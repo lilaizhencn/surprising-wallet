@@ -1,0 +1,12 @@
+org/libdohj/params/AbstractDogecoinParams$1.class
+org/libdohj/params/DogecoinMainNetParams.class
+org/bitcoinj/core/AuxPoW.class
+org/libdohj/params/AbstractDogecoinParams$CheckpointEncounteredException.class
+org/libdohj/core/AltcoinSerializer.class
+org/bitcoinj/core/AltcoinBlock.class
+org/libdohj/core/AuxPoWNetworkParameters.class
+org/dogecoinj/DogeSdk.class
+org/libdohj/core/AltcoinNetworkParameters.class
+org/libdohj/core/Utils.class
+org/bitcoinj/core/MerkleBranch.class
+org/libdohj/params/AbstractDogecoinParams.class

@@ -1,0 +1,16 @@
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/security/HessianBagURLConnectionFactory.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/annotation/HessianService.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/autoconfig/HessionServerProperty.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/scanner/HessianServerScanner.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/security/HessianBagProxyFactory.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/autoconfig/HessianServiceAutoConfiguration.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/security/HessianBagProxyFactoryBean.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/SecretConfig.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/annotation/HessianClient.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/RemoteServer.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/scanner/HessianClientScanner.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/security/HessianBagServiceExporter.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/KeyConfig.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/autoconfig/HessianClientAutoConfiguration.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/AES.java
+/Users/atomex/Desktop/surprising-wallet/backendservices/wallet-sig-api/src/main/java/com/surprising/wallet/signature/api/ITransactionSignService.java

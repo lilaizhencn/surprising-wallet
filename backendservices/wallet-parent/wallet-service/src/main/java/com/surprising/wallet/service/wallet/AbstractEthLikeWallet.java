@@ -1,0 +1,555 @@
+package com.surprising.wallet.service.wallet;
+
+import com.alibaba.fastjson.JSONObject;
+import com.surprising.common.mybatis.pager.PageInfo;
+import com.surprising.common.mybatis.sharding.ShardTable;
+import com.surprising.starters.redis.REDIS;
+import com.surprising.wallet.client.command.EthLikeCommand;
+import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.dto.TransactionDTO;
+import com.surprising.wallet.common.pojo.AccountTransaction;
+import com.surprising.wallet.common.pojo.Address;
+import com.surprising.wallet.common.pojo.WithdrawRecord;
+import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.common.pojo.rpc.EthLikeBlock;
+import com.surprising.wallet.common.pojo.rpc.EthRawTransaction;
+import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.common.utils.EthereumUtil;
+import com.surprising.wallet.service.config.PubKeyConfig;
+import com.surprising.wallet.service.criteria.AccountTransactionExample;
+import com.surprising.wallet.service.criteria.AddressExample;
+import com.surprising.wallet.service.service.AccountTransactionService;
+import com.surprising.wallet.service.service.AddressService;
+import com.surprising.wallet.service.service.WithdrawRecordService;
+import com.surprising.wallet.service.service.WithdrawTransactionService;
+import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
+import org.bitcoinj.core.AddressFormatException;
+import org.bitcoinj.core.ECKey;
+import org.ethereum.crypto.EthECKey;
+import org.spongycastle.util.encoders.Hex;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.ObjectUtils;
+import org.springframework.util.StringUtils;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+
+import static com.surprising.wallet.common.utils.Constants.TRANSFER;
+import static com.surprising.wallet.common.utils.Constants.WITHDRAW;
+
+/**
+ * @author atomex
+ * @data 12/04/2018
+ */
+@Slf4j
+@Data
+abstract public class AbstractEthLikeWallet extends com.surprising.wallet.service.wallet.AbstractAccountWallet implements IWallet {
+
+    public static final String ETH_ADDRESS_PREFIX = "0x";
+    //eth地址中保留的币，转账和erc20划转要用
+    public BigDecimal RESERVED;
+    @Autowired
+    protected PubKeyConfig pubKeyConfig;
+    protected EthLikeCommand command;
+    protected Long height = 0L;
+    @Autowired
+    protected AccountTransactionService accountTransactionService;
+    @Autowired
+    protected WithdrawTransactionService withdrawTransactionService;
+    @Autowired
+    protected WithdrawRecordService recordService;
+    @Autowired
+    protected AddressService addressService;
+    private String withdrawAddress;
+
+
+    /**
+     * 上次更新总余额的时间戳
+     */
+    private long lastUpdateTotalBalance = 0;
+
+    @Override
+    protected boolean shouldUpdateTotalBalance() {
+        long now = System.currentTimeMillis();
+        //6个小时整体刷新余额
+        long sixHours = 6 * 60 * 60 * 1000;
+        if (now - lastUpdateTotalBalance > sixHours) {
+            lastUpdateTotalBalance = now;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    @Override
+    public String getWithdrawAddress() {
+        return withdrawAddress;
+    }
+
+    public void setCommand(EthLikeCommand com) {
+        command = com;
+    }
+
+    /**
+     * 生成新地址
+     *
+     * @param userId 用户id
+     * @param biz    业务类型： spot、c2c 等
+     */
+    @Override
+    public Address genNewAddress(Long userId, Integer biz) {
+        log.info("生成新地址 开始 用户id:{}, 业务线:{}, 币种:{}", userId, biz, getCurrency().name());
+
+        AddressExample example = new AddressExample();
+        example.createCriteria().andUserIdEqualTo(userId).andBizEqualTo(biz);
+
+        ShardTable table = ShardTable.builder().prefix(getCurrency().getName()).build();
+        List<Address> addressList = addressService.getByExample(example, table);
+        int index = 0;
+        /**
+         * 获取该userId在biz业务线下面已经生成了多少地址
+         */
+        if (!CollectionUtils.isEmpty(addressList)) {
+
+            Optional<Address> maxAddress = addressList.stream().max(Comparator.comparing(Address::getIndex));
+            index = maxAddress.get().getIndex() + 1;
+        }
+
+        /*
+        hd的公钥推导path: bip44-currency-biz-userId-index
+         */
+        CurrencyEnum currency = getCurrency();
+        ECKey ecKey = pubKeyConfig.NODE2.getChild(44).getChild(currency.getIndex()).getChild(biz).getChild(userId.intValue()).getChild(index).getEcKey();
+        EthECKey ethEcKey = EthECKey.fromPublicOnly(ecKey.getPubKey());
+        String addressStr = ETH_ADDRESS_PREFIX + Hex.toHexString(ethEcKey.getAddress());
+
+        Address address = new Address();
+        address.setAddress(addressStr);
+        address.setBiz(biz);
+        address.setCurrency(getCurrency().getName());
+        address.setUserId(userId);
+        address.setIndex(index);
+        addressService.add(address, table);
+        log.info("生成新地址 结束 用户id:{}, 业务线:{}, 币种:{} 地址:{}", userId, biz, getCurrency().name(), addressStr);
+        return address;
+    }
+
+    /**
+     * 返回当前币种钱包中的余额
+     *
+     * @return
+     */
+    @Override
+    public BigDecimal getBalance() {
+        return getBalance(getCurrency());
+    }
+
+
+    public BigDecimal getBalance(CurrencyEnum currency) {
+        String currencyName = currency.getName();
+        log.info("get {} Balance begin", currencyName);
+        try {
+            AddressExample example = new AddressExample();
+            ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
+            PageInfo page = new PageInfo();
+            int size = 100;
+            page.setPageSize(size);
+            page.setSortItem("id");
+            page.setSortType(PageInfo.SORT_TYPE_ASC);
+            page.setStartIndex(0);
+            BigDecimal totalBalance = BigDecimal.ZERO;
+
+            while (true) {
+                List<Address> addresses = addressService.getByPage(page, example, table);
+                if (CollectionUtils.isEmpty(addresses)) {
+                    break;
+                }
+                BigDecimal balance = addresses.parallelStream().map((address) -> {
+                    BigDecimal res = getBalance(address.getAddress());
+                    address.setBalance(res);
+                    return res;
+                }).reduce(BigDecimal.ZERO, BigDecimal::add);
+                totalBalance = totalBalance.add(balance);
+                addressService.batchAddOnDuplicateKey(addresses, table);
+                if (addresses.size() < size) {
+                    break;
+                }
+                page.setStartIndex(page.getStartIndex() + size);
+            }
+            return totalBalance;
+        } catch (Throwable e) {
+            log.error("get {} Balance error", currencyName, e);
+
+        }
+        return BigDecimal.ZERO;
+
+    }
+
+    /**
+     * 获得区块链的当前最大高度
+     */
+    @Override
+    public Long getBestHeight() {
+        String height = command.getBlockNumber();
+        this.height = EthereumUtil.hexToLong(height);
+        return this.height;
+    }
+
+    @Override
+    public List<TransactionDTO> findRelatedTxs(Long height) {
+        String currencyName = getCurrency().getName();
+        log.info("{} 从区块中查找关联交易, height:{} 开始", currencyName, height);
+        EthLikeBlock block = command.getBlockByHeight(ETH_ADDRESS_PREFIX + Long.toHexString(height), true);
+        if (ObjectUtils.isEmpty(block)) {
+            log.error("{} 从区块中查找关联交易 错误, 区块为空 height:{} ", currencyName, height);
+            return null;
+        }
+        EthRawTransaction[] txListArray = block.getTransactions();
+        if (txListArray.length == 0) {
+            log.info("{} findRelatedTxs empty, height:{} end", currencyName, height);
+            return new LinkedList<>();
+        }
+
+        //存储参与交易的地址，方便更新地址中的余额
+        Set<String> relatedAddress = ConcurrentHashMap.newKeySet();
+        List<AccountTransaction> accountTransactions = Arrays.asList(txListArray).parallelStream().map(tx -> {
+            AccountTransaction accountTransaction = getAccountTx(tx, height);
+            //查询数据库是否存在这个地址
+            Address address = searchAddress(tx.getFrom(), getCurrency());
+            //收集发送地址
+            if (!ObjectUtils.isEmpty(address)) {
+                relatedAddress.add(address.getAddress());
+            }
+            return accountTransaction;
+        }).filter((acTx) -> {
+            if (!ObjectUtils.isEmpty(acTx)) {
+                //收集接收地址
+                relatedAddress.add(acTx.getAddress());
+                return true;
+            }
+            return false;
+        }).collect(Collectors.toList());
+
+        //更新币种余额
+        AbstractEthLikeWallet selfReference = getSelf(getClass());
+        selfReference.updateAddressBalance(relatedAddress);
+        log.info("{} findRelatedTxs, height:{} end", currencyName, height);
+        return getTransactionDTOS(accountTransactions);
+    }
+
+    protected List<TransactionDTO> getTransactionDTOS(List<AccountTransaction> accountTransactions) {
+        List<TransactionDTO> dtos = new LinkedList<>();
+        if (!CollectionUtils.isEmpty(accountTransactions)) {
+            ShardTable table = ShardTable.builder().prefix(getCurrency().getName()).build();
+            accountTransactionService.batchAddOnDuplicateKey(accountTransactions, table);
+            dtos = accountTransactions.parallelStream().map(this::convertAccountTxToDto).collect(Collectors.toList());
+        }
+        return dtos;
+    }
+
+    @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_UNCOMMITTED)
+    public void updateAddressBalance(Set<String> relatedAddress) {
+        //更新币种余额
+        BigDecimal deltaBalance = BigDecimal.ZERO;
+        for (String addressStr : relatedAddress) {
+            BigDecimal balance = getBalance(addressStr);
+            Address address = searchAddress(addressStr, getCurrency());
+            deltaBalance = deltaBalance.add(balance.subtract(address.getBalance()));
+            address.setBalance(balance);
+            addressService.editById(address, ShardTable.builder().prefix(address.getCurrency()).build());
+        }
+        updateCurrencyDeltaBalance(getCurrency(), deltaBalance);
+    }
+
+    @Override
+    protected void updateWithdrawTXId(String txId, CurrencyEnum currency) {
+        super.updateWithdrawTXId(txId, currency);
+        updateAccountTransaction(txId, currency);
+    }
+
+    protected AccountTransaction getAccountTx(EthRawTransaction transaction, Long height) {
+        String txId = transaction.getHash();
+        //先检测是不是我们发出的交易
+        updateWithdrawTXId(txId, getCurrency());
+
+        String addressStr = transaction.getTo();
+        Address address = searchAddress(addressStr, getCurrency());
+        if (ObjectUtils.isEmpty(address)) {
+            return null;
+        }
+
+        if (checkInternalTransferTx(transaction.getFrom(), txId)) {
+            return null;
+        }
+
+        Long confirm = this.height - height + 1;
+        BigDecimal txValue = new BigDecimal(EthereumUtil.hexToBigInteger(transaction.getValue()));
+        AccountTransaction acTx = AccountTransaction.builder()
+                .address(addressStr)
+                .balance(txValue.divide(getDecimal()))
+                .biz(address.getBiz())
+                .txId(txId)
+                .blockHeight(height)
+                .confirmNum(confirm)
+                .status((byte) Constants.WAITING)
+                .currency(getCurrency().getIndex())
+                .createDate(Date.from(Instant.now()))
+                .updateDate(Date.from(Instant.now()))
+                .build();
+        if (addressStr.equals(withdrawAddress)) {
+            acTx.setStatus((byte) Constants.CONFIRM);
+        }
+
+        return acTx;
+    }
+
+    protected Address searchAddress(String addressStr, CurrencyEnum currency) {
+        if (!StringUtils.hasText(addressStr)) {
+            return null;
+        }
+        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
+        return addressService.getAddress(addressStr, table);
+    }
+
+
+    @Override
+    @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_UNCOMMITTED)
+    public void transfer(String address, CurrencyEnum currency, Date deadline) {
+        BigDecimal gasPrice = gasPrice(currency);
+        BigDecimal transferGasPrice = transferGasPrice(currency);
+
+        if (gasPrice.compareTo(transferGasPrice) > 0) {
+            log.info("gas price is too high, wait for a while");
+            return;
+        }
+
+        BigDecimal balance = getBalance(address, currency);
+        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
+
+        AccountTransactionExample example = new AccountTransactionExample();
+        example.createCriteria().andAddressEqualTo(address)
+                .andConfirmNumGreaterThan(currency.getDepositConfirmNum())
+                .andCreateDateLessThan(deadline);
+        //balance > 2 * RESERVED
+        if (balance.compareTo(RESERVED.add(RESERVED)) > 0) {
+            CurrencyEnum mainCurrency = CurrencyEnum.toMainCurrency(currency);
+            if (mainCurrency == currency) {
+                //地址中保留的币，用来付手续费
+                balance = balance.subtract(RESERVED);
+            }
+            WithdrawRecord record = WithdrawRecord.builder()
+                    .address(withdrawAddress)
+                    .balance(balance)
+                    .currency(currency.getIndex())
+                    .build();
+
+            WithdrawTransaction transferTransaction = buildTransaction(record, address, TRANSFER);
+            if (transferTransaction == null) {
+                log.error(" {} transfer error, buildTransaction failed", currency.getName());
+                return;
+            }
+            //把交易推送到待签名队列
+            String val = JSONObject.toJSONString(transferTransaction);
+            //eth 只支持单签，所以直接用第二台机器签名
+            REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_SECOND_KEY, val);
+            AccountTransaction transaction = new AccountTransaction();
+            transaction.setStatus((byte) Constants.SIGNING);
+            accountTransactionService.editByExample(transaction, example, table);
+            log.info("{} buildTransaction success, id:{}", currency.getName(), transferTransaction.getId());
+        } else {
+            log.info("{} balance of {} is {}", currency.getName(), address, balance);
+            AccountTransaction transaction = new AccountTransaction();
+            transaction.setStatus((byte) Constants.SIGNING);
+            accountTransactionService.editByExample(transaction, example, table);
+        }
+    }
+
+
+    @Override
+    protected WithdrawTransaction buildTransaction(WithdrawRecord record) {
+
+        return buildTransaction(record, withdrawAddress, WITHDRAW);
+    }
+
+    protected BigDecimal gas() {
+        return new BigDecimal("0.00000000000042");
+    }
+
+    protected BigDecimal gasPrice(CurrencyEnum currency) {
+
+        BigDecimal minGasPrice = new BigDecimal("0.000000012");
+        BigDecimal maxGasPrice = new BigDecimal("0.0000001");
+        String gasPriceStr = command.getGasPrice();
+
+
+        BigDecimal decimal;
+
+        if (CurrencyEnum.isErc20(currency)) {
+            decimal = CurrencyEnum.ETH.getDecimal();
+        } else {
+            decimal = getDecimal();
+        }
+        BigDecimal gasPrice = new BigDecimal(EthereumUtil.hexToDouble(gasPriceStr)).divide(decimal);
+
+        if (gasPrice.compareTo(minGasPrice) < 0) {
+            gasPrice = minGasPrice;
+        } else if (gasPrice.compareTo(maxGasPrice) > 0) {
+            gasPrice = maxGasPrice;
+        }
+        return gasPrice;
+
+    }
+
+    protected BigDecimal transferGasPrice(CurrencyEnum currency) {
+        return new BigDecimal("0.00000003");
+    }
+
+
+    protected WithdrawTransaction buildTransaction(WithdrawRecord record, String from, String type) {
+        CurrencyEnum currency = CurrencyEnum.parseValue(record.getCurrency());
+        BigDecimal gas = gas();
+
+        AddressExample addrExam = new AddressExample();
+        addrExam.createCriteria().andAddressEqualTo(from);
+        ShardTable addressTable;
+        addressTable = ShardTable.builder().prefix(CurrencyEnum.toMainCurrency(currency).getName()).build();
+
+        Address address = addressService.getAndLockOneByExample(addrExam, addressTable);
+        Long nonce = getAddressNonce(from);
+        //校正nonce
+        if (address.getNonce() < nonce) {
+            address.setNonce(nonce.intValue());
+        } else if (address.getNonce() > nonce) {
+            log.error("{} 数据库 nonce = {} , 链上 nonce = {}", address.getAddress(), address.getNonce(), nonce);
+            if (TRANSFER.equals(type)) {
+                return null;
+            }
+        }
+
+        JSONObject signature = new JSONObject();
+
+        signature.put("address", address);
+        signature.put("from", from);
+        signature.put("to", record.getAddress());
+        signature.put("value", record.getBalance());
+        signature.put("gas", gas);
+
+        signature.put("nonce", address.getNonce());
+        BigDecimal gasPrice = gasPrice(currency);
+        signature.put("gasPrice", gasPrice);
+        WithdrawTransaction transaction = WithdrawTransaction.builder()
+                .balance(record.getBalance())
+                .currency(currency.getIndex())
+                .status(Constants.SIGNING)
+                .txId(type)
+                .signature(signature.toJSONString())
+                .build();
+        address.setNonce(address.getNonce() + 1);
+        address.setUpdateDate(Date.from(Instant.now()));
+        addressService.editById(address, addressTable);
+        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
+        withdrawTransactionService.add(transaction, table);
+        log.info("{} 交易构建对象完成", currency.getName());
+        return transaction;
+    }
+
+    /**
+     * 发送签好的原始交易
+     */
+    @Override
+    public String sendRawTransaction(WithdrawTransaction transaction) {
+        String result;
+        try {
+            JSONObject signature = JSONObject.parseObject(transaction.getSignature());
+
+            String raw = signature.getString("rawTransaction");
+            result = command.sendRawTransaction(raw);
+        } catch (Throwable e) {
+            log.error("sendRawTransaction error", e);
+            result = "";
+        }
+        return result;
+    }
+
+    /**
+     * 获得区块hash
+     */
+    @Override
+    public String getBlockHash(Long height) {
+        EthLikeBlock block = command.getBlockByHeight(ETH_ADDRESS_PREFIX + Long.toHexString(height), true);
+        String hash = block.getHash();
+        return hash;
+    }
+
+    public EthRawTransaction getTransaction(String txId) {
+        int dashIndex = txId.indexOf("");//TODO StringUtil.DASH
+        if (dashIndex >= 0) {
+            txId = txId.substring(0, dashIndex);
+        }
+        return command.getTransaction(txId);
+    }
+
+    public BigDecimal getBalance(String address) {
+        return getBalance(address, getCurrency());
+    }
+
+    @Override
+    protected BigDecimal getBalance(String address, CurrencyEnum currency) {
+        String tranAmount = command.getBalance(address, "latest");
+        BigDecimal amount = new BigDecimal(EthereumUtil.hexToBigInteger(tranAmount));
+        return amount.divide(getDecimal());
+    }
+
+    public Long getAddressNonce(String address) {
+        String nonceStr = command.getAddressNonce(address, "pending");
+        long nonce = EthereumUtil.hexToLong(nonceStr);
+        return nonce;
+    }
+
+
+    @Override
+    public boolean checkAddress(String addressStr) {
+        boolean valid = false;
+        if (StringUtils.hasText(addressStr)) {
+            try {
+                String rex = "^0x[a-fA-F0-9]{40}$";
+                if (addressStr.matches(rex)) {
+                    valid = true;
+                }
+            } catch (AddressFormatException e) {
+                log.error("{} is not valid", addressStr, e);
+            }
+        }
+        return valid;
+
+    }
+
+    @Override
+    public int getConfirm(String txId) {
+        EthRawTransaction transaction = getTransaction(txId);
+        if (ObjectUtils.isEmpty(transaction)) {
+            return -1;
+
+        } else {
+            Long blockHeight = EthereumUtil.hexToLong(transaction.getBlockNumber());
+            Long bestHeight = getBestHeight();
+            Long confirm = bestHeight - blockHeight + 1;
+            return confirm.intValue();
+        }
+
+    }
+
+    @Override
+    public String getTxId(WithdrawTransaction transaction) {
+        JSONObject signature = JSONObject.parseObject(transaction.getSignature());
+        String raw = signature.getString("rawTransaction");
+        return caculateTransactionHash(raw);
+    }
+}

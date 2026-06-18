@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Encoding">
+    <file url="file://$PROJECT_DIR$/backendservices/common/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/jsonrpc/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/mybatis-generator/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/mybatis-starter/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/wallet-parent/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/wallet-parent/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/wallet-parent/wallet-rpc/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/wallet-parent/wallet-server/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/wallet-parent/wallet-web/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/wallet-sig-first/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/wallet-sig-second-client/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/wallet-sig-second-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/wallet-sig1/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/currency-sdks/bitcoin-sdk/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/currency-sdks/bitcoincash-sdk/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/currency-sdks/doge-sdk/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/currency-sdks/litecoin-sdk/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/currency-sdks/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/currency-sdks/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/currency-sdks/tron-sdk/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
+  </component>
+</project>

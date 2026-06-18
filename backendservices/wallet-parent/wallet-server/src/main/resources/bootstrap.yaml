@@ -1,0 +1,69 @@
+server:
+  port: 8003
+  error:
+    whitelabel:
+      enabled: true
+
+spring:
+  application:
+    name: wallet-web
+  jackson:
+    serialization:
+      fail-on-empty-beans: false
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+  profiles:
+    active: @spring.profiles.active@
+  cloud:
+    nacos:
+      config:
+        file-extension: @spring.cloud.nacos.config.file-extension@
+        server-addr: @spring.cloud.nacos.config.server-addr@
+        namespace: @spring.cloud.nacos.config.namespace@
+      discovery:
+        server-addr: @spring.cloud.nacos.discovery.server-addr@
+        namespace: @spring.cloud.nacos.discovery.namespace@
+# Endpoint
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: ALWAYS
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 1m
+        descriptions: true
+    tags:
+      application: ${spring.application.name}
+  info:
+    git:
+      mode: full
+feign:
+  hystrix:
+    enabled: false
+  client:
+    config:
+      default:
+        connectTimeout: 10000
+        readTimeout: 10000
+        loggerLevel: basic
+  httpclient:
+    max-connections: 2000
+    max-connections-per-route: 500
+    enabled: false
+  okhttp:
+    enabled: true
+  compression:
+    request:
+      enabled: true
+    response:
+      enabled: true

@@ -1,0 +1,116 @@
+package com.surprising.wallet.sig.second.impl;
+
+import com.alibaba.fastjson.JSONObject;
+import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.pojo.Address;
+import com.surprising.wallet.common.pojo.UtxoTransaction;
+import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.sig.second.BipNodeUtil;
+import com.surprising.wallet.sig.second.ISignService;
+import lombok.extern.slf4j.Slf4j;
+import org.bitcoincashj.core.*;
+import org.bitcoincashj.crypto.TransactionSignature;
+import org.bitcoincashj.params.MainNetParams;
+import org.bitcoincashj.params.TestNet3Params;
+import org.bitcoincashj.script.Script;
+import org.bitcoincashj.script.ScriptBuilder;
+import org.bitcoincashj.script.ScriptChunk;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import jakarta.annotation.PostConstruct;
+import java.math.BigInteger;
+import java.util.List;
+
+/**
+ * @author atomex
+ */
+@Component
+@Slf4j
+public class BchSecondSignService extends AbstractBtcLikeSecondSign implements ISignService {
+
+    @Autowired
+    private Constants CONS;
+    private NetworkParameters params = MainNetParams.get();
+
+    @PostConstruct
+    public void init() {
+        if ("test".equals(CONS.NETWORK)) {
+            params = TestNet3Params.get();
+        } else {
+            params = MainNetParams.get();
+        }
+    }
+
+
+    @Override
+    public String signTransaction(WithdrawTransaction transaction) {
+
+        log.info("{} second signTransaction begin", getCurrency().getName());
+        String signature = transaction.getSignature();
+        JSONObject sigJson = JSONObject.parseObject(signature);
+        String firstSignTx = sigJson.getString("firstSignTx");
+        List<Address> addresses = sigJson.getJSONArray("addresses").toJavaList(Address.class);
+        List<UtxoTransaction> utxos = sigJson.getJSONArray("utxos").toJavaList(UtxoTransaction.class);
+        Transaction spendTx = new Transaction(params, Utils.HEX.decode(firstSignTx));
+        for (int i = 0; i < spendTx.getInputs().size(); i++) {
+            TransactionInput input = spendTx.getInput(i);
+
+            List<ScriptChunk> chunkList = input.getScriptSig().getChunks();
+            int size = chunkList.size();
+            // 多签的签名信息最后一项内容为多签脚本。内容： “0 签名1 签名2 ... 多签脚本”
+            if (size < 2) {
+                log.error("error signature");
+                sigJson.put("valid", false);
+                transaction.setSignature(sigJson.toJSONString());
+                return "";
+            }
+            Script multiSigScript = new Script(chunkList.get(size - 1).data);
+            ECKey ecKey = convertECKey(BipNodeUtil.getBipNODE(addresses.get(i)).getEcKey());
+            UtxoTransaction utxo = utxos.get(i);
+            long amount = utxo.getBalance().multiply(getCurrency().getDecimal()).longValue();
+            //TODO
+            Sha256Hash hash = null;// spendTx.hashForSignature4MultiSign(i, multiSigScript, Transaction.SigHash.ALL, false, amount);
+            ECKey.ECDSASignature sig = ecKey.sign(hash);
+            TransactionSignature secondSig = new TransactionSignature(sig, Transaction.SigHash.ALL, false, true);
+            ScriptBuilder builder = new ScriptBuilder();
+            if (size == 2 + 1) {
+                int pos = 0;
+                while (pos < size - 1) {
+                    builder.addChunk(chunkList.get(pos++));
+                }
+            } else {
+                builder.addChunk(chunkList.get(0));
+                for (int pos = 1; pos < size; pos++) {
+                    ScriptChunk chunk = chunkList.get(pos);
+                    if (chunk.data == null || chunk.data.length == 0) {
+                        break;
+                    }
+                    builder.addChunk(chunk);
+                }
+            }
+            builder.data(secondSig.encodeToBitcoin());
+            builder.data(multiSigScript.getProgram());
+            Script result = builder.build();
+            input.setScriptSig(result);
+        }
+
+        String tx = Utils.HEX.encode(spendTx.bitcoinSerialize());
+
+        log.info("{} second signTransaction end", getCurrency().getName());
+
+        return tx;
+    }
+
+    @Override
+    public CurrencyEnum getCurrency() {
+        return CurrencyEnum.BCH;
+    }
+
+    // 把bitcoinj 中的ECkey转变成bitcoincashj中的Eckey
+    private ECKey convertECKey(org.bitcoinj.core.ECKey key) {
+        BigInteger pri = key.getPrivKey();
+        return ECKey.fromPrivate(pri);
+    }
+}

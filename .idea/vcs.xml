@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/backendservices/common" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/backendservices/wallet-parent" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/backendservices/wallet-sig-api" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/backendservices/wallet-sig1" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/backendservices/wallet-sig2" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/currency-sdks/bitcoin-sdk" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/currency-sdks/bitcoincash-sdk" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/currency-sdks/doge-sdk" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/currency-sdks/litecoin-sdk" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/currency-sdks/tron-sdk" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/currency-sdks/wallet-client" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/currency-sdks/wallet-common" vcs="Git" />
+  </component>
+</project>

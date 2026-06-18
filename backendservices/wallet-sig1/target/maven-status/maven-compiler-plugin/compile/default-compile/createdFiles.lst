@@ -1,0 +1,10 @@
+com/surprising/wallet/sig/first/config/PubKeyConfig.class
+com/surprising/wallet/sig/first/config/RedisConfig.class
+com/surprising/wallet/sig/first/service/LtcFirstSignService.class
+com/surprising/wallet/sig/first/service/BchFirstSignService.class
+com/surprising/wallet/sig/first/service/AbstractBtcLikeFirstSign.class
+com/surprising/wallet/sig/first/WalletSig1Application.class
+com/surprising/wallet/sig/first/jobs/FirstSignJob.class
+com/surprising/wallet/sig/first/service/BtcFirstSignService.class
+com/surprising/wallet/sig/first/service/ISignService.class
+com/surprising/wallet/sig/first/SignContent.class

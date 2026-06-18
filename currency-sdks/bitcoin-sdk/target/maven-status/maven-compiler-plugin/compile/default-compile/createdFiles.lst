@@ -1,0 +1,10 @@
+com/surprising/wallet/sdk/bitcoinj/core/TransactionBuilder$SignInfo.class
+com/surprising/wallet/sdk/bitcoinj/core/TransactionBuilder$InputInfo.class
+com/surprising/wallet/sdk/bitcoinj/core/TransactionBuilder.class
+com/surprising/wallet/sdk/bitcoinj/core/MultiSignAddressGenerator.class
+com/surprising/wallet/sdk/bitcoinj/header/LiteMainNetParam.class
+com/surprising/wallet/sdk/bitcoinj/bip/Bip32Node.class
+com/surprising/wallet/sdk/bitcoinj/util/Tools.class
+com/surprising/wallet/sdk/bitcoinj/core/TransactionBuilder$OutputInfo.class
+com/surprising/wallet/sdk/bitcoinj/core/KeyGenerator.class
+com/surprising/wallet/sdk/bitcoinj/crypto/DigestHash.class

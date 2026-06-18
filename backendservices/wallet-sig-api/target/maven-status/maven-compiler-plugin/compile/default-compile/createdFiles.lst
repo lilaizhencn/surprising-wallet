@@ -1,0 +1,5 @@
+com/surprising/wallet/signature/api/ITransactionSignService.class
+com/surprising/wallet/signature/KeyConfig.class
+com/surprising/wallet/signature/AES.class
+com/surprising/wallet/signature/SecretConfig.class
+com/surprising/wallet/signature/RemoteServer.class

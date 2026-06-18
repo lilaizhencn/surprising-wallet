@@ -1,0 +1,514 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="2419acd0-c841-4ca6-942f-8dc6589d210e" name="更改" comment="">
+      <change beforePath="$PROJECT_DIR$/backendservices/common/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/common/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/settings.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/BufferedImageWithSer.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/CreateImageCode.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/DateUtils.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/DigestUtil.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/EmailUtil.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/IpUtil.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/MD5Util.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/MobileUtils.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/NumericConvertUtil.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/Page.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/QrCodeUtil.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/RSAEncrypt.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/RedisPrefix.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/RespCode.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/RespEntity.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/UuidUtil.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/XTEAUtils.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/config/CurrencyIds.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/config/EventConstants.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/config/SAFETOKEN.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/AuthLevelEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/ConstEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/CurrencyEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/EmailOrMobileAuthEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/EmailSetEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/EmailTemplateType.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/GenderEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/GoogleCodeSetEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/IdentityCardAuthEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/IdentityCardAuthTypeEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/LoginSourceEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/MessageSendStatusEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/MessageTemplateTypeEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/MobileSetEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/StatusEnums.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/TradePassSetEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/TypeEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/UserStatusEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/UserTypeEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/VerifyTypeEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/enums/VideoAuthEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/common/src/main/java/pro/atomex/common/vo/AddressInfo.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-parent/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/schema/atomex-wallet.sql" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/pom.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/WalletJobsApplication.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/claim/OngClaimJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/AbstractScanAccountBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/AbstractScanBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/AbstractScanOmniBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/AbstractScanUtxoBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanActBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanBchBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanBsvBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanBtcBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanBtmBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanDashBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanDogeBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanEosBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanEoscBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanEtcBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanEthBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanIotaBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanLtcBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanOntBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanRbtcBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanSSCBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanSpecifiedHeight.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanTronBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanUsdtBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanXemBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanXlmBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/ScanXrpBlockJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/listener/ListenBchUnconfirmedTxs.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/deposit/listener/ListenBtcUnconfirmedTxs.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/transfer/AbstractTransferJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/transfer/Erc20TransferJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/transfer/EtcTransferJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/transfer/EthTransferJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/transfer/OntTransferJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/transfer/RbtcTransferJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/transfer/RskTokenTransferJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/transfer/TransferBetweenCurrencyJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/transfer/TronTransferJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/transfer/USDTTransferJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/AbstractBatchWithdrawJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/BatchBchWithdrawJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/BatchBsvWithdrawJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/BatchBtcWithdrawJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/BatchBtmWithdrawJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/BatchDashWithdrawJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/BatchDogeWithdrawJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/BatchGasWithdrawJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/BatchIotaWithdrawJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/BatchLtcWithdrawJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/BatchZcashWithdrawJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/GetWithdrawRecordJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/IotaReplayBundleJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/OntLocalWithdrawJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/RetryFailedWithdraw.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/java/com/polarisex/wallet/jobs/withdraw/SendRawTxJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-jobs/src/main/resources/application.properties" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-rpc/pom.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-rpc/src/main/java/com/polarisex/wallet/rpc/WalletClient.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/config/PubKeyConfig.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/config/datasource/AbstractDataSourceConfig.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/config/datasource/MybatisDataSourceConfig.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/config/datasource/RedisConfig.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/criteria/AccountTransactionExample.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/criteria/AddressExample.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/criteria/BestBlockHeightExample.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/criteria/CurrencyBalanceExample.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/criteria/OmniTransactionExample.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/criteria/UtxoTransactionExample.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/criteria/WithdrawRecordExample.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/criteria/WithdrawTransactionExample.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/dao/AccountTransactionRepository.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/dao/AddressRepository.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/dao/BestBlockHeightRepository.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/dao/CurrencyBalanceRepository.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/dao/OmniTransactionRepository.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/dao/UtxoTransactionRepository.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/dao/WithdrawRecordRepository.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/dao/WithdrawTransactionRepository.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/AccountTransactionService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/AddressService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/BestBlockHeightService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/CurrencyBalanceService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/OmniTransactionService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/TransactionService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/UtxoTransactionService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/WithdrawRecordService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/WithdrawTransactionService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/impl/AccountTransactionServiceImpl.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/impl/AddressServiceImpl.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/impl/BestBlockHeightServiceImpl.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/impl/CurrencyBalanceServiceImpl.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/impl/OmniTransactionServiceImpl.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/impl/UtxoTransactionServiceImpl.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/impl/WithdrawRecordServiceImpl.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/service/impl/WithdrawTransactionServiceImpl.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/AbstractAccountWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/AbstractActLikeWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/AbstractBtcLikeWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/AbstractEthLikeWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/AbstractWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/IWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/WalletContext.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/ActWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/BchWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/BsvWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/BtcWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/BtmWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/DashWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/DogeWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/EosWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/EoscWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/Erc20Wallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/EtcWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/EthWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/IOTAWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/LtcWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/OntWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/RbtcWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/RskTokenWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/SSCWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/TronWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/UsdtWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/XemWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/XlmWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/java/com/polarisex/wallet/service/wallet/impl/XrpWallet.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/AccountTransactionMapper.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/AccountTransactionMapper.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/AddressMapper.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/AddressMapper.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/BestBlockHeightMapper.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/BestBlockHeightMapper.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/CurrencyBalanceMapper.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/CurrencyBalanceMapper.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/OmniTransactionMapper.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/UtxoTransactionMapper.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/UtxoTransactionMapper.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/WithdrawRecordMapper.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/WithdrawRecordMapper.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/WithdrawTransactionMapper.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-service/src/main/resources/mapper/WithdrawTransactionMapper.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-web/pom.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-web/src/main/java/com/polarisex/wallet/web/WalletWebApplication.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-web/src/main/java/com/polarisex/wallet/web/controller/InnerSigController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-web/src/main/java/com/polarisex/wallet/web/controller/WalletController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-web/src/main/java/com/polarisex/wallet/web/task/MonitorCurrencyClient.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-web/src/main/resources/bootstrap.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-web/src/main/resources/logback-spring.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-web/src/main/resources/mybatis/mybatis-config.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-web/src/main/resources/profiles/application-dev.properties" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-web/src/main/resources/profiles/application-prod.properties" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-web/src/main/resources/profiles/application-stage.properties" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-parent/wallet-web/src/main/resources/profiles/application-test.properties" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-sig-api/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/readme.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/AES.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/KeyConfig.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/RemoteServer.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/SecretConfig.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/annotation/HessianClient.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/annotation/HessianService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/api/ITransactionSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/autoconfig/HessianClientAutoConfiguration.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/autoconfig/HessianServiceAutoConfiguration.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/autoconfig/HessionServerProperty.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/scanner/HessianClientScanner.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/scanner/HessianServerScanner.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/security/HessianBagProxyFactory.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/security/HessianBagProxyFactoryBean.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/security/HessianBagServiceExporter.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig-api/src/main/java/com/polarisex/wallet/signature/security/HessianBagURLConnectionFactory.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-sig1/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/java/com/polarisex/wallet/sig/first/SignContent.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/java/com/polarisex/wallet/sig/first/WalletSigFirstApplication.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/java/com/polarisex/wallet/sig/first/config/PubKeyConfig.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/java/com/polarisex/wallet/sig/first/config/RedisConfig.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/java/com/polarisex/wallet/sig/first/jobs/FirstSignJob.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/java/com/polarisex/wallet/sig/first/service/AbstractBtcLikeFirstSign.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/java/com/polarisex/wallet/sig/first/service/BchFirstSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/java/com/polarisex/wallet/sig/first/service/BsvFirstSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/java/com/polarisex/wallet/sig/first/service/BtcFirstSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/java/com/polarisex/wallet/sig/first/service/ISignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/java/com/polarisex/wallet/sig/first/service/LtcFirstSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/java/com/polarisex/wallet/sig/first/service/UsdtFirstSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/resources/logback-spring.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-sig1/src/main/resources/logback-spring.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-sig2/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/settings.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/BipNodeUtil.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/ISignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/SignContent.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/TransactionSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/WalletSigSecondServiceApplication.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/AbstractBtcLikeSecondSign.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/AbstractEthLikeSecondSign.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/BchSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/BsvSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/BtcSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/BtmSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/DashSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/DogeSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/EosSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/EoscSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/Erc20SecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/EtcSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/EthSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/IotaSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/LtcSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/OntSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/RbtcSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/TronSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/UsdtSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/XemSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/XlmSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/java/com/polarisex/wallet/sig/second/impl/XrpSecondSignService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/backendservices/wallet-sig2/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoin-sdk/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoin-sdk/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/currency-sdks/bitcoin-sdk/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoin-sdk/src/main/java/com/polarisex/wallet/sdk/bitcoinj/bip/Bip32Node.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoin-sdk/src/main/java/com/polarisex/wallet/sdk/bitcoinj/core/KeyGenerator.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoin-sdk/src/main/java/com/polarisex/wallet/sdk/bitcoinj/core/MultiSignAddressGenerator.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoin-sdk/src/main/java/com/polarisex/wallet/sdk/bitcoinj/core/TransactionBuilder.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoin-sdk/src/main/java/com/polarisex/wallet/sdk/bitcoinj/crypto/DigestHash.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoin-sdk/src/main/java/com/polarisex/wallet/sdk/bitcoinj/header/LiteMainNetParam.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoin-sdk/src/main/java/com/polarisex/wallet/sdk/bitcoinj/util/Tools.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoin-sdk/src/test/java/sdk/core/KeyGeneratorTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/currency-sdks/bitcoin-sdk/src/test/java/sdk/core/KeyGeneratorTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoincash-sdk/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoincash-sdk/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/currency-sdks/bitcoincash-sdk/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoincash-sdk/src/main/java/com/polarisex/wallet/sdk/bitcoincashj/bip/Bip32Node.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoincash-sdk/src/main/java/com/polarisex/wallet/sdk/bitcoincashj/core/KeyGenerator.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoincash-sdk/src/main/java/com/polarisex/wallet/sdk/bitcoincashj/core/MultiSignAddressGenerator.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoincash-sdk/src/main/java/com/polarisex/wallet/sdk/bitcoincashj/core/TransactionBuilder.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoincash-sdk/src/main/java/com/polarisex/wallet/sdk/bitcoincashj/crypto/DigestHash.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/bitcoincash-sdk/src/main/java/com/polarisex/wallet/sdk/bitcoincashj/util/Tools.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/doge-sdk/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/currency-sdks/doge-sdk/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/doge-sdk/readme.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/litecoin-sdk/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/litecoin-sdk/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/currency-sdks/litecoin-sdk/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/tron-sdk/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/currency-sdks/tron-sdk/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/tron-sdk/readme.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/tron-sdk/settings.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/tron-sdk/src/main/java/org/tron/api/DatabaseGrpc.java" beforeDir="false" afterPath="$PROJECT_DIR$/currency-sdks/tron-sdk/src/main/java/org/tron/api/DatabaseGrpc.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/tron-sdk/src/main/java/org/tron/api/NetworkGrpc.java" beforeDir="false" afterPath="$PROJECT_DIR$/currency-sdks/tron-sdk/src/main/java/org/tron/api/NetworkGrpc.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/tron-sdk/src/main/java/org/tron/api/WalletExtensionGrpc.java" beforeDir="false" afterPath="$PROJECT_DIR$/currency-sdks/tron-sdk/src/main/java/org/tron/api/WalletExtensionGrpc.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/tron-sdk/src/main/java/org/tron/api/WalletGrpc.java" beforeDir="false" afterPath="$PROJECT_DIR$/currency-sdks/tron-sdk/src/main/java/org/tron/api/WalletGrpc.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/tron-sdk/src/main/java/org/tron/api/WalletSolidityGrpc.java" beforeDir="false" afterPath="$PROJECT_DIR$/currency-sdks/tron-sdk/src/main/java/org/tron/api/WalletSolidityGrpc.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/currency-sdks/wallet-client/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/readme.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/settings.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/CommandFactoryBean.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/RpcCommandProcessor.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/ActCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/ActLikeCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/BchCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/BchCommandByBitcoinCom.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/BchRawTxReq.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/BchTxDetailReq.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/BlockChainBtcCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/BsvCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/BtcCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/BtcLikeCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/BtmCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/DashCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/DogeCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/EosCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/EtcCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/EthCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/EthLikeCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/IRpcCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/LtcCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/LuckyWinCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/NeoCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/OfCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/OntCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/RbtcCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/SSCCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/UsdtCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/XemCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/XrpCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-client/src/main/java/com/polarisex/wallet/client/command/ZcashCommand.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/currency-sdks/wallet-common/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/readme.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/annotation/RpcConfig.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/annotation/StartThread.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/currency/BizEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/currency/CurrencyEnum.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/dto/AddressDto.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/dto/TransactionDTO.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/exception/DataExistError.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/exception/ObjectNullException.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/exception/UnsupportedBiz.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/exception/UnsupportedCurrency.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/AccountTransaction.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/Address.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/BestBlockHeight.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/CurrencyBalance.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/OmniTransaction.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/UtxoTransaction.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/WithdrawRecord.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/WithdrawTransaction.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/BtcLikeBlock.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/BtcLikeRawTransaction.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/EosChainInfo.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/EthCallArguments.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/EthGasUsedDto.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/EthLikeBlock.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/EthRawTransaction.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/OmniRawTransaction.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/OntBalance.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/OntEvent.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/OntRawTransaction.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/OntStates.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/ScriptPubKey.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/ScriptSig.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/TxInput.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/pojo/rpc/TxOutput.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/utils/Constants.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/utils/DoubleUtil.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/utils/EthereumUtil.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/currency-sdks/wallet-common/src/main/java/com/polarisex/wallet/common/utils/PropertyUtil.java" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/currency-sdks/bitcoin-sdk" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 5,
+  "fromUser": false
+}]]></component>
+  <component name="ProjectId" id="3FI6L0eiNDtD69KUexYtDKRf7kV" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "master",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "/Users/atomex/Desktop/surprising-wallet",
+    "nodejs_package_manager_path": "npm",
+    "project.structure.last.edited": "模块",
+    "project.structure.proportion": "0.15",
+    "project.structure.side.proportion": "0.3275862",
+    "run.configurations.included.in.services": "true",
+    "settings.editor.selected.configurable": "http.proxy",
+    "vue.rearranger.settings.migration": "true",
+    "应用程序.Launcher.executor": "Debug",
+    "应用程序.MainUI.executor": "Debug",
+    "应用程序.MultiSignAddressGenerator.executor": "Run"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
+    </key>
+  </component>
+  <component name="RunDashboard">
+    <option name="configurationTypes">
+      <set>
+        <option value="MicronautRunConfigurationType" />
+        <option value="QuarkusRunConfigurationType" />
+        <option value="SpringBootApplicationConfigurationType" />
+      </set>
+    </option>
+  </component>
+  <component name="RunManager" selected="应用程序.MultiSignAddressGenerator">
+    <configuration name="MultiSignAddressGenerator" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="com.surprising.wallet.sdk.bitcoinj.core.MultiSignAddressGenerator" />
+      <module name="bitcoin-sdk" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="com.surprising.wallet.sdk.bitcoinj.core.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="WalletServerApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
+      <module name="wallet-server" />
+      <option name="SPRING_BOOT_MAIN_CLASS" value="com.surprising.wallet.jobs.WalletServerApplication" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="WalletSig1Application" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
+      <module name="wallet-sig1" />
+      <option name="SPRING_BOOT_MAIN_CLASS" value="com.surprising.wallet.sig.first.WalletSig1Application" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="WalletSig2Application" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
+      <module name="wallet-sig2" />
+      <option name="SPRING_BOOT_MAIN_CLASS" value="com.surprising.wallet.sig.second.WalletSig2Application" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="WalletSigFirstApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
+      <module name="wallet-sig-first" />
+      <option name="SPRING_BOOT_MAIN_CLASS" value="com.surprising.wallet.sig.first.WalletSigFirstApplication" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="WalletSigSecondServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
+      <module name="wallet-sig-second-service" />
+      <option name="SPRING_BOOT_MAIN_CLASS" value="com.surprising.wallet.sig.second.WalletSigSecondServiceApplication" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <list>
+      <item itemvalue="Spring Boot.WalletSig1Application" />
+      <item itemvalue="Spring Boot.WalletSig2Application" />
+      <item itemvalue="Spring Boot.WalletServerApplication" />
+      <item itemvalue="Spring Boot.WalletSigFirstApplication" />
+      <item itemvalue="Spring Boot.WalletSigSecondServiceApplication" />
+      <item itemvalue="应用程序.MultiSignAddressGenerator" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="应用程序.MultiSignAddressGenerator" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-30f59d01ecdd-37e91769500f-intellij.indexing.shared.core-IU-261.25134.95" />
+        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-IU-261.25134.95" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="2419acd0-c841-4ca6-942f-8dc6589d210e" name="更改" comment="" />
+      <created>1781750176550</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1781750176550</updated>
+      <workItem from="1781750177551" duration="21778000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>
