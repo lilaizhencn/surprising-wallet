@@ -35,11 +35,9 @@ abstract public class AbstractScanBlockJob {
 
     public void execute() {
 
-        if ("dev".equals(env)) {
             if (wallet.getCurrency() != run) {
                 return;
             }
-        }
         log.info("扫描 {} 交易 开始", wallet.getCurrency().getName());
         Long bestHeight = null;
         try {

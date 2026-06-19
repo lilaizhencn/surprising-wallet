@@ -47,21 +47,6 @@
             </dependency>
             <dependency>
                 <groupId>com.surprising</groupId>
-                <artifactId>bitcoincash-sdk</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.surprising</groupId>
-                <artifactId>doge-sdk</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.surprising</groupId>
-                <artifactId>litecoin-sdk</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.surprising</groupId>
                 <artifactId>tron-sdk</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -245,9 +230,6 @@
 
     <modules>
         <module>bitcoin-sdk</module>
-        <module>bitcoincash-sdk</module>
-        <module>doge-sdk</module>
-        <module>litecoin-sdk</module>
         <module>tron-sdk</module>
         <module>wallet-common</module>
         <module>wallet-client</module>

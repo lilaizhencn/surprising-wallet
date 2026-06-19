@@ -45,7 +45,6 @@
         <mysql.version>8.0.22</mysql.version>
         <mybatis.version>4.0.1</mybatis.version>
         <hibernate-validator.version>6.0.16.Final</hibernate-validator.version>
-        <bitcoin-cash-converter.version>1.0</bitcoin-cash-converter.version>
         <!-- slf4j.version managed by Spring Boot parent -->
         <spring-cloud.version>2025.1.2</spring-cloud.version>
         <spring-cloud-alibaba.version>2025.1.0.0</spring-cloud-alibaba.version>
@@ -73,21 +72,6 @@
             <dependency>
                 <groupId>com.surprising</groupId>
                 <artifactId>bitcoin-sdk</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.surprising</groupId>
-                <artifactId>bitcoincash-sdk</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.surprising</groupId>
-                <artifactId>doge-sdk</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.surprising</groupId>
-                <artifactId>litecoin-sdk</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

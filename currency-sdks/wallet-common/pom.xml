@@ -61,14 +61,6 @@
             <artifactId>bitcoin-sdk</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.surprising</groupId>
-            <artifactId>bitcoincash-sdk</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.surprising</groupId>
-            <artifactId>litecoin-sdk</artifactId>
-        </dependency>
-        <dependency>
             <groupId>com.madgag.spongycastle</groupId>
             <artifactId>prov</artifactId>
         </dependency>

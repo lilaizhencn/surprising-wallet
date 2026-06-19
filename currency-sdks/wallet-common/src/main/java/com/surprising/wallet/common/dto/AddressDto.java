@@ -27,6 +27,8 @@ public class AddressDto implements Serializable {
      * 业务类型
      */
     private Integer biz;
+    private Integer childId;
+    private String path;
     /**
      * 充值确认数
      */
