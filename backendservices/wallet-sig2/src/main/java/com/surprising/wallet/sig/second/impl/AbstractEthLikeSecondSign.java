@@ -51,7 +51,7 @@ abstract public class AbstractEthLikeSecondSign implements ISignService {
         Bip32Node node = BipNodeUtil.getBipNODE(address);
         String signResult = sign(
                 BigInteger.valueOf(address.getNonce()),
-                sigJson.getBigDecimal("gasPrice").multiply(CurrencyEnum.RSK_TOKEN.getDecimal()).toBigInteger(),
+                sigJson.getBigDecimal("gasPrice").multiply(CurrencyEnum.ETH.getDecimal()).toBigInteger(),
                 sigJson.getBigDecimal("gas").multiply(getCurrency().getDecimal()).toBigInteger(),
                 sigJson.getString("to"),
                 transaction.getBalance().multiply(getCurrency().getDecimal()).toBigInteger(),

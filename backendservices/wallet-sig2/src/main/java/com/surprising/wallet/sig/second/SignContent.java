@@ -29,10 +29,6 @@ public class SignContent implements InitializingBean, ApplicationContextAware {
     private ApplicationContext context;
 
     public static ISignService getSignService(CurrencyEnum currency) {
-        if (CurrencyEnum.isErc20(currency)) {
-            currency = CurrencyEnum.ERC20;
-        }
-        currency = CurrencyEnum.toMainCurrency(currency);
         for (Map.Entry<String, ISignService> entry : SignContent.cache.entrySet()) {
 
             ISignService sign = entry.getValue();

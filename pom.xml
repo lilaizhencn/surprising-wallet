@@ -13,7 +13,7 @@
     <artifactId>surprising-wallet</artifactId>
     <packaging>pom</packaging>
     <name>atomex-root</name>
-    <description>Root reactor aggregator for all atomex modules</description>
+    <description>Root reactor aggregator for all surprising modules</description>
 
     <modules>
         <module>currency-sdks</module>

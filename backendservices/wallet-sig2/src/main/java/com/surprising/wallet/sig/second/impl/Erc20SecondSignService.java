@@ -20,7 +20,7 @@ import java.math.BigInteger;
 public class Erc20SecondSignService extends AbstractEthLikeSecondSign implements ISignService {
     @Override
     public CurrencyEnum getCurrency() {
-        return CurrencyEnum.ERC20;
+        return CurrencyEnum.USDT;
     }
 
     @Override
@@ -31,8 +31,8 @@ public class Erc20SecondSignService extends AbstractEthLikeSecondSign implements
         Address address = sigJson.getJSONObject("address").toJavaObject(Address.class);
         Bip32Node node = BipNodeUtil.getBipNODE(address);
         String signResult = tokenTransaction(
-                sigJson.getBigDecimal("gasPrice").multiply(CurrencyEnum.RSK_TOKEN.getDecimal()).toBigInteger(),
-                sigJson.getBigDecimal("gas").multiply(getCurrency().getDecimal()).toBigInteger(),
+                sigJson.getBigDecimal("gasPrice").multiply(CurrencyEnum.ETH.getDecimal()).toBigInteger(),
+                sigJson.getBigDecimal("gas").multiply(CurrencyEnum.ETH.getDecimal()).toBigInteger(),
                 BigInteger.valueOf(address.getNonce()),
                 node.getEcKey().getPrivateKeyAsHex(),
                 currency.getContractAddress(),
