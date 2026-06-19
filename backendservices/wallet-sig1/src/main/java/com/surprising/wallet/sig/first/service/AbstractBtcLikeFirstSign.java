@@ -10,6 +10,7 @@ import jakarta.annotation.PostConstruct;import java.math.BigDecimal;import java.
 abstract public class AbstractBtcLikeFirstSign implements ISignService {
     public Bip32Node NODE; @Autowired protected PubKeyConfig pubKeyConfig; @Value("${atomex.wallet.masterKey}") String masterKey;
     private static final long DEFAULT_FEE_RATE = 10L;
+    private static final long DUST_THRESHOLD_SAT = 546L;
     @PostConstruct public void init(){NODE=Bip32Node.decode(masterKey);}
     protected NetworkParameters getNetworkParameters(){return Constants.NET_PARAMS;}
     @Override public void signTransaction(WithdrawTransaction transaction){
@@ -34,15 +35,17 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
             long feeRate=signature.getLongValue("feeRate"); if(feeRate<=0){feeRate=DEFAULT_FEE_RATE;}
             long vBytes=WitnessTransactionBuilder.estimateVBytes(inputCount,records.size()), fee=vBytes*feeRate;
             long change=total-sent-fee;
-            if(change>0){vBytes=WitnessTransactionBuilder.estimateVBytes(inputCount,records.size()+1); fee=vBytes*feeRate; change=total-sent-fee;}
+            if(change>=DUST_THRESHOLD_SAT){long cv=WitnessTransactionBuilder.estimateVBytes(inputCount,records.size()+1), cf=cv*feeRate, cc=total-sent-cf; if(cc>=DUST_THRESHOLD_SAT){vBytes=cv; fee=cf; change=cc;} else {fee=total-sent; change=0;}}
+            else if(change>0){fee=total-sent; change=0;}
+            if(change<0){throw new IllegalArgumentException("insufficient input for SegWit fee: need "+(sent+fee)+", have "+total);}
             log.info("P2WSH fee: {} vB * {} sat/vB = {} sat",vBytes,feeRate,fee);
-            for(WithdrawRecord r:records) wtxBuilder.addOutput(r.getAddress(),Coin.valueOf(r.getBalance().multiply(cd).longValue()));
+            for(WithdrawRecord r:records) { long out=r.getBalance().multiply(cd).longValue(); if(out>0&&out<DUST_THRESHOLD_SAT){throw new IllegalArgumentException("withdraw output dust: "+out+" sat");} wtxBuilder.addOutput(r.getAddress(),Coin.valueOf(out)); }
             if(change>0){String ca=signature.getString("changeAddress"); if(ca!=null&&!ca.isEmpty()) wtxBuilder.addOutput(ca,Coin.valueOf(change));}
             String firstSignTx=wtxBuilder.buildFirstSign(ecKeys);
             signature.put("firstSignTx",firstSignTx); signature.put("valid",true);
             JSONArray wsa=new JSONArray(); witnessScriptHexes.forEach(wsa::add); signature.put("witnessScripts",wsa);
             JSONArray uva=new JSONArray(); utxoValues.forEach(v->uva.add(v.getValue())); signature.put("utxoValues",uva);
-            signature.put("scriptType","p2wsh"); signature.put("fee",fee); signature.put("vBytes",vBytes);
+            signature.put("scriptType","p2wsh"); signature.put("fee",fee); signature.put("vBytes",wtxBuilder.getVsize());
             log.info("P2WSH first sign done: txid={}", wtxBuilder.getHash());
         }catch(Throwable e){log.error("sign error",e); signature.put("valid",false); signature.put("error",e.getMessage());}
         transaction.setSignature(signature.toJSONString());

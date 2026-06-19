@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Lazy;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -47,6 +48,7 @@ abstract public class AbstractWallet implements IWallet {
     protected AddressService addressService;
 
     @Autowired
+    @Lazy
     protected TransactionService transactionService;
 
     protected void updateTotalCurrencyBalance(CurrencyEnum currency, BigDecimal balance) {

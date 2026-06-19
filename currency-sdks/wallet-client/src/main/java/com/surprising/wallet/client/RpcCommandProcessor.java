@@ -52,7 +52,7 @@ import static com.surprising.wallet.common.annotation.RpcConfig.RpcType.REST_RPC
 @Log4j2
 public class RpcCommandProcessor implements BeanDefinitionRegistryPostProcessor, EnvironmentAware {
 
-    private final static String RPC_LOCATION = ResourcePatternResolver.CLASSPATH_ALL_URL_PREFIX + "com/polarisex/wallet/client/command/**/*.class";
+    private final static String RPC_LOCATION = ResourcePatternResolver.CLASSPATH_ALL_URL_PREFIX + "com/surprising/wallet/client/command/**/*.class";
 
 
     private Environment environment;

@@ -23,11 +23,11 @@ spring:
     password: wallet123
     hikari:
       maximum-pool-size: 20
-  # redis
-  redis:
-    host: 127.0.0.1
-    port: 6379
-    password:
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password:
   cloud:
     nacos:
       discovery:

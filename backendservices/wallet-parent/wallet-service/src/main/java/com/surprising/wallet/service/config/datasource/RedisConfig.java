@@ -14,11 +14,11 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
  */
 @Configuration
 public class RedisConfig {
-    @Value("${spring.redis.host}")
+    @Value("${spring.data.redis.host:${spring.redis.host:127.0.0.1}}")
     protected String redisHost;
-    @Value("${spring.redis.port}")
+    @Value("${spring.data.redis.port:${spring.redis.port:6379}}")
     protected Integer redisPort;
-    @Value("${spring.redis.password}")
+    @Value("${spring.data.redis.password:${spring.redis.password:}}")
     protected String password;
 
     @Lazy(false)

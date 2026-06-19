@@ -23,7 +23,7 @@
         <commons-codec.version>1.12</commons-codec.version>
         <commons-lang3.version>3.9</commons-lang3.version>
         <commons-text.version>1.7</commons-text.version>
-        <commons-pool2.version>2.8.0</commons-pool2.version>
+        <commons-pool2.version>2.13.1</commons-pool2.version>
         <commons-io.version>2.6</commons-io.version>
         <commons-collections4.version>4.4</commons-collections4.version>
         <disruptor.version>3.4.2</disruptor.version>
@@ -35,7 +35,8 @@
         <bcprov-jdk16.version>1.46</bcprov-jdk16.version>
         <scrypt.version>1.4.0</scrypt.version>
         <bitcoinj.version>0.17.1</bitcoinj.version>
-        <jackson.version>2.10.0</jackson.version>
+        <jackson.version>2.19.4</jackson.version>
+        <jackson-annotations.version>2.21</jackson-annotations.version>
         <config.version>1.3.3</config.version>
         <okhttp.version>4.0.1</okhttp.version>
         <retrofit.version>2.6.1</retrofit.version>
@@ -156,7 +157,7 @@
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-annotations</artifactId>
-                <version>${jackson.version}</version>
+                <version>${jackson-annotations.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>

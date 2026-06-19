@@ -1,0 +1,24 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: wallet-sig2
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+      config:
+        server-addr: 127.0.0.1:8848
+        file-extension: yaml
+  config:
+    import: optional:nacos:wallet-sig2.yaml
+
+atomex:
+  wallet:
+    network: test

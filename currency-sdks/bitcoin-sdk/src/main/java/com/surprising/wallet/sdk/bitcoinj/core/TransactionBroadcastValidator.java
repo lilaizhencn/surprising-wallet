@@ -1,28 +1,118 @@
 package com.surprising.wallet.sdk.bitcoinj.core;
-import java.nio.ByteBuffer; import java.util.*;
-import org.bitcoinj.base.Coin; import org.bitcoinj.core.*; import org.bitcoinj.script.Script;
+
+import org.bitcoinj.base.Sha256Hash;
+import org.bitcoinj.core.NetworkParameters;
+import org.bitcoinj.core.Transaction;
+import org.bitcoinj.core.TransactionInput;
+import org.bitcoinj.core.TransactionOutPoint;
+import org.bitcoinj.core.TransactionWitness;
+import org.bitcoinj.script.Script;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Set;
+
 public class TransactionBroadcastValidator {
     private static final HexFormat HEX = HexFormat.of();
-    public static final long DUST=546L; private final NetworkParameters p; private final WitnessSigner ins=new WitnessSigner();
-    public TransactionBroadcastValidator(NetworkParameters pp){p=pp;}
-    public ValidationResult validate(String hex){
-        List<String> e=new ArrayList<>(); int ic=0,sc=0; String tid=null;
-        try{Transaction tx=Transaction.read(ByteBuffer.wrap(HEX.parseHex(hex))); tid=tx.getTxId().toString(); ic=tx.getInputs().size();
-            if(ic==0) e.add("no inputs");
-            for(int i=0;i<ic;i++){Script ss=tx.getInput(i).getScriptSig(); if(ss!=null&&ss.getProgram().length>0) e.add("input "+i+" non-empty scriptSig");}
-            for(int i=0;i<ic;i++){TransactionWitness w=tx.getInput(i).getWitness(); if(w==null) e.add("input "+i+" no witness");
-                int pc=w.getPushCount(); if(pc<3) e.add("input "+i+" witness<3");
-                byte[] d=w.getPush(0); if(d==null||d.length!=1||d[0]!=0) e.add("input "+i+" no OP_0");
-                int s=0; for(int j=1;j<pc-1;j++){if(w.getPush(j)!=null&&w.getPush(j).length>0)s++;} sc+=s; if(s<2) e.add("input "+i+" sigs<2");
-                byte[] sb=w.getPush(pc-1); if(sb==null||sb.length==0) e.add("input "+i+" no witnessScript");
-            }
-            Set<String> seen=new HashSet<>(); for(int i=0;i<ic;i++){String k=tx.getInput(i).getOutpoint().getHash()+":"+tx.getInput(i).getOutpoint().getIndex(); if(!seen.add(k)) e.add("dup "+k);}
-            for(int o=0;o<tx.getOutputs().size();o++){long v=tx.getOutput(o).getValue().getValue(); if(v>0&&v<DUST) e.add("output "+o+" dust");}
-        } catch(Exception ex){e.add("exception: "+ex.getMessage());}
-        return new ValidationResult(e.isEmpty(),e,ic,sc,tid);
+
+    private final NetworkParameters params;
+
+    public TransactionBroadcastValidator(NetworkParameters params) {
+        this.params = params;
     }
-    public static class ValidationResult{ public final boolean valid; public final List<String> errors; public final int inputCount,signatureCount; public final String txId;
-        public ValidationResult(boolean v,List<String> e,int i,int s,String t){valid=v;errors=e!=null?e:new ArrayList<>();inputCount=i;signatureCount=s;txId=t;}
-        public String toString(){return "VR{valid="+valid+",txid="+txId+",ins="+inputCount+",sigs="+signatureCount+"}";}
+
+    public ValidationResult validate(String hex) {
+        List<String> errors = new ArrayList<>();
+        int inputCount = 0;
+        int signatureCount = 0;
+        String txId = null;
+        try {
+            Transaction tx = Transaction.read(ByteBuffer.wrap(HEX.parseHex(hex)));
+            if (params != null) {
+                Transaction.verify(params, tx);
+            }
+            txId = tx.getTxId().toString();
+            inputCount = tx.getInputs().size();
+            if (inputCount == 0) {
+                errors.add("no inputs");
+            }
+
+            Set<String> seenInputs = new HashSet<>();
+            for (int i = 0; i < inputCount; i++) {
+                TransactionInput input = tx.getInput(i);
+                if (input.getScriptSig().program().length > 0) {
+                    errors.add("input " + i + " has non-empty scriptSig");
+                }
+                TransactionOutPoint outPoint = input.getOutpoint();
+                String outPointKey = outPoint.hash() + ":" + outPoint.index();
+                if (!seenInputs.add(outPointKey)) {
+                    errors.add("duplicate input " + outPointKey);
+                }
+
+                TransactionWitness witness = input.getWitness();
+                if (witness == null || witness.getPushCount() < 3) {
+                    errors.add("input " + i + " invalid witness");
+                    continue;
+                }
+                if (witness.getPush(0).length != 0) {
+                    errors.add("input " + i + " invalid multisig dummy push");
+                }
+                byte[] witnessScriptBytes = witness.getPush(witness.getPushCount() - 1);
+                if (witnessScriptBytes.length == 0) {
+                    errors.add("input " + i + " missing witnessScript");
+                    continue;
+                }
+                Script witnessScript = new Script(witnessScriptBytes);
+                byte[] witnessProgram = Sha256Hash.hash(witnessScript.program());
+                if (witnessProgram.length != 32) {
+                    errors.add("input " + i + " invalid P2WSH program");
+                }
+                int signatures = 0;
+                for (int j = 1; j < witness.getPushCount() - 1; j++) {
+                    if (witness.getPush(j).length > 0) {
+                        signatures++;
+                    }
+                }
+                signatureCount += signatures;
+                int required = witnessScript.getNumberOfSignaturesRequiredToSpend();
+                if (signatures < required) {
+                    errors.add("input " + i + " signatures " + signatures + " < required " + required);
+                }
+            }
+
+            for (int i = 0; i < tx.getOutputs().size(); i++) {
+                if (tx.getOutput(i).isDust()) {
+                    errors.add("output " + i + " is dust");
+                }
+            }
+        } catch (Exception e) {
+            errors.add("exception: " + e.getMessage());
+        }
+        return new ValidationResult(errors.isEmpty(), errors, inputCount, signatureCount, txId);
+    }
+
+    public static class ValidationResult {
+        public final boolean valid;
+        public final List<String> errors;
+        public final int inputCount;
+        public final int signatureCount;
+        public final String txId;
+
+        public ValidationResult(boolean valid, List<String> errors, int inputCount, int signatureCount, String txId) {
+            this.valid = valid;
+            this.errors = errors == null ? new ArrayList<>() : errors;
+            this.inputCount = inputCount;
+            this.signatureCount = signatureCount;
+            this.txId = txId;
+        }
+
+        @Override
+        public String toString() {
+            return "ValidationResult{valid=" + valid + ", txId='" + txId + "', inputCount="
+                    + inputCount + ", signatureCount=" + signatureCount + ", errors=" + errors + '}';
+        }
     }
 }

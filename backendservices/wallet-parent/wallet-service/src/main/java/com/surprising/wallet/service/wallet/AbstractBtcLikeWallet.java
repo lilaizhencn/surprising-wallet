@@ -23,14 +23,10 @@ import com.surprising.wallet.service.criteria.WithdrawRecordExample;
 import com.surprising.wallet.service.criteria.WithdrawTransactionExample;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
-import org.bitcoinj.base.Coin;
-import org.bitcoinj.base.Sha256Hash;
 import org.bitcoinj.base.exceptions.AddressFormatException;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;
-import org.bitcoinj.core.TransactionInput;
 import org.bitcoinj.core.TransactionOutput;
-import org.bitcoinj.core.TransactionOutPoint;
 import org.bitcoinj.script.ScriptException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.ObjectUtils;
@@ -392,8 +388,9 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         boolean valid = false;
         if (StringUtils.hasText(addressStr)) {
             try {
-                org.bitcoinj.base.Address address = org.bitcoinj.base.Address.fromString(Constants.NET_PARAMS, addressStr);
-                if (!ObjectUtils.isEmpty(address)) {
+                org.bitcoinj.base.Address parsedAddress =
+                        org.bitcoinj.base.Address.fromString(Constants.NET_PARAMS, addressStr);
+                if (!ObjectUtils.isEmpty(parsedAddress)) {
                     valid = true;
                 }
             } catch (AddressFormatException e) {

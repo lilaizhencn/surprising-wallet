@@ -11,6 +11,7 @@ import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.sdk.bitcoinj.core.WitnessTransactionBuilder;
 import com.surprising.wallet.service.criteria.UtxoTransactionExample;
 import com.surprising.wallet.service.criteria.WithdrawRecordExample;
 import com.surprising.wallet.service.service.AddressService;
@@ -50,6 +51,7 @@ abstract public class AbstractBatchWithdrawJob {
     WithdrawTransactionService transactionService;
 
     private static final Set<CurrencyEnum> SINGLE_SIG_CURRENCY = Sets.immutableEnumSet(IOTA, NEO, GAS, BTM, DOGE, DASH, ZEC);
+    private static final int DEFAULT_FEE_RATE = 10;
 
     public void execute() {
         log.info("提现任务开始 币种:{}", currency.getName());
@@ -105,9 +107,13 @@ abstract public class AbstractBatchWithdrawJob {
         int size = 1;
         WithdrawTransaction transaction = null;
         BigDecimal totalAmount = BigDecimal.ZERO;
+        BigDecimal withdrawAmount = BigDecimal.ZERO;
         for (WithdrawRecord record : records) {
             totalAmount = totalAmount.add(record.getBalance()).add(record.getFee());
+            withdrawAmount = withdrawAmount.add(record.getBalance());
         }
+        Integer redisFeeRate = REDIS.getInt(Constants.WALLET_FEE + currency.getIndex());
+        int feeRate = redisFeeRate == null || redisFeeRate <= 0 ? DEFAULT_FEE_RATE : redisFeeRate;
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
         UtxoTransactionExample example = new UtxoTransactionExample();
         example.createCriteria().andStatusEqualTo((byte) Constants.WAITING).andConfirmNumGreaterThanOrEqualTo(currency.getDepositConfirmNum());
@@ -130,7 +136,7 @@ abstract public class AbstractBatchWithdrawJob {
             //因为page size 为 1，所以查询结果中只有一条数据
             UtxoTransaction utxo = tmps.get(0);
             walletAmount = walletAmount.add(utxo.getBalance());
-            if (walletAmount.compareTo(totalAmount) > 0) {
+            if (walletAmount.compareTo(requiredAmount(totalAmount, withdrawAmount, utxos.size(), records.size(), feeRate)) > 0) {
                 break;
             }
             pageInfo.setStartIndex(pageInfo.getStartIndex() + size);
@@ -147,13 +153,12 @@ abstract public class AbstractBatchWithdrawJob {
             walletAmount = walletAmount.add(utxo.getBalance());
             Address address = addressService.getAddress(utxo.getAddress(), table);
             addresses.add(address);
-            if (walletAmount.compareTo(totalAmount) > 0) {
+            if (walletAmount.compareTo(requiredAmount(totalAmount, withdrawAmount, utxos.size(), records.size(), feeRate)) > 0) {
                 break;
             }
         }
 
         //初始化交易
-        int feeRate = REDIS.getInt(Constants.WALLET_FEE + currency.getIndex());
         JSONObject signature = new JSONObject();
         IWallet wallet = walletContext.getWallet(currency);
         Address changeAddress = wallet.genNewAddress(Constants.USER_ID, Constants.BIZ);
@@ -196,5 +201,13 @@ abstract public class AbstractBatchWithdrawJob {
         log.info("交易创建完成");
         return transaction;
 
+    }
+
+    private BigDecimal requiredAmount(BigDecimal userFeeRequired, BigDecimal withdrawAmount,
+                                      int inputCount, int outputCount, int feeRate) {
+        long feeSat = WitnessTransactionBuilder.estimateVBytes(Math.max(inputCount, 1), outputCount + 1) * feeRate;
+        BigDecimal networkFee = BigDecimal.valueOf(feeSat).divide(currency.getDecimal());
+        BigDecimal dynamicRequired = withdrawAmount.add(networkFee);
+        return dynamicRequired.max(userFeeRequired);
     }
 }

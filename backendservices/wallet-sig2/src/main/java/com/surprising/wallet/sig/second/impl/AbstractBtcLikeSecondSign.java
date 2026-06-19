@@ -25,7 +25,8 @@ abstract public class AbstractBtcLikeSecondSign implements ISignService {
                 Script script=new Script(wsb); long vs=uva.getLongValue(i); if(vs<=0){sj.put("valid",false);sj.put("error","bad utxoValue");tx.setSignature(sj.toJSONString());return"";}
                 Coin uv=Coin.valueOf(vs); ECKey ek=BipNodeUtil.getBipNODE(ads.get(i)).getEcKey();
                 TransactionSignature s2=stx.calculateWitnessSignature(i,ek,script,uv,Transaction.SigHash.ALL,false);
-                stx.replaceInput(i,in.withWitness(ws.mergeWitness(ew,s2,1)));}
+                int required=script.getNumberOfSignaturesRequiredToSpend();
+                stx.replaceInput(i,in.withWitness(ws.mergeMultisigWitness(stx,i,ew,s2,ek,script,uv,required)));}
             String hex=HEX.formatHex(stx.bitcoinSerialize()); log.info("P2WSH second sign done: txid={}",stx.getTxId()); return hex;
         }catch(Exception e){log.error("P2WSH second sign error",e); sj.put("valid",false);sj.put("error",e.getMessage());tx.setSignature(sj.toJSONString());return"";}
     }
