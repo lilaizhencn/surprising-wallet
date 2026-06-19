@@ -1,0 +1,193 @@
+# ============================================================
+# wallet-server configuration
+# ============================================================
+
+server:
+  port: 8002
+  error:
+    whitelabel:
+      enabled: false
+
+logging:
+  file:
+    path: ./logs
+
+spring:
+  application:
+    name: wallet-server
+  # data source - PostgreSQL
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://127.0.0.1:5432/wallet
+    username: wallet
+    password: wallet123
+    hikari:
+      maximum-pool-size: 20
+  # redis
+  redis:
+    host: 127.0.0.1
+    port: 6379
+    password:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+      config:
+        server-addr: 127.0.0.1:8848
+        file-extension: yaml
+  config:
+    import: optional:nacos:wallet-server.yaml
+
+# feign
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 10000
+        readTimeout: 40000
+  hystrix:
+    enabled: false
+
+# ============================================================
+# Application specific config
+# ============================================================
+atomex:
+  app:
+    env:
+      name: dev
+  innerProxy: http://innerproxy.atomex.pro
+  warning:
+    contacts: "13261645368"
+  wallet:
+    network: test
+    pubKey1: tpubD6NzVbkrYhZ4X4tuLUxPpCvAZBWXW2mju3nt7RzmczFVYuLqieUacCQ2snjhu8zE9EagGrkG5gxthYUFhpgYx4bEVM9dYraywwZHycJNg5d
+    pubKey2: tpubD6NzVbkrYhZ4WpEJatAtP8DJjva1o2cbV8LbnhLNLrMCaUmF3rUMRFgsVneh53JipwKMwUp3QGGzqff7avf5M9QLR7RZaEy3ha5ihtrkDRQ
+    pubKey3: tpubD6NzVbkrYhZ4XDJNtex5Gm1Hzj4bbewgop6stxxZv4trZ3YFdLk1p9VvzQtYTk8Lf4BMo5pWA5TwJGgFbbEFaBr5Ft951V2wYQcMLWQNji4
+  # btc config (publicnode testnet)
+  btc:
+    server: https://bitcoin-rpc.publicnode.com#
+    server.user:
+    server.pwd:
+  # ltc config
+  ltc:
+    server: http://127.0.0.1:18332
+    server.user: test
+    server.pwd: "123456"
+  # bch config
+  bch:
+    server: http://127.0.0.1:18332
+    server.user: test
+    server.pwd: "123456"
+  # usdt config
+  usdt:
+    server: http://127.0.0.1:18332
+    server.user: test
+    server.pwd: "123456"
+    withdraw.address: "123456"
+  # eth config
+  eth:
+    server: http://10.40.16.182:7001
+    server.user: user
+    server.pwd: password
+    withdraw.address: "0x8dc1b89df4bda67d241c3d88afb6b95038c1cdcc"
+  # etc config
+  etc:
+    server: http://54.65.183.172:10005
+    server.user: user
+    server.pwd: password
+    withdraw.address: "0x8dc1b89df4bda67d241c3d88afb6b95038c1cdcc"
+  # act config
+  act:
+    server: http://192.168.24.28:7001/rpc
+    server.user: admin
+    server.pwd: "123456"
+    withdraw.address: ACT6wXG7mUmV8rY6DZbQZQCdeeAsWXAWixo1
+    wallet.name: wallet
+    wallet.password: atomex0987act
+    account.name: atomex0987act
+  # ssc config
+  ssc:
+    server: http://192.168.24.28:7002/rpc
+    server.user: admin
+    server.pwd: "123456"
+    withdraw.address: SSCFGm1SoWPsQ3BRs1N9raMWsaDcKaxpz8ET
+    wallet.name: wallet
+    wallet.password: atomex0987ssc
+    account.name: atomex0987ssc
+  # xrp config
+  xrp:
+    server: http://s1.ripple.com:51234
+    withdraw.address: rpi6YSvG1V9npkGGwXjdiBuVrC4d4ZTXdF
+  # iota config
+  iota:
+    server: node.iotawallet.info:14265
+  # of config
+  of:
+    server: http://192.168.102.42:7002
+    withdraw.address: "0x000018009cd72f992b5b74f34679bddde7826b5ccf6ba8c552"
+  # ont config
+  ont:
+    server: http://192.168.102.75:7001
+    withdraw.address: ANrB7NVGYS56pRxWfPt2v1BfQQki3ka3QZ
+    pubKey: xpub661MyMwAqRbcFBCPpX2NWrk3FnwzDRfQdm1wxYwDSuzngdKNaN5Ac7eC8Y1LPhWbeRtLridKdPeNpCGmoqQzzobPrLQ3FfLKoyaM1MkBWtK
+  ong:
+    claim:
+      to:
+        address: AUSmEuaqm4TqVhBnvUMK6bWvsbWcjU7tgK
+  # neo config
+  neo:
+    server: http://192.168.102.42:7001
+    withdraw.address: AGihh7mcFWEZdNqopRowsZwCBoN87hf4Ki
+    pubKey: xpub661MyMwAqRbcFBCPpX2NWrk3FnwzDRfQdm1wxYwDSuzngdKNaN5Ac7eC8Y1LPhWbeRtLridKdPeNpCGmoqQzzobPrLQ3FfLKoyaM1MkBWtK
+  # btm config
+  btm:
+    server: http://localhost:9888
+    pubKey: 49CbsCEDtemY4mcMMPEbpkLgg7hRyJhCNY1qpkZWJb8kQ3wjQEkwXN728S3sC2NTUTM5UUsc9NNd58t3urQJLtmz
+  # eos config
+  eos:
+    server: https://eos.greymass.com
+    withdraw.address: coinmexisgod
+  # xlm config
+  xlm:
+    server: https://horizon.stellar.org
+    withdraw.address: GDVIO2JXJGJWL3K2EJGAOWA4N3K7LI423S7R66NJYIQGQHW72IVDFD5F
+  # eosc config
+  eosc:
+    server: https://w1.eosforce.cn
+    withdraw.address: hexing
+  # tron config
+  tron:
+    server: grpc.trongrid.io:50051
+    pubkey: xpub661MyMwAqRbcFBCPpX2NWrk3FnwzDRfQdm1wxYwDSuzngdKNaN5Ac7eC8WQVuSWiuqKoVQT2Qk6r5E9KDCPUFZyXXcFS4y4977zLmssnL6J
+    withdraw.address: TQNkWNfn53g4YxSJHQs1fxbPoorw8hV9Vz
+  # dogecoin config
+  doge:
+    server: http://192.168.102.42:7500
+    server.user: dogecoinrpc
+    server.pwd: BxZQdQW8wHHjRrQ5YxVSesATLSEvdSQ3Du2Ww13XqTum
+    pubkey: xpub661MyMwAqRbcFBCPpX2NWrk3FnwzDRfQdm1wxYwDSuzngdKNaN5Ac7eC8WQVuSWiuqKoVQT2Qk6r5E9KDCPUFZyXXcFS4y4977zLmssnL6J
+  # xem config
+  xem:
+    server: http://192.168.102.113:7001
+    withdraw.address: NCWWAXRGCEIXWMALJTEHP47YPQCYC32GGWXSO3MZ
+  # dash config
+  dash:
+    server: http://192.168.102.42:7500
+    server.user: dashcoin
+    server.pwd: "123456"
+    pubkey: xpub661MyMwAqRbcFBCPpX2NWrk3FnwzDRfQdm1wxYwDSuzngdKNaN5Ac7eC8WQVuSWiuqKoVQT2Qk6r5E9KDCPUFZyXXcFS4y4977zLmssnL6J
+  # luckywin config
+  luckywin:
+    server: http://mainnet.luckywin.io
+    withdraw.address: "0xb678872dbcb100d3450c622e1d3fefa226251043"
+    pubkey: xpub661MyMwAqRbcFBCPpX2NWrk3FnwzDRfQdm1wxYwDSuzngdKNaN5Ac7eC8WQVuSWiuqKoVQT2Qk6r5E9KDCPUFZyXXcFS4y4977zLmssnL6J
+  # zcash config
+  zcash:
+    server: http://192.168.102.113:8232
+    server.user: username
+    server.pwd: password
+  # RBTC config
+  rbtc:
+    server: http://192.168.102.109:7510
+    withdraw.address: "0x051567f56c6914896ee959114fe0f4c0958cbc56"
+    pubkey: xpub661MyMwAqRbcFBCPpX2NWrk3FnwzDRfQdm1wxYwDSuzngdKNaN5Ac7eC8WQVuSWiuqKoVQT2Qk6r5E9KDCPUFZyXXcFS4y4977zLmssnL6J

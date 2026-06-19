@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="Maven: com.surprising.wallet-sdk:litecoinj:0.0.1-SNAPSHOT">
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/com/polarisex/wallet-sdk/litecoinj/0.0.1-SNAPSHOT/litecoinj-0.0.1-20191220.014741-2.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$MAVEN_REPOSITORY$/com/polarisex/wallet-sdk/litecoinj/0.0.1-SNAPSHOT/litecoinj-0.0.1-20191220.014741-2-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$MAVEN_REPOSITORY$/com/polarisex/wallet-sdk/litecoinj/0.0.1-SNAPSHOT/litecoinj-0.0.1-20191220.014741-2-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

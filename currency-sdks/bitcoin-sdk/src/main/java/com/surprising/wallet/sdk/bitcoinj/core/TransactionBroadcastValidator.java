@@ -1,0 +1,28 @@
+package com.surprising.wallet.sdk.bitcoinj.core;
+import java.nio.ByteBuffer; import java.util.*;
+import org.bitcoinj.base.Coin; import org.bitcoinj.core.*; import org.bitcoinj.script.Script;
+public class TransactionBroadcastValidator {
+    private static final HexFormat HEX = HexFormat.of();
+    public static final long DUST=546L; private final NetworkParameters p; private final WitnessSigner ins=new WitnessSigner();
+    public TransactionBroadcastValidator(NetworkParameters pp){p=pp;}
+    public ValidationResult validate(String hex){
+        List<String> e=new ArrayList<>(); int ic=0,sc=0; String tid=null;
+        try{Transaction tx=Transaction.read(ByteBuffer.wrap(HEX.parseHex(hex))); tid=tx.getTxId().toString(); ic=tx.getInputs().size();
+            if(ic==0) e.add("no inputs");
+            for(int i=0;i<ic;i++){Script ss=tx.getInput(i).getScriptSig(); if(ss!=null&&ss.getProgram().length>0) e.add("input "+i+" non-empty scriptSig");}
+            for(int i=0;i<ic;i++){TransactionWitness w=tx.getInput(i).getWitness(); if(w==null) e.add("input "+i+" no witness");
+                int pc=w.getPushCount(); if(pc<3) e.add("input "+i+" witness<3");
+                byte[] d=w.getPush(0); if(d==null||d.length!=1||d[0]!=0) e.add("input "+i+" no OP_0");
+                int s=0; for(int j=1;j<pc-1;j++){if(w.getPush(j)!=null&&w.getPush(j).length>0)s++;} sc+=s; if(s<2) e.add("input "+i+" sigs<2");
+                byte[] sb=w.getPush(pc-1); if(sb==null||sb.length==0) e.add("input "+i+" no witnessScript");
+            }
+            Set<String> seen=new HashSet<>(); for(int i=0;i<ic;i++){String k=tx.getInput(i).getOutpoint().getHash()+":"+tx.getInput(i).getOutpoint().getIndex(); if(!seen.add(k)) e.add("dup "+k);}
+            for(int o=0;o<tx.getOutputs().size();o++){long v=tx.getOutput(o).getValue().getValue(); if(v>0&&v<DUST) e.add("output "+o+" dust");}
+        } catch(Exception ex){e.add("exception: "+ex.getMessage());}
+        return new ValidationResult(e.isEmpty(),e,ic,sc,tid);
+    }
+    public static class ValidationResult{ public final boolean valid; public final List<String> errors; public final int inputCount,signatureCount; public final String txId;
+        public ValidationResult(boolean v,List<String> e,int i,int s,String t){valid=v;errors=e!=null?e:new ArrayList<>();inputCount=i;signatureCount=s;txId=t;}
+        public String toString(){return "VR{valid="+valid+",txid="+txId+",ins="+inputCount+",sigs="+signatureCount+"}";}
+    }
+}

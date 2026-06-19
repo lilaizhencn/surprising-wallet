@@ -1,0 +1,51 @@
+package com.surprising.wallet.sdk.bitcoinj.core;
+import java.nio.ByteBuffer; import java.util.*;
+import org.bitcoinj.base.Address; import org.bitcoinj.base.Coin; import org.bitcoinj.base.Sha256Hash;
+import org.bitcoinj.base.exceptions.AddressFormatException; import org.bitcoinj.core.NetworkParameters;
+import org.bitcoinj.core.Transaction; import org.bitcoinj.core.TransactionInput; import org.bitcoinj.core.TransactionWitness;
+import org.bitcoinj.crypto.ECKey; import org.bitcoinj.crypto.TransactionSignature;
+import org.bitcoinj.script.Script; import org.bitcoinj.script.ScriptBuilder;
+public class WitnessTransactionBuilder {
+    private static final HexFormat HEX = HexFormat.of();
+    private final NetworkParameters params; private final WitnessSigner signer = new WitnessSigner();
+    private final List<InputMeta> inputs = new ArrayList<>();
+    private final List<OutputMeta> outputs = new ArrayList<>();
+    private Transaction cachedTx;
+    private static final int BB_IN=40, BB_OUT=35, W_SIG=73, W_SCRIPT=102, W_OVH=3, TX_OVH=10, FS=2;
+    public WitnessTransactionBuilder(NetworkParameters p) { params=p; }
+    public void addInput(String txId, int idx, String wsHex, Coin val) {
+        if(txId==null||txId.isEmpty()||wsHex==null||wsHex.isEmpty()||val==null||val.getValue()<=0) throw new IllegalArgumentException("invalid input");
+        inputs.add(new InputMeta(txId,idx,wsHex,val)); cachedTx=null;
+    }
+    public void addOutput(String a, Coin v) {
+        if(a==null||a.isEmpty()||v==null||v.getValue()<=0) throw new IllegalArgumentException("invalid output");
+        try{outputs.add(new OutputMeta(Address.fromString(params,a),v)); cachedTx=null;} catch(AddressFormatException e){throw new IllegalArgumentException("bad addr "+a);}
+    }
+    public String buildFirstSign(List<ECKey> keys) {
+        if(inputs.isEmpty()) throw new IllegalArgumentException("need inputs");
+        if(keys==null||keys.size()!=inputs.size()) throw new IllegalArgumentException("key count mismatch");
+        Transaction tx=new Transaction(params);
+        for(InputMeta m:inputs) tx.addInput(Sha256Hash.wrap(m.txId),m.idx,new Script(new byte[0]));
+            for(int i=0;i<inputs.size();i++) tx.replaceInput(i,tx.getInput(i).withSequence(0xFFFFFFFDL)); // BIP 125 RBF opt-in
+        for(OutputMeta o:outputs) tx.addOutput(o.val,o.addr);
+        for(int i=0;i<inputs.size();i++){ InputMeta m=inputs.get(i); Script ws=new Script(HEX.parseHex(m.wsHex));
+            TransactionSignature sig=signer.signWitnessInput(tx,i,keys.get(i),ws,m.val,Transaction.SigHash.ALL);
+            tx.replaceInput(i,tx.getInput(i).withWitness(signer.assembleWitness(ws,java.util.Arrays.asList(sig,null))));
+        }
+        cachedTx=tx; return HEX.formatHex(tx.bitcoinSerialize());
+    }
+    public String buildSecondSign(String hex, List<ECKey> keys, List<String> wsHexes, List<Coin> vals) {
+        Transaction tx=Transaction.read(ByteBuffer.wrap(HEX.parseHex(hex)));
+        for(int i=0;i<tx.getInputs().size();i++){ TransactionWitness ew=tx.getInput(i).getWitness();
+            Script ws=signer.extractWitnessScript(ew); if(ws==null) ws=new Script(HEX.parseHex(wsHexes.get(i)));
+            Coin v=vals.get(i); TransactionSignature sig=signer.signWitnessInput(tx,i,keys.get(i),ws,v,Transaction.SigHash.ALL);
+            tx.replaceInput(i,tx.getInput(i).withWitness(signer.mergeWitness(ew,sig,1)));
+        }
+        return HEX.formatHex(tx.bitcoinSerialize());
+    }
+    public Transaction getTransaction() { return cachedTx; }
+    public String getHash() { return cachedTx!=null?cachedTx.getTxId().toString():null; }
+    public static long estimateVBytes(int ni, int no) { long bs=TX_OVH+ni*BB_IN+no*BB_OUT; long ws=ni*(W_OVH+FS*W_SIG+W_SCRIPT); return (bs*4+ws+3)/4; }
+    private static class InputMeta { String txId,wsHex; int idx; Coin val; InputMeta(String t,int i,String w,Coin v){txId=t;idx=i;wsHex=w;val=v;} }
+    private static class OutputMeta { Address addr; Coin val; OutputMeta(Address a,Coin v){addr=a;val=v;} }
+}
