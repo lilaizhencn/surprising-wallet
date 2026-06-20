@@ -1,0 +1,18 @@
+{
+  "chain": "ETH",
+  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "tokens": {
+    "USDT": {
+      "symbol": "USDT",
+      "name": "Tether USD",
+      "decimals": 6,
+      "address": "0xc56d9D5Fb9202C6c91BeD66E27FB816fa2E54b89"
+    },
+    "USDC": {
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6,
+      "address": "0xAB9F64Fff7CC373D77C1E52C4BC75190DDbcBfB9"
+    }
+  }
+}

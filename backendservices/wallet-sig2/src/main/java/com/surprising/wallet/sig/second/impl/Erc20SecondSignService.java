@@ -37,7 +37,8 @@ public class Erc20SecondSignService extends AbstractEthLikeSecondSign implements
                 node.getEcKey().getPrivateKeyAsHex(),
                 currency.getContractAddress(),
                 sigJson.getString("to"),
-                transaction.getBalance().multiply(currency.getDecimal()).toBigInteger());
+                transaction.getBalance().multiply(currency.getDecimal()).toBigInteger(),
+                sigJson.containsKey("chainId") ? sigJson.getLongValue("chainId") : org.web3j.tx.ChainIdLong.NONE);
         return signResult;
     }
 }

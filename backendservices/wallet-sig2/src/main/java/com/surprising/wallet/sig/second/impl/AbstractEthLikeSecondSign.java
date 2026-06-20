@@ -56,13 +56,17 @@ abstract public class AbstractEthLikeSecondSign implements ISignService {
                 sigJson.getString("to"),
                 transaction.getBalance().multiply(getCurrency().getDecimal()).toBigInteger(),
                 "",
-                ChainIdLong.MAINNET,
+                sigJson.containsKey("chainId") ? sigJson.getLongValue("chainId") : ChainIdLong.MAINNET,
                 node.getEcKey().getPrivateKeyAsHex());
         return signResult;
     }
 
 
     public static String tokenTransaction(BigInteger gasPrice, BigInteger gasLimit, BigInteger nonce, String privateKey, String contractAddress, String toAddress, BigInteger amount) {
+        return tokenTransaction(gasPrice, gasLimit, nonce, privateKey, contractAddress, toAddress, amount, ChainIdLong.NONE);
+    }
+
+    public static String tokenTransaction(BigInteger gasPrice, BigInteger gasLimit, BigInteger nonce, String privateKey, String contractAddress, String toAddress, BigInteger amount, long chainId) {
         BigInteger value = BigInteger.ZERO;
         //token转账参数
         String methodName = "transfer";
@@ -78,7 +82,6 @@ abstract public class AbstractEthLikeSecondSign implements ISignService {
         Function function = new Function(methodName, inputParameters, outputParameters);
         String data = FunctionEncoder.encode(function);
 
-        long chainId = ChainIdLong.NONE;
         String signedData;
         signedData = sign(nonce, gasPrice, gasLimit, contractAddress, value, data, chainId, privateKey);
         return signedData;
