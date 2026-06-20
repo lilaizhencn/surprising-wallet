@@ -1,7 +1,6 @@
 package com.surprising.wallet.service.chain.btc;
 
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TransferQuote;
 import com.surprising.wallet.common.chain.TransferRequest;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
@@ -10,7 +9,6 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.List;
 
 @Component
 public class BtcChainAdapter implements BlockchainAdapter {
@@ -40,8 +38,4 @@ public class BtcChainAdapter implements BlockchainAdapter {
                 request.amount(), fee, 0L, 1L, feeBtcSat, 0L, null, true, "btc utxo fee estimate");
     }
 
-    @Override
-    public List<DepositEvent> scanDeposits(long height) {
-        return List.of();
-    }
 }

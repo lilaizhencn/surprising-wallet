@@ -1,0 +1,60 @@
+atomex:
+  app:
+    env:
+      name: prod
+  wallet:
+    network: main
+    pubKey1: ${ATOMEX_PROD_PUBKEY1:}
+    pubKey2: ${ATOMEX_PROD_PUBKEY2:}
+    pubKey3: ${ATOMEX_PROD_PUBKEY3:}
+  btc:
+    server: https://bitcoin-rpc.publicnode.com
+  eth:
+    server: https://ethereum-rpc.publicnode.com
+    chain-id: 1
+  tron:
+    server: grpc.trongrid.io:50051
+    fullnode: grpc.trongrid.io:50051
+    soliditynode: grpc.trongrid.io:50052
+    eventserver: https://api.trongrid.io
+  chains:
+    btc-testnet:
+      enabled: false
+    ethereum-sepolia:
+      enabled: false
+    bnb-chain-testnet:
+      enabled: false
+    polygon-amoy:
+      enabled: false
+    arbitrum-sepolia:
+      enabled: false
+    optimism-sepolia:
+      enabled: false
+    base-sepolia:
+      enabled: false
+    avalanche-fuji:
+      enabled: false
+    ethereum-mainnet:
+      enabled: true
+      rpcUrl: https://ethereum-rpc.publicnode.com
+    bnb-chain-mainnet:
+      enabled: true
+      rpcUrl: https://bsc-rpc.publicnode.com
+    polygon-mainnet:
+      enabled: true
+      rpcUrl: https://polygon-bor-rpc.publicnode.com
+    arbitrum-one:
+      enabled: true
+      rpcUrl: https://arbitrum-one-rpc.publicnode.com
+    optimism-mainnet:
+      enabled: true
+      rpcUrl: https://optimism-rpc.publicnode.com
+    base-mainnet:
+      enabled: true
+      rpcUrl: https://base-rpc.publicnode.com
+    avalanche-mainnet:
+      enabled: true
+      rpcUrl: https://avalanche-c-chain-rpc.publicnode.com
+    tron-mainnet:
+      enabled: true
+      rpcUrl: grpc.trongrid.io:50051

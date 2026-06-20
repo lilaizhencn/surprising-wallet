@@ -1,11 +1,11 @@
 package com.surprising.wallet.sdk.bitcoinj.core;
 
 import com.surprising.wallet.sdk.bitcoinj.crypto.DigestHash;
-import org.bitcoinj.crypto.ECKey;
-import org.bitcoinj.base.LegacyAddress;
-import org.bitcoinj.base.Address;
+import org.bitcoinj.core.ECKey;
+import org.bitcoinj.core.LegacyAddress;
+import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Utils;
-import org.bitcoinj.base.Network;
+import org.bitcoinj.params.MainNetParams;
 import org.bouncycastle.util.Arrays;
 
 /**

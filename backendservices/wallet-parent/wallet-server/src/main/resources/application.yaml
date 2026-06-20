@@ -68,18 +68,190 @@ atomex:
     server.pwd:
   # eth config
   eth:
-    server: http://10.40.16.182:7001
+    server: https://ethereum-sepolia-rpc.publicnode.com
+    chain-id: 11155111
     server.user: user
     server.pwd: password
-    withdraw.address: "0x8dc1b89df4bda67d241c3d88afb6b95038c1cdcc"
+    withdraw.address: "0xa69c190e7c823fe23dcf6ed7c32877214458d4d3"
   # usdt config
   usdt:
     server: http://127.0.0.1:18332
     server.user: test
     server.pwd: "123456"
-    withdraw.address: "123456"
+    withdraw.address: "0xa69c190e7c823fe23dcf6ed7c32877214458d4d3"
   # tron config
   tron:
     server: grpc.trongrid.io:50051
-    pubkey: xpub661MyMwAqRbcFBCPpX2NWrk3FnwzDRfQdm1wxYwDSuzngdKNaN5Ac7eC8WQVuSWiuqKoVQT2Qk6r5E9KDCPUFZyXXcFS4y4977zLmssnL6J
-    withdraw.address: TQNkWNfn53g4YxSJHQs1fxbPoorw8hV9Vz
+    withdraw.address: TB1x9vmH5SbBd1EUaUePGbZzqmXGosFtxK
+  chains:
+    btc-testnet:
+      enabled: true
+      family: btc
+      rpcUrl: https://bitcoin-testnet-rpc.publicnode.com
+      chainId: testnet3
+      explorerUrl: https://mempool.space/testnet/tx/
+      confirmations: 1
+      gasPolicy: segwit-vbytes
+      scanBatchSize: 6
+    ethereum-sepolia:
+      enabled: true
+      family: evm
+      rpcUrl: https://ethereum-sepolia-rpc.publicnode.com
+      chainId: 11155111
+      explorerUrl: https://sepolia.etherscan.io/tx/
+      confirmations: 12
+      gasPolicy: eip1559
+      scanBatchSize: 100
+    ethereum-mainnet:
+      enabled: false
+      family: evm
+      rpcUrl: https://ethereum-rpc.publicnode.com
+      chainId: 1
+      explorerUrl: https://etherscan.io/tx/
+      confirmations: 24
+      gasPolicy: eip1559
+      scanBatchSize: 100
+    bnb-chain-testnet:
+      enabled: true
+      family: evm
+      rpcUrl: https://bsc-testnet-rpc.publicnode.com
+      chainId: 97
+      explorerUrl: https://testnet.bscscan.com/tx/
+      confirmations: 20
+      gasPolicy: legacy-gas-price
+      scanBatchSize: 200
+    bnb-chain-mainnet:
+      enabled: false
+      family: evm
+      rpcUrl: https://bsc-rpc.publicnode.com
+      chainId: 56
+      explorerUrl: https://bscscan.com/tx/
+      confirmations: 20
+      gasPolicy: legacy-gas-price
+      scanBatchSize: 200
+    polygon-amoy:
+      enabled: true
+      family: evm
+      rpcUrl: https://polygon-amoy-bor-rpc.publicnode.com
+      chainId: 80002
+      explorerUrl: https://amoy.polygonscan.com/tx/
+      confirmations: 64
+      gasPolicy: eip1559
+      scanBatchSize: 300
+    polygon-mainnet:
+      enabled: false
+      family: evm
+      rpcUrl: https://polygon-bor-rpc.publicnode.com
+      chainId: 137
+      explorerUrl: https://polygonscan.com/tx/
+      confirmations: 128
+      gasPolicy: eip1559
+      scanBatchSize: 300
+    arbitrum-sepolia:
+      enabled: true
+      family: evm
+      rpcUrl: https://arbitrum-sepolia-rpc.publicnode.com
+      chainId: 421614
+      explorerUrl: https://sepolia.arbiscan.io/tx/
+      confirmations: 40
+      gasPolicy: eip1559-l2
+      scanBatchSize: 500
+    arbitrum-one:
+      enabled: false
+      family: evm
+      rpcUrl: https://arbitrum-one-rpc.publicnode.com
+      chainId: 42161
+      explorerUrl: https://arbiscan.io/tx/
+      confirmations: 40
+      gasPolicy: eip1559-l2
+      scanBatchSize: 500
+    optimism-sepolia:
+      enabled: true
+      family: evm
+      rpcUrl: https://optimism-sepolia-rpc.publicnode.com
+      chainId: 11155420
+      explorerUrl: https://sepolia-optimism.etherscan.io/tx/
+      confirmations: 40
+      gasPolicy: eip1559-l2
+      scanBatchSize: 500
+    optimism-mainnet:
+      enabled: false
+      family: evm
+      rpcUrl: https://optimism-rpc.publicnode.com
+      chainId: 10
+      explorerUrl: https://optimistic.etherscan.io/tx/
+      confirmations: 40
+      gasPolicy: eip1559-l2
+      scanBatchSize: 500
+    base-sepolia:
+      enabled: true
+      family: evm
+      rpcUrl: https://base-sepolia-rpc.publicnode.com
+      chainId: 84532
+      explorerUrl: https://sepolia.basescan.org/tx/
+      confirmations: 40
+      gasPolicy: eip1559-l2
+      scanBatchSize: 500
+    base-mainnet:
+      enabled: false
+      family: evm
+      rpcUrl: https://base-rpc.publicnode.com
+      chainId: 8453
+      explorerUrl: https://basescan.org/tx/
+      confirmations: 40
+      gasPolicy: eip1559-l2
+      scanBatchSize: 500
+    avalanche-fuji:
+      enabled: true
+      family: evm
+      rpcUrl: https://avalanche-fuji-c-chain-rpc.publicnode.com
+      chainId: 43113
+      explorerUrl: https://testnet.snowtrace.io/tx/
+      confirmations: 20
+      gasPolicy: eip1559
+      scanBatchSize: 200
+    avalanche-mainnet:
+      enabled: false
+      family: evm
+      rpcUrl: https://avalanche-c-chain-rpc.publicnode.com
+      chainId: 43114
+      explorerUrl: https://snowtrace.io/tx/
+      confirmations: 20
+      gasPolicy: eip1559
+      scanBatchSize: 200
+    tron-mainnet:
+      enabled: true
+      family: tron
+      rpcUrl: https://tron-rpc.publicnode.com
+      chainId: tron-mainnet
+      explorerUrl: https://tronscan.org/#/transaction/
+      confirmations: 20
+      gasPolicy: energy-bandwidth
+      scanBatchSize: 100
+    solana-mainnet:
+      enabled: true
+      family: solana
+      rpcUrl: https://solana-rpc.publicnode.com
+      chainId: mainnet-beta
+      explorerUrl: https://solscan.io/tx/
+      confirmations: 32
+      gasPolicy: compute-unit
+      scanBatchSize: 100
+    solana-testnet:
+      enabled: false
+      family: solana
+      rpcUrl: https://solana-testnet-rpc.publicnode.com
+      chainId: testnet
+      explorerUrl: https://solscan.io/tx/
+      confirmations: 32
+      gasPolicy: compute-unit
+      scanBatchSize: 100
+    ton-mainnet:
+      enabled: false
+      family: ton
+      rpcUrl: https://toncenter.com/api/v2/jsonRPC
+      chainId: mainnet
+      explorerUrl: https://tonscan.org/tx/
+      confirmations: 1
+      gasPolicy: ton-forward-fee
+      scanBatchSize: 50

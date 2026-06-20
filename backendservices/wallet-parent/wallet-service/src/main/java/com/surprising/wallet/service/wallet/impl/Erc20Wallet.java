@@ -241,7 +241,9 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
   protected List<AccountTransaction> findErc20Txs(Long height, Long bestHeight, CurrencyEnum currency) {
     try {
       log.info("{} findRelatedTxs, height:{} begin", currency.getName(), height);
-      //TODO
+      // ERC20 deposit detection is event-based: scan Transfer(address,address,uint256)
+      // logs for the token contract and only credit transfers whose recipient is a
+      // system-managed ETH-family address.
       Event event = new Event("Transfer", Arrays.asList(new TypeReference<Address>() {
                                                         },
               new TypeReference<Address>() {

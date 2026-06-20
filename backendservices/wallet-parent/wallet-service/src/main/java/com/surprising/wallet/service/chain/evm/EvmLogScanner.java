@@ -29,7 +29,7 @@ public class EvmLogScanner {
             String txId = log.getTransactionHash();
             String from = topicToAddress(log.getTopics().get(1));
             String to = topicToAddress(log.getTopics().get(2));
-            BigDecimal amount = new BigDecimal(new BigInteger(stripHex(log.getData())));
+            BigDecimal amount = new BigDecimal(new BigInteger(stripHex(log.getData()), 16));
             int decimals = tokenDefinition.getDecimals() == null ? 18 : tokenDefinition.getDecimals();
             events.add(new DepositEvent(chainType, tokenDefinition.getSymbol(), txId, from, to,
                     amount.movePointLeft(decimals), blockHeight, confirmations, tokenDefinition.getContractAddress(),

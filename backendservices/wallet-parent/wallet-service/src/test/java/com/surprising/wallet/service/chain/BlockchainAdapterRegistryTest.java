@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlockchainAdapterRegistryTest {
@@ -53,5 +54,6 @@ class BlockchainAdapterRegistryTest {
         assertTrue(erc20Quote.supported());
         assertEquals("USDT", erc20Quote.assetSymbol());
         assertTrue(erc20Quote.payload() != null && !erc20Quote.payload().isBlank());
+        assertThrows(UnsupportedOperationException.class, () -> registry.require(ChainType.POLYGON).scanDeposits(1L));
     }
 }

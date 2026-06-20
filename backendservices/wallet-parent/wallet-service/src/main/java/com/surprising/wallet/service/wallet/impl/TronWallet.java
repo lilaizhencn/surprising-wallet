@@ -10,7 +10,6 @@ import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.service.criteria.AccountTransactionExample;
 import com.surprising.wallet.service.criteria.AddressExample;
 import com.surprising.wallet.service.wallet.AbstractEthLikeWallet;
@@ -51,17 +50,10 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
     @Value("${atomex.tron.server}")
     private String tronServer;
 
-    private Bip32Node tronNode;
-
-    @Value("${atomex.tron.pubkey}")
-    private String tronPubkey;
-
-
     @PostConstruct
     public void init() {
 //        log.info("tronserver url = {}", tronServer);
         TronWalletApi.init(tronServer);
-        tronNode = Bip32Node.decode(tronPubkey);
     }
 
     @Override
@@ -203,11 +195,11 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
         }
 
         /*
-         * tron 的前缀是41
-         * hd的公钥推导path: bip44-currency-biz-userId-index
+         * TRON uses the same secp256k1 root key set as BTC/EVM.
+         * Address generation must mirror wallet-sig2's m/44/currency/biz/user/index private-key path.
          */
         CurrencyEnum currency = getCurrency();
-        ECKey ecKey = tronNode.getChild(44).getChild(currency.getIndex()).getChild(biz).getChild(userId.intValue()).getChild(index).getEcKey();
+        ECKey ecKey = pubKeyConfig.NODE2.getChild(44).getChild(currency.getIndex()).getChild(biz).getChild(userId.intValue()).getChild(index).getEcKey();
         String addressStr = TronWalletApi.getAddress(ecKey.getPubKey());
 
         Address address = new Address();

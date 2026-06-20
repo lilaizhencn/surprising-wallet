@@ -2,7 +2,7 @@ package com.surprising.wallet.sdk.bitcoinj.util;
 
 import com.surprising.wallet.sdk.bitcoinj.crypto.DigestHash;
 import org.bitcoinj.core.*;
-import org.bitcoinj.crypto.ECKey;
+import org.bitcoinj.core.ECKey;
 import org.bouncycastle.util.Arrays;
 
 import javax.crypto.Mac;

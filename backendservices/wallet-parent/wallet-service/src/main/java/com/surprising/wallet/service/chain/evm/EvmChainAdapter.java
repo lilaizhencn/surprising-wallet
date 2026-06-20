@@ -7,8 +7,10 @@ import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TransferQuote;
 import com.surprising.wallet.common.chain.TransferRequest;
 import com.surprising.wallet.service.chain.BlockchainAdapter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.EnumMap;
 import java.util.List;
@@ -21,7 +23,21 @@ public class EvmChainAdapter implements BlockchainAdapter {
     private final EvmGasEstimator gasEstimator;
     private final EvmTransactionBuilder transactionBuilder;
     private final EvmLogScanner logScanner;
+    private final EvmDepositScanner depositScanner;
     private final Map<ChainType, ChainProfile> profiles = new EnumMap<>(ChainType.class);
+
+    @Autowired
+    public EvmChainAdapter(EvmNonceManager nonceManager, TokenRegistry tokenRegistry,
+                           EvmGasEstimator gasEstimator, EvmTransactionBuilder transactionBuilder,
+                           EvmLogScanner logScanner, EvmDepositScanner depositScanner) {
+        this.nonceManager = nonceManager;
+        this.tokenRegistry = tokenRegistry;
+        this.gasEstimator = gasEstimator;
+        this.transactionBuilder = transactionBuilder;
+        this.logScanner = logScanner;
+        this.depositScanner = depositScanner;
+        registerProfiles();
+    }
 
     public EvmChainAdapter(EvmNonceManager nonceManager, TokenRegistry tokenRegistry,
                            EvmGasEstimator gasEstimator, EvmTransactionBuilder transactionBuilder,
@@ -31,6 +47,7 @@ public class EvmChainAdapter implements BlockchainAdapter {
         this.gasEstimator = gasEstimator;
         this.transactionBuilder = transactionBuilder;
         this.logScanner = logScanner;
+        this.depositScanner = null;
         registerProfiles();
     }
 
@@ -81,7 +98,14 @@ public class EvmChainAdapter implements BlockchainAdapter {
 
     @Override
     public List<DepositEvent> scanDeposits(long height) {
-        return List.of();
+        if (depositScanner == null) {
+            throw new UnsupportedOperationException("EVM deposit scanner runtime is not configured");
+        }
+        try {
+            return depositScanner.scanAndCreditNativeEth(height);
+        } catch (IOException e) {
+            throw new IllegalStateException("EVM deposit scan failed at height " + height, e);
+        }
     }
 
     public ChainProfile getProfile(ChainType chainType) {
@@ -89,13 +113,16 @@ public class EvmChainAdapter implements BlockchainAdapter {
     }
 
     private void registerProfiles() {
-        registerProfile(ChainType.ETH, "ETH", 1L, 1L);
-        registerProfile(ChainType.BNB, "BNB", 56L, 1L);
-        registerProfile(ChainType.POLYGON, "MATIC", 137L, 1L);
-        registerProfile(ChainType.ARBITRUM, "ETH_ARB", 42161L, 1L);
-        registerProfile(ChainType.OPTIMISM, "ETH_OP", 10L, 1L);
-        registerProfile(ChainType.BASE, "ETH_BASE", 8453L, 1L);
-        registerProfile(ChainType.AVAX_C, "AVAX_C", 43114L, 1L);
+        registerProfile(ChainType.ETH, "ETH", 11155111L, 1L);
+        // The current runtime is testnet-only. Keep the adapter chainIds aligned
+        // with application.yaml so signed EVM payloads never mix mainnet IDs with
+        // testnet RPC endpoints during fork and integration tests.
+        registerProfile(ChainType.BNB, "BNB", 97L, 1L);
+        registerProfile(ChainType.POLYGON, "MATIC", 80002L, 1L);
+        registerProfile(ChainType.ARBITRUM, "ETH_ARB", 421614L, 1L);
+        registerProfile(ChainType.OPTIMISM, "ETH_OP", 11155420L, 1L);
+        registerProfile(ChainType.BASE, "ETH_BASE", 84532L, 1L);
+        registerProfile(ChainType.AVAX_C, "AVAX_C", 43113L, 1L);
     }
 
     private void registerProfile(ChainType chainType, String nativeSymbol, Long chainId, Long gasFloorGwei) {

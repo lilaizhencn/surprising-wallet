@@ -1,0 +1,55 @@
+atomex:
+  app:
+    env:
+      name: test
+  wallet:
+    network: test
+    pubKey1: tpubD6NzVbkrYhZ4YeTnP6ae6en8YvKSvxvvCwh5X7gNpwqEeix6o7etGgsyGywcB9gS1bGTmC4WfLKAdK6vxDEzedd7PMRLcYk5yZLj5JkLAVB
+    pubKey2: tpubD6NzVbkrYhZ4WuN2bmdffo5p894oRYGQVCfKe3TKT4QVw7qQT18jG1FYbYyB3ePESejLdfaEFMRpsYGVjb4Bh6HiiWaSU8iJRVE46EirNBT
+    pubKey3: tpubD6NzVbkrYhZ4XKeuSHwv2p3snJxWjacFsu2rEEht2qMaM5FYV2RkbMaJEYNZGK7B3i8D46RTs83DJNPh2Jd5MzXivXCiHLbqAFKv8MKxrC4
+  btc:
+    server: https://bitcoin-testnet-rpc.publicnode.com
+  eth:
+    server: https://ethereum-sepolia-rpc.publicnode.com
+    chain-id: 11155111
+  tron:
+    server: grpc.nile.trongrid.io:50051
+    fullnode: grpc.nile.trongrid.io:50051
+    soliditynode: grpc.nile.trongrid.io:50061
+    eventserver: https://nile.trongrid.io
+  chains:
+    btc-testnet:
+      enabled: true
+      rpcUrl: https://bitcoin-testnet-rpc.publicnode.com
+    ethereum-sepolia:
+      enabled: true
+      rpcUrl: https://ethereum-sepolia-rpc.publicnode.com
+    bnb-chain-testnet:
+      enabled: true
+      rpcUrl: ${BNB_TESTNET_RPC_URL:https://bsc-testnet-dataseed.bnbchain.org}
+    polygon-amoy:
+      enabled: true
+      rpcUrl: ${POLYGON_AMOY_RPC_URL:https://polygon-amoy-bor-rpc.publicnode.com}
+    arbitrum-sepolia:
+      enabled: true
+      rpcUrl: https://sepolia-rollup.arbitrum.io/rpc
+    optimism-sepolia:
+      enabled: true
+      rpcUrl: https://sepolia.optimism.io
+    base-sepolia:
+      enabled: true
+      rpcUrl: https://sepolia.base.org
+    avalanche-fuji:
+      enabled: true
+      rpcUrl: https://api.avax-test.network/ext/bc/C/rpc
+    tron-nile:
+      enabled: true
+      family: tron
+      rpcUrl: grpc.nile.trongrid.io:50051
+      chainId: nile
+      explorerUrl: https://nile.tronscan.org/#/transaction/
+      confirmations: 20
+      gasPolicy: energy-bandwidth
+      scanBatchSize: 100
+    tron-mainnet:
+      enabled: false

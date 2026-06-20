@@ -8,8 +8,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,12 +27,37 @@ class TestTatumFaucetHelperTest {
         try {
             String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
             TestTatumFaucetHelper helper = new TestTatumFaucetHelper("test-key", baseUrl,
-                    Map.of("btc-testnet", "/v3/blockchain/faucet/btc"));
+                    Map.of("btc-testnet", "/v3/blockchain/faucet/btc"), 1, Duration.ofMillis(1));
             helper.requestBitcoinTestnet("tb1qexampleaddress");
 
             assertEquals("POST", captured.method);
             assertEquals("test-key", captured.apiKey);
             assertTrue(captured.body.contains("tb1qexampleaddress"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void helperShouldRetryRateLimitedRequest() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/v3/blockchain/faucet/btc", exchange -> {
+            int current = calls.incrementAndGet();
+            byte[] response = "{}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(current == 1 ? 429 : 200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.setExecutor(Executors.newSingleThreadExecutor());
+        server.start();
+        try {
+            String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+            TestTatumFaucetHelper helper = new TestTatumFaucetHelper("test-key", baseUrl,
+                    Map.of("btc-testnet", "/v3/blockchain/faucet/btc"), 2, Duration.ofMillis(1));
+
+            assertEquals(200, helper.requestBitcoinTestnet("tb1qexampleaddress").statusCode());
+            assertEquals(2, calls.get());
         } finally {
             server.stop(0);
         }

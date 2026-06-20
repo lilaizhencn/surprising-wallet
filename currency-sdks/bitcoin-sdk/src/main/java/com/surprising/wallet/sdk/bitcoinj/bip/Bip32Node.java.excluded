@@ -1,0 +1,79 @@
+package com.surprising.wallet.sdk.bitcoinj.bip;
+import com.surprising.wallet.sdk.bitcoinj.crypto.DigestHash;
+import com.surprising.wallet.sdk.bitcoinj.util.Tools;
+import org.bitcoinj.core.Base58;
+import org.bitcoinj.core.AddressFormatException;
+import org.bitcoinj.core.NetworkParameters;
+import org.bitcoinj.core.ECKey;
+import org.bouncycastle.math.ec.ECPoint;
+import org.bouncycastle.util.Arrays;
+import java.math.BigInteger;
+import java.util.HashMap;
+import java.util.Map;
+
+public class Bip32Node {
+    public static final int TYPE_BITCOIN = 0, TYPE_LITECOIN = 1;
+    private static final byte[] BIP_SEED = "Bitcoin seed".getBytes();
+    private static final byte[] BIT_MAIN_PRIV = {0X04,0X48,(byte)0XAD,(byte)0XE4};
+    private static final byte[] BIT_MAIN_PUB = {0X04,0X48,(byte)0XB2,0X1E};
+    private static final byte[] BIT_TEST_PRIV = {0X04,0X35,(byte)0X83,(byte)0X94};
+    private static final byte[] BIT_TEST_PUB = {0X04,0X35,(byte)0X87,(byte)0XCF};
+    private static final byte[] LITE_MAIN_PRIV = {0X01,(byte)0X9D,(byte)0X9C,(byte)0XFE};
+    private static final byte[] LITE_MAIN_PUB = {0X01,(byte)0X9D,(byte)0XA4,0X62};
+    private static final byte[] LITE_TEST_PRIV = {0X04,0X36,(byte)0XEF,0X7D};
+    private static final byte[] LITE_TEST_PUB = {0X04,0X36,(byte)0XF6,(byte)0XE1};
+    private static final Map<String,byte[]> byteMap = new HashMap<>();
+    static { byteMap.put("BIT_MAIN_PRIV",BIT_MAIN_PRIV); byteMap.put("BIT_MAIN_PUB",BIT_MAIN_PUB); byteMap.put("BIT_TEST_PRIV",BIT_TEST_PRIV); byteMap.put("BIT_TEST_PUB",BIT_TEST_PUB); byteMap.put("LITE_MAIN_PRIV",LITE_MAIN_PRIV); byteMap.put("LITE_MAIN_PUB",LITE_MAIN_PUB); byteMap.put("LITE_TEST_PRIV",LITE_TEST_PRIV); byteMap.put("LITE_TEST_PUB",LITE_TEST_PUB); }
+    private ECKey ecKey; private byte[] chainCode; private int depth, parent, sequence;
+    public Bip32Node(ECKey ecKey, byte[] chainCode) { this.ecKey=ecKey; this.chainCode=chainCode; }
+    public Bip32Node(ECKey ecKey, byte[] chainCode, int d, int p, int s) { this.ecKey=ecKey; this.chainCode=chainCode; depth=d; parent=p; sequence=s; }
+    public static Bip32Node getMasterKey(byte[] seed) {
+        byte[] r = Tools.hmacSha512(seed,BIP_SEED);
+        byte[] lft=Arrays.copyOfRange(r,0,32), rgt=Arrays.copyOfRange(r,32,64);
+        if(new BigInteger(1,lft).compareTo(ECKey.ecDomainParameters().getN())>=0) throw new RuntimeException("bad");
+        return new Bip32Node(ECKey.fromPrivate(new BigInteger(1,lft),true),rgt);
+    }
+    public Bip32Node getChild(int s) { return getChildNode(this,s); }
+    public Bip32Node getChildH(int s) { return getChildNode(this,getHSeq(s)); }
+    public static Bip32Node getChildNode(Bip32Node node, int sequence) {
+        ECKey nk=node.getEcKey(); byte[] pubKey=nk.getPubKey();
+        int seqCheck=(sequence&0X80000000); if(seqCheck!=0&&!nk.hasPrivKey()) throw new IllegalArgumentException("no hardened for pub");
+        byte[] sub; if(seqCheck==0){ int pl=pubKey.length; sub=new byte[pl+4]; System.arraycopy(pubKey,0,sub,0,pl); sub[pl]=(byte)((sequence>>>24)&0XFF); sub[pl+1]=(byte)((sequence>>>16)&0XFF); sub[pl+2]=(byte)((sequence>>>8)&0XFF); sub[pl+3]=(byte)(sequence&0XFF); }
+        else { byte[] pk=nk.getPrivKeyBytes(); int pl=pk.length; sub=new byte[pl+5]; System.arraycopy(pk,0,sub,1,pl); sub[pl+1]=(byte)((sequence>>>24)&0XFF); sub[pl+2]=(byte)((sequence>>>16)&0XFF); sub[pl+3]=(byte)((sequence>>>8)&0XFF); sub[pl+4]=(byte)(sequence&0XFF); }
+        byte[] r=Tools.hmacSha512(sub,node.getChainCode());
+        byte[] lft=Arrays.copyOfRange(r,0,32), rgt=Arrays.copyOfRange(r,32,64);
+        BigInteger bi=new BigInteger(1,lft), cn=ECKey.ecDomainParameters().getN();
+        if(bi.compareTo(cn)>=0) throw new RuntimeException("bad");
+        if(nk.hasPrivKey()){ BigInteger t=bi.add(new BigInteger(1,nk.getPrivKeyBytes())).mod(cn); if(t.equals(BigInteger.ZERO)) throw new RuntimeException("bad"); return new Bip32Node(ECKey.fromPrivate(t,true),rgt,node.getDepth()+1,node.fingerprint(),sequence); }
+        else { ECPoint pt=ECKey.ecDomainParameters().getG().multiply(bi).add(ECKey.ecDomainParameters().getCurve().decodePoint(pubKey)); if(pt.isInfinity()) throw new RuntimeException("bad"); return new Bip32Node(ECKey.fromPublicOnly(pt,true),rgt,node.getDepth()+1,node.fingerprint(),sequence); }
+    }
+    public int fingerprint() { byte[] pk=ecKey.getPubKey(); byte[] enc=DigestHash.sha256hash160(pk); int r=0; for(int i=0;i<4;i++){r<<=8;r|=enc[i]&0XFF;} return r; }
+    public String privSerialize(int ct, boolean mn) { return serialize(ct,mn,true); }
+    public String pubSerialize(int ct, boolean mn) { return serialize(ct,mn,false); }
+    private String serialize(int ct, boolean mn, boolean isPrivate) {
+        byte[] r=new byte[78]; int pos=0;
+        byte[] hd=byteMap.get((ct==TYPE_BITCOIN?"BIT":"LITE")+"_"+(mn?"MAIN":"TEST")+"_"+(isPrivate?"PRIV":"PUB"));
+        System.arraycopy(hd,0,r,pos,4); pos+=4; r[pos++]=(byte)(depth&0XFF);
+        int p=this.parent; r[pos++]=(byte)((p>>>24)&0XFF); r[pos++]=(byte)((p>>>16)&0XFF); r[pos++]=(byte)((p>>>8)&0XFF); r[pos++]=(byte)(p&0XFF);
+        int s=this.sequence; r[pos++]=(byte)((s>>>24)&0XFF); r[pos++]=(byte)((s>>>16)&0XFF); r[pos++]=(byte)((s>>>8)&0XFF); r[pos++]=(byte)(s&0XFF);
+        System.arraycopy(chainCode,0,r,13,32); pos+=32;
+        if(isPrivate){r[pos++]=0X00; System.arraycopy(ecKey.getPrivKeyBytes(),0,r,pos,32);}
+        else{System.arraycopy(ecKey.getPubKey(),0,r,pos,33);}
+        return Tools.byteToString(r);
+    }
+    public static Bip32Node decode(String ser) {
+        try { byte[] t=Base58.decode(ser); if(t.length!=82) throw new IllegalArgumentException("bad len"); if(!Tools.check(t)) throw new IllegalArgumentException("bad checksum");
+            byte[] d=Arrays.copyOfRange(t,0,78); int pos=4; byte[] hb=Arrays.copyOfRange(d,0,pos);
+            boolean isPriv=Arrays.areEqual(hb,BIT_MAIN_PRIV)||Arrays.areEqual(hb,BIT_TEST_PRIV)||Arrays.areEqual(hb,LITE_MAIN_PRIV)||Arrays.areEqual(hb,LITE_TEST_PRIV);
+            if(!isPriv&&!(Arrays.areEqual(hb,BIT_MAIN_PUB)||Arrays.areEqual(hb,BIT_TEST_PUB)||Arrays.areEqual(hb,LITE_MAIN_PUB)||Arrays.areEqual(hb,LITE_TEST_PUB))) throw new IllegalArgumentException("bad header");
+            int dp=d[pos++]&0XFF, pr=d[pos++]&0XFF; for(int i=0;i<3;i++){pr<<=8;pr|=d[pos++]&0XFF;}
+            int sq=d[pos++]&0XFF; for(int i=0;i<3;i++){sq<<=8;sq|=d[pos++]&0XFF;}
+            byte[] cc=Arrays.copyOfRange(d,pos,pos+32); pos+=32; byte[] key=Arrays.copyOfRange(d,pos,d.length);
+            return new Bip32Node(isPriv?ECKey.fromPrivate(key,true):ECKey.fromPublicOnly(key),cc,dp,pr,sq);
+        } catch(AddressFormatException e){e.printStackTrace();} return null;
+    }
+    public static int getHSeq(int s){return Integer.MAX_VALUE+1+s;}
+    public ECKey getEcKey(){return ecKey;}
+    public byte[] getChainCode(){return chainCode;}
+    public int getDepth(){return depth;} public int getParent(){return parent;} public int getSequence(){return sequence;}
+}

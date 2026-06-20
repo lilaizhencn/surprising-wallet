@@ -30,6 +30,7 @@ import org.bitcoinj.crypto.ECKey;
 import org.ethereum.crypto.EthECKey;
 import org.spongycastle.util.encoders.Hex;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
@@ -68,6 +69,8 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
     @Autowired
     protected AddressService addressService;
     private String withdrawAddress;
+    @Value("${atomex.eth.chain-id:11155111}")
+    private Long chainId;
 
 
     /**
@@ -448,6 +451,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
         signature.put("nonce", address.getNonce());
         BigDecimal gasPrice = gasPrice(currency);
         signature.put("gasPrice", gasPrice);
+        signature.put("chainId", chainId);
         WithdrawTransaction transaction = WithdrawTransaction.builder()
                 .balance(record.getBalance())
                 .currency(currency.getIndex())

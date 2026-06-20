@@ -11,31 +11,54 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.logging.Logger;
 
 /**
- * Test-only helper for Tatum faucet calls.
+ * Test-only helper for Tatum faucet calls. This class deliberately lives under
+ * {@code src/test} and is not a Spring bean, so faucet access cannot leak into
+ * production wallet services.
+ *
  * The endpoint paths are configurable so the helper can track Tatum API changes without
  * changing production code.
  */
 public final class TestTatumFaucetHelper {
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Logger LOGGER = Logger.getLogger(TestTatumFaucetHelper.class.getName());
+    private static final String DEFAULT_TEST_API_KEY = "t-6a35f7d8c8da54cac6d6f4cd-44ba8373be864f1599aa0cf7";
 
     private final HttpClient httpClient;
     private final String apiKey;
     private final String baseUrl;
     private final Map<String, String> faucetPaths;
+    private final int maxAttempts;
+    private final Duration retryDelay;
 
     public TestTatumFaucetHelper(String apiKey, String baseUrl) {
-        this(apiKey, baseUrl, defaultPaths());
+        this(apiKey, baseUrl, defaultPaths(), 3, Duration.ofSeconds(2));
     }
 
     public TestTatumFaucetHelper(String apiKey, String baseUrl, Map<String, String> faucetPaths) {
+        this(apiKey, baseUrl, faucetPaths, 3, Duration.ofSeconds(2));
+    }
+
+    public TestTatumFaucetHelper(String apiKey, String baseUrl, Map<String, String> faucetPaths,
+                                 int maxAttempts, Duration retryDelay) {
         this.apiKey = Objects.requireNonNull(apiKey, "apiKey");
         this.baseUrl = Objects.requireNonNull(baseUrl, "baseUrl");
         this.faucetPaths = new LinkedHashMap<>(Objects.requireNonNull(faucetPaths, "faucetPaths"));
+        this.maxAttempts = Math.max(1, maxAttempts);
+        this.retryDelay = Objects.requireNonNull(retryDelay, "retryDelay");
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
+    }
+
+    public static TestTatumFaucetHelper fromEnvironment(String baseUrl) {
+        String apiKey = Optional.ofNullable(System.getenv("TATUM_API_KEY"))
+                .filter(value -> !value.isBlank())
+                .orElse(DEFAULT_TEST_API_KEY);
+        return new TestTatumFaucetHelper(apiKey, baseUrl);
     }
 
     public HttpResponse<String> requestBitcoinTestnet(String address) throws IOException, InterruptedException {
@@ -70,7 +93,16 @@ public final class TestTatumFaucetHelper {
                 .header("x-api-key", apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(payload))
                 .build();
-        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> lastResponse = null;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            lastResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            logResult(key, address, attempt, lastResponse);
+            if (!shouldRetry(lastResponse.statusCode()) || attempt == maxAttempts) {
+                return lastResponse;
+            }
+            Thread.sleep(retryDelay(lastResponse).toMillis());
+        }
+        return lastResponse;
     }
 
     private static Map<String, String> defaultPaths() {
@@ -84,5 +116,32 @@ public final class TestTatumFaucetHelper {
 
     private static String trimTrailingSlash(String value) {
         return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
+    }
+
+    private boolean shouldRetry(int statusCode) {
+        return statusCode == 429 || statusCode == 500 || statusCode == 502 || statusCode == 503 || statusCode == 504;
+    }
+
+    private Duration retryDelay(HttpResponse<String> response) {
+        return response.headers().firstValue("Retry-After")
+                .flatMap(TestTatumFaucetHelper::parseRetryAfterSeconds)
+                .map(Duration::ofSeconds)
+                .orElse(retryDelay);
+    }
+
+    private static Optional<Long> parseRetryAfterSeconds(String value) {
+        try {
+            return Optional.of(Long.parseLong(value));
+        } catch (NumberFormatException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private static void logResult(String faucetKey, String address, int attempt, HttpResponse<String> response) {
+        LOGGER.info(() -> "tatum faucet result key=" + faucetKey
+                + ", address=" + address
+                + ", attempt=" + attempt
+                + ", status=" + response.statusCode()
+                + ", body=" + response.body());
     }
 }

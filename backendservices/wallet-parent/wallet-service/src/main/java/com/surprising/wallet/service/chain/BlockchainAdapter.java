@@ -27,6 +27,6 @@ public interface BlockchainAdapter {
     }
 
     default List<DepositEvent> scanDeposits(long height) {
-        return List.of();
+        throw new UnsupportedOperationException("deposit scanning must be implemented by the concrete chain runtime");
     }
 }

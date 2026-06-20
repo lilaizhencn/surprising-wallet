@@ -47,6 +47,6 @@ public class TronChainAdapter implements BlockchainAdapter {
 
     @Override
     public List<DepositEvent> scanDeposits(long height) {
-        return List.of();
+        throw new UnsupportedOperationException("TRON deposit scanning requires the RPC-backed TronScanner runtime; empty scans are forbidden");
     }
 }

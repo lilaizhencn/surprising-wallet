@@ -7,7 +7,6 @@ import com.surprising.wallet.common.chain.TransferRequest;
 import com.surprising.wallet.service.chain.BlockchainAdapter;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 @Component
@@ -35,6 +34,6 @@ public class SolanaChainAdapter implements BlockchainAdapter {
 
     @Override
     public List<DepositEvent> scanDeposits(long height) {
-        return List.of();
+        throw new UnsupportedOperationException("Solana scanner is blocked until a Solana Java RPC runtime is wired");
     }
 }

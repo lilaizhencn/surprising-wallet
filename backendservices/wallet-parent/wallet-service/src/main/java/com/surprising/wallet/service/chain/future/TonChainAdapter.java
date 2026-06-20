@@ -34,6 +34,6 @@ public class TonChainAdapter implements BlockchainAdapter {
 
     @Override
     public List<DepositEvent> scanDeposits(long height) {
-        return List.of();
+        throw new UnsupportedOperationException("TON scanner is blocked until a TON cell/jetton RPC runtime is wired");
     }
 }
