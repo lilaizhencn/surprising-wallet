@@ -1,0 +1,16 @@
+1.添加 application-test.yaml,application-prod.yaml:不同环境配置不同的 rpc node和 masterNode keypair(3对)，test 使用测试网 prod 要使用 mainnet网络
+rpc list：
+1.btc：main：https://bitcoin-rpc.publicnode.com  test：https://bitcoin-testnet-rpc.publicnode.com
+2.eth：main：https://ethereum-rpc.publicnode.com test：https://ethereum-sepolia-rpc.publicnode.com
+3.BSC: main：https://bsc-rpc.publicnode.com test：https://bsc-testnet-rpc.publicnode.com
+4.Polygon：main：https://polygon-bor-rpc.publicnode.com test：https://polygon-amoy-bor-rpc.publicnode.com
+5.Base：main：https://base-rpc.publicnode.com test：https://base-sepolia-rpc.publicnode.com
+6.Arbitrum One：main：https://arbitrum-one-rpc.publicnode.com test：https://arbitrum-sepolia-rpc.publicnode.com
+7.Optimism：main：https://optimism-rpc.publicnode.com test：https://optimism-sepolia-rpc.publicnode.com
+8.Avalanche main：https://avalanche-c-chain-rpc.publicnode.com test：https://avalanche-fuji-c-chain-rpc.publicnode.com(为什么 c p x chain 三种)
+9.Solana：https://solana-rpc.publicnode.com test：https://solana-testnet-rpc.publicnode.com
+10.Sui main：GRPC:https://sui-grpc.publicnode.com RPC:https://sui-rpc.publicnode.com TEST: GRPC: https://sui-testnet-grpc.publicnode.com  RPC: https://sui-testnet-rpc.publicnode.com
+11.TON:
+12.Aptos：
+wallet-server 配置：
+2.

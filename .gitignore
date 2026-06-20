@@ -12,4 +12,5 @@ target/
 
 # Logs
 logs/
+log/
 *.log
