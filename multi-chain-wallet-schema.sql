@@ -49,6 +49,16 @@ create table if not exists token_config (
     unique (chain, contract_address)
 );
 
+alter table token_config add column if not exists network varchar(32);
+alter table token_config add column if not exists token_standard varchar(32);
+alter table token_config add column if not exists contract_address_base58 varchar(128);
+alter table token_config add column if not exists contract_address_hex varchar(128);
+alter table token_config add column if not exists min_deposit_amount numeric(78, 18);
+alter table token_config add column if not exists min_withdraw_amount numeric(78, 18);
+alter table token_config add column if not exists collect_threshold numeric(78, 18);
+alter table token_config add column if not exists gas_strategy varchar(64);
+alter table token_config add column if not exists confirmation_required integer;
+
 create table if not exists chain_scan_height (
     id bigserial primary key,
     chain varchar(32) not null,
@@ -238,6 +248,43 @@ create table if not exists tron_token_transfer (
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
     unique (chain, tx_hash, log_index)
+);
+
+create table if not exists collection_record (
+    id bigserial primary key,
+    collection_no varchar(96) not null,
+    chain varchar(32) not null,
+    asset_symbol varchar(32) not null,
+    from_address varchar(160) not null,
+    to_address varchar(160) not null,
+    amount numeric(78, 18) not null default 0,
+    fee numeric(78, 18) not null default 0,
+    tx_hash varchar(128),
+    status varchar(32) not null default 'CREATED',
+    error_message text,
+    raw_payload text,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (collection_no),
+    unique (chain, asset_symbol, from_address, to_address, tx_hash)
+);
+
+create table if not exists gas_topup_task (
+    id bigserial primary key,
+    task_no varchar(96) not null,
+    chain varchar(32) not null,
+    target_address varchar(160) not null,
+    source_address varchar(160),
+    amount numeric(78, 18) not null default 0,
+    tx_hash varchar(128),
+    status varchar(32) not null default 'CREATED',
+    reason varchar(256),
+    retry_count integer not null default 0,
+    raw_payload text,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (task_no),
+    unique (chain, target_address, status)
 );
 
 create table if not exists sol_transaction (

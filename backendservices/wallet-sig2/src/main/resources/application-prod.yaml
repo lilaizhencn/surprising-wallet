@@ -1,0 +1,8 @@
+atomex:
+  wallet:
+    network: main
+    # Production master/private keys must be injected by KMS/HSM or environment variables.
+    masterKey: ${ATOMEX_SIG2_MASTER_KEY:}
+    pubKey1: ${ATOMEX_PROD_PUBKEY1:}
+    pubKey2: ${ATOMEX_PROD_PUBKEY2:}
+    pubKey3: ${ATOMEX_PROD_PUBKEY3:}

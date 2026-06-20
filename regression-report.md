@@ -204,9 +204,92 @@ Generated: 2026-06-20 21:08 Asia/Shanghai.
 
 ### Remaining Blocked Items
 
-- Polygon Amoy fork full-chain and multi-user validation remains blocked until a fork-capable RPC/archive provider is available.
+- Polygon Amoy was later validated with the operator-provided Alchemy fork-capable RPC; see `Polygon And TRON Follow-Up`.
 - No commit was created and nothing was pushed.
 
 Suggested commit message when all commit gates are satisfied:
 
 `feat: evm multi-user full business flow stability validation with fork environment`
+
+---
+
+## Polygon And TRON Follow-Up
+
+Generated: 2026-06-20 23:35 Asia/Shanghai.
+
+### Polygon
+
+- User-provided Alchemy Polygon Amoy RPC was tested.
+- Hardhat fork without a fixed block can hang during initialization.
+- Hardhat fork with block `40491200` passed in TTY mode.
+- Mock USDT: `0xb5F6211f94FCC162D5c8cebba4f656c965577392`.
+- Mock USDC: `0x729B992ba1ccea88BE66985DCa5Ff28Ebba12046`.
+- Polygon full-chain integration test passed.
+- Polygon multi-user business-flow stability test passed.
+- DB summary: 5 MATIC credited deposits, 2 USDT credited deposits, 2 USDC credited deposits, 4 stability orders all `CONFIRMED`.
+
+### EVM Fork Runner
+
+- Added `CHAIN_FILTER` so one chain can be tested without rerunning verified chains.
+- Added `POLYGON_RPC_URL`, `POLYGON_FORK_BLOCK`, and `FORK_START_TIMEOUT_SEC` support.
+- Removed known failed fork endpoints from the runner and kept only endpoints that previously passed fork tests or private env-var endpoints.
+- Added `EVM_FORK_TESTING.md` in the repository root.
+
+### Environment Profiles
+
+- Added `application-test.yaml` and `application-prod.yaml` for:
+  - `wallet-server`
+  - `wallet-sig1`
+  - `wallet-sig2`
+- Test profile uses testnet RPC and current test key material.
+- Prod profile uses mainnet RPC and empty env placeholders for production key material; production keys were not generated.
+
+### TRON Trident
+
+- Trident SDK: `io.github.tronprotocol:trident:0.11.0`.
+- Added Trident dependency to `wallet-service`.
+- Fixed protobuf runtime conflict by pinning `protobuf-java` and `protobuf-java-util` to `3.25.8` before legacy transitive dependencies.
+- Added TRON key/address/TRC20/gas/scanner/client/service wrappers.
+- TRON unit tests passed.
+- Nile gRPC connectivity test passed with `-Dtron.live.enabled=true`.
+- Multi-chain SQL migration was applied with the local DB role `atomex` after the lower-privilege `wallet` role was rejected by schema/table ownership.
+- Nile TRX/TRC20 USDT live fund flows passed after the faucet funding arrived.
+- TRC20 scanner bug fixed: Nile returns event contract address as a 20-byte value, so scanner now normalizes it to `41` + 20-byte address before token_config matching.
+- USDC TRC20 live flow remains blocked until a Nile/Shasta USDC test token or mock contract is provided.
+
+### TRON Nile Live Flow
+
+- Source/faucet address: `TB1x9vmH5SbBd1EUaUePGbZzqmXGosFtxK`.
+- USDT contract: `TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf`.
+- TRX deposit txid: `3ada2e6ebc97d206fcf08e332d4c30699d9ea9035d91cb852bf1e5a49b7ad80c`.
+- TRX withdraw txids: `6767933aac18c26d14a1e0f07047897bf30dd0e1ac0cd38bef8de0142cad27b4`, `6cf387ca07f3fb05a5ba570d92ec1f066de80ac796f43536795ed0b318cbf985`.
+- USDT deposit txids: `e2b7583e00d7f097e6d5c98c4bf22850b6760b8bdc36aeee716c413a9f4a33ee`, `9895fcd268408d94f28ab23b0f86f7c1b5cfb8efeba44ab37a3f7ac3a3685ede`.
+- USDT collection txid: `8b7d473180bb4584ccc59cf2244bd9c35a4a4f9c4b93ca5588a237e65007a43d`.
+- USDT withdraw txid: `c5b2a2ad1d4cfed63c884320c89a34e6dbd69cd24d176828e5a6195408c3f271`.
+- Gas top-up txids: `d6189681b50f23199df6845f592bfc01303a58b099d2631166a53816f9bf93f0`, `610111a7398087fa3be86a93ebd2f06bd398149daf0eb6f19053a83d37266ca2`.
+- Detailed report: `TRON_LIVE_FLOW_REPORT.md`.
+
+### Final Build And Startup Verification
+
+- `mvn -q clean install -DskipTests=false` passed across the full reactor at `2026-06-21 00:42:00 +08:00`.
+- Surefire summary after the final build: 57 tests, 0 failures, 0 errors, 11 skipped.
+- BTC SDK regression in the full build passed: 21 tests, 0 failures.
+- Redis check passed: `PONG`.
+- PostgreSQL check passed: `select 1`.
+- Multi-chain SQL verification passed: all 9 new `token_config` TRC20 columns exist, `collection_record`/`gas_topup_task` exist, and `wallet` can insert into both new tables in rollback transactions.
+- `wallet-server` started on `8002`, `/actuator/health` returned `UP`, PostgreSQL Hikari pool initialized, and BTC scan job started.
+- `wallet-sig1` started on `8004`, and the first-sign job started.
+- `wallet-sig2` started as a non-web signing process, and the second-sign job started.
+- `application-test.yaml` loading was verified for all three runnable projects with `--spring.profiles.active=test`.
+- Test profile startup results: `wallet-server` health `UP`, `wallet-sig1` listening on `8004`, and `wallet-sig2` non-web signing process started.
+- Startup risk note: `wallet-sig2` printed `第二次签名服务校验钱包环境 没有初始化`; process startup and second-sign job still entered running state.
+- Cleanup completed after validation.
+
+### Commit Gate
+
+- TRX and TRC20 USDT Nile live flow passed.
+- USDC TRC20 live flow remains blocked because the Nile faucet supplied USDT only and no controlled mock USDC deployment has been verified through the wallet path.
+- Commit was not created.
+- Push: no.
+
+Detailed TRON report: `TRON_TRIDENT_REPORT.md`.

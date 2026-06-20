@@ -1,4 +1,4 @@
-1.添加 application-test.yaml,application-prod.yaml:不同环境配置不同的 rpc node和 masterNode keypair(3对)，test 使用测试网 prod 要使用 mainnet网络
+A.添加 application-test.yaml,application-prod.yaml:不同环境配置不同的 rpc node和 masterNode keypair(3对)，test 使用测试网 prod 要使用 mainnet网络
 rpc list：
 1.btc：main：https://bitcoin-rpc.publicnode.com  test：https://bitcoin-testnet-rpc.publicnode.com
 2.eth：main：https://ethereum-rpc.publicnode.com test：https://ethereum-sepolia-rpc.publicnode.com
@@ -12,5 +12,922 @@ rpc list：
 10.Sui main：GRPC:https://sui-grpc.publicnode.com RPC:https://sui-rpc.publicnode.com TEST: GRPC: https://sui-testnet-grpc.publicnode.com  RPC: https://sui-testnet-rpc.publicnode.com
 11.TON:
 12.Aptos：
-wallet-server 配置：
-2.
+13.TRON
+
+B.需要为FOrk专门写一篇文章，以及整理项目已经测试通过的可以 fork 的节点并做好记录 不支持的就删除掉，方便以后进行测试，项目 evm-fork目录是测试时的文件，目前只剩下一个节点没测试通过了Polygon:
+```
+我们前面讨论的 fork 方案，核心是用 本地 Anvil / Hardhat fork 一个 EVM 链，然后你的项目不再连真实测试网 RPC，而是连本地 RPC：
+
+http://127.0.0.1:8545
+
+这样可以在本地模拟真实链环境，部署 Mock USDT / Mock USDC，mint 测试币，完整跑 ETH/ERC20 的充值、扫描、入账、提现、归集、gas 充值、异常恢复等流程。
+
+1. Fork 方案的核心原理
+
+不是下载整条链，也不是同步节点。
+
+它是：
+
+真实链 RPC
+   ↓
+Anvil / Hardhat fork
+   ↓
+本地模拟链
+   ↓
+你的钱包项目连接本地 RPC
+
+例如 fork Sepolia：
+
+anvil --fork-url https://ethereum-sepolia-rpc.publicnode.com
+
+启动后本地 RPC 是：
+
+http://127.0.0.1:8545
+
+你的项目配置里把 EVM RPC 改成：
+
+evm:
+  rpc-url: http://127.0.0.1:8545
+2. 为什么要 fork？
+
+因为你要测试的是：
+
+用户创建 ETH/EVM 地址
+用户从外部充值 ETH
+用户充值 USDT/ERC20
+用户充值 USDC/ERC20
+scanner 扫区块入账
+deposit_record 幂等
+ledger_balance 正确增加
+用户提现
+ERC20 合约提现
+用户地址归集到热钱包
+gas 不足进入 WAITING_GAS
+gas 充值后恢复任务
+多用户充值/提现/归集
+失败后可恢复
+
+这些流程如果都依赖真实测试网，会遇到：
+
+faucet 不稳定
+USDT/USDC 没有稳定测试币
+gas 不够
+测试难以重复
+链上失败成本高
+
+所以我们用 fork + mock token 解决。
+
+3. Mock USDT / Mock USDC 是什么？
+
+fork 启动后，在本地 fork 链上部署两个 ERC20 合约：
+
+Mock USDT
+- name: Tether USD
+- symbol: USDT
+- decimals: 6
+
+Mock USDC
+- name: USD Coin
+- symbol: USDC
+- decimals: 6
+
+它们支持：
+
+mint(address, amount)
+transfer(address, amount)
+Transfer(address indexed from, address indexed to, uint256 value)
+
+部署后把合约地址写入数据库：
+
+token_config
+
+例如：
+
+chain = ETH_SEPOLIA_FORK
+symbol = USDT
+standard = ERC20
+contract_address = 0x...
+decimals = 6
+enabled = true
+
+然后你的 ERC20 scanner 就像扫真实 USDT/USDC 一样扫它们。
+
+4. 项目怎么连接 fork？
+
+真实测试网时：
+
+https://ethereum-sepolia-rpc.publicnode.com
+
+fork 测试时：
+
+http://127.0.0.1:8545
+
+也就是说：
+
+wallet-server / wallet-service
+       ↓
+http://127.0.0.1:8545
+       ↓
+Anvil / Hardhat fork
+       ↓
+真实链状态镜像
+
+项目不用知道它是 fork，只要 RPC 配置换成本地地址。
+
+5. 测试流程应该怎么跑？
+
+标准流程是：
+
+1. 启动 fork RPC
+2. 部署 Mock USDT / Mock USDC
+3. 写入 token_config
+4. 启动 wallet-server / wallet-sig1 / wallet-sig2
+5. 通过 API 创建用户地址
+6. 模拟用户充值 ETH
+7. 模拟用户充值 USDT / USDC
+8. scanner 扫描区块
+9. 验证入账和 ledger
+10. 执行 ETH 提现
+11. 执行 ERC20 提现
+12. 执行归集
+13. 测试 WAITING_GAS
+14. 测试失败重试和恢复
+15. 做 ledger vs chain 对账
+6. 多条 EVM 链怎么测？
+
+所有 EVM 链复用同一套 EVM 引擎，只换配置：
+
+rpcUrl
+chainId
+nativeToken
+gasPolicy
+confirmation
+
+我们之前的测试结果里已经通过：
+
+ETH Sepolia
+BNB Testnet
+Arbitrum Sepolia
+Optimism Sepolia
+Base Sepolia
+Avalanche Fuji
+
+Polygon Amoy 当时是 blocked，原因不是钱包逻辑问题，而是 fork RPC 缺历史状态 / archive 能力。
+
+7. 这个方案适合测试什么？
+
+适合测试：
+
+ETH / ERC20 充值
+ETH / ERC20 提现
+内部划转
+热钱包归集
+gas 充值
+多用户充值
+多用户提现
+多笔提现任务
+scanner 恢复
+提现失败恢复
+归集失败恢复
+ledger 对账
+
+不适合测试：
+
+真实公网 mempool 竞争
+真实 RPC 稳定性
+真实生产 gas 波动
+真实交易所级吞吐压力
+
+所以它是：
+
+功能正确性 + 资金一致性验证方案
+
+不是最终生产环境验证方案。
+
+8. 一句话总结
+
+我们前面讨论的 fork 方案就是：
+
+用 Anvil / Hardhat fork EVM 链到本地 RPC，项目连接 127.0.0.1:8545，本地部署 Mock USDT/USDC，然后完整模拟用户充值、扫描入账、提现、归集、gas 充值、多用户、多任务、异常恢复和 ledger 对账。
+```
+
+
+c.TRON添加trx 和 trc20全功能支持。
+```
+你是交易所级多链钱包系统架构师、Java/Spring Boot 区块链核心工程师、TRON/TRC20 钱包模块负责人。
+
+当前项目已经完成：
+
+* BTC Testnet3 P2WSH 2-of-3 多签完整闭环
+* BTC UTXO 入账 / 提现 / 归集
+* EVM fork 多用户业务闭环
+* ETH/ERC20 充值、提现、归集、ledger 对账
+* 多链统一架构初步完成
+* 当前 TRON 代码只具备 TRX 基础能力和 TRC20 占位，尚未完整实现 TRC20
+
+现在任务是：
+
+使用 TRON 官方 Trident Java SDK 重构 TRON/TRC20 模块，并完整实现 TRX + TRC20 USDT/USDC 的充值、提现、归集、gas/energy/bandwidth 管理、WAITING_GAS 状态、幂等入账、ledger 对账和 Nile/Shasta 测试网验证。
+
+=====================================================
+最高原则
+====
+
+1. 不允许破坏当前 BTC 功能。
+2. 不允许破坏当前 EVM/ETH/ERC20 功能。
+3. 不允许伪代码。
+4. 不允许只加依赖但不落地业务逻辑。
+5. 不允许跳过关键功能测试。
+6. 不允许改变当前 Bitcoin ECKey → TRON KeyPair 的 key 方案。
+7. 不允许引入新的 TRON seed/mnemonic 派生体系替代当前方案。
+8. 必须保持现有项目的签名服务、私钥加密/解密、地址生成架构一致。
+9. 必须真实调用 TRON 测试网或本地可验证节点完成测试。
+10. 所有发现的 bug 必须修复后重新测试。
+11. 未完成关键功能或测试未通过，不允许 commit。
+12. 不允许 push。
+
+=====================================================
+第一部分：官方 Trident SDK 接入
+======================
+
+请阅读 TRON 官方 Trident Java SDK 文档和源码，确认当前最新稳定版本、Maven 坐标、JDK 版本要求、KeyPair、ApiWrapper、合约调用、交易签名、广播、TRC20 ABI 编解码相关用法。
+
+必须完成：
+
+1. 在正确模块中加入 Trident SDK 依赖。
+2. 避免依赖冲突，尤其是：
+
+   * grpc
+   * protobuf
+   * guava
+   * bcprov
+   * logback/slf4j
+3. 如果项目已有依赖版本冲突，必须做 dependencyManagement 统一。
+4. 不允许引入和现有 Spring Boot 版本不兼容的依赖。
+5. mvn clean install 必须通过。
+
+推荐依赖方向：
+
+* io.github.tronprotocol:trident
+* 使用官方稳定版本，具体版本以官方 Maven Central / 文档为准
+
+=====================================================
+第二部分：保持当前 Bitcoin ECKey → TRON KeyPair 方案不变
+===========================================
+
+这是硬约束。
+
+当前项目已经有从 Bitcoin ECKey / secp256k1 私钥体系转换到 TRON 私钥/地址的方案。不得推翻这个设计。
+
+必须做：
+
+1. 找到当前项目中 ETH/TRX/BTC 私钥生成、解密、地址生成相关代码。
+
+2. 梳理当前：
+
+   * Bitcoin ECKey 私钥来源
+   * AES 解密逻辑
+   * 私钥十六进制格式
+   * TRON 地址生成逻辑
+   * wallet-sig1 / wallet-sig2 签名逻辑
+
+3. 保持现有私钥来源不变。
+
+4. 使用当前私钥生成 Trident KeyPair：
+
+   KeyPair keyPair = new KeyPair(privateKeyHex);
+
+5. privateKeyHex 必须来自当前系统已有 ECKey 私钥，不允许重新生成。
+
+6. 必须确认 privateKeyHex 格式：
+
+   * 是否带 0x 前缀
+   * 是否固定 32 字节
+   * 是否需要补零
+   * 是否大小写敏感
+
+7. 新增 TronTridentKeyFactory 或等价封装类，职责：
+
+   * 接收当前系统私钥
+   * 格式化为 Trident 可接受格式
+   * 创建 KeyPair
+   * 导出 TRON base58 地址
+   * 导出 hex address
+   * 与旧地址生成结果做一致性断言
+
+8. 必须写测试：
+
+   * sameEcKey_shouldProduceSameTronAddress
+   * privateKeyHex_shouldCreateTridentKeyPair
+   * invalidPrivateKey_shouldFail
+   * address_shouldMatchLegacyImplementation
+
+9. 不允许改变现有 BTC/EVM key 行为。
+
+=====================================================
+第三部分：重构 TRON SDK 适配层
+====================
+
+新增或重构以下模块，名称可根据项目现有包结构调整：
+
+1. TronTridentClient
+
+   * 封装 Trident ApiWrapper
+   * 负责节点连接
+   * 支持 Nile/Shasta 配置
+   * 支持 fullnode / soliditynode / eventserver 配置
+   * 支持超时、重试、错误日志
+
+2. TronKeyService
+
+   * 使用现有 ECKey 私钥
+   * 创建 Trident KeyPair
+   * 生成 TRON 地址
+   * 保持和现有地址方案兼容
+
+3. TronTransactionService
+
+   * TRX 转账构建
+   * TRX 签名
+   * TRX 广播
+   * 交易查询
+   * receipt / transactionInfo 查询
+
+4. TronTrc20Service
+
+   * TRC20 transfer(address,uint256) ABI 编码
+   * triggerSmartContract
+   * feeLimit 设置
+   * energy / bandwidth 预估
+   * 签名广播
+   * transactionInfo 解析
+
+5. TronScanner
+
+   * 按 block height 扫描
+   * 解析 TRX 原生转账
+   * 解析 TRC20 Transfer
+   * 支持重扫
+   * 支持幂等
+
+6. TronCollectionService
+
+   * TRX 归集
+   * TRC20 归集
+   * gas/energy 不足时进入 WAITING_GAS
+   * gas 充值后自动恢复
+
+7. TronGasService
+
+   * 查询用户地址 TRX 余额
+   * 估算 TRC20 转账所需 TRX
+   * 计算最小充值金额
+   * 不允许过度充值
+   * 支持不同链环境配置策略
+
+8. TronLedgerReconciliationService
+
+   * 链上余额 vs ledger_balance 对账
+   * deposit_record 对账
+   * withdrawal_record 对账
+   * collection_record 对账
+
+=====================================================
+第四部分：TRX 地址生成
+=============
+
+必须实现和验证：
+
+1. 调用项目 API 为用户生成 TRON 地址。
+2. 地址必须为合法 TRON base58 地址，T 开头。
+3. 地址必须能由当前 Bitcoin ECKey 私钥经过现有方案转换得到。
+4. 使用 Trident KeyPair 生成的地址必须和旧逻辑一致。
+5. 数据库必须保存：
+
+   * user_id
+   * chain = TRON
+   * address
+   * derivation_path / index
+   * key_index
+   * network
+   * status
+6. 重启后继续生成地址不能重复。
+7. 多用户生成地址不能重复。
+
+=====================================================
+第五部分：TRX 充值扫描
+=============
+
+必须实现：
+
+1. 扫描 Nile/Shasta 区块。
+2. 识别 TRX 原生转账。
+3. 匹配用户地址。
+4. 写入 deposit_record。
+5. 写入 tron_transaction 或统一 chain_transaction。
+6. 更新 ledger_balance。
+7. 支持确认数。
+8. 支持 best_block_height / chain_scan_height。
+9. 支持重扫。
+10. 重复扫描不允许重复入账。
+
+必须测试：
+
+1. 用户 A 生成 TRON 地址。
+2. 测试网 faucet 或测试账户向用户 A 充值 TRX。
+3. scanner 扫描到交易。
+4. deposit_record 状态流转：
+
+   * DETECTED
+   * CONFIRMING
+   * CONFIRMED
+   * CREDITED
+5. ledger_balance 增加一次且仅一次。
+6. 重扫同一区块不重复入账。
+
+=====================================================
+第六部分：TRX 提现
+===========
+
+必须实现：
+
+1. 用户发起 TRX 提现。
+2. 检查 ledger 可用余额。
+3. 冻结余额。
+4. 构建 TRX transfer 交易。
+5. 使用当前项目签名服务签名。
+6. 使用 Trident 广播。
+7. 记录 txid。
+8. 查询 transactionInfo / receipt。
+9. 状态流转：
+
+   * CREATED
+   * FROZEN
+   * SIGNING
+   * SENT
+   * CONFIRMING
+   * CONFIRMED
+   * FAILED
+   * RETRYING
+10. 成功后扣减冻结余额。
+11. 失败后释放冻结余额或进入可重试状态。
+12. 不允许重复扣账。
+13. 不允许重复广播同一提现订单。
+
+必须测试：
+
+1. 单用户 TRX 提现。
+2. 多用户 TRX 提现。
+3. 单用户多笔 TRX 提现。
+4. 广播失败重试。
+5. transactionInfo 未及时返回时轮询恢复。
+6. ledger 与链上余额一致。
+
+=====================================================
+第七部分：TRC20 token_config
+=======================
+
+必须补齐数据库 token_config 支持 TRC20：
+
+字段至少包括：
+
+* id
+* chain
+* network
+* symbol
+* token_standard = TRC20
+* contract_address_base58
+* contract_address_hex
+* decimals
+* enabled
+* min_deposit_amount
+* min_withdraw_amount
+* collect_threshold
+* gas_strategy
+* confirmation_required
+* created_at
+* updated_at
+
+必须支持：
+
+1. USDT TRC20
+2. USDC TRC20
+3. Nile/Shasta 测试环境 token 配置
+4. 如果测试网没有官方 USDT/USDC，可部署或使用 mock TRC20 合约。
+5. 不允许写死合约地址，必须从 token_config 读取。
+6. 合约地址必须同时支持 base58 和 hex 格式转换。
+
+=====================================================
+第八部分：TRC20 Transfer 解析与充值入账
+===========================
+
+必须实现：
+
+1. 读取区块交易。
+2. 对每个交易查询 transactionInfo。
+3. 解析 log / contractResult。
+4. 识别 TRC20 Transfer(address,address,uint256)。
+5. 匹配 token_config 中的 contract address。
+6. 解码 from、to、amount。
+7. 匹配用户充值地址。
+8. 写入 deposit_record。
+9. 写入 tron_token_transfer 或统一 token_transfer。
+10. 更新 ledger_balance。
+11. 支持 decimals。
+12. 支持确认数。
+13. 支持重扫幂等。
+
+注意：
+
+* TRC20 不能照搬 EVM scanner。
+* TRON 地址 hex/base58 转换必须正确。
+* topic 中地址解析必须严格验证。
+* amount 必须使用 BigInteger/BigDecimal，禁止 double。
+* decimals 必须从 token_config 读取。
+
+必须测试：
+
+1. USDT TRC20 充值。
+2. USDC TRC20 充值。
+3. 重复扫描不重复入账。
+4. 错误合约地址不入账。
+5. 非平台地址不入账。
+6. decimals 正确。
+7. 多用户同时充值不串账。
+
+=====================================================
+第九部分：TRC20 提现 triggerSmartContract
+==================================
+
+必须实现：
+
+1. 用户发起 USDT/USDC TRC20 提现。
+2. 检查 token ledger 可用余额。
+3. 检查提现地址合法。
+4. 冻结 token 余额。
+5. 检查用户/出款地址 TRX gas 是否足够。
+6. 构建 triggerSmartContract：
+
+   * contract = token_config.contract_address
+   * function = transfer(address,uint256)
+   * params = recipient, amountRaw
+7. 设置 feeLimit。
+8. 使用 Trident KeyPair 签名。
+9. 广播交易。
+10. 查询 transactionInfo。
+11. 根据执行结果更新提现状态。
+12. 成功后扣减冻结 token。
+13. 失败后释放或重试。
+14. 不允许重复扣账。
+15. 不允许重复广播。
+
+必须测试：
+
+1. USDT TRC20 提现。
+2. USDC TRC20 提现。
+3. gas 不足进入 WAITING_GAS。
+4. gas 补充后自动继续。
+5. 错误合约调用失败后正确恢复。
+6. 多用户提现不串账。
+7. 单用户多笔提现 nonce/order 不冲突。
+
+=====================================================
+第十部分：TRC20 归集
+=============
+
+必须实现：
+
+1. 定时扫描用户地址 TRC20 余额。
+2. 如果余额达到 collect_threshold，创建归集任务。
+3. 检查用户地址 TRX 余额是否足够支付 energy/bandwidth。
+4. 如果不足，进入 WAITING_GAS。
+5. 触发 gas 充值任务，向用户地址充值最小必要 TRX。
+6. gas 到账后继续执行归集。
+7. 构建 TRC20 transfer 到热钱包。
+8. 签名广播。
+9. 查询 transactionInfo。
+10. 更新 collection_record。
+11. ledger 不重复扣减。
+12. 不允许重复归集。
+
+必须测试：
+
+1. 用户地址 USDT 达到阈值后归集。
+2. 用户地址 USDC 达到阈值后归集。
+3. TRX 不足进入 WAITING_GAS。
+4. TRX gas 充值后恢复归集。
+5. 重试不重复转账。
+6. 归集后用户地址 token 余额为 0 或低于 dust/阈值。
+7. 热钱包 token 余额增加。
+8. ledger 与链上余额一致。
+
+=====================================================
+第十一部分：TRX gas / energy / bandwidth 估算
+=====================================
+
+必须实现：
+
+1. 查询账户 bandwidth。
+2. 查询账户 energy。
+3. 查询账户 TRX 余额。
+4. 估算 TRX transfer 成本。
+5. 估算 TRC20 transfer 成本。
+6. 不允许写死过大的 gas 充值金额。
+7. gas 充值策略必须按链配置：
+
+   * minGasTopup
+   * maxGasTopup
+   * targetGasBalance
+   * trc20FeeLimit
+   * reserveSafetyMultiplier
+8. 如果链支持免费 bandwidth，优先消耗免费资源。
+9. 如果资源不足，计算最小必要 TRX。
+10. token 归集前必须确保有足够资源。
+11. 不允许无限循环 gas 充值。
+12. gas 充值任务必须幂等。
+
+必须测试：
+
+1. TRX 充足时不充值。
+2. TRX 不足时进入 WAITING_GAS。
+3. gas topup 金额不超过 maxGasTopup。
+4. gas topup 成功后任务恢复。
+5. gas topup 失败后可重试。
+6. 多个 token 归集共享 gas 策略不冲突。
+
+=====================================================
+第十二部分：WAITING_GAS 状态
+====================
+
+必须统一支持：
+
+提现状态：
+
+* WAITING_GAS
+
+归集状态：
+
+* WAITING_GAS
+
+语义：
+
+1. 业务资金已经锁定或任务已经创建。
+2. 当前无法继续链上操作，因为 TRX 资源不足。
+3. 系统应创建 gas 充值任务。
+4. gas 到账后自动恢复原任务。
+5. 如果 gas 充值失败，应停留在 WAITING_GAS 或进入 RETRYING，不允许失败扣账。
+6. 不允许重复创建无限 gas 充值任务。
+7. 必须有日志和数据库记录。
+
+=====================================================
+第十三部分：幂等入账与 ledger 对账
+=====================
+
+必须保证：
+
+1. deposit_record 唯一键：
+
+   * chain
+   * txid
+   * log_index 或 event_index
+   * asset
+2. TRX 原生转账和 TRC20 event 不能冲突。
+3. 重扫不重复入账。
+4. ledger_balance 不允许负数。
+5. 提现冻结/释放/扣减必须事务化。
+6. 归集不应错误扣减用户资产，除非当前系统设计需要链上用户地址余额同步扣减，必须说明。
+7. 链上余额和 ledger 余额必须可对账。
+8. 对账异常必须输出报告。
+
+必须测试：
+
+1. 重复扫描同一区块。
+2. 重复处理同一 transactionInfo。
+3. 重复执行提现 job。
+4. 重复执行归集 job。
+5. DB 事务中断后恢复。
+6. scanner 中断后恢复。
+
+=====================================================
+第十四部分：Nile / Shasta 测试网验证
+=========================
+
+必须支持至少一个 TRON 测试网：
+
+* Nile
+* Shasta
+
+必须配置：
+
+* fullnode
+* soliditynode
+* eventserver 如果需要
+* network name
+* chain identifier
+* confirmation required
+* explorer url
+
+测试方式：
+
+1. 优先使用 Nile。
+2. 如果 Nile faucet 或节点不可用，使用 Shasta。
+3. 如果没有官方测试 USDT/USDC，部署 mock TRC20 合约或使用测试合约。
+4. 真实执行：
+
+   * 生成地址
+   * TRX 充值
+   * TRX 扫描入账
+   * TRX 提现
+   * TRC20 充值
+   * TRC20 提现
+   * TRC20 归集
+   * WAITING_GAS
+   * ledger 对账
+5. 如果链上资源申请受限，必须明确 blocked，不允许假装完成。
+
+=====================================================
+第十五部分：数据库与 MyBatis Generator
+============================
+
+当前项目使用 MyBatis Generator。
+
+规则：
+
+1. MBG 只允许生成：
+
+   * entity
+   * mapper
+   * xml
+2. 不允许 MBG 生成：
+
+   * service
+   * scanner
+   * wallet logic
+   * signing logic
+   * fee logic
+3. 新增表先写 SQL migration/init。
+4. 再用 MBG 生成 entity/mapper/xml。
+5. 手写业务逻辑必须放在 service/adapter/domain 层。
+
+需要检查和补齐：
+
+* token_config
+* tron_transaction
+* tron_token_transfer
+* deposit_record
+* withdrawal_order
+* collection_record
+* gas_topup_task
+* ledger_balance
+* chain_scan_height
+* hot_wallet_address
+
+如果已有统一多链表，优先复用，不重复造表。若字段缺失，做增量迁移。
+
+=====================================================
+第十六部分：代码注释
+==========
+
+必须为关键逻辑增加注释：
+
+1. Bitcoin ECKey → Trident KeyPair 兼容逻辑。
+2. TRON base58/hex 地址转换。
+3. TRC20 Transfer event 解码。
+4. triggerSmartContract 构造逻辑。
+5. energy/bandwidth/gas 估算。
+6. WAITING_GAS 状态流转。
+7. 幂等入账。
+8. ledger 冻结/扣减/释放。
+9. scanner 重扫恢复。
+
+注释要解释业务原因，不要写无意义注释。
+
+=====================================================
+第十七部分：测试要求
+==========
+
+必须新增/修复测试。
+
+单元测试：
+
+1. TronTridentKeyFactoryTest
+2. TronAddressGenerationTest
+3. TronAddressCodecTest
+4. Trc20AbiEncodingTest
+5. Trc20TransferEventDecodeTest
+6. TronGasEstimatorTest
+7. TronWaitingGasStateTest
+8. TronLedgerIdempotencyTest
+
+集成测试：
+
+1. TronTrxDepositScanIntegrationTest
+2. TronTrxWithdrawIntegrationTest
+3. Trc20DepositScanIntegrationTest
+4. Trc20WithdrawIntegrationTest
+5. Trc20CollectionIntegrationTest
+6. TronGasTopupIntegrationTest
+7. TronRecoveryIntegrationTest
+8. TronMultiUserBusinessFlowIntegrationTest
+
+测试必须覆盖：
+
+* 单用户充值
+* 多用户充值
+* 单用户提现
+* 多用户提现
+* 单用户多笔提现
+* TRC20 充值
+* TRC20 提现
+* TRC20 归集
+* gas 不足
+* gas 补充
+* scanner 重扫
+* job 重试
+* ledger 对账
+
+=====================================================
+第十八部分：启动验证
+==========
+
+必须验证：
+
+1. mvn clean install -DskipTests=false 通过。
+2. wallet-server 启动成功。
+3. wallet-sig1 启动成功。
+4. wallet-sig2 启动成功。
+5. PostgreSQL 连接成功。
+6. Redis 连接成功。
+7. BTC 未受影响。
+8. EVM 未受影响。
+9. TRON 配置加载正常。
+10. TRON scanner job 启动正常。
+11. TRON withdrawal job 启动正常。
+12. TRON collection job 启动正常。
+13. application.yaml 配置完整。
+14. 不存在 Nacos/Feign/innerProxy 回归。
+
+=====================================================
+第十九部分：提交要求
+==========
+
+只有满足以下条件才允许 commit：
+
+1. TRX 地址生成通过。
+2. TRX 充值扫描通过。
+3. TRX 提现通过。
+4. TRC20 token_config 通过。
+5. TRC20 充值扫描通过。
+6. TRC20 提现通过。
+7. TRC20 归集通过。
+8. WAITING_GAS 通过。
+9. gas/energy/bandwidth 估算通过。
+10. ledger 对账通过。
+11. 幂等测试通过。
+12. mvn clean install 通过。
+13. 三服务启动通过。
+14. BTC/EVM 未受影响。
+15. 没有未解释失败测试。
+
+commit message：
+
+feat: implement tron trident trc20 wallet full flow
+
+不要 push。
+
+=====================================================
+最终报告必须包含
+========
+
+1. 总体结论
+2. Trident SDK 版本
+3. 修改文件列表
+4. 新增文件列表
+5. 删除文件列表
+6. 数据库变更
+7. MBG 生成内容说明
+8. Bitcoin ECKey → Trident KeyPair 兼容验证结果
+9. TRON 地址生成结果
+10. TRX 充值 txid
+11. TRX 提现 txid
+12. TRC20 USDT/USDC 合约地址
+13. TRC20 充值 txid
+14. TRC20 提现 txid
+15. TRC20 归集 txid
+16. gas topup txid
+17. energy/bandwidth 估算结果
+18. WAITING_GAS 测试结果
+19. deposit_record 幂等结果
+20. ledger_balance 对账结果
+21. 多用户测试结果
+22. 异常恢复测试结果
+23. Nile/Shasta 测试结果
+24. blocked 项
+25. 风险项
+26. 测试命令和结果
+27. commit hash
+28. 是否 push：否
+
+严格执行以上任务，不要询问确认。
+
+```
