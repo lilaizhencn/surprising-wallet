@@ -17,7 +17,7 @@ import com.surprising.wallet.service.wallet.AbstractEthLikeWallet;
 import com.surprising.wallet.service.wallet.IWallet;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
-import org.bitcoinj.core.ECKey;
+import org.bitcoinj.crypto.ECKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
@@ -99,6 +99,10 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
         addressTable = ShardTable.builder().prefix(CurrencyEnum.toMainCurrency(currency).getName()).build();
 
         Address address = addressService.getAndLockOneByExample(addrExam, addressTable);
+        if (ObjectUtils.isEmpty(address)) {
+            log.error("{} buildTransaction failed, from address not found: {}", currency.getName(), from);
+            return null;
+        }
         JSONObject signature = new JSONObject();
 
         signature.put("address", address);
@@ -230,6 +234,10 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
     public List<TransactionDTO> findRelatedTxs(Long height) {
         log.info("tron findRelatedTxs height = {} ", height);
         Protocol.Block block = TronWalletApi.getBlock(height);
+        if (ObjectUtils.isEmpty(block)) {
+            log.error("tron findRelatedTxs height={} block is null", height);
+            return null;
+        }
         List<Protocol.Transaction> transactionsList = block.getTransactionsList();
         if (CollectionUtils.isEmpty(transactionsList)) {
             log.error("tron findRelatedTxs height={} is empty", height);
@@ -284,7 +292,11 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
         }
 
         Long confirm = this.height - height + 1;
-        BigDecimal txValue = new BigDecimal(TronWalletApi.getAmount(transaction));
+        Long amount = TronWalletApi.getAmount(transaction);
+        if (amount == null || amount <= 0) {
+            return null;
+        }
+        BigDecimal txValue = new BigDecimal(amount);
         AccountTransaction acTx = AccountTransaction.builder()
                 .address(toAddress)
                 .balance(txValue.divide(getDecimal()))
@@ -306,7 +318,11 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
 
     @Override
     protected BigDecimal getBalance(String address, CurrencyEnum currency) {
-        Long tranAmount = TronWalletApi.queryAccount(address).getBalance();
+        Protocol.Account account = TronWalletApi.queryAccount(address);
+        if (ObjectUtils.isEmpty(account)) {
+            return BigDecimal.ZERO;
+        }
+        Long tranAmount = account.getBalance();
         BigDecimal amount = new BigDecimal(tranAmount);
         return amount.divide(getDecimal());
     }

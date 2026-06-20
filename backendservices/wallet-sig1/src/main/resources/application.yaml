@@ -16,15 +16,6 @@ spring:
       host: 127.0.0.1
       port: 6379
       password:
-  cloud:
-    nacos:
-      discovery:
-        server-addr: 127.0.0.1:8848
-      config:
-        server-addr: 127.0.0.1:8848
-        file-extension: yaml
-  config:
-    import: optional:nacos:wallet-sig1.yaml
 
 atomex:
   wallet:

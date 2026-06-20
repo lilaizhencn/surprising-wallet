@@ -33,6 +33,15 @@ public class UserAssetServiceImpl implements UserAssetService {
 
     @Override
     @Transactional
+    public boolean addBalance(Long userId, Integer currency, BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+        return userAssetRepository.addBalance(userId, currency, amount) > 0;
+    }
+
+    @Override
+    @Transactional
     public boolean freeze(Long userId, Integer currency, BigDecimal amount) {
         UserAsset asset = getOrCreate(userId, currency);
         BigDecimal newBalance = asset.getBalance().subtract(amount);

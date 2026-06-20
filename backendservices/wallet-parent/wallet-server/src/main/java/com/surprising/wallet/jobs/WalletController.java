@@ -8,7 +8,6 @@ import com.surprising.wallet.common.currency.BizEnum;
 import com.surprising.wallet.common.currency.CurrencyEnum;
 import com.surprising.wallet.common.dto.AddressDto;
 import com.surprising.wallet.common.pojo.*;
-import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.criteria.AddressExample;
 import com.surprising.wallet.service.criteria.CurrencyBalanceExample;
 import com.surprising.wallet.service.criteria.UtxoTransactionExample;
@@ -17,19 +16,12 @@ import com.surprising.wallet.service.service.CurrencyBalanceService;
 import com.surprising.wallet.service.service.UtxoTransactionService;
 import com.surprising.wallet.service.wallet.IWallet;
 import com.surprising.wallet.service.wallet.WalletContext;
-import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
-import com.surprising.wallet.sdk.bitcoinj.core.SegwitMultiSignAddressGenerator;
 import lombok.extern.slf4j.Slf4j;
-import org.bitcoinj.crypto.ECKey;
-import org.bitcoinj.params.MainNetParams;
-import org.bitcoinj.params.TestNet3Params;
-import org.springframework.util.CollectionUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.ObjectUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.sql.Date;
-import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -45,6 +37,13 @@ public class WalletController {
     private final CurrencyBalanceService balanceService;
     private final AddressService addressService;
     private final UtxoTransactionService utxoService;
+
+    @Value("${atomex.wallet.pubKey1}")
+    private String pubKey1;
+    @Value("${atomex.wallet.pubKey2}")
+    private String pubKey2;
+    @Value("${atomex.wallet.pubKey3}")
+    private String pubKey3;
 
     public WalletController(WalletContext context, CurrencyBalanceService balanceService,
                             AddressService addressService, UtxoTransactionService utxoService) {
@@ -70,8 +69,12 @@ public class WalletController {
             addressDto.setBiz(biz);
             addressDto.setAddress(address.getAddress());
             addressDto.setChildId(address.getIndex());
-            addressDto.setPath(String.format("m/44'/%d'/%d/%d/%d",
-                    coin.getIndex(), biz, userId, address.getIndex()));
+            addressDto.setPath(address.getDerivationPath());
+            addressDto.setNetwork(address.getNetwork());
+            addressDto.setScriptType(address.getScriptType());
+            addressDto.setRedeemScript(address.getRedeemScript());
+            addressDto.setWitnessScript(address.getWitnessScript());
+            addressDto.setPublicKeys(address.getPublicKeys());
         } catch (Throwable e) {
             log.error("生成新地址异常 用户id:{} 币种:{} 业务线:{}", userId, currency, biz, e);
             return ResultUtils.failure("生成新地址异常");
@@ -121,70 +124,6 @@ public class WalletController {
 
     }
 
-    @PostMapping(value = "/address/need/{currency}")
-    public ResponseResult<?> postNeedAddress(@PathVariable(value = "currency") Integer currency,
-                                             @RequestBody List<String> addresses) {
-
-
-        try {
-            CurrencyEnum coin = CurrencyEnum.parseValue(currency);
-            if (!CollectionUtils.isEmpty(addresses)) {
-                List<Address> res = addresses.parallelStream().map((addr) -> {
-                    String[] tmp = addr.split(":");
-                    return Address.builder()
-                            .address(tmp[0]).index(Integer.parseInt(tmp[1])).userId(-1L).balance(BigDecimal.ZERO)
-                            .currency(coin.getName()).biz(0).nonce(0).status((byte) Constants.WAITING)
-                            .createDate(Date.from(Instant.now()))
-                            .updateDate(Date.from(Instant.now()))
-                            .build();
-                }).collect(Collectors.toList());
-                ShardTable table = ShardTable.builder().prefix(coin.getName()).build();
-                addressService.batchAddOnDuplicateKey(res, table);
-
-            } else {
-                return ResultUtils.failure("postNeedAddress error: addresses is empty");
-            }
-
-            return ResultUtils.success();
-
-        } catch (Throwable e) {
-            log.error("postNeedAddress error", e);
-            return ResultUtils.failure("postNeedAddress error");
-        }
-
-
-    }
-
-
-    @GetMapping(value = "/address/need/{currency}")
-    public ResponseResult<?> getNeedAddressCount(@PathVariable(value = "currency") Integer currency) {
-        JSONObject json = new JSONObject();
-        try {
-            CurrencyEnum coin = CurrencyEnum.parseValue(currency);
-            ShardTable table = ShardTable.builder().prefix(coin.getName()).build();
-            AddressExample example = new AddressExample();
-            example.createCriteria().andUserIdEqualTo(-1L);
-            example.setOrderByClause("id desc");
-
-            Address address = addressService.getOneByExample(example, table).get();
-            int maxIndex = 0;
-            if (!ObjectUtils.isEmpty(address)) {
-                maxIndex = address.getIndex();
-            }
-
-            int count = addressService.countByExam(example, table);
-
-            json.put("currency", coin.getName());
-            json.put("count", count);
-            json.put("index", maxIndex + 1);
-
-        } catch (Throwable e) {
-            log.error("getNeedAddressCount error", e);
-            return ResultUtils.failure("getNeedAddressCount error");
-        }
-        return ResultUtils.success(json);
-    }
-
     @GetMapping("/balance/all")
     public ResponseResult<List<CurrencyBalance>> genAllBalance() {
         try {
@@ -218,17 +157,13 @@ public class WalletController {
     public ResponseResult<Map<String, Object>> getKeyInfo() {
         Map<String, Object> result = new HashMap<>();
         try {
-            String pub1 = System.getProperty("atomex.wallet.pubKey1", "");
-            String pub2 = System.getProperty("atomex.wallet.pubKey2", "");
-            String pub3 = System.getProperty("atomex.wallet.pubKey3", "");
-
             List<Map<String, String>> keys = new ArrayList<>();
-            addKeyInfo(keys, "KEY 1 (Hot — Sig1)", pub1, "sig1 首签 (hot wallet)", "m/44'/1'/0/0/0");
-            addKeyInfo(keys, "KEY 2 (Cold — Sig2)", pub2, "sig2 二次签名 (cold wallet)", "m/44'/1'/0/0/0");
-            addKeyInfo(keys, "KEY 3 (Offline Backup)", pub3, "离线备份 (保险柜)", "m/44'/1'/0/0/0");
+            addKeyInfo(keys, "KEY 1 (Hot - Sig1)", pubKey1, "sig1 首签 (hot wallet)", "m/44/1/0/0/0");
+            addKeyInfo(keys, "KEY 2 (Cold - Sig2)", pubKey2, "sig2 二次签名 (cold wallet)", "m/44/1/0/0/0");
+            addKeyInfo(keys, "KEY 3 (Offline Backup)", pubKey3, "离线备份", "m/44/1/0/0/0");
             result.put("keys", keys);
             result.put("scriptType", "P2WSH 2-of-3 Multisig (Native SegWit)");
-            result.put("network", Constants.NET_PARAMS.getId().contains("test") ? "Testnet" : "Mainnet");
+            result.put("network", "Bitcoin TestNet3");
         } catch (Exception e) {
             log.error("getKeyInfo error", e);
             return ResultUtils.failure("获取密钥信息失败");
@@ -265,7 +200,10 @@ public class WalletController {
                 Address addr = addrOpt.get();
                 result.put("address", addr.getAddress());
                 result.put("childId", addr.getIndex());
-                result.put("path", String.format("m/44'/%d'/0/0/%d", coin.getIndex(), addr.getIndex()));
+                result.put("path", addr.getDerivationPath());
+                result.put("scriptType", addr.getScriptType());
+                result.put("witnessScript", addr.getWitnessScript());
+                result.put("publicKeys", addr.getPublicKeys());
                 result.put("currency", coin.getName());
             }
 
@@ -276,7 +214,7 @@ public class WalletController {
             result.put("balance", bal.map(CurrencyBalance::getBalance).orElse(BigDecimal.ZERO));
 
             // Computed: derivation chain, witness script from 3 xpubs
-            result.put("network", Constants.NET_PARAMS.getId().contains("test") ? "Testnet" : "Mainnet");
+            result.put("network", "Bitcoin TestNet3");
             result.put("scriptType", "P2WSH 2-of-3 Multisig");
         } catch (Exception e) {
             log.error("getHotWalletInfo error currency={}", currency, e);
@@ -308,16 +246,18 @@ public class WalletController {
             pageInfo.setStartIndex(0);
 
             List<Address> addrs = addressService.getByPage(pageInfo, example, table);
-            final int coinIdx = coin.getIndex();
-
             List<AddressDto> dtos = addrs.stream().map(a -> {
                 AddressDto dto = new AddressDto();
                 dto.setUserId(a.getUserId());
                 dto.setBiz(a.getBiz());
                 dto.setAddress(a.getAddress());
                 dto.setChildId(a.getIndex());
-                dto.setPath(String.format("m/44'/%d'/%d/%d/%d",
-                        coinIdx, a.getBiz(), a.getUserId(), a.getIndex()));
+                dto.setPath(a.getDerivationPath());
+                dto.setNetwork(a.getNetwork());
+                dto.setScriptType(a.getScriptType());
+                dto.setRedeemScript(a.getRedeemScript());
+                dto.setWitnessScript(a.getWitnessScript());
+                dto.setPublicKeys(a.getPublicKeys());
                 return dto;
             }).collect(Collectors.toList());
 

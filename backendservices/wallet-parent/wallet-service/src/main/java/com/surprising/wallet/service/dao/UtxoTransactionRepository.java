@@ -27,4 +27,6 @@ public interface UtxoTransactionRepository
 
     int insertOnDuplicateKey(@Param("record") UtxoTransaction tx, @Param("shardTable") ShardTable table);
 
+    int markCredited(@Param("txId") String txId, @Param("seq") Short seq, @Param("shardTable") ShardTable table);
+
 }

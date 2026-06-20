@@ -2,7 +2,6 @@ package com.surprising.wallet.common.utils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.TestNet3Params;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -95,22 +94,19 @@ public class Constants {
     //生成内部地址的用户ID
     public static Long USER_ID = 0L;
     public static Integer BIZ = 0;
-    @Value("${atomex.wallet.network:main}")
+    @Value("${atomex.wallet.network:test}")
     public String NETWORK;
 
     @PostConstruct
     public void init() {
-//        log.info("当前环境={}", NETWORK);
-        if (NETWORK.equals("test")) {
-            Constants.NET_PARAMS = TestNet3Params.get();
-        } else {
-            Constants.NET_PARAMS = MainNetParams.get();
+        if (!"test".equalsIgnoreCase(NETWORK)) {
+            throw new IllegalStateException("Only BTC testnet is supported by this wallet build");
         }
+        Constants.NET_PARAMS = TestNet3Params.get();
     }
 
 
 }
-
 
 
 

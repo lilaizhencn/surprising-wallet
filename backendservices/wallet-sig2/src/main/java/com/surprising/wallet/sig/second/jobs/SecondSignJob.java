@@ -9,16 +9,21 @@ import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sig.second.ISignService;
 import com.surprising.wallet.sig.second.SignContent;
 import lombok.extern.slf4j.Slf4j;
+import org.bitcoinj.core.Transaction;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
+
+import java.nio.ByteBuffer;
+import java.util.HexFormat;
 
 @Component
 @StartThread
 @Slf4j
 public class SecondSignJob implements Runnable {
     private static final long WAIT_TIME = 10_000L;
+    private static final HexFormat HEX = HexFormat.of();
 
     @Override
     public void run() {
@@ -45,10 +50,15 @@ public class SecondSignJob implements Runnable {
                         String rawTransaction = signService.signTransaction(transaction);
                         signature = JSONObject.parseObject(transaction.getSignature());
                         if (StringUtils.hasText(rawTransaction)) {
+                            Transaction signedTx = Transaction.read(ByteBuffer.wrap(HEX.parseHex(rawTransaction)));
                             signature.put("rawTransaction", rawTransaction);
+                            signature.put("txId", signedTx.getTxId().toString());
+                            signature.put("weight", signedTx.getWeight());
+                            signature.put("vBytes", signedTx.getVsize());
                             signature.remove("firstSignTx");
                             signature.put("valid", true);
-                            log.info("二次签名成功 txId={}", transaction.getId());
+                            log.info("二次签名成功 txId={}, finalTxId={}, weight={}, vBytes={}",
+                                    transaction.getId(), signedTx.getTxId(), signedTx.getWeight(), signedTx.getVsize());
                         } else {
                             signature.put("valid", false);
                             signature.putIfAbsent("error", "second sign returned empty raw transaction");

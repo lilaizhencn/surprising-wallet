@@ -6,6 +6,12 @@
     <id column="id" property="id" jdbcType="BIGINT" />
     <result column="user_id" property="userId" jdbcType="BIGINT" />
     <result column="address" property="address" jdbcType="VARCHAR" />
+    <result column="network" property="network" jdbcType="VARCHAR" />
+    <result column="script_type" property="scriptType" jdbcType="VARCHAR" />
+    <result column="redeem_script" property="redeemScript" jdbcType="VARCHAR" />
+    <result column="witness_script" property="witnessScript" jdbcType="VARCHAR" />
+    <result column="derivation_path" property="derivationPath" jdbcType="VARCHAR" />
+    <result column="public_keys" property="publicKeys" jdbcType="VARCHAR" />
     <result column="balance" property="balance" jdbcType="NUMERIC" />
     <result column="biz" property="biz" jdbcType="INTEGER" />
     <result column="nonce" property="nonce" jdbcType="INTEGER" />
@@ -47,7 +53,8 @@
     ${shardTable.prefix}_address
   </sql>
   <sql id="Base_Column_List_Without_Id">
-    user_id, address, balance, biz, nonce, index, status, create_date, update_date
+    user_id, address, network, script_type, redeem_script, witness_script, derivation_path, public_keys,
+    balance, biz, nonce, index, status, create_date, update_date
   </sql>
   <sql id="Base_Column_List">
     id, 
@@ -59,6 +66,24 @@
     </if>
     <if test="record.address != null">
       address,
+    </if>
+    <if test="record.network != null">
+      network,
+    </if>
+    <if test="record.scriptType != null">
+      script_type,
+    </if>
+    <if test="record.redeemScript != null">
+      redeem_script,
+    </if>
+    <if test="record.witnessScript != null">
+      witness_script,
+    </if>
+    <if test="record.derivationPath != null">
+      derivation_path,
+    </if>
+    <if test="record.publicKeys != null">
+      public_keys,
     </if>
     <if test="record.balance != null">
       balance,
@@ -89,6 +114,24 @@
     <if test="record.address != null">
       #{record.address,jdbcType=VARCHAR},
     </if>
+    <if test="record.network != null">
+      #{record.network,jdbcType=VARCHAR},
+    </if>
+    <if test="record.scriptType != null">
+      #{record.scriptType,jdbcType=VARCHAR},
+    </if>
+    <if test="record.redeemScript != null">
+      #{record.redeemScript,jdbcType=VARCHAR},
+    </if>
+    <if test="record.witnessScript != null">
+      #{record.witnessScript,jdbcType=VARCHAR},
+    </if>
+    <if test="record.derivationPath != null">
+      #{record.derivationPath,jdbcType=VARCHAR},
+    </if>
+    <if test="record.publicKeys != null">
+      #{record.publicKeys,jdbcType=VARCHAR},
+    </if>
     <if test="record.balance != null">
       #{record.balance,jdbcType=NUMERIC},
     </if>
@@ -114,6 +157,12 @@
   <sql id="Batch_Insert_Values">
     #{record.userId,jdbcType=BIGINT},
     #{record.address,jdbcType=VARCHAR},
+    #{record.network,jdbcType=VARCHAR},
+    #{record.scriptType,jdbcType=VARCHAR},
+    #{record.redeemScript,jdbcType=VARCHAR},
+    #{record.witnessScript,jdbcType=VARCHAR},
+    #{record.derivationPath,jdbcType=VARCHAR},
+    #{record.publicKeys,jdbcType=VARCHAR},
     #{record.balance,jdbcType=NUMERIC},
     #{record.biz,jdbcType=INTEGER},
     #{record.nonce,jdbcType=INTEGER},
@@ -132,6 +181,24 @@
     </if>
     <if test="record.address != null">
       address = #{record.address,jdbcType=VARCHAR},
+    </if>
+    <if test="record.network != null">
+      network = #{record.network,jdbcType=VARCHAR},
+    </if>
+    <if test="record.scriptType != null">
+      script_type = #{record.scriptType,jdbcType=VARCHAR},
+    </if>
+    <if test="record.redeemScript != null">
+      redeem_script = #{record.redeemScript,jdbcType=VARCHAR},
+    </if>
+    <if test="record.witnessScript != null">
+      witness_script = #{record.witnessScript,jdbcType=VARCHAR},
+    </if>
+    <if test="record.derivationPath != null">
+      derivation_path = #{record.derivationPath,jdbcType=VARCHAR},
+    </if>
+    <if test="record.publicKeys != null">
+      public_keys = #{record.publicKeys,jdbcType=VARCHAR},
     </if>
     <if test="record.balance != null">
       balance = #{record.balance,jdbcType=NUMERIC},
@@ -194,7 +261,7 @@
     ON CONFLICT (
     id
     ) DO UPDATE SET
-    user_id = EXCLUDED.user_id, address = EXCLUDED.address, balance = EXCLUDED.balance, biz = EXCLUDED.biz, nonce = EXCLUDED.nonce, index = EXCLUDED.index, status = EXCLUDED.status, create_date = EXCLUDED.create_date, update_date = EXCLUDED.update_date
+    user_id = EXCLUDED.user_id, address = EXCLUDED.address, network = EXCLUDED.network, script_type = EXCLUDED.script_type, redeem_script = EXCLUDED.redeem_script, witness_script = EXCLUDED.witness_script, derivation_path = EXCLUDED.derivation_path, public_keys = EXCLUDED.public_keys, balance = EXCLUDED.balance, biz = EXCLUDED.biz, nonce = EXCLUDED.nonce, index = EXCLUDED.index, status = EXCLUDED.status, create_date = EXCLUDED.create_date, update_date = EXCLUDED.update_date
   </insert>
   <!-- end insert -->
   <!-- delete -->

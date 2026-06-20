@@ -6,7 +6,6 @@ import com.surprising.wallet.service.wallet.AbstractBtcLikeWallet;
 import com.surprising.wallet.service.wallet.IWallet;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.TestNet3Params;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -39,11 +38,7 @@ public class BtcWallet extends AbstractBtcLikeWallet implements IWallet {
 
     @Override
     public NetworkParameters getNetworkParameters() {
-        if (CONSTANT.NETWORK.equals("test")) {
-            return TestNet3Params.get();
-        }
-
-        return MainNetParams.get();
+        return TestNet3Params.get();
     }
 
 

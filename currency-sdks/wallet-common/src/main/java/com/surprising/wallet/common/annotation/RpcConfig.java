@@ -26,8 +26,6 @@ public @interface RpcConfig {
 
     String password() default "";
 
-    boolean needProxy() default false;
-
     RpcType type() default JSON_RPC;
 
     /**

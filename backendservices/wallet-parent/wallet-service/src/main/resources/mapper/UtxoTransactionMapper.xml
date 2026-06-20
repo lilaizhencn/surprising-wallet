@@ -13,6 +13,7 @@
     <result column="seq" property="seq" jdbcType="SMALLINT" />
     <result column="spent" property="spent" jdbcType="SMALLINT" />
     <result column="status" property="status" jdbcType="SMALLINT" />
+    <result column="credited" property="credited" jdbcType="BOOLEAN" />
     <result column="spent_tx_id" property="spentTxId" jdbcType="VARCHAR" />
     <result column="create_date" property="createDate" jdbcType="TIMESTAMP" />
     <result column="update_date" property="updateDate" jdbcType="TIMESTAMP" />
@@ -50,7 +51,7 @@
     ${shardTable.prefix}_utxo_transaction
   </sql>
   <sql id="Base_Column_List_Without_Id">
-    tx_id, block_height, address, balance, confirm_num, biz, seq, spent, status, spent_tx_id, 
+    tx_id, block_height, address, balance, confirm_num, biz, seq, spent, status, credited, spent_tx_id,
     create_date, update_date
   </sql>
   <sql id="Base_Column_List">
@@ -84,6 +85,9 @@
     </if>
     <if test="record.status != null">
       status,
+    </if>
+    <if test="record.credited != null">
+      credited,
     </if>
     <if test="record.spentTxId != null">
       spent_tx_id,
@@ -123,6 +127,9 @@
     <if test="record.status != null">
       #{record.status,jdbcType=SMALLINT},
     </if>
+    <if test="record.credited != null">
+      #{record.credited,jdbcType=BOOLEAN},
+    </if>
     <if test="record.spentTxId != null">
       #{record.spentTxId,jdbcType=VARCHAR},
     </if>
@@ -143,6 +150,7 @@
     #{record.seq,jdbcType=SMALLINT},
     #{record.spent,jdbcType=SMALLINT},
     #{record.status,jdbcType=SMALLINT},
+    #{record.credited,jdbcType=BOOLEAN},
     #{record.spentTxId,jdbcType=VARCHAR},
     #{record.createDate,jdbcType=TIMESTAMP},
     #{record.updateDate,jdbcType=TIMESTAMP},
@@ -178,6 +186,9 @@
     </if>
     <if test="record.status != null">
       status = #{record.status,jdbcType=SMALLINT},
+    </if>
+    <if test="record.credited != null">
+      credited = #{record.credited,jdbcType=BOOLEAN},
     </if>
     <if test="record.spentTxId != null">
       spent_tx_id = #{record.spentTxId,jdbcType=VARCHAR},
@@ -228,7 +239,7 @@
     ON CONFLICT (
     id
     ) DO UPDATE SET
-    tx_id = EXCLUDED.tx_id, block_height = EXCLUDED.block_height, address = EXCLUDED.address, balance = EXCLUDED.balance, confirm_num = EXCLUDED.confirm_num, biz = EXCLUDED.biz, seq = EXCLUDED.seq, spent = EXCLUDED.spent, status = EXCLUDED.status, spent_tx_id = EXCLUDED.spent_tx_id, create_date = EXCLUDED.create_date, update_date = EXCLUDED.update_date
+    tx_id = EXCLUDED.tx_id, block_height = EXCLUDED.block_height, address = EXCLUDED.address, balance = EXCLUDED.balance, confirm_num = EXCLUDED.confirm_num, biz = EXCLUDED.biz, seq = EXCLUDED.seq, spent = EXCLUDED.spent, status = EXCLUDED.status, credited = EXCLUDED.credited, spent_tx_id = EXCLUDED.spent_tx_id, create_date = EXCLUDED.create_date, update_date = EXCLUDED.update_date
   </insert>
   <!-- end insert -->
   <!-- delete -->
@@ -366,4 +377,32 @@
       <include refid="Example_Where_Clause"/>
     </if>
   </select>
+  <insert id="insertOnDuplicateKey" parameterType="java.util.Map" useGeneratedKeys="true" keyProperty="record.id" keyColumn="id">
+    insert into
+    <include refid="Table_Name" />
+    <trim prefix="(" suffix=")" suffixOverrides=",">
+      <include refid="Insert_Columns" />
+    </trim>
+    <trim prefix="values (" suffix=")" suffixOverrides=",">
+      <include refid="Insert_Values" />
+    </trim>
+    ON CONFLICT (tx_id, seq) DO UPDATE SET
+    block_height = EXCLUDED.block_height,
+    address = EXCLUDED.address,
+    balance = EXCLUDED.balance,
+    confirm_num = EXCLUDED.confirm_num,
+    biz = EXCLUDED.biz,
+    spent = EXCLUDED.spent,
+    status = EXCLUDED.status,
+    spent_tx_id = EXCLUDED.spent_tx_id,
+    update_date = EXCLUDED.update_date
+  </insert>
+  <update id="markCredited" parameterType="java.util.Map">
+    update
+    <include refid="Table_Name" />
+    set credited = true, update_date = CURRENT_TIMESTAMP
+    where tx_id = #{txId,jdbcType=VARCHAR}
+      and seq = #{seq,jdbcType=SMALLINT}
+      and credited = false
+  </update>
 </mapper>

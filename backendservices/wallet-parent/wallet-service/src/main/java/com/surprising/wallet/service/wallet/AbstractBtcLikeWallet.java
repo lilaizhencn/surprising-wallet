@@ -29,6 +29,8 @@ import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.script.ScriptException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
@@ -85,13 +87,29 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
      * @return
      */
     @Override
-    public Address genNewAddress(Long userId, Integer biz) {
+    @Transactional(rollbackFor = Throwable.class)
+    public synchronized Address genNewAddress(Long userId, Integer biz) {
         log.info("用户获取新地址, 用户id:{}, 业务线:{}, 币种:{} 开始获取", userId, biz, getCurrency().name());
 
+        ShardTable table = ShardTable.builder().prefix(getCurrency().getName()).build();
+        for (int attempt = 0; attempt < 5; attempt++) {
+            try {
+                Address address = buildNextAddress(userId, biz, table);
+                addressService.add(address, table);
+                log.info("用户获取新地址, 用户id:{}, 业务线:{}, 币种:{} 第{}个 结束",
+                        userId, biz, getCurrency().name(), address.getIndex());
+                return address;
+            } catch (DuplicateKeyException e) {
+                log.warn("生成地址遇到并发重复, userId={}, biz={}, attempt={}", userId, biz, attempt + 1);
+            }
+        }
+        throw new IllegalStateException("failed to allocate a unique address index");
+    }
+
+    private Address buildNextAddress(Long userId, Integer biz, ShardTable table) {
         AddressExample example = new AddressExample();
         example.createCriteria().andUserIdEqualTo(userId).andBizEqualTo(biz);
 
-        ShardTable table = ShardTable.builder().prefix(getCurrency().getName()).build();
         List<Address> addressList = addressService.getByExample(example, table);
         int index = 0;
         /**
@@ -108,17 +126,27 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
          */
         CurrencyEnum currency = getCurrency();
 
-        String addressStr = pubKeyConfig.genThree_TwoAddress(currency.getIndex(), userId.intValue(), biz, index);
+        PubKeyConfig.AddressMetadata metadata = pubKeyConfig.genThreeTwoAddressMetadata(
+                currency.getIndex(), userId.intValue(), biz, index);
 
-        Address address = new Address();
-        address.setAddress(addressStr);
-        address.setBiz(biz);
-        address.setCurrency(getCurrency().getName());
-        address.setUserId(userId);
-        address.setIndex(index);
-        addressService.add(address, table);
-        log.info("用户获取新地址, 用户id:{}, 业务线:{}, 币种:{} 第{}个 结束", userId, biz, getCurrency().name(), index);
-        return address;
+        return Address.builder()
+                .address(metadata.getAddress())
+                .network("testnet3")
+                .scriptType("P2WSH")
+                .redeemScript("")
+                .witnessScript(metadata.getWitnessScript())
+                .derivationPath(metadata.getPath())
+                .publicKeys(metadata.getPublicKeys())
+                .biz(biz)
+                .currency(getCurrency().getName())
+                .userId(userId)
+                .index(index)
+                .balance(BigDecimal.ZERO)
+                .nonce(0)
+                .status((byte) Constants.WAITING)
+                .createDate(Date.from(Instant.now()))
+                .updateDate(Date.from(Instant.now()))
+                .build();
     }
 
     /**
@@ -161,6 +189,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
                                 .currency(getCurrency().getIndex())
                                 .spentTxId(UNSPENT_TX_ID)
                                 .status((byte) Constants.WAITING)
+                                .credited(false)
                                 .createDate(Date.from(Instant.now()))
                                 .updateDate(Date.from(Instant.now()))
                                 .build();
@@ -206,7 +235,11 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         log.info("get {} Balance begin", currencyName);
         try {
             UtxoTransactionExample example = new UtxoTransactionExample();
-            example.createCriteria().andStatusLessThan((byte) Constants.CONFIRM).andConfirmNumGreaterThan(0L);
+            example.createCriteria()
+                    .andStatusLessThan((byte) Constants.CONFIRM)
+                    .andConfirmNumGreaterThan(0L)
+                    .andSpentEqualTo((byte) 0)
+                    .andSpentTxIdEqualTo(UNSPENT_TX_ID);
             ShardTable table = ShardTable.builder().prefix(currencyEnum.getName()).build();
             BigDecimal balance = utxoTransactionService.getTotalBalance(example, table);
             log.info("get {} Balance end", currencyName);
@@ -293,16 +326,19 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
 
     private List<UtxoTransaction> getUtxo(String txid, Long height) {
         BtcLikeRawTransaction rawTransaction = getRawTransaction(txid);
+        if (rawTransaction == null || CollectionUtils.isEmpty(rawTransaction.getVout())) {
+            return new LinkedList<>();
+        }
 
         List<TxOutput> vout = rawTransaction.getVout();
         List<UtxoTransaction> utxoTransactions = vout.parallelStream()
                 .map((output) -> {
 
                     ScriptPubKey pubKey = output.getScriptPubKey();
-                    if (CollectionUtils.isEmpty(pubKey.getAddresses())) {
+                    String addressStr = extractOutputAddress(pubKey);
+                    if (!StringUtils.hasText(addressStr)) {
                         return null;
                     }
-                    String addressStr = pubKey.getAddresses().get(0);
                     ShardTable table = ShardTable.builder().prefix(getCurrency().getName()).build();
                     Address address = addressService.getAddress(addressStr, table);
                     Long confirm = this.height - height + 1;
@@ -323,6 +359,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
                             .blockHeight(height)
                             .confirmNum(confirm)
                             .status((byte) Constants.WAITING)
+                            .credited(false)
                             .createDate(Date.from(Instant.now()))
                             .updateDate(Date.from(Instant.now()))
                             .build();
@@ -332,6 +369,19 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
                 .filter(utxo -> !ObjectUtils.isEmpty(utxo))
                 .collect(Collectors.toList());
         return utxoTransactions;
+    }
+
+    private String extractOutputAddress(ScriptPubKey pubKey) {
+        if (pubKey == null) {
+            return null;
+        }
+        if (StringUtils.hasText(pubKey.getAddress())) {
+            return pubKey.getAddress();
+        }
+        if (!CollectionUtils.isEmpty(pubKey.getAddresses())) {
+            return pubKey.getAddresses().get(0);
+        }
+        return null;
     }
 
 

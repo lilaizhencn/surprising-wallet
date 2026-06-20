@@ -15,6 +15,7 @@ import org.bitcoinj.script.Script;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HexFormat;
 import java.util.List;
@@ -22,8 +23,6 @@ import java.util.List;
 public class WitnessTransactionBuilder {
     private static final HexFormat HEX = HexFormat.of();
     private static final long RBF_SEQUENCE = 0xfffffffdL;
-    private static final int DEFAULT_REQUIRED_SIGNATURES = 2;
-    private static final int DEFAULT_TOTAL_PUBKEYS = 3;
 
     private final NetworkParameters params;
     private final WitnessSigner signer = new WitnessSigner();
@@ -102,8 +101,12 @@ public class WitnessTransactionBuilder {
             TransactionInput input = tx.getInput(i);
             TransactionWitness existingWitness = input.getWitness();
             Script witnessScript = signer.extractWitnessScript(existingWitness);
+            Script providedWitnessScript = new Script(HEX.parseHex(witnessScriptHexes.get(i)));
+            if (witnessScript != null && !Arrays.equals(witnessScript.program(), providedWitnessScript.program())) {
+                throw new IllegalArgumentException("provided witnessScript does not match transaction witness");
+            }
             if (witnessScript == null) {
-                witnessScript = new Script(HEX.parseHex(witnessScriptHexes.get(i)));
+                witnessScript = providedWitnessScript;
             }
             Coin value = values.get(i);
             TransactionSignature signature = signer.signWitnessInput(tx, i, keys.get(i), witnessScript,
@@ -133,32 +136,11 @@ public class WitnessTransactionBuilder {
     }
 
     public static long estimateVBytes(int inputs, int outputs) {
-        return estimateVBytes(inputs, outputs, DEFAULT_REQUIRED_SIGNATURES, DEFAULT_TOTAL_PUBKEYS);
+        return P2wshFeeCalculator.estimateVBytes(inputs, outputs);
     }
 
     public static long estimateVBytes(int inputs, int outputs, int requiredSignatures, int totalPubKeys) {
-        if (inputs < 1 || outputs < 1 || requiredSignatures < 1 || totalPubKeys < requiredSignatures) {
-            throw new IllegalArgumentException("invalid P2WSH multisig dimensions");
-        }
-        long witnessScriptSize = 3L + 34L * totalPubKeys;
-        long witnessPerInput = 1L + 1L + requiredSignatures * 74L + varIntSize(witnessScriptSize) + witnessScriptSize;
-        long witnessBytes = 2L + inputs * witnessPerInput;
-        long baseBytes = 4L + varIntSize(inputs) + inputs * 41L + varIntSize(outputs) + outputs * 43L + 4L;
-        long weight = baseBytes * 4L + witnessBytes;
-        return (weight + 3L) / 4L;
-    }
-
-    private static long varIntSize(long value) {
-        if (value < 0xfdL) {
-            return 1L;
-        }
-        if (value <= 0xffffL) {
-            return 3L;
-        }
-        if (value <= 0xffffffffL) {
-            return 5L;
-        }
-        return 9L;
+        return P2wshFeeCalculator.estimateVBytes(inputs, outputs, requiredSignatures, totalPubKeys);
     }
 
     private static class InputMeta {

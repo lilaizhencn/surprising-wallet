@@ -11,7 +11,7 @@ import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.sdk.bitcoinj.core.WitnessTransactionBuilder;
+import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.service.criteria.UtxoTransactionExample;
 import com.surprising.wallet.service.criteria.WithdrawRecordExample;
 import com.surprising.wallet.service.service.AddressService;
@@ -50,7 +50,7 @@ abstract public class AbstractBatchWithdrawJob {
     @Autowired
     WithdrawTransactionService transactionService;
 
-    private static final Set<CurrencyEnum> SINGLE_SIG_CURRENCY = Sets.immutableEnumSet(IOTA, NEO, GAS, BTM, DOGE, DASH, ZEC);
+    private static final Set<CurrencyEnum> SINGLE_SIG_CURRENCY = Collections.emptySet();
     private static final int DEFAULT_FEE_RATE = 10;
 
     public void execute() {
@@ -205,7 +205,7 @@ abstract public class AbstractBatchWithdrawJob {
 
     private BigDecimal requiredAmount(BigDecimal userFeeRequired, BigDecimal withdrawAmount,
                                       int inputCount, int outputCount, int feeRate) {
-        long feeSat = WitnessTransactionBuilder.estimateVBytes(Math.max(inputCount, 1), outputCount + 1) * feeRate;
+        long feeSat = P2wshFeeCalculator.calculateFeeSat(Math.max(inputCount, 1), outputCount + 1, feeRate);
         BigDecimal networkFee = BigDecimal.valueOf(feeSat).divide(currency.getDecimal());
         BigDecimal dynamicRequired = withdrawAmount.add(networkFee);
         return dynamicRequired.max(userFeeRequired);

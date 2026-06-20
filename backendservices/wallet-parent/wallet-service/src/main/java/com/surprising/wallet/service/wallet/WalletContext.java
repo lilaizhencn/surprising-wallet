@@ -19,11 +19,19 @@ public class WalletContext {
     private List<IWallet> cachedWallet;
 
     public IWallet getWallet(CurrencyEnum currency) {
-        if (CurrencyEnum.isErc20(currency)) {
-            currency = CurrencyEnum.ERC20;
+        IWallet wallet = findWallet(currency);
+        if (wallet != null) {
+            return wallet;
         }
-        currency = CurrencyEnum.toMainCurrency(currency);
 
+        CurrencyEnum mainCurrency = CurrencyEnum.toMainCurrency(currency);
+        if (mainCurrency != currency) {
+            return findWallet(mainCurrency);
+        }
+        return null;
+    }
+
+    private IWallet findWallet(CurrencyEnum currency) {
         for (IWallet wallet : cachedWallet) {
             if (wallet.getCurrency() == currency) {
                 return wallet;

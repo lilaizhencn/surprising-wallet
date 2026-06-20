@@ -6,9 +6,11 @@ import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.currency.BizEnum;
 import com.surprising.wallet.common.currency.CurrencyEnum;
 import com.surprising.wallet.common.dto.TransactionDTO;
+import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.service.service.AddressService;
 import com.surprising.wallet.service.criteria.WithdrawRecordExample;
 import com.surprising.wallet.service.wallet.IWallet;
 import com.surprising.wallet.service.wallet.WalletContext;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
@@ -33,6 +36,12 @@ import static com.surprising.wallet.common.utils.Constants.WALLET_DEPOSIT_KEY;
 public class TransactionService {
     @Autowired
     UtxoTransactionService utxoService;
+
+    @Autowired
+    AddressService addressService;
+
+    @Autowired
+    UserAssetService userAssetService;
 
     @Autowired
     AccountTransactionService accountTransactionService;
@@ -51,10 +60,11 @@ public class TransactionService {
      */
     public void saveTransaction(List<TransactionDTO> dtos) {
         log.info("saveTransactions dto begin");
-        dtos.parallelStream().forEach(this::saveTransaction);
+        dtos.forEach(this::saveTransaction);
         log.info("saveTransactions dto end");
     }
 
+    @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_COMMITTED)
     public void saveTransaction(TransactionDTO dto) {
         // INTERNAL 一般代表是内部找零地址的默认业务线，不需要通知到账
         if (BizEnum.INTERNAL.getIndex() == dto.getBiz()) {
@@ -62,6 +72,10 @@ public class TransactionService {
             return;
         }
         log.info("saveTransaction dto: {} begin", dto.getTxId());
+        CurrencyEnum currency = CurrencyEnum.parseValue(dto.getCurrency());
+        if (dto.getConfirmNum() != null && dto.getConfirmNum() >= currency.getDepositConfirmNum()) {
+            creditDepositIfNeeded(dto, currency);
+        }
         // String depositKey = WALLET_DEPOSIT_KEY + dto.getBiz();
         String depositKey = WALLET_DEPOSIT_KEY;
         String val = JSONObject.toJSONString(dto);
@@ -73,12 +87,24 @@ public class TransactionService {
     /**
      * 把提现记录入库，账户类型的币直接发出提现请求，但是utxo类型的币在 {@link com.surprising.wallet.jobs.withdraw}中批量汇出
      */
-    @Transactional(rollbackFor = {Throwable.class}, isolation = Isolation.READ_UNCOMMITTED)
+    @Transactional(rollbackFor = {Throwable.class}, isolation = Isolation.READ_COMMITTED)
     public boolean withdraw(WithdrawRecord record) {
         log.info("提现操作 开始 提现id:{}", record.getWithdrawId());
 
         CurrencyEnum currency = CurrencyEnum.parseValue(record.getCurrency());
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
+        WithdrawRecordExample duplicateExample = new WithdrawRecordExample();
+        duplicateExample.createCriteria().andWithdrawIdEqualTo(record.getWithdrawId());
+        if (!withdrawRecordService.getByExample(duplicateExample, table).isEmpty()) {
+            log.info("提现操作 重复提现id已存在:{}", record.getWithdrawId());
+            return true;
+        }
+        BigDecimal frozenAmount = withdrawFrozenAmount(record);
+        if (!userAssetService.freeze(record.getUserId(), currency.getIndex(), frozenAmount)) {
+            log.warn("提现操作 用户余额不足 userId:{} currency:{} amount:{}",
+                    record.getUserId(), currency.getName(), frozenAmount);
+            return false;
+        }
         //在交易未构建成功之前，用withdrawId占位，然后入库
         record.setTxId(record.getWithdrawId());
         record.setStatus((byte) Constants.WAITING);
@@ -96,6 +122,7 @@ public class TransactionService {
         if (!success) {
             log.error("提现操作失败 删除提现记录 {}", record.getId());
             withdrawRecordService.removeById(record.getId(), table);
+            userAssetService.unfreeze(record.getUserId(), currency.getIndex(), frozenAmount);
         }
 
         log.info("提现操作 结束 提现id:{}", record.getWithdrawId());
@@ -109,6 +136,7 @@ public class TransactionService {
      *
      * @param transaction 已经签好的交易
      */
+    @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_COMMITTED)
     public void sendWithdrawTransaction(WithdrawTransaction transaction) {
         log.info("广播签名后的交易 开始 币种id:{} 交易id:{}", transaction.getCurrency(), transaction.getId());
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
@@ -143,16 +171,64 @@ public class TransactionService {
         WithdrawRecordExample example = new WithdrawRecordExample();
         example.createCriteria().andTxIdEqualTo(transaction.getId().toString());
         List<WithdrawRecord> records = withdrawRecordService.getByExample(example, table);
-        records.parallelStream().forEach((record) -> {
+        records.forEach((record) -> {
             record.setTxId(txId);
             record.setStatus((byte) status);
             record.setUpdateDate(Date.from(Instant.now()));
             withdrawRecordService.editById(record, table);
+            userAssetService.deduct(record.getUserId(), currency.getIndex(), withdrawFrozenAmount(record));
             // String key = Constants.WALLET_WITHDRAW_TX_BIZ_KEY + record.getBiz();
             String key = Constants.WALLET_WITHDRAW_TX_BIZ_KEY;
             String val = JSONObject.toJSONString(record);
             REDIS.lPush(key, val);
         });
         log.info("广播签名后的交易 成功 更新数据库完成 币种id:{} 交易id:{}", currency.getName(), transaction.getTxId());
+    }
+
+    private void creditDepositIfNeeded(TransactionDTO dto, CurrencyEnum currency) {
+        UtxoKey utxoKey = UtxoKey.parse(dto.getTxId());
+        if (utxoKey == null) {
+            return;
+        }
+        Address address = addressService.getAddress(dto.getAddress(), currency);
+        if (address == null || address.getUserId() == null || address.getUserId() <= 0) {
+            return;
+        }
+        int marked = utxoService.markCredited(utxoKey.txId, utxoKey.seq, currency);
+        if (marked > 0) {
+            userAssetService.addBalance(address.getUserId(), currency.getIndex(), dto.getBalance());
+            log.info("充值入账成功 userId:{} currency:{} tx:{} amount:{}",
+                    address.getUserId(), currency.getName(), dto.getTxId(), dto.getBalance());
+        }
+    }
+
+    private BigDecimal withdrawFrozenAmount(WithdrawRecord record) {
+        BigDecimal fee = record.getFee() == null ? BigDecimal.ZERO : record.getFee();
+        return record.getBalance().add(fee);
+    }
+
+    private static class UtxoKey {
+        private final String txId;
+        private final Short seq;
+
+        private UtxoKey(String txId, Short seq) {
+            this.txId = txId;
+            this.seq = seq;
+        }
+
+        private static UtxoKey parse(String value) {
+            if (!StringUtils.hasText(value)) {
+                return null;
+            }
+            int split = value.lastIndexOf('-');
+            if (split <= 0 || split == value.length() - 1) {
+                return null;
+            }
+            try {
+                return new UtxoKey(value.substring(0, split), Short.parseShort(value.substring(split + 1)));
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
     }
 }

@@ -1,25 +1,25 @@
 package com.surprising.wallet.jobs.deposit;
 
-import com.surprising.wallet.service.wallet.impl.DogeWallet;
+import com.surprising.wallet.service.wallet.impl.TronWallet;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 扫描打包在区块中的交易
- *
  * @author lilaizhen
+ * @data 12/04/2018
  */
 @Component
 @Slf4j
-public class ScanDogeBlockJob extends AbstractScanUtxoBlockJob {
+public class ScanTronBlockJob extends AbstractScanAccountBlockJob {
 
     @Autowired
-    public ScanDogeBlockJob(DogeWallet dogeWallet) {
-        wallet = dogeWallet;
+    public ScanTronBlockJob(TronWallet tronWallet) {
+        wallet = tronWallet;
     }
 
-    //    @Scheduled(cron = "1 1/1 * * * ?")
+//    @Scheduled(cron = "20/30 * * * * ?")
     @Override
     public void execute() {
         super.execute();

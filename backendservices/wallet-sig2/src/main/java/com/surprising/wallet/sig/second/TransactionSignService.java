@@ -1,26 +1,20 @@
 package com.surprising.wallet.sig.second;
 
-import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.currency.CurrencyEnum;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
-import com.surprising.wallet.signature.api.ITransactionSignService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
-import java.util.List;
-
-
 /**
  * @author atomex
  **/
 @Slf4j
 @RestController
-public class TransactionSignService implements ITransactionSignService {
+public class TransactionSignService {
 
-    @Override
     @PostMapping("/sign/transaction")
     public String signTransaction(@RequestBody WithdrawTransaction transaction) {
         log.info("签名服务 开始 币种id:{}", transaction.getCurrency());
@@ -38,19 +32,4 @@ public class TransactionSignService implements ITransactionSignService {
         return sig;
     }
 
-    @Override
-    @PostMapping("/sign/need-address")
-    public List<String> generateNeedAddress(@RequestBody JSONObject param) {
-        log.info("generateNeedAddress begin");
-
-        try {
-            String currency = param.getString("currency");
-            CurrencyEnum currencyEnum = CurrencyEnum.parseName(currency);
-            ISignService signService = SignContent.getSignService(currencyEnum);
-            return signService.genrateNeedAddress(param);
-        } catch (Throwable e) {
-            log.error("generateNeedAddress error", e);
-            return null;
-        }
-    }
 }

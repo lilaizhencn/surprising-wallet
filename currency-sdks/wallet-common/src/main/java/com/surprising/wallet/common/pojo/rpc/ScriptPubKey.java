@@ -37,6 +37,7 @@ public class ScriptPubKey implements Serializable {
     private String hex;
     private int reqSigs;
     private String type;
+    private String address;
     private List<String> addresses;
     /**
      * 兼容比特币现金api响应

@@ -2,8 +2,6 @@ package com.surprising.wallet.jobs;
 
 import com.surprising.wallet.common.annotation.StartThread;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
-import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -26,8 +24,6 @@ import java.util.concurrent.TimeUnit;
 @SpringBootApplication(scanBasePackages = {"com.surprising.wallet", "com.surprising.starters"})
 @EnableConfigurationProperties
 @EnableScheduling
-@EnableDiscoveryClient
-@EnableFeignClients(basePackages = "com.surprising.wallet.signature.api")
 public class WalletServerApplication {
 
     public static void main(String[] args) {

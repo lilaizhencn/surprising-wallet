@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.googlecode.jsonrpc4j.JsonRpcHttpClient;
 import com.googlecode.jsonrpc4j.ProxyUtil;
-import com.surprising.wallet.client.command.ActLikeCommand;
 import com.surprising.wallet.common.annotation.RpcConfig;
 import lombok.extern.log4j.Log4j2;
 import okhttp3.OkHttpClient;
@@ -61,8 +60,6 @@ public class RpcCommandProcessor implements BeanDefinitionRegistryPostProcessor,
     private final int connectionTimeoutMillis = 120 * 1000;
     private final int readTimeoutMillis = 120 * 1000;
 
-    private String innerProxy;
-
     @Override
     public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) {
         this.registry = registry;
@@ -87,13 +84,12 @@ public class RpcCommandProcessor implements BeanDefinitionRegistryPostProcessor,
                         }
                         String username = getProperty(config.username());
                         String password = getProperty(config.password());
-                        boolean needProxy = config.needProxy();
                         Object obj = null;
                         if (config.type() == JSON_RPC) {
-                            JsonRpcHttpClient client = buildRpcClient(command, server, username, password, needProxy);
+                            JsonRpcHttpClient client = buildRpcClient(command, server, username, password);
                             obj = ProxyUtil.createClientProxy(getClass().getClassLoader(), command, client);
                         } else if (config.type() == REST_RPC) {
-                            obj = buildRestClient(command, server, username, password, needProxy);
+                            obj = buildRestClient(command, server, username, password);
                         } else {
                             throw new RuntimeException("Not support rpc type: " + config.type().name());
                         }
@@ -115,7 +111,7 @@ public class RpcCommandProcessor implements BeanDefinitionRegistryPostProcessor,
 
     }
 
-    private <T> T buildRestClient(Class<T> command, String server, String username, String password, boolean needProxy) {
+    private <T> T buildRestClient(Class<T> command, String server, String username, String password) {
 
         Map<String, String> authorization = new HashMap<>(2);
         authorization.put("Content-type", "application/json");
@@ -129,9 +125,6 @@ public class RpcCommandProcessor implements BeanDefinitionRegistryPostProcessor,
                             .newBuilder()
                             .addHeader("Content-Type", "application/json")
                             .addHeader("Authorization", "Basic " + java.util.Base64.getEncoder().encodeToString(auth.getBytes()));
-                    if (needProxy) {
-                        builder.addHeader("referer", server);
-                    }
 
                     Request request = builder.build();
                     return chain.proceed(request);
@@ -143,11 +136,7 @@ public class RpcCommandProcessor implements BeanDefinitionRegistryPostProcessor,
                 .addConverterFactory(new Retrofit2ConverterFactory())
                 .addCallAdapterFactory(new RestCallAdapterFactory())
                 .client(client);
-        if (needProxy) {
-            builder.baseUrl(innerProxy);
-        } else {
-            builder.baseUrl(server);
-        }
+        builder.baseUrl(server);
 
         Retrofit retrofit = builder.build();
         T obj = retrofit.create(command);
@@ -186,24 +175,14 @@ public class RpcCommandProcessor implements BeanDefinitionRegistryPostProcessor,
         }
     }
 
-    private JsonRpcHttpClient buildRpcClient(Class command, String server, String username, String password, boolean needProxy) {
+    private JsonRpcHttpClient buildRpcClient(Class command, String server, String username, String password) {
         Map<String, String> authorization = new HashMap<>(3);
         authorization.put("Content-type", "application/json");
         String auth = username + ":" + password;
 
-        if (ActLikeCommand.class.isAssignableFrom(command)) {
-            authorization.put(
-                    "Authorization",
-                    "000000" + java.util.Base64.getEncoder().encodeToString(auth.getBytes()));
-        } else {
-            authorization.put(
-                    "Authorization",
-                    "Basic " + java.util.Base64.getEncoder().encodeToString(auth.getBytes()));
-        }
-        if (needProxy) {
-            authorization.put("referer", server);
-            server = innerProxy;
-        }
+        authorization.put(
+                "Authorization",
+                "Basic " + java.util.Base64.getEncoder().encodeToString(auth.getBytes()));
 
         JsonRpcHttpClient client = null;
         try {
@@ -223,7 +202,7 @@ public class RpcCommandProcessor implements BeanDefinitionRegistryPostProcessor,
                 }
             };
         } catch (Exception e) {
-            log.error("command:{} buildRpcClient error server:{} username:{} passoword:{} needProxy:{}", command.getSimpleName(), server, username, password, needProxy);
+            log.error("command:{} buildRpcClient error server:{} username:{} password:{}", command.getSimpleName(), server, username, password);
             e.printStackTrace();
         }
         client.setConnectionTimeoutMillis(connectionTimeoutMillis);
@@ -244,7 +223,6 @@ public class RpcCommandProcessor implements BeanDefinitionRegistryPostProcessor,
     @Override
     public void setEnvironment(Environment env) {
         environment = env;
-        innerProxy = getProperty("atomex.innerProxy");
     }
 
 }

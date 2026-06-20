@@ -31,4 +31,6 @@ public interface UtxoTransactionService
 
     UtxoTransaction markAsSpent(UtxoTransactionExample example, CurrencyEnum currencyEnum);
 
+    int markCredited(String txId, Short seq, CurrencyEnum currencyEnum);
+
 }

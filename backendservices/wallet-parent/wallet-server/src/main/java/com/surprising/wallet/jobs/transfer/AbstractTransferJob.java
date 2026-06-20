@@ -2,6 +2,7 @@ package com.surprising.wallet.jobs.transfer;
 
 import com.surprising.common.mybatis.pager.PageInfo;
 import com.surprising.common.mybatis.sharding.ShardTable;
+import com.surprising.wallet.common.currency.CurrencyEnum;
 import com.surprising.wallet.common.pojo.AccountTransaction;
 import com.surprising.wallet.service.criteria.AccountTransactionExample;
 import com.surprising.wallet.service.service.AccountTransactionService;
@@ -9,8 +10,10 @@ import com.surprising.wallet.service.wallet.AbstractWallet;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Set;
@@ -27,7 +30,13 @@ abstract public class AbstractTransferJob {
 
     AbstractWallet wallet;
 
+    @Value("${atomex.wallet.transfer.enabled-currencies:btc}")
+    private String enabledCurrencies;
+
     public void execute() {
+        if (!isTransferEnabled(wallet.getCurrency())) {
+            return;
+        }
         //一次划转100个
         int pageSize = 100;
         log.info("{} 转账/划转 任务开始 每次转{}条记录", wallet.getCurrency().getName(), pageSize);
@@ -52,5 +61,12 @@ abstract public class AbstractTransferJob {
         }
         log.info("{} 转账/划转 任务结束", wallet.getCurrency().getName());
 
+    }
+
+    private boolean isTransferEnabled(CurrencyEnum currency) {
+        return Arrays.stream(enabledCurrencies.split(","))
+                .map(String::trim)
+                .filter(item -> !item.isEmpty())
+                .anyMatch(item -> "*".equals(item) || item.equalsIgnoreCase(currency.getName()));
     }
 }

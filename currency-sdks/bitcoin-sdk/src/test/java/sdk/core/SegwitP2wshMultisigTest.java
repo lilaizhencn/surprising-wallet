@@ -1,5 +1,7 @@
 package sdk.core;
 
+import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
+import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.sdk.bitcoinj.core.SegwitMultiSignAddressGenerator;
 import com.surprising.wallet.sdk.bitcoinj.core.TransactionBroadcastValidator;
 import com.surprising.wallet.sdk.bitcoinj.core.WitnessTransactionBuilder;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SegwitP2wshMultisigTest {
@@ -37,7 +41,11 @@ class SegwitP2wshMultisigTest {
     private static final ECKey KEY_1 = ECKey.fromPrivate(BigInteger.valueOf(2), true);
     private static final ECKey KEY_2 = ECKey.fromPrivate(BigInteger.valueOf(3), true);
     private static final ECKey KEY_3 = ECKey.fromPrivate(BigInteger.valueOf(4), true);
+    private static final ECKey WRONG_KEY = ECKey.fromPrivate(BigInteger.valueOf(99), true);
     private static final Coin INPUT_VALUE = Coin.valueOf(150_000L);
+    private static final String XPUB_1 = "tpubD6NzVbkrYhZ4YeTnP6ae6en8YvKSvxvvCwh5X7gNpwqEeix6o7etGgsyGywcB9gS1bGTmC4WfLKAdK6vxDEzedd7PMRLcYk5yZLj5JkLAVB";
+    private static final String XPUB_2 = "tpubD6NzVbkrYhZ4WuN2bmdffo5p894oRYGQVCfKe3TKT4QVw7qQT18jG1FYbYyB3ePESejLdfaEFMRpsYGVjb4Bh6HiiWaSU8iJRVE46EirNBT";
+    private static final String XPUB_3 = "tpubD6NzVbkrYhZ4XKeuSHwv2p3snJxWjacFsu2rEEht2qMaM5FYV2RkbMaJEYNZGK7B3i8D46RTs83DJNPh2Jd5MzXivXCiHLbqAFKv8MKxrC4";
 
     @Test
     void nativeP2wshAddressAndWitnessScriptAreGenerated() throws Exception {
@@ -56,22 +64,9 @@ class SegwitP2wshMultisigTest {
 
     @Test
     void twoOfThreeFirstAndSecondSignProduceBroadcastReadyNativeSegwitTransaction() throws Exception {
-        SegwitMultiSignAddressGenerator generator = multisigGenerator();
-        generator.generateAddress(PARAMS, 2);
-        String witnessScriptHex = generator.getWitnessScriptStr();
-
-        WitnessTransactionBuilder builder = new WitnessTransactionBuilder(PARAMS);
-        builder.addInput("0101010101010101010101010101010101010101010101010101010101010101", 0,
-                witnessScriptHex, INPUT_VALUE);
-        builder.addOutput(SegwitAddress.fromKey(PARAMS, ECKey.fromPrivate(BigInteger.valueOf(11), true)).toBech32(),
-                Coin.valueOf(80_000L));
-        builder.addOutput(SegwitAddress.fromKey(PARAMS, ECKey.fromPrivate(BigInteger.valueOf(12), true)).toBech32(),
-                Coin.valueOf(40_000L));
-
-        String firstHex = builder.buildFirstSign(List.of(KEY_1));
-        String fullHex = builder.buildSecondSign(firstHex, List.of(KEY_2), List.of(witnessScriptHex), List.of(INPUT_VALUE));
-        Transaction firstTx = Transaction.read(ByteBuffer.wrap(HEX.parseHex(firstHex)));
-        Transaction fullTx = Transaction.read(ByteBuffer.wrap(HEX.parseHex(fullHex)));
+        SignedFixture fixture = signedFixture();
+        Transaction firstTx = Transaction.read(ByteBuffer.wrap(HEX.parseHex(fixture.firstHex)));
+        Transaction fullTx = Transaction.read(ByteBuffer.wrap(HEX.parseHex(fixture.fullHex)));
 
         assertEquals(firstTx.getTxId(), fullTx.getTxId(), "SegWit txid must not change when witness changes");
         assertNotEquals(firstTx.getWTxId(), fullTx.getWTxId(), "wtxid should reflect the second signature");
@@ -81,7 +76,7 @@ class SegwitP2wshMultisigTest {
         assertEquals(4, witness.getPushCount());
         assertEquals(0, witness.getPush(0).length);
         assertFalse(java.util.Arrays.equals(witness.getPush(1), witness.getPush(2)));
-        assertEquals(generator.getWitnessScriptStr(), HEX.formatHex(witness.getPush(3)));
+        assertEquals(fixture.witnessScriptHex, HEX.formatHex(witness.getPush(3)));
 
         Script witnessScript = new Script(witness.getPush(3));
         TransactionSignature sig1 = TransactionSignature.decodeFromBitcoin(witness.getPush(1), true, true);
@@ -94,10 +89,113 @@ class SegwitP2wshMultisigTest {
         assertTrue(KEY_2.verify(hash2, sig2));
 
         TransactionBroadcastValidator.ValidationResult validation =
-                new TransactionBroadcastValidator(PARAMS).validate(fullHex);
+                new TransactionBroadcastValidator(PARAMS).validate(fixture.fullHex);
         assertTrue(validation.valid, validation.errors.toString());
         assertEquals(1, validation.inputCount);
         assertEquals(2, validation.signatureCount);
+    }
+
+    @Test
+    void configuredTpubs_shouldDeriveNativeP2wshMultisigAddress() {
+        SegwitMultiSignAddressGenerator generator = multisigGeneratorFromConfiguredTpubs(1, 1, 0, 0);
+        String address = generator.generateAddress(PARAMS, 2);
+        String repeat = multisigGeneratorFromConfiguredTpubs(1, 1, 0, 0).generateAddress(PARAMS, 2);
+
+        assertEquals(repeat, address);
+        assertTrue(address.startsWith("tb1"));
+        assertEquals(ScriptType.P2WSH, Address.fromString(PARAMS, address).getOutputScriptType());
+        assertEquals(3, generator.getWitnessScript().getPubKeys().size());
+    }
+
+    @Test
+    void firstSign_shouldProducePartialWitness() {
+        FirstSignFixture fixture = firstSignFixture();
+        Transaction tx = Transaction.read(ByteBuffer.wrap(HEX.parseHex(fixture.firstHex)));
+
+        TransactionWitness witness = tx.getInput(0).getWitness();
+        assertEquals(3, witness.getPushCount());
+        assertEquals(0, witness.getPush(0).length);
+        assertTrue(witness.getPush(1).length > 0);
+        assertEquals(fixture.witnessScriptHex, HEX.formatHex(witness.getPush(2)));
+    }
+
+    @Test
+    void secondSign_shouldCompleteWitness() {
+        SignedFixture fixture = signedFixture();
+        Transaction tx = Transaction.read(ByteBuffer.wrap(HEX.parseHex(fixture.fullHex)));
+        TransactionWitness witness = tx.getInput(0).getWitness();
+
+        assertEquals(4, witness.getPushCount());
+        assertEquals(0, witness.getPush(0).length);
+        assertFalse(Arrays.equals(witness.getPush(1), witness.getPush(2)));
+        assertEquals(fixture.witnessScriptHex, HEX.formatHex(witness.getPush(3)));
+    }
+
+    @Test
+    void signedP2wshMultisigTx_shouldVerify() {
+        SignedFixture fixture = signedFixture();
+        TransactionBroadcastValidator.ValidationResult validation =
+                new TransactionBroadcastValidator(PARAMS).validate(fixture.fullHex);
+
+        assertTrue(validation.valid, validation.errors.toString());
+        assertEquals(2, validation.signatureCount);
+    }
+
+    @Test
+    void redisSerializedTx_shouldKeepWitness() {
+        SignedFixture fixture = signedFixture();
+        String redisValue = "rawTransaction:" + fixture.fullHex;
+        String restoredHex = redisValue.substring("rawTransaction:".length());
+        Transaction restored = Transaction.read(ByteBuffer.wrap(HEX.parseHex(restoredHex)));
+
+        assertEquals(4, restored.getInput(0).getWitness().getPushCount());
+        assertEquals(fixture.fullTxId, restored.getTxId().toString());
+    }
+
+    @Test
+    void wrongPrivateKey_shouldFail() {
+        FirstSignFixture fixture = firstSignFixture();
+        WitnessTransactionBuilder builder = new WitnessTransactionBuilder(PARAMS);
+
+        assertThrows(IllegalArgumentException.class, () ->
+                builder.buildSecondSign(fixture.firstHex, List.of(WRONG_KEY),
+                        List.of(fixture.witnessScriptHex), List.of(INPUT_VALUE)));
+    }
+
+    @Test
+    void duplicatePrivateKey_shouldFail() {
+        FirstSignFixture fixture = firstSignFixture();
+        WitnessTransactionBuilder builder = new WitnessTransactionBuilder(PARAMS);
+
+        assertThrows(IllegalArgumentException.class, () ->
+                builder.buildSecondSign(fixture.firstHex, List.of(KEY_1),
+                        List.of(fixture.witnessScriptHex), List.of(INPUT_VALUE)));
+    }
+
+    @Test
+    void missingInputValue_shouldFail() {
+        SegwitMultiSignAddressGenerator generator = multisigGenerator();
+        generator.generateAddress(PARAMS, 2);
+        WitnessTransactionBuilder builder = new WitnessTransactionBuilder(PARAMS);
+
+        assertThrows(IllegalArgumentException.class, () ->
+                builder.addInput("0101010101010101010101010101010101010101010101010101010101010101",
+                        0, generator.getWitnessScriptStr(), null));
+    }
+
+    @Test
+    void wrongWitnessScript_shouldFail() {
+        FirstSignFixture fixture = firstSignFixture();
+        SegwitMultiSignAddressGenerator wrong = new SegwitMultiSignAddressGenerator();
+        wrong.addECKey(KEY_1);
+        wrong.addECKey(KEY_2);
+        wrong.addECKey(WRONG_KEY);
+        wrong.generateAddress(PARAMS, 2);
+
+        WitnessTransactionBuilder builder = new WitnessTransactionBuilder(PARAMS);
+        assertThrows(IllegalArgumentException.class, () ->
+                builder.buildSecondSign(fixture.firstHex, List.of(KEY_2),
+                        List.of(wrong.getWitnessScriptStr()), List.of(INPUT_VALUE)));
     }
 
     @Test
@@ -107,6 +205,37 @@ class SegwitP2wshMultisigTest {
 
         assertTrue(estimatedSegwitVbytes < legacyBytes);
         assertTrue(estimatedSegwitVbytes <= legacyBytes * 60 / 100);
+    }
+
+    @Test
+    void feeCalculator_shouldEstimateP2wshSingleInputSingleOutput() {
+        assertEquals(634L, P2wshFeeCalculator.estimateWeight(1, 1, 2, 3));
+        assertEquals(159L, P2wshFeeCalculator.estimateVBytes(1, 1));
+        assertEquals(1_590L, P2wshFeeCalculator.calculateFeeSat(1, 1, 10));
+    }
+
+    @Test
+    void feeCalculator_shouldEstimateP2wshMultiInputTwoOutputs() {
+        assertEquals(1_226L, P2wshFeeCalculator.estimateWeight(2, 2, 2, 3));
+        assertEquals(307L, P2wshFeeCalculator.estimateVBytes(2, 2));
+    }
+
+    @Test
+    void feeCalculator_shouldMergeDustChangeIntoFee() {
+        long inputSat = 100_000L;
+        long sendSat = 97_880L;
+
+        P2wshFeeCalculator.FeeResult result = P2wshFeeCalculator.calculate(inputSat, sendSat, 1, 1, 10);
+
+        assertEquals(0L, result.getChangeSat());
+        assertEquals(2_120L, result.getFeeSat());
+        assertEquals(159L, result.getVbytes());
+    }
+
+    @Test
+    void feeCalculator_shouldScaleWithFeeRate() {
+        assertEquals(202L, P2wshFeeCalculator.calculateFeeSat(1, 2, 1));
+        assertEquals(5_050L, P2wshFeeCalculator.calculateFeeSat(1, 2, 25));
     }
 
     @Test
@@ -141,6 +270,74 @@ class SegwitP2wshMultisigTest {
         generator.addECKey(KEY_2);
         generator.addECKey(KEY_3);
         return generator;
+    }
+
+    private static SegwitMultiSignAddressGenerator multisigGeneratorFromConfiguredTpubs(
+            int currency, int biz, int userId, int index) {
+        SegwitMultiSignAddressGenerator generator = new SegwitMultiSignAddressGenerator();
+        generator.addECKey(derive(XPUB_1, currency, biz, userId, index));
+        generator.addECKey(derive(XPUB_2, currency, biz, userId, index));
+        generator.addECKey(derive(XPUB_3, currency, biz, userId, index));
+        return generator;
+    }
+
+    private static ECKey derive(String xpub, int currency, int biz, int userId, int index) {
+        return Bip32Node.decode(xpub)
+                .getChild(44)
+                .getChild(currency)
+                .getChild(biz)
+                .getChild(userId)
+                .getChild(index)
+                .getEcKey();
+    }
+
+    private static FirstSignFixture firstSignFixture() {
+        SegwitMultiSignAddressGenerator generator = multisigGenerator();
+        generator.generateAddress(PARAMS, 2);
+        String witnessScriptHex = generator.getWitnessScriptStr();
+
+        WitnessTransactionBuilder builder = new WitnessTransactionBuilder(PARAMS);
+        builder.addInput("0101010101010101010101010101010101010101010101010101010101010101", 0,
+                witnessScriptHex, INPUT_VALUE);
+        builder.addOutput(SegwitAddress.fromKey(PARAMS, ECKey.fromPrivate(BigInteger.valueOf(11), true)).toBech32(),
+                Coin.valueOf(80_000L));
+        builder.addOutput(SegwitAddress.fromKey(PARAMS, ECKey.fromPrivate(BigInteger.valueOf(12), true)).toBech32(),
+                Coin.valueOf(40_000L));
+
+        return new FirstSignFixture(witnessScriptHex, builder.buildFirstSign(List.of(KEY_1)));
+    }
+
+    private static SignedFixture signedFixture() {
+        FirstSignFixture first = firstSignFixture();
+        WitnessTransactionBuilder builder = new WitnessTransactionBuilder(PARAMS);
+        String fullHex = builder.buildSecondSign(first.firstHex, List.of(KEY_2),
+                List.of(first.witnessScriptHex), List.of(INPUT_VALUE));
+        Transaction fullTx = Transaction.read(ByteBuffer.wrap(HEX.parseHex(fullHex)));
+        return new SignedFixture(first.witnessScriptHex, first.firstHex, fullHex, fullTx.getTxId().toString());
+    }
+
+    private static class FirstSignFixture {
+        private final String witnessScriptHex;
+        private final String firstHex;
+
+        private FirstSignFixture(String witnessScriptHex, String firstHex) {
+            this.witnessScriptHex = witnessScriptHex;
+            this.firstHex = firstHex;
+        }
+    }
+
+    private static class SignedFixture {
+        private final String witnessScriptHex;
+        private final String firstHex;
+        private final String fullHex;
+        private final String fullTxId;
+
+        private SignedFixture(String witnessScriptHex, String firstHex, String fullHex, String fullTxId) {
+            this.witnessScriptHex = witnessScriptHex;
+            this.firstHex = firstHex;
+            this.fullHex = fullHex;
+            this.fullTxId = fullTxId;
+        }
     }
 
     private static void scanOutputs(Transaction tx, String watchedAddress, Map<String, Coin> utxos) {

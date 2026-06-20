@@ -2,6 +2,7 @@ package com.surprising.wallet.sig.second;
 
 import com.surprising.wallet.signature.KeyConfig;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -21,6 +22,9 @@ import java.util.Properties;
 @Slf4j
 public class WalletSig2Application {
 
+    @Value("${atomex.wallet.masterKey}")
+    private String masterKey;
+
     public static void main(String[] args) {
         SpringApplication.run(WalletSig2Application.class, args);
     }
@@ -30,7 +34,7 @@ public class WalletSig2Application {
 
         return args -> {
             Properties properties = new Properties();
-            properties.setProperty("masterNode", "tprv8ZgxMBicQKsPdSLEi7y5GPRhZ7YsGD5Vuu4YMXR22nc76dadpcK95WdgRSB7V3LAhDEWDBiJg1F5TYXFWHMGZLx99f3zSwWkMWD6MPe627j");
+            properties.setProperty("masterNode", masterKey);
             KeyConfig.init(properties);
 //            if (args.containsOption("keyFile")) {
 //                List<String> optionValues = args.getOptionValues("keyFile");
@@ -104,4 +108,3 @@ public class WalletSig2Application {
         };
     }
 }
-

@@ -20,7 +20,6 @@ public class ScanBtcBlockJob extends AbstractScanUtxoBlockJob {
         wallet = btcWallet;
     }
 
-    //    @Scheduled(cron = "3 1/5 * * * ?")
     @Scheduled(cron = "0/59 * * * * ?")
     @Override
     public void execute() {

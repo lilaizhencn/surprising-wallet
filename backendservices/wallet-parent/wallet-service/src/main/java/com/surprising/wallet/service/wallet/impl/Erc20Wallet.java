@@ -15,6 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.ObjectUtils;
 import org.web3j.abi.EventEncoder;
@@ -101,7 +103,6 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
 
   public static void main(String[] args) throws ExecutionException, InterruptedException, IOException {
     Web3jService web3jService = new HttpService("https://ethereum.polarisex.com");
-//        Web3jService web3jService = new HttpService("https://mainnet.infura.io/v3/f18e59cbca624527aea1b3093520f0e8");
     Web3j web3j = Web3j.build(web3jService);
     //填写合约方法和查询地址 to填写合约地址
     Function function = new Function("balances", Arrays
@@ -162,6 +163,36 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
     }
 
     return balance;
+  }
+
+  @Override
+  @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_UNCOMMITTED)
+  public void transfer(String address, CurrencyEnum currency, Date deadline) {
+    BigDecimal tokenBalance = getBalance(address, currency);
+    if (tokenBalance.compareTo(BigDecimal.ZERO) <= 0) {
+      log.info("{} balance of {} is {}", currency.getName(), address, tokenBalance);
+      return;
+    }
+
+    BigDecimal ethBalance = getEthBalance(address);
+    BigDecimal requiredGasFee = estimateGasFee(currency);
+    if (ethBalance.compareTo(requiredGasFee) < 0) {
+      log.warn("{} transfer skipped, address {} eth gas balance {} < required {}",
+              currency.getName(), address, ethBalance, requiredGasFee);
+      return;
+    }
+
+    super.transfer(address, currency, deadline);
+  }
+
+  private BigDecimal getEthBalance(String address) {
+    String tranAmount = command.getBalance(address, "latest");
+    return new BigDecimal(EthereumUtil.hexToBigInteger(tranAmount)).divide(CurrencyEnum.ETH.getDecimal());
+  }
+
+  private BigDecimal estimateGasFee(CurrencyEnum currency) {
+    BigDecimal gasLimit = gas().multiply(CurrencyEnum.ETH.getDecimal());
+    return gasLimit.multiply(gasPrice(currency));
   }
 
   @Override
@@ -232,6 +263,10 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
           EthLog.LogResult resultLog = resultLogs.get(i);
           Log lg = (Log) resultLog.get();
           String txId = lg.getTransactionHash();
+          if (CollectionUtils.isEmpty(lg.getTopics()) || lg.getTopics().size() < 3) {
+            log.warn("{} transfer log topics invalid, txId:{}", currency.getName(), txId);
+            continue;
+          }
           //先检测是不是我们发出的交易
           super.updateWithdrawTXId(txId, currency);
           String to = analyseAddress(lg.getTopics().get(2));
@@ -240,11 +275,7 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
           if (ObjectUtils.isEmpty(address)) {
             continue;
           }
-          int decimal = currency.getDecimal().precision();
-          String sciNotation = "1.0E" + (decimal - 1);
-          BigInteger data = EthereumUtil.hexToBigInteger(
-                  lg.getData().replace(sciNotation, ""));
-          BigDecimal amount = new BigDecimal(EthereumUtil.hexToBigInteger("0x" + data.toString(16)));
+          BigDecimal amount = new BigDecimal(EthereumUtil.hexToBigInteger(lg.getData()));
           AccountTransaction transaction = AccountTransaction.builder()
                   .blockHeight(height)
                   .address(to)
@@ -259,8 +290,7 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
 
           txIdCnt.put(txId, txIdCnt.getOrDefault(txId, 0) + 1);
           if (txIdCnt.get(txId) > 1) {
-            //TODO StringUtil.DASH
-            transaction.setTxId(transaction.getTxId() + "" + txIdCnt.get(txId));
+            transaction.setTxId(transaction.getTxId() + "-" + txIdCnt.get(txId));
           }
           transactions.add(transaction);
         }
@@ -275,7 +305,7 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
 
   @Override
   public CurrencyEnum getCurrency() {
-    return CurrencyEnum.ERC20;
+    return CurrencyEnum.USDT;
   }
 
   /**
@@ -285,6 +315,6 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
    */
   @Override
   public BigDecimal getDecimal() {
-    throw new RuntimeException("not support this getDecimal method");
+    return CurrencyEnum.USDT.getDecimal();
   }
 }

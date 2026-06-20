@@ -104,6 +104,9 @@ public class WitnessSigner {
         if (!verifies(tx, inputIndex, witnessScript, value, signingKey, newSignature)) {
             throw new IllegalArgumentException("new witness signature does not verify for signing key");
         }
+        if (signaturesByKey.containsKey(newKeyIndex)) {
+            throw new IllegalArgumentException("duplicate signing key for P2WSH multisig input");
+        }
         signaturesByKey.put(newKeyIndex, newSignature.encodeToBitcoin());
 
         List<byte[]> pushes = new ArrayList<>(required + 2);

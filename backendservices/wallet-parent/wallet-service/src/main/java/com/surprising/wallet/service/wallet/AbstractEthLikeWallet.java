@@ -422,6 +422,10 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
         addressTable = ShardTable.builder().prefix(CurrencyEnum.toMainCurrency(currency).getName()).build();
 
         Address address = addressService.getAndLockOneByExample(addrExam, addressTable);
+        if (ObjectUtils.isEmpty(address)) {
+            log.error("{} buildTransaction failed, from address not found: {}", currency.getName(), from);
+            return null;
+        }
         Long nonce = getAddressNonce(from);
         //校正nonce
         if (address.getNonce() < nonce) {
@@ -489,8 +493,8 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
     }
 
     public EthRawTransaction getTransaction(String txId) {
-        int dashIndex = txId.indexOf("");//TODO StringUtil.DASH
-        if (dashIndex >= 0) {
+        int dashIndex = txId.indexOf("-");
+        if (dashIndex > 0) {
             txId = txId.substring(0, dashIndex);
         }
         return command.getTransaction(txId);

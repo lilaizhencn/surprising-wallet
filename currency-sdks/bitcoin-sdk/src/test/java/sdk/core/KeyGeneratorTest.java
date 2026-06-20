@@ -10,7 +10,6 @@ public class KeyGeneratorTest {
 
     public static void main(String[] args) {
 
-        //NetworkParameters params = MainNetParams.get(); // TestNet3Params.get();
         NetworkParameters params = TestNet3Params.get();
         Bip32Node node1 = Bip32Node.getMasterKey(getSeed(256));
         Bip32Node node2 = Bip32Node.getMasterKey(getSeed(256));

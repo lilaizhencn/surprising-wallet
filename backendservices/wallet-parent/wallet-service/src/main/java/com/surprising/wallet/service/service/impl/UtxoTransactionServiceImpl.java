@@ -105,5 +105,10 @@ public class UtxoTransactionServiceImpl
         return editById(utxo, table);
     }
 
+    @Override
+    public int markCredited(String txId, Short seq, CurrencyEnum currencyEnum) {
+        ShardTable table = ShardTable.builder().prefix(currencyEnum.getName()).build();
+        return utxoTransactionRepos.markCredited(txId, seq, table);
+    }
 
 }

@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.ObjectUtils;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
@@ -31,13 +32,17 @@ abstract public class AbstractScanBlockJob {
     @Value("${atomex.app.env.name}")
     private String env;
 
-    private final CurrencyEnum run = CurrencyEnum.BTC;
+    @Value("${atomex.wallet.scan.enabled-currencies:btc}")
+    private String enabledCurrencies;
+
+    @Value("${atomex.wallet.scan.start-height:0}")
+    private Long configuredStartHeight;
 
     public void execute() {
 
-            if (wallet.getCurrency() != run) {
-                return;
-            }
+        if (!isScanEnabled(wallet.getCurrency())) {
+            return;
+        }
         log.info("扫描 {} 交易 开始", wallet.getCurrency().getName());
         Long bestHeight = null;
         try {
@@ -58,6 +63,12 @@ abstract public class AbstractScanBlockJob {
                     return;
                 }
             }
+            if (storedHeight.getHeight() <= 0 && (configuredStartHeight == null || configuredStartHeight <= 0)) {
+                log.info("{} scan start-height is 0, initializing DB height to current best height {}",
+                        wallet.getCurrency().getName(), bestHeight);
+                updateStoreHeight(bestHeight, storedHeight);
+                return;
+            }
 
             //判断数据库中的区块高度高于链上的高度
             if (storedHeight.getHeight() >= bestHeight) {
@@ -66,7 +77,8 @@ abstract public class AbstractScanBlockJob {
             }
 
             //循环扫描某个阶段的区块
-            for (long begin = storedHeight.getHeight() - wallet.getCurrency().getDepositConfirmNum(); begin <= bestHeight; begin++) {
+            long scanBegin = Math.max(0L, storedHeight.getHeight() - wallet.getCurrency().getDepositConfirmNum());
+            for (long begin = scanBegin; begin <= bestHeight; begin++) {
 
                 //具体扫描区块处理逻辑
                 List<TransactionDTO> transactions = wallet.findRelatedTxs(begin);
@@ -96,6 +108,13 @@ abstract public class AbstractScanBlockJob {
         log.info("扫描 {} 交易高度结束 当前高度:{}", wallet.getCurrency().getName(), bestHeight);
     }
 
+    private boolean isScanEnabled(CurrencyEnum currency) {
+        return Arrays.stream(enabledCurrencies.split(","))
+                .map(String::trim)
+                .filter(item -> !item.isEmpty())
+                .anyMatch(item -> "*".equals(item) || item.equalsIgnoreCase(currency.getName()));
+    }
+
     /**
      * 更新数据库扫描到的高度
      *
@@ -122,7 +141,11 @@ abstract public class AbstractScanBlockJob {
      * 初始化扫描的区块高度
      */
     protected boolean initCurrencyBestHeight(BestBlockHeight storedHeight, Long bestHeight) {
-        storedHeight.setHeight(bestHeight);
+        long initialHeight = bestHeight;
+        if (configuredStartHeight != null && configuredStartHeight > 0) {
+            initialHeight = Math.min(configuredStartHeight, bestHeight);
+        }
+        storedHeight.setHeight(initialHeight);
         storedHeight.setCurrency(wallet.getCurrency().getIndex());
         int insertFlag = bestHeightService.add(storedHeight);
         if (insertFlag < 1) {

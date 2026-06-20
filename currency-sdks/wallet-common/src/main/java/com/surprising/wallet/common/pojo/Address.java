@@ -28,6 +28,18 @@ public class Address implements Serializable {
      */
     private String address;
 
+    private String network;
+
+    private String scriptType;
+
+    private String redeemScript;
+
+    private String witnessScript;
+
+    private String derivationPath;
+
+    private String publicKeys;
+
     /**
      * 币种
      */

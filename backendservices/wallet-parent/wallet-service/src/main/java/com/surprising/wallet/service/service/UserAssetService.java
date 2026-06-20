@@ -8,6 +8,8 @@ public interface UserAssetService {
 
     UserAsset getOrCreate(Long userId, Integer currency);
 
+    boolean addBalance(Long userId, Integer currency, BigDecimal amount);
+
     boolean freeze(Long userId, Integer currency, BigDecimal amount);
 
     boolean deduct(Long userId, Integer currency, BigDecimal amount);

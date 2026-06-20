@@ -29,6 +29,11 @@ public class AddressDto implements Serializable {
     private Integer biz;
     private Integer childId;
     private String path;
+    private String network;
+    private String scriptType;
+    private String redeemScript;
+    private String witnessScript;
+    private String publicKeys;
     /**
      * 充值确认数
      */

@@ -1,24 +1,24 @@
-package com.surprising.wallet.jobs.deposit;
+package com.surprising.wallet.jobs.transfer;
 
 import com.surprising.wallet.service.wallet.impl.TronWallet;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * @author lilaizhen
- * @data 12/04/2018
+ * 汇总已确认的 TRX 充值到归集地址。
  */
 @Component
 @Slf4j
-public class ScanTronBlockJob extends AbstractScanAccountBlockJob {
+public class TronTransferJob extends AbstractTransferJob {
 
     @Autowired
-    public ScanTronBlockJob(TronWallet tronWallet) {
+    public TronTransferJob(TronWallet tronWallet) {
         wallet = tronWallet;
     }
 
-    //    @Scheduled(cron = "1 1/2 * * * ?")
+//    @Scheduled(cron = "25/30 * * * * ?")
     @Override
     public void execute() {
         super.execute();

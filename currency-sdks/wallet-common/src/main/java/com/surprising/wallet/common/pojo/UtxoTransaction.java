@@ -67,4 +67,6 @@ public class UtxoTransaction implements Serializable {
     private Integer currency;
 
     private Byte status;
+
+    private Boolean credited;
 }

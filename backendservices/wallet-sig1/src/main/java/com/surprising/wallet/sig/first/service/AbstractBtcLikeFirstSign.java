@@ -41,11 +41,12 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
             log.info("P2WSH fee: {} vB * {} sat/vB = {} sat",vBytes,feeRate,fee);
             for(WithdrawRecord r:records) { long out=r.getBalance().multiply(cd).longValue(); if(out>0&&out<DUST_THRESHOLD_SAT){throw new IllegalArgumentException("withdraw output dust: "+out+" sat");} wtxBuilder.addOutput(r.getAddress(),Coin.valueOf(out)); }
             if(change>0){String ca=signature.getString("changeAddress"); if(ca!=null&&!ca.isEmpty()) wtxBuilder.addOutput(ca,Coin.valueOf(change));}
+            long estimatedWeight=com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator.estimateWeight(inputCount,records.size()+(change>0?1:0),2,3);
             String firstSignTx=wtxBuilder.buildFirstSign(ecKeys);
             signature.put("firstSignTx",firstSignTx); signature.put("valid",true);
             JSONArray wsa=new JSONArray(); witnessScriptHexes.forEach(wsa::add); signature.put("witnessScripts",wsa);
             JSONArray uva=new JSONArray(); utxoValues.forEach(v->uva.add(v.getValue())); signature.put("utxoValues",uva);
-            signature.put("scriptType","p2wsh"); signature.put("fee",fee); signature.put("vBytes",wtxBuilder.getVsize());
+            signature.put("scriptType","p2wsh"); signature.put("fee",fee); signature.put("estimatedVBytes",vBytes); signature.put("estimatedWeight",estimatedWeight); signature.put("vBytes",vBytes);
             log.info("P2WSH first sign done: txid={}", wtxBuilder.getHash());
         }catch(Throwable e){log.error("sign error",e); signature.put("valid",false); signature.put("error",e.getMessage());}
         transaction.setSignature(signature.toJSONString());
