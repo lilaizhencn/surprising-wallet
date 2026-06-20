@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620">
+  <style>
+    .box { fill: #f8fafc; stroke: #1f2937; stroke-width: 2; rx: 12; }
+    .core { fill: #ecfdf5; stroke: #047857; stroke-width: 3; rx: 12; }
+    .blocked { fill: #fff7ed; stroke: #c2410c; stroke-width: 2; rx: 12; }
+    .text { font: 16px sans-serif; fill: #111827; }
+    .small { font: 13px sans-serif; fill: #374151; }
+    .title { font: 22px sans-serif; font-weight: 700; fill: #111827; }
+    .line { stroke: #4b5563; stroke-width: 2; marker-end: url(#arrow); }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <text x="40" y="40" class="title">Production-Safe Multi-Chain Wallet Architecture</text>
+
+  <rect x="40" y="85" width="230" height="105" class="core"/>
+  <text x="65" y="125" class="text">BTC Core</text>
+  <text x="65" y="152" class="small">P2WSH 2-of-3 multisig</text>
+  <text x="65" y="174" class="small">UTXO scan/withdraw/collection</text>
+
+  <rect x="325" y="85" width="230" height="105" class="box"/>
+  <text x="350" y="125" class="text">EVM Engine</text>
+  <text x="350" y="152" class="small">Nonce, gas, ERC20 payload</text>
+  <text x="350" y="174" class="small">DB token registry</text>
+
+  <rect x="610" y="85" width="210" height="105" class="box"/>
+  <text x="635" y="125" class="text">TRON Adapter</text>
+  <text x="635" y="152" class="small">TRX/TRC20 resource model</text>
+  <text x="635" y="174" class="small">Legacy gRPC compatible</text>
+
+  <rect x="875" y="85" width="185" height="105" class="blocked"/>
+  <text x="900" y="125" class="text">SOL / TON</text>
+  <text x="900" y="152" class="small">Future adapters</text>
+  <text x="900" y="174" class="small">Fail-fast scanners</text>
+
+  <rect x="155" y="265" width="250" height="105" class="box"/>
+  <text x="180" y="305" class="text">wallet-service</text>
+  <text x="180" y="332" class="small">domain, adapters, repositories</text>
+  <text x="180" y="354" class="small">no production Tatum dependency</text>
+
+  <rect x="470" y="265" width="250" height="105" class="box"/>
+  <text x="495" y="305" class="text">wallet-server</text>
+  <text x="495" y="332" class="small">scan, withdraw, collection jobs</text>
+  <text x="495" y="354" class="small">PublicNode RPC config</text>
+
+  <rect x="785" y="265" width="220" height="105" class="box"/>
+  <text x="810" y="305" class="text">wallet-sig1 / wallet-sig2</text>
+  <text x="810" y="332" class="small">Redis signing pipeline</text>
+  <text x="810" y="354" class="small">BTC witness validation</text>
+
+  <rect x="210" y="455" width="250" height="80" class="box"/>
+  <text x="235" y="495" class="text">PostgreSQL Ledger</text>
+  <text x="235" y="520" class="small">BTC tables + multi-chain schema</text>
+
+  <rect x="610" y="455" width="250" height="80" class="box"/>
+  <text x="635" y="495" class="text">Redis Queues</text>
+  <text x="635" y="520" class="small">first sign, second sign, send</text>
+
+  <line x1="155" y1="190" x2="250" y2="265" class="line"/>
+  <line x1="440" y1="190" x2="350" y2="265" class="line"/>
+  <line x1="715" y1="190" x2="600" y2="265" class="line"/>
+  <line x1="965" y1="190" x2="705" y2="265" class="line"/>
+  <line x1="405" y1="318" x2="470" y2="318" class="line"/>
+  <line x1="720" y1="318" x2="785" y2="318" class="line"/>
+  <line x1="280" y1="370" x2="335" y2="455" class="line"/>
+  <line x1="595" y1="370" x2="735" y2="455" class="line"/>
+</svg>

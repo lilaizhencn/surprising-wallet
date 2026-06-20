@@ -5,11 +5,12 @@
 - `BTC` stays isolated as the UTXO engine.
 - `EVM` chains share one account-model engine.
 - `TRON` is a separate account-model family with resource accounting.
-- `SOLANA` and `TON` are modeled as future-chain adapters now, so the system can expand without changing the BTC core.
+- `SOLANA` and `TON` are modeled as future-chain adapters now and fail fast until runtime connectors are wired.
 - `wallet-service` is the domain layer.
 - `wallet-server` is the job/orchestration layer.
 - `bitcoin-sdk` is the BTC algorithm layer.
 - `wallet-common` is the shared chain and asset model layer.
+- PublicNode RPC endpoints are configured under `atomex.chains.*`; legacy BTC/TRON properties are preserved where existing production code requires them.
 
 ## Diagram Version
 
@@ -47,6 +48,8 @@ flowchart LR
     end
 
     WSVC --> Unified
+    WSVC --> DB[(PostgreSQL)]
+    WSRV --> Redis[(Redis queues)]
 ```
 
 ## Design Notes
@@ -56,3 +59,4 @@ flowchart LR
 3. TRON is split from EVM because energy and bandwidth are not equivalent to gas.
 4. All chain metadata is represented with explicit model objects instead of hidden constants.
 5. New chain support should be added by registering a new adapter and data rows, not by editing BTC code paths.
+6. Generic adapter scanning must not return empty success. If no real scanner runtime is wired, the adapter fails fast to avoid silent missed deposits.

@@ -56,7 +56,8 @@ flowchart TD
     C --> E[EvmGasEstimator]
     C --> F[EvmTransactionBuilder]
     C --> G[EvmLogScanner]
-    G --> H[TokenRegistry]
+    G --> H[JdbcTokenRegistry]
+    H --> J[token_config / token_registry]
     H --> I[DepositEvent / AccountTransaction]
 ```
 
@@ -67,7 +68,8 @@ flowchart TD
 5. `EvmGasEstimator` produces chain-aware fee quotes.
 6. `EvmTransactionBuilder` builds native and ERC20 transfer payloads.
 7. `EvmLogScanner` converts logs into normalized deposit events.
-8. `TokenRegistry` maps symbol + chain to token contract metadata.
+8. `JdbcTokenRegistry` reads enabled token metadata from `token_config`, then falls back to legacy `token_registry`.
+9. Generic `scanDeposits` is fail-fast until an RPC-backed scanner runtime is attached.
 
 ## 4. TRON flow
 
@@ -77,14 +79,14 @@ flowchart TD
     A --> C[TronChainAdapter]
     C --> D[TronEnergyEstimator]
     C --> E[TRC20 / TRX quote]
-    C --> F[Tron log scan placeholder]
+    C --> F[Fail-fast scanner boundary]
 ```
 
 1. `TronWallet` keeps the current TRX transfer and scan entrypoint.
 2. `TronChainAdapter` exposes the unified TRON family interface.
 3. `TronEnergyEstimator` models bandwidth and energy usage.
 4. TRX and TRC20 quote paths are separated from EVM logic.
-5. Future TRON scanning hooks can normalize `DepositEvent` output in the same model as EVM.
+5. Generic TRON scanner calls fail fast until a real RPC-backed `TronScanner` is wired, so deposits cannot be silently missed.
 
 ## 5. Future chain flow
 
@@ -101,4 +103,4 @@ flowchart TD
 2. BTC remains isolated.
 3. EVM chains share one engine and multiple profiles.
 4. TRON has its own resource model.
-5. Solana and TON are represented as future-chain adapters with explicit unsupported transfer quotes until their runtime connectors are enabled.
+5. Solana and TON are represented as future-chain adapters with explicit unsupported transfer quotes and fail-fast scanners until their runtime connectors are enabled.

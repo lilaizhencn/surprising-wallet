@@ -4,11 +4,9 @@ import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.currency.CurrencyEnum;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
-import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sig.second.BipNodeUtil;
 import com.surprising.wallet.sig.second.ISignService;
 import lombok.extern.slf4j.Slf4j;
-import org.bitcoinj.crypto.ECKey;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
 import org.tron.TronWalletApi;
@@ -31,54 +29,6 @@ public class TronSecondSignService implements ISignService {
     public CurrencyEnum getCurrency() {
         return TRX;
     }
-
-//    public static void main(String[] args) {
-//
-//        File keyFile = new File("/Volumes/Secure/key-cmx.conf");
-//
-//
-//        try {
-//            KeyConfig.init(keyFile.toURI().toURL());
-//        } catch (MalformedURLException e) {
-//            e.printStackTrace();
-//        }
-//
-//        String mk = KeyConfig.getValue("masterNode");
-//        Bip32Node pubNODE = Bip32Node.decode(mk);
-//        Bip32Node tronNode1 = pubNODE.getChildH(TRX.getIndex());
-//
-//
-//        Bip32Node tronNode = tronNode1
-//                .getChild(44)
-//                .getChild(TRX.getIndex())
-//                .getChild(0)
-//                .getChild(0)
-//                .getChild(0);
-//        ECKey tronNodeEcKey = tronNode.getEcKey();
-//        ECPoint pubKeyPoint = tronNodeEcKey.getPubKeyPoint();
-//        System.out.println("pub   " + tronNode1.pubSerialize(0, true));
-//        String address = TronWalletApi.getAddress(pubKeyPoint.getEncoded());
-//        System.out.println(address);
-//
-////
-////        Bip32Node NODE2 = Bip32Node.decode("xprv9s21ZrQH143K2h7viVVN9ioJhm7VoxwZGY6MAAXbtaToopzE2pkv4KKiHDrPePfZY999rgLbEx23N6t9WxUeDjEcCb1xMrME5HN5quSYPPF");
-////        ECKey ecKey = NODE2.getChildH(23).getChild(41).getChild(0).getChild(0).getChild(0).getEcKey();
-////        ECPoint point = ecKey.getPubKeyPoint();
-////        address = TronWalletApi.getAddress(point);
-////        System.out.println("web ==== " + address);
-////        Bip32Node node = BipNodeUtil.getMainBipNODE();
-////        Bip32Node tronNode = node.getChildH(CurrencyEnum.TRON.getIndex())
-////                .getChild(41)
-////                .getChild(1)
-////                .getChild(1)
-////                .getChild(1);
-////        ECKey tronKey = tronNode.getEcKey();
-////        byte[] bytes = org.tron.wallet.crypto.ECKey.publicKeyFromPrivate(tronKey.getPrivKey(), true);
-////        String s = ByteArray.toHexString(bytes);
-////        String encode = Base58.encode(bytes);
-////        System.out.println(encode);
-//
-//    }
 
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
@@ -104,15 +54,13 @@ public class TronSecondSignService implements ISignService {
     }
 
     private byte[] getKeyByAddress(Address address) {
-        Bip32Node node = BipNodeUtil.getMainBipNODE();
-        Bip32Node tronNode = node.getChildH(TRX.getIndex())
-                .getChild(44)
-                .getChild(getCurrency().getIndex())
-                .getChild(address.getBiz())
-                .getChild(address.getUserId().intValue())
-                .getChild(address.getIndex());
-        ECKey tronKey = tronNode.getEcKey();
-        return tronKey.getPrivKeyBytes();
+        /*
+         * Keep TRON on the same root-key model as BTC/EVM:
+         * wallet-server derives the public key from wallet.pubKey2 at
+         * m/44/currency/biz/user/index, and sig2 derives the matching private key
+         * from atomex.wallet.masterKey at the identical path.
+         */
+        return BipNodeUtil.getBipNODE(address).getEcKey().getPrivKeyBytes();
     }
 
 }
