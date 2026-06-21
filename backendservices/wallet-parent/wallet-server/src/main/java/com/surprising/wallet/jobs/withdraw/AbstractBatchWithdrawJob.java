@@ -113,7 +113,7 @@ abstract public class AbstractBatchWithdrawJob {
             withdrawAmount = withdrawAmount.add(record.getBalance());
         }
         Integer redisFeeRate = REDIS.getInt(Constants.WALLET_FEE + currency.getIndex());
-        int feeRate = redisFeeRate == null || redisFeeRate <= 0 ? DEFAULT_FEE_RATE : redisFeeRate;
+        int feeRate = redisFeeRate == null || redisFeeRate <= 0 ? defaultFeeRate() : redisFeeRate;
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
         UtxoTransactionExample example = new UtxoTransactionExample();
         example.createCriteria().andStatusEqualTo((byte) Constants.WAITING).andConfirmNumGreaterThanOrEqualTo(currency.getDepositConfirmNum());
@@ -209,5 +209,9 @@ abstract public class AbstractBatchWithdrawJob {
         BigDecimal networkFee = BigDecimal.valueOf(feeSat).divide(currency.getDecimal());
         BigDecimal dynamicRequired = withdrawAmount.add(networkFee);
         return dynamicRequired.max(userFeeRequired);
+    }
+
+    protected int defaultFeeRate() {
+        return DEFAULT_FEE_RATE;
     }
 }

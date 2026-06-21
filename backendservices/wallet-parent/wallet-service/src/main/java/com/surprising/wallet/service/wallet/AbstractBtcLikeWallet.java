@@ -127,11 +127,11 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         CurrencyEnum currency = getCurrency();
 
         PubKeyConfig.AddressMetadata metadata = pubKeyConfig.genThreeTwoAddressMetadata(
-                currency.getIndex(), userId.intValue(), biz, index);
+                getNetworkParameters(), currency.getBip44CoinType(), userId.intValue(), biz, index);
 
         return Address.builder()
                 .address(metadata.getAddress())
-                .network("testnet3")
+                .network(getNetworkName())
                 .scriptType("P2WSH")
                 .redeemScript("")
                 .witnessScript(metadata.getWitnessScript())
@@ -165,7 +165,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
                 .map((output) -> {
                     UtxoTransaction utxo = null;
                     try {
-                        String addressStr = output.getScriptPubKey().getToAddress(Constants.NET_PARAMS).toString();
+                        String addressStr = output.getScriptPubKey().getToAddress(getNetworkParameters()).toString();
                         ShardTable table = ShardTable.builder().prefix(getCurrency().getName()).build();
                         Address address = addressService.getAddress(addressStr, table);
                         if (ObjectUtils.isEmpty(address)) {
@@ -438,8 +438,8 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         boolean valid = false;
         if (StringUtils.hasText(addressStr)) {
             try {
-                org.bitcoinj.base.Address parsedAddress =
-                        org.bitcoinj.base.Address.fromString(Constants.NET_PARAMS, addressStr);
+                        org.bitcoinj.base.Address parsedAddress =
+                        org.bitcoinj.base.Address.fromString(getNetworkParameters(), addressStr);
                 if (!ObjectUtils.isEmpty(parsedAddress)) {
                     valid = true;
                 }
@@ -503,5 +503,9 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         }
 
         log.info("{} 更新交易确认数开始", currency.getName());
+    }
+
+    protected String getNetworkName() {
+        return getNetworkParameters().getPaymentProtocolId();
     }
 }

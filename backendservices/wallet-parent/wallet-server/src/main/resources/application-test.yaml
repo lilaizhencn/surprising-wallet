@@ -9,6 +9,11 @@ atomex:
     pubKey3: tpubD6NzVbkrYhZ4XKeuSHwv2p3snJxWjacFsu2rEEht2qMaM5FYV2RkbMaJEYNZGK7B3i8D46RTs83DJNPh2Jd5MzXivXCiHLbqAFKv8MKxrC4
   btc:
     server: https://bitcoin-testnet-rpc.publicnode.com
+  ltc:
+    network: testnet
+    server: ${LTC_TESTNET_RPC_URL:http://127.0.0.1:19332}
+    server.user: ${LTC_TESTNET_RPC_USER:}
+    server.pwd: ${LTC_TESTNET_RPC_PASSWORD:}
   eth:
     server: https://ethereum-sepolia-rpc.publicnode.com
     chain-id: 11155111
@@ -21,6 +26,15 @@ atomex:
     btc-testnet:
       enabled: true
       rpcUrl: https://bitcoin-testnet-rpc.publicnode.com
+    litecoin-testnet:
+      enabled: false
+      family: litecoin
+      rpcUrl: ${LTC_TESTNET_RPC_URL:http://127.0.0.1:19332}
+      chainId: litecoin-testnet
+      explorerUrl: https://chain.so/tx/LTCTEST/
+      confirmations: 1
+      gasPolicy: ltc-p2wsh-vbytes
+      scanBatchSize: 6
     ethereum-sepolia:
       enabled: true
       rpcUrl: https://ethereum-sepolia-rpc.publicnode.com

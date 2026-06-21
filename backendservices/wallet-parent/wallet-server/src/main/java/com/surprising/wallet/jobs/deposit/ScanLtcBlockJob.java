@@ -1,0 +1,25 @@
+package com.surprising.wallet.jobs.deposit;
+
+import com.surprising.wallet.service.wallet.impl.LtcWallet;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+/**
+ * Litecoin block scanner. Execution is gated by atomex.wallet.scan.enabled-currencies.
+ */
+@Component
+@Slf4j
+public class ScanLtcBlockJob extends AbstractScanUtxoBlockJob {
+    @Autowired
+    public ScanLtcBlockJob(LtcWallet ltcWallet) {
+        wallet = ltcWallet;
+    }
+
+    @Scheduled(cron = "5/59 * * * * ?")
+    @Override
+    public void execute() {
+        super.execute();
+    }
+}

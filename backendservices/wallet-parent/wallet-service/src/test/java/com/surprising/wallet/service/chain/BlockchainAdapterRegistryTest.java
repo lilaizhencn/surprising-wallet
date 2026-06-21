@@ -11,6 +11,7 @@ import com.surprising.wallet.service.chain.evm.EvmLogScanner;
 import com.surprising.wallet.service.chain.evm.EvmNonceManager;
 import com.surprising.wallet.service.chain.evm.EvmTransactionBuilder;
 import com.surprising.wallet.service.chain.evm.InMemoryTokenRegistry;
+import com.surprising.wallet.service.chain.ltc.LitecoinChainAdapter;
 import com.surprising.wallet.service.chain.tron.TronChainAdapter;
 import org.junit.jupiter.api.Test;
 
@@ -39,11 +40,13 @@ class BlockchainAdapterRegistryTest {
                 new EvmGasEstimator(), new EvmTransactionBuilder(), new EvmLogScanner());
         BlockchainAdapterRegistry registry = new BlockchainAdapterRegistry(List.of(
                 new BtcChainAdapter(),
+                new LitecoinChainAdapter(),
                 evmAdapter,
                 new TronChainAdapter()
         ));
 
         assertEquals(ChainType.BTC, registry.require(ChainType.BTC).chainType());
+        assertEquals(ChainType.LTC, registry.require(ChainType.LTC).chainType());
         assertTrue(registry.require(ChainType.BNB).supports(ChainType.BNB));
         assertEquals("evm", registry.require(ChainType.BASE).family());
         assertEquals(ChainType.TRON, registry.require(ChainType.TRON).chainType());

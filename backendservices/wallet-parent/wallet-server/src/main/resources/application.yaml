@@ -66,6 +66,11 @@ atomex:
     server: https://bitcoin-testnet-rpc.publicnode.com
     server.user:
     server.pwd:
+  ltc:
+    network: testnet
+    server: ${LTC_TESTNET_RPC_URL:http://127.0.0.1:19332}
+    server.user: ${LTC_TESTNET_RPC_USER:}
+    server.pwd: ${LTC_TESTNET_RPC_PASSWORD:}
   # eth config
   eth:
     server: https://ethereum-sepolia-rpc.publicnode.com
@@ -92,6 +97,15 @@ atomex:
       explorerUrl: https://mempool.space/testnet/tx/
       confirmations: 1
       gasPolicy: segwit-vbytes
+      scanBatchSize: 6
+    litecoin-testnet:
+      enabled: false
+      family: litecoin
+      rpcUrl: ${LTC_TESTNET_RPC_URL:http://127.0.0.1:19332}
+      chainId: litecoin-testnet
+      explorerUrl: https://chain.so/tx/LTCTEST/
+      confirmations: 1
+      gasPolicy: ltc-p2wsh-vbytes
       scanBatchSize: 6
     ethereum-sepolia:
       enabled: true
@@ -228,6 +242,15 @@ atomex:
       confirmations: 20
       gasPolicy: energy-bandwidth
       scanBatchSize: 100
+    litecoin-mainnet:
+      enabled: false
+      family: litecoin
+      rpcUrl: ${LTC_MAINNET_RPC_URL:http://127.0.0.1:9332}
+      chainId: litecoin-mainnet
+      explorerUrl: https://blockchair.com/litecoin/transaction/
+      confirmations: 6
+      gasPolicy: ltc-p2wsh-vbytes
+      scanBatchSize: 6
     solana-mainnet:
       enabled: true
       family: solana

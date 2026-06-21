@@ -3,6 +3,7 @@ package com.surprising.wallet.service.config;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sdk.bitcoinj.core.SegwitMultiSignAddressGenerator;
+import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.crypto.ECKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -27,6 +28,10 @@ public class PubKeyConfig {
     }
 
     public AddressMetadata genThreeTwoAddressMetadata(int currency, int userId, int biz, int index) {
+        return genThreeTwoAddressMetadata(Constants.NET_PARAMS, currency, userId, biz, index);
+    }
+
+    public AddressMetadata genThreeTwoAddressMetadata(NetworkParameters params, int currency, int userId, int biz, int index) {
         SegwitMultiSignAddressGenerator g = new SegwitMultiSignAddressGenerator();
         ECKey key1 = childKey(NODE1, currency, biz, userId, index);
         ECKey key2 = childKey(NODE2, currency, biz, userId, index);
@@ -34,7 +39,7 @@ public class PubKeyConfig {
         g.addECKey(key1);
         g.addECKey(key2);
         g.addECKey(key3);
-        String address = g.generateAddress(Constants.NET_PARAMS, 2);
+        String address = g.generateAddress(params, 2);
         String pubKeys = Stream.of(key1, key2, key3)
                 .map(key -> HEX.formatHex(key.getPubKey()))
                 .collect(Collectors.joining(","));

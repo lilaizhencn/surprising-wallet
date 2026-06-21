@@ -17,6 +17,7 @@ import static com.surprising.wallet.common.currency.CurrencyEnum.Decimal.*;
 public enum CurrencyEnum {
 
     BTC(1, "btc", 7, 1, 6, EIGHT),
+    LTC(24, "ltc", 7, 1, 6, EIGHT, "", 2),
     ETH(2, "eth", 121, 12, 120, EIGHTEEN),
     TRX(23, "trx", 121, 12, 120, SIX),
     USDT(100, "usdt", 121, 12, 120, SIX, "0xdac17f958d2ee523a2206206994597c13d831ec7");
@@ -30,6 +31,7 @@ public enum CurrencyEnum {
     private final long depositConfirmNum;
     private final long withdrawConfirmNum;
     private final BigDecimal decimal;
+    private final int bip44CoinType;
 
     CurrencyEnum(final int index, final String name, final int confirmNum, final int depositConfirmNum,
                  final int withdrawConfirmNum, final Decimal decimal) {
@@ -38,6 +40,11 @@ public enum CurrencyEnum {
 
     CurrencyEnum(final int index, final String name, final int confirmNum, final int depositConfirmNum,
                  final int withdrawConfirmNum, final Decimal decimal, final String remark) {
+        this(index, name, confirmNum, depositConfirmNum, withdrawConfirmNum, decimal, remark, index);
+    }
+
+    CurrencyEnum(final int index, final String name, final int confirmNum, final int depositConfirmNum,
+                 final int withdrawConfirmNum, final Decimal decimal, final String remark, final int bip44CoinType) {
         this.index = index;
         this.name = name;
         this.confirmNum = confirmNum;
@@ -45,6 +52,7 @@ public enum CurrencyEnum {
         this.withdrawConfirmNum = withdrawConfirmNum;
         this.decimal = BigDecimal.valueOf(decimal.getDecimal());
         this.remark = remark;
+        this.bip44CoinType = bip44CoinType;
     }
 
     public static CurrencyEnum parseValue(final int index) {
@@ -105,6 +113,15 @@ public enum CurrencyEnum {
 
     public int getIndex() {
         return this.index;
+    }
+
+    /**
+     * Legacy currency id and BIP44 coin type are not always the same in this
+     * project. New BTC-like chains should use this value for HD derivation while
+     * keeping {@link #getIndex()} stable for legacy DB sharding and queues.
+     */
+    public int getBip44CoinType() {
+        return this.bip44CoinType;
     }
 
     public String getName() {

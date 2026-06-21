@@ -178,11 +178,14 @@ public class RpcCommandProcessor implements BeanDefinitionRegistryPostProcessor,
     private JsonRpcHttpClient buildRpcClient(Class command, String server, String username, String password) {
         Map<String, String> authorization = new HashMap<>(3);
         authorization.put("Content-type", "application/json");
-        String auth = username + ":" + password;
-
-        authorization.put(
-                "Authorization",
-                "Basic " + java.util.Base64.getEncoder().encodeToString(auth.getBytes()));
+        // Only send Basic Auth when username is non-empty.
+        // Empty credentials means the RPC endpoint uses URL-based API key (e.g. Alchemy/Infura).
+        if (username != null && !username.isEmpty()) {
+            String auth = username + ":" + (password != null ? password : "");
+            authorization.put(
+                    "Authorization",
+                    "Basic " + java.util.Base64.getEncoder().encodeToString(auth.getBytes()));
+        }
 
         JsonRpcHttpClient client = null;
         try {

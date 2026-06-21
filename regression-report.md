@@ -372,3 +372,52 @@ Generated: 2026-06-21 07:50 Asia/Shanghai.
 - Required to unblock: a running Litecoin testnet JSON-RPC endpoint compatible with Litecoin Core and funded testnet LTC for a generated `tltc1...` platform address.
 
 Detailed Litecoin report: `LITECOIN_WALLET_REPORT.md`.
+
+---
+
+## Live Deposit Verification
+
+Deposit scan was executed against the Alchemy Litecoin testnet RPC endpoint (`https://litecoin-testnet.g.alchemy.com/v2/...`).
+
+### Results
+
+| Item | Value |
+|------|-------|
+| Deposit txid | `24aecf832537eb6b9e77722541ab812f3c6f887a75ff40aee83170bd35497f9f` |
+| Block | 4773130 |
+| Amount | 0.01 tLTC |
+| Address | `tltc1qeh6wxfsj4cfwh5dmp0nnpqj52s9u5gkc59gyj94qllg7wnjxx6qsnda7vj` |
+| Scan detected | yes |
+| UTXO inserted | yes |
+| user_asset credited | yes, 0.01 LTC |
+| Confirmations at scan | 23 |
+| Best block at scan | 4773150+ |
+| RPC provider | Alchemy Litecoin testnet |
+| Dust threshold | 1000 litoshi |
+| Default fee rate | 2 litoshi/vbyte |
+
+### Idempotency
+
+- UTXO insert uses `batchAddOnDuplicateKey` (ON CONFLICT DO NOTHING for `(tx_id, seq)`).
+- `creditDepositIfNeeded` checks the `credited` flag before applying credit.
+- Restarting the scanner did NOT produce a duplicate credit.
+- Rescanning the same block after already processing it does NOT produce duplicate UTXO records.
+
+### Remaining Blocked Items
+
+- **LTC live withdrawal**: blocked. Withdrawal requires the multisig infrastructure (wallet_multisig_config, hot_wallet_address, sig1/sig2 services running concurrently).
+- **LTC live collection**: blocked for the same reason as withdrawal.
+- **Scanner recovery scoped test**: skipped due to limited live node session time.
+
+### Node Connectivity
+
+- `getblockcount`: 4773150+
+- `getblockhash`: returns valid hash
+- `getblock`: returns full block with txids
+- `getrawtransaction` (verbose): returns decoded tx with vout, scriptPubKey, addresses, confirmations
+- `sendrawtransaction`: not tested (no withdrawal was triggered)
+- Basic Auth: not used (Alchemy uses URL-based API key)
+
+### LTC RPC Config Notes
+
+Alchemy Litecoin testnet uses URL-based API key authentication. The `RpcCommandProcessor.buildRpcClient` method was modified to skip the `Authorization: Basic` header when both `username` and `password` are empty. This change is in `currency-sdks/wallet-client/src/main/java/com/surprising/wallet/client/RpcCommandProcessor.java`.

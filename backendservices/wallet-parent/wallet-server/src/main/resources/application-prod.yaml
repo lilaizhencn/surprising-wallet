@@ -9,6 +9,11 @@ atomex:
     pubKey3: ${ATOMEX_PROD_PUBKEY3:}
   btc:
     server: https://bitcoin-rpc.publicnode.com
+  ltc:
+    network: mainnet
+    server: ${LTC_MAINNET_RPC_URL:http://127.0.0.1:9332}
+    server.user: ${LTC_MAINNET_RPC_USER:}
+    server.pwd: ${LTC_MAINNET_RPC_PASSWORD:}
   eth:
     server: https://ethereum-rpc.publicnode.com
     chain-id: 1
@@ -19,6 +24,8 @@ atomex:
     eventserver: https://api.trongrid.io
   chains:
     btc-testnet:
+      enabled: false
+    litecoin-testnet:
       enabled: false
     ethereum-sepolia:
       enabled: false
@@ -58,3 +65,6 @@ atomex:
     tron-mainnet:
       enabled: true
       rpcUrl: grpc.trongrid.io:50051
+    litecoin-mainnet:
+      enabled: false
+      rpcUrl: ${LTC_MAINNET_RPC_URL:http://127.0.0.1:9332}
