@@ -2,6 +2,7 @@ package com.surprising.wallet.service.config;
 
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
+import com.surprising.wallet.sdk.bitcoinj.core.LegacyMultiSignAddressGenerator;
 import com.surprising.wallet.sdk.bitcoinj.core.SegwitMultiSignAddressGenerator;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.crypto.ECKey;
@@ -44,7 +45,24 @@ public class PubKeyConfig {
                 .map(key -> HEX.formatHex(key.getPubKey()))
                 .collect(Collectors.joining(","));
         String path = String.format("m/44/%d/%d/%d/%d", currency, biz, userId, index);
-        return new AddressMetadata(address, path, g.getWitnessScriptStr(), pubKeys);
+        return new AddressMetadata(address, path, "", g.getWitnessScriptStr(), pubKeys);
+    }
+
+    public AddressMetadata genLegacyThreeTwoAddressMetadata(
+            NetworkParameters params, int coinType, int userId, int biz, int index) {
+        LegacyMultiSignAddressGenerator generator = new LegacyMultiSignAddressGenerator();
+        ECKey key1 = childKey(NODE1, coinType, biz, userId, index);
+        ECKey key2 = childKey(NODE2, coinType, biz, userId, index);
+        ECKey key3 = childKey(NODE3, coinType, biz, userId, index);
+        generator.addECKey(key1);
+        generator.addECKey(key2);
+        generator.addECKey(key3);
+        String address = generator.generateAddress(params, 2);
+        String pubKeys = Stream.of(key1, key2, key3)
+                .map(key -> HEX.formatHex(key.getPubKey()))
+                .collect(Collectors.joining(","));
+        String path = String.format("m/44/%d/%d/%d/%d", coinType, biz, userId, index);
+        return new AddressMetadata(address, path, generator.getRedeemScriptHex(), "", pubKeys);
     }
 
     private ECKey childKey(Bip32Node node, int currency, int biz, int userId, int index) {
@@ -54,12 +72,15 @@ public class PubKeyConfig {
     public static class AddressMetadata {
         private final String address;
         private final String path;
+        private final String redeemScript;
         private final String witnessScript;
         private final String publicKeys;
 
-        private AddressMetadata(String address, String path, String witnessScript, String publicKeys) {
+        private AddressMetadata(String address, String path, String redeemScript,
+                                String witnessScript, String publicKeys) {
             this.address = address;
             this.path = path;
+            this.redeemScript = redeemScript;
             this.witnessScript = witnessScript;
             this.publicKeys = publicKeys;
         }
@@ -70,6 +91,10 @@ public class PubKeyConfig {
 
         public String getPath() {
             return path;
+        }
+
+        public String getRedeemScript() {
+            return redeemScript;
         }
 
         public String getWitnessScript() {

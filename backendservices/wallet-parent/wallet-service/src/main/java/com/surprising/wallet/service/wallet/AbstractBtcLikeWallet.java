@@ -22,7 +22,7 @@ import com.surprising.wallet.service.criteria.UtxoTransactionExample;
 import com.surprising.wallet.service.criteria.WithdrawRecordExample;
 import com.surprising.wallet.service.criteria.WithdrawTransactionExample;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import com.surprising.wallet.service.chain.ltc.LitecoinSettlementService;
+import com.surprising.wallet.service.chain.BitcoinLikeSettlementService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.bitcoinj.base.exceptions.AddressFormatException;
@@ -57,7 +57,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
     @Autowired
     protected ChainJdbcRepository chainJdbcRepository;
     @Autowired
-    protected LitecoinSettlementService litecoinSettlementService;
+    protected BitcoinLikeSettlementService bitcoinLikeSettlementService;
     protected BtcLikeCommand command;
     protected Long height = 0L;
 
@@ -130,16 +130,17 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         /*
         hd的公钥推导path: bip44-currency-biz-userId-index
          */
-        CurrencyEnum currency = getCurrency();
+        return buildAddress(userId, biz, index);
+    }
 
+    protected Address buildAddress(Long userId, Integer biz, int index) {
         PubKeyConfig.AddressMetadata metadata = pubKeyConfig.genThreeTwoAddressMetadata(
                 getNetworkParameters(), getBip44CoinType(), userId.intValue(), biz, index);
-
         return Address.builder()
                 .address(metadata.getAddress())
                 .network(getNetworkName())
                 .scriptType("P2WSH")
-                .redeemScript("")
+                .redeemScript(metadata.getRedeemScript())
                 .witnessScript(metadata.getWitnessScript())
                 .derivationPath(metadata.getPath())
                 .publicKeys(metadata.getPublicKeys())
@@ -313,13 +314,13 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
             JSONObject signature = JSONObject.parseObject(withdrawTransaction.getSignature());
             int confirmations = getConfirm(txid);
             if (confirmations < currency.getWithdrawConfirmNum()) {
-                if (currency == CurrencyEnum.LTC) {
-                    markLitecoinConfirming(signature, txid);
+                if (usesUnifiedUtxoModel()) {
+                    markBitcoinLikeConfirming(signature, txid);
                 }
                 return;
             }
-            if (currency == CurrencyEnum.LTC) {
-                litecoinSettlementService.settleConfirmed(withdrawTransaction, txid);
+            if (usesUnifiedUtxoModel()) {
+                bitcoinLikeSettlementService.settleConfirmed(withdrawTransaction, txid, currency);
                 return;
             }
             withdrawTransaction.setStatus(Constants.CONFIRM);
@@ -570,22 +571,23 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
             int confirmations = getConfirm(transaction.getTxId());
             if (confirmations >= currency.getWithdrawConfirmNum()) {
                 updateWithdrawTXId(transaction.getTxId(), currency);
-            } else if (currency == CurrencyEnum.LTC && confirmations > 0) {
-                markLitecoinConfirming(JSONObject.parseObject(transaction.getSignature()), transaction.getTxId());
+            } else if (usesUnifiedUtxoModel() && confirmations > 0) {
+                markBitcoinLikeConfirming(JSONObject.parseObject(transaction.getSignature()), transaction.getTxId());
             }
         }
     }
 
-    private void markLitecoinConfirming(JSONObject signature, String txId) {
+    private void markBitcoinLikeConfirming(JSONObject signature, String txId) {
+        String chain = getCurrency().getName().toUpperCase(Locale.ROOT);
         if ("collection".equals(signature.getString("type"))) {
             chainJdbcRepository.updateCollectionStatus(
-                    "LTC", signature.getString("collectionId"), "CONFIRMING", txId, null,
+                    chain, signature.getString("collectionId"), "CONFIRMING", txId, null,
                     signature.toJSONString());
             return;
         }
         List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
         records.forEach(record -> chainJdbcRepository.updateWithdrawalStatus(
-                "LTC", record.getWithdrawId(), "CONFIRMING", null, txId, null));
+                chain, record.getWithdrawId(), "CONFIRMING", null, txId, null));
     }
 
     protected String getNetworkName() {
@@ -593,7 +595,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
     }
 
     protected boolean usesUnifiedUtxoModel() {
-        return getCurrency() == CurrencyEnum.LTC;
+        return getCurrency() == CurrencyEnum.LTC || getCurrency() == CurrencyEnum.DOGE;
     }
 
     protected int getBip44CoinType() {

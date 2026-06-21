@@ -479,3 +479,22 @@ This section supersedes the earlier Litecoin blocked status.
 - Push: no.
 
 Detailed evidence: `LITECOIN_WALLET_REPORT.md`.
+
+---
+
+## Dogecoin Integration Update
+
+Generated: 2026-06-21 23:07 Asia/Shanghai.
+
+- Dogecoin was implemented with bitcoinj `0.17.1` using independent legacy P2SH 2-of-3 signing.
+- Runtime id `41` and BIP44 coin type `3` are separate and database-validated.
+- Full Maven passed: 69 tests, 0 failures, 0 errors, 12 skipped.
+- Real Dogecoin testnet RPC block/transaction reads passed.
+- Scanner processed block `65162280`, advanced its checkpoint, and ignored the non-platform output.
+- Deterministic multi-user addresses, two-stage P2SH signatures, fee/dust policy, PostgreSQL deposit idempotency, UTXO lock/release, ledger non-negative guard, and recovery jobs passed.
+- wallet-server health `UP`; wallet-sig1 and wallet-sig2 started.
+- Funded live deposit/withdraw/collection is deferred until testnet DOGE is supplied.
+- Funding address: `2MtNHNEL8YcV3EWM3DZhFcZhxCwNCKSsrtk`.
+- Push: no.
+
+Detailed evidence: `DOGECOIN_WALLET_REPORT.md`.

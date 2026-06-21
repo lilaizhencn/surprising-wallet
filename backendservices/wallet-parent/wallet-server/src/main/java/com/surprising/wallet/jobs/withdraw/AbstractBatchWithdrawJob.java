@@ -183,21 +183,23 @@ abstract public class AbstractBatchWithdrawJob {
 
         String transactionId = transaction.getId().toString();
 
-        if (currency == LTC) {
+        if (currency == LTC || currency == DOGE) {
+            String chain = currency.getName().toUpperCase(Locale.ROOT);
             for (UtxoTransaction utxo : utxos) {
                 int locked = chainJdbcRepository.lockUtxo(
-                        "LTC", utxo.getTxId(), utxo.getSeq(), transactionId);
+                        chain, utxo.getTxId(), utxo.getSeq(), transactionId);
                 if (locked != 1) {
                     throw new IllegalStateException(
-                            "failed to lock unified LTC UTXO " + utxo.getTxId() + ":" + utxo.getSeq());
+                            "failed to lock unified " + chain + " UTXO "
+                                    + utxo.getTxId() + ":" + utxo.getSeq());
                 }
             }
             String fromAddress = addresses.isEmpty() ? null : addresses.get(0).getAddress();
             records.forEach(record -> {
                 chainJdbcRepository.updateWithdrawalStatus(
-                        "LTC", record.getWithdrawId(), "UTXO_LOCKED", fromAddress, null, null);
+                        chain, record.getWithdrawId(), "UTXO_LOCKED", fromAddress, null, null);
                 chainJdbcRepository.updateWithdrawalStatus(
-                        "LTC", record.getWithdrawId(), "SIGNING", fromAddress, null, null);
+                        chain, record.getWithdrawId(), "SIGNING", fromAddress, null, null);
             });
         }
 
@@ -226,7 +228,7 @@ abstract public class AbstractBatchWithdrawJob {
 
     private BigDecimal requiredAmount(BigDecimal userFeeRequired, BigDecimal withdrawAmount,
                                       int inputCount, int outputCount, int feeRate) {
-        long feeSat = P2wshFeeCalculator.calculateFeeSat(Math.max(inputCount, 1), outputCount + 1, feeRate);
+        long feeSat = estimateNetworkFeeAtomic(Math.max(inputCount, 1), outputCount + 1, feeRate);
         BigDecimal networkFee = BigDecimal.valueOf(feeSat).divide(currency.getDecimal());
         BigDecimal dynamicRequired = withdrawAmount.add(networkFee);
         return dynamicRequired.max(userFeeRequired);
@@ -234,5 +236,9 @@ abstract public class AbstractBatchWithdrawJob {
 
     protected int defaultFeeRate() {
         return DEFAULT_FEE_RATE;
+    }
+
+    protected long estimateNetworkFeeAtomic(int inputCount, int outputCount, int feeRate) {
+        return P2wshFeeCalculator.calculateFeeSat(inputCount, outputCount, feeRate);
     }
 }

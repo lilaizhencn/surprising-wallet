@@ -1,4 +1,4 @@
-package com.surprising.wallet.service.chain.ltc;
+package com.surprising.wallet.service.chain;
 
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.common.mybatis.sharding.ShardTable;
@@ -23,22 +23,22 @@ import java.util.Date;
 import java.util.List;
 
 /**
- * Atomically settles confirmed Litecoin withdrawals and collections across the
- * legacy tables and the unified chain ledger.
+ * Atomically settles confirmed database-driven Bitcoin-like withdrawals and
+ * collections across the legacy tables and unified chain ledger.
  */
 @Service
-public class LitecoinSettlementService {
+public class BitcoinLikeSettlementService {
     private final ChainJdbcRepository chainRepository;
     private final UserAssetService userAssetService;
     private final UtxoTransactionService utxoService;
     private final WithdrawRecordService recordService;
     private final WithdrawTransactionService transactionService;
 
-    public LitecoinSettlementService(ChainJdbcRepository chainRepository,
-                                     UserAssetService userAssetService,
-                                     UtxoTransactionService utxoService,
-                                     WithdrawRecordService recordService,
-                                     WithdrawTransactionService transactionService) {
+    public BitcoinLikeSettlementService(ChainJdbcRepository chainRepository,
+                                        UserAssetService userAssetService,
+                                        UtxoTransactionService utxoService,
+                                        WithdrawRecordService recordService,
+                                        WithdrawTransactionService transactionService) {
         this.chainRepository = chainRepository;
         this.userAssetService = userAssetService;
         this.utxoService = utxoService;
@@ -47,8 +47,11 @@ public class LitecoinSettlementService {
     }
 
     @Transactional(rollbackFor = Throwable.class)
-    public void settleConfirmed(WithdrawTransaction transaction, String txId) {
-        CurrencyEnum currency = CurrencyEnum.LTC;
+    public void settleConfirmed(WithdrawTransaction transaction, String txId, CurrencyEnum currency) {
+        if (currency != CurrencyEnum.LTC && currency != CurrencyEnum.DOGE) {
+            throw new IllegalArgumentException("unsupported unified UTXO currency " + currency);
+        }
+        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
 
@@ -69,8 +72,8 @@ public class LitecoinSettlementService {
 
         if ("collection".equals(signature.getString("type"))) {
             chainRepository.markCollectionConfirmed(
-                    "LTC", signature.getString("collectionId"), txId);
-            chainRepository.markUtxosSpent("LTC", transaction.getId().toString(), txId);
+                    chain, signature.getString("collectionId"), txId);
+            chainRepository.markUtxosSpent(chain, transaction.getId().toString(), txId);
             return;
         }
 
@@ -79,7 +82,7 @@ public class LitecoinSettlementService {
         List<WithdrawRecord> records = recordService.getByExample(recordExample, table);
         for (WithdrawRecord record : records) {
             int confirmed = chainRepository.markWithdrawalConfirmed(
-                    "LTC", record.getWithdrawId(), txId);
+                    chain, record.getWithdrawId(), txId);
             if (confirmed == 1) {
                 BigDecimal fee = record.getFee() == null ? BigDecimal.ZERO : record.getFee();
                 BigDecimal settled = record.getBalance().add(fee);
@@ -88,9 +91,9 @@ public class LitecoinSettlementService {
                             "failed to settle LTC frozen balance for " + record.getWithdrawId());
                 }
                 if (!chainRepository.settleLockedDebit(
-                        "LTC", "LTC", record.getUserId().toString(), settled)) {
+                        chain, chain, record.getUserId().toString(), settled)) {
                     throw new IllegalStateException(
-                            "failed to settle LTC ledger for " + record.getWithdrawId());
+                            "failed to settle " + chain + " ledger for " + record.getWithdrawId());
                 }
             }
             record.setStatus((byte) Constants.CONFIRM);
@@ -99,6 +102,6 @@ public class LitecoinSettlementService {
         if (!records.isEmpty()) {
             recordService.batchEdit(records, table);
         }
-        chainRepository.markUtxosSpent("LTC", transaction.getId().toString(), txId);
+        chainRepository.markUtxosSpent(chain, transaction.getId().toString(), txId);
     }
 }

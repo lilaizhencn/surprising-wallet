@@ -83,7 +83,7 @@ abstract public class AbstractScanBlockJob {
             }
 
             //循环扫描某个阶段的区块
-            long scanBegin = wallet.getCurrency() == CurrencyEnum.LTC
+            long scanBegin = isDatabaseDrivenUtxo(wallet.getCurrency())
                     ? Math.max(0L, storedHeight.getHeight() + 1L)
                     : Math.max(0L, storedHeight.getHeight() - wallet.getCurrency().getDepositConfirmNum());
             long scanEnd = bestHeight;
@@ -139,9 +139,11 @@ abstract public class AbstractScanBlockJob {
         storedHeight.setHeight(bestHeight);
         storedHeight.setUpdateDate(Date.from(Instant.now()));
         bestHeightService.editById(storedHeight);
-        if (wallet.getCurrency() == CurrencyEnum.LTC) {
+        if (isDatabaseDrivenUtxo(wallet.getCurrency())) {
+            String chain = wallet.getCurrency().getName().toUpperCase(java.util.Locale.ROOT);
             long safeHeight = Math.max(0L, bestHeight - wallet.getCurrency().getDepositConfirmNum());
-            chainJdbcRepository.updateScanHeight("LTC", "ltc-block-scanner", bestHeight, safeHeight);
+            chainJdbcRepository.updateScanHeight(
+                    chain, wallet.getCurrency().getName() + "-block-scanner", bestHeight, safeHeight);
         }
     }
 
@@ -171,5 +173,9 @@ abstract public class AbstractScanBlockJob {
             return false;
         }
         return true;
+    }
+
+    private boolean isDatabaseDrivenUtxo(CurrencyEnum currency) {
+        return currency == CurrencyEnum.LTC || currency == CurrencyEnum.DOGE;
     }
 }

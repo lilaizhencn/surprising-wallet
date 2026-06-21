@@ -9,6 +9,7 @@ import com.surprising.wallet.common.chain.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TronTransactionRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.common.currency.CurrencyEnum;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -357,15 +358,17 @@ public class ChainJdbcRepository {
                 txHash, toTs(now()), chain, collectionNo);
     }
 
-    public List<WithdrawTransaction> findStaleLitecoinSigningTransactions(long staleSeconds) {
+    public List<WithdrawTransaction> findStaleBitcoinLikeSigningTransactions(
+            CurrencyEnum currency, long staleSeconds) {
+        String table = signingTransactionTable(currency);
         return jdbcTemplate.query("""
                         select id, tx_id, balance, signature, currency, status, create_date, update_date
-                        from ltc_withdraw_transaction
+                        from %s
                         where status = 1
                           and update_date < now() - (? * interval '1 second')
                         order by id
                         limit 100
-                        """,
+                        """.formatted(table),
                 (rs, rowNum) -> WithdrawTransaction.builder()
                         .id(rs.getInt("id"))
                         .txId(rs.getString("tx_id"))
@@ -379,14 +382,25 @@ public class ChainJdbcRepository {
                 staleSeconds);
     }
 
-    public boolean claimLitecoinSigningRecovery(int transactionId, long staleSeconds) {
+    public boolean claimBitcoinLikeSigningRecovery(
+            CurrencyEnum currency, int transactionId, long staleSeconds) {
+        String table = signingTransactionTable(currency);
         return jdbcTemplate.update("""
-                        update ltc_withdraw_transaction
+                        update %s
                         set update_date = now()
                         where id = ? and status = 1
                           and update_date < now() - (? * interval '1 second')
-                        """,
+                        """.formatted(table),
                 transactionId, staleSeconds) == 1;
+    }
+
+    private String signingTransactionTable(CurrencyEnum currency) {
+        return switch (currency) {
+            case LTC -> "ltc_withdraw_transaction";
+            case DOGE -> "doge_withdraw_transaction";
+            default -> throw new IllegalArgumentException(
+                    "unsupported signing recovery currency " + currency);
+        };
     }
 
     public int recordEvmTokenTransfer(DepositEvent event, long logIndex, String status) {

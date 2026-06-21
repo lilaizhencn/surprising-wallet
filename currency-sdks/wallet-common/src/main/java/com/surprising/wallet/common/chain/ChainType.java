@@ -6,6 +6,7 @@ package com.surprising.wallet.common.chain;
 public enum ChainType {
     BTC("bitcoin", "utxo"),
     LTC("litecoin", "utxo"),
+    DOGE("dogecoin", "utxo"),
     ETH("evm", "account"),
     BNB("evm", "account"),
     POLYGON("evm", "account"),

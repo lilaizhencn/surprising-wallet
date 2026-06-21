@@ -26,6 +26,7 @@ public enum CurrencyEnum {
 
     BTC(1, "btc", 7, 1, 6, EIGHT),
     LTC(24, "ltc", 7, 1, 6, EIGHT, "", 2),
+    DOGE(41, "doge", 13, 6, 12, EIGHT, "", 3),
     ETH(2, "eth", 121, 12, 120, EIGHTEEN),
     TRX(23, "trx", 121, 12, 120, SIX),
     USDT(100, "usdt", 121, 12, 120, SIX, "0xdac17f958d2ee523a2206206994597c13d831ec7");

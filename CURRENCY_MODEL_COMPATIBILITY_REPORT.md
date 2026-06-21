@@ -79,13 +79,14 @@ LTC continues to mirror legacy `ltc_*`, `user_asset`, `currency_balance`, and `b
 - Signer dispatch still uses enum id `24`; HD derivation uses coin type `2`.
 - `CurrencyIds.LTC` must not be used.
 
-## DOGE Compatibility Plan
+## DOGE Compatibility
 
-- Proposed runtime currency id: `41`, subject to a final database conflict query in the DOGE migration.
+- Runtime currency id: `41`; the pre-migration database conflict query returned zero rows.
 - BIP44 coin type: `3`.
-- Add a `CurrencyEnum.DOGE` compatibility entry only because old signer/job dispatch requires it.
+- `CurrencyEnum.DOGE` was added only because old signer/job dispatch requires it.
 - The enum value must mirror `chain_profile.runtime_currency_id`; network, fee, dust, confirmations, and RPC must remain database/application driven.
 - Do not add or reuse `CurrencyIds` constants.
+- DOGE testnet/mainnet profiles and chain-scoped legacy compatibility tables were added.
 
 ## BCH Compatibility Plan
 
@@ -109,7 +110,7 @@ No MBG generation was needed because these tables are accessed through the hand-
 
 ## ID Conflict Risk
 
-- Current modern database runtime ids are `1` (BTC) and `24` (LTC).
+- Current modern database runtime ids are `1` (BTC), `24` (LTC), and `41` (DOGE).
 - Current `chain_profile` rows reserve runtime id `24` for LTC testnet and mainnet. Runtime ids `41` and `42` are not currently present in `chain_profile`, `user_asset`, or `currency_balance`, but each future migration must recheck immediately before insertion.
 - The legacy `CurrencyIds` namespace contains incompatible meanings for ids `2`, `5`, `24`, and many token ids.
 - Risk is high if code imports both currency namespaces or hardcodes ids.
