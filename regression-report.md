@@ -289,7 +289,86 @@ Generated: 2026-06-20 23:35 Asia/Shanghai.
 
 - TRX and TRC20 USDT Nile live flow passed.
 - USDC TRC20 live flow remains blocked because the Nile faucet supplied USDT only and no controlled mock USDC deployment has been verified through the wallet path.
-- Commit was not created.
+- TRON commit was created after the operator requested committing the current completed stage: `4654a45 feat: implement tron trident trc20 wallet full flow`.
 - Push: no.
 
 Detailed TRON report: `TRON_TRIDENT_REPORT.md`.
+
+---
+
+## Litecoin Wallet Update
+
+Generated: 2026-06-21 07:50 Asia/Shanghai.
+
+### Overall
+
+- Litecoin implementation is code-complete for the current BTC-like P2WSH UTXO architecture.
+- `CurrencyEnum` is treated as historical runtime id infrastructure: LTC uses runtime id `24`, while HD derivation uses BIP44 coin type `2`.
+- BTC/EVM/TRON core logic was not rewritten.
+- Live Litecoin testnet deposit/withdraw/collection remains blocked by missing funded Litecoin Core-compatible testnet RPC.
+- Commit was not created because the Litecoin live chain gates are not satisfied.
+- Push: no.
+
+### Code And Config
+
+- Added `ChainType.LTC`.
+- Added `CurrencyEnum.LTC` with independent `bip44CoinType`.
+- Added Litecoin network parameters with mainnet/testnet HRP and legacy address headers.
+- Added Litecoin fee/dust policy.
+- Added `LtcCommand`, `LtcWallet`, `LitecoinChainAdapter`.
+- Added `ScanLtcBlockJob`, `BatchLtcWithdrawJob`, `LtcCollectionJob`.
+- Added `LtcFirstSignService` and `LtcSecondSignService`.
+- Added LTC RPC config in `application.yaml`, `application-test.yaml`, and `application-prod.yaml`.
+- LTC scanner/collection are not enabled by default; existing BTC enabled-currency behavior is preserved.
+
+### Database
+
+- `multi-chain-wallet-schema.sql` was applied with the local admin role `atomex`.
+- The low-privilege `wallet` role was rejected for DDL with `permission denied for schema public`; this is expected with current local DB permissions.
+- Added/verified:
+  - `ltc_address`
+  - `ltc_utxo_transaction`
+  - `ltc_withdraw_record`
+  - `ltc_withdraw_transaction`
+  - `best_block_height(currency=24)`
+  - `currency_balance(currency_index=24)`
+  - `chain_asset(chain='LTC', symbol='LTC')`
+- LTC tables have independent primary and unique constraints; UTXO idempotency key is `(tx_id, seq)`.
+- No MBG generation was run.
+
+### Address Generation
+
+- Test derivation path shape: `m/44/2/1/9001/{index}`.
+- Generated Litecoin testnet P2WSH address index 0: `tltc1qeh6wxfsj4cfwh5dmp0nnpqj52s9u5gkc59gyj94qllg7wnjxx6qsnda7vj`.
+- Generated Litecoin testnet P2WSH address index 1: `tltc1qydpzhcujqtca9uuepts0k996jfv483xlnkf8majw0f0umaht9j6q2aktvc`.
+- BTC TestNet3 parser rejects these `tltc1` addresses.
+
+### Tests
+
+- `mvn -q -pl currency-sdks/bitcoin-sdk -Dtest=LitecoinNetworkParamsTest test`: passed.
+- `mvn -q -pl backendservices/wallet-parent/wallet-service -am -Dtest=LitecoinAddressGenerationTest,LitecoinFeeEstimatorTest,BlockchainAdapterRegistryTest -Dsurefire.failIfNoSpecifiedTests=false test`: passed.
+- `mvn -q -pl backendservices/wallet-parent/wallet-server -am -DskipTests compile`: passed.
+- `mvn -q -pl backendservices/wallet-sig1 -am -DskipTests compile`: passed.
+- `mvn -q -pl backendservices/wallet-sig2 -am -DskipTests compile`: passed.
+- `mvn -q clean install -DskipTests=false`: passed.
+- Final Surefire summary: 65 tests, 0 failures, 0 errors, 12 skipped.
+- `LitecoinLiveFlowIntegrationTest`: skipped with explicit blocked reason because `ltc.live.enabled=true` and funded Core RPC credentials are not available.
+
+### Startup
+
+- Redis: `PONG`.
+- PostgreSQL: `select 1` passed.
+- `wallet-server --spring.profiles.active=test`: started on `8002`; `/actuator/health` returned `UP`.
+- `wallet-sig1 --spring.profiles.active=test`: started on `8004`; first-sign job active.
+- `wallet-sig2 --spring.profiles.active=test`: started as non-web signing process; second-sign job active.
+- All three processes were stopped after validation.
+
+### Blocked
+
+- Live LTC deposit txid: blocked.
+- Live LTC withdraw txid: blocked.
+- Live LTC collection txid: blocked.
+- Live UTXO/ledger reconciliation: blocked.
+- Required to unblock: a running Litecoin testnet JSON-RPC endpoint compatible with Litecoin Core and funded testnet LTC for a generated `tltc1...` platform address.
+
+Detailed Litecoin report: `LITECOIN_WALLET_REPORT.md`.

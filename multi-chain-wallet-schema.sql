@@ -17,6 +17,68 @@ create table if not exists chain_asset (
     unique (chain, symbol)
 );
 
+insert into chain_asset(chain, symbol, asset_kind, decimals, native_asset, active, min_transfer, min_withdraw)
+values ('LTC', 'LTC', 'NATIVE', 8, true, true, 100000, 100000)
+on conflict (chain, symbol) do update
+set decimals = excluded.decimals,
+    native_asset = excluded.native_asset,
+    active = excluded.active,
+    updated_at = now();
+
+create table if not exists ltc_address (like btc_address including defaults including identity);
+create table if not exists ltc_utxo_transaction (like btc_utxo_transaction including defaults including identity);
+create table if not exists ltc_withdraw_record (like btc_withdraw_record including defaults including identity);
+create table if not exists ltc_withdraw_transaction (like btc_withdraw_transaction including defaults including identity);
+
+do $$
+begin
+    if not exists (select 1 from pg_constraint where conname = 'pk_ltc_address') then
+        alter table ltc_address add constraint pk_ltc_address primary key (id);
+    end if;
+    if not exists (select 1 from pg_constraint where conname = 'uq_ltc_address_address') then
+        alter table ltc_address add constraint uq_ltc_address_address unique (address);
+    end if;
+    if not exists (select 1 from pg_constraint where conname = 'uq_ltc_address_user_biz_index') then
+        alter table ltc_address add constraint uq_ltc_address_user_biz_index unique (user_id, biz, index);
+    end if;
+    if not exists (select 1 from pg_constraint where conname = 'pk_ltc_utxo_transaction') then
+        alter table ltc_utxo_transaction add constraint pk_ltc_utxo_transaction primary key (id);
+    end if;
+    if not exists (select 1 from pg_constraint where conname = 'uq_ltc_utxo_transaction_tx_seq') then
+        alter table ltc_utxo_transaction add constraint uq_ltc_utxo_transaction_tx_seq unique (tx_id, seq);
+    end if;
+    if not exists (select 1 from pg_constraint where conname = 'pk_ltc_withdraw_record') then
+        alter table ltc_withdraw_record add constraint pk_ltc_withdraw_record primary key (id);
+    end if;
+    if not exists (select 1 from pg_constraint where conname = 'uq_ltc_withdraw_record_withdraw_id') then
+        alter table ltc_withdraw_record add constraint uq_ltc_withdraw_record_withdraw_id unique (withdraw_id);
+    end if;
+    if not exists (select 1 from pg_constraint where conname = 'pk_ltc_withdraw_transaction') then
+        alter table ltc_withdraw_transaction add constraint pk_ltc_withdraw_transaction primary key (id);
+    end if;
+end $$;
+
+create index if not exists idx_ltc_utxo_available
+    on ltc_utxo_transaction (status, confirm_num, spent_tx_id);
+create index if not exists idx_ltc_utxo_address
+    on ltc_utxo_transaction (address);
+create index if not exists idx_ltc_withdraw_record_tx_id
+    on ltc_withdraw_record (tx_id);
+create index if not exists idx_ltc_withdraw_record_status
+    on ltc_withdraw_record (status);
+create index if not exists idx_ltc_withdraw_transaction_tx_id
+    on ltc_withdraw_transaction (tx_id);
+create index if not exists idx_ltc_withdraw_transaction_status
+    on ltc_withdraw_transaction (status);
+
+insert into best_block_height(currency, height, interval_time)
+values (24, 0, 300000)
+on conflict (currency) do nothing;
+
+insert into currency_balance(currency_index, balance)
+values (24, 0)
+on conflict (currency_index) do nothing;
+
 create table if not exists token_registry (
     id bigserial primary key,
     chain varchar(32) not null,

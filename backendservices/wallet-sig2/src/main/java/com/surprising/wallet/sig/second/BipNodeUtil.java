@@ -21,7 +21,7 @@ public class BipNodeUtil {
         }
         CurrencyEnum currencyEnum = CurrencyEnum.parseName(address.getCurrency());
         Bip32Node node = BipNodeUtil.NODE.getChild(44)
-                .getChild(currencyEnum.getIndex())
+                .getChild(currencyEnum.getBip44CoinType())
                 .getChild(address.getBiz())
                 .getChild(address.getUserId().intValue())
                 .getChild(address.getIndex());

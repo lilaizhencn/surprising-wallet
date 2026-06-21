@@ -32,14 +32,15 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
                 wtxBuilder.addInput(u.getTxId(),u.getSeq(),wsh,uv);}
             long total=transaction.getBalance().multiply(cd).longValue(), sent=0;
             for(WithdrawRecord r:records) sent+=r.getBalance().multiply(cd).longValue();
-            long feeRate=signature.getLongValue("feeRate"); if(feeRate<=0){feeRate=DEFAULT_FEE_RATE;}
+            long feeRate=signature.getLongValue("feeRate"); if(feeRate<=0){feeRate=defaultFeeRate();}
             long vBytes=WitnessTransactionBuilder.estimateVBytes(inputCount,records.size()), fee=vBytes*feeRate;
             long change=total-sent-fee;
-            if(change>=DUST_THRESHOLD_SAT){long cv=WitnessTransactionBuilder.estimateVBytes(inputCount,records.size()+1), cf=cv*feeRate, cc=total-sent-cf; if(cc>=DUST_THRESHOLD_SAT){vBytes=cv; fee=cf; change=cc;} else {fee=total-sent; change=0;}}
+            long dust=dustThresholdSat();
+            if(change>=dust){long cv=WitnessTransactionBuilder.estimateVBytes(inputCount,records.size()+1), cf=cv*feeRate, cc=total-sent-cf; if(cc>=dust){vBytes=cv; fee=cf; change=cc;} else {fee=total-sent; change=0;}}
             else if(change>0){fee=total-sent; change=0;}
             if(change<0){throw new IllegalArgumentException("insufficient input for SegWit fee: need "+(sent+fee)+", have "+total);}
             log.info("P2WSH fee: {} vB * {} sat/vB = {} sat",vBytes,feeRate,fee);
-            for(WithdrawRecord r:records) { long out=r.getBalance().multiply(cd).longValue(); if(out>0&&out<DUST_THRESHOLD_SAT){throw new IllegalArgumentException("withdraw output dust: "+out+" sat");} wtxBuilder.addOutput(r.getAddress(),Coin.valueOf(out)); }
+            for(WithdrawRecord r:records) { long out=r.getBalance().multiply(cd).longValue(); if(out>0&&out<dust){throw new IllegalArgumentException("withdraw output dust: "+out+" sat");} wtxBuilder.addOutput(r.getAddress(),Coin.valueOf(out)); }
             if(change>0){String ca=signature.getString("changeAddress"); if(ca!=null&&!ca.isEmpty()) wtxBuilder.addOutput(ca,Coin.valueOf(change));}
             long estimatedWeight=com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator.estimateWeight(inputCount,records.size()+(change>0?1:0),2,3);
             String firstSignTx=wtxBuilder.buildFirstSign(ecKeys);
@@ -53,5 +54,7 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
     }
     @Override abstract public CurrencyEnum getCurrency();
     public Bip32Node getBipNODE(Address a){CurrencyEnum ce=CurrencyEnum.parseName(a.getCurrency());
-        return NODE.getChild(44).getChild(ce.getIndex()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex());}
+        return NODE.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex());}
+    protected long defaultFeeRate(){return DEFAULT_FEE_RATE;}
+    protected long dustThresholdSat(){return DUST_THRESHOLD_SAT;}
 }
