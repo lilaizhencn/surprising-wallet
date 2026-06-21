@@ -12,6 +12,7 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.util.UUID;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -34,35 +35,38 @@ class DogecoinDatabaseFlowIntegrationTest {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
             repository = new ChainJdbcRepository(jdbc);
-            String txid = UUID.randomUUID().toString().replace("-", "") + "00";
-            String account = "doge-test-" + UUID.randomUUID();
-            DepositEvent event = new DepositEvent(
-                    ChainType.DOGE, "DOGE", txid, null, "nSynthetic",
-                    new BigDecimal("25.00000000"), 1L, 6, null, "{}");
+            for (ChainType chainType : List.of(ChainType.DOGE, ChainType.BCH)) {
+                String chain = chainType.name();
+                String txid = UUID.randomUUID().toString().replace("-", "") + "00";
+                String account = chain.toLowerCase() + "-test-" + UUID.randomUUID();
+                DepositEvent event = new DepositEvent(
+                        chainType, chain, txid, null, "synthetic",
+                        new BigDecimal("25.00000000"), 1L, 6, null, "{}");
 
-            assertTrue(repository.recordAndCreditDeposit(event, 0, 6, account));
-            assertFalse(repository.recordAndCreditDeposit(event, 0, 6, account));
-            repository.upsertUtxo(
-                    "DOGE", "DOGE", txid, 0, "nSynthetic",
-                    new BigDecimal("25.00000000"), 1L, 6, true);
-            assertEquals(1, repository.lockUtxo("DOGE", txid, 0, "lock-1"));
-            assertEquals(0, repository.lockUtxo("DOGE", txid, 0, "lock-2"));
-            assertEquals(1, repository.releaseUtxos("DOGE", "lock-1"));
+                assertTrue(repository.recordAndCreditDeposit(event, 0, 6, account));
+                assertFalse(repository.recordAndCreditDeposit(event, 0, 6, account));
+                repository.upsertUtxo(
+                        chain, chain, txid, 0, "synthetic",
+                        new BigDecimal("25.00000000"), 1L, 6, true);
+                assertEquals(1, repository.lockUtxo(chain, txid, 0, "lock-1"));
+                assertEquals(0, repository.lockUtxo(chain, txid, 0, "lock-2"));
+                assertEquals(1, repository.releaseUtxos(chain, "lock-1"));
 
-            BigDecimal total = jdbc.queryForObject("""
+                BigDecimal total = jdbc.queryForObject("""
                     select total_balance from ledger_balance
-                    where chain='DOGE' and asset_symbol='DOGE' and account_id=?
-                    """, BigDecimal.class, account);
-            assertEquals(new BigDecimal("25.000000000000000000"), total);
-            assertEquals(1L, jdbc.queryForObject("""
+                    where chain=? and asset_symbol=? and account_id=?
+                    """, BigDecimal.class, chain, chain, account);
+                assertEquals(new BigDecimal("25.000000000000000000"), total);
+                assertEquals(1L, jdbc.queryForObject("""
                     select count(*) from deposit_record
-                    where chain='DOGE' and tx_hash=? and log_index=0
-                    """, Long.class, txid));
-            assertEquals(0L, jdbc.queryForObject("""
+                    where chain=? and tx_hash=? and log_index=0
+                    """, Long.class, chain, txid));
+                assertEquals(0L, jdbc.queryForObject("""
                     select count(*) from ledger_balance
-                    where chain='DOGE'
+                    where chain=?
                       and (available_balance < 0 or locked_balance < 0 or total_balance < 0)
-                    """, Long.class));
+                    """, Long.class, chain));
+            }
             connection.rollback();
         }
     }

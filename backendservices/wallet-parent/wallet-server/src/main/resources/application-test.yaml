@@ -20,6 +20,11 @@ atomex:
     server: ${DOGE_TESTNET_RPC_URL:https://dogecoin-testnet.gateway.tatum.io}
     server.user: ${DOGE_TESTNET_RPC_USER:}
     server.pwd: ${DOGE_TESTNET_RPC_PASSWORD:}
+  bch:
+    network: testnet
+    server: ${BCH_TESTNET_RPC_URL:https://bitcoin-cash-testnet.gateway.tatum.io}
+    server.user: ${BCH_TESTNET_RPC_USER:}
+    server.pwd: ${BCH_TESTNET_RPC_PASSWORD:}
   eth:
     server: https://ethereum-sepolia-rpc.publicnode.com
     chain-id: 11155111
@@ -49,6 +54,15 @@ atomex:
       explorerUrl: https://doge-testnet-explorer.qed.me/tx/
       confirmations: 6
       gasPolicy: doge-p2sh-bytes
+      scanBatchSize: 1
+    bitcoin-cash-testnet:
+      enabled: false
+      family: bitcoin-cash
+      rpcUrl: ${BCH_TESTNET_RPC_URL:https://bitcoin-cash-testnet.gateway.tatum.io}
+      chainId: bitcoin-cash-testnet
+      explorerUrl: https://tbch.loping.net/tx/
+      confirmations: 1
+      gasPolicy: bch-p2sh-forkid
       scanBatchSize: 1
     ethereum-sepolia:
       enabled: true

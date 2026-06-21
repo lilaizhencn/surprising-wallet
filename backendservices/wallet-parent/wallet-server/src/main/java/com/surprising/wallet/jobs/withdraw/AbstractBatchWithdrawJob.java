@@ -183,7 +183,7 @@ abstract public class AbstractBatchWithdrawJob {
 
         String transactionId = transaction.getId().toString();
 
-        if (currency == LTC || currency == DOGE) {
+        if (currency == LTC || currency == DOGE || currency == BCH) {
             String chain = currency.getName().toUpperCase(Locale.ROOT);
             for (UtxoTransaction utxo : utxos) {
                 int locked = chainJdbcRepository.lockUtxo(

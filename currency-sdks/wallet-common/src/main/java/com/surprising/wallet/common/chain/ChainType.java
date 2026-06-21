@@ -7,6 +7,7 @@ public enum ChainType {
     BTC("bitcoin", "utxo"),
     LTC("litecoin", "utxo"),
     DOGE("dogecoin", "utxo"),
+    BCH("bitcoin-cash", "utxo"),
     ETH("evm", "account"),
     BNB("evm", "account"),
     POLYGON("evm", "account"),

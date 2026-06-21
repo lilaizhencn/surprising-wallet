@@ -498,3 +498,21 @@ Generated: 2026-06-21 23:07 Asia/Shanghai.
 - Push: no.
 
 Detailed evidence: `DOGECOIN_WALLET_REPORT.md`.
+
+---
+
+## Bitcoin Cash Integration Update
+
+Generated: 2026-06-21 23:23 Asia/Shanghai.
+
+- BCH was implemented with bitcoinj `0.17.1`, CashAddr/legacy compatibility, and BCH `SIGHASH_FORKID`.
+- Runtime id `42` and BIP44 coin type `145` are database-validated and separate.
+- Full Maven: 71 tests, 0 failures, 0 errors, 11 skipped.
+- Real testnet RPC read block `1715780`; scanner advanced the BCH checkpoint and ignored non-platform outputs.
+- CashAddr, P2SH 2-of-3, `0x41` signatures, PostgreSQL idempotency, UTXO lock/release, ledger non-negative, and recovery tests passed.
+- wallet-server health `UP`; both signer services started.
+- Funded live deposit/withdraw/collection is deferred until testnet BCH is supplied.
+- Funding address: `bchtest:pzleucus9lj0zns4j52mkecpams5hftrzqfaauzp8t`.
+- Push: no.
+
+Detailed evidence: `BITCOIN_CASH_WALLET_REPORT.md`.

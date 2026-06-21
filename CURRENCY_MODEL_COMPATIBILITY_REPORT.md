@@ -43,7 +43,7 @@ The active legacy wallet pipeline still depends on `CurrencyEnum` in these areas
 
 These dependencies are retained because replacing the old queue/table routing in the LTC gate would materially risk BTC. New-chain code must load and validate its database profile before using the matching enum entry.
 
-Current audit scope: 50 Java source files reference `CurrencyEnum`. This is a compatibility surface to reduce over time, not the configuration source for DOGE/BCH.
+Current audit scope: 64 Java source files reference `CurrencyEnum`. This is a compatibility surface to reduce over time, not the configuration source for DOGE/BCH.
 
 ## Remaining CurrencyIds Dependencies
 
@@ -88,11 +88,11 @@ LTC continues to mirror legacy `ltc_*`, `user_asset`, `currency_balance`, and `b
 - Do not add or reuse `CurrencyIds` constants.
 - DOGE testnet/mainnet profiles and chain-scoped legacy compatibility tables were added.
 
-## BCH Compatibility Plan
+## BCH Compatibility
 
-- Proposed runtime currency id: `42`, subject to a final database conflict query in the BCH migration.
+- Runtime currency id: `42`; the pre-migration conflict query returned zero rows.
 - BIP44 coin type: `145`.
-- Add a `CurrencyEnum.BCH` compatibility entry only for old signer/job routing.
+- `CurrencyEnum.BCH` was added only for old signer/job routing.
 - Do not use legacy `CurrencyIds.BCH = 5`.
 - CashAddr, legacy address compatibility, SIGHASH_FORKID, fee, dust, and confirmations remain BCH-specific profile/signer concerns.
 
@@ -104,14 +104,15 @@ Required and added:
 - `utxo_record` with unique `(chain, tx_hash, vout)`
 - unique `(chain, order_no)` for `withdrawal_order`
 - unique `(chain, collection_no)` for `collection_record`
-- LTC testnet/mainnet `chain_profile` rows
+- LTC, DOGE, and BCH testnet/mainnet `chain_profile` rows
+- DOGE/BCH native `chain_asset` rows and chain-scoped compatibility tables
 
 No MBG generation was needed because these tables are accessed through the hand-written JDBC repository; no service, scanner, signer, or fee logic was generated.
 
 ## ID Conflict Risk
 
-- Current modern database runtime ids are `1` (BTC), `24` (LTC), and `41` (DOGE).
-- Current `chain_profile` rows reserve runtime id `24` for LTC testnet and mainnet. Runtime ids `41` and `42` are not currently present in `chain_profile`, `user_asset`, or `currency_balance`, but each future migration must recheck immediately before insertion.
+- Current modern database runtime ids are `1` (BTC), `24` (LTC), `41` (DOGE), and `42` (BCH).
+- Current `chain_profile` rows reserve runtime ids `24`, `41`, and `42` for LTC, DOGE, and BCH testnet/mainnet profiles. Pre-migration checks found no conflicting use in the legacy balance tables.
 - The legacy `CurrencyIds` namespace contains incompatible meanings for ids `2`, `5`, `24`, and many token ids.
 - Risk is high if code imports both currency namespaces or hardcodes ids.
 - Mitigation:

@@ -398,6 +398,7 @@ public class ChainJdbcRepository {
         return switch (currency) {
             case LTC -> "ltc_withdraw_transaction";
             case DOGE -> "doge_withdraw_transaction";
+            case BCH -> "bch_withdraw_transaction";
             default -> throw new IllegalArgumentException(
                     "unsupported signing recovery currency " + currency);
         };

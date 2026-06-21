@@ -48,7 +48,9 @@ public class BitcoinLikeSettlementService {
 
     @Transactional(rollbackFor = Throwable.class)
     public void settleConfirmed(WithdrawTransaction transaction, String txId, CurrencyEnum currency) {
-        if (currency != CurrencyEnum.LTC && currency != CurrencyEnum.DOGE) {
+        if (currency != CurrencyEnum.LTC
+                && currency != CurrencyEnum.DOGE
+                && currency != CurrencyEnum.BCH) {
             throw new IllegalArgumentException("unsupported unified UTXO currency " + currency);
         }
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);

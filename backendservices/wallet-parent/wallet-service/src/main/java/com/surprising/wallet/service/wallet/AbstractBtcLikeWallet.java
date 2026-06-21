@@ -172,7 +172,8 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
                 .map((output) -> {
                     UtxoTransaction utxo = null;
                     try {
-                        String addressStr = output.getScriptPubKey().getToAddress(getNetworkParameters()).toString();
+                        String addressStr = normalizeScannedAddress(
+                                output.getScriptPubKey().getToAddress(getNetworkParameters()).toString());
                         ShardTable table = ShardTable.builder().prefix(getCurrency().getName()).build();
                         Address address = addressService.getAddress(addressStr, table);
                         if (ObjectUtils.isEmpty(address)) {
@@ -359,7 +360,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
                 .map((output) -> {
 
                     ScriptPubKey pubKey = output.getScriptPubKey();
-                    String addressStr = extractOutputAddress(pubKey);
+                    String addressStr = normalizeScannedAddress(extractOutputAddress(pubKey));
                     if (!StringUtils.hasText(addressStr)) {
                         return null;
                     }
@@ -398,6 +399,9 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
     private String extractOutputAddress(ScriptPubKey pubKey) {
         if (pubKey == null) {
             return null;
+        }
+        if (getCurrency() == CurrencyEnum.BCH && !CollectionUtils.isEmpty(pubKey.getCashAddrs())) {
+            return pubKey.getCashAddrs().get(0);
         }
         if (StringUtils.hasText(pubKey.getAddress())) {
             return pubKey.getAddress();
@@ -595,7 +599,13 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
     }
 
     protected boolean usesUnifiedUtxoModel() {
-        return getCurrency() == CurrencyEnum.LTC || getCurrency() == CurrencyEnum.DOGE;
+        return getCurrency() == CurrencyEnum.LTC
+                || getCurrency() == CurrencyEnum.DOGE
+                || getCurrency() == CurrencyEnum.BCH;
+    }
+
+    protected String normalizeScannedAddress(String address) {
+        return address;
     }
 
     protected int getBip44CoinType() {

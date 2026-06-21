@@ -176,6 +176,8 @@ abstract public class AbstractScanBlockJob {
     }
 
     private boolean isDatabaseDrivenUtxo(CurrencyEnum currency) {
-        return currency == CurrencyEnum.LTC || currency == CurrencyEnum.DOGE;
+        return currency == CurrencyEnum.LTC
+                || currency == CurrencyEnum.DOGE
+                || currency == CurrencyEnum.BCH;
     }
 }

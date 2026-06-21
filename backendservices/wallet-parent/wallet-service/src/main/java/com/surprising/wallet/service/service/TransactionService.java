@@ -368,7 +368,9 @@ public class TransactionService {
     }
 
     private boolean isUnifiedBitcoinLike(CurrencyEnum currency) {
-        return currency == CurrencyEnum.LTC || currency == CurrencyEnum.DOGE;
+        return currency == CurrencyEnum.LTC
+                || currency == CurrencyEnum.DOGE
+                || currency == CurrencyEnum.BCH;
     }
 
     private String chainName(CurrencyEnum currency) {

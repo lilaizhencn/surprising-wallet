@@ -250,6 +250,33 @@ insert into currency_balance(currency_index, balance)
 values (41, 0)
 on conflict (currency_index) do nothing;
 
+insert into chain_profile(chain,network,family,runtime_currency_id,bip44_coin_type,native_symbol,rpc_url,explorer_url,deposit_confirmations,withdraw_confirmations,default_fee_rate,dust_threshold,enabled)
+values
+('BCH','testnet','bitcoin-like',42,145,'BCH',null,'https://tbch.loping.net/tx/',1,6,1,546,true),
+('BCH','mainnet','bitcoin-like',42,145,'BCH',null,'https://blockchair.com/bitcoin-cash/transaction/',1,6,1,546,true)
+on conflict(chain,network) do update set runtime_currency_id=excluded.runtime_currency_id,bip44_coin_type=excluded.bip44_coin_type,explorer_url=excluded.explorer_url,deposit_confirmations=excluded.deposit_confirmations,withdraw_confirmations=excluded.withdraw_confirmations,default_fee_rate=excluded.default_fee_rate,dust_threshold=excluded.dust_threshold,enabled=excluded.enabled,updated_at=now();
+insert into chain_asset(chain,symbol,asset_kind,decimals,native_asset,active,min_transfer,min_withdraw)
+values('BCH','BCH','NATIVE',8,true,true,546,546)
+on conflict(chain,symbol) do update set decimals=excluded.decimals,active=excluded.active,updated_at=now();
+create table if not exists bch_address(like btc_address including defaults including identity);
+create table if not exists bch_utxo_transaction(like btc_utxo_transaction including defaults including identity);
+create table if not exists bch_withdraw_record(like btc_withdraw_record including defaults including identity);
+create table if not exists bch_withdraw_transaction(like btc_withdraw_transaction including defaults including identity);
+do $$ begin
+ if not exists(select 1 from pg_constraint where conname='pk_bch_address')then alter table bch_address add constraint pk_bch_address primary key(id);end if;
+ if not exists(select 1 from pg_constraint where conname='uq_bch_address_address')then alter table bch_address add constraint uq_bch_address_address unique(address);end if;
+ if not exists(select 1 from pg_constraint where conname='uq_bch_address_user_biz_index')then alter table bch_address add constraint uq_bch_address_user_biz_index unique(user_id,biz,index);end if;
+ if not exists(select 1 from pg_constraint where conname='pk_bch_utxo_transaction')then alter table bch_utxo_transaction add constraint pk_bch_utxo_transaction primary key(id);end if;
+ if not exists(select 1 from pg_constraint where conname='uq_bch_utxo_transaction_tx_seq')then alter table bch_utxo_transaction add constraint uq_bch_utxo_transaction_tx_seq unique(tx_id,seq);end if;
+ if not exists(select 1 from pg_constraint where conname='pk_bch_withdraw_record')then alter table bch_withdraw_record add constraint pk_bch_withdraw_record primary key(id);end if;
+ if not exists(select 1 from pg_constraint where conname='uq_bch_withdraw_record_withdraw_id')then alter table bch_withdraw_record add constraint uq_bch_withdraw_record_withdraw_id unique(withdraw_id);end if;
+ if not exists(select 1 from pg_constraint where conname='pk_bch_withdraw_transaction')then alter table bch_withdraw_transaction add constraint pk_bch_withdraw_transaction primary key(id);end if;
+end $$;
+create index if not exists idx_bch_utxo_available on bch_utxo_transaction(status,confirm_num,spent_tx_id);
+create index if not exists idx_bch_utxo_address on bch_utxo_transaction(address);
+insert into best_block_height(currency,height,interval_time)values(42,0,600000)on conflict(currency)do nothing;
+insert into currency_balance(currency_index,balance)values(42,0)on conflict(currency_index)do nothing;
+
 create table if not exists token_registry (
     id bigserial primary key,
     chain varchar(32) not null,
