@@ -209,12 +209,14 @@ Uses `CREATE TABLE IF NOT EXISTS` — safe for incremental application:
 
 | Table | Purpose |
 |---|---|
+| `chain_profile` | New-chain runtime id, BIP44 coin type, network, confirmations, fee/dust, RPC/explorer metadata |
 | `chain_asset` | Chain-native asset definitions |
 | `token_registry` | Token metadata (legacy, read as fallback) |
 | `token_config` | **Primary** token configuration (enabled, min deposit/withdraw, collect settings) |
 | `chain_scan_height` | Per-chain scanner progress tracking |
 | `hot_wallet_address` | Hot wallet addresses per chain/asset |
 | `deposit_record` | Normalized deposit events across all chains |
+| `utxo_record` | Chain-scoped Bitcoin-like UTXO state (`AVAILABLE`/`LOCKED`/`SPENT`) |
 | `withdrawal_order` | Multi-chain withdrawal orders |
 | `evm_nonce` | Per-chain/address nonce management for EVM |
 | `evm_transaction` / `evm_tx` | EVM transaction records |
@@ -241,6 +243,10 @@ VALUES ('bnb-chain-testnet', 'USDC', 'BEP20', '0xYOUR_USDC_CONTRACT', 18, true, 
 
 The `JdbcTokenRegistry` reads `token_config` first, falling back to `token_registry` for backward compatibility.
 
+For new chains, `chain_profile`, `chain_asset`, and `token_config` are the source of truth.
+`CurrencyEnum` and `CurrencyIds` are legacy compatibility layers only. Runtime currency ids
+must not be confused with BIP44 coin types.
+
 ---
 
 ## Public/Private Key Configuration
@@ -264,7 +270,7 @@ atomex:
 ```yaml
 atomex:
   wallet:
-    masterKey: tprv8ZgxMBicQKsPfBRzVSv3hF81ytoWmdk1de6JEbe5Qg2qpEhLAiqJ6CG76rytrWK6t5ZqeRTzR3eLEAbUM6euY3wB5kV43jSZxfEJ8NcQs3m
+    masterKey: ${ATOMEX_SIG1_MASTER_KEY:}
 ```
 
 **wallet-sig2** holds the second signer's **extended private key** (`tprv...`):
@@ -272,7 +278,7 @@ atomex:
 ```yaml
 atomex:
   wallet:
-    masterKey: tprv8ZgxMBicQKsPdSLEi7y5GPRhZ7YsGD5Vuu4YMXR22nc76dadpcK95WdgRSB7V3LAhDEWDBiJg1F5TYXFWHMGZLx99f3zSwWkMWD6MPe627j
+    masterKey: ${ATOMEX_SIG2_MASTER_KEY:}
 ```
 
 ### EVM Single-Sig

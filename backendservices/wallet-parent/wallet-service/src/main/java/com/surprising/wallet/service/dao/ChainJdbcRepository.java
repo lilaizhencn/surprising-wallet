@@ -1,12 +1,14 @@
 package com.surprising.wallet.service.dao;
 
 import com.surprising.wallet.common.chain.ChainAsset;
+import com.surprising.wallet.common.chain.BitcoinLikeChainProfile;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.EvmNonceRecord;
 import com.surprising.wallet.common.chain.EvmTransactionRecord;
 import com.surprising.wallet.common.chain.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TronTransactionRecord;
+import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -44,6 +46,33 @@ public class ChainJdbcRepository {
                 asset.getChain(), asset.getSymbol(), asset.getAssetKind(), asset.getContractAddress(),
                 asset.getDecimals(), asset.getNativeAsset(), asset.getActive(), asset.getMinTransfer(),
                 asset.getMinWithdraw(), toTs(nowOr(asset.getCreatedAt())), toTs(nowOr(asset.getUpdatedAt())));
+    }
+
+    public Optional<BitcoinLikeChainProfile> findBitcoinLikeProfile(String chain, String network) {
+        List<BitcoinLikeChainProfile> results = jdbcTemplate.query("""
+                        select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+                               rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+                               default_fee_rate, dust_threshold, enabled
+                        from chain_profile
+                        where chain = ? and network = ? and enabled = true
+                        """,
+                (rs, rowNum) -> BitcoinLikeChainProfile.builder()
+                        .chain(rs.getString("chain"))
+                        .network(rs.getString("network"))
+                        .family(rs.getString("family"))
+                        .runtimeCurrencyId(rs.getInt("runtime_currency_id"))
+                        .bip44CoinType(rs.getInt("bip44_coin_type"))
+                        .nativeSymbol(rs.getString("native_symbol"))
+                        .rpcUrl(rs.getString("rpc_url"))
+                        .explorerUrl(rs.getString("explorer_url"))
+                        .depositConfirmations(rs.getInt("deposit_confirmations"))
+                        .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
+                        .defaultFeeRate(rs.getObject("default_fee_rate", Long.class))
+                        .dustThreshold(rs.getObject("dust_threshold", Long.class))
+                        .enabled(rs.getBoolean("enabled"))
+                        .build(),
+                chain, network);
+        return results.stream().findFirst();
     }
 
     public int upsertToken(TokenDefinition token) {
@@ -143,6 +172,12 @@ public class ChainJdbcRepository {
     }
 
     public boolean recordAndCreditDeposit(DepositEvent event, long logIndex, int requiredConfirmations) {
+        return recordAndCreditDeposit(event, logIndex, requiredConfirmations, event.toAddress().toLowerCase());
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public boolean recordAndCreditDeposit(DepositEvent event, long logIndex, int requiredConfirmations,
+                                          String accountId) {
         String chain = event.chainType().name();
         String status = event.confirmations() <= 0 ? "DETECTED"
                 : event.confirmations() < requiredConfirmations ? "CONFIRMING" : "CONFIRMED";
@@ -172,10 +207,186 @@ public class ChainJdbcRepository {
                         """,
                 toTs(now()), toTs(now()), chain, event.txId(), logIndex);
         if (credited == 1) {
-            incrementLedgerBalance(chain, event.assetSymbol(), event.toAddress().toLowerCase(), event.amount());
+            incrementLedgerBalance(chain, event.assetSymbol(), accountId, event.amount());
             return true;
         }
         return false;
+    }
+
+    public void upsertUtxo(String chain, String assetSymbol, String txHash, int vout, String address,
+                           BigDecimal amount, long blockHeight, int confirmations, boolean credited) {
+        jdbcTemplate.update("""
+                        insert into utxo_record(chain, asset_symbol, tx_hash, vout, address, amount, block_height,
+                                                confirmations, state, credited, created_at, updated_at)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE', ?, ?, ?)
+                        on conflict (chain, tx_hash, vout) do update set
+                            address = excluded.address,
+                            amount = excluded.amount,
+                            block_height = excluded.block_height,
+                            confirmations = greatest(utxo_record.confirmations, excluded.confirmations),
+                            state = case
+                                when utxo_record.state in ('LOCKED', 'SPENT') then utxo_record.state
+                                else excluded.state
+                            end,
+                            credited = utxo_record.credited or excluded.credited,
+                            updated_at = excluded.updated_at
+                        """,
+                chain, assetSymbol, txHash, vout, address, amount, blockHeight, confirmations, credited,
+                toTs(now()), toTs(now()));
+    }
+
+    public int markUtxoCredited(String chain, String txHash, int vout) {
+        return jdbcTemplate.update("""
+                        update utxo_record
+                        set credited = true, updated_at = ?
+                        where chain = ? and tx_hash = ? and vout = ? and credited = false
+                        """,
+                toTs(now()), chain, txHash, vout);
+    }
+
+    public int lockUtxo(String chain, String txHash, int vout, String lockRef) {
+        return jdbcTemplate.update("""
+                        update utxo_record
+                        set state = 'LOCKED', lock_ref = ?, updated_at = ?
+                        where chain = ? and tx_hash = ? and vout = ? and state = 'AVAILABLE'
+                        """,
+                lockRef, toTs(now()), chain, txHash, vout);
+    }
+
+    public int releaseUtxos(String chain, String lockRef) {
+        return jdbcTemplate.update("""
+                        update utxo_record
+                        set state = 'AVAILABLE', lock_ref = null, updated_at = ?
+                        where chain = ? and lock_ref = ? and state = 'LOCKED'
+                        """,
+                toTs(now()), chain, lockRef);
+    }
+
+    public int markUtxosSpent(String chain, String lockRef, String spentTxHash) {
+        return jdbcTemplate.update("""
+                        update utxo_record
+                        set state = 'SPENT', spent_tx_hash = ?, updated_at = ?
+                        where chain = ? and lock_ref = ? and state = 'LOCKED'
+                        """,
+                spentTxHash, toTs(now()), chain, lockRef);
+    }
+
+    public int updateUtxoConfirmations(String chain, String txHash, int vout, int confirmations) {
+        return jdbcTemplate.update("""
+                        update utxo_record
+                        set confirmations = greatest(confirmations, ?), updated_at = ?
+                        where chain = ? and tx_hash = ? and vout = ?
+                        """,
+                confirmations, toTs(now()), chain, txHash, vout);
+    }
+
+    public int createWithdrawalOrder(String orderNo, long userId, String chain, String assetSymbol,
+                                     String toAddress, BigDecimal amount, BigDecimal fee) {
+        return jdbcTemplate.update("""
+                        insert into withdrawal_order(order_no, user_id, chain, asset_symbol, to_address,
+                                                     amount, fee, status, created_at, updated_at)
+                        values (?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?)
+                        on conflict (chain, order_no) do nothing
+                        """,
+                orderNo, userId, chain, assetSymbol, toAddress, amount, fee, toTs(now()), toTs(now()));
+    }
+
+    public int updateWithdrawalStatus(String chain, String orderNo, String status, String fromAddress,
+                                      String txHash, String errorMessage) {
+        return jdbcTemplate.update("""
+                        update withdrawal_order
+                        set status = ?,
+                            from_address = coalesce(?, from_address),
+                            tx_hash = coalesce(?, tx_hash),
+                            error_message = ?,
+                            updated_at = ?
+                        where chain = ? and order_no = ?
+                        """,
+                status, fromAddress, txHash, errorMessage, toTs(now()), chain, orderNo);
+    }
+
+    public int markWithdrawalConfirmed(String chain, String orderNo, String txHash) {
+        return jdbcTemplate.update("""
+                        update withdrawal_order
+                        set status = 'CONFIRMED', tx_hash = ?, error_message = null, updated_at = ?
+                        where chain = ? and order_no = ? and status <> 'CONFIRMED'
+                        """,
+                txHash, toTs(now()), chain, orderNo);
+    }
+
+    public Optional<String> findWithdrawalStatus(String chain, String orderNo) {
+        List<String> results = jdbcTemplate.queryForList("""
+                        select status from withdrawal_order where chain = ? and order_no = ?
+                        """, String.class, chain, orderNo);
+        return results.stream().findFirst();
+    }
+
+    public int createCollectionRecord(String collectionNo, String chain, String assetSymbol,
+                                      String fromAddress, String toAddress, BigDecimal amount, BigDecimal fee,
+                                      String rawPayload) {
+        return jdbcTemplate.update("""
+                        insert into collection_record(collection_no, chain, asset_symbol, from_address, to_address,
+                                                      amount, fee, status, raw_payload, created_at, updated_at)
+                        values (?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?, ?)
+                        on conflict (chain, collection_no) do nothing
+                        """,
+                collectionNo, chain, assetSymbol, fromAddress, toAddress, amount, fee, rawPayload,
+                toTs(now()), toTs(now()));
+    }
+
+    public int updateCollectionStatus(String chain, String collectionNo, String status, String txHash,
+                                      String errorMessage, String rawPayload) {
+        return jdbcTemplate.update("""
+                        update collection_record
+                        set status = ?,
+                            tx_hash = coalesce(?, tx_hash),
+                            error_message = ?,
+                            raw_payload = coalesce(?, raw_payload),
+                            updated_at = ?
+                        where chain = ? and collection_no = ?
+                        """,
+                status, txHash, errorMessage, rawPayload, toTs(now()), chain, collectionNo);
+    }
+
+    public int markCollectionConfirmed(String chain, String collectionNo, String txHash) {
+        return jdbcTemplate.update("""
+                        update collection_record
+                        set status = 'CONFIRMED', tx_hash = ?, error_message = null, updated_at = ?
+                        where chain = ? and collection_no = ? and status <> 'CONFIRMED'
+                        """,
+                txHash, toTs(now()), chain, collectionNo);
+    }
+
+    public List<WithdrawTransaction> findStaleLitecoinSigningTransactions(long staleSeconds) {
+        return jdbcTemplate.query("""
+                        select id, tx_id, balance, signature, currency, status, create_date, update_date
+                        from ltc_withdraw_transaction
+                        where status = 1
+                          and update_date < now() - (? * interval '1 second')
+                        order by id
+                        limit 100
+                        """,
+                (rs, rowNum) -> WithdrawTransaction.builder()
+                        .id(rs.getInt("id"))
+                        .txId(rs.getString("tx_id"))
+                        .balance(rs.getBigDecimal("balance"))
+                        .signature(rs.getString("signature"))
+                        .currency(rs.getInt("currency"))
+                        .status(rs.getShort("status"))
+                        .createDate(rs.getTimestamp("create_date"))
+                        .updateDate(rs.getTimestamp("update_date"))
+                        .build(),
+                staleSeconds);
+    }
+
+    public boolean claimLitecoinSigningRecovery(int transactionId, long staleSeconds) {
+        return jdbcTemplate.update("""
+                        update ltc_withdraw_transaction
+                        set update_date = now()
+                        where id = ? and status = 1
+                          and update_date < now() - (? * interval '1 second')
+                        """,
+                transactionId, staleSeconds) == 1;
     }
 
     public int recordEvmTokenTransfer(DepositEvent event, long logIndex, String status) {

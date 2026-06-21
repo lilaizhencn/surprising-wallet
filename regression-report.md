@@ -421,3 +421,61 @@ Deposit scan was executed against the Alchemy Litecoin testnet RPC endpoint (`ht
 ### LTC RPC Config Notes
 
 Alchemy Litecoin testnet uses URL-based API key authentication. The `RpcCommandProcessor.buildRpcClient` method was modified to skip the `Authorization: Basic` header when both `username` and `password` are empty. This change is in `currency-sdks/wallet-client/src/main/java/com/surprising/wallet/client/RpcCommandProcessor.java`.
+
+---
+
+## Litecoin Live Gate Final Update
+
+Generated: 2026-06-21 18:50 Asia/Shanghai.
+
+This section supersedes the earlier Litecoin blocked status.
+
+### Live Chain Results
+
+- Deposit `24aecf832537eb6b9e77722541ab812f3c6f887a75ff40aee83170bd35497f9f`, block `4773130`, `0.01000000 tLTC`: scanned and credited exactly once.
+- Withdrawal `ede1443842edaace31f1f7e4525f436b6bc69aad952bba2646b8c3be1678880c`, block `4773436`: confirmed; destination received `0.00500000 tLTC`.
+- Collection `34c2a03b9696b558c794350039d19ff38f76a44b1a3717f3531be73f31274949`, block `4773439`: confirmed; hot wallet received `0.00499682 tLTC`.
+- Final evidence at tip `4773453`: deposit `324` confirmations, withdrawal `18`, collection `15`.
+
+### State And Reconciliation
+
+- `deposit_record`: one `CREDITED` row for the real deposit; no internal withdrawal/collection deposits.
+- `withdrawal_order`: live order `CONFIRMED`.
+- `collection_record`: one live record, `CONFIRMED`.
+- Initial deposit UTXO and controlled withdrawal UTXO: `SPENT`.
+- Withdrawal change and collection hot-wallet outputs: `AVAILABLE`.
+- Account `9001` ledger: available/total `0.00499680 LTC`, locked `0`.
+- Legacy `user_asset`: balance `0.00499680`, frozen `0`.
+- Negative LTC ledger rows: `0`.
+- Repeated deposit scan, withdrawal done-queue replay, and collection done-queue replay produced no duplicate credit or broadcast.
+- Scanner stop/restart resumed from the persisted chain height.
+
+### Fees
+
+- Withdrawal: `404` litoshi, weight `803`, vsize `201`, approximately `2.01` litoshi/vbyte.
+- Collection: `318` litoshi, weight `632`, vsize `158`, approximately `2.01` litoshi/vbyte.
+- Dust threshold: `1000` litoshi; all created outputs were above dust.
+
+### Regression
+
+- `mvn -q clean install -DskipTests=false`: passed.
+- Full Surefire summary: 64 tests, 0 failures, 0 errors, 11 skipped.
+- Strict `LitecoinLiveFlowIntegrationTest`: 4 tests, 0 failures, 0 errors, 0 skipped.
+- BTC, EVM, and TRON tests passed within the full reactor build.
+- PostgreSQL `select 1`: passed.
+- Incremental migration rerun: passed idempotently.
+- Full `surprising-wallet-init-pgsql.sql`: passed against a disposable empty PostgreSQL database after correcting identity seed collisions.
+- Redis `PING`: `PONG`.
+- wallet-server test profile: started; `/actuator/health` returned `UP`.
+- wallet-sig1 test profile: started.
+- wallet-sig2 test profile: started.
+- All three validation processes were stopped cleanly.
+- Precise private-key scan found no extended private key or WIF key after README/config remediation.
+- Production YAML uses environment placeholders and does not generate keys.
+
+### Commit / Push
+
+- Commit message: `feat: add litecoin wallet flow`.
+- Push: no.
+
+Detailed evidence: `LITECOIN_WALLET_REPORT.md`.

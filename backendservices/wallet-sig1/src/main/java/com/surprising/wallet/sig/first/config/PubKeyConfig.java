@@ -13,9 +13,9 @@ public class PubKeyConfig {
     @PostConstruct public void init(){NODE1=Bip32Node.decode(pub1); NODE2=Bip32Node.decode(pub2); NODE3=Bip32Node.decode(pub3);}
     public String genWitnessScript(Address a){
         CurrencyEnum ce=CurrencyEnum.parseName(a.getCurrency());
-        ECKey k1=NODE1.getChild(44).getChild(ce.getIndex()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
-        ECKey k2=NODE2.getChild(44).getChild(ce.getIndex()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
-        ECKey k3=NODE3.getChild(44).getChild(ce.getIndex()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
+        ECKey k1=NODE1.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
+        ECKey k2=NODE2.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
+        ECKey k3=NODE3.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
         SegwitMultiSignAddressGenerator g=new SegwitMultiSignAddressGenerator(); g.addECKey(k1);g.addECKey(k2);g.addECKey(k3);
         String addr=g.generateAddress(Constants.NET_PARAMS,2);
         log.info("P2WSH witnessScript: bech32={}, addrRef={}",addr,a.getAddress());

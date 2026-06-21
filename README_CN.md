@@ -209,12 +209,14 @@ curl http://localhost:8002/actuator/health
 
 | 表 | 用途 |
 |---|---|
+| `chain_profile` | 新链 runtime id、BIP44 coin type、网络、确认数、fee/dust、RPC/explorer 配置 |
 | `chain_asset` | 链原生资产定义 |
 | `token_registry` | 代币元数据（旧表，作为回退读取） |
 | `token_config` | **主要**代币配置（启用状态、最小充值/提现、归集设置） |
 | `chain_scan_height` | 每条链的扫描器进度跟踪 |
 | `hot_wallet_address` | 每条链/资产的热钱包地址 |
 | `deposit_record` | 跨所有链的归一化充值事件 |
+| `utxo_record` | 按链隔离的 Bitcoin-like UTXO 状态（`AVAILABLE`/`LOCKED`/`SPENT`） |
 | `withdrawal_order` | 多链提现订单 |
 | `evm_nonce` | EVM 每条链/地址的 nonce 管理 |
 | `evm_transaction` / `evm_tx` | EVM 交易记录 |
@@ -241,6 +243,10 @@ VALUES ('bnb-chain-testnet', 'USDC', 'BEP20', '0x你的USDC合约地址', 18, tr
 
 `JdbcTokenRegistry` 优先读取 `token_config`，在找不到时回退到 `token_registry`，保证向后兼容。
 
+新链以 `chain_profile`、`chain_asset`、`token_config` 为配置事实来源。
+`CurrencyEnum` 和 `CurrencyIds` 仅作为 legacy 兼容层；runtime currency id 与
+BIP44 coin type 必须分离。
+
 ---
 
 ## 公私钥配置
@@ -264,7 +270,7 @@ atomex:
 ```yaml
 atomex:
   wallet:
-    masterKey: tprv8ZgxMBicQKsPfBRzVSv3hF81ytoWmdk1de6JEbe5Qg2qpEhLAiqJ6CG76rytrWK6t5ZqeRTzR3eLEAbUM6euY3wB5kV43jSZxfEJ8NcQs3m
+    masterKey: ${ATOMEX_SIG1_MASTER_KEY:}
 ```
 
 **wallet-sig2** 持有第二签名者的**扩展私钥**（`tprv...`）：
@@ -272,7 +278,7 @@ atomex:
 ```yaml
 atomex:
   wallet:
-    masterKey: tprv8ZgxMBicQKsPdSLEi7y5GPRhZ7YsGD5Vuu4YMXR22nc76dadpcK95WdgRSB7V3LAhDEWDBiJg1F5TYXFWHMGZLx99f3zSwWkMWD6MPe627j
+    masterKey: ${ATOMEX_SIG2_MASTER_KEY:}
 ```
 
 ### EVM 单签

@@ -21,6 +21,8 @@ import com.surprising.wallet.service.criteria.AddressExample;
 import com.surprising.wallet.service.criteria.UtxoTransactionExample;
 import com.surprising.wallet.service.criteria.WithdrawRecordExample;
 import com.surprising.wallet.service.criteria.WithdrawTransactionExample;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
+import com.surprising.wallet.service.chain.ltc.LitecoinSettlementService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.bitcoinj.base.exceptions.AddressFormatException;
@@ -52,6 +54,10 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
     protected Constants CONSTANT;
     @Autowired
     protected PubKeyConfig pubKeyConfig;
+    @Autowired
+    protected ChainJdbcRepository chainJdbcRepository;
+    @Autowired
+    protected LitecoinSettlementService litecoinSettlementService;
     protected BtcLikeCommand command;
     protected Long height = 0L;
 
@@ -127,7 +133,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         CurrencyEnum currency = getCurrency();
 
         PubKeyConfig.AddressMetadata metadata = pubKeyConfig.genThreeTwoAddressMetadata(
-                getNetworkParameters(), currency.getBip44CoinType(), userId.intValue(), biz, index);
+                getNetworkParameters(), getBip44CoinType(), userId.intValue(), biz, index);
 
         return Address.builder()
                 .address(metadata.getAddress())
@@ -205,6 +211,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         if (!CollectionUtils.isEmpty(txs)) {
             ShardTable table = ShardTable.builder().prefix(getCurrency().getName()).build();
             utxoTransactionService.batchAddOnDuplicateKey(txs, table);
+            syncUnifiedUtxos(txs);
             dtos = txs.parallelStream().map(this::convertUtxoToDto).collect(Collectors.toList());
         }
         return dtos;
@@ -281,6 +288,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         if (!CollectionUtils.isEmpty(results)) {
             ShardTable table = ShardTable.builder().prefix(getCurrency().getName()).build();
             utxoTransactionService.batchAddOnDuplicateKey(results, table);
+            syncUnifiedUtxos(results);
             dtos = results.parallelStream().map(this::convertUtxoToDto).collect(Collectors.toList());
         }
 
@@ -302,6 +310,18 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         Optional<WithdrawTransaction> oneByExample = withdrawTransactionService.getOneByExample(withExam, table);
         if (oneByExample.isPresent()) {
             WithdrawTransaction withdrawTransaction = oneByExample.get();
+            JSONObject signature = JSONObject.parseObject(withdrawTransaction.getSignature());
+            int confirmations = getConfirm(txid);
+            if (confirmations < currency.getWithdrawConfirmNum()) {
+                if (currency == CurrencyEnum.LTC) {
+                    markLitecoinConfirming(signature, txid);
+                }
+                return;
+            }
+            if (currency == CurrencyEnum.LTC) {
+                litecoinSettlementService.settleConfirmed(withdrawTransaction, txid);
+                return;
+            }
             withdrawTransaction.setStatus(Constants.CONFIRM);
             withdrawTransaction.setUpdateDate(Date.from(Instant.now()));
             withdrawTransactionService.editById(withdrawTransaction, table);
@@ -318,7 +338,10 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
             recordExample.createCriteria().andTxIdEqualTo(txid);
             List<WithdrawRecord> withdrawRecords = recordService.getByExample(recordExample, table);
             if (!org.springframework.util.CollectionUtils.isEmpty(withdrawRecords)) {
-                withdrawRecords.parallelStream().forEach((record -> record.setStatus((byte) Constants.CONFIRM)));
+                withdrawRecords.forEach(record -> {
+                    record.setStatus((byte) Constants.CONFIRM);
+                    record.setUpdateDate(Date.from(Instant.now()));
+                });
                 recordService.batchEdit(withdrawRecords, table);
             }
         }
@@ -394,6 +417,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
     @Override
     public String sendRawTransaction(WithdrawTransaction transaction) {
 
+        String expectedTxId = getTxId(transaction);
         try {
             //更新utxo表中的txid
             UtxoTransactionExample utxoExam = new UtxoTransactionExample();
@@ -405,14 +429,35 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
             //utxo 更新spentTxId
 
             String raw = signature.getString("rawTransaction");
-            String txId = command.sendRawTransaction(raw);
+            String txId;
+            if (transactionExists(expectedTxId)) {
+                txId = expectedTxId;
+            } else {
+                try {
+                    txId = command.sendRawTransaction(raw);
+                } catch (Throwable broadcastError) {
+                    if (!transactionExists(expectedTxId)) {
+                        throw broadcastError;
+                    }
+                    txId = expectedTxId;
+                }
+            }
+            String broadcastTxId = txId;
             utxos.parallelStream().forEach((utxo) -> {
-                utxoTransactionService.setSpentTxId(utxo, txId, getCurrency());
+                utxoTransactionService.setSpentTxId(utxo, broadcastTxId, getCurrency());
             });
-            return txId;
+            return broadcastTxId;
         } catch (Throwable e) {
             AbstractBtcLikeWallet.log.error("sendRawTransaction error", e);
             return "";
+        }
+    }
+
+    private boolean transactionExists(String txId) {
+        try {
+            return getRawTransaction(txId) != null;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -491,6 +536,13 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
                 utxo.setConfirmNum(confirm.longValue() > 0 ? confirm.longValue() : 0);
                 UtxoTransaction tmp = UtxoTransaction.builder().id(utxo.getId()).confirmNum(utxo.getConfirmNum()).build();
                 utxoTransactionService.editById(tmp, table);
+                if (usesUnifiedUtxoModel()) {
+                    chainJdbcRepository.updateUtxoConfirmations(
+                            getCurrency().getName().toUpperCase(Locale.ROOT),
+                            utxo.getTxId(),
+                            utxo.getSeq(),
+                            utxo.getConfirmNum().intValue());
+                }
                 TransactionDTO dto = convertUtxoToDto(utxo);
                 transactionService.saveTransaction(dto);
 
@@ -501,11 +553,70 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
             }
             page.setStartIndex(page.getStartIndex() + PAGE_SIZE);
         }
+        updatePendingWithdrawConfirmations(currency);
 
         log.info("{} 更新交易确认数开始", currency.getName());
     }
 
+    private void updatePendingWithdrawConfirmations(CurrencyEnum currency) {
+        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
+        WithdrawTransactionExample example = new WithdrawTransactionExample();
+        example.createCriteria().andStatusEqualTo(Constants.SENT);
+        List<WithdrawTransaction> pending = withdrawTransactionService.getByExample(example, table);
+        for (WithdrawTransaction transaction : pending) {
+            if (!StringUtils.hasText(transaction.getTxId())) {
+                continue;
+            }
+            int confirmations = getConfirm(transaction.getTxId());
+            if (confirmations >= currency.getWithdrawConfirmNum()) {
+                updateWithdrawTXId(transaction.getTxId(), currency);
+            } else if (currency == CurrencyEnum.LTC && confirmations > 0) {
+                markLitecoinConfirming(JSONObject.parseObject(transaction.getSignature()), transaction.getTxId());
+            }
+        }
+    }
+
+    private void markLitecoinConfirming(JSONObject signature, String txId) {
+        if ("collection".equals(signature.getString("type"))) {
+            chainJdbcRepository.updateCollectionStatus(
+                    "LTC", signature.getString("collectionId"), "CONFIRMING", txId, null,
+                    signature.toJSONString());
+            return;
+        }
+        List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
+        records.forEach(record -> chainJdbcRepository.updateWithdrawalStatus(
+                "LTC", record.getWithdrawId(), "CONFIRMING", null, txId, null));
+    }
+
     protected String getNetworkName() {
         return getNetworkParameters().getPaymentProtocolId();
+    }
+
+    protected boolean usesUnifiedUtxoModel() {
+        return getCurrency() == CurrencyEnum.LTC;
+    }
+
+    protected int getBip44CoinType() {
+        return getCurrency().getBip44CoinType();
+    }
+
+    private void syncUnifiedUtxos(List<UtxoTransaction> utxos) {
+        if (!usesUnifiedUtxoModel()) {
+            return;
+        }
+        String chain = getCurrency().getName().toUpperCase(Locale.ROOT);
+        String symbol = chain;
+        for (UtxoTransaction utxo : utxos) {
+            chainJdbcRepository.upsertUtxo(
+                    chain,
+                    symbol,
+                    utxo.getTxId(),
+                    utxo.getSeq(),
+                    utxo.getAddress(),
+                    utxo.getBalance(),
+                    utxo.getBlockHeight(),
+                    utxo.getConfirmNum().intValue(),
+                    Boolean.TRUE.equals(utxo.getCredited()));
+        }
     }
 }

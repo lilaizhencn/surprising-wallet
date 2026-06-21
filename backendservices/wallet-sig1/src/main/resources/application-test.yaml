@@ -1,8 +1,7 @@
 atomex:
   wallet:
     network: test
-    masterKey: tprv8ZgxMBicQKsPfBRzVSv3hF81ytoWmdk1de6JEbe5Qg2qpEhLAiqJ6CG76rytrWK6t5ZqeRTzR3eLEAbUM6euY3wB5kV43jSZxfEJ8NcQs3m
+    masterKey: ${ATOMEX_SIG1_MASTER_KEY:}
     pubKey1: tpubD6NzVbkrYhZ4YeTnP6ae6en8YvKSvxvvCwh5X7gNpwqEeix6o7etGgsyGywcB9gS1bGTmC4WfLKAdK6vxDEzedd7PMRLcYk5yZLj5JkLAVB
     pubKey2: tpubD6NzVbkrYhZ4WuN2bmdffo5p894oRYGQVCfKe3TKT4QVw7qQT18jG1FYbYyB3ePESejLdfaEFMRpsYGVjb4Bh6HiiWaSU8iJRVE46EirNBT
     pubKey3: tpubD6NzVbkrYhZ4XKeuSHwv2p3snJxWjacFsu2rEEht2qMaM5FYV2RkbMaJEYNZGK7B3i8D46RTs83DJNPh2Jd5MzXivXCiHLbqAFKv8MKxrC4
-

@@ -4,6 +4,7 @@ import com.surprising.wallet.common.currency.CurrencyEnum;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.BestBlockHeight;
 import com.surprising.wallet.service.criteria.BestBlockHeightExample;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.BestBlockHeightService;
 import com.surprising.wallet.service.service.TransactionService;
 import com.surprising.wallet.service.wallet.AbstractWallet;
@@ -28,6 +29,8 @@ abstract public class AbstractScanBlockJob {
     protected TransactionService txService;
     @Autowired
     BestBlockHeightService bestHeightService;
+    @Autowired
+    ChainJdbcRepository chainJdbcRepository;
 
     @Value("${atomex.app.env.name}")
     private String env;
@@ -37,6 +40,9 @@ abstract public class AbstractScanBlockJob {
 
     @Value("${atomex.wallet.scan.start-height:0}")
     private Long configuredStartHeight;
+
+    @Value("${atomex.wallet.scan.max-blocks-per-run:0}")
+    private Long maxBlocksPerRun;
 
     public void execute() {
 
@@ -77,17 +83,24 @@ abstract public class AbstractScanBlockJob {
             }
 
             //循环扫描某个阶段的区块
-            long scanBegin = Math.max(0L, storedHeight.getHeight() - wallet.getCurrency().getDepositConfirmNum());
-            for (long begin = scanBegin; begin <= bestHeight; begin++) {
+            long scanBegin = wallet.getCurrency() == CurrencyEnum.LTC
+                    ? Math.max(0L, storedHeight.getHeight() + 1L)
+                    : Math.max(0L, storedHeight.getHeight() - wallet.getCurrency().getDepositConfirmNum());
+            long scanEnd = bestHeight;
+            if (maxBlocksPerRun != null && maxBlocksPerRun > 0) {
+                scanEnd = Math.min(scanEnd, scanBegin + maxBlocksPerRun - 1L);
+            }
+            long lastScannedHeight = storedHeight.getHeight();
+            for (long begin = scanBegin; begin <= scanEnd; begin++) {
 
                 //具体扫描区块处理逻辑
                 List<TransactionDTO> transactions = wallet.findRelatedTxs(begin);
 
                 //当前区块没有交易数据 进入下一区块
                 if (transactions == null) {
-                    bestHeight = begin - 1;
                     break;
                 }
+                lastScannedHeight = begin;
                 if (transactions.size() == 0) {
                     continue;
                 }
@@ -97,7 +110,8 @@ abstract public class AbstractScanBlockJob {
             }
 
             //更新数据库最新扫描完的区块
-            updateStoreHeight(bestHeight, storedHeight);
+            updateStoreHeight(lastScannedHeight, storedHeight);
+            bestHeight = lastScannedHeight;
 
             //更新币种余额
             wallet.updateTotalCurrencyBalance();
@@ -125,6 +139,10 @@ abstract public class AbstractScanBlockJob {
         storedHeight.setHeight(bestHeight);
         storedHeight.setUpdateDate(Date.from(Instant.now()));
         bestHeightService.editById(storedHeight);
+        if (wallet.getCurrency() == CurrencyEnum.LTC) {
+            long safeHeight = Math.max(0L, bestHeight - wallet.getCurrency().getDepositConfirmNum());
+            chainJdbcRepository.updateScanHeight("LTC", "ltc-block-scanner", bestHeight, safeHeight);
+        }
     }
 
     /**

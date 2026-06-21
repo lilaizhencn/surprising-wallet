@@ -14,6 +14,7 @@ atomex:
     server: ${LTC_TESTNET_RPC_URL:http://127.0.0.1:19332}
     server.user: ${LTC_TESTNET_RPC_USER:}
     server.pwd: ${LTC_TESTNET_RPC_PASSWORD:}
+    esplora-url: ${LTC_TESTNET_ESPLORA_URL:https://litecoinspace.org/testnet/api}
   eth:
     server: https://ethereum-sepolia-rpc.publicnode.com
     chain-id: 11155111

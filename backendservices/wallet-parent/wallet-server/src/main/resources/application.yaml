@@ -16,7 +16,7 @@ spring:
     driver-class-name: org.postgresql.Driver
     url: jdbc:postgresql://127.0.0.1:5432/wallet
     username: wallet
-    password: wallet123
+    password: ${WALLET_DB_PASSWORD:}
     hikari:
       maximum-pool-size: 20
   data:
@@ -71,6 +71,7 @@ atomex:
     server: ${LTC_TESTNET_RPC_URL:http://127.0.0.1:19332}
     server.user: ${LTC_TESTNET_RPC_USER:}
     server.pwd: ${LTC_TESTNET_RPC_PASSWORD:}
+    esplora-url: ${LTC_TESTNET_ESPLORA_URL:https://litecoinspace.org/testnet/api}
   # eth config
   eth:
     server: https://ethereum-sepolia-rpc.publicnode.com

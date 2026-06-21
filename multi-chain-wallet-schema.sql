@@ -17,6 +17,73 @@ create table if not exists chain_asset (
     unique (chain, symbol)
 );
 
+create table if not exists chain_profile (
+    id bigserial primary key,
+    chain varchar(32) not null,
+    network varchar(32) not null,
+    family varchar(32) not null,
+    runtime_currency_id integer not null,
+    bip44_coin_type integer not null,
+    native_symbol varchar(32) not null,
+    rpc_url varchar(512),
+    explorer_url varchar(512),
+    deposit_confirmations integer not null default 1,
+    withdraw_confirmations integer not null default 1,
+    default_fee_rate bigint,
+    dust_threshold bigint,
+    enabled boolean not null default true,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (chain, network),
+    unique (runtime_currency_id, network)
+);
+
+insert into chain_profile(
+    chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+    rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+    default_fee_rate, dust_threshold, enabled
+)
+values (
+    'LTC', 'testnet', 'bitcoin-like', 24, 2, 'LTC',
+    null, 'https://litecoinspace.org/testnet/tx/',
+    1, 6, 2, 1000, true
+)
+on conflict (chain, network) do update
+set family = excluded.family,
+    runtime_currency_id = excluded.runtime_currency_id,
+    bip44_coin_type = excluded.bip44_coin_type,
+    native_symbol = excluded.native_symbol,
+    explorer_url = excluded.explorer_url,
+    deposit_confirmations = excluded.deposit_confirmations,
+    withdraw_confirmations = excluded.withdraw_confirmations,
+    default_fee_rate = excluded.default_fee_rate,
+    dust_threshold = excluded.dust_threshold,
+    enabled = excluded.enabled,
+    updated_at = now();
+
+insert into chain_profile(
+    chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+    rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+    default_fee_rate, dust_threshold, enabled
+)
+values (
+    'LTC', 'mainnet', 'bitcoin-like', 24, 2, 'LTC',
+    null, 'https://litecoinspace.org/tx/',
+    1, 6, 2, 1000, true
+)
+on conflict (chain, network) do update
+set family = excluded.family,
+    runtime_currency_id = excluded.runtime_currency_id,
+    bip44_coin_type = excluded.bip44_coin_type,
+    native_symbol = excluded.native_symbol,
+    explorer_url = excluded.explorer_url,
+    deposit_confirmations = excluded.deposit_confirmations,
+    withdraw_confirmations = excluded.withdraw_confirmations,
+    default_fee_rate = excluded.default_fee_rate,
+    dust_threshold = excluded.dust_threshold,
+    enabled = excluded.enabled,
+    updated_at = now();
+
 insert into chain_asset(chain, symbol, asset_kind, decimals, native_asset, active, min_transfer, min_withdraw)
 values ('LTC', 'LTC', 'NATIVE', 8, true, true, 100000, 100000)
 on conflict (chain, symbol) do update
@@ -133,6 +200,30 @@ create table if not exists chain_scan_height (
     unique (chain, scanner_name)
 );
 
+create table if not exists utxo_record (
+    id bigserial primary key,
+    chain varchar(32) not null,
+    asset_symbol varchar(32) not null,
+    tx_hash varchar(128) not null,
+    vout integer not null,
+    address varchar(160) not null,
+    amount numeric(78, 18) not null,
+    block_height bigint not null,
+    confirmations integer not null default 0,
+    state varchar(32) not null default 'AVAILABLE',
+    lock_ref varchar(128),
+    spent_tx_hash varchar(128),
+    credited boolean not null default false,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (chain, tx_hash, vout)
+);
+
+create index if not exists idx_utxo_record_spendable
+    on utxo_record(chain, asset_symbol, state, confirmations);
+create index if not exists idx_utxo_record_address
+    on utxo_record(chain, address);
+
 create table if not exists hot_wallet_address (
     id bigserial primary key,
     chain varchar(32) not null,
@@ -182,9 +273,19 @@ create table if not exists withdrawal_order (
     status varchar(32) not null default 'CREATED',
     error_message text,
     created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now(),
-    unique (order_no)
+    updated_at timestamptz not null default now()
 );
+
+do $$
+begin
+    if exists (select 1 from pg_constraint where conname = 'withdrawal_order_order_no_key') then
+        alter table withdrawal_order drop constraint withdrawal_order_order_no_key;
+    end if;
+    if not exists (select 1 from pg_constraint where conname = 'uq_withdrawal_order_chain_order_no') then
+        alter table withdrawal_order
+            add constraint uq_withdrawal_order_chain_order_no unique (chain, order_no);
+    end if;
+end $$;
 
 create table if not exists evm_nonce (
     id bigserial primary key,
@@ -327,9 +428,19 @@ create table if not exists collection_record (
     raw_payload text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
-    unique (collection_no),
     unique (chain, asset_symbol, from_address, to_address, tx_hash)
 );
+
+do $$
+begin
+    if exists (select 1 from pg_constraint where conname = 'collection_record_collection_no_key') then
+        alter table collection_record drop constraint collection_record_collection_no_key;
+    end if;
+    if not exists (select 1 from pg_constraint where conname = 'uq_collection_record_chain_collection_no') then
+        alter table collection_record
+            add constraint uq_collection_record_chain_collection_no unique (chain, collection_no);
+    end if;
+end $$;
 
 create table if not exists gas_topup_task (
     id bigserial primary key,

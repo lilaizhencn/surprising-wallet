@@ -13,6 +13,7 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.service.criteria.UtxoTransactionExample;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.criteria.WithdrawRecordExample;
 import com.surprising.wallet.service.service.AddressService;
 import com.surprising.wallet.service.service.UtxoTransactionService;
@@ -49,6 +50,8 @@ abstract public class AbstractBatchWithdrawJob {
     WalletContext walletContext;
     @Autowired
     WithdrawTransactionService transactionService;
+    @Autowired
+    ChainJdbcRepository chainJdbcRepository;
 
     private static final Set<CurrencyEnum> SINGLE_SIG_CURRENCY = Collections.emptySet();
     private static final int DEFAULT_FEE_RATE = 10;
@@ -179,6 +182,24 @@ abstract public class AbstractBatchWithdrawJob {
         transactionService.add(transaction, table);
 
         String transactionId = transaction.getId().toString();
+
+        if (currency == LTC) {
+            for (UtxoTransaction utxo : utxos) {
+                int locked = chainJdbcRepository.lockUtxo(
+                        "LTC", utxo.getTxId(), utxo.getSeq(), transactionId);
+                if (locked != 1) {
+                    throw new IllegalStateException(
+                            "failed to lock unified LTC UTXO " + utxo.getTxId() + ":" + utxo.getSeq());
+                }
+            }
+            String fromAddress = addresses.isEmpty() ? null : addresses.get(0).getAddress();
+            records.forEach(record -> {
+                chainJdbcRepository.updateWithdrawalStatus(
+                        "LTC", record.getWithdrawId(), "UTXO_LOCKED", fromAddress, null, null);
+                chainJdbcRepository.updateWithdrawalStatus(
+                        "LTC", record.getWithdrawId(), "SIGNING", fromAddress, null, null);
+            });
+        }
 
         //更新utxo和WithdrawRecord的status
         List<UtxoTransaction> spends = utxos.parallelStream().map((utxo) -> UtxoTransaction.builder()

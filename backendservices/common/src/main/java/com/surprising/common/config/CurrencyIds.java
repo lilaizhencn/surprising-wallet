@@ -8,7 +8,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 币种类配置文件,数据库一致
+ * Legacy constants retained for old jobs and SAFE/token compatibility.
+ *
+ * <p>Do not allocate new-chain runtime ids here and do not treat these constants as the
+ * source of truth. New chains use {@code chain_profile.runtime_currency_id}. In particular,
+ * this class's historical {@code LTC = 2} conflicts with modern wallet ids and must not be
+ * used by the LTC/DOGE/BCH wallet flow.</p>
  *
  * @author lilaizhencn
  */

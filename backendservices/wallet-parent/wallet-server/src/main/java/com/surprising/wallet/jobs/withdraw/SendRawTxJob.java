@@ -38,13 +38,17 @@ public class SendRawTxJob implements Runnable {
                 List<String> withdrawStr = REDIS.lRange(key, 0L, COUNT);
                 if (!CollectionUtils.isEmpty(withdrawStr)) {
                     log.info("广播交易开始 待广播数量:{}", withdrawStr.size());
-                    withdrawStr.parallelStream().forEach((str) -> {
+                    java.util.ArrayList<String> retry = new java.util.ArrayList<>();
+                    withdrawStr.forEach((str) -> {
                         JSONObject json = JSONObject.parseObject(str);
                         WithdrawTransaction transaction = json.toJavaObject(WithdrawTransaction.class);
-                        txService.sendWithdrawTransaction(transaction);
+                        if (!txService.sendWithdrawTransaction(transaction)) {
+                            retry.add(str);
+                        }
                     });
                     log.info("广播交易结束 数量:{}", withdrawStr.size());
                     REDIS.lTrim(key, withdrawStr.size(), -1L);
+                    retry.forEach(str -> REDIS.rPush(key, str));
                     continue;
                 }
 

@@ -27,12 +27,6 @@ public class KeyGeneratorTest {
         pubKey = node3.pubSerialize(0, false);
         System.out.println("priKey-3:" + priKey);
         System.out.println("pubKey-3:" + pubKey);
-//        priKey-1:tprv8ZgxMBicQKsPfBRzVSv3hF81ytoWmdk1de6JEbe5Qg2qpEhLAiqJ6CG76rytrWK6t5ZqeRTzR3eLEAbUM6euY3wB5kV43jSZxfEJ8NcQs3m
-//        pubKey-1:tpubD6NzVbkrYhZ4YeTnP6ae6en8YvKSvxvvCwh5X7gNpwqEeix6o7etGgsyGywcB9gS1bGTmC4WfLKAdK6vxDEzedd7PMRLcYk5yZLj5JkLAVB
-//        priKey-2:tprv8ZgxMBicQKsPdSLEi7y5GPRhZ7YsGD5Vuu4YMXR22nc76dadpcK95WdgRSB7V3LAhDEWDBiJg1F5TYXFWHMGZLx99f3zSwWkMWD6MPe627j
-//        pubKey-2:tpubD6NzVbkrYhZ4WuN2bmdffo5p894oRYGQVCfKe3TKT4QVw7qQT18jG1FYbYyB3ePESejLdfaEFMRpsYGVjb4Bh6HiiWaSU8iJRVE46EirNBT
-//        priKey-3:tprv8ZgxMBicQKsPdrd7YeHKdQPmDHSaaFRMJbS4wifacZZBWazmrdcAQrxS4QBuxy3fyCfVV7bWNKwr4XX5pgTSLJAsdB7kLsu7NgjSFwPLCDB
-//        pubKey-3:tpubD6NzVbkrYhZ4XKeuSHwv2p3snJxWjacFsu2rEEht2qMaM5FYV2RkbMaJEYNZGK7B3i8D46RTs83DJNPh2Jd5MzXivXCiHLbqAFKv8MKxrC4
     }
 
 

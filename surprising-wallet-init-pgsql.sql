@@ -198,17 +198,199 @@ CREATE TABLE wallet_multisig_config (
   UNIQUE (currency, network, script_type)
 );
 
+CREATE TABLE chain_asset (
+  id               BIGSERIAL PRIMARY KEY,
+  chain            VARCHAR(32) NOT NULL,
+  symbol           VARCHAR(32) NOT NULL,
+  asset_kind       VARCHAR(32) NOT NULL,
+  contract_address VARCHAR(128),
+  decimals         INTEGER NOT NULL DEFAULT 18,
+  native_asset     BOOLEAN NOT NULL DEFAULT FALSE,
+  active           BOOLEAN NOT NULL DEFAULT TRUE,
+  min_transfer     NUMERIC(78,0),
+  min_withdraw     NUMERIC(78,0),
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (chain, symbol)
+);
+
+CREATE TABLE chain_profile (
+  id                       BIGSERIAL PRIMARY KEY,
+  chain                    VARCHAR(32) NOT NULL,
+  network                  VARCHAR(32) NOT NULL,
+  family                   VARCHAR(32) NOT NULL,
+  runtime_currency_id      INTEGER NOT NULL,
+  bip44_coin_type          INTEGER NOT NULL,
+  native_symbol            VARCHAR(32) NOT NULL,
+  rpc_url                  VARCHAR(512),
+  explorer_url             VARCHAR(512),
+  deposit_confirmations    INTEGER NOT NULL DEFAULT 1,
+  withdraw_confirmations   INTEGER NOT NULL DEFAULT 1,
+  default_fee_rate         BIGINT,
+  dust_threshold           BIGINT,
+  enabled                  BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (chain, network),
+  UNIQUE (runtime_currency_id, network)
+);
+
+CREATE TABLE chain_scan_height (
+  id           BIGSERIAL PRIMARY KEY,
+  chain        VARCHAR(32) NOT NULL,
+  scanner_name VARCHAR(64) NOT NULL,
+  best_height  BIGINT NOT NULL DEFAULT 0,
+  safe_height  BIGINT NOT NULL DEFAULT 0,
+  status       VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (chain, scanner_name)
+);
+
+CREATE TABLE hot_wallet_address (
+  id            BIGSERIAL PRIMARY KEY,
+  chain         VARCHAR(32) NOT NULL,
+  asset_symbol  VARCHAR(32) NOT NULL,
+  address       VARCHAR(160) NOT NULL,
+  address_index BIGINT NOT NULL DEFAULT 0,
+  wallet_role   VARCHAR(32) NOT NULL DEFAULT 'HOT_WITHDRAW',
+  enabled       BOOLEAN NOT NULL DEFAULT TRUE,
+  kms_key_ref   VARCHAR(256),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (chain, asset_symbol, wallet_role)
+);
+
+CREATE TABLE deposit_record (
+  id               BIGSERIAL PRIMARY KEY,
+  chain            VARCHAR(32) NOT NULL,
+  asset_symbol     VARCHAR(32) NOT NULL,
+  tx_hash          VARCHAR(128) NOT NULL,
+  log_index        BIGINT NOT NULL DEFAULT 0,
+  from_address     VARCHAR(160),
+  to_address       VARCHAR(160) NOT NULL,
+  contract_address VARCHAR(128),
+  amount           NUMERIC(78,18) NOT NULL,
+  block_height     BIGINT NOT NULL,
+  confirmations    INTEGER NOT NULL DEFAULT 0,
+  status           VARCHAR(32) NOT NULL DEFAULT 'DETECTED',
+  credited         BOOLEAN NOT NULL DEFAULT FALSE,
+  credited_at      TIMESTAMPTZ,
+  raw_payload      TEXT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (chain, tx_hash, log_index)
+);
+
+CREATE TABLE withdrawal_order (
+  id            BIGSERIAL PRIMARY KEY,
+  order_no      VARCHAR(96) NOT NULL,
+  user_id       BIGINT NOT NULL,
+  chain         VARCHAR(32) NOT NULL,
+  asset_symbol  VARCHAR(32) NOT NULL,
+  from_address  VARCHAR(160),
+  to_address    VARCHAR(160) NOT NULL,
+  amount        NUMERIC(78,18) NOT NULL,
+  fee           NUMERIC(78,18) NOT NULL DEFAULT 0,
+  tx_hash       VARCHAR(128),
+  status        VARCHAR(32) NOT NULL DEFAULT 'CREATED',
+  error_message TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (chain, order_no)
+);
+
+CREATE TABLE collection_record (
+  id             BIGSERIAL PRIMARY KEY,
+  collection_no  VARCHAR(96) NOT NULL,
+  chain          VARCHAR(32) NOT NULL,
+  asset_symbol   VARCHAR(32) NOT NULL,
+  from_address   VARCHAR(160) NOT NULL,
+  to_address     VARCHAR(160) NOT NULL,
+  amount         NUMERIC(78,18) NOT NULL DEFAULT 0,
+  fee            NUMERIC(78,18) NOT NULL DEFAULT 0,
+  tx_hash        VARCHAR(128),
+  status         VARCHAR(32) NOT NULL DEFAULT 'CREATED',
+  error_message  TEXT,
+  raw_payload    TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (chain, collection_no),
+  UNIQUE (chain, asset_symbol, from_address, to_address, tx_hash)
+);
+
+CREATE TABLE ledger_balance (
+  id                BIGSERIAL PRIMARY KEY,
+  chain             VARCHAR(32) NOT NULL,
+  asset_symbol      VARCHAR(32) NOT NULL,
+  account_id        VARCHAR(128) NOT NULL,
+  available_balance NUMERIC(78,18) NOT NULL DEFAULT 0,
+  locked_balance    NUMERIC(78,18) NOT NULL DEFAULT 0,
+  total_balance     NUMERIC(78,18) NOT NULL DEFAULT 0,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (chain, asset_symbol, account_id)
+);
+
+CREATE TABLE utxo_record (
+  id            BIGSERIAL PRIMARY KEY,
+  chain         VARCHAR(32) NOT NULL,
+  asset_symbol  VARCHAR(32) NOT NULL,
+  tx_hash       VARCHAR(128) NOT NULL,
+  vout          INTEGER NOT NULL,
+  address       VARCHAR(160) NOT NULL,
+  amount        NUMERIC(78,18) NOT NULL,
+  block_height  BIGINT NOT NULL,
+  confirmations INTEGER NOT NULL DEFAULT 0,
+  state         VARCHAR(32) NOT NULL DEFAULT 'AVAILABLE',
+  lock_ref      VARCHAR(128),
+  spent_tx_hash VARCHAR(128),
+  credited      BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (chain, tx_hash, vout)
+);
+
+CREATE INDEX idx_utxo_record_spendable
+  ON utxo_record(chain, asset_symbol, state, confirmations);
+CREATE INDEX idx_utxo_record_address
+  ON utxo_record(chain, address);
+
 INSERT INTO best_block_height (id, currency, height, interval_time)
 VALUES (1, 1, 0, 300000);
 
-INSERT INTO best_block_height (currency, height, interval_time)
-VALUES (24, 0, 300000);
+INSERT INTO best_block_height (id, currency, height, interval_time)
+VALUES (2, 24, 0, 300000);
 
 INSERT INTO currency_balance (id, currency_index, balance)
 VALUES (1, 1, 0);
 
-INSERT INTO currency_balance (currency_index, balance)
-VALUES (24, 0);
+INSERT INTO currency_balance (id, currency_index, balance)
+VALUES (2, 24, 0);
+
+INSERT INTO chain_asset(
+  chain, symbol, asset_kind, decimals, native_asset, active, min_transfer, min_withdraw
+) VALUES (
+  'LTC', 'LTC', 'NATIVE', 8, TRUE, TRUE, 100000, 100000
+);
+
+INSERT INTO chain_profile(
+  chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+  explorer_url, deposit_confirmations, withdraw_confirmations,
+  default_fee_rate, dust_threshold, enabled
+) VALUES (
+  'LTC', 'testnet', 'bitcoin-like', 24, 2, 'LTC',
+  'https://litecoinspace.org/testnet/tx/', 1, 6, 2, 1000, TRUE
+);
+
+INSERT INTO chain_profile(
+  chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+  explorer_url, deposit_confirmations, withdraw_confirmations,
+  default_fee_rate, dust_threshold, enabled
+) VALUES (
+  'LTC', 'mainnet', 'bitcoin-like', 24, 2, 'LTC',
+  'https://litecoinspace.org/tx/', 1, 6, 2, 1000, TRUE
+);
 
 INSERT INTO wallet_multisig_config (
   id, currency, network, script_type, required_signatures, total_pubkeys,
@@ -227,9 +409,10 @@ INSERT INTO wallet_multisig_config (
 );
 
 INSERT INTO wallet_multisig_config (
-  currency, network, script_type, required_signatures, total_pubkeys,
+  id, currency, network, script_type, required_signatures, total_pubkeys,
   pub_key_1, pub_key_2, pub_key_3, derivation_template
 ) VALUES (
+  2,
   24,
   'litecoin-testnet',
   'P2WSH',
@@ -269,10 +452,10 @@ INSERT INTO system_param (param_key, param_value, remark) VALUES
   ('wallet.fee_rate_sat_vb', '10', 'Default fee rate in sat/vB'),
   ('wallet.scan_start_height', '0', 'Initial scan height');
 
-SELECT setval(pg_get_serial_sequence('best_block_height', 'id'), 1, true);
-SELECT setval(pg_get_serial_sequence('currency_balance', 'id'), 1, true);
+SELECT setval(pg_get_serial_sequence('best_block_height', 'id'), 2, true);
+SELECT setval(pg_get_serial_sequence('currency_balance', 'id'), 2, true);
 SELECT setval(pg_get_serial_sequence('btc_address', 'id'), 1, true);
-SELECT setval(pg_get_serial_sequence('wallet_multisig_config', 'id'), 1, true);
+SELECT setval(pg_get_serial_sequence('wallet_multisig_config', 'id'), 2, true);
 SELECT setval(pg_get_serial_sequence('system_param', 'id'), 6, true);
 
 DO $$
@@ -291,6 +474,15 @@ BEGIN
     ALTER TABLE user_asset OWNER TO wallet;
     ALTER TABLE system_param OWNER TO wallet;
     ALTER TABLE wallet_multisig_config OWNER TO wallet;
+    ALTER TABLE chain_asset OWNER TO wallet;
+    ALTER TABLE chain_profile OWNER TO wallet;
+    ALTER TABLE chain_scan_height OWNER TO wallet;
+    ALTER TABLE hot_wallet_address OWNER TO wallet;
+    ALTER TABLE deposit_record OWNER TO wallet;
+    ALTER TABLE withdrawal_order OWNER TO wallet;
+    ALTER TABLE collection_record OWNER TO wallet;
+    ALTER TABLE ledger_balance OWNER TO wallet;
+    ALTER TABLE utxo_record OWNER TO wallet;
     GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO wallet;
     GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO wallet;
   END IF;

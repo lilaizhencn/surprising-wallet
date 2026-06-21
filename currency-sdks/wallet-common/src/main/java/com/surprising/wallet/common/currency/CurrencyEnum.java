@@ -11,6 +11,14 @@ import java.util.Set;
 import static com.surprising.wallet.common.currency.CurrencyEnum.Decimal.*;
 
 /**
+ * Legacy wallet routing compatibility only.
+ *
+ * <p>Do not use this enum as the source of truth for new chains. Runtime currency ids,
+ * BIP44 coin types, confirmation policy, fee policy, and network metadata for new chains
+ * are loaded from {@code chain_profile}/{@code chain_asset} plus application configuration.
+ * Entries remain here only because legacy sharded tables, Redis queues, and signing jobs
+ * still route by the historical integer id.</p>
+ *
  * @author lilaizhen
  * @data 27/03/2018
  */

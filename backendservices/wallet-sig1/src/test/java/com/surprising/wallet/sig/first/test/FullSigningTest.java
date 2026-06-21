@@ -3,6 +3,7 @@ package com.surprising.wallet.sig.first.test;
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.pojo.*;
 import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sig.first.config.PubKeyConfig;
 import com.surprising.wallet.sig.first.service.BtcFirstSignService;
 import org.bitcoinj.core.Transaction;
@@ -15,14 +16,14 @@ import java.util.List;
 import java.util.Properties;
 
 public class FullSigningTest {
-    // sig1 的私钥 (hot wallet — KEY 1 of 2-of-3)
-    static final String SIG1_MK = "tprv8ZgxMBicQKsPdbs7SqHoQoG3z9zbLhaqKkC6puxUCiT6iR656FezRhnAhdykJjLanDqqZRGimT8yvHM7sZmWAXeEvk8UPxVMSZ1sh6uJFJc";
-    // sig2 的私钥 (cold wallet — KEY 2 of 2-of-3)
-    static final String SIG2_MK = "tprv8ZgxMBicQKsPdMCWhEWHyiZCAu45dhRgupjpWBJ4vaYojzWURTemEm51Kf8tGQVcuerPJhCh98aCL9E81C2je6k3aeT7AJ5xELrVMprXf8U";
-    // KEY 3 的 xpub (用于生成多签地址，不在线)
-    static final String PK1 = "tpubD6NzVbkrYhZ4X4tuLUxPpCvAZBWXW2mju3nt7RzmczFVYuLqieUacCQ2snjhu8zE9EagGrkG5gxthYUFhpgYx4bEVM9dYraywwZHycJNg5d";
-    static final String PK2 = "tpubD6NzVbkrYhZ4WpEJatAtP8DJjva1o2cbV8LbnhLNLrMCaUmF3rUMRFgsVneh53JipwKMwUp3QGGzqff7avf5M9QLR7RZaEy3ha5ihtrkDRQ";
-    static final String PK3 = "tpubD6NzVbkrYhZ4XDJNtex5Gm1Hzj4bbewgop6stxxZv4trZ3YFdLk1p9VvzQtYTk8Lf4BMo5pWA5TwJGgFbbEFaBr5Ft951V2wYQcMLWQNji4";
+    private static final Bip32Node ROOT1 = testRoot((byte) 0x11);
+    private static final Bip32Node ROOT2 = testRoot((byte) 0x22);
+    private static final Bip32Node ROOT3 = testRoot((byte) 0x33);
+    static final String SIG1_MK = ROOT1.privSerialize(0, false);
+    static final String SIG2_MK = ROOT2.privSerialize(0, false);
+    static final String PK1 = ROOT1.pubSerialize(0, false);
+    static final String PK2 = ROOT2.pubSerialize(0, false);
+    static final String PK3 = ROOT3.pubSerialize(0, false);
 
     public static void main(String[] args) throws Exception {
         System.setProperty("atomex.wallet.masterKey", SIG1_MK);
@@ -133,5 +134,11 @@ public class FullSigningTest {
                   f.setAccessible(true); f.set(obj, val); return; }
             catch (NoSuchFieldException e) {}
         }} catch(Exception e) { throw new RuntimeException(e); }
+    }
+
+    private static Bip32Node testRoot(byte fill) {
+        byte[] seed = new byte[32];
+        java.util.Arrays.fill(seed, fill);
+        return Bip32Node.getMasterKey(seed);
     }
 }

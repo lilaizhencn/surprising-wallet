@@ -1,255 +1,261 @@
 # Litecoin Wallet Report
 
-Generated: 2026-06-21 07:50 Asia/Shanghai.
+Generated: 2026-06-21 18:50 Asia/Shanghai.
 
-## Overall Result
+## 1. Overall Conclusion
 
-- Litecoin implementation is code-complete for the current BTC-like P2WSH UTXO architecture.
-- Local unit/regression tests passed.
-- Full Maven build passed.
-- Three runnable services started successfully with `--spring.profiles.active=test`.
-- Live Litecoin testnet deposit/withdraw/collection is blocked by missing funded Litecoin testnet Core-compatible JSON-RPC.
-- Commit was not created because the live Litecoin testnet flow gate is not satisfied.
+- Litecoin testnet live gate passed using real funds and LitecoinSpace testnet Esplora.
+- Deposit, withdrawal, collection, confirmation settlement, idempotency, UTXO locking/release, scanner recovery, and ledger reconciliation passed.
+- Full Maven regression passed: 64 tests, 0 failures, 0 errors, 11 skipped. The separately enabled live gate passed 4 tests with 0 skipped.
+- PostgreSQL, Redis, wallet-server health, wallet-sig1 startup, and wallet-sig2 startup passed.
+- No DOGE or BCH implementation was started before this LTC gate.
 - Push: no.
 
-## Design Summary
+## 2. Modified Files
 
-- Litecoin is isolated as `ChainType.LTC` and `CurrencyEnum.LTC`.
-- Runtime legacy currency id is `24` to avoid the historical `CurrencyEnum`/legacy id conflict with ETH.
-- HD derivation uses BIP44 coin type `2` through `CurrencyEnum#getBip44CoinType()`.
-- BTC runtime id, BTC witness structure, BTC multisig script shape, and BTC signing queues were not changed.
-- Existing BTC-like infrastructure is reused only through chain-specific network parameters and fee policy.
-
-## Modified Files
-
+- `README.md`
+- `README_CN.md`
+- `LITECOIN_WALLET_REPORT.md`
+- `regression-report.md`
+- `backendservices/common/src/main/java/com/surprising/common/config/CurrencyIds.java`
+- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/deposit/AbstractScanBlockJob.java`
+- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/transfer/LtcCollectionJob.java`
 - `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/withdraw/AbstractBatchWithdrawJob.java`
-- `backendservices/wallet-parent/wallet-server/src/main/resources/application.yaml`
-- `backendservices/wallet-parent/wallet-server/src/main/resources/application-test.yaml`
+- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/withdraw/BatchLtcWithdrawJob.java`
+- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/withdraw/SendRawTxJob.java`
 - `backendservices/wallet-parent/wallet-server/src/main/resources/application-prod.yaml`
-- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/config/PubKeyConfig.java`
+- `backendservices/wallet-parent/wallet-server/src/main/resources/application-test.yaml`
+- `backendservices/wallet-parent/wallet-server/src/main/resources/application.yaml`
+- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/dao/ChainJdbcRepository.java`
+- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/service/TransactionService.java`
 - `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/wallet/AbstractBtcLikeWallet.java`
-- `backendservices/wallet-parent/wallet-service/src/test/java/com/surprising/wallet/service/chain/BlockchainAdapterRegistryTest.java`
-- `backendservices/wallet-sig1/src/main/java/com/surprising/wallet/sig/first/service/AbstractBtcLikeFirstSign.java`
-- `backendservices/wallet-sig2/src/main/java/com/surprising/wallet/sig/second/BipNodeUtil.java`
-- `currency-sdks/wallet-common/src/main/java/com/surprising/wallet/common/chain/ChainType.java`
+- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/wallet/impl/LtcWallet.java`
+- `backendservices/wallet-parent/wallet-service/src/test/java/com/surprising/wallet/service/chain/ltc/LitecoinLiveFlowIntegrationTest.java`
+- `backendservices/wallet-sig1/src/main/java/com/surprising/wallet/sig/first/config/PubKeyConfig.java`
+- `backendservices/wallet-sig1/src/main/resources/application-test.yaml`
+- `backendservices/wallet-sig1/src/main/resources/application.yaml`
+- `backendservices/wallet-sig1/src/test/java/com/surprising/wallet/sig/first/test/FullSigningTest.java`
+- `backendservices/wallet-sig2/src/main/resources/application-test.yaml`
+- `backendservices/wallet-sig2/src/main/resources/application.yaml`
+- `currency-sdks/bitcoin-sdk/src/test/java/sdk/core/KeyGeneratorTest.java`
+- `currency-sdks/wallet-client/src/main/java/com/surprising/wallet/client/RpcCommandProcessor.java`
 - `currency-sdks/wallet-common/src/main/java/com/surprising/wallet/common/currency/CurrencyEnum.java`
 - `multi-chain-wallet-schema.sql`
 - `surprising-wallet-init-pgsql.sql`
-- `regression-report.md`
 
-## New Files
+## 3. New Files
 
-- `LITECOIN_WALLET_REPORT.md`
-- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/deposit/ScanLtcBlockJob.java`
-- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/transfer/LtcCollectionJob.java`
-- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/withdraw/BatchLtcWithdrawJob.java`
-- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/chain/ltc/LitecoinChainAdapter.java`
-- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/wallet/impl/LtcWallet.java`
-- `backendservices/wallet-parent/wallet-service/src/test/java/com/surprising/wallet/service/chain/ltc/LitecoinAddressGenerationTest.java`
-- `backendservices/wallet-parent/wallet-service/src/test/java/com/surprising/wallet/service/chain/ltc/LitecoinFeeEstimatorTest.java`
-- `backendservices/wallet-parent/wallet-service/src/test/java/com/surprising/wallet/service/chain/ltc/LitecoinLiveFlowIntegrationTest.java`
-- `backendservices/wallet-sig1/src/main/java/com/surprising/wallet/sig/first/service/LtcFirstSignService.java`
-- `backendservices/wallet-sig2/src/main/java/com/surprising/wallet/sig/second/impl/LtcSecondSignService.java`
-- `currency-sdks/bitcoin-sdk/src/main/java/com/surprising/wallet/sdk/bitcoinj/litecoin/LitecoinFeePolicy.java`
-- `currency-sdks/bitcoin-sdk/src/main/java/com/surprising/wallet/sdk/bitcoinj/litecoin/LitecoinNetwork.java`
-- `currency-sdks/bitcoin-sdk/src/main/java/com/surprising/wallet/sdk/bitcoinj/litecoin/LitecoinNetworkParameters.java`
-- `currency-sdks/bitcoin-sdk/src/test/java/sdk/core/LitecoinNetworkParamsTest.java`
-- `currency-sdks/wallet-client/src/main/java/com/surprising/wallet/client/command/LtcCommand.java`
+- `CURRENCY_MODEL_COMPATIBILITY_REPORT.md`
+- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/withdraw/LtcSigningRecoveryJob.java`
+- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/chain/ltc/LitecoinEsploraCommand.java`
+- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/chain/ltc/LitecoinSettlementService.java`
+- `currency-sdks/wallet-common/src/main/java/com/surprising/wallet/common/chain/BitcoinLikeChainProfile.java`
 
-## Deleted Files
+## 4. Deleted Files
 
 - None.
 
-## Database Changes
+## 5. Database Schema Changes
 
-- Added LTC native asset row in `chain_asset`.
-- Added `ltc_address`.
-- Added `ltc_utxo_transaction`.
-- Added `ltc_withdraw_record`.
-- Added `ltc_withdraw_transaction`.
-- Added `best_block_height` row for currency `24`.
-- Added `currency_balance` row for currency `24`.
-- Full init script now creates LTC tables with independent primary/unique constraints.
-- Incremental schema now uses independent LTC constraint names and indexes.
-- Local execution result: `wallet` role failed DDL with `permission denied for schema public`; `atomex` admin role applied the migration successfully.
+- Added `chain_profile`; LTC testnet/mainnet rows use runtime currency id `24` and BIP44 coin type `2`.
+- Added `utxo_record` with unique `(chain, tx_hash, vout)`.
+- Changed `withdrawal_order` uniqueness to `(chain, order_no)`.
+- Changed `collection_record` uniqueness to `(chain, collection_no)`.
+- Reused `chain_asset`, `chain_scan_height`, `hot_wallet_address`, `deposit_record`, `withdrawal_order`, `collection_record`, and `ledger_balance`.
+- The migration was applied to the local PostgreSQL `wallet` database successfully.
+- Fixed deterministic seed identities for BTC/LTC height, balance, and multisig rows so the full initialization script works on an empty database.
 
-## MBG Generated Content
+## 6. MBG Generation
 
-- No MyBatis Generator run was performed.
-- No generated mapper/entity/XML files were overwritten.
-- Existing sharded BTC-like tables are reused through `ShardTable` prefixes.
+- No MyBatis Generator run was needed.
+- No service, scanner, wallet, signer, or fee logic was generated.
+- Unified tables are accessed through the hand-written `ChainJdbcRepository`.
 
-## Litecoin Network Parameters
+## 7. CurrencyEnum / CurrencyIds Compatibility
 
-- Mainnet id: `org.litecoin.production`.
-- Testnet id: `org.litecoin.test`.
-- Mainnet P2PKH/P2SH/Bech32: `48 / 50 / ltc`.
-- Testnet P2PKH/P2SH/Bech32: `111 / 58 / tltc`.
-- Decimals: `8`.
-- Dust threshold: `1000` litoshi.
+- `CurrencyEnum` remains a legacy adapter for wallet lookup, table sharding, Redis queues, jobs, and signer dispatch.
+- `CurrencyIds` remains legacy-only and is not used by the LTC flow.
+- LTC runtime currency id is loaded and validated from `chain_profile`.
+- New-chain source of truth is the database/application configuration, not either legacy constant class.
+- Full dependency and collision analysis is in `CURRENCY_MODEL_COMPATIBILITY_REPORT.md`.
+
+## 8. Runtime Currency ID
+
+- LTC runtime currency id: `24`.
+- It is distinct from BIP44 coin type and must not be resolved through legacy `CurrencyIds.LTC`.
+
+## 9. BIP44 Coin Type
+
+- LTC BIP44 coin type: `2`.
+- Address and signer derivation use coin type `2`, while legacy routing uses runtime id `24`.
+
+## 10. Network Parameters
+
+- Network: Litecoin testnet.
+- P2PKH prefix: `111`.
+- P2SH prefix: `58`.
+- Bech32 HRP: `tltc`.
 - Default fee rate: `2` litoshi/vbyte.
-- Min/max fee rate guard: `1` to `100` litoshi/vbyte.
+- Dust threshold: `1000` litoshi.
+- Withdrawal confirmations: `6`.
+- Explorer/API: `https://litecoinspace.org/testnet/`.
+- The adapter uses Litecoin-specific Esplora block/transaction/broadcast APIs; it does not use BTC network parameters.
 
-## Address Generation Result
+## 11. Address Generation
 
-- Test derivation path shape: `m/44/2/1/9001/{index}`.
-- Address index 0: `tltc1qeh6wxfsj4cfwh5dmp0nnpqj52s9u5gkc59gyj94qllg7wnjxx6qsnda7vj`.
-- Address index 1: `tltc1qydpzhcujqtca9uuepts0k996jfv483xlnkf8majw0f0umaht9j6q2aktvc`.
-- Both addresses use Litecoin testnet Bech32 HRP `tltc`.
-- Both are rejected by Bitcoin TestNet3 address parsing.
+- Deposit address: `tltc1qeh6wxfsj4cfwh5dmp0nnpqj52s9u5gkc59gyj94qllg7wnjxx6qsnda7vj`.
+- Controlled withdrawal/collection address: `tltc1qydpzhcujqtca9uuepts0k996jfv483xlnkf8majw0f0umaht9j6q2aktvc`.
+- Hot address: `tltc1qku2kf64evgw0m79sypm3tp39js97d2e6j6xl6ntf089nvzpkxvnsnc54wn`.
+- All are Litecoin testnet 2-of-3 P2WSH addresses.
 
-## Deposit Txid
+## 12. Deposit Result
 
-- Blocked.
-- Reason: no funded Litecoin testnet JSON-RPC endpoint and no testnet LTC deposit txid were available.
+- Txid: `24aecf832537eb6b9e77722541ab812f3c6f887a75ff40aee83170bd35497f9f`.
+- Explorer: `https://litecoinspace.org/testnet/tx/24aecf832537eb6b9e77722541ab812f3c6f887a75ff40aee83170bd35497f9f`.
+- Block: `4773130`.
+- Amount: `0.01000000 tLTC`.
+- Confirmations at final evidence capture: `324`.
+- Scanner started at block `4773130`, detected the exact address/output, and advanced `chain_scan_height`.
+- Final state: `CREDITED`.
+- The state model supports `DETECTED -> CONFIRMING -> CONFIRMED -> CREDITED`; this historical deposit already exceeded the confirmation threshold when rescanned, so the persisted final transition completed immediately.
 
-## Withdraw Txid
+## 13. Withdrawal Result
 
-- Blocked.
-- Reason: live withdrawal requires funded LTC UTXO and a Core-compatible Litecoin testnet RPC endpoint for `sendrawtransaction`.
+- Order: `ltc-live-gate-20260621-001`.
+- Txid: `ede1443842edaace31f1f7e4525f436b6bc69aad952bba2646b8c3be1678880c`.
+- Explorer: `https://litecoinspace.org/testnet/tx/ede1443842edaace31f1f7e4525f436b6bc69aad952bba2646b8c3be1678880c`.
+- Block: `4773436`.
+- Confirmations at final evidence capture: `18`.
+- Destination amount: `0.00500000 tLTC`.
+- Destination was the controlled second Litecoin testnet address.
+- Final status: `CONFIRMED`.
+- Balance freeze, UTXO lock, two signatures, broadcast, confirmation settlement, and spent marking passed.
 
-## Collection Txid
+## 14. Collection Result
 
-- Blocked.
-- Reason: live collection requires user-address LTC UTXOs and a Core-compatible Litecoin testnet RPC endpoint.
+- Collection id: `ltc-collection-ede1443842edaace31f1f7e4525f436b6bc69aad952bba2646b8c3be1678880c-0`.
+- Txid: `34c2a03b9696b558c794350039d19ff38f76a44b1a3717f3531be73f31274949`.
+- Explorer: `https://litecoinspace.org/testnet/tx/34c2a03b9696b558c794350039d19ff38f76a44b1a3717f3531be73f31274949`.
+- Block: `4773439`.
+- Confirmations at final evidence capture: `15`.
+- Hot-wallet output: `0.00499682 tLTC`.
+- Final status: `CONFIRMED`.
 
-## UTXO State Result
+## 15. UTXO State
 
-- Local schema has `ltc_utxo_transaction` with primary key and unique `(tx_id, seq)`.
-- UTXO live state was not created because live deposit is blocked.
+- Deposit UTXO `(deposit txid, vout 0)`: `SPENT`, spent by the withdrawal tx.
+- Withdrawal destination UTXO `(withdraw txid, vout 0)`: `SPENT`, spent by the collection tx.
+- Withdrawal change UTXO `(withdraw txid, vout 1)`: `AVAILABLE`.
+- Collection hot-wallet UTXO `(collection txid, vout 0)`: `AVAILABLE`.
+- Deposit unique counts: legacy UTXO `1`; unified UTXO `1`.
+- The live test also transactionally verified single-winner lock and guarded release behavior.
 
-## Fee And Dust Result
+## 16. Fee / Dust
 
-- `LitecoinFeePolicy` clamps fee rate below min and above max.
-- `LitecoinChainAdapter` native quote uses P2WSH vbytes and Litecoin fee policy.
-- `LitecoinFeeEstimatorTest` passed for default and max-clamped fee.
-- `LitecoinNetworkParamsTest` passed for dust threshold and address-network isolation.
+- Withdrawal: fee `404` litoshi, weight `803`, vsize `201`, effective rate about `2.01` litoshi/vbyte.
+- Withdrawal quoted/user fee: `320` litoshi; the platform absorbed the `84` litoshi difference while preserving correct chain fee and non-negative ledger state.
+- Collection: fee `318` litoshi, weight `632`, vsize `158`, effective rate about `2.01` litoshi/vbyte.
+- Collection output remained above the `1000`-litoshi dust threshold.
+- Fee-rate and dust unit tests passed.
 
-## Record Results
+## 17. deposit_record
 
-- `deposit_record`: not populated for LTC live flow because deposit is blocked.
-- `withdrawal_order`: not populated for LTC live flow because withdrawal is blocked.
-- `collection_record`: not populated for LTC live flow because collection is blocked.
-- Legacy BTC-like LTC tables were created and verified locally.
+- Exactly one row exists for `(LTC, deposit txid, vout/log_index 0)`.
+- Status: `CREDITED`.
+- `credited = true`.
+- No deposit rows were created for the platform withdrawal or collection transactions.
 
-## Ledger Balance Result
+## 18. withdrawal_order
 
-- `currency_balance` row for currency `24` exists with balance `0.00000000`.
-- Ledger live reconciliation is blocked until a live deposit/withdraw/collection cycle is executed.
+- `ltc-live-gate-20260621-001`: `CONFIRMED`.
+- Tx hash matches the live withdrawal txid.
+- A pre-gate failed attempt remains explicitly marked `FAILED`; it has no tx hash and did not broadcast.
 
-## Idempotency Result
+## 19. collection_record
 
-- DB idempotency keys are in place:
-  - `ltc_utxo_transaction(tx_id, seq)`
-  - `ltc_withdraw_record(withdraw_id)`
-  - `ltc_address(address)`
-  - `ltc_address(user_id, biz, index)`
-- Runtime duplicate scan/withdraw/collection live idempotency remains blocked by missing live chain flow.
+- Exactly one live collection record exists.
+- Status: `CONFIRMED`.
+- Tx hash matches the live collection txid.
 
-## Recovery Result
+## 20. ledger_balance Reconciliation
 
-- Scanner/withdraw/collection job classes compile and are configured.
-- Live scanner recovery, withdrawal retry, and collection retry remain blocked by missing Litecoin testnet RPC/funds.
+- Account `9001`, chain/asset `LTC/LTC`:
+  - available: `0.004996800000000000`
+  - locked: `0`
+  - total: `0.004996800000000000`
+- Legacy `user_asset`:
+  - balance: `0.00499680`
+  - frozen: `0`
+- Reconciliation formula: `0.01000000 - 0.00500000 - 0.00000320 = 0.00499680`.
+- Negative LTC ledger rows: `0`.
 
-## Multi-User Result
+## 21. Idempotency
 
-- Multi-address uniqueness is covered by `LitecoinAddressGenerationTest`.
-- Multi-user live deposit/withdraw/collection remains blocked by missing testnet RPC/funds.
+- The same deposit block was scanned repeatedly; deposit, legacy UTXO, unified UTXO, and ledger credit remained single-entry.
+- Re-inserting the signed withdrawal into the done queue was skipped using persisted `SENT`/txid state; no second broadcast occurred.
+- Re-inserting the signed collection was also skipped; no second collection broadcast occurred.
+- Deterministic collection id prevents duplicate collection records.
 
-## Testnet Validation
+## 22. Recovery
 
-- Local Core RPC port check: `127.0.0.1:19332` is not listening.
-- `LitecoinLiveFlowIntegrationTest`: 1 test skipped with explicit blocked reason.
-- Required to unblock:
-  - `LTC_TESTNET_RPC_URL`
-  - `LTC_TESTNET_RPC_USER`
-  - `LTC_TESTNET_RPC_PASSWORD`
-  - funded Litecoin testnet UTXO for a generated `tltc1...` address.
+- Scanner stop/restart resumed from `chain_scan_height` and did not lose or duplicate the deposit.
+- Failed build/signing paths release legacy and unified UTXO locks and release frozen ledger/user balances.
+- `LtcSigningRecoveryJob` requeues stale `SIGNING` transactions using an atomic claim.
+- Broadcast retry first checks the locally derived txid on-chain, preventing duplicate broadcast after uncertain RPC responses.
 
-## Commands And Results
+## 23. Multi-User
 
-- `mvn -q -pl currency-sdks/bitcoin-sdk -Dtest=LitecoinNetworkParamsTest test`: passed.
-- `mvn -q -pl backendservices/wallet-parent/wallet-service -am -Dtest=LitecoinAddressGenerationTest,LitecoinFeeEstimatorTest,BlockchainAdapterRegistryTest -Dsurefire.failIfNoSpecifiedTests=false test`: passed.
-- `mvn -q -pl backendservices/wallet-parent/wallet-server -am -DskipTests compile`: passed.
-- `mvn -q -pl backendservices/wallet-sig1 -am -DskipTests compile`: passed.
-- `mvn -q -pl backendservices/wallet-sig2 -am -DskipTests compile`: passed.
-- `psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U atomex -d wallet -f multi-chain-wallet-schema.sql`: passed.
-- `mvn -q clean install -DskipTests=false`: passed.
-- Full Surefire summary after final build: 65 tests, 0 failures, 0 errors, 12 skipped.
-- Redis: `PONG`.
+- The LTC live gate used account `9001` and two independently derived controlled addresses.
+- Address-index isolation passed in `LitecoinAddressGenerationTest`.
+- Cross-user live funding was not required for this LTC gate; DOGE/BCH stages must add their explicitly required multi-user live tests.
+
+## 24. Test Commands
+
+- `mvn -q clean install -DskipTests=false`
+- `mvn -q -pl backendservices/wallet-parent/wallet-service -am -Dtest=LitecoinLiveFlowIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false -Dltc.live.enabled=true -Dltc.live.withdraw.txid=<txid> -Dltc.live.collection.txid=<txid> test`
+- `psql -d wallet -Atc 'select 1'`
+- `createdb <temporary>; psql -v ON_ERROR_STOP=1 -d <temporary> -f surprising-wallet-init-pgsql.sql; dropdb <temporary>`
+- `redis-cli ping`
+- `java -jar .../wallet-server-1.0.0-SNAPSHOT.jar --spring.profiles.active=test`
+- `java -jar .../wallet-sig1-1.0.0-SNAPSHOT.jar --spring.profiles.active=test`
+- `java -jar .../wallet-sig2-1.0.0-SNAPSHOT.jar --spring.profiles.active=test`
+
+Secrets were supplied through environment variables and were not written to commands, reports, production YAML, or committed files.
+
+## 25. Test Results
+
+- Full Maven: passed.
+- Full Surefire summary: 64 tests, 0 failures, 0 errors, 11 skipped.
+- Strict live LTC test: 4 tests, 0 failures, 0 errors, 0 skipped.
+- BTC SDK regression: passed within full Maven.
+- EVM core regression: passed within full Maven.
+- TRON core regression: passed within full Maven.
 - PostgreSQL: `select 1` passed.
-- `wallet-server --spring.profiles.active=test`: started, `/actuator/health` returned `UP`.
-- `wallet-sig1 --spring.profiles.active=test`: started, first-sign job active.
-- `wallet-sig2 --spring.profiles.active=test`: started, second-sign job active.
+- Incremental migration rerun: passed idempotently.
+- Full initialization SQL: passed on a disposable empty database; LTC profiles and chain-scoped uniqueness constraints were verified.
+- Redis: `PONG`.
+- wallet-server: started; `/actuator/health` returned `UP`.
+- wallet-sig1: started successfully.
+- wallet-sig2: started successfully.
+- Secret scan: no extended private key, WIF private key, plaintext production password, or plaintext production master key found after remediation.
+- `application-prod.yaml` files use environment placeholders and do not generate keys.
 
-## Blocked Items
+## 26. Blocked Items
 
-- Live LTC deposit scan.
-- Live LTC withdrawal.
-- Live LTC collection.
-- Live scanner recovery.
-- Live withdrawal retry recovery.
-- Live collection retry recovery.
-- Live ledger-vs-chain reconciliation.
+- None for the Litecoin testnet commit gate.
 
-## Risks
+## 27. Risks
 
-- Current Litecoin integration uses Litecoin Core-compatible JSON-RPC. Public block-explorer APIs are not a drop-in replacement for `getblockcount`, `getblockhash`, `getblock`, `getrawtransaction`, `decoderawtransaction`, and `sendrawtransaction`.
-- `wallet-server` test profile still enables BTC scanning by default; startup validation can advance BTC scan height as normal existing behavior.
-- `Constants.init()` still enforces test network mode globally; production profile startup for mainnet assets needs a separate reviewed change before prod use.
+- LitecoinSpace Esplora is an external public dependency; production should use a controlled Litecoin Core/Esplora deployment with availability monitoring.
+- The legacy and unified models are mirrored during migration; reconciliation monitoring is required until legacy jobs are retired.
+- The live withdrawal charged the configured estimate while actual witness size cost `84` extra litoshi; platform fee subsidy is explicit, but a later change should choose whether customer fee quotation must include a worst-case witness margin.
+- Mainnet activation was not performed in this testnet gate.
 
-## Commit
+## 28. Commit
 
-- Commit hash: not created.
-- Reason: Litecoin live testnet deposit/withdraw/collection gates are blocked.
-- Intended commit message after live gates pass: `feat: add litecoin wallet flow`.
-- Push: no.
+- Commit message: `feat: add litecoin wallet flow`.
+- Commit hash: this report is part of the commit; resolve with `git rev-parse HEAD` after creation.
 
----
+## 29. Push
 
-## Live Deposit Verification
-
-Deposit scan was executed against the Alchemy Litecoin testnet RPC endpoint (`https://litecoin-testnet.g.alchemy.com/v2/...`).
-
-### Results
-
-| Item | Value |
-|------|-------|
-| Deposit txid | `24aecf832537eb6b9e77722541ab812f3c6f887a75ff40aee83170bd35497f9f` |
-| Block | 4773130 |
-| Amount | 0.01 tLTC |
-| Address | `tltc1qeh6wxfsj4cfwh5dmp0nnpqj52s9u5gkc59gyj94qllg7wnjxx6qsnda7vj` |
-| Scan detected | yes |
-| UTXO inserted | yes |
-| user_asset credited | yes, 0.01 LTC |
-| Confirmations at scan | 23 |
-| Best block at scan | 4773150+ |
-| RPC provider | Alchemy Litecoin testnet |
-| Dust threshold | 1000 litoshi |
-| Default fee rate | 2 litoshi/vbyte |
-
-### Idempotency
-
-- UTXO insert uses `batchAddOnDuplicateKey` (ON CONFLICT DO NOTHING for `(tx_id, seq)`).
-- `creditDepositIfNeeded` checks the `credited` flag before applying credit.
-- Restarting the scanner did NOT produce a duplicate credit.
-- Rescanning the same block after already processing it does NOT produce duplicate UTXO records.
-
-### Remaining Blocked Items
-
-- **LTC live withdrawal**: blocked. Withdrawal requires the multisig infrastructure (wallet_multisig_config, hot_wallet_address, sig1/sig2 services running concurrently).
-- **LTC live collection**: blocked for the same reason as withdrawal.
-- **Scanner recovery scoped test**: skipped due to limited live node session time.
-
-### Node Connectivity
-
-- `getblockcount`: 4773150+
-- `getblockhash`: returns valid hash
-- `getblock`: returns full block with txids
-- `getrawtransaction` (verbose): returns decoded tx with vout, scriptPubKey, addresses, confirmations
-- `sendrawtransaction`: not tested (no withdrawal was triggered)
-- Basic Auth: not used (Alchemy uses URL-based API key)
-
-### LTC RPC Config Notes
-
-Alchemy Litecoin testnet uses URL-based API key authentication. The `RpcCommandProcessor.buildRpcClient` method was modified to skip the `Authorization: Basic` header when both `username` and `password` are empty. This change is in `currency-sdks/wallet-client/src/main/java/com/surprising/wallet/client/RpcCommandProcessor.java`.
+- No.

@@ -205,8 +205,8 @@ public class RpcCommandProcessor implements BeanDefinitionRegistryPostProcessor,
                 }
             };
         } catch (Exception e) {
-            log.error("command:{} buildRpcClient error server:{} username:{} password:{}", command.getSimpleName(), server, username, password);
-            e.printStackTrace();
+            log.error("command:{} buildRpcClient error server:{} usernamePresent:{}",
+                    command.getSimpleName(), server, StringUtils.hasText(username), e);
         }
         client.setConnectionTimeoutMillis(connectionTimeoutMillis);
         client.setReadTimeoutMillis(readTimeoutMillis);

@@ -14,6 +14,7 @@ import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinFeePolicy;
 import com.surprising.wallet.service.criteria.AddressExample;
 import com.surprising.wallet.service.criteria.UtxoTransactionExample;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
 import com.surprising.wallet.service.service.UtxoTransactionService;
 import com.surprising.wallet.service.service.WithdrawTransactionService;
@@ -40,6 +41,7 @@ public class LtcCollectionJob {
     private final AddressService addressService;
     private final UtxoTransactionService utxoService;
     private final WithdrawTransactionService transactionService;
+    private final ChainJdbcRepository chainJdbcRepository;
 
     @Value("${atomex.wallet.collection.enabled-currencies:}")
     private String enabledCurrencies;
@@ -54,10 +56,12 @@ public class LtcCollectionJob {
     private Integer hotAddressIndex;
 
     public LtcCollectionJob(AddressService addressService, UtxoTransactionService utxoService,
-                            WithdrawTransactionService transactionService) {
+                            WithdrawTransactionService transactionService,
+                            ChainJdbcRepository chainJdbcRepository) {
         this.addressService = addressService;
         this.utxoService = utxoService;
         this.transactionService = transactionService;
+        this.chainJdbcRepository = chainJdbcRepository;
     }
 
     @Scheduled(cron = "20/30 * * * * ?")
@@ -105,8 +109,9 @@ public class LtcCollectionJob {
         Date now = Date.from(Instant.now());
         BigDecimal outputAmount = BigDecimal.valueOf(outputLitoshi).divide(currency.getDecimal());
         BigDecimal feeAmount = BigDecimal.valueOf(feeLitoshi).divide(currency.getDecimal());
+        String collectionId = "ltc-collection-" + utxos.get(0).getTxId() + "-" + utxos.get(0).getSeq();
         WithdrawRecord output = WithdrawRecord.builder()
-                .withdrawId("ltc-collection-" + now.getTime())
+                .withdrawId(collectionId)
                 .txId("collection")
                 .address(hotAddress.getAddress())
                 .userId(hotUserId)
@@ -121,7 +126,7 @@ public class LtcCollectionJob {
 
         JSONObject signature = new JSONObject();
         signature.put("type", "collection");
-        signature.put("collectionId", output.getWithdrawId());
+        signature.put("collectionId", collectionId);
         signature.put("utxos", utxos);
         signature.put("addresses", inputAddresses);
         signature.put("withdraw", List.of(output));
@@ -140,6 +145,26 @@ public class LtcCollectionJob {
         transactionService.add(transaction, table);
 
         String transactionId = transaction.getId().toString();
+        String fromAddress = inputAddresses.get(0).getAddress();
+        chainJdbcRepository.createCollectionRecord(
+                collectionId,
+                "LTC",
+                "LTC",
+                fromAddress,
+                hotAddress.getAddress(),
+                outputAmount,
+                feeAmount,
+                signature.toJSONString());
+        for (UtxoTransaction utxo : utxos) {
+            int locked = chainJdbcRepository.lockUtxo(
+                    "LTC", utxo.getTxId(), utxo.getSeq(), transactionId);
+            if (locked != 1) {
+                throw new IllegalStateException(
+                        "failed to lock unified LTC collection UTXO " + utxo.getTxId() + ":" + utxo.getSeq());
+            }
+        }
+        chainJdbcRepository.updateCollectionStatus(
+                "LTC", collectionId, "SIGNING", null, null, signature.toJSONString());
         List<UtxoTransaction> spends = utxos.stream().map(utxo -> UtxoTransaction.builder()
                 .id(utxo.getId())
                 .spent((byte) 1)
