@@ -275,6 +275,7 @@ on conflict (currency_index) do nothing;
 
 insert into chain_profile(chain,network,family,runtime_currency_id,bip44_coin_type,native_symbol,rpc_url,explorer_url,deposit_confirmations,withdraw_confirmations,default_fee_rate,dust_threshold,enabled)
 values
+('BCH','regtest','bitcoin-like',42,145,'BCH','http://127.0.0.1:18443',null,6,6,1,546,true),
 ('BCH','testnet','bitcoin-like',42,145,'BCH',null,'https://tbch.loping.net/tx/',1,6,1,546,true),
 ('BCH','mainnet','bitcoin-like',42,145,'BCH',null,'https://blockchair.com/bitcoin-cash/transaction/',1,6,1,546,true)
 on conflict(chain,network) do update set runtime_currency_id=excluded.runtime_currency_id,bip44_coin_type=excluded.bip44_coin_type,explorer_url=excluded.explorer_url,deposit_confirmations=excluded.deposit_confirmations,withdraw_confirmations=excluded.withdraw_confirmations,default_fee_rate=excluded.default_fee_rate,dust_threshold=excluded.dust_threshold,enabled=excluded.enabled,updated_at=now();

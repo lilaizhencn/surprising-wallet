@@ -21,7 +21,7 @@ atomex:
     server.user: ${DOGE_MAINNET_RPC_USER:}
     server.pwd: ${DOGE_MAINNET_RPC_PASSWORD:}
   bch:
-    network: mainnet
+    network: ${BCH_NETWORK:mainnet}
     server: ${BCH_MAINNET_RPC_URL:http://127.0.0.1:8332}
     server.user: ${BCH_MAINNET_RPC_USER:}
     server.pwd: ${BCH_MAINNET_RPC_PASSWORD:}

@@ -501,6 +501,45 @@ Detailed evidence: `DOGECOIN_WALLET_REPORT.md`.
 
 ---
 
+## Bitcoin Cash Regtest Gate Final Update
+
+Generated: 2026-06-23 Asia/Shanghai. This section supersedes the earlier BCH funded-live deferral.
+
+- Official Bitcoin Cash Node `29.0.0` installed through the checked Docker workflow; node result `chain=regtest`, `txindex=1`, RPC `127.0.0.1:18443`, final height `126`.
+- Regtest addresses:
+  - UserA: `bchreg:pzeausgnzhry45zss97uu2lrlrnhy4k2xvff4pdrhr`
+  - UserB: `bchreg:pqlvl75tpu99kv2yl5jshw98ktthu0d7ggg8a76hul`
+  - UserC: `bchreg:ppyxcegm2k6yx7m0u9r7xqtk0pntacm9sgg7k64w5d`
+  - Hot wallet: `bchreg:prp53syhkfe3w87zv2s6vlxnlf4v7uuywsrslzjnzy`
+- Deposits:
+  - `7388b67eef77f204242ab1af9887bad4d071a7e93b125d706fbc803f8b7c0c27` — 10 BCH, block 102.
+  - `2625dab2fc411c40967b8ee01083367360d6ec100a0b82ef44be519d14d5ff94` — 5 BCH, block 102.
+  - `60ccb42812b6900b345a781fb62abab8ab473f06def89e21edf48aac051ebe31` — 2 BCH, block 120, sent while wallet-server was stopped.
+- Withdrawal `2807d1ec012c244aef51e3342ec6fa9bc733c4f7d1c3a1f2d3f260a30b22acd0`: two-stage signing, BCHN broadcast, six-confirmation settlement, 1 BCH output, 8.99999623 BCH change, 377 sat fee.
+- Collection `a7c53c36e0c2dcf5caba1a1e010defbda0b9c0fc1e0c4f447fbd25ab65447a3a`: recovered after a reproduced one-output fee-plan bug, sent 4.99999657 BCH to the hot wallet, 343 sat fee, final `CONFIRMED`.
+- BCHN decoded both production transaction signatures as `[ALL|FORKID]`.
+- Independent ForkId node test:
+  - correct transaction `7784e5d3fe294952d4f1089cd4beac012d48c8a670c96bbd0728c3bb94f17269`: `testmempoolaccept allowed=true`;
+  - signatures changed from `0x41` to `0x01`: rejected with `mandatory-script-verify-flag-failed (Signature must use SIGHASH_FORKID)`.
+- Deposit checkpoint rewind and replay produced no duplicate deposit, UTXO, or ledger credit.
+- Successful withdrawal order replay was skipped before a second freeze/sign/broadcast.
+- Failed withdrawal signing released the `0.501 BCH` frozen balance and unified/legacy UTXO locks.
+- Collection retry required an explicit `FAILED -> RETRYING` transition and produced exactly one successful recovery transaction.
+- Final customer ledger: `8.999 + 5 + 2 = 15.999 BCH`, locked `0`, negative rows `0`.
+- Controlled available UTXOs: `15.99999280 BCH`; difference `0.00099280 BCH` equals charged withdrawal fee minus actual withdrawal and collection network fees.
+- Scanner checkpoint: best height `126`, safe height `120`, using BCH regtest profile confirmations `6`.
+- PostgreSQL-backed DOGE/BCH flow test with forced database execution: passed.
+- `mvn -q clean install -DskipTests=false`: passed.
+- Full Surefire: 74 tests, 0 failures, 0 errors, 12 skipped.
+- wallet-server health: `UP`; wallet-sig1 and wallet-sig2 started from final clean artifacts.
+- PostgreSQL `select 1`: passed; Redis: `PONG`.
+- Secret scan: no tracked extended private key or plaintext API/RPC key assignment.
+- Push: no.
+
+Detailed evidence: `BITCOIN_CASH_WALLET_REPORT.md`.
+
+---
+
 ## Bitcoin Cash Integration Update
 
 Generated: 2026-06-21 23:23 Asia/Shanghai.

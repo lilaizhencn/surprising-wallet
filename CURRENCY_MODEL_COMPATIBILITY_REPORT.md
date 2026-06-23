@@ -11,6 +11,7 @@ Generated: 2026-06-23 Asia/Shanghai.
 - A migration is required and has been added for `chain_profile` and `utxo_record`, plus chain-scoped withdrawal/collection uniqueness.
 - The LTC live gate validated runtime id `24` with BIP44 coin type `2`; deposit, withdrawal, collection, and reconciliation used the database profile successfully.
 - The DOGE Regtest gate validated runtime id `41` with BIP44 coin type `3`; network, confirmations, RPC, fee, and dust were loaded from the DOGE regtest profile.
+- The BCH Regtest gate validated runtime id `42` with BIP44 coin type `145`; confirmations, fee, dust, safe scan height, withdrawal, collection, and reconciliation used the BCH regtest profile.
 
 ## Remaining CurrencyEnum Dependencies
 
@@ -98,6 +99,10 @@ LTC continues to mirror legacy `ltc_*`, `user_asset`, `currency_balance`, and `b
 - `CurrencyEnum.BCH` was added only for old signer/job routing.
 - Do not use legacy `CurrencyIds.BCH = 5`.
 - CashAddr, legacy address compatibility, SIGHASH_FORKID, fee, dust, and confirmations remain BCH-specific profile/signer concerns.
+- BCH mainnet/testnet/regtest network parameters and CashAddr prefixes are selected independently; BCH is not routed through BTC or LTC parameters.
+- The live Regtest flow used database profile confirmation thresholds for deposit credit, withdrawal UTXO selection, collection selection, and `chain_scan_height.safe_height`.
+- Runtime dust is propagated with the signing payload; the signer uses the database-derived value with a BCH policy fallback only for legacy payload compatibility.
+- BCH collection uses a deterministic chain-scoped id and atomic database claim. `FAILED` is terminal until an explicit `RETRYING` transition.
 
 ## Migration Requirement
 
@@ -109,6 +114,7 @@ Required and added:
 - unique `(chain, collection_no)` for `collection_record`
 - LTC, DOGE, and BCH testnet/mainnet `chain_profile` rows
 - DOGE regtest `chain_profile`
+- BCH regtest `chain_profile`
 - DOGE/BCH native `chain_asset` rows and chain-scoped compatibility tables
 
 No MBG generation was needed because these tables are accessed through the hand-written JDBC repository; no service, scanner, signer, or fee logic was generated.

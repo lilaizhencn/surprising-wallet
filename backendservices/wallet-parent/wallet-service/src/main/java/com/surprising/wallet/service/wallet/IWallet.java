@@ -24,6 +24,22 @@ public interface IWallet {
     CurrencyEnum getCurrency();
 
     /**
+     * Runtime deposit threshold. New chains override this from chain_profile;
+     * the enum value remains the legacy compatibility fallback.
+     */
+    default long getDepositConfirmationThreshold() {
+        return getCurrency().getDepositConfirmNum();
+    }
+
+    /**
+     * Runtime dust threshold in the chain's smallest unit. New chains should
+     * override this from chain_profile; zero means no generic threshold.
+     */
+    default long getDustThresholdAtomic() {
+        return 0L;
+    }
+
+    /**
      * 获得当前币种的精度，用于精度转换
      *
      * @return

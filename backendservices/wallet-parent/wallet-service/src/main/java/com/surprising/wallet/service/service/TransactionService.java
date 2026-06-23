@@ -81,6 +81,8 @@ public class TransactionService {
         }
         log.info("saveTransaction dto: {} begin", dto.getTxId());
         CurrencyEnum currency = CurrencyEnum.parseValue(dto.getCurrency());
+        long requiredConfirmations =
+                walletContext.getWallet(currency).getDepositConfirmationThreshold();
         UtxoKey utxoKey = UtxoKey.parse(dto.getTxId());
         if (isUnifiedBitcoinLike(currency)
                 && utxoKey != null
@@ -88,8 +90,8 @@ public class TransactionService {
             log.info("skip {} self-transfer deposit event for tx={}", currency.getName(), utxoKey.txId);
             return;
         }
-        if (dto.getConfirmNum() != null && dto.getConfirmNum() >= currency.getDepositConfirmNum()) {
-            creditDepositIfNeeded(dto, currency);
+        if (dto.getConfirmNum() != null && dto.getConfirmNum() >= requiredConfirmations) {
+            creditDepositIfNeeded(dto, currency, requiredConfirmations);
         }
         // String depositKey = WALLET_DEPOSIT_KEY + dto.getBiz();
         String depositKey = WALLET_DEPOSIT_KEY;
@@ -318,7 +320,8 @@ public class TransactionService {
         });
     }
 
-    private void creditDepositIfNeeded(TransactionDTO dto, CurrencyEnum currency) {
+    private void creditDepositIfNeeded(
+            TransactionDTO dto, CurrencyEnum currency, long requiredConfirmations) {
         UtxoKey utxoKey = UtxoKey.parse(dto.getTxId());
         if (utxoKey == null) {
             return;
@@ -343,9 +346,9 @@ public class TransactionService {
             chainJdbcRepository.recordAndCreditDeposit(
                     event,
                     utxoKey.seq,
-                    (int) currency.getDepositConfirmNum(),
+                    Math.toIntExact(requiredConfirmations),
                     address.getUserId().toString());
-            if (dto.getConfirmNum() >= currency.getDepositConfirmNum()) {
+            if (dto.getConfirmNum() >= requiredConfirmations) {
                 chainJdbcRepository.markUtxoCredited(chain, utxoKey.txId, utxoKey.seq);
             }
         }

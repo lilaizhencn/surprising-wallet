@@ -31,7 +31,8 @@ public class PubKeyConfig {
         g.generateAddress(com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinNetworkParameters.testnet(),2);
         String redeemScript=g.getRedeemScriptHex();
         if(a.getRedeemScript()!=null&&!a.getRedeemScript().isBlank()&&!a.getRedeemScript().equalsIgnoreCase(redeemScript)){
-            throw new IllegalStateException("stored redeemScript does not match derived DOGE keys");
+            throw new IllegalStateException(
+                    "stored redeemScript does not match derived multisig keys");
         }
         return redeemScript;
     }

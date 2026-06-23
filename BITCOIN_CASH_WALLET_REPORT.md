@@ -1,103 +1,230 @@
 # Bitcoin Cash Wallet Report
 
-Generated: 2026-06-21 23:23 Asia/Shanghai.
+Generated: 2026-06-23 Asia/Shanghai.
 
-## Overall Conclusion
+## 1. Overall Conclusion
 
-- Bitcoin Cash was integrated on bitcoinj `0.17.1` with a minimal BCH-specific signer.
-- CashAddr generation/parsing, legacy compatibility, P2SH 2-of-3, `SIGHASH_ALL|FORKID (0x41)`, scanning, withdrawal, collection, recovery, unified UTXO state, and ledger settlement are implemented.
-- Real BCH testnet RPC reads and a real block scan passed.
-- Funded live deposit/withdraw/collection is deferred because no BCH testnet funds were available, per the updated task instruction.
-- Full Maven regression passed; no push.
+- BCH local Regtest gate passed with real Bitcoin Cash Node transactions: CashAddr/legacy address handling, multi-user deposits, scanner recovery, withdrawal, collection, two-stage signing, `SIGHASH_FORKID`, idempotency, failure release, and ledger reconciliation.
+- Bitcoin Cash Node `29.0.0` ran with `chain=regtest`, `txindex=1`, and host RPC `127.0.0.1:18443`.
+- The implementation remains based on bitcoinj `0.17.1`; BCH-specific CashAddr, network parameters, fee planning, and ForkId signing are minimal adapters inside the existing bitcoinj stack.
+- BTC, LTC, DOGE, EVM, and TRON regression passed.
+- Gate result: PASS. Push: NO.
 
-## Files / Schema / MBG
+## 2. Modified Files
 
-- Added BCH address codec, network parameters, fee policy, transaction signer, wallet, RPC command, scanner, withdrawal/collection/recovery jobs, signer services, and tests.
-- Added `bch_address`, `bch_utxo_transaction`, `bch_withdraw_record`, `bch_withdraw_transaction`.
-- Reused unified `chain_profile`, `chain_asset`, `chain_scan_height`, `utxo_record`, `deposit_record`, `withdrawal_order`, `collection_record`, and `ledger_balance`.
-- Incremental and clean-database migrations passed.
+- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/deposit/AbstractScanBlockJob.java`
+- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/transfer/BchCollectionJob.java`
+- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/withdraw/AbstractBatchWithdrawJob.java`
+- `backendservices/wallet-parent/wallet-server/src/main/resources/application.yaml`
+- `backendservices/wallet-parent/wallet-server/src/main/resources/application-test.yaml`
+- `backendservices/wallet-parent/wallet-server/src/main/resources/application-prod.yaml`
+- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/dao/ChainJdbcRepository.java`
+- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/service/TransactionService.java`
+- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/wallet/IWallet.java`
+- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/wallet/impl/BchWallet.java`
+- `backendservices/wallet-parent/wallet-service/src/test/java/com/surprising/wallet/service/chain/doge/DogecoinDatabaseFlowIntegrationTest.java`
+- `backendservices/wallet-sig1/src/main/java/com/surprising/wallet/sig/first/config/PubKeyConfig.java`
+- `backendservices/wallet-sig1/src/main/java/com/surprising/wallet/sig/first/service/BchFirstSignService.java`
+- `backendservices/wallet-sig2/src/main/java/com/surprising/wallet/sig/second/impl/BchSecondSignService.java`
+- `currency-sdks/bitcoin-sdk/src/main/java/com/surprising/wallet/sdk/bitcoinj/bitcoincash/BitcoinCashFeePolicy.java`
+- `currency-sdks/bitcoin-sdk/src/main/java/com/surprising/wallet/sdk/bitcoinj/bitcoincash/BitcoinCashNetwork.java`
+- `currency-sdks/bitcoin-sdk/src/main/java/com/surprising/wallet/sdk/bitcoinj/bitcoincash/BitcoinCashNetworkParameters.java`
+- `currency-sdks/bitcoin-sdk/src/test/java/sdk/core/BitcoinCashCodecAndSigningTest.java`
+- `multi-chain-wallet-schema.sql`
+- `surprising-wallet-init-pgsql.sql`
+- `BITCOIN_CASH_WALLET_REPORT.md`
+- `CURRENCY_MODEL_COMPATIBILITY_REPORT.md`
+- `regression-report.md`
+
+## 3. New Files
+
+- `infra/regtest/bitcoincash/Dockerfile`
+- `infra/regtest/bitcoincash/entrypoint.sh`
+- `scripts/regtest/bitcoincash-regtest.sh`
+
+## 4. Deleted Files
+
+- None.
+
+## 5. Database Schema
+
+- Added an idempotent BCH `regtest` `chain_profile`: runtime currency id `42`, BIP44 coin type `145`, RPC `http://127.0.0.1:18443`, deposit/withdraw confirmations `6`, fee rate `1 sat/byte`, and dust `546 sat`.
+- Reused `deposit_record`, `utxo_record`, `withdrawal_order`, `collection_record`, `ledger_balance`, and `chain_scan_height`.
+- Deposit uniqueness is `(chain, tx_hash, log_index)` and UTXO uniqueness is `(chain, tx_hash, vout)`.
+- Scanner checkpoint ended at best height `126`, safe height `120`, using the database profile confirmation threshold.
+
+## 6. MBG
+
 - No MBG generation was required.
-- No files were deleted.
+- No service, scanner, signing, fee, or recovery logic was generated by MBG.
 
-## Currency Model
+## 7. CurrencyEnum / CurrencyIds Compatibility
 
-- Runtime currency id: `42`.
-- BIP44 coin type: `145`.
-- Pre-migration checks found no id `42` collision.
-- `CurrencyEnum.BCH` is legacy routing only; `CurrencyIds.BCH = 5` is not used.
-- Database/application configuration remains the source of truth.
+- `CurrencyEnum.BCH` remains a legacy table, queue, job, and signer routing adapter.
+- `CurrencyIds.BCH = 5` is not used by the BCH wallet.
+- Runtime network, currency id, BIP44 coin type, confirmations, fee, dust, and RPC configuration come from `chain_profile` and application configuration.
 
-## Network / Address
+## 8. Runtime Currency ID
 
-- Mainnet legacy P2PKH/P2SH/WIF: `0 / 5 / 128`; CashAddr prefix `bitcoincash`.
-- Testnet legacy P2PKH/P2SH/WIF: `111 / 196 / 239`; CashAddr prefix `bchtest`.
-- Wallet and both signer services select mainnet/testnet parameters from their active Spring configuration; no signer path is fixed to testnet.
-- Deposit: `bchtest:pzleucus9lj0zns4j52mkecpams5hftrzqfaauzp8t`.
-- Collection source: `bchtest:ppycmnpzszs2j50yerxelncchketwgsgwq0er5k06l`.
-- Hot: `bchtest:prtahgvp3xhdjpp2xkyvn6rxe9v3r6ceqy4hf4lyap`.
-- Paths use `m/44/145/...`.
-- CashAddr ↔ legacy round-trip tests passed.
+- BCH runtime currency id: `42`.
+- Database conflict checks found no modern runtime id collision.
 
-## bitcoinj 0.17.1 Support Boundary
+## 9. BIP44 Coin Type
 
-- Reused bitcoinj transaction serialization, P2SH scripts, keys, DER signatures, and BIP143-style digest primitive.
-- Added only the BCH-specific `0x41` hash type and CashAddr codec.
-- Every generated signature was verified against the BCH digest and checked to end in `0x41`.
-- No conflicting BCH/UTXO SDK was introduced.
+- BCH BIP44 coin type: `145`.
+- Runtime id `42` is never used as the derivation coin type.
 
-## Fee / Dust
+## 10. Network Parameters
 
-- Default fee: `1 sat/byte`.
-- Dust threshold: `546 sat`.
-- P2SH size estimation and dust rejection are chain-specific.
+- Mainnet P2PKH/P2SH/WIF: `0 / 5 / 128`; CashAddr prefix `bitcoincash`.
+- Testnet P2PKH/P2SH/WIF: `111 / 196 / 239`; CashAddr prefix `bchtest`.
+- Regtest P2PKH/P2SH/WIF: `111 / 196 / 239`; CashAddr prefix `bchreg`.
+- Regtest packet magic: `0xfabfb5da`; max target uses the regtest `0x207fffff` compact target.
 
-## Real Testnet Validation
+## 11. Address Generation
 
-- RPC: `https://bitcoin-cash-testnet.gateway.tatum.io`.
-- `getblockcount`: passed.
-- Scanned block: `1715780`.
-- Block hash: `000000003a87711566cfabbc64d13b1088521700f15b1221d50a16ef3a5b7347`.
-- Sample tx: `efd348e353e67d62c508dee30b2147f7f667b57c4238c0643f05177286563323`.
-- Scanner checkpoint advanced to `1715780`, safe height `1715779`.
-- The block contained no platform output; `deposit_record` and UTXO rows remained zero.
+- UserA `9401/0`: `bchreg:pzeausgnzhry45zss97uu2lrlrnhy4k2xvff4pdrhr`
+- UserB `9402/0`: `bchreg:pqlvl75tpu99kv2yl5jshw98ktthu0d7ggg8a76hul`
+- UserC `9403/0`: `bchreg:ppyxcegm2k6yx7m0u9r7xqtk0pntacm9sgg7k64w5d`
+- Hot wallet `0/0`: `bchreg:prp53syhkfe3w87zv2s6vlxnlf4v7uuywsrslzjnzy`
+- External withdrawal target: `bchreg:qr077k33n4rska80ttg4vzktq9k3dql4esh4n2ly5k`
+- UserA legacy form: `2N9eHC7Zd5mcZNb8z4ahnFqoPTbt47fKcRK`
+- UserB legacy form: `2MxyM2nm2BkC7rxqn3hzCH3VQgRTkhzSjMF`
+- Hot-wallet legacy form: `2NB3nucMQCKfoYZzJJXivS6xpfcnuyx3RLB`
+- Restart continuity generated UserA indexes `1` and `2` without duplication.
 
-## Records / Ledger / Idempotency / Recovery
+## 12. Deposit Transactions
 
-- Live deposit, withdrawal, and collection txids: deferred pending testnet funds.
-- PostgreSQL-backed synthetic flow verified BCH deposit credit exactly once, one UTXO lock winner, guarded release, and zero negative ledger rows.
-- Chain-scoped uniqueness remains `(chain, txid, vout)` and `(chain, order/collection no)`.
-- Stale BCH signing rows use an atomic database claim before Redis requeue.
-- Failure paths release unified/legacy UTXOs and frozen balances.
-- Two users (`9201`, `9202`) produced distinct addresses; funded multi-user flow is deferred.
+- UserA 10 BCH: `7388b67eef77f204242ab1af9887bad4d071a7e93b125d706fbc803f8b7c0c27`, vout `0`, block `102`.
+- UserB 5 BCH: `2625dab2fc411c40967b8ee01083367360d6ec100a0b82ef44be519d14d5ff94`, vout `0`, block `102`.
+- UserC 2 BCH scanner-interruption deposit: `60ccb42812b6900b345a781fb62abab8ab473f06def89e21edf48aac051ebe31`, vout `0`, block `120`.
+- At node height `126`, node confirmations were `25`, `25`, and `7`.
+- All three deposits reached `CREDITED` exactly once.
 
-## Tests
+## 13. Withdrawal Transaction
 
-- `mvn -q clean install -DskipTests=false`: passed.
-- Surefire: 71 tests, 0 failures, 0 errors, 11 skipped.
-- BCH CashAddr/FORKID signing tests: passed.
-- BCH address generation: passed.
-- PostgreSQL-backed BCH idempotency/ledger/UTXO test: passed.
+- Order: `BCH-REGTEST-WD-1782194478`
+- Txid: `2807d1ec012c244aef51e3342ec6fa9bc733c4f7d1c3a1f2d3f260a30b22acd0`
+- Block: `108`; node confirmations at height `126`: `19`.
+- Amount: `1 BCH`; change: `8.99999623 BCH`; network fee: `0.00000377 BCH` (`377 sat`).
+- Both input signatures were decoded by BCHN as `[ALL|FORKID]`.
+- Final order state: `CONFIRMED`; frozen balance is zero; source UTXO is `SPENT`.
+
+## 14. Collection Transaction
+
+- Collection id: `bch-collection-2625dab2fc411c40967b8ee01083367360d6ec100a0b82ef44be519d14d5ff94-0`
+- Txid: `a7c53c36e0c2dcf5caba1a1e010defbda0b9c0fc1e0c4f447fbd25ab65447a3a`
+- Block: `114`; node confirmations at height `126`: `13`.
+- Hot-wallet output: `4.99999657 BCH`; network fee: `0.00000343 BCH` (`343 sat`).
+- Both signatures were decoded as `[ALL|FORKID]`.
+- Final state: `CONFIRMED`; repeated collection scheduling did not create another record or transaction.
+
+## 15. UTXO State
+
+- UserA 10 BCH deposit UTXO: `SPENT` by the withdrawal.
+- UserB 5 BCH deposit UTXO: `SPENT` by the collection.
+- Withdrawal change `8.99999623 BCH`: `AVAILABLE`.
+- Collection hot-wallet output `4.99999657 BCH`: `AVAILABLE`.
+- UserC 2 BCH deposit UTXO: `AVAILABLE`.
+- No final `LOCKED` UTXO remains.
+
+## 16. Fee / Dust
+
+- Runtime fee rate: `1 sat/byte`.
+- Runtime dust threshold: `546 sat`.
+- Withdrawal estimate/actual: `377 bytes / 377 sat`.
+- Collection estimate: `343 bytes / 343 sat`; serialized transaction size was `335 bytes`.
+- No dust output was created.
+
+## 17. deposit_record
+
+- Exactly three BCH platform deposit rows exist, totaling `17 BCH`.
+- All are `CREDITED`.
+- Rewinding the scanner to height `101` and replaying blocks did not add rows or credit ledger again.
+- Non-platform and controlled internal outputs were not credited as customer deposits.
+
+## 18. withdrawal_order
+
+- Successful order `BCH-REGTEST-WD-1782194478`: `CONFIRMED` with the real txid.
+- Failure-recovery order `BCH-REGTEST-WD-FAIL-1782195322`: `FAILED` after deliberate redeemScript corruption.
+- The failed order did not broadcast; its `0.501 BCH` frozen amount and UTXO lock were fully released.
+- Replaying the successful business order id was skipped and did not create or broadcast another transaction.
+
+## 19. collection_record
+
+- Exactly one BCH collection record exists.
+- The first signing attempt failed because collection fee planning incorrectly assumed a change output.
+- The bug was fixed, the record was explicitly changed from `FAILED` to `RETRYING`, and exactly one recovery attempt reached `CONFIRMED`.
+
+## 20. Ledger Reconciliation
+
+- UserA: available/total `8.999 BCH`, locked `0`.
+- UserB: available/total `5 BCH`, locked `0`.
+- UserC: available/total `2 BCH`, locked `0`.
+- Customer liability total: `15.999 BCH`.
+- Controlled available UTXOs: `15.99999280 BCH`.
+- Difference `0.00099280 BCH` equals charged withdrawal fee `0.001 BCH` minus actual network fees `0.00000720 BCH`.
+- Negative BCH ledger rows: `0`.
+
+## 21. Idempotency
+
+- Deposit replay kept `deposit_record=3`, customer credits unchanged, and chain-scoped UTXOs unique.
+- Replayed withdrawal order id was detected before freeze/signing and produced no second broadcast.
+- Collection id is deterministic; atomic `CREATED/RETRYING -> SIGNING` claim prevented duplicate collection creation.
+- Confirmed transactions were not rebroadcast.
+
+## 22. Exception Recovery
+
+- Scanner interruption: UserC deposit was sent and confirmed while wallet-server was stopped; restart resumed from height `119` and credited block `120`.
+- Collection failure: the initial fee-plan defect produced `FAILED`, released UTXOs, and stayed terminal until explicit `RETRYING`; recovery then confirmed.
+- Withdrawal failure: deliberate redeemScript mismatch failed in sig1, did not broadcast, released legacy/unified UTXO locks, and restored user available/locked balances.
+- Scanner safe-height correction: profile confirmation changes can now lower stale safe checkpoints without allowing best-height rollback.
+
+## 23. Multi-User
+
+- Users `9401`, `9402`, and `9403` generated independent addresses and received independent real deposits.
+- Customer ledger rows remained isolated by account id; UTXOs remained isolated by chain and outpoint.
+
+## 24. ForkId Validation
+
+- Correct independently built transaction: BCHN `testmempoolaccept` returned `allowed=true`, txid `7784e5d3fe294952d4f1089cd4beac012d48c8a670c96bbd0728c3bb94f17269`.
+- The same transaction with signature hash bytes changed from `0x41` to `0x01`: `allowed=false`.
+- BCHN rejection: `mandatory-script-verify-flag-failed (Signature must use SIGHASH_FORKID)`.
+- The production withdrawal and collection were both accepted and confirmed without mandatory-script errors.
+
+## 25. Test Commands
+
+- `scripts/regtest/bitcoincash-regtest.sh init`
+- `scripts/regtest/bitcoincash-regtest.sh status`
+- `mvn -q -pl currency-sdks/bitcoin-sdk -Dtest=BitcoinCashCodecAndSigningTest test`
+- PostgreSQL-backed DOGE/BCH flow test with `-Ddoge.db.enabled=true`
+- `mvn -q clean install -DskipTests=false`
+- wallet-server, wallet-sig1, and wallet-sig2 startup with profile `test`
+- PostgreSQL `select 1`, Redis `PING`, BCHN `getblockchaininfo`
+
+## 26. Test Results
+
+- Full Maven: `74` tests, `0` failures, `0` errors, `12` skipped.
+- Forced PostgreSQL DOGE/BCH flow test: PASS.
+- BCH CashAddr, regtest prefix/checksum, fresh second-signer builder, ForkId, fee, and collection no-change tests: PASS.
 - wallet-server health: `UP`.
-- wallet-sig1 and wallet-sig2: started.
-- PostgreSQL `select 1`: passed; Redis: `PONG`.
-- BTC/LTC/DOGE/EVM/TRON regression passed in the full reactor.
+- wallet-sig1 and wallet-sig2: started successfully.
+- PostgreSQL: `1`; Redis: `PONG`; BCHN: `chain=regtest`.
+- Tracked-secret scan found no extended private key or plaintext API/RPC key assignment.
+- Production YAML uses environment placeholders and does not generate keys.
 
-## Deferred / Risks
+## 27. Blocked Items
 
-- Funded BCH live deposit, withdrawal, collection, on-chain confirmation settlement, and live reconciliation are deferred.
-- Public RPC is rate-limited; production requires controlled BCH Node infrastructure.
-- CashAddr support currently targets standard 160-bit P2PKH/P2SH, which is the wallet's supported scope.
+- None for the BCH Regtest gate.
 
-## Commit / Push
+## 28. Risks
 
-- Commit message: `feat: add bitcoin cash wallet flow`.
-- Commit hash: this report is included in the commit.
-- Push: no.
+- Public BCH testnet infrastructure remains less deterministic than local BCHN Regtest; production requires controlled BCHN nodes and monitoring.
+- CashAddr support is intentionally limited to the wallet's standard 160-bit P2PKH/P2SH scope.
+- Legacy enum/table routing remains technical debt and must not become the configuration source of truth.
 
-## Testnet Funding Request
+## 29. Commit / Push
 
-Send at least `0.02 tBCH` to:
-
-`bchtest:pzleucus9lj0zns4j52mkecpams5hftrzqfaauzp8t`
-
-This is sufficient for deposit, withdrawal, collection, fee/dust, and reconciliation validation in the next live-gate task.
+- Commit message: `feat: add bitcoin cash wallet flow`
+- Commit hash: this report is contained in that commit; the final execution output records the resulting hash.
+- Push: NO.

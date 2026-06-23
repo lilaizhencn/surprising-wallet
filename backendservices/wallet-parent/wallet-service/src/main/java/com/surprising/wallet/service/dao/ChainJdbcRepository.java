@@ -536,7 +536,11 @@ public class ChainJdbcRepository {
                         values (?, ?, ?, ?, 'ACTIVE', ?, ?)
                         on conflict (chain, scanner_name) do update set
                             best_height = greatest(chain_scan_height.best_height, excluded.best_height),
-                            safe_height = greatest(chain_scan_height.safe_height, excluded.safe_height),
+                            safe_height = case
+                                when excluded.best_height >= chain_scan_height.best_height
+                                    then excluded.safe_height
+                                else chain_scan_height.safe_height
+                            end,
                             status = 'ACTIVE',
                             updated_at = excluded.updated_at
                         """,

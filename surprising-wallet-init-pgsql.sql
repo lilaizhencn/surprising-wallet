@@ -498,6 +498,24 @@ INSERT INTO chain_profile(chain,network,family,runtime_currency_id,bip44_coin_ty
 VALUES
 ('BCH','testnet','bitcoin-like',42,145,'BCH','https://tbch.loping.net/tx/',1,6,1,546,TRUE),
 ('BCH','mainnet','bitcoin-like',42,145,'BCH','https://blockchair.com/bitcoin-cash/transaction/',1,6,1,546,TRUE);
+INSERT INTO chain_profile(
+  chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+  rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+  default_fee_rate, dust_threshold, enabled
+) VALUES (
+  'BCH', 'regtest', 'bitcoin-like', 42, 145, 'BCH',
+  'http://127.0.0.1:18443', NULL, 6, 6, 1, 546, TRUE
+)
+ON CONFLICT (chain, network) DO UPDATE SET
+  runtime_currency_id = EXCLUDED.runtime_currency_id,
+  bip44_coin_type = EXCLUDED.bip44_coin_type,
+  rpc_url = EXCLUDED.rpc_url,
+  deposit_confirmations = EXCLUDED.deposit_confirmations,
+  withdraw_confirmations = EXCLUDED.withdraw_confirmations,
+  default_fee_rate = EXCLUDED.default_fee_rate,
+  dust_threshold = EXCLUDED.dust_threshold,
+  enabled = EXCLUDED.enabled,
+  updated_at = NOW();
 
 INSERT INTO wallet_multisig_config (
   id, currency, network, script_type, required_signatures, total_pubkeys,

@@ -82,6 +82,20 @@ class DogecoinDatabaseFlowIntegrationTest {
                 assertEquals(1, repository.claimCollectionSigning(chain, collectionNo, "{}"),
                         "explicit RETRYING transition must allow one recovery attempt");
                 assertEquals(0, repository.claimCollectionSigning(chain, collectionNo, "{}"));
+
+                String scannerName = chain.toLowerCase() + "-scanner-" + UUID.randomUUID();
+                repository.updateScanHeight(chain, scannerName, 10L, 9L);
+                repository.updateScanHeight(chain, scannerName, 10L, 4L);
+                assertEquals(4L, jdbc.queryForObject("""
+                    select safe_height from chain_scan_height
+                    where chain=? and scanner_name=?
+                    """, Long.class, chain, scannerName));
+                repository.updateScanHeight(chain, scannerName, 9L, 8L);
+                assertEquals(4L, jdbc.queryForObject("""
+                    select safe_height from chain_scan_height
+                    where chain=? and scanner_name=?
+                    """, Long.class, chain, scannerName),
+                        "a stale lower best height must not move the safe checkpoint");
             }
             connection.rollback();
         }

@@ -6,7 +6,8 @@ import org.bitcoinj.base.Network;
 
 public enum BitcoinCashNetwork implements Network {
     MAINNET("org.bitcoincash.production", 0, 5, "bitcoincash"),
-    TESTNET("org.bitcoincash.test", 111, 196, "bchtest");
+    TESTNET("org.bitcoincash.test", 111, 196, "bchtest"),
+    REGTEST("org.bitcoincash.regtest", 111, 196, "bchreg");
 
     private static final Coin MAX = Coin.COIN.multiply(21_000_000L);
     private final String id;

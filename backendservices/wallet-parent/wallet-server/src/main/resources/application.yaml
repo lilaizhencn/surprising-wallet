@@ -78,7 +78,7 @@ atomex:
     server.user: ${DOGE_TESTNET_RPC_USER:}
     server.pwd: ${DOGE_TESTNET_RPC_PASSWORD:}
   bch:
-    network: testnet
+    network: ${BCH_NETWORK:testnet}
     server: ${BCH_TESTNET_RPC_URL:https://bitcoin-cash-testnet.gateway.tatum.io}
     server.user: ${BCH_TESTNET_RPC_USER:}
     server.pwd: ${BCH_TESTNET_RPC_PASSWORD:}

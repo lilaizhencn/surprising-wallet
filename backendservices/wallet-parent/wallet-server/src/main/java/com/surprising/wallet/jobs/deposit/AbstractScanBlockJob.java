@@ -76,16 +76,21 @@ abstract public class AbstractScanBlockJob {
                 return;
             }
 
-            //判断数据库中的区块高度高于链上的高度
-            if (storedHeight.getHeight() >= bestHeight) {
-                log.error("{} 数据库高度高于区块高度,跳过本次扫描", wallet.getCurrency().getName());
+            if (storedHeight.getHeight() > bestHeight) {
+                log.warn("{} 数据库高度 {} 高于链上高度 {},跳过本次扫描",
+                        wallet.getCurrency().getName(), storedHeight.getHeight(), bestHeight);
+                return;
+            }
+            if (storedHeight.getHeight().equals(bestHeight)) {
+                log.info("{} 已同步到链上最新高度 {}", wallet.getCurrency().getName(), bestHeight);
                 return;
             }
 
             //循环扫描某个阶段的区块
             long scanBegin = isDatabaseDrivenUtxo(wallet.getCurrency())
                     ? Math.max(0L, storedHeight.getHeight() + 1L)
-                    : Math.max(0L, storedHeight.getHeight() - wallet.getCurrency().getDepositConfirmNum());
+                    : Math.max(0L, storedHeight.getHeight()
+                            - wallet.getDepositConfirmationThreshold());
             long scanEnd = bestHeight;
             if (maxBlocksPerRun != null && maxBlocksPerRun > 0) {
                 scanEnd = Math.min(scanEnd, scanBegin + maxBlocksPerRun - 1L);
@@ -141,7 +146,8 @@ abstract public class AbstractScanBlockJob {
         bestHeightService.editById(storedHeight);
         if (isDatabaseDrivenUtxo(wallet.getCurrency())) {
             String chain = wallet.getCurrency().getName().toUpperCase(java.util.Locale.ROOT);
-            long safeHeight = Math.max(0L, bestHeight - wallet.getCurrency().getDepositConfirmNum());
+            long safeHeight = Math.max(
+                    0L, bestHeight - wallet.getDepositConfirmationThreshold());
             chainJdbcRepository.updateScanHeight(
                     chain, wallet.getCurrency().getName() + "-block-scanner", bestHeight, safeHeight);
         }

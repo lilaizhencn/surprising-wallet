@@ -117,9 +117,13 @@ abstract public class AbstractBatchWithdrawJob {
         }
         Integer redisFeeRate = REDIS.getInt(Constants.WALLET_FEE + currency.getIndex());
         int feeRate = redisFeeRate == null || redisFeeRate <= 0 ? defaultFeeRate() : redisFeeRate;
+        IWallet wallet = walletContext.getWallet(currency);
+        long depositConfirmationThreshold = wallet.getDepositConfirmationThreshold();
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
         UtxoTransactionExample example = new UtxoTransactionExample();
-        example.createCriteria().andStatusEqualTo((byte) Constants.WAITING).andConfirmNumGreaterThanOrEqualTo(currency.getDepositConfirmNum());
+        example.createCriteria()
+                .andStatusEqualTo((byte) Constants.WAITING)
+                .andConfirmNumGreaterThanOrEqualTo(depositConfirmationThreshold);
         PageInfo pageInfo = new PageInfo();
         pageInfo.setPageSize(size);
         pageInfo.setStartIndex(0);
@@ -163,7 +167,6 @@ abstract public class AbstractBatchWithdrawJob {
 
         //初始化交易
         JSONObject signature = new JSONObject();
-        IWallet wallet = walletContext.getWallet(currency);
         Address changeAddress = wallet.genNewAddress(Constants.USER_ID, Constants.BIZ);
         signature.put("utxos", utxos);
         signature.put("addresses", addresses);
@@ -171,6 +174,9 @@ abstract public class AbstractBatchWithdrawJob {
         signature.put("changeAddress", changeAddress.getAddress());
         signature.put("feeRate", feeRate);
         signature.put("totalAmount", totalAmount.toPlainString());
+        if (wallet.getDustThresholdAtomic() > 0) {
+            signature.put("dustThreshold", wallet.getDustThresholdAtomic());
+        }
 
         transaction = WithdrawTransaction.builder()
                 .balance(walletAmount)
