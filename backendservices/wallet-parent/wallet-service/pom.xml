@@ -111,6 +111,11 @@
             </exclusions>
         </dependency>
         <dependency>
+            <groupId>org.ton.ton4j</groupId>
+            <artifactId>smartcontract</artifactId>
+            <version>2.1.0</version>
+        </dependency>
+        <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-collections4</artifactId>
         </dependency>

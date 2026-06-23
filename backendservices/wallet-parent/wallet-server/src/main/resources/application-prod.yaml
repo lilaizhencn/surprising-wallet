@@ -27,6 +27,17 @@ atomex:
     server: ${BCH_MAINNET_RPC_URL:http://127.0.0.1:8332}
     server.user: ${BCH_MAINNET_RPC_USER:}
     server.pwd: ${BCH_MAINNET_RPC_PASSWORD:}
+  solana:
+    network: ${SOLANA_NETWORK:mainnet}
+    rpc-url: ${SOLANA_RPC_URL:}
+    scan-limit: ${SOLANA_SCAN_LIMIT:100}
+  ton:
+    network: ${TON_NETWORK:mainnet}
+    rpc-url: ${TON_RPC_URL:}
+    api-key: ${TONCENTER_API_KEY:}
+    indexer-url: ${TON_INDEXER_URL:}
+    indexer-api-key: ${TON_INDEXER_API_KEY:}
+    scan-limit: ${TON_SCAN_LIMIT:100}
   eth:
     server: https://ethereum-rpc.publicnode.com
     chain-id: 1

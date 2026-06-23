@@ -13,6 +13,7 @@ Generated: 2026-06-23 Asia/Shanghai.
 - The DOGE Regtest gate validated runtime id `41` with BIP44 coin type `3`; network, confirmations, RPC, fee, and dust were loaded from the DOGE regtest profile.
 - The BCH Regtest gate validated runtime id `42` with BIP44 coin type `145`; confirmations, fee, dust, safe scan height, withdrawal, collection, and reconciliation used the BCH regtest profile.
 - The Solana devnet gate validated runtime id `50` with BIP44 coin type `501`; Solana has no `CurrencyEnum` entry and loads profile, assets, tokens, addresses, scan checkpoint, and ledger state from the unified database model.
+- The TON testnet gate validated runtime id `51` with BIP44 coin type `607`; TON has no `CurrencyEnum` entry and loads profile, assets, Jetton token config, addresses, seqno, scan checkpoint, and ledger state from the unified database model.
 
 ## Remaining CurrencyEnum Dependencies
 
@@ -115,6 +116,23 @@ LTC continues to mirror legacy `ltc_*`, `user_asset`, `currency_balance`, and `b
 - Ed25519 derivation uses the shared master seed through a separate SLIP-0010 tree. It does not convert or hash BTC/EVM/TRON secp256k1 private keys.
 - User and token addresses are persisted in `chain_address`; private keys and the master seed are never persisted.
 
+## TON Compatibility
+
+- Runtime currency id: `51`.
+- BIP44 coin type: `607`.
+- TON is intentionally absent from `CurrencyEnum` and `CurrencyIds`.
+- `chain_profile`, `chain_asset`, `token_config`, `chain_address`,
+  `account_sequence`, `ton_transaction`, `deposit_record`, `withdrawal_order`,
+  `collection_record`, `ledger_balance`, and `chain_scan_height` are the runtime
+  source of truth.
+- TON WalletV4R2 seqno is reserved through `account_sequence`; runtime currency
+  id is never reused as a derivation coin type.
+- Testnet USDT/USDC were validated with self-deployed mock Jetton masters
+  configured through `token_config`. Production USDT/USDC must use production
+  Jetton master addresses and remain database-driven.
+- Ed25519 derivation uses the shared master seed through SLIP-0010 and does not
+  convert or hash BTC/EVM/TRON secp256k1 private keys.
+
 ## Migration Requirement
 
 Required and added:
@@ -129,12 +147,14 @@ Required and added:
 - DOGE/BCH native `chain_asset` rows and chain-scoped compatibility tables
 - `chain_address` for database-driven account/object-chain address persistence
 - Solana devnet/mainnet profiles and SOL native asset row
+- TON testnet/mainnet profiles, TON native asset row, `ton_transaction`,
+  `account_sequence`, and TON Jetton token config rows
 
 No MBG generation was needed because these tables are accessed through the hand-written JDBC repository; no service, scanner, signer, or fee logic was generated.
 
 ## ID Conflict Risk
 
-- Current modern database runtime ids include `1` (BTC), `24` (LTC), `41` (DOGE), `42` (BCH), and `50` (Solana).
+- Current modern database runtime ids include `1` (BTC), `24` (LTC), `41` (DOGE), `42` (BCH), `50` (Solana), and `51` (TON).
 - Current `chain_profile` rows reserve runtime ids `24`, `41`, and `42` for LTC, DOGE, and BCH testnet/mainnet profiles. Pre-migration checks found no conflicting use in the legacy balance tables.
 - The legacy `CurrencyIds` namespace contains incompatible meanings for ids `2`, `5`, `24`, and many token ids.
 - Risk is high if code imports both currency namespaces or hardcodes ids.

@@ -2,6 +2,9 @@
 
 Generated: 2026-06-20 14:51 Asia/Shanghai.
 
+This file is cumulative. Later sections supersede earlier checkpoint notes when
+they reference the same chain.
+
 ## Overall Result
 
 - `mvn clean install -DskipTests=false`: passed across 14 modules.
@@ -46,7 +49,7 @@ Generated: 2026-06-20 14:51 Asia/Shanghai.
 ## Blocked Items
 
 - EVM/TRON/SOL/TON live transfers were not executed.
-- SOL/TON runtime connectors remain blocked/fail-fast.
+- At this early checkpoint, SOL/TON runtime connectors were still pending.
 - Multi-user BTC withdrawal scenario was not executed in this run.
 - New multi-chain DB tables were not applied because of local DB permissions.
 - No commit was created because not all required gates passed.
@@ -210,6 +213,75 @@ Generated: 2026-06-20 21:08 Asia/Shanghai.
 Suggested commit message when all commit gates are satisfied:
 
 `feat: evm multi-user full business flow stability validation with fork environment`
+
+---
+
+## TON Account/Jetton Integration Update
+
+Generated: 2026-06-23 21:10 Asia/Shanghai.
+
+Historical note: this section records the earlier pre-funding/pre-RPC state.
+It is superseded by `TON Native / Jetton Live Gate Final Update` below.
+
+### Overall
+
+- At this earlier checkpoint, TON code integration was complete enough for
+  offline/DB/regression validation, while live funding/RPC was still pending.
+- `mvn -q clean install -DskipTests=false`: passed after the TON/FeeRateUpdater/report updates with
+  85 tests, 0 failures, 0 errors, and 16 environment-conditioned skips.
+- TON targeted default tests passed.
+- TON PostgreSQL-backed idempotency/ledger/seqno test passed with
+  `-Dton.db.enabled=true`.
+- wallet-server test profile started and `/actuator/health` returned `UP`.
+- wallet-sig1 and wallet-sig2 test profiles started with temporary external test
+  xprv values; no xprv was written to source or YAML.
+- Redis `PING`: `PONG`.
+
+### TON Verified
+
+- Runtime currency id `51` and BIP44 coin type `607` are database-driven and
+  distinct.
+- Shared Ed25519 SLIP-0010 derivation path:
+  `m/44'/607'/{userIndex}'/0'`.
+- WalletV4R2 uses explicit subwallet id `698983191` for offline address/signing
+  consistency; ton4j provider lookup is not required for BOC construction.
+- Native transfer BOC and Jetton transfer BOC build successfully without
+  broadcasting.
+- TEP-74 Jetton transfer notification body parsing is covered.
+- `deposit_record` replay credits once.
+- `ton_transaction` replay updates one row.
+- `account_sequence` reserves monotonically.
+- Ledger freeze/release guards prevent negative balances.
+
+### Earlier TON Pending Items
+
+- Live native deposit/withdraw/collection had not yet been executed at this
+  checkpoint.
+- Live Jetton USDT/USDC deposit/withdraw/collection had not yet been executed
+  at this checkpoint.
+- Initial environment had no `ATOMEX_MASTER_SEED`; a repository-external shared
+  Ed25519 test seed was created at
+  `/Users/atomex/.surprising-wallet-test-secrets/ed25519-master-seed` with mode
+  `600`.
+- Funding address for next TON testnet run:
+  `0QAZqo0OKuwLmIsJT57odv_onrMViV4mnymFhoYst7EUiGWs`.
+- TonCenter later failed with TLS handshake error and direct curl checks to both
+  TonCenter and TonAPI testnet timed out after 20 seconds. No live txid is
+  reported.
+
+### Fixes
+
+- Added TON WalletV4R2 key/address/RPC/API/transaction/scanner/adapter classes.
+- Added `ton_transaction` and `account_sequence`.
+- Added TON native profile/asset and disabled USDT/USDC Jetton placeholders.
+- Added null guard to `FeeRateUpdater` so empty Redis does not throw NPE during
+  startup.
+- Deleted the fail-fast future TON adapter placeholder.
+
+### Commit At This Earlier Checkpoint
+
+- TON commit was not created at this checkpoint.
+- Push: no.
 
 ---
 
@@ -498,6 +570,68 @@ Generated: 2026-06-21 23:07 Asia/Shanghai.
 - Push: no.
 
 Detailed evidence: `DOGECOIN_WALLET_REPORT.md`.
+
+---
+
+## TON Native / Jetton Live Gate Final Update
+
+Generated: 2026-06-23 22:10 Asia/Shanghai. This section supersedes the earlier
+TON blocked notes.
+
+- TON native + Jetton code completed and verified on TON testnet.
+- Public testnet USDT/USDC could not be obtained, so USDT and USDC were
+  validated with self-deployed TON testnet mock Jetton masters.
+- Runtime id `51` and BIP44 coin type `607` remain database-driven and separate.
+- Owner address:
+  `0QAZqo0OKuwLmIsJT57odv_onrMViV4mnymFhoYst7EUiGWs`.
+- External recipient:
+  `0QC1F5dA8vlIyvUGIMiHTZUreQVNt69dXZvsNjuxFLUGOcCG`.
+- Hot wallet:
+  `0QCOrx-PYGs7ab6r81lFm6B7t4XbmNkdeqc6Ns_bIpmnHrmE`.
+- Mock USDT master:
+  `kQCZ5SAA78W_0vA5eSoU23YomxnUwah3KYagqeesNQI5jOXT`.
+- Mock USDC master:
+  `kQCzPT6908-8TR862TQo1S43-2kEme8UKRCRSWkaxNLD7H_2`.
+- Native withdrawal:
+  `6/v48yQabtNIfMH5VImFxW9xK6dO9FS+sLiqdXvRs/g=`.
+- Native collection:
+  `mU39Pf7F9Q68rYc2/5OTbNCRpqmREMxb7dy1U+kzlM8=`.
+- USDT withdrawal:
+  `WCLKsqWSVTCd7oeVKWP4W5Ft57XQdusB/uGNuzBpxKw=`.
+- USDT collection:
+  `aVTlXPR5Cw4HIaxAu+3zy9/I3b6fsQfQvdnG2EgrgRE=`.
+- USDC withdrawal:
+  `Us7AaK2DCJI+ISjcMoT4iUhXKFDyfzRiDYDyhGeNjgU=`.
+- USDC collection:
+  `284BbYeWklER9X5xFbAY57wsyHaykd3Z3aDpCWCHYQg=`.
+- `deposit_record`: TON 3 CREDITED rows totaling `4001000000`; USDT 4
+  CREDITED rows totaling `4000000000`; USDC 4 CREDITED rows totaling
+  `4000000000`.
+- `withdrawal_order`: TON/USDT/USDC each 1 CONFIRMED.
+- `collection_record`: TON/USDT/USDC each 1 CONFIRMED.
+- `ton_transaction`: TON 5 CONFIRMED rows, USDT 6 CONFIRMED rows, USDC 6
+  CONFIRMED rows.
+- Duplicate deposit and duplicate transaction checks: 0 rows.
+- Final ledger: TON `3946000000`, USDT `3900000000`, USDC `3900000000`;
+  locked balances `0`; negative ledger rows `0`.
+- Scanner checkpoint: `ton-account-message-scanner`,
+  `best_height=67008877`, `safe_height=67008877`, `status=ACTIVE`.
+- Native scanner was hardened to ignore platform-originated Jetton protocol
+  messages so Jetton excess/refund messages cannot be credited as native TON
+  deposits.
+- TonCenter client now includes HTTP response body diagnostics and retries
+  transient 429/5xx responses.
+- `mvn -q clean install -DskipTests=false`: passed.
+- PostgreSQL `select 1`: passed; Redis: `PONG`.
+- wallet-server test profile health: `UP`.
+- wallet-sig1 test profile: started and listened on `8004`.
+- wallet-sig2 test profile: started in non-web mode and second-sign job was
+  active.
+- Current owner balance after live gate is about `0.826` testnet TON; apply more
+  testnet TON to the owner address before additional extended live tests.
+- Push: no.
+
+Detailed evidence: `TON_WALLET_REPORT.md`.
 
 ---
 

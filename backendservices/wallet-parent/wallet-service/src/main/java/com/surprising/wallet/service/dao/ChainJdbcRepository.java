@@ -11,6 +11,7 @@ import com.surprising.wallet.common.chain.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TronTransactionRecord;
 import com.surprising.wallet.common.chain.SolanaTransactionRecord;
+import com.surprising.wallet.common.chain.TonTransactionRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.currency.CurrencyEnum;
 import lombok.RequiredArgsConstructor;
@@ -240,6 +241,17 @@ public class ChainJdbcRepository {
                 (rs, rowNum) -> mapChainAddress(rs), chain, assetSymbol);
     }
 
+    public List<ChainAddressRecord> listChainAddresses(String chain) {
+        return jdbcTemplate.query("""
+                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                               owner_address, derivation_path, wallet_role, enabled
+                        from chain_address
+                        where chain = ? and enabled = true
+                        order by id
+                        """,
+                (rs, rowNum) -> mapChainAddress(rs), chain);
+    }
+
     public Optional<ChainAddressRecord> findChainAddressByAddress(String chain, String address) {
         List<ChainAddressRecord> results = jdbcTemplate.query("""
                         select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
@@ -270,6 +282,81 @@ public class ChainJdbcRepository {
                 tx.getChain(), tx.getSignature(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),
                 tx.getMintAddress(), tx.getAmount(), tx.getFeeLamports(), tx.getSlot(), tx.getConfirmations(),
                 tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
+    }
+
+    public int recordTonTransaction(TonTransactionRecord tx) {
+        return jdbcTemplate.update("""
+                        insert into ton_transaction(
+                            chain, tx_hash, from_address, to_address, asset_symbol, jetton_master,
+                            amount, fee_nano, logical_time, confirmations, status, raw_payload,
+                            created_at, updated_at
+                        )
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        on conflict (chain, tx_hash) do update set
+                            fee_nano = excluded.fee_nano,
+                            logical_time = excluded.logical_time,
+                            confirmations = greatest(ton_transaction.confirmations, excluded.confirmations),
+                            status = excluded.status,
+                            raw_payload = excluded.raw_payload,
+                            updated_at = excluded.updated_at
+                        """,
+                tx.getChain(), tx.getTxHash(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),
+                tx.getJettonMaster(), tx.getAmount(), tx.getFeeNano(), tx.getLogicalTime(),
+                tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
+    }
+
+    public int markTonTransactionConfirmed(String chain, String txHash) {
+        return jdbcTemplate.update("""
+                        update ton_transaction
+                        set confirmations = greatest(confirmations, 1),
+                            status = 'CONFIRMED',
+                            updated_at = ?
+                        where chain = ? and tx_hash = ? and status <> 'CONFIRMED'
+                        """,
+                toTs(now()), chain, txHash);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public long reserveAccountSequence(String chain, String address, long chainSequence) {
+        jdbcTemplate.update("""
+                        insert into account_sequence(
+                            chain, address, chain_sequence, next_sequence, status, created_at, updated_at
+                        )
+                        values (?, ?, ?, ?, 'ACTIVE', ?, ?)
+                        on conflict (chain, address) do nothing
+                        """,
+                chain, address, chainSequence, chainSequence, toTs(now()), toTs(now()));
+        Long next = jdbcTemplate.queryForObject("""
+                        select next_sequence from account_sequence
+                        where chain = ? and address = ?
+                        for update
+                        """, Long.class, chain, address);
+        long reserved = Math.max(chainSequence, next == null ? chainSequence : next);
+        jdbcTemplate.update("""
+                        update account_sequence
+                        set chain_sequence = greatest(chain_sequence, ?),
+                            next_sequence = ?,
+                            status = 'ACTIVE',
+                            updated_at = ?
+                        where chain = ? and address = ?
+                        """,
+                chainSequence, reserved + 1, toTs(now()), chain, address);
+        return reserved;
+    }
+
+    public void synchronizeAccountSequence(String chain, String address, long chainSequence) {
+        jdbcTemplate.update("""
+                        insert into account_sequence(
+                            chain, address, chain_sequence, next_sequence, status, created_at, updated_at
+                        )
+                        values (?, ?, ?, ?, 'ACTIVE', ?, ?)
+                        on conflict (chain, address) do update set
+                            chain_sequence = excluded.chain_sequence,
+                            next_sequence = greatest(account_sequence.next_sequence, excluded.next_sequence),
+                            status = 'ACTIVE',
+                            updated_at = excluded.updated_at
+                        """,
+                chain, address, chainSequence, chainSequence, toTs(now()), toTs(now()));
     }
 
     /**

@@ -61,8 +61,8 @@ public class FeeRateUpdater {
             } catch (Exception e) {
                 // API 不可用，检查 Redis 是否有值，没有则设默认
                 String key = Constants.WALLET_FEE + currency.getIndex();
-                int current = REDIS.getInt(key);
-                if (current <= 0) {
+                Integer current = REDIS.getInt(key);
+                if (current == null || current <= 0) {
                     REDIS.set(key, String.valueOf(DEFAULT_FEE_RATE));
                     log.warn("费率 API 不可用，使用默认值: {} = {} sat/vB", key, DEFAULT_FEE_RATE);
                 } else {

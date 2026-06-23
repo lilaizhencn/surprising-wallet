@@ -88,6 +88,13 @@ atomex:
     network: ${SOLANA_NETWORK:devnet}
     rpc-url: ${SOLANA_RPC_URL:https://api.devnet.solana.com}
     scan-limit: ${SOLANA_SCAN_LIMIT:100}
+  ton:
+    network: ${TON_NETWORK:testnet}
+    rpc-url: ${TON_RPC_URL:https://testnet.toncenter.com/api/v2}
+    api-key: ${TONCENTER_API_KEY:}
+    indexer-url: ${TON_INDEXER_URL:https://testnet.tonapi.io}
+    indexer-api-key: ${TON_INDEXER_API_KEY:}
+    scan-limit: ${TON_SCAN_LIMIT:100}
   # eth config
   eth:
     server: https://ethereum-sepolia-rpc.publicnode.com

@@ -731,3 +731,85 @@ set asset_kind = excluded.asset_kind,
     min_transfer = excluded.min_transfer,
     min_withdraw = excluded.min_withdraw,
     updated_at = now();
+
+create table if not exists account_sequence (
+    id bigserial primary key,
+    chain varchar(32) not null,
+    address varchar(160) not null,
+    chain_sequence bigint not null default 0,
+    next_sequence bigint not null default 0,
+    status varchar(32) not null default 'ACTIVE',
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (chain, address)
+);
+
+insert into chain_profile(
+    chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+    rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+    default_fee_rate, dust_threshold, enabled
+)
+values
+    ('TON', 'testnet', 'ton', 51, 607, 'TON',
+     'https://testnet.toncenter.com/api/v2', 'https://testnet.tonviewer.com/transaction/',
+     1, 1, 5000000, 1000000, true),
+    ('TON', 'mainnet', 'ton', 51, 607, 'TON',
+     null, 'https://tonviewer.com/transaction/',
+     1, 1, 5000000, 1000000, false)
+on conflict (chain, network) do update
+set family = excluded.family,
+    runtime_currency_id = excluded.runtime_currency_id,
+    bip44_coin_type = excluded.bip44_coin_type,
+    native_symbol = excluded.native_symbol,
+    rpc_url = coalesce(excluded.rpc_url, chain_profile.rpc_url),
+    explorer_url = excluded.explorer_url,
+    deposit_confirmations = excluded.deposit_confirmations,
+    withdraw_confirmations = excluded.withdraw_confirmations,
+    default_fee_rate = excluded.default_fee_rate,
+    dust_threshold = excluded.dust_threshold,
+    enabled = excluded.enabled,
+    updated_at = now();
+
+insert into chain_asset(
+    chain, symbol, asset_kind, decimals, native_asset, active, min_transfer, min_withdraw
+)
+values ('TON', 'TON', 'NATIVE', 9, true, true, 1000000, 1000000)
+on conflict (chain, symbol) do update
+set asset_kind = excluded.asset_kind,
+    decimals = excluded.decimals,
+    native_asset = excluded.native_asset,
+    active = excluded.active,
+    min_transfer = excluded.min_transfer,
+    min_withdraw = excluded.min_withdraw,
+    updated_at = now();
+
+insert into token_config(
+    chain, network, symbol, standard, token_standard, contract_address,
+    decimals, enabled, min_deposit, min_withdraw, min_deposit_amount,
+    min_withdraw_amount, collect_enabled, collect_threshold, gas_strategy,
+    confirmation_required
+)
+values
+    ('TON', 'testnet', 'USDT', 'JETTON', 'JETTON', 'TON_TESTNET_USDT_JETTON_MASTER_CONFIGURE_IN_DB',
+     6, false, 1, 1, 1, 1, true, 1, 'TON_FORWARD_FEE', 1),
+    ('TON', 'testnet', 'USDC', 'JETTON', 'JETTON', 'TON_TESTNET_USDC_JETTON_MASTER_CONFIGURE_IN_DB',
+     6, false, 1, 1, 1, 1, true, 1, 'TON_FORWARD_FEE', 1)
+on conflict (chain, symbol) do update
+set network = excluded.network,
+    standard = excluded.standard,
+    token_standard = excluded.token_standard,
+    contract_address = case
+        when token_config.enabled then token_config.contract_address
+        else excluded.contract_address
+    end,
+    decimals = excluded.decimals,
+    enabled = token_config.enabled,
+    min_deposit = excluded.min_deposit,
+    min_withdraw = excluded.min_withdraw,
+    min_deposit_amount = excluded.min_deposit_amount,
+    min_withdraw_amount = excluded.min_withdraw_amount,
+    collect_enabled = excluded.collect_enabled,
+    collect_threshold = excluded.collect_threshold,
+    gas_strategy = excluded.gas_strategy,
+    confirmation_required = excluded.confirmation_required,
+    updated_at = now();
