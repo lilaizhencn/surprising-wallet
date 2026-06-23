@@ -17,7 +17,9 @@ public enum ChainType {
     AVAX_C("evm", "account"),
     TRON("tron", "account"),
     SOLANA("solana", "account"),
-    TON("ton", "account");
+    TON("ton", "account"),
+    APTOS("aptos", "account"),
+    SUI("sui", "object");
 
     private final String family;
     private final String model;

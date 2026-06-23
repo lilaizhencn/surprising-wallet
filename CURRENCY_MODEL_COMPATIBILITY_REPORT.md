@@ -12,6 +12,7 @@ Generated: 2026-06-23 Asia/Shanghai.
 - The LTC live gate validated runtime id `24` with BIP44 coin type `2`; deposit, withdrawal, collection, and reconciliation used the database profile successfully.
 - The DOGE Regtest gate validated runtime id `41` with BIP44 coin type `3`; network, confirmations, RPC, fee, and dust were loaded from the DOGE regtest profile.
 - The BCH Regtest gate validated runtime id `42` with BIP44 coin type `145`; confirmations, fee, dust, safe scan height, withdrawal, collection, and reconciliation used the BCH regtest profile.
+- The Solana devnet gate validated runtime id `50` with BIP44 coin type `501`; Solana has no `CurrencyEnum` entry and loads profile, assets, tokens, addresses, scan checkpoint, and ledger state from the unified database model.
 
 ## Remaining CurrencyEnum Dependencies
 
@@ -104,6 +105,16 @@ LTC continues to mirror legacy `ltc_*`, `user_asset`, `currency_balance`, and `b
 - Runtime dust is propagated with the signing payload; the signer uses the database-derived value with a BCH policy fallback only for legacy payload compatibility.
 - BCH collection uses a deterministic chain-scoped id and atomic database claim. `FAILED` is terminal until an explicit `RETRYING` transition.
 
+## Solana Compatibility
+
+- Runtime currency id: `50`.
+- BIP44 coin type: `501`.
+- Solana is intentionally absent from `CurrencyEnum` and `CurrencyIds`.
+- `chain_profile`, `chain_asset`, `token_config`, and `chain_address` are the runtime source of truth.
+- SOL/SPL amounts, ATA addresses, RPC URL, confirmations, scanner checkpoint, withdrawal state, collection state, and ledger balances are chain-scoped.
+- Ed25519 derivation uses the shared master seed through a separate SLIP-0010 tree. It does not convert or hash BTC/EVM/TRON secp256k1 private keys.
+- User and token addresses are persisted in `chain_address`; private keys and the master seed are never persisted.
+
 ## Migration Requirement
 
 Required and added:
@@ -116,12 +127,14 @@ Required and added:
 - DOGE regtest `chain_profile`
 - BCH regtest `chain_profile`
 - DOGE/BCH native `chain_asset` rows and chain-scoped compatibility tables
+- `chain_address` for database-driven account/object-chain address persistence
+- Solana devnet/mainnet profiles and SOL native asset row
 
 No MBG generation was needed because these tables are accessed through the hand-written JDBC repository; no service, scanner, signer, or fee logic was generated.
 
 ## ID Conflict Risk
 
-- Current modern database runtime ids are `1` (BTC), `24` (LTC), `41` (DOGE), and `42` (BCH).
+- Current modern database runtime ids include `1` (BTC), `24` (LTC), `41` (DOGE), `42` (BCH), and `50` (Solana).
 - Current `chain_profile` rows reserve runtime ids `24`, `41`, and `42` for LTC, DOGE, and BCH testnet/mainnet profiles. Pre-migration checks found no conflicting use in the legacy balance tables.
 - The legacy `CurrencyIds` namespace contains incompatible meanings for ids `2`, `5`, `24`, and many token ids.
 - Risk is high if code imports both currency namespaces or hardcodes ids.
@@ -129,5 +142,5 @@ No MBG generation was needed because these tables are accessed through the hand-
   - database profile lookup and startup validation;
   - no new `CurrencyIds` usage;
   - one compatibility enum entry per new chain;
-  - migrations query/reserve runtime ids before DOGE/BCH activation;
+  - migrations query/reserve runtime ids before new-chain activation;
   - BIP44 coin type never inferred from runtime id.

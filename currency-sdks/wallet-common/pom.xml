@@ -60,5 +60,16 @@
             <groupId>com.madgag.spongycastle</groupId>
             <artifactId>prov</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.bloxbean.cardano</groupId>
+            <artifactId>net-i2p-crypto-eddsa</artifactId>
+            <version>0.3.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.11.4</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

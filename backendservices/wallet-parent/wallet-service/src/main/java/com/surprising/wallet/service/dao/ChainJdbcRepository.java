@@ -1,13 +1,16 @@
 package com.surprising.wallet.service.dao;
 
 import com.surprising.wallet.common.chain.ChainAsset;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.BitcoinLikeChainProfile;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.EvmNonceRecord;
 import com.surprising.wallet.common.chain.EvmTransactionRecord;
 import com.surprising.wallet.common.chain.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TronTransactionRecord;
+import com.surprising.wallet.common.chain.SolanaTransactionRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.currency.CurrencyEnum;
 import lombok.RequiredArgsConstructor;
@@ -69,6 +72,33 @@ public class ChainJdbcRepository {
                         .depositConfirmations(rs.getInt("deposit_confirmations"))
                         .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
                         .defaultFeeRate(rs.getObject("default_fee_rate", Long.class))
+                        .dustThreshold(rs.getObject("dust_threshold", Long.class))
+                        .enabled(rs.getBoolean("enabled"))
+                        .build(),
+                chain, network);
+        return results.stream().findFirst();
+    }
+
+    public Optional<AccountChainProfile> findAccountChainProfile(String chain, String network) {
+        List<AccountChainProfile> results = jdbcTemplate.query("""
+                        select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+                               rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+                               default_fee_rate, dust_threshold, enabled
+                        from chain_profile
+                        where chain = ? and network = ? and enabled = true
+                        """,
+                (rs, rowNum) -> AccountChainProfile.builder()
+                        .chain(rs.getString("chain"))
+                        .network(rs.getString("network"))
+                        .family(rs.getString("family"))
+                        .runtimeCurrencyId(rs.getInt("runtime_currency_id"))
+                        .bip44CoinType(rs.getInt("bip44_coin_type"))
+                        .nativeSymbol(rs.getString("native_symbol"))
+                        .rpcUrl(rs.getString("rpc_url"))
+                        .explorerUrl(rs.getString("explorer_url"))
+                        .depositConfirmations(rs.getInt("deposit_confirmations"))
+                        .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
+                        .defaultFee(rs.getObject("default_fee_rate", Long.class))
                         .dustThreshold(rs.getObject("dust_threshold", Long.class))
                         .enabled(rs.getBoolean("enabled"))
                         .build(),
@@ -161,6 +191,85 @@ public class ChainJdbcRepository {
                         """, String.class, chain)
                 .stream()
                 .collect(Collectors.toSet());
+    }
+
+    public int upsertChainAddress(ChainAddressRecord address) {
+        return jdbcTemplate.update("""
+                        insert into chain_address(
+                            chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                            owner_address, derivation_path, wallet_role, enabled, created_at, updated_at
+                        )
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        on conflict (chain, asset_symbol, user_id, biz, address_index, wallet_role)
+                        do update set
+                            account_id = excluded.account_id,
+                            address = excluded.address,
+                            owner_address = excluded.owner_address,
+                            derivation_path = excluded.derivation_path,
+                            enabled = excluded.enabled,
+                            updated_at = excluded.updated_at
+                        """,
+                address.getChain(), address.getAssetSymbol(), address.getAccountId(), address.getUserId(),
+                address.getBiz(), address.getAddressIndex(), address.getAddress(), address.getOwnerAddress(),
+                address.getDerivationPath(), address.getWalletRole(), address.getEnabled(),
+                toTs(now()), toTs(now()));
+    }
+
+    public Optional<ChainAddressRecord> findChainAddress(String chain, String assetSymbol, long userId,
+                                                         int biz, long addressIndex, String walletRole) {
+        List<ChainAddressRecord> results = jdbcTemplate.query("""
+                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                               owner_address, derivation_path, wallet_role, enabled
+                        from chain_address
+                        where chain = ? and asset_symbol = ? and user_id = ? and biz = ?
+                          and address_index = ? and wallet_role = ?
+                        """,
+                (rs, rowNum) -> mapChainAddress(rs),
+                chain, assetSymbol, userId, biz, addressIndex, walletRole);
+        return results.stream().findFirst();
+    }
+
+    public List<ChainAddressRecord> listChainAddresses(String chain, String assetSymbol) {
+        return jdbcTemplate.query("""
+                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                               owner_address, derivation_path, wallet_role, enabled
+                        from chain_address
+                        where chain = ? and asset_symbol = ? and enabled = true
+                        order by id
+                        """,
+                (rs, rowNum) -> mapChainAddress(rs), chain, assetSymbol);
+    }
+
+    public Optional<ChainAddressRecord> findChainAddressByAddress(String chain, String address) {
+        List<ChainAddressRecord> results = jdbcTemplate.query("""
+                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                               owner_address, derivation_path, wallet_role, enabled
+                        from chain_address
+                        where chain = ? and address = ? and enabled = true
+                        """,
+                (rs, rowNum) -> mapChainAddress(rs), chain, address);
+        return results.stream().findFirst();
+    }
+
+    public int recordSolanaTransaction(SolanaTransactionRecord tx) {
+        return jdbcTemplate.update("""
+                        insert into sol_transaction(
+                            chain, signature, from_address, to_address, asset_symbol, mint_address,
+                            amount, fee_lamports, slot, confirmations, status, raw_payload,
+                            created_at, updated_at
+                        )
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        on conflict (chain, signature) do update set
+                            fee_lamports = excluded.fee_lamports,
+                            slot = excluded.slot,
+                            confirmations = greatest(sol_transaction.confirmations, excluded.confirmations),
+                            status = excluded.status,
+                            raw_payload = excluded.raw_payload,
+                            updated_at = excluded.updated_at
+                        """,
+                tx.getChain(), tx.getSignature(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),
+                tx.getMintAddress(), tx.getAmount(), tx.getFeeLamports(), tx.getSlot(), tx.getConfirmations(),
+                tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
     }
 
     /**
@@ -322,6 +431,14 @@ public class ChainJdbcRepository {
         return results.stream().findFirst();
     }
 
+    public Optional<String> findWithdrawalTxHash(String chain, String orderNo) {
+        List<String> results = jdbcTemplate.queryForList("""
+                        select tx_hash from withdrawal_order
+                        where chain = ? and order_no = ? and tx_hash is not null
+                        """, String.class, chain, orderNo);
+        return results.stream().findFirst();
+    }
+
     public int createCollectionRecord(String collectionNo, String chain, String assetSymbol,
                                       String fromAddress, String toAddress, BigDecimal amount, BigDecimal fee,
                                       String rawPayload) {
@@ -374,6 +491,42 @@ public class ChainJdbcRepository {
                         where chain = ? and collection_no = ? and status <> 'CONFIRMED'
                         """,
                 txHash, toTs(now()), chain, collectionNo);
+    }
+
+    public Optional<String> findCollectionStatus(String chain, String collectionNo) {
+        List<String> results = jdbcTemplate.queryForList("""
+                        select status from collection_record where chain = ? and collection_no = ?
+                        """, String.class, chain, collectionNo);
+        return results.stream().findFirst();
+    }
+
+    public Optional<String> findCollectionTxHash(String chain, String collectionNo) {
+        List<String> results = jdbcTemplate.queryForList("""
+                        select tx_hash from collection_record
+                        where chain = ? and collection_no = ? and tx_hash is not null
+                        """, String.class, chain, collectionNo);
+        return results.stream().findFirst();
+    }
+
+    public Optional<LedgerBalanceRecord> findLedgerBalance(String chain, String assetSymbol, String accountId) {
+        List<LedgerBalanceRecord> results = jdbcTemplate.query("""
+                        select chain, asset_symbol, account_id, available_balance, locked_balance, total_balance,
+                               created_at, updated_at
+                        from ledger_balance
+                        where chain = ? and asset_symbol = ? and account_id = ?
+                        """,
+                (rs, rowNum) -> LedgerBalanceRecord.builder()
+                        .chain(rs.getString("chain"))
+                        .assetSymbol(rs.getString("asset_symbol"))
+                        .accountId(rs.getString("account_id"))
+                        .availableBalance(rs.getBigDecimal("available_balance"))
+                        .lockedBalance(rs.getBigDecimal("locked_balance"))
+                        .totalBalance(rs.getBigDecimal("total_balance"))
+                        .createdAt(toInstant(rs.getTimestamp("created_at")))
+                        .updatedAt(toInstant(rs.getTimestamp("updated_at")))
+                        .build(),
+                chain, assetSymbol, accountId);
+        return results.stream().findFirst();
     }
 
     public List<WithdrawTransaction> findStaleBitcoinLikeSigningTransactions(
@@ -476,7 +629,7 @@ public class ChainJdbcRepository {
                         where chain = ? and asset_symbol = ? and account_id = ?
                           and available_balance >= ?
                         """,
-                amount, amount, toTs(now()), chain, assetSymbol, accountId.toLowerCase(), amount);
+                amount, amount, toTs(now()), chain, assetSymbol, accountId, amount);
         return updated == 1;
     }
 
@@ -493,7 +646,7 @@ public class ChainJdbcRepository {
                         where chain = ? and asset_symbol = ? and account_id = ?
                           and available_balance >= ?
                         """,
-                amount, amount, toTs(now()), chain, assetSymbol, accountId.toLowerCase(), amount);
+                amount, amount, toTs(now()), chain, assetSymbol, accountId, amount);
         return updated == 1;
     }
 
@@ -509,7 +662,7 @@ public class ChainJdbcRepository {
                         where chain = ? and asset_symbol = ? and account_id = ?
                           and locked_balance >= ?
                         """,
-                amount, amount, toTs(now()), chain, assetSymbol, accountId.toLowerCase(), amount);
+                amount, amount, toTs(now()), chain, assetSymbol, accountId, amount);
         return updated == 1;
     }
 
@@ -525,7 +678,7 @@ public class ChainJdbcRepository {
                         where chain = ? and asset_symbol = ? and account_id = ?
                           and locked_balance >= ?
                         """,
-                amount, amount, toTs(now()), chain, assetSymbol, accountId.toLowerCase(), amount);
+                amount, amount, toTs(now()), chain, assetSymbol, accountId, amount);
         return updated == 1;
     }
 
@@ -659,5 +812,22 @@ public class ChainJdbcRepository {
         } catch (DataAccessException ignored) {
             return List.of();
         }
+    }
+
+    private static ChainAddressRecord mapChainAddress(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return ChainAddressRecord.builder()
+                .id(rs.getLong("id"))
+                .chain(rs.getString("chain"))
+                .assetSymbol(rs.getString("asset_symbol"))
+                .accountId(rs.getString("account_id"))
+                .userId(rs.getLong("user_id"))
+                .biz(rs.getInt("biz"))
+                .addressIndex(rs.getLong("address_index"))
+                .address(rs.getString("address"))
+                .ownerAddress(rs.getString("owner_address"))
+                .derivationPath(rs.getString("derivation_path"))
+                .walletRole(rs.getString("wallet_role"))
+                .enabled(rs.getBoolean("enabled"))
+                .build();
     }
 }

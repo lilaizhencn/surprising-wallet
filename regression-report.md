@@ -501,6 +501,39 @@ Detailed evidence: `DOGECOIN_WALLET_REPORT.md`.
 
 ---
 
+## Solana Devnet Gate Final Update
+
+Generated: 2026-06-23 Asia/Shanghai.
+
+- Shared-master-seed SLIP-0010 Ed25519 derivation passed stability, chain separation,
+  user-index separation, signature verification, and service-restart determinism tests.
+- Runtime id `50` and BIP44 coin type `501` are separate database fields.
+- SOL deposits:
+  - `4F4cZdy39pEDqQA6TteEYvXmxJkW2tstpMAY3aU34m4eDWFrSYfnT666vXu1td384xBnxQU9JXcvR1DusiqvD9sZ`
+  - `2bRy3NN6pm3yoMQLEQSTKXaRZrpK6KbqwTLXovU1y2XZr759rvn1fu9LVjcf92pN5BnMch6yPVjMdUUB9pVsjEKv`
+- SOL withdrawal:
+  `54WzTvv62Vt4NARYJvzrb9KUdwtpCLpkBPUqjQNK5cKspn9yj3MkWfRTD3Go8CCN1U3Q6RqLM1NW5Komt9cprNEr`.
+- SOL collection:
+  `5PvuJukmM1wdPm9LqVgnLSsMh4SLpHjCdXwkSvjgVcWZrDt6c6c6NUp14WmSV5rQMAtG8JeBgYhGtYPp1G59nFdZ`.
+- Mock SPL USDT and USDC each passed mint/ATA creation, deposit, scanner credit,
+  withdrawal, collection, confirmation, and replay idempotency.
+- Scanner checkpoint reached slot `471360225`; duplicate scans did not duplicate credit.
+- Successful withdrawal/collection business-id replay returned the original signature.
+- Oversized withdrawal failed before broadcast; locked balances remained zero.
+- Negative Solana ledger rows: `0`.
+- Official RPC faucet rate limiting and transient EOF were reproduced. The official
+  PoW faucet and bounded RPC retry completed the gate without mocked transactions.
+- `mvn -q clean install -DskipTests=false`: passed.
+- Full Surefire: 79 tests, 0 failures, 0 errors, 14 environment-conditioned skips.
+- PostgreSQL `select 1`: passed; Redis: `PONG`.
+- wallet-server health: `UP`; wallet-sig1 and wallet-sig2 started.
+- Production YAML contains only an environment placeholder for the master seed.
+- Push: no.
+
+Detailed evidence: `SOLANA_WALLET_REPORT.md`.
+
+---
+
 ## Bitcoin Cash Regtest Gate Final Update
 
 Generated: 2026-06-23 Asia/Shanghai. This section supersedes the earlier BCH funded-live deferral.

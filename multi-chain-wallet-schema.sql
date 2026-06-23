@@ -665,3 +665,69 @@ create table if not exists ledger_balance (
     updated_at timestamptz not null default now(),
     unique (chain, asset_symbol, account_id)
 );
+
+-- Unified address registry for account/object chains. Private key material is
+-- never persisted here; derivation_path is safe metadata and the master seed
+-- remains in external secret storage.
+create table if not exists chain_address (
+    id bigserial primary key,
+    chain varchar(32) not null,
+    asset_symbol varchar(32) not null,
+    account_id varchar(160) not null,
+    user_id bigint not null,
+    biz integer not null default 0,
+    address_index bigint not null,
+    address varchar(160) not null,
+    owner_address varchar(160),
+    derivation_path varchar(96) not null,
+    wallet_role varchar(32) not null default 'DEPOSIT',
+    enabled boolean not null default true,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (chain, asset_symbol, address),
+    unique (chain, asset_symbol, user_id, biz, address_index, wallet_role)
+);
+
+create index if not exists idx_chain_address_scan
+    on chain_address(chain, asset_symbol, enabled);
+create index if not exists idx_chain_address_owner
+    on chain_address(chain, owner_address);
+
+insert into chain_profile(
+    chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+    rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+    default_fee_rate, dust_threshold, enabled
+)
+values
+    ('SOLANA', 'devnet', 'solana', 50, 501, 'SOL',
+     'https://api.devnet.solana.com', 'https://explorer.solana.com/tx/',
+     1, 1, 5000, 890880, true),
+    ('SOLANA', 'mainnet', 'solana', 50, 501, 'SOL',
+     null, 'https://explorer.solana.com/tx/',
+     32, 32, 5000, 890880, false)
+on conflict (chain, network) do update
+set family = excluded.family,
+    runtime_currency_id = excluded.runtime_currency_id,
+    bip44_coin_type = excluded.bip44_coin_type,
+    native_symbol = excluded.native_symbol,
+    rpc_url = coalesce(excluded.rpc_url, chain_profile.rpc_url),
+    explorer_url = excluded.explorer_url,
+    deposit_confirmations = excluded.deposit_confirmations,
+    withdraw_confirmations = excluded.withdraw_confirmations,
+    default_fee_rate = excluded.default_fee_rate,
+    dust_threshold = excluded.dust_threshold,
+    enabled = excluded.enabled,
+    updated_at = now();
+
+insert into chain_asset(
+    chain, symbol, asset_kind, decimals, native_asset, active, min_transfer, min_withdraw
+)
+values ('SOLANA', 'SOL', 'NATIVE', 9, true, true, 1, 1)
+on conflict (chain, symbol) do update
+set asset_kind = excluded.asset_kind,
+    decimals = excluded.decimals,
+    native_asset = excluded.native_asset,
+    active = excluded.active,
+    min_transfer = excluded.min_transfer,
+    min_withdraw = excluded.min_withdraw,
+    updated_at = now();

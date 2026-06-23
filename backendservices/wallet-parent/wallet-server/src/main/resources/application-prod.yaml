@@ -4,6 +4,8 @@ atomex:
       name: prod
   wallet:
     network: main
+    ed25519:
+      master-seed: ${ATOMEX_MASTER_SEED:}
     pubKey1: ${ATOMEX_PROD_PUBKEY1:}
     pubKey2: ${ATOMEX_PROD_PUBKEY2:}
     pubKey3: ${ATOMEX_PROD_PUBKEY3:}
