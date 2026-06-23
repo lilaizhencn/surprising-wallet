@@ -573,6 +573,63 @@ Detailed evidence: `DOGECOIN_WALLET_REPORT.md`.
 
 ---
 
+## Sui Testnet Gate Final Update
+
+Generated: 2026-06-24 Asia/Shanghai.
+
+- Shared-master-seed SLIP-0010 Ed25519 derivation passed stability, chain
+  separation, user-index separation, signature verification, and service-restart
+  determinism tests.
+- Runtime id `53` and BIP44 coin type `784` are separate database fields.
+- Sui native addresses:
+  - Owner/deposit: `0xe9ea852c9bcd9a48769da7608b26fdd1b4d7e28f57777cf74336b61546b440e0`
+  - External: `0x8375c7ebc6ccbe821e70e0c160fa2a916bcec46693eac6181d50dd3fc41e56ca`
+  - Hot: `0x0bda2e1c5cf7ff45cdd0d0abe80762847881d49a03fa750f13de43fd2cf7cc59`
+- SUI deposit:
+  `79yfEshLC7FeZbHzcFsBATxiHqt9yzW6jiNWNJqn8PtP`.
+- SUI withdrawal:
+  `5y5UcARz2xJxtFNhV248SDWLFm965aLDcbAeE6i6LLWc`.
+- SUI collection:
+  `AbYDXSYHRjJXg7s64ik9swzz2TuSdcfxnYQwG9WK1fPG`.
+- Mock Sui Coin<T> package:
+  `0x516b04d9f19a4eee51fb9b2e3d80a4691ee65680cd488ddffd8b91c4d24762ce`.
+- Mock MUSD CoinType:
+  `0x516b04d9f19a4eee51fb9b2e3d80a4691ee65680cd488ddffd8b91c4d24762ce::mock_coin::MOCK_COIN`.
+- Final MUSD mint/deposit:
+  `3YWdJtK7Ag9biLJVEdsVXKujtykvHfYJzkhFwT23PEe4`.
+- Final MUSD withdrawal:
+  `CgyMdZYiBAn8UncrbBBxGi4NvvY3tKYEt5w3vTxf3xkN`.
+- Final MUSD collection:
+  `GozpwydgFLaj1jnBoYUQMHTjfGjzp8vYvxumdv5VtJod`.
+- Scanner checkpoint reached checkpoint `351930951`; duplicate scans did not
+  duplicate credit.
+- Successful withdrawal/collection business-id replay returned the original
+  digest and did not broadcast again.
+- Sui coin/object selection validated `unsafe_paySui`, `unsafe_pay`, separate
+  SUI gas object selection for Coin<T>, and RPC confirmation through
+  `sui_getTransactionBlock`.
+- `deposit_record`: MUSD 2 `CREDITED` real testnet rows; SUI real testnet
+  deposit plus repeatable DB-flow synthetic rows.
+- `withdrawal_order`: SUI 1 `CONFIRMED`; MUSD 2 `CONFIRMED`.
+- `collection_record`: SUI 1 `CONFIRMED`; MUSD 2 `CONFIRMED`.
+- Final ledger: SUI owner available/total `890000000`, MUSD owner
+  available/total `16000000`, locked `0`, negative Sui ledger rows `0`.
+- Public faucet rate limiting was reproduced (`429`). Publisher funding used a
+  controlled Sui testnet owner address; no faucet/key material was committed.
+- Sui Java `HttpClient` TLS/EOF instability was handled by an OkHttp fallback;
+  production code no longer shells out to `curl`.
+- `mvn -q clean install -DskipTests=false`: passed.
+- PostgreSQL `select 1`: passed; Redis: `PONG`.
+- wallet-server health: `UP`; wallet-sig1 and wallet-sig2 started from final
+  clean artifacts.
+- Secret scan: no plaintext private key, Sui CLI private key, RPC key, or API key
+  assignment in tracked Sui/prod config files.
+- Push: no.
+
+Detailed evidence: `SUI_WALLET_REPORT.md`.
+
+---
+
 ## Aptos Devnet Gate Update
 
 Generated: 2026-06-23 Asia/Shanghai.

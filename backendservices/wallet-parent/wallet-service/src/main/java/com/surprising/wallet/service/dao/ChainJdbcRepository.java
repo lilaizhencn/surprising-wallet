@@ -13,6 +13,7 @@ import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TronTransactionRecord;
 import com.surprising.wallet.common.chain.SolanaTransactionRecord;
 import com.surprising.wallet.common.chain.TonTransactionRecord;
+import com.surprising.wallet.common.chain.SuiTransactionRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.currency.CurrencyEnum;
 import lombok.RequiredArgsConstructor;
@@ -355,6 +356,39 @@ public class ChainJdbcRepository {
                         where chain = ? and tx_hash = ? and status <> 'CONFIRMED'
                         """,
                 version, gasUsed, gasUnitPrice, rawPayload, toTs(now()), chain, txHash);
+    }
+
+    public int recordSuiTransaction(SuiTransactionRecord tx) {
+        return jdbcTemplate.update("""
+                        insert into sui_transaction(
+                            chain, tx_digest, sender, receiver, asset_symbol, coin_type,
+                            amount, gas_used, checkpoint, status, raw_payload, created_at, updated_at
+                        )
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        on conflict (chain, tx_digest) do update set
+                            gas_used = greatest(sui_transaction.gas_used, excluded.gas_used),
+                            checkpoint = coalesce(excluded.checkpoint, sui_transaction.checkpoint),
+                            status = excluded.status,
+                            raw_payload = coalesce(excluded.raw_payload, sui_transaction.raw_payload),
+                            updated_at = excluded.updated_at
+                        """,
+                tx.getChain(), tx.getTxDigest(), tx.getSender(), tx.getReceiver(), tx.getAssetSymbol(),
+                tx.getCoinType(), tx.getAmount(), tx.getGasUsed(), tx.getCheckpoint(), tx.getStatus(),
+                tx.getRawPayload(), toTs(now()), toTs(now()));
+    }
+
+    public int markSuiTransactionConfirmed(String chain, String txDigest, long checkpoint,
+                                           long gasUsed, String rawPayload) {
+        return jdbcTemplate.update("""
+                        update sui_transaction
+                        set status = 'CONFIRMED',
+                            checkpoint = ?,
+                            gas_used = ?,
+                            raw_payload = coalesce(?, raw_payload),
+                            updated_at = ?
+                        where chain = ? and tx_digest = ? and status <> 'CONFIRMED'
+                        """,
+                checkpoint, gasUsed, rawPayload, toTs(now()), chain, txDigest);
     }
 
     @Transactional(rollbackFor = Throwable.class)

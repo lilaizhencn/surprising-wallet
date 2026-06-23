@@ -43,6 +43,11 @@ atomex:
     rpc-url: ${APTOS_RPC_URL:}
     faucet-url: ${APTOS_FAUCET_URL:}
     scan-limit: ${APTOS_SCAN_LIMIT:100}
+  sui:
+    network: ${SUI_NETWORK:mainnet}
+    rpc-url: ${SUI_RPC_URL:}
+    faucet-url: ${SUI_FAUCET_URL:}
+    scan-limit: ${SUI_SCAN_LIMIT:50}
   eth:
     server: https://ethereum-rpc.publicnode.com
     chain-id: 1

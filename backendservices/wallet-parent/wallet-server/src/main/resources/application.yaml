@@ -100,6 +100,11 @@ atomex:
     rpc-url: ${APTOS_RPC_URL:https://fullnode.devnet.aptoslabs.com/v1}
     faucet-url: ${APTOS_FAUCET_URL:https://faucet.devnet.aptoslabs.com}
     scan-limit: ${APTOS_SCAN_LIMIT:100}
+  sui:
+    network: ${SUI_NETWORK:testnet}
+    rpc-url: ${SUI_RPC_URL:https://fullnode.testnet.sui.io:443}
+    faucet-url: ${SUI_FAUCET_URL:https://faucet.testnet.sui.io/v2/gas}
+    scan-limit: ${SUI_SCAN_LIMIT:50}
   # eth config
   eth:
     server: https://ethereum-sepolia-rpc.publicnode.com
