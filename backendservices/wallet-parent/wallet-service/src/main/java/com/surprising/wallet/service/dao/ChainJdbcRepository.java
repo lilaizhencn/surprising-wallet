@@ -349,6 +349,24 @@ public class ChainJdbcRepository {
                 status, txHash, errorMessage, rawPayload, toTs(now()), chain, collectionNo);
     }
 
+    /**
+     * Atomically claims a new or explicitly retried collection before a signing
+     * transaction is created. FAILED is intentionally terminal until an operator
+     * or recovery workflow moves it to RETRYING.
+     */
+    public int claimCollectionSigning(String chain, String collectionNo, String rawPayload) {
+        return jdbcTemplate.update("""
+                        update collection_record
+                        set status = 'SIGNING',
+                            error_message = null,
+                            raw_payload = coalesce(?, raw_payload),
+                            updated_at = ?
+                        where chain = ? and collection_no = ?
+                          and status in ('CREATED', 'RETRYING')
+                        """,
+                rawPayload, toTs(now()), chain, collectionNo);
+    }
+
     public int markCollectionConfirmed(String chain, String collectionNo, String txHash) {
         return jdbcTemplate.update("""
                         update collection_record

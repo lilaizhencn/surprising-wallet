@@ -516,3 +516,35 @@ Generated: 2026-06-21 23:23 Asia/Shanghai.
 - Push: no.
 
 Detailed evidence: `BITCOIN_CASH_WALLET_REPORT.md`.
+
+---
+
+## Dogecoin Regtest Gate Final Update
+
+Generated: 2026-06-23 Asia/Shanghai. This section supersedes the earlier DOGE funded-live deferral.
+
+- Official Dogecoin Core `1.14.9` Regtest node installed through the checked Docker workflow; release SHA-256 verified.
+- Node result: `chain=regtest`, RPC host binding `127.0.0.1:22555`, height `131`.
+- Multi-user deposits:
+  - `1fb68eb8a9bca674dfd4f90d7757359b69aa4a107fab35d507bee4f65f47f10a` — 1000 DOGE.
+  - `54d7c0d5eff21a67487bebe3ed4105915a16f980e5830b49f7d0e0d598339b0a` — 500 DOGE.
+  - `55563f61db1d6a1c9b080442f336f666df5fd2516295ff0f8e48002248370b87` — 200 DOGE after scanner interruption.
+- Withdrawal `c1cee4ab5933bdf6457a19739d88e74e87272294c8ec2c23207eb327af9d93e7`: real two-stage signing, broadcast, change, six-confirmation settlement, and UTXO spend passed.
+- Collections:
+  - `8e5b7d8a4d2a72bafe659ff0769c75b4b262ec2c5d5dcd80a731fa602ed8816d`.
+  - Recovered interruption transaction `def4eba2a79114376a8bb0704b80fe9854a013e2e35232c8aeb2fc7c87974765`.
+- Rewound scanner replay produced no duplicate deposit, UTXO, or ledger credit.
+- Replayed signed transaction produced an idempotent completed-state skip and no second broadcast.
+- Failed collection retry bug was reproduced and fixed with atomic collection claim and terminal failed transaction state.
+- Sig1 interruption across another collection interval retained exactly one database transaction and one Redis message; restart completed the transaction.
+- Final ledger: users `899 + 500 + 200 = 1599 DOGE`, locked `0`, negative rows `0`.
+- Controlled UTXOs `1599.98937000 DOGE`; difference matches collected fee minus actual network fees.
+- Forced PostgreSQL DOGE flow test: passed.
+- `mvn -q clean install -DskipTests=false`: passed.
+- Full Surefire: 72 tests, 0 failures, 0 errors, 12 skipped.
+- wallet-server health: `UP`; wallet-sig1 and wallet-sig2 started.
+- PostgreSQL `select 1`: passed; Redis: `PONG`.
+- Secret scan: no extended private key, RPC key, or API key in tracked source/config.
+- Push: no.
+
+Detailed evidence: `DOGECOIN_WALLET_REPORT.md`.

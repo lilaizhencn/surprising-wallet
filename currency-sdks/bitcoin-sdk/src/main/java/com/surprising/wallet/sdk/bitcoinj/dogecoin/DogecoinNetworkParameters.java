@@ -21,11 +21,14 @@ import java.time.Instant;
 public final class DogecoinNetworkParameters extends NetworkParameters {
     public static final String ID_MAINNET = DogecoinNetwork.MAINNET.id();
     public static final String ID_TESTNET = DogecoinNetwork.TESTNET.id();
+    public static final String ID_REGTEST = DogecoinNetwork.REGTEST.id();
 
     private static final DogecoinNetworkParameters MAINNET =
             new DogecoinNetworkParameters(DogecoinNetwork.MAINNET);
     private static final DogecoinNetworkParameters TESTNET =
             new DogecoinNetworkParameters(DogecoinNetwork.TESTNET);
+    private static final DogecoinNetworkParameters REGTEST =
+            new DogecoinNetworkParameters(DogecoinNetwork.REGTEST);
     private static final Coin UNBOUNDED_MONEY = Coin.valueOf(Long.MAX_VALUE);
 
     private final DogecoinNetwork dogecoinNetwork;
@@ -39,10 +42,10 @@ public final class DogecoinNetworkParameters extends NetworkParameters {
         this.segwitAddressHrp = "";
         this.interval = 240;
         this.targetTimespan = 4 * 60 * 60;
-        this.maxTarget = new BigInteger(
-                "00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16);
-        this.spendableCoinbaseDepth = 240;
         if (network == DogecoinNetwork.MAINNET) {
+            this.maxTarget = new BigInteger(
+                    "00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16);
+            this.spendableCoinbaseDepth = 240;
             this.dumpedPrivateKeyHeader = 158;
             this.port = 22556;
             this.packetMagic = 0xc0c0c0c0;
@@ -50,7 +53,10 @@ public final class DogecoinNetworkParameters extends NetworkParameters {
             this.bip32HeaderP2PKHpriv = 0x02fac398;
             this.genesisBlock = Block.createGenesis(
                     Instant.ofEpochSecond(1386325540L), 0x1e0ffff0L, 99943L);
-        } else {
+        } else if (network == DogecoinNetwork.TESTNET) {
+            this.maxTarget = new BigInteger(
+                    "00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16);
+            this.spendableCoinbaseDepth = 240;
             this.dumpedPrivateKeyHeader = 241;
             this.port = 44556;
             this.packetMagic = 0xfcc1b7dc;
@@ -58,6 +64,17 @@ public final class DogecoinNetworkParameters extends NetworkParameters {
             this.bip32HeaderP2PKHpriv = 0x04358394;
             this.genesisBlock = Block.createGenesis(
                     Instant.ofEpochSecond(1391503289L), 0x1e0ffff0L, 997879L);
+        } else {
+            this.maxTarget = new BigInteger(
+                    "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16);
+            this.spendableCoinbaseDepth = 60;
+            this.dumpedPrivateKeyHeader = 239;
+            this.port = 18444;
+            this.packetMagic = 0xfabfb5da;
+            this.bip32HeaderP2PKHpub = 0x043587cf;
+            this.bip32HeaderP2PKHpriv = 0x04358394;
+            this.genesisBlock = Block.createGenesis(
+                    Instant.ofEpochSecond(1296688602L), 0x207fffffL, 2L);
         }
         this.bip32HeaderP2WPKHpub = this.bip32HeaderP2PKHpub;
         this.bip32HeaderP2WPKHpriv = this.bip32HeaderP2PKHpriv;
@@ -69,6 +86,10 @@ public final class DogecoinNetworkParameters extends NetworkParameters {
 
     public static DogecoinNetworkParameters testnet() {
         return TESTNET;
+    }
+
+    public static DogecoinNetworkParameters regtest() {
+        return REGTEST;
     }
 
     @Override

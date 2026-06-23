@@ -314,7 +314,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
             WithdrawTransaction withdrawTransaction = oneByExample.get();
             JSONObject signature = JSONObject.parseObject(withdrawTransaction.getSignature());
             int confirmations = getConfirm(txid);
-            if (confirmations < currency.getWithdrawConfirmNum()) {
+            if (confirmations < getWithdrawConfirmationThreshold()) {
                 if (usesUnifiedUtxoModel()) {
                     markBitcoinLikeConfirming(signature, txid);
                 }
@@ -573,7 +573,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
                 continue;
             }
             int confirmations = getConfirm(transaction.getTxId());
-            if (confirmations >= currency.getWithdrawConfirmNum()) {
+            if (confirmations >= getWithdrawConfirmationThreshold()) {
                 updateWithdrawTXId(transaction.getTxId(), currency);
             } else if (usesUnifiedUtxoModel() && confirmations > 0) {
                 markBitcoinLikeConfirming(JSONObject.parseObject(transaction.getSignature()), transaction.getTxId());
@@ -610,6 +610,10 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
 
     protected int getBip44CoinType() {
         return getCurrency().getBip44CoinType();
+    }
+
+    protected long getWithdrawConfirmationThreshold() {
+        return getCurrency().getWithdrawConfirmNum();
     }
 
     private void syncUnifiedUtxos(List<UtxoTransaction> utxos) {

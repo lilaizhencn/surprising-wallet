@@ -27,8 +27,6 @@ public class RSAEncrypt {
     public static void main(String[] args) throws Exception {
 
 
-//        String s111 = "api_key=MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAKI79SBTDLS5OfYHb799XX0cbdAi8BFRr9XvVCX+t8xEtf4L1CIgRNGrvYxaX1d53OjYNVZCXUT1sgl20FaQhLMCAwEAAQ==&beginTime=2019-02-20&endTime=2019-02-26&prdName=btc&size=1&start=1&uid=139984&";
-//        String m222 = "api_key=MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAKI79SBTDLS5OfYHb799XX0cbdAi8BFRr9XvVCX+t8xEtf4L1CIgRNGrvYxaX1d53OjYNVZCXUT1sgl20FaQhLMCAwEAAQ==&begintime=2019-02-20&endtime=2019-02-26&prdname=btc&size=1&start=1&uid=139984&";
 //
 //        System.out.println(s111.equals(m222));
 //        // TODO Auto-generated method stub
@@ -42,7 +40,6 @@ public class RSAEncrypt {
 //        paraMap.put("endTime","2019-02-26");
 //        paraMap.put("size","1");
 //        paraMap.put("uid","139984");
-//        String url = formatUrlMap(paraMap,"secret_key=MIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAojv1IFMMtLk59gdvv31dfRxt0CLwEVGv1e9UJf63zES1/gvUIiBE0au9jFpfV3nc6Ng1VkJdRPWyCXbQVpCEswIDAQABAkAplnUf9Cotqc3R49YhoGF20PLViB9CUU5h6RgJJWK4WfwXn/NDXyXYBGX02ZR3PoPqPnchjQatFgeocS1tNkYBAiEA2aAVHF3tUNtNCUFd8/RMjPxYFXjK5aQwZ1+zhggtuisCIQC+13DxvhEqtdkgpbCyUsvctlan6RsukyrjT6mZ0AlDmQIhAKNRxuYN+05l9e9PNhIhsd1Qd05N437pdEXwBUs+EgsXAiEAu6Wq8Igq6QwVivxgWXb/7O19F20lxQ3/xbK22P6tnUECIFEVkERBUVAfyJTvlc+AvW9EnGsrsp4IngThc2/6hVuW", false, true);
 //        System.out.println("url====="+url);
 //        String s =MD5(url);
 //        System.out.println("md5 ======"+s);

@@ -1,171 +1,184 @@
 # Dogecoin Wallet Report
 
-Generated: 2026-06-21 23:07 Asia/Shanghai.
+Generated: 2026-06-23 Asia/Shanghai.
 
 ## 1. Overall Conclusion
 
-- Dogecoin wallet flow is implemented on bitcoinj `0.17.1` without another UTXO SDK.
-- DOGE uses independent legacy P2SH 2-of-3 addresses/signing, Dogecoin network parameters, fee policy, dust policy, runtime profile, tables, scanner, withdrawal, collection, recovery, unified UTXO state, and ledger settlement.
-- Real Dogecoin testnet RPC read/scan validation passed.
-- Live funded deposit/withdraw/collection is deferred because no DOGE testnet funds were available, as permitted by the updated task instruction.
-- BTC, LTC, EVM, and TRON full Maven regression passed.
-- Push: no.
+- DOGE local Regtest gate passed with real Dogecoin Core transactions: address generation, multi-user deposit scan, withdrawal, collection, confirmations, ledger settlement, idempotency, and interruption recovery.
+- Dogecoin Core `1.14.9` runs locally with `chain=regtest`, `txindex=1`, RPC bound through Docker to host `127.0.0.1:22555`.
+- DOGE implementation remains based on bitcoinj `0.17.1`; no conflicting UTXO SDK was added.
+- BTC, LTC, EVM, and TRON regression passed.
+- Gate result: PASS. Push: NO.
 
 ## 2. Modified Files
 
-- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/deposit/AbstractScanBlockJob.java`
-- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/withdraw/AbstractBatchWithdrawJob.java`
-- `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/withdraw/LtcSigningRecoveryJob.java`
-- `backendservices/wallet-parent/wallet-server/src/main/resources/application.yaml`
-- `backendservices/wallet-parent/wallet-server/src/main/resources/application-test.yaml`
-- `backendservices/wallet-parent/wallet-server/src/main/resources/application-prod.yaml`
-- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/config/PubKeyConfig.java`
-- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/dao/ChainJdbcRepository.java`
-- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/service/TransactionService.java`
-- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/wallet/AbstractBtcLikeWallet.java`
-- `backendservices/wallet-sig1/src/main/java/com/surprising/wallet/sig/first/config/PubKeyConfig.java`
-- `currency-sdks/wallet-common/src/main/java/com/surprising/wallet/common/chain/ChainType.java`
-- `currency-sdks/wallet-common/src/main/java/com/surprising/wallet/common/currency/CurrencyEnum.java`
-- `multi-chain-wallet-schema.sql`
-- `surprising-wallet-init-pgsql.sql`
-- `CURRENCY_MODEL_COMPATIBILITY_REPORT.md`
-- `regression-report.md`
+- DOGE regtest network/profile, wallet, sig1/sig2, scanner confirmation, and configuration files.
+- `DogeCollectionJob`, `LtcCollectionJob`, `ChainJdbcRepository`, and `TransactionService` for collection claim/failure idempotency.
+- DOGE network/database tests and schema initialization SQL.
+- Test secret cleanup in `TestTatumFaucetHelper` and obsolete commented RSA examples.
+- `DOGECOIN_WALLET_REPORT.md`, `CURRENCY_MODEL_COMPATIBILITY_REPORT.md`, and `regression-report.md`.
 
 ## 3. New Files
 
-- DOGE wallet, RPC command, scanner, withdrawal, collection, recovery, first/second signer classes.
-- Dogecoin network, fee, legacy multisig address, transaction builder, and P2SH fee calculator classes.
-- Dogecoin address, signing, fee/network, and PostgreSQL flow tests.
+- `infra/regtest/dogecoin/Dockerfile`
+- `infra/regtest/dogecoin/entrypoint.sh`
+- `scripts/regtest/dogecoin-regtest.sh`
 
 ## 4. Deleted Files
 
-- `LitecoinSettlementService.java` was replaced by the generalized `BitcoinLikeSettlementService.java`; LTC behavior is preserved.
+- None.
 
 ## 5. Database Schema
 
-- Added DOGE testnet/mainnet `chain_profile`.
-- Added DOGE `chain_asset`.
-- Added legacy compatibility tables: `doge_address`, `doge_utxo_transaction`, `doge_withdraw_record`, `doge_withdraw_transaction`.
-- Reused unified `utxo_record`, `deposit_record`, `withdrawal_order`, `collection_record`, `ledger_balance`, `chain_scan_height`, and `hot_wallet_address`.
-- Unique UTXO key remains `(chain, tx_hash, vout)`.
-- Incremental migration and clean-database initialization both passed.
+- Added idempotent DOGE `regtest` `chain_profile`: runtime id `41`, BIP44 coin type `3`, RPC `http://127.0.0.1:22555`, deposit/withdraw confirmations `6`, fee rate `1000`, dust `1000000`.
+- Reused `deposit_record`, `utxo_record`, `withdrawal_order`, `collection_record`, `ledger_balance`, and `chain_scan_height`.
+- Unique keys remain chain-scoped: deposit `(chain, tx_hash, log_index)` and UTXO `(chain, tx_hash, vout)`.
 
 ## 6. MBG
 
-- No MBG run was needed. No generated service/scanner/signing logic was introduced.
+- No MBG generation was required. No service, scanner, signing, or fee logic was generated by MBG.
 
-## 7. Currency Compatibility
+## 7. CurrencyEnum / CurrencyIds Compatibility
 
-- `CurrencyEnum.DOGE` exists only for legacy table/queue/signer dispatch.
-- Runtime configuration comes from `chain_profile`.
-- `CurrencyIds` was not modified or used for DOGE.
+- `CurrencyEnum.DOGE` remains a legacy queue/table/signer routing adapter only.
+- Runtime network, currency id, confirmation, RPC, fee, and dust values come from `chain_profile` and application configuration.
+- `CurrencyIds` is not used by DOGE.
 
 ## 8. Runtime Currency ID
 
 - DOGE runtime currency id: `41`.
-- Pre-migration checks found no id `41` in `chain_profile`, `user_asset`, or `currency_balance`.
+- No conflict was found in the modern profile or tested ledger rows.
 
-## 9. BIP44
+## 9. BIP44 Coin Type
 
 - DOGE BIP44 coin type: `3`.
-- Runtime id `41` is never used as the derivation coin type.
+- Runtime currency id `41` is not used in derivation paths.
 
 ## 10. Network Parameters
 
-- Mainnet P2PKH/P2SH/WIF: `30 / 22 / 158`; port `22556`; magic `0xc0c0c0c0`.
-- Testnet P2PKH/P2SH/WIF: `113 / 196 / 241`; port `44556`; magic `0xfcc1b7dc`.
-- Dogecoin SegWit is disabled; DOGE uses legacy P2SH, not BTC/LTC P2WSH.
-- Testnet RPC: `https://dogecoin-testnet.gateway.tatum.io`.
+- Regtest P2PKH/P2SH/WIF: `111 / 196 / 239`.
+- Regtest packet magic: `0xfabfb5da`; max target: `0x7fff...`; coinbase maturity: `60`.
+- A real node exposed that DOGE regtest P2PKH `111` differs from DOGE public testnet P2PKH `113`; this was fixed and tested.
 
 ## 11. Address Generation
 
-- Deposit: `2MtNHNEL8YcV3EWM3DZhFcZhxCwNCKSsrtk`, path `m/44/3/1/9101/0`.
-- Collection source: `2NCe91VjbxN6qNtuGNgsTrzwBZzo9RZfSDs`, path `m/44/3/1/9102/0`.
-- Hot: `2NDPypMNMLaAvi1Lf9UEETD8iwwLWi6SbHv`, path `m/44/3/0/0/0`.
-- All are deterministic Dogecoin testnet P2SH 2-of-3 addresses and are persisted in `doge_address`.
+- UserA `9301/0`: `2Mznd9Nscn4qyvhg56a59gWgpHi5jhCz7eL`
+- UserB `9302/0`: `2N3nkyo92ZtNRREHPGvujbR1KSePbSFpHzN`
+- UserC `9303/0`: `2NGVZeyVpgufcz7ofqCyYUNRm1nZfoYhx4B`
+- Hot wallet `0/0`: `2MxDBC78MT2mCBTL2SEfwwynLiB8TNcci5P`
+- External withdrawal target: `n2ukZcjK6nxBoJ1UunV57Tf2CDsd3SKHKG`
+- Restart continuity: UserA next index generated `2N23acstLEUU34ajNA6bghDgRLH1PmKuS1D`; addresses remained unique.
 
-## 12-14. Live Transaction IDs
+## 12. Deposit Transactions
 
-- Deposit txid: deferred pending testnet funds.
-- Withdraw txid: deferred pending funded deposit.
-- Collection txid: deferred pending funded deposit/withdrawal.
+- UserA 1000 DOGE: `1fb68eb8a9bca674dfd4f90d7757359b69aa4a107fab35d507bee4f65f47f10a`, vout `1`, block `102`.
+- UserB 500 DOGE: `54d7c0d5eff21a67487bebe3ed4105915a16f980e5830b49f7d0e0d598339b0a`, vout `0`, block `102`.
+- UserC 200 DOGE interruption test: `55563f61db1d6a1c9b080442f336f666df5fd2516295ff0f8e48002248370b87`, vout `0`, block `120`.
+- All three deposits reached 6 confirmations and were credited once.
+
+## 13. Withdrawal Transaction
+
+- Order: `DOGE-REGTEST-WD-RETRY-1782180806`
+- Txid: `c1cee4ab5933bdf6457a19739d88e74e87272294c8ec2c23207eb327af9d93e7`
+- Block: `108`; amount: `100 DOGE`; change: `899.99623000 DOGE`; network fee: `0.00377000 DOGE`.
+- Final state: `CONFIRMED`; frozen balance returned to zero; source UTXO marked SPENT.
+
+## 14. Collection Transactions
+
+- UserB collection: `8e5b7d8a4d2a72bafe659ff0769c75b4b262ec2c5d5dcd80a731fa602ed8816d`, block `114`, output `499.99657000`, fee `0.00343000`.
+- UserC recovered collection: `def4eba2a79114376a8bb0704b80fe9854a013e2e35232c8aeb2fc7c87974765`, block `126`, output `199.99657000`, fee `0.00343000`.
+- Both paid the controlled hot-wallet address and reached `CONFIRMED`.
 
 ## 15. UTXO State
 
-- PostgreSQL-backed synthetic flow verified one insert, one lock winner, duplicate lock rejection, and guarded release.
-- Real scanner block contained no platform output; DOGE unified/legacy UTXO rows remained zero as expected.
+- Three credited deposit UTXOs are SPENT exactly once.
+- Withdrawal change and both hot-wallet outputs are AVAILABLE.
+- No final LOCKED UTXO remains.
 
 ## 16. Fee / Dust
 
-- Recommended fee: `0.01 DOGE/kB` = `1000 koinu/byte`.
-- Recommended dust threshold: `0.01 DOGE` = `1,000,000 koinu`.
-- Hard lower dust reference: `0.001 DOGE`.
-- P2SH 2-of-3 serialized-size estimator and two-stage signed transaction tests passed.
+- Configured fee rate: `1000 koinu/byte`.
+- Dust threshold: `1,000,000 koinu` (`0.01 DOGE`).
+- Actual tested fees: withdrawal `0.00377000`; collections `0.00343000` each.
+- No dust output was created.
 
-## 17-19. Records
+## 17. deposit_record
 
-- `deposit_record`: real non-platform scan created zero rows; synthetic idempotency test created exactly one row inside a rolled-back transaction.
-- `withdrawal_order`: live record deferred.
-- `collection_record`: live record deferred.
+- Exactly three platform deposit rows exist for the three chain outpoints.
+- Rewinding the scan checkpoint and rescanning blocks `102-107` did not add records or credit ledger again.
+- Non-platform outputs were ignored.
 
-## 20. Ledger
+## 18. withdrawal_order
 
-- Synthetic deposit credited exactly once and produced no negative balance.
-- Real DOGE ledger remains zero because no testnet funds were received.
+- Successful order is `CONFIRMED` with the real txid.
+- An initial regtest-prefix failure is retained as `FAILED` evidence; balance and UTXO locks were released.
+
+## 19. collection_record
+
+- Two records are `CONFIRMED`, each with one real txid.
+- Deterministic collection numbers remained unique.
+
+## 20. Ledger Reconciliation
+
+- UserA: available `899`, locked `0`.
+- UserB: available `500`, locked `0`.
+- UserC: available `200`, locked `0`.
+- Customer liability total: `1599.00000000 DOGE`.
+- Controlled available UTXOs: `1599.98937000 DOGE`.
+- Difference `0.98937000` equals charged withdrawal fee `1.00000000` minus real network fees `0.01063000`.
+- Negative ledger rows: `0`.
 
 ## 21. Idempotency
 
-- Deposit unique key and `credited=false` guard passed against PostgreSQL.
-- UTXO duplicate lock guard passed.
-- Broadcast path derives the txid before sending and checks whether it already exists on-chain.
-- Deterministic collection id prevents duplicate collection creation.
+- Deposit replay: no duplicate `deposit_record`, UTXO, or ledger credit.
+- Signed withdrawal/collection message replay: persisted SENT/CONFIRMED transaction caused an idempotent skip; no second broadcast.
+- Failed collection remained terminal until explicitly changed to `RETRYING`.
+- After the fix, keeping sig1 offline across another collection interval produced one SIGNING row and one Redis message only.
 
-## 22. Recovery
+## 22. Exception Recovery
 
-- Scanner checkpoint advanced to `65162280`; persisted `chain_scan_height` is `DOGE/doge-block-scanner`.
-- DOGE stale signing recovery uses an atomic database claim before Redis requeue.
-- Failed signing releases unified/legacy UTXO locks and ledger/user frozen balances.
+- Scanner interruption: deposit was sent while wallet-server was stopped; restart scanned from the checkpoint and credited it.
+- Withdrawal signing failure: order became FAILED and frozen ledger/UTXO locks were released.
+- Collection signing failure: deliberately corrupted redeem script was rejected.
+- Bug found: the old job recreated a failed collection every 30 seconds and left stale SIGNING rows.
+- Fix: atomic `CREATED/RETRYING -> SIGNING` claim, FAILED terminal behavior, and failed transaction terminalization.
+- Recovery validation: restore redeem script, explicit RETRYING, stop sig1, verify one queued transaction, restart sig1, sign/broadcast/mine 6 blocks, final CONFIRMED.
 
 ## 23. Multi-User
 
-- Independent users `9101` and `9102` generated distinct P2SH addresses.
-- Funded multi-user flow is deferred until testnet DOGE arrives.
+- Users `9301`, `9302`, and `9303` generated independent addresses and received independent deposits.
+- Ledger and UTXO rows remained isolated by user/address and chain.
 
-## 24-25. Commands / Results
+## 24. Test Commands
 
-- `mvn -q clean install -DskipTests=false`: passed.
-- Full Surefire: 69 tests, 0 failures, 0 errors, 12 skipped.
-- DOGE address/database flow tests: passed.
-- Dogecoin network/P2SH signing/fee tests: passed.
-- Real RPC `getblockcount`, `getblockhash`, `getblock`, and verbose `getrawtransaction`: passed.
-- Real scanner processed block `65162280`, tx `7f33306a5e2074ca340d7545ca0bd38fc4ce7a478fdf238130efe938d980cac5`.
-- Non-platform address was ignored; checkpoint advanced; no deposit or UTXO was written.
-- wallet-server health `UP`; wallet-sig1 and wallet-sig2 started.
-- PostgreSQL `select 1` and Redis `PONG` passed.
+- `scripts/regtest/dogecoin-regtest.sh status`
+- PostgreSQL-backed DOGE test with `-Ddoge.db.enabled=true`
+- `mvn -q clean install -DskipTests=false`
+- wallet-server, wallet-sig1, and wallet-sig2 startup with profile `test`
+- PostgreSQL `select 1`, Redis `PING`, Dogecoin `getblockchaininfo`
 
-## 26. Deferred / Blocked
+## 25. Test Results
 
-- Funded DOGE live deposit, withdrawal, collection, confirmation settlement, and on-chain ledger reconciliation are deferred until testnet funds are supplied.
+- Full Maven: `72` tests, `0` failures, `0` errors, `12` skipped.
+- Forced DOGE PostgreSQL flow test: PASS.
+- wallet-server health: `UP`.
+- wallet-sig1 and wallet-sig2: started successfully.
+- PostgreSQL: `1`; Redis: `PONG`; Dogecoin node: `chain=regtest`.
+
+## 26. Blocked Items
+
+- None for the DOGE Regtest gate.
 
 ## 27. Risks
 
-- Public Tatum RPC is rate-limited and is suitable for validation, not production scanning.
-- Dogecoin testnet may mine rapidly and can have unstable public explorer availability.
-- Production should use controlled Dogecoin Core infrastructure.
+- Public DOGE testnet remains operationally less reliable than local Regtest; production still requires controlled Dogecoin Core infrastructure.
+- Legacy enum/table routing remains technical debt and must not become the source of truth.
 
 ## 28. Commit
 
-- Message: `feat: add dogecoin wallet flow`.
-- Hash: this report is part of the commit; resolve after commit.
+- Message: `feat: add dogecoin wallet flow`
+- Hash: this report is contained in that commit; use `git rev-parse HEAD`.
 
 ## 29. Push
 
-- No.
-
-## Testnet Funding Request
-
-Send at least `50 DOGE` testnet to:
-
-`2MtNHNEL8YcV3EWM3DZhFcZhxCwNCKSsrtk`
-
-This provides enough margin for deposit, withdrawal, collection, and Dogecoin's fee/dust policy in the next live-gate task.
+- NO.

@@ -16,7 +16,7 @@ atomex:
     server.pwd: ${LTC_TESTNET_RPC_PASSWORD:}
     esplora-url: ${LTC_TESTNET_ESPLORA_URL:https://litecoinspace.org/testnet/api}
   doge:
-    network: testnet
+    network: ${DOGE_NETWORK:testnet}
     server: ${DOGE_TESTNET_RPC_URL:https://dogecoin-testnet.gateway.tatum.io}
     server.user: ${DOGE_TESTNET_RPC_USER:}
     server.pwd: ${DOGE_TESTNET_RPC_PASSWORD:}

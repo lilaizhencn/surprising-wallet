@@ -34,7 +34,7 @@ public class DogeWallet extends AbstractBtcLikeWallet implements IWallet {
     @PostConstruct
     public void init() {
         super.setCommand(dogeCommand);
-        String profileNetwork = isMainnet() ? "mainnet" : "testnet";
+        String profileNetwork = isMainnet() ? "mainnet" : isRegtest() ? "regtest" : "testnet";
         runtimeProfile = chainJdbcRepository.findBitcoinLikeProfile("DOGE", profileNetwork)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for DOGE/" + profileNetwork));
@@ -53,14 +53,22 @@ public class DogeWallet extends AbstractBtcLikeWallet implements IWallet {
 
     @Override
     public NetworkParameters getNetworkParameters() {
-        return isMainnet()
-                ? DogecoinNetworkParameters.mainnet()
+        if (isMainnet()) {
+            return DogecoinNetworkParameters.mainnet();
+        }
+        return isRegtest()
+                ? DogecoinNetworkParameters.regtest()
                 : DogecoinNetworkParameters.testnet();
     }
 
     @Override
     protected int getBip44CoinType() {
         return runtimeProfile.getBip44CoinType();
+    }
+
+    @Override
+    protected long getWithdrawConfirmationThreshold() {
+        return runtimeProfile.getWithdrawConfirmations();
     }
 
     @Override
@@ -89,5 +97,9 @@ public class DogeWallet extends AbstractBtcLikeWallet implements IWallet {
 
     private boolean isMainnet() {
         return "mainnet".equalsIgnoreCase(network) || "main".equalsIgnoreCase(network);
+    }
+
+    private boolean isRegtest() {
+        return "regtest".equalsIgnoreCase(network);
     }
 }

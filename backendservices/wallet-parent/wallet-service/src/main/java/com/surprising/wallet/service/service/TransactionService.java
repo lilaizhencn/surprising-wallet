@@ -294,6 +294,9 @@ public class TransactionService {
             utxoService.batchEdit(utxos, table);
         }
         chainJdbcRepository.releaseUtxos(chain, lockRef);
+        transaction.setStatus(Constants.DELETE);
+        transaction.setUpdateDate(Date.from(Instant.now()));
+        transactionService.editById(transaction, table);
 
         if ("collection".equals(signature.getString("type"))) {
             chainJdbcRepository.updateCollectionStatus(

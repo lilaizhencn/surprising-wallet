@@ -479,6 +479,15 @@ INSERT INTO chain_profile(
 
 INSERT INTO chain_profile(
   chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+  rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+  default_fee_rate, dust_threshold, enabled
+) VALUES (
+  'DOGE', 'regtest', 'bitcoin-like', 41, 3, 'DOGE',
+  'http://127.0.0.1:22555', NULL, 6, 6, 1000, 1000000, TRUE
+);
+
+INSERT INTO chain_profile(
+  chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
   explorer_url, deposit_confirmations, withdraw_confirmations,
   default_fee_rate, dust_threshold, enabled
 ) VALUES (

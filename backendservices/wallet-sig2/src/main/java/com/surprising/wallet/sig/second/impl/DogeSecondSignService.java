@@ -9,6 +9,7 @@ import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinNetworkParameters;
 import com.surprising.wallet.sig.second.BipNodeUtil;
 import com.surprising.wallet.sig.second.ISignService;
 import org.bitcoinj.crypto.ECKey;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -19,6 +20,9 @@ import java.util.List;
  */
 @Component
 public class DogeSecondSignService implements ISignService {
+    @Value("${atomex.doge.network:testnet}")
+    private String network;
+
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
@@ -34,7 +38,7 @@ public class DogeSecondSignService implements ISignService {
                 keys.add(BipNodeUtil.getBipNODE(address).getEcKey());
             }
             LegacyMultisigTransactionBuilder builder =
-                    new LegacyMultisigTransactionBuilder(DogecoinNetworkParameters.testnet());
+                    new LegacyMultisigTransactionBuilder(networkParameters());
             return builder.buildSecondSign(firstSigned, keys, redeemScripts);
         } catch (Throwable error) {
             signature.put("valid", false);
@@ -47,5 +51,14 @@ public class DogeSecondSignService implements ISignService {
     @Override
     public CurrencyEnum getCurrency() {
         return CurrencyEnum.DOGE;
+    }
+
+    private DogecoinNetworkParameters networkParameters() {
+        if ("main".equalsIgnoreCase(network) || "mainnet".equalsIgnoreCase(network)) {
+            return DogecoinNetworkParameters.mainnet();
+        }
+        return "regtest".equalsIgnoreCase(network)
+                ? DogecoinNetworkParameters.regtest()
+                : DogecoinNetworkParameters.testnet();
     }
 }

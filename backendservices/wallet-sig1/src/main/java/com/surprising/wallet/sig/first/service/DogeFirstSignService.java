@@ -35,6 +35,9 @@ public class DogeFirstSignService implements ISignService {
     @Value("${atomex.wallet.masterKey}")
     private String masterKey;
 
+    @Value("${atomex.doge.network:testnet}")
+    private String network;
+
     private Bip32Node root;
 
     @PostConstruct
@@ -54,7 +57,7 @@ public class DogeFirstSignService implements ISignService {
                     .toJavaList(WithdrawRecord.class);
             BigDecimal decimal = CurrencyEnum.DOGE.getDecimal();
             LegacyMultisigTransactionBuilder builder =
-                    new LegacyMultisigTransactionBuilder(DogecoinNetworkParameters.testnet());
+                    new LegacyMultisigTransactionBuilder(networkParameters());
             List<ECKey> signingKeys = new ArrayList<>(utxos.size());
             List<String> redeemScripts = new ArrayList<>(utxos.size());
             for (int i = 0; i < utxos.size(); i++) {
@@ -141,5 +144,14 @@ public class DogeFirstSignService implements ISignService {
                 .getChild(address.getBiz())
                 .getChild(address.getUserId().intValue())
                 .getChild(address.getIndex());
+    }
+
+    private DogecoinNetworkParameters networkParameters() {
+        if ("main".equalsIgnoreCase(network) || "mainnet".equalsIgnoreCase(network)) {
+            return DogecoinNetworkParameters.mainnet();
+        }
+        return "regtest".equalsIgnoreCase(network)
+                ? DogecoinNetworkParameters.regtest()
+                : DogecoinNetworkParameters.testnet();
     }
 }

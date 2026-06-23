@@ -132,19 +132,8 @@ public class LtcCollectionJob {
         signature.put("withdraw", List.of(output));
         signature.put("feeRate", feeRate);
         signature.put("totalAmount", inputAmount.toPlainString());
+        String rawPayload = signature.toJSONString();
 
-        WithdrawTransaction transaction = WithdrawTransaction.builder()
-                .balance(inputAmount)
-                .currency(currency.getIndex())
-                .status(Constants.SIGNING)
-                .txId("signing")
-                .signature(signature.toJSONString())
-                .createDate(now)
-                .updateDate(now)
-                .build();
-        transactionService.add(transaction, table);
-
-        String transactionId = transaction.getId().toString();
         String fromAddress = inputAddresses.get(0).getAddress();
         chainJdbcRepository.createCollectionRecord(
                 collectionId,
@@ -154,7 +143,23 @@ public class LtcCollectionJob {
                 hotAddress.getAddress(),
                 outputAmount,
                 feeAmount,
-                signature.toJSONString());
+                rawPayload);
+        if (chainJdbcRepository.claimCollectionSigning("LTC", collectionId, rawPayload) != 1) {
+            return;
+        }
+
+        WithdrawTransaction transaction = WithdrawTransaction.builder()
+                .balance(inputAmount)
+                .currency(currency.getIndex())
+                .status(Constants.SIGNING)
+                .txId("signing")
+                .signature(rawPayload)
+                .createDate(now)
+                .updateDate(now)
+                .build();
+        transactionService.add(transaction, table);
+
+        String transactionId = transaction.getId().toString();
         for (UtxoTransaction utxo : utxos) {
             int locked = chainJdbcRepository.lockUtxo(
                     "LTC", utxo.getTxId(), utxo.getSeq(), transactionId);
@@ -163,8 +168,6 @@ public class LtcCollectionJob {
                         "failed to lock unified LTC collection UTXO " + utxo.getTxId() + ":" + utxo.getSeq());
             }
         }
-        chainJdbcRepository.updateCollectionStatus(
-                "LTC", collectionId, "SIGNING", null, null, signature.toJSONString());
         List<UtxoTransaction> spends = utxos.stream().map(utxo -> UtxoTransaction.builder()
                 .id(utxo.getId())
                 .spent((byte) 1)

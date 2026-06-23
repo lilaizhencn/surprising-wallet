@@ -12,7 +12,8 @@ import org.bitcoinj.base.Network;
  */
 public enum DogecoinNetwork implements Network {
     MAINNET("org.dogecoin.production", 30, 22, "dogecoin"),
-    TESTNET("org.dogecoin.test", 113, 196, "dogecoin");
+    TESTNET("org.dogecoin.test", 113, 196, "dogecoin"),
+    REGTEST("org.dogecoin.regtest", 111, 196, "dogecoin");
 
     private static final Coin UNBOUNDED_MONEY = Coin.valueOf(Long.MAX_VALUE);
 

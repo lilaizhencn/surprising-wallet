@@ -11,7 +11,6 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.logging.Logger;
 
 /**
@@ -25,7 +24,6 @@ import java.util.logging.Logger;
 public final class TestTatumFaucetHelper {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final Logger LOGGER = Logger.getLogger(TestTatumFaucetHelper.class.getName());
-    private static final String DEFAULT_TEST_API_KEY = "t-6a35f7d8c8da54cac6d6f4cd-44ba8373be864f1599aa0cf7";
 
     private final HttpClient httpClient;
     private final String apiKey;
@@ -55,9 +53,10 @@ public final class TestTatumFaucetHelper {
     }
 
     public static TestTatumFaucetHelper fromEnvironment(String baseUrl) {
-        String apiKey = Optional.ofNullable(System.getenv("TATUM_API_KEY"))
-                .filter(value -> !value.isBlank())
-                .orElse(DEFAULT_TEST_API_KEY);
+        String apiKey = System.getenv("TATUM_API_KEY");
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("TATUM_API_KEY is required for live faucet tests");
+        }
         return new TestTatumFaucetHelper(apiKey, baseUrl);
     }
 
@@ -129,11 +128,11 @@ public final class TestTatumFaucetHelper {
                 .orElse(retryDelay);
     }
 
-    private static Optional<Long> parseRetryAfterSeconds(String value) {
+    private static java.util.Optional<Long> parseRetryAfterSeconds(String value) {
         try {
-            return Optional.of(Long.parseLong(value));
+            return java.util.Optional.of(Long.parseLong(value));
         } catch (NumberFormatException ignored) {
-            return Optional.empty();
+            return java.util.Optional.empty();
         }
     }
 

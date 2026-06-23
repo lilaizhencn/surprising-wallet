@@ -16,7 +16,7 @@ atomex:
     server.pwd: ${LTC_MAINNET_RPC_PASSWORD:}
     esplora-url: ${LTC_MAINNET_ESPLORA_URL:https://litecoinspace.org/api}
   doge:
-    network: mainnet
+    network: ${DOGE_NETWORK:mainnet}
     server: ${DOGE_MAINNET_RPC_URL:http://127.0.0.1:22555}
     server.user: ${DOGE_MAINNET_RPC_USER:}
     server.pwd: ${DOGE_MAINNET_RPC_PASSWORD:}

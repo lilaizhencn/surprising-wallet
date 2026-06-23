@@ -132,31 +132,34 @@ public class DogeCollectionJob {
         signature.put("withdraw", List.of(output));
         signature.put("feeRate", feeRate);
         signature.put("totalAmount", inputAmount.toPlainString());
+        String rawPayload = signature.toJSONString();
+
+        chainRepository.createCollectionRecord(
+                collectionId, "DOGE", "DOGE",
+                inputAddresses.get(0).getAddress(), hotAddress.getAddress(),
+                outputAmount, feeAmount, rawPayload);
+        if (chainRepository.claimCollectionSigning("DOGE", collectionId, rawPayload) != 1) {
+            return;
+        }
 
         WithdrawTransaction transaction = WithdrawTransaction.builder()
                 .balance(inputAmount)
                 .currency(currency.getIndex())
                 .status(Constants.SIGNING)
                 .txId("signing")
-                .signature(signature.toJSONString())
+                .signature(rawPayload)
                 .createDate(now)
                 .updateDate(now)
                 .build();
         transactionService.add(transaction, table);
 
         String transactionId = transaction.getId().toString();
-        chainRepository.createCollectionRecord(
-                collectionId, "DOGE", "DOGE",
-                inputAddresses.get(0).getAddress(), hotAddress.getAddress(),
-                outputAmount, feeAmount, signature.toJSONString());
         for (UtxoTransaction utxo : utxos) {
             if (chainRepository.lockUtxo("DOGE", utxo.getTxId(), utxo.getSeq(), transactionId) != 1) {
                 throw new IllegalStateException(
                         "failed to lock DOGE collection UTXO " + utxo.getTxId() + ":" + utxo.getSeq());
             }
         }
-        chainRepository.updateCollectionStatus(
-                "DOGE", collectionId, "SIGNING", null, null, signature.toJSONString());
         List<UtxoTransaction> spends = utxos.stream().map(utxo -> UtxoTransaction.builder()
                 .id(utxo.getId())
                 .spent((byte) 1)

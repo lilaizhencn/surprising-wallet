@@ -67,6 +67,29 @@ insert into chain_profile(
     default_fee_rate, dust_threshold, enabled
 )
 values (
+    'DOGE', 'regtest', 'bitcoin-like', 41, 3, 'DOGE',
+    'http://127.0.0.1:22555', null,
+    6, 6, 1000, 1000000, true
+)
+on conflict (chain, network) do update
+set family = excluded.family,
+    runtime_currency_id = excluded.runtime_currency_id,
+    bip44_coin_type = excluded.bip44_coin_type,
+    native_symbol = excluded.native_symbol,
+    rpc_url = excluded.rpc_url,
+    deposit_confirmations = excluded.deposit_confirmations,
+    withdraw_confirmations = excluded.withdraw_confirmations,
+    default_fee_rate = excluded.default_fee_rate,
+    dust_threshold = excluded.dust_threshold,
+    enabled = excluded.enabled,
+    updated_at = now();
+
+insert into chain_profile(
+    chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+    rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+    default_fee_rate, dust_threshold, enabled
+)
+values (
     'LTC', 'mainnet', 'bitcoin-like', 24, 2, 'LTC',
     null, 'https://litecoinspace.org/tx/',
     1, 6, 2, 1000, true

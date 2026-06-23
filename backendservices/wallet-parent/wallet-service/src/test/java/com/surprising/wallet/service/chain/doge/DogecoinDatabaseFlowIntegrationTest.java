@@ -66,6 +66,22 @@ class DogecoinDatabaseFlowIntegrationTest {
                     where chain=?
                       and (available_balance < 0 or locked_balance < 0 or total_balance < 0)
                     """, Long.class, chain));
+
+                String collectionNo = chain.toLowerCase() + "-collection-" + UUID.randomUUID();
+                assertEquals(1, repository.createCollectionRecord(
+                        collectionNo, chain, chain, "source", "hot",
+                        new BigDecimal("24.00000000"), BigDecimal.ONE, "{}"));
+                assertEquals(1, repository.claimCollectionSigning(chain, collectionNo, "{}"));
+                assertEquals(0, repository.claimCollectionSigning(chain, collectionNo, "{}"));
+                assertEquals(1, repository.updateCollectionStatus(
+                        chain, collectionNo, "FAILED", null, "expected failure", "{}"));
+                assertEquals(0, repository.claimCollectionSigning(chain, collectionNo, "{}"),
+                        "FAILED collection must not be retried automatically");
+                assertEquals(1, repository.updateCollectionStatus(
+                        chain, collectionNo, "RETRYING", null, null, "{}"));
+                assertEquals(1, repository.claimCollectionSigning(chain, collectionNo, "{}"),
+                        "explicit RETRYING transition must allow one recovery attempt");
+                assertEquals(0, repository.claimCollectionSigning(chain, collectionNo, "{}"));
             }
             connection.rollback();
         }
