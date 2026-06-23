@@ -38,6 +38,11 @@ atomex:
     indexer-url: ${TON_INDEXER_URL:https://testnet.tonapi.io}
     indexer-api-key: ${TON_INDEXER_API_KEY:}
     scan-limit: ${TON_SCAN_LIMIT:100}
+  aptos:
+    network: ${APTOS_NETWORK:devnet}
+    rpc-url: ${APTOS_RPC_URL:https://fullnode.devnet.aptoslabs.com/v1}
+    faucet-url: ${APTOS_FAUCET_URL:https://faucet.devnet.aptoslabs.com}
+    scan-limit: ${APTOS_SCAN_LIMIT:100}
   eth:
     server: https://ethereum-sepolia-rpc.publicnode.com
     chain-id: 11155111

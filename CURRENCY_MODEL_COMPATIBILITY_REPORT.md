@@ -14,6 +14,7 @@ Generated: 2026-06-23 Asia/Shanghai.
 - The BCH Regtest gate validated runtime id `42` with BIP44 coin type `145`; confirmations, fee, dust, safe scan height, withdrawal, collection, and reconciliation used the BCH regtest profile.
 - The Solana devnet gate validated runtime id `50` with BIP44 coin type `501`; Solana has no `CurrencyEnum` entry and loads profile, assets, tokens, addresses, scan checkpoint, and ledger state from the unified database model.
 - The TON testnet gate validated runtime id `51` with BIP44 coin type `607`; TON has no `CurrencyEnum` entry and loads profile, assets, Jetton token config, addresses, seqno, scan checkpoint, and ledger state from the unified database model.
+- The Aptos devnet gate validated runtime id `52` with BIP44 coin type `637`; Aptos has no `CurrencyEnum` entry and loads profile, assets, Coin<T> token config, addresses, sequence, scan checkpoint, and ledger state from the unified database model.
 
 ## Remaining CurrencyEnum Dependencies
 
@@ -133,6 +134,23 @@ LTC continues to mirror legacy `ltc_*`, `user_asset`, `currency_balance`, and `b
 - Ed25519 derivation uses the shared master seed through SLIP-0010 and does not
   convert or hash BTC/EVM/TRON secp256k1 private keys.
 
+## Aptos Compatibility
+
+- Runtime currency id: `52`.
+- BIP44 coin type: `637`.
+- Aptos is intentionally absent from `CurrencyEnum` and `CurrencyIds`.
+- `chain_profile`, `chain_asset`, `token_config`, `chain_address`,
+  `account_sequence`, `aptos_transaction`, `deposit_record`,
+  `withdrawal_order`, `collection_record`, `ledger_balance`, and
+  `chain_scan_height` are the runtime source of truth.
+- Aptos sequence numbers are reserved through `account_sequence`; runtime
+  currency id is never reused as a derivation coin type.
+- Devnet USDT/USDC-style token mechanics were validated with a self-deployed
+  mock `Coin<T>` configured through `token_config`. Production token addresses
+  and CoinType/FA metadata must remain database-driven.
+- Ed25519 derivation uses the shared master seed through SLIP-0010 and does not
+  convert or hash BTC/EVM/TRON secp256k1 private keys.
+
 ## Migration Requirement
 
 Required and added:
@@ -149,12 +167,14 @@ Required and added:
 - Solana devnet/mainnet profiles and SOL native asset row
 - TON testnet/mainnet profiles, TON native asset row, `ton_transaction`,
   `account_sequence`, and TON Jetton token config rows
+- Aptos devnet/testnet/mainnet profiles, APT native asset row,
+  `aptos_transaction`, and Aptos Coin<T> token config rows
 
 No MBG generation was needed because these tables are accessed through the hand-written JDBC repository; no service, scanner, signer, or fee logic was generated.
 
 ## ID Conflict Risk
 
-- Current modern database runtime ids include `1` (BTC), `24` (LTC), `41` (DOGE), `42` (BCH), `50` (Solana), and `51` (TON).
+- Current modern database runtime ids include `1` (BTC), `24` (LTC), `41` (DOGE), `42` (BCH), `50` (Solana), `51` (TON), and `52` (Aptos).
 - Current `chain_profile` rows reserve runtime ids `24`, `41`, and `42` for LTC, DOGE, and BCH testnet/mainnet profiles. Pre-migration checks found no conflicting use in the legacy balance tables.
 - The legacy `CurrencyIds` namespace contains incompatible meanings for ids `2`, `5`, `24`, and many token ids.
 - Risk is high if code imports both currency namespaces or hardcodes ids.

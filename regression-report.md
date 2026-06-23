@@ -573,6 +573,62 @@ Detailed evidence: `DOGECOIN_WALLET_REPORT.md`.
 
 ---
 
+## Aptos Devnet Gate Update
+
+Generated: 2026-06-23 Asia/Shanghai.
+
+- Aptos APT native and Aptos Coin<T> token flow are implemented with the shared
+  SLIP-0010 Ed25519 master-seed tree.
+- Runtime id `52` and BIP44 coin type `637` are database-driven and separate.
+- Native owner: `0xd0456d74d63c33ab208843ae764c1acb006ac6f8557b217201c893b4996eae24`.
+- Mock token owner: `0x8589db260fb347dd4b5391ff3fb85d314b4adcea9bbaf9fc7774eca40fd0d16e`.
+- Mock MUSD CoinType:
+  `0x0efda149ef9237e8a6cb23228ec986bec0898f320f0d03e8f8b744208244759e::mock_coin::MockCoin`.
+- Native deposit:
+  `0xdd7cf27d412dcfe112556f0674bf7bb0ab4fe7c8964b101608bc08e4ac7cb57d`.
+- Native withdrawal:
+  `0xae6c1cdb173f58e632a92fc7df0109e7021ff6e0446f29d52bf5f4903d1931ea`.
+- Native collection:
+  `0x67349361098b848ce26e813ccd6c40251750d26c799781bf3ad2d735dc3baeb1`.
+- Mock package publish:
+  `0x0d9db37ba5bcf9a968713be3602df5e80306588b90359d2fb98890584521b483`.
+- Mock token deposit/mint:
+  `0xae178ede89e8c7e903b010af60904cd88a9c7708fbb28380b1c6845a63e17e69`.
+- Mock token withdrawal:
+  `0xcf108fd2a631fa4486169c47d3c7bc80abfe313cdf8605c717568aed6936344f`.
+- Mock token collection:
+  `0xe6b8131fa318aaeb9b96acf53511f606ada9bf45de226b74cdccae177f5f2e5d`.
+- `deposit_record`: APT 1 CREDITED row; MUSD 2 CREDITED rows. The latest
+  MUSD row is the final post-fix token live run.
+- `withdrawal_order`: APT 1 CONFIRMED; MUSD 2 CONFIRMED.
+- `collection_record`: APT 1 CONFIRMED; MUSD 2 CONFIRMED.
+- Final ledger: APT owner available/total `85000000`, MUSD owner
+  available/total `18000000`, locked `0`.
+- Negative Aptos ledger rows: `0`.
+- Scanner checkpoint: `aptos-coin-event-scanner`, best/safe version
+  `112983882`.
+- Aptos public devnet produced an intermediate `429` rate-limit. The token live
+  gate then scanned from the mint transaction version and passed.
+- Aptos unit tests, PostgreSQL integration test, native live test, and token live
+  test passed.
+- `mvn -q clean install -DskipTests=false`: passed.
+- Full Surefire: 95 tests, 0 failures, 0 errors, 20 skipped.
+- PostgreSQL `select 1`: passed; Redis: `PONG`.
+- wallet-server test profile started and `/actuator/health` returned `UP`.
+- wallet-sig1 test profile started; `FirstSignJob` active.
+- wallet-sig2 test profile started; `SecondSignJob` active.
+- Startup caveat: wallet-server logged transient BTC public-RPC
+  `SSLHandshakeException/connection reset` during scheduled BTC scan, but the
+  process stayed healthy. This is an external BTC RPC read failure, not an Aptos
+  regression.
+- Secret scan: no plaintext private key, RPC key, API key, or master-seed value
+  in tracked source/config or new Aptos files.
+- Push: no.
+
+Detailed evidence: `APTOS_WALLET_REPORT.md`.
+
+---
+
 ## TON Native / Jetton Live Gate Final Update
 
 Generated: 2026-06-23 22:10 Asia/Shanghai. This section supersedes the earlier

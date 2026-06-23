@@ -1,0 +1,300 @@
+package com.surprising.wallet.service.chain.aptos;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.AptosTransactionRecord;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+public class AptosTransactionService {
+    private static final String CHAIN = "APTOS";
+
+    private final AptosRpcClient rpc;
+    private final AptosTransactionSigner signer;
+    private final ChainJdbcRepository repository;
+
+    @Value("${atomex.aptos.network:devnet}")
+    private String network = "devnet";
+
+    public String sendNative(long derivationIndex, String fromAddress, String toAddress, long amountOctas) {
+        GasPlan gas = gasPlan();
+        long chainSequence = rpc.sequenceNumber(fromAddress);
+        long sequence = repository.reserveAccountSequence(CHAIN, AptosHex.normalizeAddress(fromAddress), chainSequence);
+        AptosTransactionSigner.SignedTransaction tx = signer.nativeTransfer(
+                derivationIndex, fromAddress, sequence, toAddress, amountOctas,
+                gas.maxGasAmount(), gas.gasUnitPrice(), rpc.chainId());
+        return rpc.submitTransaction(tx.json());
+    }
+
+    public String sendCoin(long derivationIndex, String fromAddress, String coinType,
+                           String toAddress, long amountAtomic) {
+        GasPlan gas = gasPlan();
+        long chainSequence = rpc.sequenceNumber(fromAddress);
+        long sequence = repository.reserveAccountSequence(CHAIN, AptosHex.normalizeAddress(fromAddress), chainSequence);
+        AptosTransactionSigner.SignedTransaction tx = signer.coinTransfer(
+                derivationIndex, fromAddress, sequence, coinType, toAddress, amountAtomic,
+                gas.maxGasAmount(), gas.gasUnitPrice(), rpc.chainId());
+        return rpc.submitTransaction(tx.json());
+    }
+
+    public String registerCoin(long derivationIndex, String ownerAddress, String coinType) {
+        if (rpc.coinStoreExists(ownerAddress, coinType)) {
+            return "";
+        }
+        GasPlan gas = gasPlan();
+        long chainSequence = rpc.sequenceNumber(ownerAddress);
+        long sequence = repository.reserveAccountSequence(CHAIN, AptosHex.normalizeAddress(ownerAddress), chainSequence);
+        AptosTransactionSigner.SignedTransaction tx = signer.managedCoinRegister(
+                derivationIndex, ownerAddress, sequence, coinType,
+                gas.maxGasAmount(), gas.gasUnitPrice(), rpc.chainId());
+        return rpc.submitTransaction(tx.json());
+    }
+
+    public String runEntryFunction(long derivationIndex, String fromAddress,
+                                   String module, String function,
+                                   List<String> typeArguments,
+                                   List<AptosTransactionSigner.FunctionArgument> arguments) {
+        GasPlan gas = gasPlan();
+        long chainSequence = rpc.sequenceNumber(fromAddress);
+        long sequence = repository.reserveAccountSequence(CHAIN, AptosHex.normalizeAddress(fromAddress), chainSequence);
+        AptosTransactionSigner.SignedTransaction tx = signer.entryFunction(
+                derivationIndex, fromAddress, sequence, module, function,
+                typeArguments, arguments, gas.maxGasAmount(), gas.gasUnitPrice(), rpc.chainId());
+        return rpc.submitTransaction(tx.json());
+    }
+
+    public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
+                                 String toAddress, BigDecimal amountOctas) {
+        Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        long amount = amountOctas.longValueExact();
+        long feeReserve = profile().getDefaultFee();
+        if (repository.createWithdrawalOrder(orderNo, userId, CHAIN, "APT", toAddress,
+                amountOctas, BigDecimal.valueOf(feeReserve)) == 0) {
+            return repository.findWithdrawalTxHash(CHAIN, orderNo)
+                    .orElseThrow(() -> new IllegalStateException("Aptos withdrawal already claimed"));
+        }
+        BigDecimal debit = amountOctas.add(BigDecimal.valueOf(feeReserve));
+        if (!repository.freezeLedgerBalance(CHAIN, "APT", from.getAccountId(), debit)) {
+            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null,
+                    "insufficient APT ledger balance");
+            throw new IllegalStateException("insufficient APT ledger balance");
+        }
+        repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
+        try {
+            repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
+            long sequenceBefore = rpc.sequenceNumber(from.getAddress());
+            String hash = sendNative(from.getAddressIndex(), from.getAddress(), toAddress, amount);
+            repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), hash, null);
+            record(hash, from.getAddress(), toAddress, "APT", AptosRpcClient.aptCoinType(), amountOctas,
+                    feeReserve, sequenceBefore, "SENT", null);
+            return hash;
+        } catch (RuntimeException e) {
+            repository.releaseLockedBalance(CHAIN, "APT", from.getAccountId(), debit);
+            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null, e.getMessage());
+            throw e;
+        }
+    }
+
+    public String withdrawCoin(String orderNo, long userId, ChainAddressRecord from,
+                               String coinType, String toAddress, BigDecimal atomicAmount) {
+        Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        TokenDefinition token = repository.findTokenByContract(CHAIN, coinType)
+                .orElseThrow(() -> new IllegalArgumentException("unconfigured Aptos coin " + coinType));
+        if (repository.createWithdrawalOrder(orderNo, userId, CHAIN, token.getSymbol(), toAddress,
+                atomicAmount, BigDecimal.ZERO) == 0) {
+            return repository.findWithdrawalTxHash(CHAIN, orderNo)
+                    .orElseThrow(() -> new IllegalStateException("Aptos coin withdrawal already claimed"));
+        }
+        if (!repository.freezeLedgerBalance(CHAIN, token.getSymbol(), from.getAccountId(), atomicAmount)) {
+            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null,
+                    "insufficient " + token.getSymbol() + " ledger balance");
+            throw new IllegalStateException("insufficient " + token.getSymbol() + " ledger balance");
+        }
+        repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
+        try {
+            repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
+            long sequenceBefore = rpc.sequenceNumber(from.getAddress());
+            String hash = sendCoin(from.getAddressIndex(), from.getAddress(), coinType,
+                    toAddress, atomicAmount.longValueExact());
+            repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), hash, null);
+            record(hash, from.getAddress(), toAddress, token.getSymbol(), coinType, atomicAmount,
+                    profile().getDefaultFee(), sequenceBefore, "SENT", null);
+            return hash;
+        } catch (RuntimeException e) {
+            repository.releaseLockedBalance(CHAIN, token.getSymbol(), from.getAccountId(), atomicAmount);
+            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null, e.getMessage());
+            throw e;
+        }
+    }
+
+    public String collectNative(String collectionNo, ChainAddressRecord from,
+                                String hotAddress, BigDecimal amountOctas) {
+        Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        long feeReserve = profile().getDefaultFee();
+        repository.createCollectionRecord(collectionNo, CHAIN, "APT", from.getAddress(), hotAddress,
+                amountOctas, BigDecimal.valueOf(feeReserve), null);
+        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(CHAIN, collectionNo)
+                    .orElseThrow(() -> new IllegalStateException("Aptos collection is not retryable"));
+        }
+        try {
+            long sequenceBefore = rpc.sequenceNumber(from.getAddress());
+            String hash = sendNative(from.getAddressIndex(), from.getAddress(), hotAddress,
+                    amountOctas.longValueExact());
+            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", hash, null, null);
+            record(hash, from.getAddress(), hotAddress, "APT", AptosRpcClient.aptCoinType(), amountOctas,
+                    feeReserve, sequenceBefore, "SENT", null);
+            return hash;
+        } catch (RuntimeException e) {
+            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            throw e;
+        }
+    }
+
+    public String collectCoin(String collectionNo, ChainAddressRecord from, String coinType,
+                              String hotAddress, BigDecimal atomicAmount) {
+        Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        TokenDefinition token = repository.findTokenByContract(CHAIN, coinType)
+                .orElseThrow(() -> new IllegalArgumentException("unconfigured Aptos coin " + coinType));
+        repository.createCollectionRecord(collectionNo, CHAIN, token.getSymbol(), from.getAddress(),
+                hotAddress, atomicAmount, BigDecimal.valueOf(profile().getDefaultFee()), null);
+        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(CHAIN, collectionNo)
+                    .orElseThrow(() -> new IllegalStateException("Aptos coin collection is not retryable"));
+        }
+        try {
+            long sequenceBefore = rpc.sequenceNumber(from.getAddress());
+            String hash = sendCoin(from.getAddressIndex(), from.getAddress(), coinType, hotAddress,
+                    atomicAmount.longValueExact());
+            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", hash, null, null);
+            record(hash, from.getAddress(), hotAddress, token.getSymbol(), coinType, atomicAmount,
+                    profile().getDefaultFee(), sequenceBefore, "SENT", null);
+            return hash;
+        } catch (RuntimeException e) {
+            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            throw e;
+        }
+    }
+
+    public boolean confirmWithdrawal(String orderNo, String assetSymbol, String accountId, BigDecimal debitAmount) {
+        String hash = repository.findWithdrawalTxHash(CHAIN, orderNo).orElseThrow();
+        JsonNode transaction = requireSuccessfulConfirmation(hash, Duration.ofMinutes(2));
+        if (repository.markWithdrawalConfirmed(CHAIN, orderNo, hash) == 1) {
+            if (!repository.settleLockedDebit(CHAIN, assetSymbol, accountId, debitAmount)) {
+                throw new IllegalStateException("unable to settle Aptos locked balance");
+            }
+            markConfirmed(hash, transaction);
+            return true;
+        }
+        return false;
+    }
+
+    public boolean confirmCollection(String collectionNo) {
+        String hash = repository.findCollectionTxHash(CHAIN, collectionNo).orElseThrow();
+        JsonNode transaction = requireSuccessfulConfirmation(hash, Duration.ofMinutes(2));
+        if (repository.markCollectionConfirmed(CHAIN, collectionNo, hash) == 1) {
+            markConfirmed(hash, transaction);
+            return true;
+        }
+        return false;
+    }
+
+    public JsonNode requireSuccessfulConfirmation(String hash, Duration timeout) {
+        Instant deadline = Instant.now().plus(timeout);
+        while (Instant.now().isBefore(deadline)) {
+            JsonNode transaction = rpc.transactionByHash(hash);
+            if (transaction != null && !transaction.isNull()) {
+                if (transaction.path("success").asBoolean(false)) {
+                    return transaction;
+                }
+                if (!transaction.path("vm_status").isMissingNode()) {
+                    throw new IllegalStateException("Aptos transaction failed: "
+                            + transaction.path("vm_status").asText());
+                }
+            }
+            sleep(750L);
+        }
+        throw new IllegalStateException("Aptos confirmation timeout for " + hash);
+    }
+
+    private GasPlan gasPlan() {
+        long gasUnitPrice = Math.max(1L, rpc.estimateGasPrice());
+        long feeReserve = Math.max(1L, profile().getDefaultFee());
+        long maxGasAmount = Math.max(50_000L, (feeReserve + gasUnitPrice - 1L) / gasUnitPrice);
+        return new GasPlan(maxGasAmount, gasUnitPrice);
+    }
+
+    private AccountChainProfile profile() {
+        return repository.findAccountChainProfile(CHAIN, network)
+                .orElseThrow(() -> new IllegalStateException("missing enabled APTOS/" + network + " profile"));
+    }
+
+    private void record(String hash, String sender, String receiver, String symbol, String coinType,
+                        BigDecimal amount, long feeReserve, long sequenceNumber,
+                        String status, String rawPayload) {
+        repository.recordAptosTransaction(AptosTransactionRecord.builder()
+                .chain(CHAIN)
+                .txHash(hash)
+                .sender(AptosHex.normalizeAddress(sender))
+                .receiver(AptosHex.normalizeAddress(receiver))
+                .assetSymbol(symbol)
+                .coinType(coinType)
+                .amount(amount)
+                .gasUsed(feeReserve)
+                .gasUnitPrice(0L)
+                .sequenceNumber(sequenceNumber)
+                .confirmations(0)
+                .status(status)
+                .rawPayload(rawPayload)
+                .build());
+    }
+
+    private void markConfirmed(String hash, JsonNode transaction) {
+        long version = transaction.path("version").asLong(0);
+        long gasUsed = transaction.path("gas_used").asLong(0);
+        long gasUnitPrice = transaction.path("gas_unit_price").asLong(0);
+        repository.markAptosTransactionConfirmed(CHAIN, hash, version, gasUsed, gasUnitPrice,
+                transaction.toString());
+        String sender = transaction.path("sender").asText();
+        if (!sender.isBlank()) {
+            repository.synchronizeAccountSequence(CHAIN, AptosHex.normalizeAddress(sender),
+                    transaction.path("sequence_number").asLong(0) + 1L);
+        }
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Aptos wait interrupted", e);
+        }
+    }
+
+    private record GasPlan(long maxGasAmount, long gasUnitPrice) {
+    }
+}

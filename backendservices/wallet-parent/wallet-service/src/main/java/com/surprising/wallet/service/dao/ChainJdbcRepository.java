@@ -2,6 +2,7 @@ package com.surprising.wallet.service.dao;
 
 import com.surprising.wallet.common.chain.ChainAsset;
 import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.AptosTransactionRecord;
 import com.surprising.wallet.common.chain.BitcoinLikeChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
@@ -314,6 +315,46 @@ public class ChainJdbcRepository {
                         where chain = ? and tx_hash = ? and status <> 'CONFIRMED'
                         """,
                 toTs(now()), chain, txHash);
+    }
+
+    public int recordAptosTransaction(AptosTransactionRecord tx) {
+        return jdbcTemplate.update("""
+                        insert into aptos_transaction(
+                            chain, tx_hash, sender, receiver, asset_symbol, coin_type,
+                            amount, gas_used, gas_unit_price, version, sequence_number,
+                            confirmations, status, raw_payload, created_at, updated_at
+                        )
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        on conflict (chain, tx_hash) do update set
+                            gas_used = greatest(aptos_transaction.gas_used, excluded.gas_used),
+                            gas_unit_price = greatest(aptos_transaction.gas_unit_price, excluded.gas_unit_price),
+                            version = coalesce(excluded.version, aptos_transaction.version),
+                            sequence_number = coalesce(excluded.sequence_number, aptos_transaction.sequence_number),
+                            confirmations = greatest(aptos_transaction.confirmations, excluded.confirmations),
+                            status = excluded.status,
+                            raw_payload = coalesce(excluded.raw_payload, aptos_transaction.raw_payload),
+                            updated_at = excluded.updated_at
+                        """,
+                tx.getChain(), tx.getTxHash(), tx.getSender(), tx.getReceiver(), tx.getAssetSymbol(),
+                tx.getCoinType(), tx.getAmount(), tx.getGasUsed(), tx.getGasUnitPrice(), tx.getVersion(),
+                tx.getSequenceNumber(), tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(),
+                toTs(now()), toTs(now()));
+    }
+
+    public int markAptosTransactionConfirmed(String chain, String txHash, long version,
+                                             long gasUsed, long gasUnitPrice, String rawPayload) {
+        return jdbcTemplate.update("""
+                        update aptos_transaction
+                        set confirmations = greatest(confirmations, 1),
+                            status = 'CONFIRMED',
+                            version = ?,
+                            gas_used = ?,
+                            gas_unit_price = ?,
+                            raw_payload = coalesce(?, raw_payload),
+                            updated_at = ?
+                        where chain = ? and tx_hash = ? and status <> 'CONFIRMED'
+                        """,
+                version, gasUsed, gasUnitPrice, rawPayload, toTs(now()), chain, txHash);
     }
 
     @Transactional(rollbackFor = Throwable.class)
@@ -785,6 +826,14 @@ public class ChainJdbcRepository {
                             updated_at = excluded.updated_at
                         """,
                 chain, scannerName, bestHeight, safeHeight, toTs(now()), toTs(now()));
+    }
+
+    public Optional<Long> findScanSafeHeight(String chain, String scannerName) {
+        List<Long> results = jdbcTemplate.queryForList("""
+                        select safe_height from chain_scan_height
+                        where chain = ? and scanner_name = ?
+                        """, Long.class, chain, scannerName);
+        return results.stream().findFirst();
     }
 
     public Optional<TokenDefinition> findToken(String chain, String symbol) {

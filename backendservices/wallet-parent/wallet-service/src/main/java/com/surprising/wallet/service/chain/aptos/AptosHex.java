@@ -1,0 +1,44 @@
+package com.surprising.wallet.service.chain.aptos;
+
+import java.util.HexFormat;
+
+final class AptosHex {
+    private static final HexFormat HEX = HexFormat.of();
+
+    private AptosHex() {
+    }
+
+    static String withPrefix(byte[] bytes) {
+        return "0x" + HEX.formatHex(bytes);
+    }
+
+    static String normalizeAddress(String address) {
+        byte[] bytes = addressBytes(address);
+        return withPrefix(bytes);
+    }
+
+    static byte[] addressBytes(String address) {
+        String value = stripPrefix(address);
+        if (value.length() > 64) {
+            throw new IllegalArgumentException("Aptos address is longer than 32 bytes");
+        }
+        if (value.length() % 2 != 0) {
+            value = "0" + value;
+        }
+        byte[] raw = value.isBlank() ? new byte[0] : HEX.parseHex(value);
+        byte[] result = new byte[32];
+        System.arraycopy(raw, 0, result, 32 - raw.length, raw.length);
+        return result;
+    }
+
+    static byte[] bytes(String hex) {
+        return HEX.parseHex(stripPrefix(hex));
+    }
+
+    static String stripPrefix(String hex) {
+        if (hex == null || hex.isBlank()) {
+            throw new IllegalArgumentException("hex value is blank");
+        }
+        return hex.startsWith("0x") || hex.startsWith("0X") ? hex.substring(2) : hex;
+    }
+}

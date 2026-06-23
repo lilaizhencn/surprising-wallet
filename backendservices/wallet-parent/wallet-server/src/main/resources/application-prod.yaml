@@ -38,6 +38,11 @@ atomex:
     indexer-url: ${TON_INDEXER_URL:}
     indexer-api-key: ${TON_INDEXER_API_KEY:}
     scan-limit: ${TON_SCAN_LIMIT:100}
+  aptos:
+    network: ${APTOS_NETWORK:mainnet}
+    rpc-url: ${APTOS_RPC_URL:}
+    faucet-url: ${APTOS_FAUCET_URL:}
+    scan-limit: ${APTOS_SCAN_LIMIT:100}
   eth:
     server: https://ethereum-rpc.publicnode.com
     chain-id: 1
