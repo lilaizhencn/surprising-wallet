@@ -24,15 +24,17 @@ public class BtcWallet extends AbstractBtcLikeWallet implements IWallet {
 
     @Autowired
     BtcCommand command;
+    private RuntimeAsset currency;
 
     @PostConstruct
     public void init() {
         super.setCommand(command);
+        currency = loadBitcoinLikeRuntimeAsset("BTC", "testnet3");
     }
 
     @Override
     public RuntimeAsset getCurrency() {
-        return RuntimeAsset.BTC;
+        return currency;
     }
 
 

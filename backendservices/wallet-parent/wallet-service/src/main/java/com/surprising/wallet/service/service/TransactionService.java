@@ -70,7 +70,7 @@ public class TransactionService {
             return;
         }
         log.info("saveTransaction dto: {} begin", dto.getTxId());
-        RuntimeAsset currency = RuntimeAsset.parseValue(dto.getCurrency());
+        RuntimeAsset currency = assetRoutingService.runtimeAsset(dto.getCurrency());
         long requiredConfirmations =
                 walletContext.getWallet(currency).getDepositConfirmationThreshold();
         UtxoKey utxoKey = UtxoKey.parse(dto.getTxId());
@@ -98,7 +98,7 @@ public class TransactionService {
     public boolean withdraw(WithdrawRecord record) {
         log.info("提现操作 开始 提现id:{}", record.getWithdrawId());
 
-        RuntimeAsset currency = RuntimeAsset.parseValue(record.getCurrency());
+        RuntimeAsset currency = assetRoutingService.runtimeAsset(record.getCurrency());
         if (isUnifiedBitcoinLike(currency)) {
             String chain = chainName(currency);
             if (chainJdbcRepository.findWithdrawalStatus(chain, record.getWithdrawId()).isPresent()) {
@@ -144,7 +144,7 @@ public class TransactionService {
     public boolean sendWithdrawTransaction(WithdrawTransaction transaction) {
         log.info("广播签名后的交易 开始 币种id:{} 交易id:{}", transaction.getCurrency(), transaction.getId());
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
-        RuntimeAsset currency = RuntimeAsset.parseValue(transaction.getCurrency());
+        RuntimeAsset currency = transactionAsset(transaction);
 
         //签名是否成功
         if (!signature.containsKey("valid") || !signature.getBoolean("valid")) {
@@ -322,6 +322,16 @@ public class TransactionService {
 
     private String chainName(RuntimeAsset currency) {
         return assetRoutingService.requireChainForRuntimeCurrencyId(currency.getIndex());
+    }
+
+    private RuntimeAsset transactionAsset(WithdrawTransaction transaction) {
+        if (StringUtils.hasText(transaction.getChain())
+                && StringUtils.hasText(transaction.getAssetSymbol())
+                && transaction.getAssetDecimals() != null
+                && transaction.getBip44CoinType() != null) {
+            return RuntimeAsset.fromTransaction(transaction);
+        }
+        return assetRoutingService.runtimeAsset(transaction.getCurrency());
     }
 
     private static class UtxoKey {

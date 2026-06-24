@@ -27,6 +27,7 @@ public class LtcWallet extends AbstractBtcLikeWallet implements IWallet {
     @Value("${atomex.ltc.network:testnet}")
     private String network;
     private BitcoinLikeChainProfile runtimeProfile;
+    private RuntimeAsset currency;
 
     @PostConstruct
     public void init() {
@@ -36,17 +37,12 @@ public class LtcWallet extends AbstractBtcLikeWallet implements IWallet {
         runtimeProfile = chainJdbcRepository.findBitcoinLikeProfile("LTC", profileNetwork)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for LTC/" + profileNetwork));
-        if (runtimeProfile.getRuntimeCurrencyId() != RuntimeAsset.LTC.getIndex()) {
-            throw new IllegalStateException("LTC runtime currency id conflicts with legacy routing id");
-        }
-        if (runtimeProfile.getBip44CoinType() != RuntimeAsset.LTC.getBip44CoinType()) {
-            throw new IllegalStateException("LTC BIP44 coin type conflicts with legacy compatibility metadata");
-        }
+        currency = loadBitcoinLikeRuntimeAsset("LTC", profileNetwork);
     }
 
     @Override
     public RuntimeAsset getCurrency() {
-        return RuntimeAsset.LTC;
+        return currency;
     }
 
     @Override

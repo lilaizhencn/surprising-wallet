@@ -14,6 +14,7 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
     @PostConstruct public void init(){NODE=Bip32Node.decode(masterKey);}
     protected NetworkParameters getNetworkParameters(){return Constants.NET_PARAMS;}
     @Override public void signTransaction(WithdrawTransaction transaction){
+        RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
         WitnessTransactionBuilder wtxBuilder=new WitnessTransactionBuilder(getNetworkParameters());
         JSONObject signature=JSONObject.parseObject(transaction.getSignature());
         try{
@@ -24,10 +25,10 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
             List<String> witnessScriptHexes=new ArrayList<>(inputCount);
             List<Coin> utxoValues=new ArrayList<>(inputCount);
             List<ECKey> ecKeys=new ArrayList<>(inputCount);
-            BigDecimal cd=getCurrency().getDecimal();
+            BigDecimal cd=currency.getDecimal();
             for(int i=0;i<inputCount;i++){Address a=addresses.get(i); UtxoTransaction u=utxos.get(i);
-                Bip32Node n=getBipNODE(a); ECKey ek=n.getEcKey(); ecKeys.add(ek);
-                String wsh=pubKeyConfig.genWitnessScript(a); witnessScriptHexes.add(wsh);
+                Bip32Node n=getBipNODE(a,currency); ECKey ek=n.getEcKey(); ecKeys.add(ek);
+                String wsh=pubKeyConfig.genWitnessScript(a,currency); witnessScriptHexes.add(wsh);
                 Coin uv=Coin.valueOf(u.getBalance().multiply(cd).longValue()); utxoValues.add(uv);
                 wtxBuilder.addInput(u.getTxId(),u.getSeq(),wsh,uv);}
             long total=transaction.getBalance().multiply(cd).longValue(), sent=0;
@@ -55,6 +56,8 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
     @Override abstract public RuntimeAsset getCurrency();
     public Bip32Node getBipNODE(Address a){RuntimeAsset ce=RuntimeAsset.parseName(a.getCurrency());
         return NODE.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex());}
+    public Bip32Node getBipNODE(Address a,RuntimeAsset currency){
+        return NODE.getChild(44).getChild(currency.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex());}
     protected long defaultFeeRate(){return DEFAULT_FEE_RATE;}
     protected long dustThresholdSat(){return DUST_THRESHOLD_SAT;}
 }

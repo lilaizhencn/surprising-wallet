@@ -47,6 +47,7 @@ public class DogeFirstSignService implements ISignService {
 
     @Override
     public void signTransaction(WithdrawTransaction transaction) {
+        RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
         try {
             List<UtxoTransaction> utxos = signature.getJSONArray("utxos")
@@ -55,7 +56,7 @@ public class DogeFirstSignService implements ISignService {
                     .toJavaList(Address.class);
             List<WithdrawRecord> records = signature.getJSONArray("withdraw")
                     .toJavaList(WithdrawRecord.class);
-            BigDecimal decimal = RuntimeAsset.DOGE.getDecimal();
+            BigDecimal decimal = currency.getDecimal();
             LegacyMultisigTransactionBuilder builder =
                     new LegacyMultisigTransactionBuilder(networkParameters());
             List<ECKey> signingKeys = new ArrayList<>(utxos.size());
@@ -63,9 +64,9 @@ public class DogeFirstSignService implements ISignService {
             for (int i = 0; i < utxos.size(); i++) {
                 Address address = addresses.get(i);
                 UtxoTransaction utxo = utxos.get(i);
-                String redeemScript = pubKeyConfig.genRedeemScript(address);
+                String redeemScript = pubKeyConfig.genRedeemScript(address, currency);
                 redeemScripts.add(redeemScript);
-                signingKeys.add(derive(address).getEcKey());
+                signingKeys.add(derive(address, currency).getEcKey());
                 builder.addInput(
                         utxo.getTxId(), utxo.getSeq(), redeemScript,
                         Coin.valueOf(utxo.getBalance().multiply(decimal).longValueExact()));
@@ -138,9 +139,9 @@ public class DogeFirstSignService implements ISignService {
         return RuntimeAsset.DOGE;
     }
 
-    private Bip32Node derive(Address address) {
+    private Bip32Node derive(Address address, RuntimeAsset currency) {
         return root.getChild(44)
-                .getChild(RuntimeAsset.DOGE.getBip44CoinType())
+                .getChild(currency.getBip44CoinType())
                 .getChild(address.getBiz())
                 .getChild(address.getUserId().intValue())
                 .getChild(address.getIndex());

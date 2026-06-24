@@ -33,6 +33,7 @@ import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -195,21 +196,42 @@ class EvmForkFullChainIntegrationTest {
 
     private static String sig2Master() throws Exception {
         String fromProperty = System.getProperty("evm.sig2.master");
-        if (fromProperty != null && !fromProperty.isBlank()) {
+        if (isValidMasterKey(fromProperty)) {
             return fromProperty.trim();
         }
         String fromEnv = System.getenv("ATOMEX_SIG2_MASTER_KEY");
-        if (fromEnv != null && !fromEnv.isBlank()) {
+        if (isValidMasterKey(fromEnv)) {
             return fromEnv.trim();
         }
         Path yaml = projectRoot().resolve("backendservices/wallet-sig2/src/main/resources/application-test.yaml");
         for (String line : Files.readAllLines(yaml)) {
             String trimmed = line.trim();
             if (trimmed.startsWith("masterKey:")) {
-                return trimmed.substring("masterKey:".length()).trim();
+                String configured = trimmed.substring("masterKey:".length()).trim();
+                if (isValidMasterKey(configured)) {
+                    return configured;
+                }
             }
         }
-        throw new IllegalStateException("missing sig2 master key for EVM fork test");
+        return testMasterKey();
+    }
+
+    private static boolean isValidMasterKey(String value) {
+        if (value == null || value.isBlank() || value.contains("${")) {
+            return false;
+        }
+        try {
+            Bip32Node.decode(value.trim());
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    private static String testMasterKey() {
+        byte[] seed = new byte[32];
+        Arrays.fill(seed, (byte) 0x42);
+        return Bip32Node.getMasterKey(seed).privSerialize(Bip32Node.TYPE_BITCOIN, true);
     }
 
     private static Path projectRoot() {

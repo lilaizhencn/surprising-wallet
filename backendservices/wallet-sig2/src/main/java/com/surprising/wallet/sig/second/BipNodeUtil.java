@@ -14,14 +14,17 @@ public class BipNodeUtil {
     private static Bip32Node NODE;
 
     public static Bip32Node getBipNODE(Address address) {
+        return getBipNODE(address, RuntimeAsset.parseName(address.getCurrency()));
+    }
+
+    public static Bip32Node getBipNODE(Address address, RuntimeAsset currency) {
         if (ObjectUtils.isEmpty(BipNodeUtil.NODE)) {
             String mk = KeyConfig.getValue("masterNode");
             //final String dk = SecretConfig.decryptKey(mk);
             BipNodeUtil.NODE = Bip32Node.decode(mk);
         }
-        RuntimeAsset currencyEnum = RuntimeAsset.parseName(address.getCurrency());
         Bip32Node node = BipNodeUtil.NODE.getChild(44)
-                .getChild(currencyEnum.getBip44CoinType())
+                .getChild(currency.getBip44CoinType())
                 .getChild(address.getBiz())
                 .getChild(address.getUserId().intValue())
                 .getChild(address.getIndex());

@@ -33,7 +33,7 @@ public class WalletContext {
 
     private IWallet findWallet(RuntimeAsset currency) {
         for (IWallet wallet : cachedWallet) {
-            if (wallet.getCurrency() == currency) {
+            if (wallet.getCurrency().sameAsset(currency)) {
                 return wallet;
             }
         }

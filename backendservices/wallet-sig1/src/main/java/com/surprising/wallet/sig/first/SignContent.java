@@ -34,7 +34,7 @@ public class SignContent implements InitializingBean, ApplicationContextAware, A
 
 
     public ISignService getSignService(RuntimeAsset currency) {
-        return cache.values().stream().filter(sign -> sign.getCurrency() == currency).findFirst().orElse(null);
+        return cache.values().stream().filter(sign -> sign.getCurrency().sameAsset(currency)).findFirst().orElse(null);
     }
 
     @Override

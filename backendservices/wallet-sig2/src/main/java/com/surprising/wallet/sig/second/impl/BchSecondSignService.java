@@ -30,6 +30,7 @@ public class BchSecondSignService implements ISignService {
 
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
+        RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
         try {
             if (!"bch-p2sh".equals(signature.getString("scriptType"))) {
@@ -48,9 +49,9 @@ public class BchSecondSignService implements ISignService {
             List<ECKey> keys = new ArrayList<>();
             BitcoinCashMultisigTransactionBuilder builder =
                     new BitcoinCashMultisigTransactionBuilder(networkParameters());
-            BigDecimal decimal = RuntimeAsset.BCH.getDecimal();
+            BigDecimal decimal = currency.getDecimal();
             for (int i = 0; i < addresses.size(); i++) {
-                keys.add(BipNodeUtil.getBipNODE(addresses.get(i)).getEcKey());
+                keys.add(BipNodeUtil.getBipNODE(addresses.get(i), currency).getEcKey());
                 UtxoTransaction utxo = utxos.get(i);
                 builder.addInput(
                         utxo.getTxId(),

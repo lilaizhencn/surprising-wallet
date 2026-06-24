@@ -1,6 +1,5 @@
 package com.surprising.wallet.jobs.withdraw;
 
-import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.sdk.bitcoinj.core.P2shMultisigFeeCalculator;
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinFeePolicy;
 import jakarta.annotation.PostConstruct;
@@ -12,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class BatchDogeWithdrawJob extends AbstractBatchWithdrawJob {
     @PostConstruct
     public void init() {
-        currency = RuntimeAsset.DOGE;
+        currency = assetRoutingService.runtimeAssetByChain("DOGE");
     }
 
     @Scheduled(cron = "12/30 * * * * ?")

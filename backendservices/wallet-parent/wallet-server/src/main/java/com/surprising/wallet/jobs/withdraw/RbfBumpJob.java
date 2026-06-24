@@ -7,6 +7,7 @@ import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +53,8 @@ public class RbfBumpJob {
 
     @Autowired
     private ChainJdbcRepository chainJdbcRepository;
+    @Autowired
+    private AssetRoutingService assetRoutingService;
 
     /**
      * 每 30 秒检查一次 RBF 触发队列
@@ -77,7 +80,7 @@ public class RbfBumpJob {
 
     private void bumpFee(int txId) {
         // 1. 找到原始交易
-        RuntimeAsset currency = RuntimeAsset.BTC; // BTC only for now
+        RuntimeAsset currency = assetRoutingService.runtimeAssetByChain("BTC");
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         java.util.Optional<WithdrawTransaction> txOpt =
                 chainJdbcRepository.findBitcoinLikeSigningTransactionById(currency, txId);
@@ -131,6 +134,7 @@ public class RbfBumpJob {
         tx.setSignature(sigJson.toJSONString());
         tx.setStatus(Constants.WAITING);
         tx.setTxId("rbf-" + txId);
+        currency.applyTo(tx);
         chainJdbcRepository.updateBitcoinLikeSigningTransaction(currency, tx);
 
         // 6. 重新推送签名队列

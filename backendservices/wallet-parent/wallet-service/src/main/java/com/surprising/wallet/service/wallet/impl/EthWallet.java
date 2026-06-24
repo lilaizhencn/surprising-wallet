@@ -31,18 +31,20 @@ public class EthWallet extends AbstractEthLikeWallet implements IWallet {
 
     @Value("${atomex.eth.withdraw.address}")
     private String ethWithdrawAddress;
+    private RuntimeAsset currency;
 
     @PostConstruct
     public void init() {
         RESERVED = new BigDecimal("0.1");
         super.setCommand(command);
         super.setWithdrawAddress(ethWithdrawAddress);
+        currency = loadRuntimeAssetByChain("ETH");
     }
 
     @Override
     public void updateTXConfirmation(RuntimeAsset currency) {
-        super.updateTXConfirmation(RuntimeAsset.ETH);
-        RuntimeAsset.ERC20_SET.parallelStream().forEach(super::updateTXConfirmation);
+        super.updateTXConfirmation(getCurrency());
+        assetRoutingService.runtimeTokenAssets("ETH").parallelStream().forEach(super::updateTXConfirmation);
     }
 
     @Override
@@ -68,7 +70,7 @@ public class EthWallet extends AbstractEthLikeWallet implements IWallet {
 
     @Override
     public RuntimeAsset getCurrency() {
-        return RuntimeAsset.ETH;
+        return currency;
     }
 
     /**
@@ -78,6 +80,6 @@ public class EthWallet extends AbstractEthLikeWallet implements IWallet {
      */
     @Override
     public BigDecimal getDecimal() {
-        return RuntimeAsset.ETH.getDecimal();
+        return getCurrency().getDecimal();
     }
 }

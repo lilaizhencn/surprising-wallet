@@ -15,6 +15,7 @@ import com.surprising.wallet.common.pojo.rpc.EthLikeBlock;
 import com.surprising.wallet.common.pojo.rpc.EthRawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.common.utils.EthereumUtil;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.config.PubKeyConfig;
 import com.surprising.wallet.service.criteria.AccountTransactionExample;
 import com.surprising.wallet.service.criteria.AddressExample;
@@ -65,6 +66,8 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
     protected WithdrawTransactionService withdrawTransactionService;
     @Autowired
     protected AddressService addressService;
+    @Autowired
+    protected AssetRoutingService assetRoutingService;
     private String withdrawAddress;
     @Value("${atomex.eth.chain-id:11155111}")
     private Long chainId;
@@ -97,6 +100,10 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
         command = com;
     }
 
+    protected RuntimeAsset loadRuntimeAssetByChain(String chain) {
+        return assetRoutingService.runtimeAssetByChain(chain);
+    }
+
     /**
      * 生成新地址
      *
@@ -126,7 +133,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
         hd的公钥推导path: bip44-currency-biz-userId-index
          */
         RuntimeAsset currency = getCurrency();
-        ECKey ecKey = pubKeyConfig.NODE2.getChild(44).getChild(currency.getIndex()).getChild(biz).getChild(userId.intValue()).getChild(index).getEcKey();
+        ECKey ecKey = pubKeyConfig.NODE2.getChild(44).getChild(currency.getBip44CoinType()).getChild(biz).getChild(userId.intValue()).getChild(index).getEcKey();
         EthECKey ethEcKey = EthECKey.fromPublicOnly(ecKey.getPubKey());
         String addressStr = ETH_ADDRESS_PREFIX + Hex.toHexString(ethEcKey.getAddress());
 
@@ -340,7 +347,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
         //balance > 2 * RESERVED
         if (balance.compareTo(RESERVED.add(RESERVED)) > 0) {
             RuntimeAsset mainCurrency = RuntimeAsset.toMainCurrency(currency);
-            if (mainCurrency == currency) {
+            if (mainCurrency.sameAsset(currency)) {
                 //地址中保留的币，用来付手续费
                 balance = balance.subtract(RESERVED);
             }
@@ -378,6 +385,10 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
         return buildTransaction(record, withdrawAddress, WITHDRAW);
     }
 
+    protected RuntimeAsset resolveRuntimeAsset(WithdrawRecord record) {
+        return assetRoutingService.runtimeAsset(record.getCurrency());
+    }
+
     protected BigDecimal gas() {
         return new BigDecimal("0.00000000000042");
     }
@@ -389,13 +400,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
         String gasPriceStr = command.getGasPrice();
 
 
-        BigDecimal decimal;
-
-        if (RuntimeAsset.isErc20(currency)) {
-            decimal = RuntimeAsset.ETH.getDecimal();
-        } else {
-            decimal = getDecimal();
-        }
+        BigDecimal decimal = feeAsset(currency).getDecimal();
         BigDecimal gasPrice = new BigDecimal(EthereumUtil.hexToDouble(gasPriceStr)).divide(decimal);
 
         if (gasPrice.compareTo(minGasPrice) < 0) {
@@ -413,7 +418,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
 
 
     protected WithdrawTransaction buildTransaction(WithdrawRecord record, String from, String type) {
-        RuntimeAsset currency = RuntimeAsset.parseValue(record.getCurrency());
+        RuntimeAsset currency = resolveRuntimeAsset(record);
         BigDecimal gas = gas();
 
         AddressExample addrExam = new AddressExample();
@@ -449,6 +454,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
         BigDecimal gasPrice = gasPrice(currency);
         signature.put("gasPrice", gasPrice);
         signature.put("chainId", chainId);
+        signature.put("feeAssetDecimals", feeAsset(currency).getDecimals());
         WithdrawTransaction transaction = WithdrawTransaction.builder()
                 .balance(record.getBalance())
                 .currency(currency.getIndex())
@@ -456,6 +462,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
                 .txId(type)
                 .signature(signature.toJSONString())
                 .build();
+        currency.applyTo(transaction);
         address.setNonce(address.getNonce() + 1);
         address.setUpdateDate(Date.from(Instant.now()));
         addressService.editById(address, addressTable);
@@ -463,6 +470,12 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
         withdrawTransactionService.add(transaction, table);
         log.info("{} 交易构建对象完成", currency.getName());
         return transaction;
+    }
+
+    protected RuntimeAsset feeAsset(RuntimeAsset currency) {
+        return RuntimeAsset.isErc20(currency)
+                ? assetRoutingService.runtimeAssetByChain(currency.chain())
+                : currency;
     }
 
     /**

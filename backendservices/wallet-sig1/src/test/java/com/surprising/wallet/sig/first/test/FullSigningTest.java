@@ -50,7 +50,8 @@ public class FullSigningTest {
         sigJson.put("changeAddress", "2N2ky5hJ1b5j8E4GT14GiKcxcdUoTuhDRG7");
 
         WithdrawTransaction tx = WithdrawTransaction.builder()
-            .signature(sigJson.toJSONString()).balance(new BigDecimal("0.001")).currency(1).build();
+            .signature(sigJson.toJSONString()).balance(new BigDecimal("0.001"))
+            .chain("BTC").assetSymbol("BTC").assetDecimals(8).bip44CoinType(0).build();
 
         // Phase 1: First Sign with SIG1_MK
         BtcFirstSignService firstSign = new BtcFirstSignService();

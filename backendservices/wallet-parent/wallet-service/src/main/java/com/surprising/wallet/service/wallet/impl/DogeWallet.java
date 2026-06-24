@@ -30,6 +30,7 @@ public class DogeWallet extends AbstractBtcLikeWallet implements IWallet {
     private String network;
 
     private BitcoinLikeChainProfile runtimeProfile;
+    private RuntimeAsset currency;
 
     @PostConstruct
     public void init() {
@@ -38,17 +39,12 @@ public class DogeWallet extends AbstractBtcLikeWallet implements IWallet {
         runtimeProfile = chainJdbcRepository.findBitcoinLikeProfile("DOGE", profileNetwork)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for DOGE/" + profileNetwork));
-        if (runtimeProfile.getRuntimeCurrencyId() != RuntimeAsset.DOGE.getIndex()) {
-            throw new IllegalStateException("DOGE runtime currency id conflicts with legacy routing id");
-        }
-        if (runtimeProfile.getBip44CoinType() != RuntimeAsset.DOGE.getBip44CoinType()) {
-            throw new IllegalStateException("DOGE BIP44 coin type conflicts with compatibility metadata");
-        }
+        currency = loadBitcoinLikeRuntimeAsset("DOGE", profileNetwork);
     }
 
     @Override
     public RuntimeAsset getCurrency() {
-        return RuntimeAsset.DOGE;
+        return currency;
     }
 
     @Override

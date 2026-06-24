@@ -19,4 +19,6 @@ exec bitcoind \
   -rpcbind=127.0.0.1 \
   -rpcallowip=127.0.0.1 \
   -rpcport=18443 \
+  -rpcthreads="${BCH_REGTEST_RPC_THREADS:-32}" \
+  -rpcworkqueue="${BCH_REGTEST_RPC_WORKQUEUE:-256}" \
   -fallbackfee=0.00001

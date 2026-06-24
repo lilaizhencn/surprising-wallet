@@ -13,6 +13,7 @@ import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.wallet.IWallet;
 import com.surprising.wallet.service.wallet.WalletContext;
@@ -36,6 +37,8 @@ abstract public class AbstractBatchWithdrawJob {
     WalletContext walletContext;
     @Autowired
     ChainJdbcRepository chainJdbcRepository;
+    @Autowired
+    protected AssetRoutingService assetRoutingService;
 
     private static final Set<RuntimeAsset> SINGLE_SIG_CURRENCY = Collections.emptySet();
     private static final int DEFAULT_FEE_RATE = 10;
@@ -166,6 +169,7 @@ abstract public class AbstractBatchWithdrawJob {
                 .txId("signing")
                 .signature(signature.toJSONString())
                 .build();
+        currency.applyTo(transaction);
         String businessNo = records.stream()
                 .map(WithdrawRecord::getWithdrawId)
                 .filter(Objects::nonNull)

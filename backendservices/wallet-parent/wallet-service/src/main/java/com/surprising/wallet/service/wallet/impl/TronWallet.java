@@ -49,21 +49,23 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
 
     @Value("${atomex.tron.server}")
     private String tronServer;
+    private RuntimeAsset currency;
 
     @PostConstruct
     public void init() {
 //        log.info("tronserver url = {}", tronServer);
         TronWalletApi.init(tronServer);
+        currency = loadRuntimeAssetByChain("TRON");
     }
 
     @Override
     public RuntimeAsset getCurrency() {
-        return RuntimeAsset.TRX;
+        return currency;
     }
 
     @Override
     public BigDecimal getDecimal() {
-        return RuntimeAsset.TRX.getDecimal();
+        return getCurrency().getDecimal();
     }
 
     @Override
@@ -84,7 +86,7 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
 
     @Override
     protected WithdrawTransaction buildTransaction(WithdrawRecord record, String from, String type) {
-        RuntimeAsset currency = RuntimeAsset.parseValue(record.getCurrency());
+        RuntimeAsset currency = resolveRuntimeAsset(record);
         AddressExample addrExam = new AddressExample();
         addrExam.createCriteria().andAddressEqualTo(from);
         ShardTable addressTable;
@@ -109,6 +111,7 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
                 .txId(type)
                 .signature(signature.toJSONString())
                 .build();
+        currency.applyTo(transaction);
         address.setUpdateDate(Date.from(Instant.now()));
         addressService.editById(address, addressTable);
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
@@ -199,7 +202,7 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
          * Address generation must mirror wallet-sig2's m/44/currency/biz/user/index private-key path.
          */
         RuntimeAsset currency = getCurrency();
-        ECKey ecKey = pubKeyConfig.NODE2.getChild(44).getChild(currency.getIndex()).getChild(biz).getChild(userId.intValue()).getChild(index).getEcKey();
+        ECKey ecKey = pubKeyConfig.NODE2.getChild(44).getChild(currency.getBip44CoinType()).getChild(biz).getChild(userId.intValue()).getChild(index).getEcKey();
         String addressStr = TronWalletApi.getAddress(ecKey.getPubKey());
 
         Address address = new Address();

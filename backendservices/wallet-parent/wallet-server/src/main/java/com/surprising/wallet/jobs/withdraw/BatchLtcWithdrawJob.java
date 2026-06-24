@@ -1,6 +1,5 @@
 package com.surprising.wallet.jobs.withdraw;
 
-import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinFeePolicy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,7 +13,7 @@ import jakarta.annotation.PostConstruct;
 public class BatchLtcWithdrawJob extends AbstractBatchWithdrawJob {
     @PostConstruct
     public void init() {
-        currency = RuntimeAsset.LTC;
+        currency = assetRoutingService.runtimeAssetByChain("LTC");
     }
 
     @Scheduled(cron = "10/30 * * * * ?")

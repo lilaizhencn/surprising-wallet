@@ -12,6 +12,7 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashFeePolicy;
 import com.surprising.wallet.sdk.bitcoinj.core.P2shMultisigFeeCalculator;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,10 +29,12 @@ import java.util.List;
 
 @Component
 public class BchCollectionJob {
+    private static final String CHAIN = "BCH";
     private static final int PAGE_SIZE = 10;
 
     private final AddressService addressService;
     private final ChainJdbcRepository repository;
+    private final AssetRoutingService assetRoutingService;
 
     @Value("${atomex.wallet.collection.enabled-currencies:}")
     private String enabledCurrencies;
@@ -50,9 +53,11 @@ public class BchCollectionJob {
 
     public BchCollectionJob(
             AddressService addressService,
-            ChainJdbcRepository repository) {
+            ChainJdbcRepository repository,
+            AssetRoutingService assetRoutingService) {
         this.addressService = addressService;
         this.repository = repository;
+        this.assetRoutingService = assetRoutingService;
     }
 
     @Scheduled(cron = "24/30 * * * * ?")
@@ -61,10 +66,10 @@ public class BchCollectionJob {
         if (!isEnabled()) {
             return;
         }
-        RuntimeAsset currency = RuntimeAsset.BCH;
+        RuntimeAsset currency = assetRoutingService.runtimeAssetByChain(CHAIN);
         BitcoinLikeChainProfile profile = profile();
         ShardTable table = ShardTable.builder().prefix("bch").build();
-        Address hotAddress = getHotAddress(table);
+        Address hotAddress = getHotAddress(table, currency);
         if (hotAddress == null) {
             return;
         }
@@ -135,14 +140,14 @@ public class BchCollectionJob {
 
         repository.createCollectionRecord(
                 collectionId,
-                "BCH",
-                "BCH",
+                CHAIN,
+                CHAIN,
                 inputAddresses.get(0).getAddress(),
                 hotAddress.getAddress(),
                 outputAmount,
                 feeAmount,
                 rawPayload);
-        if (repository.claimCollectionSigning("BCH", collectionId, rawPayload) != 1) {
+        if (repository.claimCollectionSigning(CHAIN, collectionId, rawPayload) != 1) {
             return;
         }
 
@@ -155,12 +160,13 @@ public class BchCollectionJob {
                 .createDate(now)
                 .updateDate(now)
                 .build();
+        currency.applyTo(transaction);
         transaction = repository.createBitcoinLikeSigningTransaction(
                 currency, "COLLECTION", collectionId, transaction);
         String transactionId = transaction.getId().toString();
         for (UtxoTransaction utxo : utxos) {
             if (repository.lockUtxo(
-                    "BCH", utxo.getTxId(), utxo.getSeq(), transactionId) != 1) {
+                    CHAIN, utxo.getTxId(), utxo.getSeq(), transactionId) != 1) {
                 throw new IllegalStateException(
                         "BCH UTXO lock failed " + utxo.getTxId() + ":" + utxo.getSeq());
             }
@@ -172,7 +178,7 @@ public class BchCollectionJob {
 
     private List<UtxoTransaction> findCollectableUtxos(
             ShardTable table, int requiredConfirmations) {
-        return repository.listSpendableUtxos("BCH", "BCH", requiredConfirmations, PAGE_SIZE, 0).stream()
+        return repository.listSpendableUtxos(CHAIN, CHAIN, requiredConfirmations, PAGE_SIZE, 0).stream()
                 .filter(utxo -> {
                     Address address = addressService.getAddress(utxo.getAddress(), table);
                     return address != null
@@ -182,15 +188,15 @@ public class BchCollectionJob {
                 .toList();
     }
 
-    private Address getHotAddress(ShardTable table) {
+    private Address getHotAddress(ShardTable table, RuntimeAsset currency) {
         return repository.findChainAddress(
-                        "BCH", "BCH", hotUserId, hotBiz, hotAddressIndex, "DEPOSIT")
+                        CHAIN, CHAIN, hotUserId, hotBiz, hotAddressIndex, "DEPOSIT")
                 .map(record -> Address.builder()
                         .address(record.getAddress())
                         .userId(record.getUserId())
                         .biz(record.getBiz())
                         .index(Math.toIntExact(record.getAddressIndex()))
-                        .currency(RuntimeAsset.BCH.getName())
+                        .currency(currency.getName())
                         .build())
                 .orElse(null);
     }

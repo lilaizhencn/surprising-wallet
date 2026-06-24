@@ -21,13 +21,13 @@ public class TransactionSignService {
         String sig;
         try {
             transaction.setBalance(new BigDecimal(transaction.getBalanceStr()));
-            RuntimeAsset currency = RuntimeAsset.parseValue(transaction.getCurrency());
+            RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
             ISignService signService = SignContent.getSignService(currency);
             sig = signService.signTransaction(transaction);
-            log.info("签名服务 结束 币种id:{}", RuntimeAsset.parseValue(transaction.getCurrency()).getName());
+            log.info("签名服务 结束 币种:{}", currency.getName());
         } catch (Throwable e) {
             sig = "";
-            log.error("签名服务 异常 币种id:{}", RuntimeAsset.parseValue(transaction.getCurrency()).getName(), e);
+            log.error("签名服务 异常 币种id:{}", transaction.getCurrency(), e);
         }
         return sig;
     }

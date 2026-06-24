@@ -11,6 +11,7 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinFeePolicy;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
 import lombok.extern.slf4j.Slf4j;
@@ -29,10 +30,12 @@ import java.util.List;
 @Slf4j
 @Component
 public class LtcCollectionJob {
+    private static final String CHAIN = "LTC";
     private static final int PAGE_SIZE = 10;
 
     private final AddressService addressService;
     private final ChainJdbcRepository chainJdbcRepository;
+    private final AssetRoutingService assetRoutingService;
 
     @Value("${atomex.wallet.collection.enabled-currencies:}")
     private String enabledCurrencies;
@@ -47,9 +50,11 @@ public class LtcCollectionJob {
     private Integer hotAddressIndex;
 
     public LtcCollectionJob(AddressService addressService,
-                            ChainJdbcRepository chainJdbcRepository) {
+                            ChainJdbcRepository chainJdbcRepository,
+                            AssetRoutingService assetRoutingService) {
         this.addressService = addressService;
         this.chainJdbcRepository = chainJdbcRepository;
+        this.assetRoutingService = assetRoutingService;
     }
 
     @Scheduled(cron = "20/30 * * * * ?")
@@ -58,9 +63,9 @@ public class LtcCollectionJob {
         if (!isEnabled()) {
             return;
         }
-        RuntimeAsset currency = RuntimeAsset.LTC;
+        RuntimeAsset currency = assetRoutingService.runtimeAssetByChain(CHAIN);
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        Address hotAddress = getHotAddress(table);
+        Address hotAddress = getHotAddress(table, currency);
         if (hotAddress == null) {
             log.warn("LTC collection skipped: hot address missing userId={} biz={} index={}", hotUserId, hotBiz, hotAddressIndex);
             return;
@@ -125,14 +130,14 @@ public class LtcCollectionJob {
         String fromAddress = inputAddresses.get(0).getAddress();
         chainJdbcRepository.createCollectionRecord(
                 collectionId,
-                "LTC",
-                "LTC",
+                CHAIN,
+                CHAIN,
                 fromAddress,
                 hotAddress.getAddress(),
                 outputAmount,
                 feeAmount,
                 rawPayload);
-        if (chainJdbcRepository.claimCollectionSigning("LTC", collectionId, rawPayload) != 1) {
+        if (chainJdbcRepository.claimCollectionSigning(CHAIN, collectionId, rawPayload) != 1) {
             return;
         }
 
@@ -145,13 +150,14 @@ public class LtcCollectionJob {
                 .createDate(now)
                 .updateDate(now)
                 .build();
+        currency.applyTo(transaction);
         transaction = chainJdbcRepository.createBitcoinLikeSigningTransaction(
                 currency, "COLLECTION", collectionId, transaction);
 
         String transactionId = transaction.getId().toString();
         for (UtxoTransaction utxo : utxos) {
             int locked = chainJdbcRepository.lockUtxo(
-                    "LTC", utxo.getTxId(), utxo.getSeq(), transactionId);
+                    CHAIN, utxo.getTxId(), utxo.getSeq(), transactionId);
             if (locked != 1) {
                 throw new IllegalStateException(
                         "failed to lock unified LTC collection UTXO " + utxo.getTxId() + ":" + utxo.getSeq());
@@ -164,7 +170,7 @@ public class LtcCollectionJob {
 
     private List<UtxoTransaction> findCollectableUtxos(ShardTable table, RuntimeAsset currency) {
         List<UtxoTransaction> candidates = chainJdbcRepository.listSpendableUtxos(
-                "LTC", "LTC", currency.getDepositConfirmNum(), PAGE_SIZE, 0);
+                CHAIN, CHAIN, currency.getDepositConfirmNum(), PAGE_SIZE, 0);
         if (CollectionUtils.isEmpty(candidates)) {
             return candidates;
         }
@@ -176,15 +182,15 @@ public class LtcCollectionJob {
                 .toList();
     }
 
-    private Address getHotAddress(ShardTable table) {
+    private Address getHotAddress(ShardTable table, RuntimeAsset currency) {
         return chainJdbcRepository.findChainAddress(
-                        "LTC", "LTC", hotUserId, hotBiz, hotAddressIndex, "DEPOSIT")
+                        CHAIN, CHAIN, hotUserId, hotBiz, hotAddressIndex, "DEPOSIT")
                 .map(record -> Address.builder()
                         .address(record.getAddress())
                         .userId(record.getUserId())
                         .biz(record.getBiz())
                         .index(Math.toIntExact(record.getAddressIndex()))
-                        .currency(RuntimeAsset.LTC.getName())
+                        .currency(currency.getName())
                         .build())
                 .orElse(null);
     }
@@ -200,7 +206,7 @@ public class LtcCollectionJob {
     private boolean isEnabled() {
         for (String item : enabledCurrencies.split(",")) {
             String value = item.trim();
-            if ("*".equals(value) || RuntimeAsset.LTC.getName().equalsIgnoreCase(value)) {
+            if ("*".equals(value) || CHAIN.equalsIgnoreCase(value)) {
                 return true;
             }
         }

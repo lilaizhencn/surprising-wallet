@@ -10,6 +10,7 @@ import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
 import lombok.extern.slf4j.Slf4j;
@@ -28,11 +29,13 @@ import java.util.List;
 @Slf4j
 @Component
 public class BtcCollectionJob {
+    private static final String CHAIN = "BTC";
     private static final int PAGE_SIZE = 10;
     private static final int DEFAULT_FEE_RATE = 10;
 
     private final AddressService addressService;
     private final ChainJdbcRepository chainJdbcRepository;
+    private final AssetRoutingService assetRoutingService;
 
     @Value("${atomex.wallet.collection.enabled-currencies:}")
     private String enabledCurrencies;
@@ -47,9 +50,11 @@ public class BtcCollectionJob {
     private Integer hotAddressIndex;
 
     public BtcCollectionJob(AddressService addressService,
-                            ChainJdbcRepository chainJdbcRepository) {
+                            ChainJdbcRepository chainJdbcRepository,
+                            AssetRoutingService assetRoutingService) {
         this.addressService = addressService;
         this.chainJdbcRepository = chainJdbcRepository;
+        this.assetRoutingService = assetRoutingService;
     }
 
     @Scheduled(cron = "15/30 * * * * ?")
@@ -58,9 +63,9 @@ public class BtcCollectionJob {
         if (!isEnabled()) {
             return;
         }
-        RuntimeAsset currency = RuntimeAsset.BTC;
+        RuntimeAsset currency = assetRoutingService.runtimeAssetByChain(CHAIN);
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        Address hotAddress = getHotAddress(table);
+        Address hotAddress = getHotAddress(table, currency);
         if (hotAddress == null) {
             log.warn("BTC归集跳过: 未找到热提地址 userId={} biz={} index={}", hotUserId, hotBiz, hotAddressIndex);
             return;
@@ -124,14 +129,14 @@ public class BtcCollectionJob {
 
         chainJdbcRepository.createCollectionRecord(
                 collectionId,
-                "BTC",
-                "BTC",
+                CHAIN,
+                CHAIN,
                 inputAddresses.get(0).getAddress(),
                 hotAddress.getAddress(),
                 outputAmount,
                 feeAmount,
                 rawPayload);
-        if (chainJdbcRepository.claimCollectionSigning("BTC", collectionId, rawPayload) != 1) {
+        if (chainJdbcRepository.claimCollectionSigning(CHAIN, collectionId, rawPayload) != 1) {
             return;
         }
 
@@ -144,13 +149,14 @@ public class BtcCollectionJob {
                 .createDate(now)
                 .updateDate(now)
                 .build();
+        currency.applyTo(transaction);
         transaction = chainJdbcRepository.createBitcoinLikeSigningTransaction(
                 currency, "COLLECTION", collectionId, transaction);
 
         String transactionId = transaction.getId().toString();
         for (UtxoTransaction utxo : utxos) {
             int locked = chainJdbcRepository.lockUtxo(
-                    "BTC", utxo.getTxId(), utxo.getSeq(), transactionId);
+                    CHAIN, utxo.getTxId(), utxo.getSeq(), transactionId);
             if (locked != 1) {
                 throw new IllegalStateException(
                         "failed to lock unified BTC collection UTXO " + utxo.getTxId() + ":" + utxo.getSeq());
@@ -164,7 +170,7 @@ public class BtcCollectionJob {
 
     private List<UtxoTransaction> findCollectableUtxos(ShardTable table, RuntimeAsset currency) {
         List<UtxoTransaction> candidates = chainJdbcRepository.listSpendableUtxos(
-                "BTC", "BTC", currency.getDepositConfirmNum(), PAGE_SIZE, 0);
+                CHAIN, CHAIN, currency.getDepositConfirmNum(), PAGE_SIZE, 0);
         if (CollectionUtils.isEmpty(candidates)) {
             return candidates;
         }
@@ -176,15 +182,15 @@ public class BtcCollectionJob {
                 .toList();
     }
 
-    private Address getHotAddress(ShardTable table) {
+    private Address getHotAddress(ShardTable table, RuntimeAsset currency) {
         return chainJdbcRepository.findChainAddress(
-                        "BTC", "BTC", hotUserId, hotBiz, hotAddressIndex, "DEPOSIT")
+                        CHAIN, CHAIN, hotUserId, hotBiz, hotAddressIndex, "DEPOSIT")
                 .map(record -> Address.builder()
                         .address(record.getAddress())
                         .userId(record.getUserId())
                         .biz(record.getBiz())
                         .index(Math.toIntExact(record.getAddressIndex()))
-                        .currency(RuntimeAsset.BTC.getName())
+                        .currency(currency.getName())
                         .build())
                 .orElse(null);
     }
@@ -200,7 +206,7 @@ public class BtcCollectionJob {
     private boolean isEnabled() {
         for (String item : enabledCurrencies.split(",")) {
             String value = item.trim();
-            if ("*".equals(value) || RuntimeAsset.BTC.getName().equalsIgnoreCase(value)) {
+            if ("*".equals(value) || CHAIN.equalsIgnoreCase(value)) {
                 return true;
             }
         }

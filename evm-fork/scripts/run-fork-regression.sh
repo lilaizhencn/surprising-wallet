@@ -173,6 +173,8 @@ run_chain() {
 }
 
 run_chain ETH ETH 11155111 \
+  ${ETH_RPC_URL:+"${ETH_RPC_URL}"} \
+  https://sepolia.gateway.tenderly.co \
   https://sepolia.drpc.org
 
 run_chain BNB BNB 97 \

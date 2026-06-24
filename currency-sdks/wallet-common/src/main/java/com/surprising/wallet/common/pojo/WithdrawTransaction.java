@@ -39,6 +39,15 @@ public class WithdrawTransaction implements Serializable {
      */
     private Integer currency;
     /**
+     * DB Asset Model routing metadata. Signer modules consume these fields
+     * instead of resolving static runtime currency ids.
+     */
+    private String chain;
+    private String assetSymbol;
+    private Integer assetDecimals;
+    private Integer bip44CoinType;
+    private String contractAddress;
+    /**
      * 0:正在签名;1:已发送;2:已确认
      */
     private Short status;

@@ -44,7 +44,7 @@ public class FirstSignJob implements Runnable {
                     log.info("获取到的第一次交易的数据:{}", txStr);
                     JSONObject txJson = JSONObject.parseObject(txStr);
                     WithdrawTransaction transaction = txJson.toJavaObject(WithdrawTransaction.class);
-                    RuntimeAsset currency = RuntimeAsset.parseValue(transaction.getCurrency());
+                    RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
                     ISignService signService = signContent.getSignService(currency);
                     signService.signTransaction(transaction);
                     String signatureStr = transaction.getSignature();

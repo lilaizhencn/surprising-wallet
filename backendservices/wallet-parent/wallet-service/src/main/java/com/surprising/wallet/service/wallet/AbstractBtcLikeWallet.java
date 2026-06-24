@@ -60,6 +60,14 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         command = com;
     }
 
+    protected RuntimeAsset loadBitcoinLikeRuntimeAsset(String chain, String network) {
+        var profile = chainJdbcRepository.findBitcoinLikeProfile(chain, network)
+                .orElseThrow(() -> new IllegalStateException(
+                        "missing enabled chain_profile for " + chain + "/" + network));
+        var asset = chainJdbcRepository.findAsset(profile.getChain(), profile.getNativeSymbol()).orElse(null);
+        return RuntimeAsset.fromProfile(profile, asset);
+    }
+
     /**
      * 获得当前币种的精度，用于精度转换
      *
@@ -67,7 +75,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
      */
     @Override
     public BigDecimal getDecimal() {
-        return BigDecimal.valueOf(10000_0000L);
+        return getCurrency().getDecimal();
     }
 
     /**
@@ -368,7 +376,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         if (pubKey == null) {
             return null;
         }
-        if (getCurrency() == RuntimeAsset.BCH && !CollectionUtils.isEmpty(pubKey.getCashAddrs())) {
+        if (getCurrency().sameAsset(RuntimeAsset.BCH) && !CollectionUtils.isEmpty(pubKey.getCashAddrs())) {
             return pubKey.getCashAddrs().get(0);
         }
         if (StringUtils.hasText(pubKey.getAddress())) {
@@ -550,10 +558,10 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
     }
 
     protected boolean usesUnifiedUtxoModel(RuntimeAsset currency) {
-        return currency == RuntimeAsset.BTC
-                || currency == RuntimeAsset.LTC
-                || currency == RuntimeAsset.DOGE
-                || currency == RuntimeAsset.BCH;
+        return currency.sameAsset(RuntimeAsset.BTC)
+                || currency.sameAsset(RuntimeAsset.LTC)
+                || currency.sameAsset(RuntimeAsset.DOGE)
+                || currency.sameAsset(RuntimeAsset.BCH);
     }
 
     protected String normalizeScannedAddress(String address) {

@@ -61,12 +61,21 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
   protected String withdrawAddress;
   @Value("${atomex.eth.server}")
   private String rpcServerUrl;
+  private RuntimeAsset mainCurrency;
+  private RuntimeAsset currency;
+  private List<RuntimeAsset> trackedTokens = List.of();
 
   @PostConstruct
   public void init() {
     RESERVED = BigDecimal.ZERO;
     super.setCommand(command);
     super.setWithdrawAddress(withdrawAddress);
+    mainCurrency = loadRuntimeAssetByChain("ETH");
+    trackedTokens = assetRoutingService.runtimeTokenAssets("ETH");
+    currency = trackedTokens.stream()
+            .filter(token -> token.sameAsset(RuntimeAsset.USDT))
+            .findFirst()
+            .orElse(trackedTokens.isEmpty() ? null : trackedTokens.get(0));
     Web3jService web3jService = new HttpService(rpcServerUrl);
     web3j = Web3j.build(web3jService);
   }
@@ -184,18 +193,18 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
 
   private BigDecimal getEthBalance(String address) {
     String tranAmount = command.getBalance(address, "latest");
-    return new BigDecimal(EthereumUtil.hexToBigInteger(tranAmount)).divide(RuntimeAsset.ETH.getDecimal());
+    return new BigDecimal(EthereumUtil.hexToBigInteger(tranAmount)).divide(mainCurrency.getDecimal());
   }
 
   private BigDecimal estimateGasFee(RuntimeAsset currency) {
-    BigDecimal gasLimit = gas().multiply(RuntimeAsset.ETH.getDecimal());
+    BigDecimal gasLimit = gas().multiply(mainCurrency.getDecimal());
     return gasLimit.multiply(gasPrice(currency));
   }
 
   @Override
   public void updateTotalCurrencyBalance() {
     log.info("updateTotalCurrencyBalance erc20 begin");
-    RuntimeAsset.ERC20_SET.parallelStream().forEach((currency) -> {
+    trackedTokens.parallelStream().forEach((currency) -> {
       log.info("update {} total Balance begin", currency.getName());
       BigDecimal balance = getBalance(currency);
       updateTotalCurrencyBalance(currency, balance);
@@ -210,14 +219,14 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
 
   public List<TransactionDTO> findRelatedTxs(Long height, Long bestHeight) {
     log.info("erc20 findRelatedTxs, height:{} begin", height);
-    List<AccountTransaction> txs = RuntimeAsset.ERC20_SET.parallelStream().map(currency -> findErc20Txs(height, bestHeight, currency))
+    List<AccountTransaction> txs = trackedTokens.parallelStream().map(currency -> findErc20Txs(height, bestHeight, currency))
             .filter((transactions) -> !CollectionUtils.isEmpty(transactions)).flatMap(List::parallelStream).collect(Collectors.toList());
 
     List<TransactionDTO> dtos = new LinkedList<>();
     if (!org.apache.commons.collections4.CollectionUtils.isEmpty(txs)) {
       dtos = txs.parallelStream()
               .map(tx -> {
-                RuntimeAsset currency = RuntimeAsset.parseValue(tx.getCurrency());
+                RuntimeAsset currency = tokenByRuntimeId(tx.getCurrency());
                 ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
                 accountTransactionService.addOnDuplicateKey(tx, table);
                 return convertAccountTxToDto(tx);
@@ -303,8 +312,27 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
   }
 
   @Override
+  protected RuntimeAsset resolveRuntimeAsset(com.surprising.wallet.common.pojo.WithdrawRecord record) {
+    return tokenByRuntimeId(record.getCurrency());
+  }
+
+  private RuntimeAsset tokenByRuntimeId(Integer runtimeCurrencyId) {
+    if (runtimeCurrencyId == null) {
+      throw new IllegalStateException("missing token runtime id from DB token configuration");
+    }
+    return trackedTokens.stream()
+            .filter(token -> token.getIndex() == runtimeCurrencyId)
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException(
+                    "missing enabled token_config/token_registry for runtime id " + runtimeCurrencyId));
+  }
+
+  @Override
   public RuntimeAsset getCurrency() {
-    return RuntimeAsset.USDT;
+    if (currency == null) {
+      throw new IllegalStateException("missing enabled ERC20 token configuration");
+    }
+    return currency;
   }
 
   /**
@@ -314,6 +342,6 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
    */
   @Override
   public BigDecimal getDecimal() {
-    return RuntimeAsset.USDT.getDecimal();
+    return getCurrency().getDecimal();
   }
 }

@@ -24,7 +24,7 @@ public class EvmTransactionBuilder {
         if (toAddress == null || amount == null || tokenDefinition == null) {
             throw new IllegalArgumentException("invalid erc20 payload arguments");
         }
-        int decimals = tokenDefinition.getDecimals() == null ? 18 : tokenDefinition.getDecimals();
+        int decimals = requireTokenDecimals(tokenDefinition);
         BigInteger rawAmount = amount.movePointRight(decimals).toBigIntegerExact();
         Function function = new Function("transfer",
                 List.of(new Address(toAddress), new Uint256(rawAmount)),
@@ -36,11 +36,19 @@ public class EvmTransactionBuilder {
         if (spender == null || amount == null || tokenDefinition == null) {
             throw new IllegalArgumentException("invalid approval payload arguments");
         }
-        int decimals = tokenDefinition.getDecimals() == null ? 18 : tokenDefinition.getDecimals();
+        int decimals = requireTokenDecimals(tokenDefinition);
         BigInteger rawAmount = amount.movePointRight(decimals).toBigIntegerExact();
         Function function = new Function("approve",
                 List.of(new Address(spender), new Uint256(rawAmount)),
                 List.of());
         return FunctionEncoder.encode(function);
+    }
+
+    private int requireTokenDecimals(TokenDefinition tokenDefinition) {
+        if (tokenDefinition.getDecimals() == null) {
+            throw new IllegalStateException("missing token decimals in DB asset metadata for "
+                    + tokenDefinition.getChain() + "/" + tokenDefinition.getSymbol());
+        }
+        return tokenDefinition.getDecimals();
     }
 }

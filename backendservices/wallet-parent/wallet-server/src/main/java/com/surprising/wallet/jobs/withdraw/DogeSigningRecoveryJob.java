@@ -5,6 +5,7 @@ import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -18,6 +19,7 @@ import java.util.Arrays;
 @Component
 public class DogeSigningRecoveryJob {
     private final ChainJdbcRepository repository;
+    private final AssetRoutingService assetRoutingService;
 
     @Value("${atomex.wallet.recovery.enabled-currencies:}")
     private String enabledCurrencies;
@@ -25,8 +27,10 @@ public class DogeSigningRecoveryJob {
     @Value("${atomex.wallet.recovery.signing-stale-seconds:60}")
     private long staleSeconds;
 
-    public DogeSigningRecoveryJob(ChainJdbcRepository repository) {
+    public DogeSigningRecoveryJob(ChainJdbcRepository repository,
+                                  AssetRoutingService assetRoutingService) {
         this.repository = repository;
+        this.assetRoutingService = assetRoutingService;
     }
 
     @Scheduled(cron = "17/30 * * * * ?")
@@ -34,12 +38,14 @@ public class DogeSigningRecoveryJob {
         if (!isEnabled()) {
             return;
         }
+        RuntimeAsset currency = assetRoutingService.runtimeAssetByChain("DOGE");
         for (WithdrawTransaction transaction : repository.findStaleBitcoinLikeSigningTransactions(
-                RuntimeAsset.DOGE, staleSeconds)) {
+                currency, staleSeconds)) {
             if (!repository.claimBitcoinLikeSigningRecovery(
-                    RuntimeAsset.DOGE, transaction.getId(), staleSeconds)) {
+                    currency, transaction.getId(), staleSeconds)) {
                 continue;
             }
+            currency.applyTo(transaction);
             REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, JSONObject.toJSONString(transaction));
         }
     }

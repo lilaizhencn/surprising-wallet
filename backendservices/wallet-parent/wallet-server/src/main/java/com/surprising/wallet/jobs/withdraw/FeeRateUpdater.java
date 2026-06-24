@@ -3,7 +3,9 @@ package com.surprising.wallet.jobs.withdraw;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -46,13 +48,15 @@ public class FeeRateUpdater {
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
+    @Autowired
+    private AssetRoutingService assetRoutingService;
 
     /**
      * 每 2 分钟更新一次费率
      */
     @Scheduled(cron = "0 */2 * * * ?")
     public void updateFeeRate() {
-        for (RuntimeAsset currency : new RuntimeAsset[]{RuntimeAsset.BTC}) {
+        for (RuntimeAsset currency : new RuntimeAsset[]{btc()}) {
             try {
                 int feeRate = fetchFeeRate();
                 String key = Constants.WALLET_FEE + currency.getIndex();
@@ -108,8 +112,12 @@ public class FeeRateUpdater {
      * 手动强制更新费率（运维接口可调用）
      */
     public void forceUpdate(int feeRate) {
-        String key = Constants.WALLET_FEE + RuntimeAsset.BTC.getIndex();
+        String key = Constants.WALLET_FEE + btc().getIndex();
         REDIS.set(key, String.valueOf(Math.max(feeRate, MIN_FEE_RATE)));
         log.warn("手动强制费率: {} = {} sat/vB", key, feeRate);
+    }
+
+    private RuntimeAsset btc() {
+        return assetRoutingService.runtimeAssetByChain("BTC");
     }
 }

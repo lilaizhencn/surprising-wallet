@@ -19,4 +19,6 @@ exec dogecoind \
   -rpcpassword="${DOGE_REGTEST_RPC_PASSWORD}" \
   -rpcbind=127.0.0.1 \
   -rpcallowip=127.0.0.1 \
-  -rpcport=22555
+  -rpcport=22555 \
+  -rpcthreads="${DOGE_REGTEST_RPC_THREADS:-32}" \
+  -rpcworkqueue="${DOGE_REGTEST_RPC_WORKQUEUE:-256}"

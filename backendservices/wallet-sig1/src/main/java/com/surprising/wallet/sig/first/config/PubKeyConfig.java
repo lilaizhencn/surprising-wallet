@@ -13,7 +13,9 @@ public class PubKeyConfig {
     private Bip32Node NODE1,NODE2,NODE3;
     @PostConstruct public void init(){NODE1=Bip32Node.decode(pub1); NODE2=Bip32Node.decode(pub2); NODE3=Bip32Node.decode(pub3);}
     public String genWitnessScript(Address a){
-        RuntimeAsset ce=RuntimeAsset.parseName(a.getCurrency());
+        return genWitnessScript(a, RuntimeAsset.parseName(a.getCurrency()));
+    }
+    public String genWitnessScript(Address a, RuntimeAsset ce){
         ECKey k1=NODE1.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
         ECKey k2=NODE2.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
         ECKey k3=NODE3.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
@@ -23,7 +25,9 @@ public class PubKeyConfig {
         return g.getWitnessScriptStr();
     }
     public String genRedeemScript(Address a){
-        RuntimeAsset ce=RuntimeAsset.parseName(a.getCurrency());
+        return genRedeemScript(a, RuntimeAsset.parseName(a.getCurrency()));
+    }
+    public String genRedeemScript(Address a, RuntimeAsset ce){
         ECKey k1=NODE1.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
         ECKey k2=NODE2.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
         ECKey k3=NODE3.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();

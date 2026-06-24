@@ -11,6 +11,7 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2shMultisigFeeCalculator;
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinFeePolicy;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
 import org.apache.commons.collections4.CollectionUtils;
@@ -30,10 +31,12 @@ import java.util.List;
  */
 @Component
 public class DogeCollectionJob {
+    private static final String CHAIN = "DOGE";
     private static final int PAGE_SIZE = 10;
 
     private final AddressService addressService;
     private final ChainJdbcRepository chainRepository;
+    private final AssetRoutingService assetRoutingService;
 
     @Value("${atomex.wallet.collection.enabled-currencies:}")
     private String enabledCurrencies;
@@ -48,9 +51,11 @@ public class DogeCollectionJob {
     private Integer hotAddressIndex;
 
     public DogeCollectionJob(AddressService addressService,
-                             ChainJdbcRepository chainRepository) {
+                             ChainJdbcRepository chainRepository,
+                             AssetRoutingService assetRoutingService) {
         this.addressService = addressService;
         this.chainRepository = chainRepository;
+        this.assetRoutingService = assetRoutingService;
     }
 
     @Scheduled(cron = "22/30 * * * * ?")
@@ -59,9 +64,9 @@ public class DogeCollectionJob {
         if (!isEnabled()) {
             return;
         }
-        RuntimeAsset currency = RuntimeAsset.DOGE;
+        RuntimeAsset currency = assetRoutingService.runtimeAssetByChain(CHAIN);
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        Address hotAddress = getHotAddress(table);
+        Address hotAddress = getHotAddress(table, currency);
         if (hotAddress == null) {
             return;
         }
@@ -122,10 +127,10 @@ public class DogeCollectionJob {
         String rawPayload = signature.toJSONString();
 
         chainRepository.createCollectionRecord(
-                collectionId, "DOGE", "DOGE",
+                collectionId, CHAIN, CHAIN,
                 inputAddresses.get(0).getAddress(), hotAddress.getAddress(),
                 outputAmount, feeAmount, rawPayload);
-        if (chainRepository.claimCollectionSigning("DOGE", collectionId, rawPayload) != 1) {
+        if (chainRepository.claimCollectionSigning(CHAIN, collectionId, rawPayload) != 1) {
             return;
         }
 
@@ -138,12 +143,13 @@ public class DogeCollectionJob {
                 .createDate(now)
                 .updateDate(now)
                 .build();
+        currency.applyTo(transaction);
         transaction = chainRepository.createBitcoinLikeSigningTransaction(
                 currency, "COLLECTION", collectionId, transaction);
 
         String transactionId = transaction.getId().toString();
         for (UtxoTransaction utxo : utxos) {
-            if (chainRepository.lockUtxo("DOGE", utxo.getTxId(), utxo.getSeq(), transactionId) != 1) {
+            if (chainRepository.lockUtxo(CHAIN, utxo.getTxId(), utxo.getSeq(), transactionId) != 1) {
                 throw new IllegalStateException(
                         "failed to lock DOGE collection UTXO " + utxo.getTxId() + ":" + utxo.getSeq());
             }
@@ -153,7 +159,7 @@ public class DogeCollectionJob {
 
     private List<UtxoTransaction> findCollectableUtxos(ShardTable table, RuntimeAsset currency) {
         List<UtxoTransaction> candidates = chainRepository.listSpendableUtxos(
-                "DOGE", "DOGE", currency.getDepositConfirmNum(), PAGE_SIZE, 0);
+                CHAIN, CHAIN, currency.getDepositConfirmNum(), PAGE_SIZE, 0);
         if (CollectionUtils.isEmpty(candidates)) {
             return candidates;
         }
@@ -165,15 +171,15 @@ public class DogeCollectionJob {
                 .toList();
     }
 
-    private Address getHotAddress(ShardTable table) {
+    private Address getHotAddress(ShardTable table, RuntimeAsset currency) {
         return chainRepository.findChainAddress(
-                        "DOGE", "DOGE", hotUserId, hotBiz, hotAddressIndex, "DEPOSIT")
+                        CHAIN, CHAIN, hotUserId, hotBiz, hotAddressIndex, "DEPOSIT")
                 .map(record -> Address.builder()
                         .address(record.getAddress())
                         .userId(record.getUserId())
                         .biz(record.getBiz())
                         .index(Math.toIntExact(record.getAddressIndex()))
-                        .currency(RuntimeAsset.DOGE.getName())
+                        .currency(currency.getName())
                         .build())
                 .orElse(null);
     }
@@ -188,7 +194,7 @@ public class DogeCollectionJob {
     private boolean isEnabled() {
         for (String item : enabledCurrencies.split(",")) {
             String value = item.trim();
-            if ("*".equals(value) || RuntimeAsset.DOGE.getName().equalsIgnoreCase(value)) {
+            if ("*".equals(value) || CHAIN.equalsIgnoreCase(value)) {
                 return true;
             }
         }

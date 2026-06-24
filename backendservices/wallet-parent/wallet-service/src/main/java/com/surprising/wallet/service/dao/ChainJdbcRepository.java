@@ -148,6 +148,41 @@ public class ChainJdbcRepository {
         return results.stream().findFirst();
     }
 
+    public Optional<AccountChainProfile> findProfileByChain(String chain) {
+        List<AccountChainProfile> results = jdbcTemplate.query("""
+                        select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+                               rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+                               default_fee_rate, dust_threshold, enabled
+                        from chain_profile
+                        where upper(chain) = upper(?) and enabled = true
+                        order by case network
+                            when 'regtest' then 0
+                            when 'testnet' then 1
+                            when 'testnet3' then 1
+                            when 'devnet' then 1
+                            else 2
+                        end
+                        limit 1
+                        """,
+                (rs, rowNum) -> AccountChainProfile.builder()
+                        .chain(rs.getString("chain"))
+                        .network(rs.getString("network"))
+                        .family(rs.getString("family"))
+                        .runtimeCurrencyId(rs.getInt("runtime_currency_id"))
+                        .bip44CoinType(rs.getInt("bip44_coin_type"))
+                        .nativeSymbol(rs.getString("native_symbol"))
+                        .rpcUrl(rs.getString("rpc_url"))
+                        .explorerUrl(rs.getString("explorer_url"))
+                        .depositConfirmations(rs.getInt("deposit_confirmations"))
+                        .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
+                        .defaultFee(rs.getObject("default_fee_rate", Long.class))
+                        .dustThreshold(rs.getObject("dust_threshold", Long.class))
+                        .enabled(rs.getBoolean("enabled"))
+                        .build(),
+                chain);
+        return results.stream().findFirst();
+    }
+
     public Optional<String> findChainByRuntimeCurrencyId(int runtimeCurrencyId) {
         List<String> results = jdbcTemplate.queryForList("""
                         select distinct chain

@@ -22,6 +22,7 @@ public class EvmLogScanner {
         if (logs == null) {
             return events;
         }
+        int decimals = requireTokenDecimals(tokenDefinition);
         for (Log log : logs) {
             if (log == null || log.getTopics() == null || log.getTopics().size() < 3) {
                 continue;
@@ -30,7 +31,6 @@ public class EvmLogScanner {
             String from = topicToAddress(log.getTopics().get(1));
             String to = topicToAddress(log.getTopics().get(2));
             BigDecimal amount = new BigDecimal(new BigInteger(stripHex(log.getData()), 16));
-            int decimals = tokenDefinition.getDecimals() == null ? 18 : tokenDefinition.getDecimals();
             events.add(new DepositEvent(chainType, tokenDefinition.getSymbol(), txId, from, to,
                     amount.movePointLeft(decimals), blockHeight, confirmations, tokenDefinition.getContractAddress(),
                     log.toString()));
@@ -48,5 +48,15 @@ public class EvmLogScanner {
 
     private static String stripHex(String value) {
         return value == null ? "" : value.startsWith("0x") ? value.substring(2) : value;
+    }
+
+    private static int requireTokenDecimals(TokenDefinition tokenDefinition) {
+        if (tokenDefinition == null || tokenDefinition.getDecimals() == null) {
+            String chain = tokenDefinition == null ? null : tokenDefinition.getChain();
+            String symbol = tokenDefinition == null ? null : tokenDefinition.getSymbol();
+            throw new IllegalStateException("missing token decimals in DB asset metadata for "
+                    + chain + "/" + symbol);
+        }
+        return tokenDefinition.getDecimals();
     }
 }

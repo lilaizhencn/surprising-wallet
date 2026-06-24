@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.math.BigInteger;
+import java.math.BigDecimal;
 
 /**
  * @author lilaizhen
@@ -25,14 +26,15 @@ public class Erc20SecondSignService extends AbstractEthLikeSecondSign implements
 
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
-        RuntimeAsset currency = RuntimeAsset.parseValue(transaction.getCurrency());
+        RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
         String sigStr = transaction.getSignature();
         JSONObject sigJson = JSONObject.parseObject(sigStr);
+        BigDecimal feeDecimal = feeDecimal(sigJson, currency);
         Address address = sigJson.getJSONObject("address").toJavaObject(Address.class);
-        Bip32Node node = BipNodeUtil.getBipNODE(address);
+        Bip32Node node = BipNodeUtil.getBipNODE(address, currency);
         String signResult = tokenTransaction(
-                sigJson.getBigDecimal("gasPrice").multiply(RuntimeAsset.ETH.getDecimal()).toBigInteger(),
-                sigJson.getBigDecimal("gas").multiply(RuntimeAsset.ETH.getDecimal()).toBigInteger(),
+                sigJson.getBigDecimal("gasPrice").multiply(feeDecimal).toBigInteger(),
+                sigJson.getBigDecimal("gas").multiply(feeDecimal).toBigInteger(),
                 BigInteger.valueOf(address.getNonce()),
                 node.getEcKey().getPrivateKeyAsHex(),
                 currency.getContractAddress(),

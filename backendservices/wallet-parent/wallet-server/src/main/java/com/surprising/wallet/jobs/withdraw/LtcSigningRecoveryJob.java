@@ -5,6 +5,7 @@ import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +22,7 @@ import java.util.Arrays;
 @Component
 public class LtcSigningRecoveryJob {
     private final ChainJdbcRepository repository;
+    private final AssetRoutingService assetRoutingService;
 
     @Value("${atomex.wallet.recovery.enabled-currencies:}")
     private String enabledCurrencies;
@@ -28,8 +30,10 @@ public class LtcSigningRecoveryJob {
     @Value("${atomex.wallet.recovery.signing-stale-seconds:60}")
     private long staleSeconds;
 
-    public LtcSigningRecoveryJob(ChainJdbcRepository repository) {
+    public LtcSigningRecoveryJob(ChainJdbcRepository repository,
+                                 AssetRoutingService assetRoutingService) {
         this.repository = repository;
+        this.assetRoutingService = assetRoutingService;
     }
 
     @Scheduled(cron = "15/30 * * * * ?")
@@ -37,12 +41,14 @@ public class LtcSigningRecoveryJob {
         if (!isEnabled()) {
             return;
         }
+        RuntimeAsset currency = assetRoutingService.runtimeAssetByChain("LTC");
         for (WithdrawTransaction transaction : repository.findStaleBitcoinLikeSigningTransactions(
-                RuntimeAsset.LTC, staleSeconds)) {
+                currency, staleSeconds)) {
             if (!repository.claimBitcoinLikeSigningRecovery(
-                    RuntimeAsset.LTC, transaction.getId(), staleSeconds)) {
+                    currency, transaction.getId(), staleSeconds)) {
                 continue;
             }
+            currency.applyTo(transaction);
             REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, JSONObject.toJSONString(transaction));
             log.info("requeued stale LTC signing transaction id={}", transaction.getId());
         }

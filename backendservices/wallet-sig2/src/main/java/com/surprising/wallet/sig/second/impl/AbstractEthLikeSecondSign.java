@@ -23,6 +23,7 @@ import org.web3j.tx.ChainIdLong;
 import org.web3j.utils.Numeric;
 
 import java.math.BigInteger;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,18 +48,25 @@ abstract public class AbstractEthLikeSecondSign implements ISignService {
     public String signTransaction(WithdrawTransaction transaction) {
         String sigStr = transaction.getSignature();
         JSONObject sigJson = JSONObject.parseObject(sigStr);
+        RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
+        BigDecimal feeDecimal = feeDecimal(sigJson, currency);
         Address address = sigJson.getJSONObject("address").toJavaObject(Address.class);
-        Bip32Node node = BipNodeUtil.getBipNODE(address);
+        Bip32Node node = BipNodeUtil.getBipNODE(address, currency);
         String signResult = sign(
                 BigInteger.valueOf(address.getNonce()),
-                sigJson.getBigDecimal("gasPrice").multiply(RuntimeAsset.ETH.getDecimal()).toBigInteger(),
-                sigJson.getBigDecimal("gas").multiply(getCurrency().getDecimal()).toBigInteger(),
+                sigJson.getBigDecimal("gasPrice").multiply(feeDecimal).toBigInteger(),
+                sigJson.getBigDecimal("gas").multiply(feeDecimal).toBigInteger(),
                 sigJson.getString("to"),
-                transaction.getBalance().multiply(getCurrency().getDecimal()).toBigInteger(),
+                transaction.getBalance().multiply(currency.getDecimal()).toBigInteger(),
                 "",
                 sigJson.containsKey("chainId") ? sigJson.getLongValue("chainId") : ChainIdLong.MAINNET,
                 node.getEcKey().getPrivateKeyAsHex());
         return signResult;
+    }
+
+    protected BigDecimal feeDecimal(JSONObject sigJson, RuntimeAsset currency) {
+        Integer decimals = sigJson.getObject("feeAssetDecimals", Integer.class);
+        return BigDecimal.TEN.pow(decimals == null ? currency.getDecimals() : decimals);
     }
 
 

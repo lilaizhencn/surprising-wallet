@@ -29,6 +29,7 @@ public class BchWallet extends AbstractBtcLikeWallet {
     private String network;
 
     private BitcoinLikeChainProfile profile;
+    private RuntimeAsset currency;
 
     @PostConstruct
     public void init() {
@@ -37,15 +38,12 @@ public class BchWallet extends AbstractBtcLikeWallet {
         profile = chainJdbcRepository.findBitcoinLikeProfile("BCH", profileNetwork)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for BCH/" + profileNetwork));
-        if (profile.getRuntimeCurrencyId() != getCurrency().getIndex()
-                || profile.getBip44CoinType() != 145) {
-            throw new IllegalStateException("BCH currency/profile mismatch");
-        }
+        currency = loadBitcoinLikeRuntimeAsset("BCH", profileNetwork);
     }
 
     @Override
     public RuntimeAsset getCurrency() {
-        return RuntimeAsset.BCH;
+        return currency;
     }
 
     @Override

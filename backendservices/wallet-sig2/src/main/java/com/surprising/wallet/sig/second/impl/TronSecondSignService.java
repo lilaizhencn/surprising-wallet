@@ -16,9 +16,6 @@ import org.tron.wallet.util.ByteArray;
 import java.io.IOException;
 import java.math.BigDecimal;
 
-import static com.surprising.wallet.common.chain.RuntimeAsset.TRX;
-
-
 /**
  * @author atomex
  */
@@ -27,13 +24,13 @@ import static com.surprising.wallet.common.chain.RuntimeAsset.TRX;
 public class TronSecondSignService implements ISignService {
     @Override
     public RuntimeAsset getCurrency() {
-        return TRX;
+        return RuntimeAsset.TRX;
     }
 
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
         JSONObject sigJson = JSONObject.parseObject(transaction.getSignature());
-        RuntimeAsset currency = RuntimeAsset.parseValue(transaction.getCurrency());
+        RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
         Address address = sigJson.getJSONObject("address").toJavaObject(Address.class);
         String from = sigJson.getString("from");
         String toAddr = sigJson.getString("to");
@@ -42,7 +39,8 @@ public class TronSecondSignService implements ISignService {
             Protocol.Transaction waitSignTx = TronWalletApi.createTransaction(TronWalletApi.decodeFromBase58Check(from), TronWalletApi.decodeFromBase58Check(toAddr),
                     value.multiply(currency.getDecimal()).longValue(),
                     sigJson.getString("block"));
-            Protocol.Transaction signedTxObject = TronWalletApi.signTransaction2Object(waitSignTx.toByteArray(), getKeyByAddress(address));
+            Protocol.Transaction signedTxObject = TronWalletApi.signTransaction2Object(
+                    waitSignTx.toByteArray(), getKeyByAddress(address, currency));
             if (!ObjectUtils.isEmpty(signedTxObject)) {
                 return ByteArray.toHexString(signedTxObject.toByteArray());
             }
@@ -53,14 +51,14 @@ public class TronSecondSignService implements ISignService {
         }
     }
 
-    private byte[] getKeyByAddress(Address address) {
+    private byte[] getKeyByAddress(Address address, RuntimeAsset currency) {
         /*
          * Keep TRON on the same root-key model as BTC/EVM:
          * wallet-server derives the public key from wallet.pubKey2 at
          * m/44/currency/biz/user/index, and sig2 derives the matching private key
          * from atomex.wallet.masterKey at the identical path.
          */
-        return BipNodeUtil.getBipNODE(address).getEcKey().getPrivKeyBytes();
+        return BipNodeUtil.getBipNODE(address, currency).getEcKey().getPrivKeyBytes();
     }
 
 }

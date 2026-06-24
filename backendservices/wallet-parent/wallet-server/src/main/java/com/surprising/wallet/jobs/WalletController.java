@@ -53,7 +53,7 @@ public class WalletController {
                                                     @RequestParam(value = "biz") Integer biz) {
         AddressDto addressDto = new AddressDto();
         try {
-            RuntimeAsset coin = RuntimeAsset.parseValue(currency);
+            RuntimeAsset coin = assetRoutingService.runtimeAsset(currency);
             BizEnum.parseBiz(biz);
             coin = assetRoutingService.legacyMainCurrency(coin);
             IWallet wallet = context.getWallet(coin);
@@ -82,7 +82,7 @@ public class WalletController {
                                             @RequestParam(value = "address") String address) {
         JSONObject json = new JSONObject();
         try {
-            RuntimeAsset coin = RuntimeAsset.parseValue(currency);
+            RuntimeAsset coin = assetRoutingService.runtimeAsset(currency);
             IWallet wallet = context.getWallet(coin);
             boolean valid = wallet.checkAddress(address);
             json.put("address", address);
@@ -100,7 +100,7 @@ public class WalletController {
 
         JSONObject json = new JSONObject();
         try {
-            RuntimeAsset coin = RuntimeAsset.parseValue(currency);
+            RuntimeAsset coin = assetRoutingService.runtimeAsset(currency);
             String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
             String symbol = assetRoutingService.requireNativeSymbolForRuntimeCurrencyId(coin.getIndex());
             json.put("balance", chainJdbcRepository.sumLedgerTotalBalance(chain, symbol));
@@ -175,7 +175,7 @@ public class WalletController {
             @RequestParam(value = "currency", defaultValue = "1") Integer currency) {
         Map<String, Object> result = new HashMap<>();
         try {
-            RuntimeAsset coin = RuntimeAsset.parseValue(currency);
+            RuntimeAsset coin = assetRoutingService.runtimeAsset(currency);
             coin = assetRoutingService.legacyMainCurrency(coin);
 
             // Hot wallet address at userId=0, biz=0, index=0
@@ -213,7 +213,9 @@ public class WalletController {
             @RequestParam(value = "userId", required = false) Long userId,
             @RequestParam(value = "biz", required = false) Integer biz) {
         try {
-            RuntimeAsset coin = currency != null ? RuntimeAsset.parseValue(currency) : RuntimeAsset.BTC;
+            RuntimeAsset coin = currency != null
+                    ? assetRoutingService.runtimeAsset(currency)
+                    : assetRoutingService.runtimeAssetByChain("BTC");
             coin = assetRoutingService.legacyMainCurrency(coin);
             String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
             String symbol = assetRoutingService.requireNativeSymbolForRuntimeCurrencyId(coin.getIndex());
@@ -238,7 +240,7 @@ public class WalletController {
             @RequestParam(value = "address") String address,
             @RequestParam(value = "currency") Integer currency) {
         try {
-            RuntimeAsset coin = RuntimeAsset.parseValue(currency);
+            RuntimeAsset coin = assetRoutingService.runtimeAsset(currency);
             if (isUnifiedBitcoinLike(coin)) {
                 String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
                 return ResultUtils.success(chainJdbcRepository.listUtxosByAddress(chain, address, 50));

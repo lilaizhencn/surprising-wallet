@@ -48,6 +48,7 @@ public class BchFirstSignService implements ISignService {
 
     @Override
     public void signTransaction(WithdrawTransaction transaction) {
+        RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
         try {
             List<UtxoTransaction> utxos =
@@ -63,10 +64,10 @@ public class BchFirstSignService implements ISignService {
                     new BitcoinCashMultisigTransactionBuilder(networkParameters());
             List<ECKey> keys = new ArrayList<>();
             List<String> redeemScripts = new ArrayList<>();
-            BigDecimal decimal = RuntimeAsset.BCH.getDecimal();
+            BigDecimal decimal = currency.getDecimal();
             for (int i = 0; i < utxos.size(); i++) {
                 Address address = addresses.get(i);
-                String derivedRedeemScript = pubKeyConfig.genRedeemScript(address);
+                String derivedRedeemScript = pubKeyConfig.genRedeemScript(address, currency);
                 if (address.getRedeemScript() != null
                         && !address.getRedeemScript().isBlank()
                         && !derivedRedeemScript.equalsIgnoreCase(address.getRedeemScript())) {
@@ -74,7 +75,7 @@ public class BchFirstSignService implements ISignService {
                             "stored redeemScript does not match derived BCH keys");
                 }
                 redeemScripts.add(derivedRedeemScript);
-                keys.add(derive(address).getEcKey());
+                keys.add(derive(address, currency).getEcKey());
                 UtxoTransaction utxo = utxos.get(i);
                 builder.addInput(
                         utxo.getTxId(),
@@ -128,9 +129,9 @@ public class BchFirstSignService implements ISignService {
         transaction.setSignature(signature.toJSONString());
     }
 
-    private Bip32Node derive(Address address) {
+    private Bip32Node derive(Address address, RuntimeAsset currency) {
         return root.getChild(44)
-                .getChild(145)
+                .getChild(currency.getBip44CoinType())
                 .getChild(address.getBiz())
                 .getChild(address.getUserId().intValue())
                 .getChild(address.getIndex());

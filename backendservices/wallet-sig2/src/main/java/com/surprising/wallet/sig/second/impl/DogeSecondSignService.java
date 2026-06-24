@@ -25,6 +25,7 @@ public class DogeSecondSignService implements ISignService {
 
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
+        RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
         try {
             if (!"p2sh".equals(signature.getString("scriptType"))) {
@@ -35,7 +36,7 @@ public class DogeSecondSignService implements ISignService {
             List<String> redeemScripts = signature.getJSONArray("redeemScripts").toJavaList(String.class);
             List<ECKey> keys = new ArrayList<>(addresses.size());
             for (Address address : addresses) {
-                keys.add(BipNodeUtil.getBipNODE(address).getEcKey());
+                keys.add(BipNodeUtil.getBipNODE(address, currency).getEcKey());
             }
             LegacyMultisigTransactionBuilder builder =
                     new LegacyMultisigTransactionBuilder(networkParameters());

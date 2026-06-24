@@ -40,7 +40,7 @@ public class SecondSignJob implements Runnable {
                 String txStr = REDIS.rPoplPush(key, tmp);
                 if (!ObjectUtils.isEmpty(txStr)) {
                     WithdrawTransaction transaction = JSONObject.parseObject(txStr, WithdrawTransaction.class);
-                    RuntimeAsset currency = RuntimeAsset.parseValue(transaction.getCurrency());
+                    RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
                     ISignService signService = SignContent.getSignService(currency);
                     JSONObject signature = JSONObject.parseObject(transaction.getSignature());
                     if (signService == null) {
