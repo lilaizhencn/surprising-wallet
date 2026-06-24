@@ -44,6 +44,62 @@ insert into chain_profile(
     default_fee_rate, dust_threshold, enabled
 )
 values (
+    'BTC', 'testnet3', 'bitcoin-like', 1, 0, 'BTC',
+    null, 'https://mempool.space/testnet/tx/',
+    1, 6, 2, 546, true
+)
+on conflict (chain, network) do update
+set family = excluded.family,
+    runtime_currency_id = excluded.runtime_currency_id,
+    bip44_coin_type = excluded.bip44_coin_type,
+    native_symbol = excluded.native_symbol,
+    explorer_url = excluded.explorer_url,
+    deposit_confirmations = excluded.deposit_confirmations,
+    withdraw_confirmations = excluded.withdraw_confirmations,
+    default_fee_rate = excluded.default_fee_rate,
+    dust_threshold = excluded.dust_threshold,
+    enabled = excluded.enabled,
+    updated_at = now();
+
+insert into chain_profile(
+    chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+    rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+    default_fee_rate, dust_threshold, enabled
+)
+values (
+    'BTC', 'mainnet', 'bitcoin-like', 1, 0, 'BTC',
+    null, 'https://mempool.space/tx/',
+    1, 6, 2, 546, true
+)
+on conflict (chain, network) do update
+set family = excluded.family,
+    runtime_currency_id = excluded.runtime_currency_id,
+    bip44_coin_type = excluded.bip44_coin_type,
+    native_symbol = excluded.native_symbol,
+    explorer_url = excluded.explorer_url,
+    deposit_confirmations = excluded.deposit_confirmations,
+    withdraw_confirmations = excluded.withdraw_confirmations,
+    default_fee_rate = excluded.default_fee_rate,
+    dust_threshold = excluded.dust_threshold,
+    enabled = excluded.enabled,
+    updated_at = now();
+
+insert into chain_asset(chain, symbol, asset_kind, decimals, native_asset, active, min_transfer, min_withdraw)
+values ('BTC', 'BTC', 'NATIVE', 8, true, true, 546, 546)
+on conflict (chain, symbol) do update
+set decimals = excluded.decimals,
+    native_asset = excluded.native_asset,
+    active = excluded.active,
+    min_transfer = excluded.min_transfer,
+    min_withdraw = excluded.min_withdraw,
+    updated_at = now();
+
+insert into chain_profile(
+    chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+    rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+    default_fee_rate, dust_threshold, enabled
+)
+values (
     'LTC', 'testnet', 'bitcoin-like', 24, 2, 'LTC',
     null, 'https://litecoinspace.org/testnet/tx/',
     1, 6, 2, 1000, true

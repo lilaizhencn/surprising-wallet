@@ -573,6 +573,81 @@ Detailed evidence: `DOGECOIN_WALLET_REPORT.md`.
 
 ---
 
+## Unified UTXO Legacy Cleanup Update
+
+Generated: 2026-06-24 Asia/Shanghai.
+
+- Removed legacy UTXO MBG runtime artifacts:
+  `UtxoTransactionExample`, `UtxoTransactionRepository`,
+  `UtxoTransactionService`, `UtxoTransactionServiceImpl`, and
+  `UtxoTransactionMapper.xml`.
+- Runtime BTC/LTC/DOGE/BCH UTXO paths now use `utxo_record` for scan
+  persistence, wallet balance, selection, lock/release, spend settlement, and
+  address transaction query.
+- `ChainJdbcRepository` maps UTXO runtime currency id from
+  `chain_profile.runtime_currency_id`; it no longer derives unified UTXO row
+  currency id from `CurrencyEnum`.
+- Added BTC `chain_profile` / `chain_asset` initialization for the DB asset
+  model.
+- Added separate physical-drop migration:
+  `scripts/drop-legacy-bitcoinlike-utxo-tables.sql`. It was **not executed**.
+
+Targeted verification:
+
+- `mvn -q -DskipTests compile`: passed.
+- `mvn -q -pl backendservices/wallet-parent/wallet-service -DskipTests=false -Dutxo.migration.db.enabled=true -Dtest=BitcoinLikeUnifiedUtxoRuntimeMigrationTest test`: passed.
+- `mvn -q -pl backendservices/wallet-parent/wallet-service -DskipTests=false -Dbitcoinlike.regtest.enabled=true -Dtest=BitcoinLikeRegtestFullFlowIntegrationTest test`: passed.
+
+DOGE local regtest:
+
+- deposit:
+  `34ac7f568667775f06a179c9e0b9f9ce6dd02bd0de3ac3c95ed9b0c3db543a68`
+- withdraw:
+  `e7723d5c79a8695727b1df1c52a2159ed5847278d0ff849cace8b79589ef976e`
+- collection:
+  `35d53c425773a97776f6c193b196c40604dd175106168d18314fd40b87180802`
+- addresses:
+  deposit `n3CGohzAycpjHaQqszBDamAzxH1r5KDSfi`,
+  withdraw `n4hu8Ziwkkr1AeWXSgsEYGj2FJLTvyhUgc`,
+  hot `mrWGppYoaG963tqtabihbYzxn6Q21S5vhD`.
+
+BCH local regtest:
+
+- deposit:
+  `ce034235e4907182f1ccf3f20e4b4a69c3baf13a097b3b7d4f337705bb5f3c3a`
+- withdraw:
+  `07b2267f08727b0b6bbb61f14f7d2735529d1ff76c126e83dd4b98800d85e976`
+- collection:
+  `cc9a9b115a8873b728023e33a3a062a9e511349422e6f4600bf88e878f3892c0`
+- addresses:
+  deposit `bchreg:qzxtcvjt4nn6gmhme2emk7qtdxrwawrdxgfgeqr2nu`,
+  withdraw `bchreg:qzklqdhmu0cqlwaws8mv76gw5c03sjf9fyckf7jzq6`,
+  hot `bchreg:qz73fsusqk95lcjwtqxqmjhjs0kl2fzh9cg7yr78hj`.
+
+Full regression:
+
+- `mvn -q clean install -DskipTests=false`: passed.
+- wallet-server `--spring.profiles.active=test`: health `UP`.
+- wallet-sig1 `--spring.profiles.active=test`: started.
+- wallet-sig2 `--spring.profiles.active=test`: started.
+- PostgreSQL `select 1`: passed.
+- Redis `PING`: `PONG`.
+- Secret scan: no tracked private key/RPC key/API key assignment found; matches
+  were documentation placeholders or intentional empty `xprv` response fields.
+- Push: no.
+
+Old UTXO table decision:
+
+- Code is ready to drop only `btc_utxo_transaction`,
+  `ltc_utxo_transaction`, `doge_utxo_transaction`, and
+  `bch_utxo_transaction`.
+- Do not drop address / withdraw_record / withdraw_transaction tables in this
+  cleanup.
+- Physical drop remains a separate operator action after backup:
+  `psql "$DATABASE_URL" -f scripts/drop-legacy-bitcoinlike-utxo-tables.sql`.
+
+---
+
 ## Sui Testnet Gate Final Update
 
 Generated: 2026-06-24 Asia/Shanghai.

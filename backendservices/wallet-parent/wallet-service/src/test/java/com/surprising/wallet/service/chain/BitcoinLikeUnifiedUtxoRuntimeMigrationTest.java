@@ -2,7 +2,6 @@ package com.surprising.wallet.service.chain;
 
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.common.currency.CurrencyEnum;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.junit.jupiter.api.Assumptions;
@@ -40,6 +39,7 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
             ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
 
             try {
+                ensureBitcoinLikeProfiles(jdbc);
                 for (ChainType chainType : List.of(ChainType.BTC, ChainType.LTC, ChainType.DOGE, ChainType.BCH)) {
                     String chain = chainType.name();
                     String txHash = "migration" + UUID.randomUUID().toString().replace("-", "");
@@ -49,14 +49,13 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
 
                     repository.upsertUtxo(chain, chain, txHash, 0, address, amount, 100L, 6, false);
 
-                    assertLegacyUtxoAbsent(jdbc, chain, txHash);
                     List<UtxoTransaction> spendable = repository.listSpendableUtxos(chain, chain, 1, 10, 0);
                     UtxoTransaction selected = spendable.stream()
                             .filter(utxo -> txHash.equals(utxo.getTxId()) && utxo.getSeq() == 0)
                             .findFirst()
                             .orElseThrow();
                     assertEquals(amount.setScale(18), selected.getBalance());
-                    assertEquals(CurrencyEnum.parseName(chain).getIndex(), selected.getCurrency());
+                    assertEquals(runtimeCurrencyId(jdbc, chain), selected.getCurrency());
 
                     String lockRef = "migration-lock-" + UUID.randomUUID();
                     assertEquals(1, repository.lockUtxo(chain, txHash, 0, lockRef));
@@ -88,23 +87,56 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
         }
     }
 
-    private static void assertLegacyUtxoAbsent(JdbcTemplate jdbc, String chain, String txHash) {
-        String table = switch (chain) {
-            case "BTC" -> "btc_utxo_transaction";
-            case "LTC" -> "ltc_utxo_transaction";
-            case "DOGE" -> "doge_utxo_transaction";
-            case "BCH" -> "bch_utxo_transaction";
-            default -> throw new IllegalArgumentException("unsupported chain " + chain);
-        };
-        Long count = jdbc.queryForObject(
-                "select count(*) from " + table + " where tx_id = ?",
-                Long.class,
-                txHash);
-        assertEquals(0L, count);
-    }
-
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static int runtimeCurrencyId(JdbcTemplate jdbc, String chain) {
+        Integer id = jdbc.queryForObject("""
+                select min(runtime_currency_id)
+                from chain_profile
+                where chain = ? and enabled = true
+                """, Integer.class, chain);
+        assertNotNull(id, "missing enabled chain_profile for " + chain);
+        return id;
+    }
+
+    private static void ensureBitcoinLikeProfiles(JdbcTemplate jdbc) {
+        jdbc.update("""
+                insert into chain_profile(chain, network, family, runtime_currency_id, bip44_coin_type,
+                                          native_symbol, deposit_confirmations, withdraw_confirmations,
+                                          default_fee_rate, dust_threshold, enabled)
+                values
+                    ('BTC', 'testnet3', 'bitcoin-like', 1, 0, 'BTC', 1, 6, 2, 546, true),
+                    ('LTC', 'testnet', 'bitcoin-like', 24, 2, 'LTC', 1, 6, 2, 1000, true),
+                    ('DOGE', 'regtest', 'bitcoin-like', 41, 3, 'DOGE', 6, 6, 1000, 1000000, true),
+                    ('BCH', 'regtest', 'bitcoin-like', 42, 145, 'BCH', 6, 6, 1, 546, true)
+                on conflict (chain, network) do update set
+                    runtime_currency_id = excluded.runtime_currency_id,
+                    bip44_coin_type = excluded.bip44_coin_type,
+                    native_symbol = excluded.native_symbol,
+                    deposit_confirmations = excluded.deposit_confirmations,
+                    withdraw_confirmations = excluded.withdraw_confirmations,
+                    default_fee_rate = excluded.default_fee_rate,
+                    dust_threshold = excluded.dust_threshold,
+                    enabled = excluded.enabled,
+                    updated_at = now()
+                """);
+        jdbc.update("""
+                insert into chain_asset(chain, symbol, asset_kind, decimals, native_asset, active, min_transfer, min_withdraw)
+                values
+                    ('BTC', 'BTC', 'NATIVE', 8, true, true, 546, 546),
+                    ('LTC', 'LTC', 'NATIVE', 8, true, true, 100000, 100000),
+                    ('DOGE', 'DOGE', 'NATIVE', 8, true, true, 1000000, 1000000),
+                    ('BCH', 'BCH', 'NATIVE', 8, true, true, 546, 546)
+                on conflict (chain, symbol) do update set
+                    decimals = excluded.decimals,
+                    native_asset = excluded.native_asset,
+                    active = excluded.active,
+                    min_transfer = excluded.min_transfer,
+                    min_withdraw = excluded.min_withdraw,
+                    updated_at = now()
+                """);
     }
 }

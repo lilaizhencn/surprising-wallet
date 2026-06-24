@@ -39,9 +39,6 @@ import static com.surprising.wallet.common.utils.Constants.WALLET_DEPOSIT_KEY;
 @Component
 public class TransactionService {
     @Autowired
-    UtxoTransactionService utxoService;
-
-    @Autowired
     AddressService addressService;
 
     @Autowired
@@ -344,12 +341,8 @@ public class TransactionService {
             }
             return;
         }
-        int marked = utxoService.markCredited(utxoKey.txId, utxoKey.seq, currency);
-        if (marked > 0) {
-            userAssetService.addBalance(address.getUserId(), currency.getIndex(), dto.getBalance());
-            log.info("充值入账成功 userId:{} currency:{} tx:{} amount:{}",
-                    address.getUserId(), currency.getName(), dto.getTxId(), dto.getBalance());
-        }
+        log.warn("skip non-unified UTXO credit path currency:{} tx:{}",
+                currency.getName(), dto.getTxId());
     }
 
     private boolean isKnownWalletTransaction(String txId, CurrencyEnum currency) {

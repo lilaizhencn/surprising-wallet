@@ -4,7 +4,7 @@ Generated: 2026-06-24 Asia/Shanghai.
 
 ## 1. Conclusion
 
-Result: **runtime UTXO migration completed and verified locally**.
+Result: **runtime UTXO migration and legacy UTXO persistence cleanup completed and verified locally**.
 
 BTC/LTC/DOGE/BCH available UTXOs have been backfilled into `utxo_record`, and
 BTC-like runtime paths now use `utxo_record` for:
@@ -21,12 +21,16 @@ BTC-like runtime paths now use `utxo_record` for:
 Legacy `*_utxo_transaction` tables were **not deleted**. They are now retained
 as historical compatibility data only.
 
-Production deletion conclusion: **do not delete the old UTXO tables yet**.
+Physical deletion conclusion: **code is ready to drop the old UTXO tables, but
+the drop was not executed in this task**.
 
-They can be considered for deletion only after a separate cleanup change removes
-or archives the legacy MBG mapper/service classes and after one full live
-deposit/withdraw/collection soak cycle confirms no fallback path queries those
-tables. For now, freeze them as read-only historical tables.
+The legacy MBG mapper/service/XML for UTXO persistence has been removed, Java/XML
+runtime references to `UtxoTransactionService`, `UtxoTransactionRepository`,
+`UtxoTransactionExample`, and `UtxoTransactionMapper` are gone, and one real
+DOGE/BCH local-regtest deposit/withdraw/collection cycle has passed against
+`utxo_record`. Execute `scripts/drop-legacy-bitcoinlike-utxo-tables.sql` only
+after a DB backup/PITR point; the script refuses to drop if spendable legacy
+UTXOs are missing from `utxo_record`.
 
 Push status: **NO**.
 
@@ -90,8 +94,26 @@ Modified files:
 Added files:
 
 - `backendservices/wallet-parent/wallet-service/src/test/java/com/surprising/wallet/service/chain/BitcoinLikeUnifiedUtxoRuntimeMigrationTest.java`
+- `backendservices/wallet-parent/wallet-service/src/test/java/com/surprising/wallet/service/chain/BitcoinLikeRegtestFullFlowIntegrationTest.java`
 - `scripts/migrate-bitcoinlike-utxo-record-backfill.sql`
+- `scripts/drop-legacy-bitcoinlike-utxo-tables.sql`
 - `CURRENCY_MIGRATION_INTEGRITY_REPORT.md`
+
+Deleted files:
+
+- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/criteria/UtxoTransactionExample.java`
+- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/dao/UtxoTransactionRepository.java`
+- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/service/UtxoTransactionService.java`
+- `backendservices/wallet-parent/wallet-service/src/main/java/com/surprising/wallet/service/service/impl/UtxoTransactionServiceImpl.java`
+- `backendservices/wallet-parent/wallet-service/src/main/resources/mapper/UtxoTransactionMapper.xml`
+
+DB initialization updates:
+
+- `multi-chain-wallet-schema.sql` now includes BTC `chain_profile` and
+  `chain_asset`, so unified BTC UTXO runtime can read `runtime_currency_id=1`
+  from DB instead of deriving it from `CurrencyEnum`.
+- `surprising-wallet-init-pgsql.sql` includes the same BTC DB asset/profile
+  initialization for clean environments.
 
 ## 4. Runtime Behavior After Migration
 
@@ -137,6 +159,13 @@ unified `utxo_record` lock reference.
 `/wallet/v1/addresses/transactions` reads BTC/LTC/DOGE/BCH rows from
 `utxo_record`.
 
+### Runtime Currency Id
+
+`ChainJdbcRepository.listSpendableUtxos`,
+`listAvailableUtxosBelowConfirmations`, and `listUtxosByAddress` now map
+`UtxoTransaction.currency` from `chain_profile.runtime_currency_id`. They no
+longer use `CurrencyEnum.parseName(chain)` for unified UTXO runtime rows.
+
 ## 5. Integrity Checks
 
 Executed checks:
@@ -158,12 +187,17 @@ mvn -q -pl backendservices/wallet-parent/wallet-service \
   -DskipTests=false \
   -Dutxo.migration.db.enabled=true \
   -Dtest=BitcoinLikeUnifiedUtxoRuntimeMigrationTest test
+mvn -q -pl backendservices/wallet-parent/wallet-service \
+  -DskipTests=false \
+  -Dbitcoinlike.regtest.enabled=true \
+  -Dtest=BitcoinLikeRegtestFullFlowIntegrationTest test
 mvn -q clean install -DskipTests=false
 ```
 
 Results:
 
 - Target migration DB test: **passed**.
+- DOGE/BCH real local-regtest deposit/withdraw/collection test: **passed**.
 - Full Maven clean install: **passed**.
 - wallet-server `--spring.profiles.active=test`: started.
 - wallet-server `/actuator/health`: `{"groups":["liveness","readiness"],"status":"UP"}`.
@@ -174,11 +208,54 @@ Results:
 
 No private key, RPC key, or test funding key was written to source/YAML.
 
+### DOGE/BCH Regtest Evidence
+
+DOGE local regtest:
+
+- deposit txid:
+  `34ac7f568667775f06a179c9e0b9f9ce6dd02bd0de3ac3c95ed9b0c3db543a68`
+- withdraw txid:
+  `e7723d5c79a8695727b1df1c52a2159ed5847278d0ff849cace8b79589ef976e`
+- collection txid:
+  `35d53c425773a97776f6c193b196c40604dd175106168d18314fd40b87180802`
+- deposit address: `n3CGohzAycpjHaQqszBDamAzxH1r5KDSfi`
+- withdraw address: `n4hu8Ziwkkr1AeWXSgsEYGj2FJLTvyhUgc`
+- hot address: `mrWGppYoaG963tqtabihbYzxn6Q21S5vhD`
+- ledger after rollback-scoped validation: `114.00000000 DOGE`
+- verified: `deposit_record`, `utxo_record`, `withdrawal_order`,
+  `collection_record`, `ledger_balance`, duplicate deposit idempotency,
+  duplicate order/collection claim idempotency, UTXO lock/spend guards,
+  non-negative ledger, scanner checkpoint monotonicity.
+
+BCH local regtest:
+
+- deposit txid:
+  `ce034235e4907182f1ccf3f20e4b4a69c3baf13a097b3b7d4f337705bb5f3c3a`
+- withdraw txid:
+  `07b2267f08727b0b6bbb61f14f7d2735529d1ff76c126e83dd4b98800d85e976`
+- collection txid:
+  `cc9a9b115a8873b728023e33a3a062a9e511349422e6f4600bf88e878f3892c0`
+- deposit address:
+  `bchreg:qzxtcvjt4nn6gmhme2emk7qtdxrwawrdxgfgeqr2nu`
+- withdraw address:
+  `bchreg:qzklqdhmu0cqlwaws8mv76gw5c03sjf9fyckf7jzq6`
+- hot address:
+  `bchreg:qz73fsusqk95lcjwtqxqmjhjs0kl2fzh9cg7yr78hj`
+- ledger after rollback-scoped validation: `1.14999000 BCH`
+- verified: `deposit_record`, `utxo_record`, `withdrawal_order`,
+  `collection_record`, `ledger_balance`, duplicate deposit idempotency,
+  duplicate order/collection claim idempotency, UTXO lock/spend guards,
+  non-negative ledger, scanner checkpoint monotonicity.
+
+Note: this regtest validates real local-chain transactions and the unified DB
+runtime. It does not persist DB rows because the test rolls DB writes back. It
+does not expose or write private keys.
+
 ## 7. Risks and Follow-Up
 
-1. The old UTXO tables still exist and still have MBG mapper/service classes.
-   They should not be dropped until a cleanup commit removes those compile-time
-   dependencies or moves the tables to an archive schema.
+1. Old UTXO tables still exist physically until
+   `scripts/drop-legacy-bitcoinlike-utxo-tables.sql` is executed. The UTXO
+   mapper/service/XML has already been removed from runtime code.
 2. wallet-server startup hit transient BTC public RPC SSL/connection-reset errors
    during scheduled scan. The service health remained `UP`; production should
    use a stable BTC RPC endpoint.
@@ -189,17 +266,26 @@ No private key, RPC key, or test funding key was written to source/YAML.
 
 ## 8. Old Table Deletion Decision
 
-Current answer: **not safe to delete old tables today**.
+Current answer: **yes for old UTXO tables only, after backup and preflight**.
 
-Safe next sequence:
+The runtime code is now clean enough to drop:
 
-1. Keep `btc_utxo_transaction`, `ltc_utxo_transaction`,
-   `doge_utxo_transaction`, and `bch_utxo_transaction` read-only.
-2. Run one full live or regtest cycle per BTC-like chain after this migration:
-   deposit, scanner, withdraw, collection, recovery, idempotency.
-3. Remove legacy UTXO mapper/service usage from code, tests, and API fallback.
-4. Archive old table data.
-5. Drop old tables in a dedicated DB migration.
+- `btc_utxo_transaction`
+- `ltc_utxo_transaction`
+- `doge_utxo_transaction`
+- `bch_utxo_transaction`
 
-Until step 5, `utxo_record` is the runtime source of truth; old tables are
-historical compatibility only.
+Do **not** drop legacy address, withdraw_record, or withdraw_transaction tables
+in this cleanup. They still support old routing/signing compatibility.
+
+Execute the drop only through:
+
+```bash
+psql "$DATABASE_URL" -f scripts/drop-legacy-bitcoinlike-utxo-tables.sql
+```
+
+The script checks every remaining spendable legacy UTXO exists as AVAILABLE in
+`utxo_record`; if any row is missing, it raises an exception and rolls back.
+
+Until that migration is executed, `utxo_record` is the runtime source of truth
+and old UTXO tables are historical compatibility data.

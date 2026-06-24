@@ -12,11 +12,9 @@ import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
-import com.surprising.wallet.service.criteria.UtxoTransactionExample;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.criteria.WithdrawRecordExample;
 import com.surprising.wallet.service.service.AddressService;
-import com.surprising.wallet.service.service.UtxoTransactionService;
 import com.surprising.wallet.service.service.WithdrawRecordService;
 import com.surprising.wallet.service.service.WithdrawTransactionService;
 import com.surprising.wallet.service.wallet.IWallet;
@@ -28,9 +26,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
-import java.util.stream.Collectors;
-
-import static com.surprising.wallet.common.currency.CurrencyEnum.*;
 
 /**
  * @author atomex
@@ -42,8 +37,6 @@ abstract public class AbstractBatchWithdrawJob {
     public CurrencyEnum currency;
     @Autowired
     WithdrawRecordService recordService;
-    @Autowired
-    UtxoTransactionService utxoService;
     @Autowired
     AddressService addressService;
     @Autowired
@@ -120,11 +113,6 @@ abstract public class AbstractBatchWithdrawJob {
         IWallet wallet = walletContext.getWallet(currency);
         long depositConfirmationThreshold = wallet.getDepositConfirmationThreshold();
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        boolean unifiedUtxo = isUnifiedBitcoinLike(currency);
-        UtxoTransactionExample example = new UtxoTransactionExample();
-        example.createCriteria()
-                .andStatusEqualTo((byte) Constants.WAITING)
-                .andConfirmNumGreaterThanOrEqualTo(depositConfirmationThreshold);
         PageInfo pageInfo = new PageInfo();
         pageInfo.setPageSize(size);
         pageInfo.setStartIndex(0);
@@ -136,7 +124,7 @@ abstract public class AbstractBatchWithdrawJob {
         BigDecimal walletAmount = BigDecimal.ZERO;
         while (true) {
             List<UtxoTransaction> tmps = listCandidateUtxos(
-                    unifiedUtxo, depositConfirmationThreshold, pageInfo, example, table);
+                    depositConfirmationThreshold, pageInfo);
             if (CollectionUtils.isEmpty(tmps)) {
                 log.error("构建交易失败 钱包余额不足");
                 return null;
@@ -191,37 +179,23 @@ abstract public class AbstractBatchWithdrawJob {
 
         String transactionId = transaction.getId().toString();
 
-        if (unifiedUtxo) {
-            String chain = currency.getName().toUpperCase(Locale.ROOT);
-            for (UtxoTransaction utxo : utxos) {
-                int locked = chainJdbcRepository.lockUtxo(
-                        chain, utxo.getTxId(), utxo.getSeq(), transactionId);
-                if (locked != 1) {
-                    throw new IllegalStateException(
-                            "failed to lock unified " + chain + " UTXO "
-                                    + utxo.getTxId() + ":" + utxo.getSeq());
-                }
+        String chain = currency.getName().toUpperCase(Locale.ROOT);
+        for (UtxoTransaction utxo : utxos) {
+            int locked = chainJdbcRepository.lockUtxo(
+                    chain, utxo.getTxId(), utxo.getSeq(), transactionId);
+            if (locked != 1) {
+                throw new IllegalStateException(
+                        "failed to lock unified " + chain + " UTXO "
+                                + utxo.getTxId() + ":" + utxo.getSeq());
             }
-            String fromAddress = addresses.isEmpty() ? null : addresses.get(0).getAddress();
-            records.forEach(record -> {
-                chainJdbcRepository.updateWithdrawalStatus(
-                        chain, record.getWithdrawId(), "UTXO_LOCKED", fromAddress, null, null);
-                chainJdbcRepository.updateWithdrawalStatus(
-                        chain, record.getWithdrawId(), "SIGNING", fromAddress, null, null);
-            });
         }
-
-        if (!unifiedUtxo) {
-            //更新 legacy UTXO 和 WithdrawRecord 的 status。BTC-like 新运行时不再写 legacy UTXO 表。
-            List<UtxoTransaction> spends = utxos.parallelStream().map((utxo) -> UtxoTransaction.builder()
-                    .id(utxo.getId())
-                    .spentTxId(transactionId)
-                    .spent((byte) 1)
-                    .status((byte) Constants.SIGNING)
-                    .updateDate(Date.from(Instant.now()))
-                    .build()).collect(Collectors.toList());
-            utxoService.batchEdit(spends, table);
-        }
+        String fromAddress = addresses.isEmpty() ? null : addresses.get(0).getAddress();
+        records.forEach(record -> {
+            chainJdbcRepository.updateWithdrawalStatus(
+                    chain, record.getWithdrawId(), "UTXO_LOCKED", fromAddress, null, null);
+            chainJdbcRepository.updateWithdrawalStatus(
+                    chain, record.getWithdrawId(), "SIGNING", fromAddress, null, null);
+        });
 
         records.parallelStream().forEach((record) -> {
             record.setStatus((byte) Constants.SIGNING);
@@ -252,20 +226,10 @@ abstract public class AbstractBatchWithdrawJob {
         return P2wshFeeCalculator.calculateFeeSat(inputCount, outputCount, feeRate);
     }
 
-    private List<UtxoTransaction> listCandidateUtxos(boolean unifiedUtxo,
-                                                     long depositConfirmationThreshold,
-                                                     PageInfo pageInfo,
-                                                     UtxoTransactionExample example,
-                                                     ShardTable table) {
-        if (!unifiedUtxo) {
-            return utxoService.getByPage(pageInfo, example, table);
-        }
+    private List<UtxoTransaction> listCandidateUtxos(long depositConfirmationThreshold,
+                                                     PageInfo pageInfo) {
         String chain = currency.getName().toUpperCase(Locale.ROOT);
         return chainJdbcRepository.listSpendableUtxos(
                 chain, chain, depositConfirmationThreshold, pageInfo.getPageSize(), pageInfo.getStartIndex());
-    }
-
-    private boolean isUnifiedBitcoinLike(CurrencyEnum currency) {
-        return currency == BTC || currency == LTC || currency == DOGE || currency == BCH;
     }
 }

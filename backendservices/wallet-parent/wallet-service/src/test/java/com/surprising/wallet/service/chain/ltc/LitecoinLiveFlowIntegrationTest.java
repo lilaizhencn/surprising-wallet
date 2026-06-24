@@ -64,9 +64,6 @@ class LitecoinLiveFlowIntegrationTest {
                     select count(*) from utxo_record
                     where chain='LTC' and tx_hash=? and vout=0 and credited=true
                     """, DEPOSIT_TX));
-            assertEquals(1L, scalarLong(connection, """
-                    select count(*) from ltc_utxo_transaction where tx_id=? and seq=0 and credited=true
-                    """, DEPOSIT_TX));
             assertEquals(new BigDecimal("0.004996800000000000"), scalarDecimal(connection, """
                     select total_balance from ledger_balance
                     where chain='LTC' and asset_symbol='LTC' and account_id='9001'

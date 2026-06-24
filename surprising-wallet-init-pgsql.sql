@@ -439,6 +439,12 @@ VALUES (4, 42, 0);
 INSERT INTO chain_asset(
   chain, symbol, asset_kind, decimals, native_asset, active, min_transfer, min_withdraw
 ) VALUES (
+  'BTC', 'BTC', 'NATIVE', 8, TRUE, TRUE, 546, 546
+);
+
+INSERT INTO chain_asset(
+  chain, symbol, asset_kind, decimals, native_asset, active, min_transfer, min_withdraw
+) VALUES (
   'LTC', 'LTC', 'NATIVE', 8, TRUE, TRUE, 100000, 100000
 );
 
@@ -449,6 +455,24 @@ INSERT INTO chain_asset(
 );
 INSERT INTO chain_asset(chain,symbol,asset_kind,decimals,native_asset,active,min_transfer,min_withdraw)
 VALUES('BCH','BCH','NATIVE',8,TRUE,TRUE,546,546);
+
+INSERT INTO chain_profile(
+  chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+  explorer_url, deposit_confirmations, withdraw_confirmations,
+  default_fee_rate, dust_threshold, enabled
+) VALUES (
+  'BTC', 'testnet3', 'bitcoin-like', 1, 0, 'BTC',
+  'https://mempool.space/testnet/tx/', 1, 6, 2, 546, TRUE
+);
+
+INSERT INTO chain_profile(
+  chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+  explorer_url, deposit_confirmations, withdraw_confirmations,
+  default_fee_rate, dust_threshold, enabled
+) VALUES (
+  'BTC', 'mainnet', 'bitcoin-like', 1, 0, 'BTC',
+  'https://mempool.space/tx/', 1, 6, 2, 546, TRUE
+);
 
 INSERT INTO chain_profile(
   chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,

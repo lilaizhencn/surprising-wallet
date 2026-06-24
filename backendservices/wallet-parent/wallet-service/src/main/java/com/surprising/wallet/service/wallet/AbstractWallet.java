@@ -43,8 +43,6 @@ abstract public class AbstractWallet implements IWallet {
     protected AccountTransactionService accountTransactionService;
 
     @Autowired
-    protected UtxoTransactionService utxoTransactionService;
-    @Autowired
     protected AddressService addressService;
 
     @Autowired

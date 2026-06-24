@@ -10,11 +10,9 @@ import com.surprising.wallet.common.dto.AddressDto;
 import com.surprising.wallet.common.pojo.*;
 import com.surprising.wallet.service.criteria.AddressExample;
 import com.surprising.wallet.service.criteria.CurrencyBalanceExample;
-import com.surprising.wallet.service.criteria.UtxoTransactionExample;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
 import com.surprising.wallet.service.service.CurrencyBalanceService;
-import com.surprising.wallet.service.service.UtxoTransactionService;
 import com.surprising.wallet.service.wallet.IWallet;
 import com.surprising.wallet.service.wallet.WalletContext;
 import lombok.extern.slf4j.Slf4j;
@@ -37,7 +35,6 @@ public class WalletController {
     private final WalletContext context;
     private final CurrencyBalanceService balanceService;
     private final AddressService addressService;
-    private final UtxoTransactionService utxoService;
     private final ChainJdbcRepository chainJdbcRepository;
 
     @Value("${atomex.wallet.pubKey1}")
@@ -48,12 +45,11 @@ public class WalletController {
     private String pubKey3;
 
     public WalletController(WalletContext context, CurrencyBalanceService balanceService,
-                            AddressService addressService, UtxoTransactionService utxoService,
+                            AddressService addressService,
                             ChainJdbcRepository chainJdbcRepository) {
         this.context = context;
         this.balanceService = balanceService;
         this.addressService = addressService;
-        this.utxoService = utxoService;
         this.chainJdbcRepository = chainJdbcRepository;
     }
 
@@ -283,18 +279,7 @@ public class WalletController {
                 String chain = coin.getName().toUpperCase(Locale.ROOT);
                 return ResultUtils.success(chainJdbcRepository.listUtxosByAddress(chain, address, 50));
             }
-            ShardTable table = ShardTable.builder().prefix(coin.getName()).build();
-
-            UtxoTransactionExample example = new UtxoTransactionExample();
-            example.createCriteria().andAddressEqualTo(address);
-            example.setOrderByClause("id desc");
-
-            com.surprising.common.mybatis.pager.PageInfo pageInfo = new com.surprising.common.mybatis.pager.PageInfo();
-            pageInfo.setPageSize(50);
-            pageInfo.setStartIndex(0);
-
-            List<UtxoTransaction> txs = utxoService.getByPage(pageInfo, example, table);
-            return ResultUtils.success(txs);
+            return ResultUtils.failure("仅支持BTC/LTC/DOGE/BCH UTXO交易查询");
         } catch (Exception e) {
             log.error("getAddressTransactions error address={}", address, e);
             return ResultUtils.failure("获取交易列表失败");

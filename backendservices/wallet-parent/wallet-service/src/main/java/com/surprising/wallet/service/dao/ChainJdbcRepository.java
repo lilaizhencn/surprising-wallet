@@ -558,14 +558,28 @@ public class ChainJdbcRepository {
                                                     long requiredConfirmations,
                                                     int limit, int offset) {
         return jdbcTemplate.query("""
-                        select id, tx_hash, vout, address, amount, block_height, confirmations,
-                               credited, created_at, updated_at
-                        from utxo_record
-                        where chain = ?
-                          and asset_symbol = ?
-                          and state = 'AVAILABLE'
-                          and confirmations >= ?
-                        order by id
+                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height,
+                               ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
+                               (
+                                   select cp.runtime_currency_id
+                                   from chain_profile cp
+                                   where cp.chain = ur.chain
+                                     and cp.native_symbol = ur.asset_symbol
+                                     and cp.enabled = true
+                                   order by case cp.network
+                                       when 'regtest' then 0
+                                       when 'testnet' then 1
+                                       when 'testnet3' then 1
+                                       else 2
+                                   end
+                                   limit 1
+                               ) as runtime_currency_id
+                        from utxo_record ur
+                        where ur.chain = ?
+                          and ur.asset_symbol = ?
+                          and ur.state = 'AVAILABLE'
+                          and ur.confirmations >= ?
+                        order by ur.id
                         limit ? offset ?
                         """,
                 (rs, rowNum) -> mapUtxoRecord(rs, chain),
@@ -576,14 +590,28 @@ public class ChainJdbcRepository {
                                                                       long maxConfirmations,
                                                                       int limit, int offset) {
         return jdbcTemplate.query("""
-                        select id, tx_hash, vout, address, amount, block_height, confirmations,
-                               credited, created_at, updated_at
-                        from utxo_record
-                        where chain = ?
-                          and asset_symbol = ?
-                          and state = 'AVAILABLE'
-                          and confirmations < ?
-                        order by id
+                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height,
+                               ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
+                               (
+                                   select cp.runtime_currency_id
+                                   from chain_profile cp
+                                   where cp.chain = ur.chain
+                                     and cp.native_symbol = ur.asset_symbol
+                                     and cp.enabled = true
+                                   order by case cp.network
+                                       when 'regtest' then 0
+                                       when 'testnet' then 1
+                                       when 'testnet3' then 1
+                                       else 2
+                                   end
+                                   limit 1
+                               ) as runtime_currency_id
+                        from utxo_record ur
+                        where ur.chain = ?
+                          and ur.asset_symbol = ?
+                          and ur.state = 'AVAILABLE'
+                          and ur.confirmations < ?
+                        order by ur.id
                         limit ? offset ?
                         """,
                 (rs, rowNum) -> mapUtxoRecord(rs, chain),
@@ -604,12 +632,26 @@ public class ChainJdbcRepository {
 
     public List<UtxoTransaction> listUtxosByAddress(String chain, String address, int limit) {
         return jdbcTemplate.query("""
-                        select id, tx_hash, vout, address, amount, block_height, confirmations,
-                               credited, created_at, updated_at
-                        from utxo_record
-                        where chain = ?
-                          and address = ?
-                        order by id desc
+                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height,
+                               ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
+                               (
+                                   select cp.runtime_currency_id
+                                   from chain_profile cp
+                                   where cp.chain = ur.chain
+                                     and cp.native_symbol = ur.asset_symbol
+                                     and cp.enabled = true
+                                   order by case cp.network
+                                       when 'regtest' then 0
+                                       when 'testnet' then 1
+                                       when 'testnet3' then 1
+                                       else 2
+                                   end
+                                   limit 1
+                               ) as runtime_currency_id
+                        from utxo_record ur
+                        where ur.chain = ?
+                          and ur.address = ?
+                        order by ur.id desc
                         limit ?
                         """,
                 (rs, rowNum) -> mapUtxoRecord(rs, chain),
@@ -628,6 +670,11 @@ public class ChainJdbcRepository {
     }
 
     private UtxoTransaction mapUtxoRecord(java.sql.ResultSet rs, String chain) throws java.sql.SQLException {
+        int runtimeCurrencyId = rs.getInt("runtime_currency_id");
+        if (rs.wasNull()) {
+            throw new IllegalStateException(
+                    "missing enabled chain_profile.runtime_currency_id for unified UTXO chain " + chain);
+        }
         return UtxoTransaction.builder()
                 .id(rs.getLong("id"))
                 .txId(rs.getString("tx_hash"))
@@ -638,7 +685,7 @@ public class ChainJdbcRepository {
                 .confirmNum(rs.getLong("confirmations"))
                 .spent((byte) 0)
                 .spentTxId(Constants.UNSPENT_TX_ID)
-                .currency(CurrencyEnum.parseName(chain).getIndex())
+                .currency(runtimeCurrencyId)
                 .status((byte) Constants.WAITING)
                 .credited(rs.getBoolean("credited"))
                 .createDate(rs.getTimestamp("created_at"))

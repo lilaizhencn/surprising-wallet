@@ -1,6 +1,6 @@
 # Currency Model Compatibility Report
 
-Generated: 2026-06-23 Asia/Shanghai.
+Generated: 2026-06-24 Asia/Shanghai.
 
 ## Overall Conclusion
 
@@ -12,6 +12,11 @@ Generated: 2026-06-23 Asia/Shanghai.
 - The LTC live gate validated runtime id `24` with BIP44 coin type `2`; deposit, withdrawal, collection, and reconciliation used the database profile successfully.
 - The DOGE Regtest gate validated runtime id `41` with BIP44 coin type `3`; network, confirmations, RPC, fee, and dust were loaded from the DOGE regtest profile.
 - The BCH Regtest gate validated runtime id `42` with BIP44 coin type `145`; confirmations, fee, dust, safe scan height, withdrawal, collection, and reconciliation used the BCH regtest profile.
+- The unified BTC-like UTXO runtime now maps `UtxoTransaction.currency` from
+  `chain_profile.runtime_currency_id`, not from `CurrencyEnum`.
+- Legacy UTXO MBG mapper/service/XML classes have been removed. Old
+  `*_utxo_transaction` tables remain only until the separate guarded drop
+  migration is executed.
 - The Solana devnet gate validated runtime id `50` with BIP44 coin type `501`; Solana has no `CurrencyEnum` entry and loads profile, assets, tokens, addresses, scan checkpoint, and ledger state from the unified database model.
 - The TON testnet gate validated runtime id `51` with BIP44 coin type `607`; TON has no `CurrencyEnum` entry and loads profile, assets, Jetton token config, addresses, seqno, scan checkpoint, and ledger state from the unified database model.
 - The Aptos devnet gate validated runtime id `52` with BIP44 coin type `637`; Aptos has no `CurrencyEnum` entry and loads profile, assets, Coin<T> token config, addresses, sequence, scan checkpoint, and ledger state from the unified database model.
@@ -36,7 +41,6 @@ The active legacy wallet pipeline still depends on `CurrencyEnum` in these areas
   - `AbstractTransferJob`, `FeeRateUpdater`, `RbfBumpJob`
 - Legacy service/mapper routing:
   - `AddressService`
-  - `UtxoTransactionService`
   - `WithdrawTransactionService`
   - `TransactionService`
   - their current implementations
@@ -49,7 +53,9 @@ The active legacy wallet pipeline still depends on `CurrencyEnum` in these areas
 
 These dependencies are retained because replacing the old queue/table routing in the LTC gate would materially risk BTC. New-chain code must load and validate its database profile before using the matching enum entry.
 
-Current audit scope: 64 Java source files reference `CurrencyEnum`. This is a compatibility surface to reduce over time, not the configuration source for DOGE/BCH.
+Current audit scope still includes legacy wallet/job/signing files that
+reference `CurrencyEnum`. This is a compatibility surface to reduce over time,
+not the configuration source for BTC-like runtime UTXO data.
 
 ## Remaining CurrencyIds Dependencies
 
@@ -75,7 +81,10 @@ Important conflicts:
 - `collection_record`: chain-scoped collection state.
 - `ledger_balance`: chain + asset + account ledger with guarded available/locked/total balances.
 
-LTC continues to mirror legacy `ltc_*`, `user_asset`, `currency_balance`, and `best_block_height` tables until old jobs are replaced.
+The BTC-like runtime no longer writes or queries legacy `*_utxo_transaction`
+tables. Legacy address, withdraw_record, withdraw_transaction, `user_asset`,
+`currency_balance`, and `best_block_height` compatibility remains until the old
+job/router surface is retired.
 
 ## LTC Compatibility
 
@@ -175,6 +184,7 @@ LTC continues to mirror legacy `ltc_*`, `user_asset`, `currency_balance`, and `b
 Required and added:
 
 - `chain_profile`
+- BTC `chain_profile` and `chain_asset` rows for the unified DB asset model
 - `utxo_record` with unique `(chain, tx_hash, vout)`
 - unique `(chain, order_no)` for `withdrawal_order`
 - unique `(chain, collection_no)` for `collection_record`
@@ -192,6 +202,16 @@ Required and added:
   Sui Coin<T> token config rows
 
 No MBG generation was needed because these tables are accessed through the hand-written JDBC repository; no service, scanner, signer, or fee logic was generated.
+
+Legacy cleanup added:
+
+- Removed `UtxoTransactionExample`.
+- Removed `UtxoTransactionRepository`.
+- Removed `UtxoTransactionService`.
+- Removed `UtxoTransactionServiceImpl`.
+- Removed `UtxoTransactionMapper.xml`.
+- Added `scripts/drop-legacy-bitcoinlike-utxo-tables.sql` for a separate,
+  guarded physical table drop after backup.
 
 ## ID Conflict Risk
 
