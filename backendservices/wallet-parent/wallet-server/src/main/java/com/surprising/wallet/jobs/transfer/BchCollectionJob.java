@@ -1,7 +1,6 @@
 package com.surprising.wallet.jobs.transfer;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.BitcoinLikeChainProfile;
 import com.surprising.wallet.common.chain.RuntimeAsset;
@@ -68,20 +67,19 @@ public class BchCollectionJob {
         }
         RuntimeAsset currency = assetRoutingService.runtimeAssetByChain(CHAIN);
         BitcoinLikeChainProfile profile = profile();
-        ShardTable table = ShardTable.builder().prefix("bch").build();
-        Address hotAddress = getHotAddress(table, currency);
+        Address hotAddress = getHotAddress(currency);
         if (hotAddress == null) {
             return;
         }
         List<UtxoTransaction> utxos =
-                findCollectableUtxos(table, profile.getDepositConfirmations());
+                findCollectableUtxos(currency, profile.getDepositConfirmations());
         if (utxos.isEmpty()) {
             return;
         }
         List<Address> inputAddresses = new ArrayList<>();
         BigDecimal inputAmount = BigDecimal.ZERO;
         for (UtxoTransaction utxo : utxos) {
-            Address address = addressService.getAddress(utxo.getAddress(), table);
+            Address address = addressService.getAddress(utxo.getAddress(), currency);
             if (address == null || address.getUserId() == null || address.getUserId() <= 0) {
                 continue;
             }
@@ -177,10 +175,10 @@ public class BchCollectionJob {
     }
 
     private List<UtxoTransaction> findCollectableUtxos(
-            ShardTable table, int requiredConfirmations) {
+            RuntimeAsset currency, int requiredConfirmations) {
         return repository.listSpendableUtxos(CHAIN, CHAIN, requiredConfirmations, PAGE_SIZE, 0).stream()
                 .filter(utxo -> {
-                    Address address = addressService.getAddress(utxo.getAddress(), table);
+                    Address address = addressService.getAddress(utxo.getAddress(), currency);
                     return address != null
                             && address.getUserId() != null
                             && address.getUserId() > 0;
@@ -188,7 +186,7 @@ public class BchCollectionJob {
                 .toList();
     }
 
-    private Address getHotAddress(ShardTable table, RuntimeAsset currency) {
+    private Address getHotAddress(RuntimeAsset currency) {
         return repository.findChainAddress(
                         CHAIN, CHAIN, hotUserId, hotBiz, hotAddressIndex, "DEPOSIT")
                 .map(record -> Address.builder()

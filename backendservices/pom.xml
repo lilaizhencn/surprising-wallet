@@ -44,7 +44,6 @@
         <web3j.version>5.0.0</web3j.version>
         <httpclient.version>4.5.7</httpclient.version>
         <mysql.version>8.0.22</mysql.version>
-        <mybatis.version>4.0.1</mybatis.version>
         <hibernate-validator.version>6.0.16.Final</hibernate-validator.version>
         <!-- slf4j.version managed by Spring Boot parent -->
     </properties>
@@ -245,11 +244,6 @@
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
                 <version>42.7.4</version>
-            </dependency>
-            <dependency>
-                <groupId>org.mybatis.spring.boot</groupId>
-                <artifactId>mybatis-spring-boot-starter</artifactId>
-                <version>${mybatis.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.hibernate</groupId>

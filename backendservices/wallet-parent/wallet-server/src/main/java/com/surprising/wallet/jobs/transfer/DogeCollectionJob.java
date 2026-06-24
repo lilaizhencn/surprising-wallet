@@ -1,7 +1,6 @@
 package com.surprising.wallet.jobs.transfer;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
@@ -65,12 +64,11 @@ public class DogeCollectionJob {
             return;
         }
         RuntimeAsset currency = assetRoutingService.runtimeAssetByChain(CHAIN);
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        Address hotAddress = getHotAddress(table, currency);
+        Address hotAddress = getHotAddress(currency);
         if (hotAddress == null) {
             return;
         }
-        List<UtxoTransaction> utxos = findCollectableUtxos(table, currency);
+        List<UtxoTransaction> utxos = findCollectableUtxos(currency);
         if (CollectionUtils.isEmpty(utxos)) {
             return;
         }
@@ -78,7 +76,7 @@ public class DogeCollectionJob {
         List<Address> inputAddresses = new ArrayList<>();
         BigDecimal inputAmount = BigDecimal.ZERO;
         for (UtxoTransaction utxo : utxos) {
-            Address address = addressService.getAddress(utxo.getAddress(), table);
+            Address address = addressService.getAddress(utxo.getAddress(), currency);
             if (address == null || address.getUserId() == null || address.getUserId() <= 0) {
                 continue;
             }
@@ -157,7 +155,7 @@ public class DogeCollectionJob {
         REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, JSONObject.toJSONString(transaction));
     }
 
-    private List<UtxoTransaction> findCollectableUtxos(ShardTable table, RuntimeAsset currency) {
+    private List<UtxoTransaction> findCollectableUtxos(RuntimeAsset currency) {
         List<UtxoTransaction> candidates = chainRepository.listSpendableUtxos(
                 CHAIN, CHAIN, currency.getDepositConfirmNum(), PAGE_SIZE, 0);
         if (CollectionUtils.isEmpty(candidates)) {
@@ -165,13 +163,13 @@ public class DogeCollectionJob {
         }
         return candidates.stream()
                 .filter(utxo -> {
-                    Address address = addressService.getAddress(utxo.getAddress(), table);
+                    Address address = addressService.getAddress(utxo.getAddress(), currency);
                     return address != null && address.getUserId() != null && address.getUserId() > 0;
                 })
                 .toList();
     }
 
-    private Address getHotAddress(ShardTable table, RuntimeAsset currency) {
+    private Address getHotAddress(RuntimeAsset currency) {
         return chainRepository.findChainAddress(
                         CHAIN, CHAIN, hotUserId, hotBiz, hotAddressIndex, "DEPOSIT")
                 .map(record -> Address.builder()

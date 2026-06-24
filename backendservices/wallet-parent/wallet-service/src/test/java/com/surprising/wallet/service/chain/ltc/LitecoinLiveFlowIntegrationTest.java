@@ -95,11 +95,13 @@ class LitecoinLiveFlowIntegrationTest {
                     select tx_hash from withdrawal_order
                     where chain='LTC' and order_no='ltc-live-gate-20260621-001'
                     """));
-            assertEquals(new BigDecimal("0.00499680"), scalarDecimal(connection, """
-                    select balance from user_asset where user_id=9001 and currency=24
+            assertEquals(new BigDecimal("0.004996800000000000"), scalarDecimal(connection, """
+                    select available_balance from ledger_balance
+                    where chain='LTC' and asset_symbol='LTC' and account_id='9001'
                     """));
-            assertEquals(BigDecimal.ZERO.setScale(8), scalarDecimal(connection, """
-                    select frozen from user_asset where user_id=9001 and currency=24
+            assertEquals(BigDecimal.ZERO.setScale(18), scalarDecimal(connection, """
+                    select locked_balance from ledger_balance
+                    where chain='LTC' and asset_symbol='LTC' and account_id='9001'
                     """));
         }
     }

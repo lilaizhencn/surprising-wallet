@@ -35,7 +35,6 @@ public class EthWallet extends AbstractEthLikeWallet implements IWallet {
 
     @PostConstruct
     public void init() {
-        RESERVED = new BigDecimal("0.1");
         super.setCommand(command);
         super.setWithdrawAddress(ethWithdrawAddress);
         currency = loadRuntimeAssetByChain("ETH");

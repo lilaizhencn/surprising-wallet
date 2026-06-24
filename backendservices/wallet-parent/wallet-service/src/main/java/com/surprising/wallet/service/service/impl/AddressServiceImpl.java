@@ -1,23 +1,18 @@
 package com.surprising.wallet.service.service.impl;
 
-import com.surprising.common.mybatis.sharding.ShardTable;
-import com.surprising.common.mybatis.sharding.service.AbstractCrudService;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.service.criteria.AddressExample;
-import com.surprising.wallet.service.asset.AssetRoutingService;
-import com.surprising.wallet.service.dao.AddressRepository;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -28,56 +23,10 @@ import java.util.Optional;
  */
 @Slf4j
 @Service
-public class AddressServiceImpl
-        extends AbstractCrudService<AddressRepository, Address, AddressExample, Integer>
-        implements AddressService {
+public class AddressServiceImpl implements AddressService {
 
-    @Autowired
-    private AddressRepository addressRepos;
     @Autowired
     private ChainJdbcRepository chainJdbcRepository;
-    @Autowired
-    private AssetRoutingService assetRoutingService;
-
-    @Override
-    protected AddressExample getPageExample(String fieldName, String keyword) {
-        AddressExample example = new AddressExample();
-        example.createCriteria().andFieldLike(fieldName, keyword);
-        return example;
-    }
-
-    @Override
-    public Address getAndLockOneByExample(AddressExample example, ShardTable table) {
-        Address address = addressRepos.selectAndLockOneByExample(example, table);
-        if (!ObjectUtils.isEmpty(address)) {
-            address.setCurrency(table.getPrefix());
-        }
-        return address;
-    }
-
-    @Override
-    public Address getAddress(String addressStr, ShardTable table) {
-        if (!StringUtils.hasText(addressStr)) {
-            return null;
-        }
-        RuntimeAsset parsedCurrency = RuntimeAsset.parseName(table.getPrefix());
-        final RuntimeAsset currency = assetRoutingService.legacyMainCurrency(parsedCurrency);
-        table = ShardTable.builder().prefix(currency.getName()).build();
-
-        if (isUnifiedBitcoinLike(currency)) {
-            String chain = assetRoutingService.requireChainForRuntimeCurrencyId(currency.getIndex());
-            return chainJdbcRepository.findChainAddressByAddress(chain, addressStr)
-                    .map(record -> toAddress(record, currency))
-                    .orElse(null);
-        }
-
-        ShardTable legacyTable = ShardTable.builder().prefix(currency.getName()).build();
-        AddressExample example = new AddressExample();
-        example.createCriteria().andAddressEqualTo(addressStr);
-        Optional<Address> oneByExample = getOneByExample(example, legacyTable);
-        oneByExample.ifPresent(address -> address.setCurrency(currency.getName()));
-        return oneByExample.orElse(null);
-    }
 
     private Address toAddress(ChainAddressRecord record, RuntimeAsset currency) {
         return Address.builder()
@@ -98,28 +47,29 @@ public class AddressServiceImpl
                 .build();
     }
 
-    private boolean isUnifiedBitcoinLike(RuntimeAsset currency) {
-        return assetRoutingService.isBitcoinLikeRuntimeCurrency(currency);
+    private Optional<Address> findCaseFoldedChainAddress(RuntimeAsset currency, String addressStr) {
+        if (!"ETH".equalsIgnoreCase(currency.chain())) {
+            return Optional.empty();
+        }
+        String normalized = addressStr.toLowerCase(Locale.ROOT);
+        if (normalized.equals(addressStr)) {
+            return Optional.empty();
+        }
+        return chainJdbcRepository.findChainAddressByAddress(currency.chain(), currency.assetSymbol(), normalized)
+                .map(record -> toAddress(record, currency));
     }
 
     @Override
     public Address getAddress(String addressStr, RuntimeAsset currency) {
-        if (!StringUtils.hasText(addressStr)) {
+        if (!StringUtils.hasText(addressStr) || currency == null) {
             return null;
         }
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        return getAddress(addressStr, table);
+        return findChainAddress(currency, addressStr).orElse(null);
     }
 
-
-    @Override
-    public int countByExam(AddressExample example, ShardTable table) {
-        return dao.countByExample(example, table);
+    private Optional<Address> findChainAddress(RuntimeAsset currency, String addressStr) {
+        return chainJdbcRepository.findChainAddressByAddress(currency.chain(), currency.assetSymbol(), addressStr)
+                .map(record -> toAddress(record, currency))
+                .or(() -> findCaseFoldedChainAddress(currency, addressStr));
     }
-
-    @Override
-    public BigDecimal getTotalBalance(AddressExample example, ShardTable table) {
-        return dao.getTotalBalance(example, table);
-    }
-
 }

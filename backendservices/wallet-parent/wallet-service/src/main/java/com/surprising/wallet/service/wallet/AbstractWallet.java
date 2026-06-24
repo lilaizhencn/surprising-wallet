@@ -2,8 +2,10 @@ package com.surprising.wallet.service.wallet;
 
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
-import com.surprising.wallet.common.pojo.*;
-import com.surprising.wallet.service.service.*;
+import com.surprising.wallet.common.pojo.UtxoTransaction;
+import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.service.service.AddressService;
+import com.surprising.wallet.service.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -23,12 +25,6 @@ abstract public class AbstractWallet implements IWallet {
     protected ApplicationContext applicationContext;
 
     @Autowired
-    protected WithdrawTransactionService withdrawTransactionService;
-
-    @Autowired
-    protected AccountTransactionService accountTransactionService;
-
-    @Autowired
     protected AddressService addressService;
 
     @Autowired
@@ -36,7 +32,7 @@ abstract public class AbstractWallet implements IWallet {
     protected TransactionService transactionService;
 
     protected void updateTotalCurrencyBalance(RuntimeAsset currency, BigDecimal balance) {
-        log.info("currency_balance write disabled; ledger_balance is runtime source currency={} balance={}",
+        log.info("aggregate balance write disabled; ledger_balance is runtime source currency={} balance={}",
                 currency.getName(), balance);
     }
 
@@ -47,7 +43,7 @@ abstract public class AbstractWallet implements IWallet {
      * @param deltaBalance
      */
     protected void updateCurrencyDeltaBalance(RuntimeAsset currency, BigDecimal deltaBalance) {
-        log.info("currency_balance delta write disabled; ledger_balance is runtime source currency={} delta={}",
+        log.info("aggregate balance delta write disabled; ledger_balance is runtime source currency={} delta={}",
                 currency.getName(), deltaBalance);
     }
 
@@ -87,20 +83,6 @@ abstract public class AbstractWallet implements IWallet {
                 .build();
     }
 
-    public TransactionDTO convertAccountTxToDto(AccountTransaction accountTx) {
-        return TransactionDTO.builder()
-                .address(accountTx.getAddress())
-                .balance(accountTx.getBalance())
-                .blockHeight(accountTx.getBlockHeight())
-                .confirmNum(accountTx.getConfirmNum())
-                .txId(accountTx.getTxId())
-                .biz(accountTx.getBiz())
-                .currency((accountTx.getCurrency()))
-                .build();
-    }
-
-
-
     /**
      * 检测txid 是否是我们自己发出的交易，如果是，更新交易状态为已确认
      *
@@ -108,7 +90,7 @@ abstract public class AbstractWallet implements IWallet {
      * @param currency
      */
     protected void updateWithdrawTXId(String txId, RuntimeAsset currency) {
-        log.info("legacy withdraw_record confirmation adapter disabled currency={} txId={}",
+        log.info("legacy withdraw confirmation adapter disabled currency={} txId={}",
                 currency.getName(), txId);
     }
 

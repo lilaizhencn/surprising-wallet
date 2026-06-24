@@ -11,7 +11,6 @@ import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.service.service.AddressService;
 import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.wallet.IWallet;
@@ -40,13 +39,7 @@ public class TransactionService {
     AddressService addressService;
 
     @Autowired
-    AccountTransactionService accountTransactionService;
-
-    @Autowired
     WalletContext walletContext;
-
-    @Autowired
-    WithdrawTransactionService transactionService;
 
     @Autowired
     ChainJdbcRepository chainJdbcRepository;
@@ -130,7 +123,7 @@ public class TransactionService {
         }
 
         throw new IllegalArgumentException(
-                "legacy withdraw_record runtime is disabled for currency " + record.getCurrency());
+                "legacy withdraw API runtime is disabled for currency " + record.getCurrency());
     }
 
     /**

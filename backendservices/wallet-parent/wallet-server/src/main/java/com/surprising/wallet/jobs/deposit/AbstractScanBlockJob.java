@@ -151,7 +151,7 @@ abstract public class AbstractScanBlockJob {
             return;
         }
         throw new IllegalStateException(
-                "legacy best_block_height runtime is disabled for " + wallet.getCurrency().getName());
+                "legacy scan-height runtime is disabled for " + wallet.getCurrency().getName());
     }
 
     /**
@@ -169,7 +169,7 @@ abstract public class AbstractScanBlockJob {
             return null;
         }
         throw new IllegalStateException(
-                "legacy best_block_height runtime is disabled for " + wallet.getCurrency().getName());
+                "legacy scan-height runtime is disabled for " + wallet.getCurrency().getName());
     }
 
     /**
@@ -189,7 +189,7 @@ abstract public class AbstractScanBlockJob {
             return true;
         }
         throw new IllegalStateException(
-                "legacy best_block_height runtime is disabled for " + wallet.getCurrency().getName());
+                "legacy scan-height runtime is disabled for " + wallet.getCurrency().getName());
     }
 
     private boolean isDatabaseDrivenUtxo(RuntimeAsset currency) {

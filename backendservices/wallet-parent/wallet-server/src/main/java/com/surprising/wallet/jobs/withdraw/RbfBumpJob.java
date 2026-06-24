@@ -110,7 +110,7 @@ public class RbfBumpJob {
         }
         log.info("RBF: {} 个UTXO 使用统一表保持锁定", utxos.size());
 
-        // 4. 订单继续保持 SIGNING；不回写 legacy withdraw_record。
+        // 4. 订单继续保持 SIGNING；不回写旧提现表。
         List<WithdrawRecord> records = sigJson.getJSONArray("withdraw")
                 .toJavaList(WithdrawRecord.class);
         for (WithdrawRecord record : records) {

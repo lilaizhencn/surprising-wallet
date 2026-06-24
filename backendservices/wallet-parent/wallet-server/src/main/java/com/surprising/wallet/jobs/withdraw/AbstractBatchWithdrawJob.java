@@ -2,7 +2,6 @@ package com.surprising.wallet.jobs.withdraw;
 
 import com.alibaba.fastjson.JSONObject;
 import com.google.common.collect.Sets;
-import com.surprising.common.mybatis.pager.PageInfo;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
@@ -103,18 +102,14 @@ abstract public class AbstractBatchWithdrawJob {
         int feeRate = redisFeeRate == null || redisFeeRate <= 0 ? defaultFeeRate() : redisFeeRate;
         IWallet wallet = walletContext.getWallet(currency);
         long depositConfirmationThreshold = wallet.getDepositConfirmationThreshold();
-        PageInfo pageInfo = new PageInfo();
-        pageInfo.setPageSize(size);
-        pageInfo.setStartIndex(0);
-        pageInfo.setSortItem("id");
-        pageInfo.setSortType(PageInfo.SORT_TYPE_ASC);
+        int offset = 0;
 
         //选取utxo
         LinkedList<UtxoTransaction> utxos = new LinkedList<>();
         BigDecimal walletAmount = BigDecimal.ZERO;
         while (true) {
             List<UtxoTransaction> tmps = listCandidateUtxos(
-                    depositConfirmationThreshold, pageInfo);
+                    depositConfirmationThreshold, size, offset);
             if (CollectionUtils.isEmpty(tmps)) {
                 log.error("构建交易失败 钱包余额不足");
                 return null;
@@ -126,7 +121,7 @@ abstract public class AbstractBatchWithdrawJob {
             if (walletAmount.compareTo(requiredAmount(totalAmount, withdrawAmount, utxos.size(), records.size(), feeRate)) > 0) {
                 break;
             }
-            pageInfo.setStartIndex(pageInfo.getStartIndex() + size);
+            offset += size;
         }
         //反向过滤一遍，或许后续加入的utxo金额较大，能减少使用的utxo数量
         Iterator<UtxoTransaction> descendingIterator = utxos.descendingIterator();
@@ -227,10 +222,11 @@ abstract public class AbstractBatchWithdrawJob {
     }
 
     private List<UtxoTransaction> listCandidateUtxos(long depositConfirmationThreshold,
-                                                     PageInfo pageInfo) {
+                                                     int limit,
+                                                     int offset) {
         String chain = currency.getName().toUpperCase(Locale.ROOT);
         return chainJdbcRepository.listSpendableUtxos(
-                chain, chain, depositConfirmationThreshold, pageInfo.getPageSize(), pageInfo.getStartIndex());
+                chain, chain, depositConfirmationThreshold, limit, offset);
     }
 
     private WithdrawRecord toWithdrawRecord(WithdrawalOrderRecord order, RuntimeAsset currency) {

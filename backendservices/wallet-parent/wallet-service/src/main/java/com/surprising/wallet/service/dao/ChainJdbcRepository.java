@@ -237,6 +237,32 @@ public class ChainJdbcRepository {
                 nonceRecord.getReservedNonce(), nonceRecord.getStatus(), toTs(now()), toTs(now()));
     }
 
+    @Transactional(rollbackFor = Throwable.class)
+    public long reserveEvmNonce(String chain, String address, long chainNonce) {
+        jdbcTemplate.update("""
+                        insert into evm_nonce(chain, address, chain_nonce, reserved_nonce, status, created_at, updated_at)
+                        values (?, ?, ?, ?, 'ACTIVE', ?, ?)
+                        on conflict (chain, address) do nothing
+                        """,
+                chain, address, chainNonce, chainNonce, toTs(now()), toTs(now()));
+        Long next = jdbcTemplate.queryForObject("""
+                        select reserved_nonce from evm_nonce
+                        where chain = ? and address = ?
+                        for update
+                        """, Long.class, chain, address);
+        long reserved = Math.max(chainNonce, next == null ? chainNonce : next);
+        jdbcTemplate.update("""
+                        update evm_nonce
+                        set chain_nonce = greatest(chain_nonce, ?),
+                            reserved_nonce = ?,
+                            status = 'ACTIVE',
+                            updated_at = ?
+                        where chain = ? and address = ?
+                        """,
+                chainNonce, reserved + 1, toTs(now()), chain, address);
+        return reserved;
+    }
+
     public int recordEvmTransaction(EvmTransactionRecord tx) {
         return jdbcTemplate.update("""
                 insert into evm_tx(chain, tx_hash, from_address, to_address, asset_symbol, contract_address,
@@ -359,6 +385,17 @@ public class ChainJdbcRepository {
                         where chain = ? and address = ? and enabled = true
                         """,
                 (rs, rowNum) -> mapChainAddress(rs), chain, address);
+        return results.stream().findFirst();
+    }
+
+    public Optional<ChainAddressRecord> findChainAddressByAddress(String chain, String assetSymbol, String address) {
+        List<ChainAddressRecord> results = jdbcTemplate.query("""
+                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                               owner_address, derivation_path, wallet_role, enabled
+                        from chain_address
+                        where chain = ? and asset_symbol = ? and address = ? and enabled = true
+                        """,
+                (rs, rowNum) -> mapChainAddress(rs), chain, assetSymbol, address);
         return results.stream().findFirst();
     }
 
