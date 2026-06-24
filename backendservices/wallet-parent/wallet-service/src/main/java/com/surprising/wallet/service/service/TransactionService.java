@@ -14,6 +14,7 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.service.AddressService;
 import com.surprising.wallet.service.criteria.WithdrawRecordExample;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.wallet.IWallet;
 import com.surprising.wallet.service.wallet.WalletContext;
@@ -28,7 +29,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 import static com.surprising.wallet.common.utils.Constants.WALLET_DEPOSIT_KEY;
 
@@ -58,6 +58,8 @@ public class TransactionService {
 
     @Autowired
     ChainJdbcRepository chainJdbcRepository;
+    @Autowired
+    AssetRoutingService assetRoutingService;
 
     /**
      * 充值，把充值交易推送到各自的业务线队列
@@ -370,14 +372,11 @@ public class TransactionService {
     }
 
     private boolean isUnifiedBitcoinLike(CurrencyEnum currency) {
-        return currency == CurrencyEnum.BTC
-                || currency == CurrencyEnum.LTC
-                || currency == CurrencyEnum.DOGE
-                || currency == CurrencyEnum.BCH;
+        return assetRoutingService.isBitcoinLikeRuntimeCurrency(currency);
     }
 
     private String chainName(CurrencyEnum currency) {
-        return currency.getName().toUpperCase(Locale.ROOT);
+        return assetRoutingService.requireChainForRuntimeCurrencyId(currency.getIndex());
     }
 
     private static class UtxoKey {

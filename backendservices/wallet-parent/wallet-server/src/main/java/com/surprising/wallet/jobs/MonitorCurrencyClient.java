@@ -1,9 +1,8 @@
 package com.surprising.wallet.web.task;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.currency.CurrencyEnum;
-import com.surprising.wallet.common.pojo.BestBlockHeight;
-import com.surprising.wallet.service.service.BestBlockHeightService;
+import com.surprising.wallet.common.chain.ChainScanHeightRecord;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -17,32 +16,36 @@ import java.util.List;
 @Slf4j
 public class MonitorCurrencyClient {
 
-    private final BestBlockHeightService blockHeightService;
+    private final ChainJdbcRepository chainJdbcRepository;
 
     @Value("${atomex.warning.contacts}")
     private String[] contacts;
 
-    public MonitorCurrencyClient(BestBlockHeightService blockHeightService) {
-        this.blockHeightService = blockHeightService;
+    @Value("${atomex.warning.scan-stale-ms:300000}")
+    private long scanStaleMs;
+
+    public MonitorCurrencyClient(ChainJdbcRepository chainJdbcRepository) {
+        this.chainJdbcRepository = chainJdbcRepository;
     }
 
     //    @Scheduled(fixedDelay = 5 * 60 * 1000)
     public void currencyClientMonitor() {
         log.info("检查区块更新状态开始");
         try {
-            List<BestBlockHeight> heightList = blockHeightService.getAll();
-            heightList.forEach((blockHeight) -> {
-                Long interval = blockHeight.getIntervalTime();
-                if (interval < 0) {
+            List<ChainScanHeightRecord> heightList = chainJdbcRepository.listActiveScanHeights();
+            heightList.forEach((scanHeight) -> {
+                if (scanHeight.getUpdatedAt() == null) {
                     return;
                 }
-                Long lastUpdateTime = blockHeight.getUpdateDate().getTime();
-                Long now = System.currentTimeMillis();
-                if (lastUpdateTime + blockHeight.getIntervalTime() < now) {
+                long lastUpdateTime = scanHeight.getUpdatedAt().toEpochMilli();
+                long now = System.currentTimeMillis();
+                if (lastUpdateTime + scanStaleMs < now) {
                     JSONObject params = new JSONObject();
-                    CurrencyEnum currency = CurrencyEnum.parseValue(blockHeight.getCurrency());
-                    params.put("currency", currency.getName());
-                    params.put("updateTime", blockHeight.getUpdateDate().toString());
+                    params.put("chain", scanHeight.getChain());
+                    params.put("scannerName", scanHeight.getScannerName());
+                    params.put("bestHeight", scanHeight.getBestHeight());
+                    params.put("safeHeight", scanHeight.getSafeHeight());
+                    params.put("updateTime", scanHeight.getUpdatedAt().toString());
                     //给接收人发消息 可以使用钉钉机器人 或者邮件
                     for (String contact : contacts) {
 

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 
 @Repository
+@Deprecated
 public interface UserAssetRepository {
 
     @Select("SELECT * FROM user_asset WHERE user_id = #{userId} AND currency = #{currency}")

@@ -7,6 +7,7 @@ import com.surprising.wallet.common.currency.CurrencyEnum;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.criteria.AddressExample;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.AddressRepository;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
@@ -17,7 +18,6 @@ import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -36,6 +36,8 @@ public class AddressServiceImpl
     private AddressRepository addressRepos;
     @Autowired
     private ChainJdbcRepository chainJdbcRepository;
+    @Autowired
+    private AssetRoutingService assetRoutingService;
 
     @Override
     protected AddressExample getPageExample(String fieldName, String keyword) {
@@ -59,11 +61,11 @@ public class AddressServiceImpl
             return null;
         }
         CurrencyEnum parsedCurrency = CurrencyEnum.parseName(table.getPrefix());
-        final CurrencyEnum currency = CurrencyEnum.toMainCurrency(parsedCurrency);
+        final CurrencyEnum currency = assetRoutingService.legacyMainCurrency(parsedCurrency);
         table = ShardTable.builder().prefix(currency.getName()).build();
 
         if (isUnifiedBitcoinLike(currency)) {
-            String chain = currency.getName().toUpperCase(Locale.ROOT);
+            String chain = assetRoutingService.requireChainForRuntimeCurrencyId(currency.getIndex());
             return chainJdbcRepository.findChainAddressByAddress(chain, addressStr)
                     .map(record -> toAddress(record, currency))
                     .orElse(null);
@@ -97,10 +99,7 @@ public class AddressServiceImpl
     }
 
     private boolean isUnifiedBitcoinLike(CurrencyEnum currency) {
-        return currency == CurrencyEnum.BTC
-                || currency == CurrencyEnum.LTC
-                || currency == CurrencyEnum.DOGE
-                || currency == CurrencyEnum.BCH;
+        return assetRoutingService.isBitcoinLikeRuntimeCurrency(currency);
     }
 
     @Override

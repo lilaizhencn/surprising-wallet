@@ -4,6 +4,11 @@ import com.surprising.wallet.common.pojo.UserAsset;
 
 import java.math.BigDecimal;
 
+/**
+ * Legacy user_asset mirror for compatibility with external APIs and old
+ * notification consumers. Runtime balance source of truth is ledger_balance.
+ */
+@Deprecated
 public interface UserAssetService {
 
     UserAsset getOrCreate(Long userId, Integer currency);

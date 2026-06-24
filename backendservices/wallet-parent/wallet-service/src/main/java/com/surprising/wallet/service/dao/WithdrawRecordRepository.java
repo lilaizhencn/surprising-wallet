@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
  * @date 2018-04-02
  */
 @Repository
+@Deprecated
 public interface WithdrawRecordRepository
         extends CrudRepository<WithdrawRecord, WithdrawRecordExample, Integer> {
 }

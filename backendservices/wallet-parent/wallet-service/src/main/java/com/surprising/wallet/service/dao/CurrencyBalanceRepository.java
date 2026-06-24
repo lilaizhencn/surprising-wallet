@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
  * @date 2018-04-26
  */
 @Repository
+@Deprecated
 public interface CurrencyBalanceRepository
         extends CrudRepository<CurrencyBalance, CurrencyBalanceExample, Integer> {
 }

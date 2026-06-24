@@ -8,6 +8,7 @@ import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.criteria.CurrencyBalanceExample;
 import com.surprising.wallet.service.criteria.WithdrawRecordExample;
 import com.surprising.wallet.service.criteria.WithdrawTransactionExample;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.service.*;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -30,6 +31,8 @@ abstract public class AbstractWallet implements IWallet {
 
     @Autowired
     protected CurrencyBalanceService balanceService;
+    @Autowired(required = false)
+    protected AssetRoutingService assetRoutingService;
 
     @Autowired
     protected ApplicationContext applicationContext;
@@ -50,6 +53,10 @@ abstract public class AbstractWallet implements IWallet {
     protected TransactionService transactionService;
 
     protected void updateTotalCurrencyBalance(CurrencyEnum currency, BigDecimal balance) {
+        if (isLedgerBackedRuntime(currency)) {
+            log.info("skip legacy currency_balance write for DB asset runtime currency={}", currency.getIndex());
+            return;
+        }
         CurrencyBalanceExample example = new CurrencyBalanceExample();
         example.createCriteria().andCurrencyIndexEqualTo(currency.getIndex());
         Optional<CurrencyBalance> oneByExample = balanceService.getOneByExample(example);
@@ -76,6 +83,10 @@ abstract public class AbstractWallet implements IWallet {
      * @param deltaBalance
      */
     protected void updateCurrencyDeltaBalance(CurrencyEnum currency, BigDecimal deltaBalance) {
+        if (isLedgerBackedRuntime(currency)) {
+            log.info("skip legacy currency_balance delta write for DB asset runtime currency={}", currency.getIndex());
+            return;
+        }
         CurrencyBalanceExample example = new CurrencyBalanceExample();
         example.createCriteria().andCurrencyIndexEqualTo(currency.getIndex());
         Optional<CurrencyBalance> oneByExample = balanceService.getOneByExample(example);
@@ -106,6 +117,12 @@ abstract public class AbstractWallet implements IWallet {
 
     protected boolean shouldUpdateTotalBalance() {
         return true;
+    }
+
+    protected boolean isLedgerBackedRuntime(CurrencyEnum currency) {
+        return assetRoutingService != null
+                && currency != null
+                && assetRoutingService.hasRuntimeProfile(currency.getIndex());
     }
 
     public TransactionDTO convertUtxoToDto(UtxoTransaction utxo) {

@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 
 @Slf4j
 @Service
+@Deprecated
 public class UserAssetServiceImpl implements UserAssetService {
 
     @Autowired

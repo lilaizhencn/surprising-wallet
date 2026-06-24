@@ -7,6 +7,7 @@ import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.criteria.WithdrawRecordExample;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.UserAssetService;
 import com.surprising.wallet.service.service.WithdrawRecordService;
@@ -25,26 +26,26 @@ import java.util.List;
 @Service
 public class BitcoinLikeSettlementService {
     private final ChainJdbcRepository chainRepository;
+    private final AssetRoutingService assetRoutingService;
     private final UserAssetService userAssetService;
     private final WithdrawRecordService recordService;
 
     public BitcoinLikeSettlementService(ChainJdbcRepository chainRepository,
+                                        AssetRoutingService assetRoutingService,
                                         UserAssetService userAssetService,
                                         WithdrawRecordService recordService) {
         this.chainRepository = chainRepository;
+        this.assetRoutingService = assetRoutingService;
         this.userAssetService = userAssetService;
         this.recordService = recordService;
     }
 
     @Transactional(rollbackFor = Throwable.class)
     public void settleConfirmed(WithdrawTransaction transaction, String txId, CurrencyEnum currency) {
-        if (currency != CurrencyEnum.BTC
-                && currency != CurrencyEnum.LTC
-                && currency != CurrencyEnum.DOGE
-                && currency != CurrencyEnum.BCH) {
+        if (!assetRoutingService.isBitcoinLikeRuntimeCurrency(currency)) {
             throw new IllegalArgumentException("unsupported unified UTXO currency " + currency);
         }
-        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
+        String chain = assetRoutingService.requireChainForRuntimeCurrencyId(currency.getIndex());
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
 

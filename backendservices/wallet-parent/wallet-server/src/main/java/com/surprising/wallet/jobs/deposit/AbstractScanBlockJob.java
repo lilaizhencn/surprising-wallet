@@ -4,6 +4,7 @@ import com.surprising.wallet.common.currency.CurrencyEnum;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.BestBlockHeight;
 import com.surprising.wallet.service.criteria.BestBlockHeightExample;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.BestBlockHeightService;
 import com.surprising.wallet.service.service.TransactionService;
@@ -31,6 +32,8 @@ abstract public class AbstractScanBlockJob {
     BestBlockHeightService bestHeightService;
     @Autowired
     ChainJdbcRepository chainJdbcRepository;
+    @Autowired
+    AssetRoutingService assetRoutingService;
 
     @Value("${atomex.app.env.name}")
     private String env;
@@ -143,22 +146,42 @@ abstract public class AbstractScanBlockJob {
     protected void updateStoreHeight(Long bestHeight, BestBlockHeight storedHeight) {
         storedHeight.setHeight(bestHeight);
         storedHeight.setUpdateDate(Date.from(Instant.now()));
-        bestHeightService.editById(storedHeight);
         if (isDatabaseDrivenUtxo(wallet.getCurrency())) {
-            String chain = wallet.getCurrency().getName().toUpperCase(java.util.Locale.ROOT);
+            String chain = chainName(wallet.getCurrency());
             long safeHeight = Math.max(
                     0L, bestHeight - wallet.getDepositConfirmationThreshold());
             chainJdbcRepository.updateScanHeight(
-                    chain, wallet.getCurrency().getName() + "-block-scanner", bestHeight, safeHeight);
+                    chain, scannerName(wallet.getCurrency()), bestHeight, safeHeight);
+            return;
         }
+        bestHeightService.editById(storedHeight);
     }
 
     /**
      * 查询数据库中已经扫描到的高度
      */
     protected BestBlockHeight getDbBestBlockHeight() {
+        if (isDatabaseDrivenUtxo(wallet.getCurrency())) {
+            CurrencyEnum currency = wallet.getCurrency();
+            String chain = chainName(currency);
+            Optional<Long> scanHeight =
+                    chainJdbcRepository.findScanSafeHeight(chain, scannerName(currency));
+            if (scanHeight.isPresent()) {
+                return checkpoint(currency, scanHeight.get());
+            }
+            BestBlockHeight legacyHeight = getLegacyDbBestBlockHeight(currency);
+            if (legacyHeight != null && legacyHeight.getHeight() != null) {
+                chainJdbcRepository.updateScanHeight(
+                        chain, scannerName(currency), legacyHeight.getHeight(), legacyHeight.getHeight());
+            }
+            return legacyHeight;
+        }
+        return getLegacyDbBestBlockHeight(wallet.getCurrency());
+    }
+
+    private BestBlockHeight getLegacyDbBestBlockHeight(CurrencyEnum currency) {
         BestBlockHeightExample example = new BestBlockHeightExample();
-        example.createCriteria().andCurrencyEqualTo(wallet.getCurrency().getIndex());
+        example.createCriteria().andCurrencyEqualTo(currency.getIndex());
         Optional<BestBlockHeight> oneByExample = bestHeightService.getOneByExample(example);
         return oneByExample.orElse(null);
     }
@@ -173,6 +196,12 @@ abstract public class AbstractScanBlockJob {
         }
         storedHeight.setHeight(initialHeight);
         storedHeight.setCurrency(wallet.getCurrency().getIndex());
+        if (isDatabaseDrivenUtxo(wallet.getCurrency())) {
+            chainJdbcRepository.updateScanHeight(
+                    chainName(wallet.getCurrency()), scannerName(wallet.getCurrency()),
+                    initialHeight, initialHeight);
+            return true;
+        }
         int insertFlag = bestHeightService.add(storedHeight);
         if (insertFlag < 1) {
             log.error("init best block height fail, currency:{}", wallet.getCurrency().getName());
@@ -182,9 +211,22 @@ abstract public class AbstractScanBlockJob {
     }
 
     private boolean isDatabaseDrivenUtxo(CurrencyEnum currency) {
-        return currency == CurrencyEnum.BTC
-                || currency == CurrencyEnum.LTC
-                || currency == CurrencyEnum.DOGE
-                || currency == CurrencyEnum.BCH;
+        return assetRoutingService.isBitcoinLikeRuntimeCurrency(currency);
+    }
+
+    private String chainName(CurrencyEnum currency) {
+        return assetRoutingService.requireChainForRuntimeCurrencyId(currency.getIndex());
+    }
+
+    private String scannerName(CurrencyEnum currency) {
+        return assetRoutingService.scannerName(currency.getIndex());
+    }
+
+    private BestBlockHeight checkpoint(CurrencyEnum currency, Long height) {
+        BestBlockHeight checkpoint = new BestBlockHeight();
+        checkpoint.setCurrency(currency.getIndex());
+        checkpoint.setHeight(height);
+        checkpoint.setUpdateDate(Date.from(Instant.now()));
+        return checkpoint;
     }
 }

@@ -11,6 +11,7 @@ import com.surprising.wallet.common.dto.AddressDto;
 import com.surprising.wallet.common.pojo.*;
 import com.surprising.wallet.service.criteria.AddressExample;
 import com.surprising.wallet.service.criteria.CurrencyBalanceExample;
+import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
 import com.surprising.wallet.service.service.CurrencyBalanceService;
@@ -37,6 +38,7 @@ public class WalletController {
     private final CurrencyBalanceService balanceService;
     private final AddressService addressService;
     private final ChainJdbcRepository chainJdbcRepository;
+    private final AssetRoutingService assetRoutingService;
 
     @Value("${atomex.wallet.pubKey1}")
     private String pubKey1;
@@ -47,11 +49,13 @@ public class WalletController {
 
     public WalletController(WalletContext context, CurrencyBalanceService balanceService,
                             AddressService addressService,
-                            ChainJdbcRepository chainJdbcRepository) {
+                            ChainJdbcRepository chainJdbcRepository,
+                            AssetRoutingService assetRoutingService) {
         this.context = context;
         this.balanceService = balanceService;
         this.addressService = addressService;
         this.chainJdbcRepository = chainJdbcRepository;
+        this.assetRoutingService = assetRoutingService;
     }
 
     @PostMapping("/address")
@@ -62,7 +66,7 @@ public class WalletController {
         try {
             CurrencyEnum coin = CurrencyEnum.parseValue(currency);
             BizEnum.parseBiz(biz);
-            coin = CurrencyEnum.toMainCurrency(coin);
+            coin = assetRoutingService.legacyMainCurrency(coin);
             IWallet wallet = context.getWallet(coin);
 
             Address address = wallet.genNewAddress(userId, biz);
@@ -108,6 +112,12 @@ public class WalletController {
         JSONObject json = new JSONObject();
         try {
             CurrencyEnum coin = CurrencyEnum.parseValue(currency);
+            if (assetRoutingService.hasRuntimeProfile(coin.getIndex())) {
+                String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
+                String symbol = assetRoutingService.requireNativeSymbolForRuntimeCurrencyId(coin.getIndex());
+                json.put("balance", chainJdbcRepository.sumLedgerTotalBalance(chain, symbol));
+                return ResultUtils.success(json);
+            }
             CurrencyBalanceExample example = new CurrencyBalanceExample();
             example.createCriteria().andCurrencyIndexEqualTo(coin.getIndex());
             CurrencyBalance balance = balanceService.getOneByExample(example).get();
@@ -189,12 +199,12 @@ public class WalletController {
         Map<String, Object> result = new HashMap<>();
         try {
             CurrencyEnum coin = CurrencyEnum.parseValue(currency);
-            coin = CurrencyEnum.toMainCurrency(coin);
+            coin = assetRoutingService.legacyMainCurrency(coin);
 
             // Hot wallet address at userId=0, biz=0, index=0
             if (isUnifiedBitcoinLike(coin)) {
                 CurrencyEnum finalCoin = coin;
-                String chain = coin.getName().toUpperCase(Locale.ROOT);
+                String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
                 chainJdbcRepository.findChainAddress(chain, chain, 0L, 0, 0L, "DEPOSIT")
                         .ifPresent(addr -> {
                             result.put("address", addr.getAddress());
@@ -247,9 +257,9 @@ public class WalletController {
             @RequestParam(value = "biz", required = false) Integer biz) {
         try {
             CurrencyEnum coin = currency != null ? CurrencyEnum.parseValue(currency) : CurrencyEnum.BTC;
-            coin = CurrencyEnum.toMainCurrency(coin);
+            coin = assetRoutingService.legacyMainCurrency(coin);
             if (isUnifiedBitcoinLike(coin)) {
-                String chain = coin.getName().toUpperCase(Locale.ROOT);
+                String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
                 List<AddressDto> dtos = chainJdbcRepository.listChainAddresses(chain, chain).stream()
                         .filter(record -> record.getUserId() != null && record.getUserId() > 0)
                         .filter(record -> userId == null || Objects.equals(record.getUserId(), userId))
@@ -304,7 +314,7 @@ public class WalletController {
         try {
             CurrencyEnum coin = CurrencyEnum.parseValue(currency);
             if (isUnifiedBitcoinLike(coin)) {
-                String chain = coin.getName().toUpperCase(Locale.ROOT);
+                String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
                 return ResultUtils.success(chainJdbcRepository.listUtxosByAddress(chain, address, 50));
             }
             return ResultUtils.failure("仅支持BTC/LTC/DOGE/BCH UTXO交易查询");
@@ -315,10 +325,7 @@ public class WalletController {
     }
 
     private boolean isUnifiedBitcoinLike(CurrencyEnum currency) {
-        return currency == CurrencyEnum.BTC
-                || currency == CurrencyEnum.LTC
-                || currency == CurrencyEnum.DOGE
-                || currency == CurrencyEnum.BCH;
+        return assetRoutingService.isBitcoinLikeRuntimeCurrency(currency);
     }
 
     private AddressDto toAddressDto(ChainAddressRecord record) {

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
  * @date 2018-05-02
  */
 @Repository
+@Deprecated
 public interface BestBlockHeightRepository
         extends CrudRepository<BestBlockHeight, BestBlockHeightExample, Integer> {
 }

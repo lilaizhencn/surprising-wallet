@@ -8,6 +8,7 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.EvmNonceRecord;
 import com.surprising.wallet.common.chain.EvmTransactionRecord;
+import com.surprising.wallet.common.chain.ChainScanHeightRecord;
 import com.surprising.wallet.common.chain.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TronTransactionRecord;
@@ -109,6 +110,64 @@ public class ChainJdbcRepository {
                         .build(),
                 chain, network);
         return results.stream().findFirst();
+    }
+
+    public Optional<AccountChainProfile> findProfileByRuntimeCurrencyId(int runtimeCurrencyId) {
+        List<AccountChainProfile> results = jdbcTemplate.query("""
+                        select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+                               rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+                               default_fee_rate, dust_threshold, enabled
+                        from chain_profile
+                        where runtime_currency_id = ? and enabled = true
+                        order by case network
+                            when 'regtest' then 0
+                            when 'testnet' then 1
+                            when 'testnet3' then 1
+                            when 'devnet' then 1
+                            else 2
+                        end
+                        limit 1
+                        """,
+                (rs, rowNum) -> AccountChainProfile.builder()
+                        .chain(rs.getString("chain"))
+                        .network(rs.getString("network"))
+                        .family(rs.getString("family"))
+                        .runtimeCurrencyId(rs.getInt("runtime_currency_id"))
+                        .bip44CoinType(rs.getInt("bip44_coin_type"))
+                        .nativeSymbol(rs.getString("native_symbol"))
+                        .rpcUrl(rs.getString("rpc_url"))
+                        .explorerUrl(rs.getString("explorer_url"))
+                        .depositConfirmations(rs.getInt("deposit_confirmations"))
+                        .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
+                        .defaultFee(rs.getObject("default_fee_rate", Long.class))
+                        .dustThreshold(rs.getObject("dust_threshold", Long.class))
+                        .enabled(rs.getBoolean("enabled"))
+                        .build(),
+                runtimeCurrencyId);
+        return results.stream().findFirst();
+    }
+
+    public Optional<String> findChainByRuntimeCurrencyId(int runtimeCurrencyId) {
+        List<String> results = jdbcTemplate.queryForList("""
+                        select distinct chain
+                        from chain_profile
+                        where runtime_currency_id = ? and enabled = true
+                        order by chain
+                        limit 1
+                        """, String.class, runtimeCurrencyId);
+        return results.stream().findFirst();
+    }
+
+    public boolean isRuntimeCurrencyFamily(int runtimeCurrencyId, String family) {
+        Boolean exists = jdbcTemplate.queryForObject("""
+                        select exists(
+                            select 1 from chain_profile
+                            where runtime_currency_id = ?
+                              and lower(family) = lower(?)
+                              and enabled = true
+                        )
+                        """, Boolean.class, runtimeCurrencyId, family);
+        return Boolean.TRUE.equals(exists);
     }
 
     public int upsertToken(TokenDefinition token) {
@@ -990,6 +1049,26 @@ public class ChainJdbcRepository {
         return results.stream().findFirst();
     }
 
+    public BigDecimal sumLedgerTotalBalance(String chain, String assetSymbol) {
+        BigDecimal balance = jdbcTemplate.queryForObject("""
+                        select coalesce(sum(total_balance), 0)
+                        from ledger_balance
+                        where chain = ? and asset_symbol = ?
+                        """,
+                BigDecimal.class, chain, assetSymbol);
+        return balance == null ? BigDecimal.ZERO : balance;
+    }
+
+    public BigDecimal sumLedgerAvailableBalance(String chain, String assetSymbol) {
+        BigDecimal balance = jdbcTemplate.queryForObject("""
+                        select coalesce(sum(available_balance), 0)
+                        from ledger_balance
+                        where chain = ? and asset_symbol = ?
+                        """,
+                BigDecimal.class, chain, assetSymbol);
+        return balance == null ? BigDecimal.ZERO : balance;
+    }
+
     public List<WithdrawTransaction> findStaleBitcoinLikeSigningTransactions(
             CurrencyEnum currency, long staleSeconds) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
@@ -1162,6 +1241,23 @@ public class ChainJdbcRepository {
                         where chain = ? and scanner_name = ?
                         """, Long.class, chain, scannerName);
         return results.stream().findFirst();
+    }
+
+    public List<ChainScanHeightRecord> listActiveScanHeights() {
+        return jdbcTemplate.query("""
+                        select chain, scanner_name, best_height, safe_height, status, updated_at
+                        from chain_scan_height
+                        where status = 'ACTIVE'
+                        order by chain, scanner_name
+                        """,
+                (rs, rowNum) -> ChainScanHeightRecord.builder()
+                        .chain(rs.getString("chain"))
+                        .scannerName(rs.getString("scanner_name"))
+                        .bestHeight(rs.getLong("best_height"))
+                        .safeHeight(rs.getLong("safe_height"))
+                        .status(rs.getString("status"))
+                        .updatedAt(toInstant(rs.getTimestamp("updated_at")))
+                        .build());
     }
 
     public Optional<TokenDefinition> findToken(String chain, String symbol) {
