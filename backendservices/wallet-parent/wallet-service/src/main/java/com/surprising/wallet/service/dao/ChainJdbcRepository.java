@@ -14,8 +14,10 @@ import com.surprising.wallet.common.chain.TronTransactionRecord;
 import com.surprising.wallet.common.chain.SolanaTransactionRecord;
 import com.surprising.wallet.common.chain.TonTransactionRecord;
 import com.surprising.wallet.common.chain.SuiTransactionRecord;
+import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.utils.Constants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -550,6 +552,98 @@ public class ChainJdbcRepository {
                         where chain = ? and tx_hash = ? and vout = ?
                         """,
                 confirmations, toTs(now()), chain, txHash, vout);
+    }
+
+    public List<UtxoTransaction> listSpendableUtxos(String chain, String assetSymbol,
+                                                    long requiredConfirmations,
+                                                    int limit, int offset) {
+        return jdbcTemplate.query("""
+                        select id, tx_hash, vout, address, amount, block_height, confirmations,
+                               credited, created_at, updated_at
+                        from utxo_record
+                        where chain = ?
+                          and asset_symbol = ?
+                          and state = 'AVAILABLE'
+                          and confirmations >= ?
+                        order by id
+                        limit ? offset ?
+                        """,
+                (rs, rowNum) -> mapUtxoRecord(rs, chain),
+                chain, assetSymbol, requiredConfirmations, limit, offset);
+    }
+
+    public List<UtxoTransaction> listAvailableUtxosBelowConfirmations(String chain, String assetSymbol,
+                                                                      long maxConfirmations,
+                                                                      int limit, int offset) {
+        return jdbcTemplate.query("""
+                        select id, tx_hash, vout, address, amount, block_height, confirmations,
+                               credited, created_at, updated_at
+                        from utxo_record
+                        where chain = ?
+                          and asset_symbol = ?
+                          and state = 'AVAILABLE'
+                          and confirmations < ?
+                        order by id
+                        limit ? offset ?
+                        """,
+                (rs, rowNum) -> mapUtxoRecord(rs, chain),
+                chain, assetSymbol, maxConfirmations, limit, offset);
+    }
+
+    public BigDecimal sumAvailableUtxoAmount(String chain, String assetSymbol) {
+        BigDecimal balance = jdbcTemplate.queryForObject("""
+                        select coalesce(sum(amount), 0)
+                        from utxo_record
+                        where chain = ?
+                          and asset_symbol = ?
+                          and state = 'AVAILABLE'
+                        """,
+                BigDecimal.class, chain, assetSymbol);
+        return balance == null ? BigDecimal.ZERO : balance;
+    }
+
+    public List<UtxoTransaction> listUtxosByAddress(String chain, String address, int limit) {
+        return jdbcTemplate.query("""
+                        select id, tx_hash, vout, address, amount, block_height, confirmations,
+                               credited, created_at, updated_at
+                        from utxo_record
+                        where chain = ?
+                          and address = ?
+                        order by id desc
+                        limit ?
+                        """,
+                (rs, rowNum) -> mapUtxoRecord(rs, chain),
+                chain, address, limit);
+    }
+
+    public boolean depositRecordExists(String chain, String txHash, int logIndex) {
+        Boolean exists = jdbcTemplate.queryForObject("""
+                        select exists(
+                            select 1 from deposit_record
+                            where chain = ? and tx_hash = ? and log_index = ?
+                        )
+                        """,
+                Boolean.class, chain, txHash, logIndex);
+        return Boolean.TRUE.equals(exists);
+    }
+
+    private UtxoTransaction mapUtxoRecord(java.sql.ResultSet rs, String chain) throws java.sql.SQLException {
+        return UtxoTransaction.builder()
+                .id(rs.getLong("id"))
+                .txId(rs.getString("tx_hash"))
+                .seq((short) rs.getInt("vout"))
+                .address(rs.getString("address"))
+                .balance(rs.getBigDecimal("amount"))
+                .blockHeight(rs.getLong("block_height"))
+                .confirmNum(rs.getLong("confirmations"))
+                .spent((byte) 0)
+                .spentTxId(Constants.UNSPENT_TX_ID)
+                .currency(CurrencyEnum.parseName(chain).getIndex())
+                .status((byte) Constants.WAITING)
+                .credited(rs.getBoolean("credited"))
+                .createDate(rs.getTimestamp("created_at"))
+                .updateDate(rs.getTimestamp("updated_at"))
+                .build();
     }
 
     public int createWithdrawalOrder(String orderNo, long userId, String chain, String assetSymbol,

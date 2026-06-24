@@ -14,7 +14,6 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.service.AddressService;
 import com.surprising.wallet.service.criteria.WithdrawRecordExample;
-import com.surprising.wallet.service.criteria.UtxoTransactionExample;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.wallet.IWallet;
 import com.surprising.wallet.service.wallet.WalletContext;
@@ -282,19 +281,6 @@ public class TransactionService {
         String lockRef = transaction.getId().toString();
         String chain = chainName(currency);
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        UtxoTransactionExample utxoExample = new UtxoTransactionExample();
-        utxoExample.createCriteria().andSpentTxIdEqualTo(lockRef);
-        List<com.surprising.wallet.common.pojo.UtxoTransaction> utxos =
-                utxoService.getByExample(utxoExample, table);
-        utxos.forEach(utxo -> {
-            utxo.setSpent((byte) 0);
-            utxo.setSpentTxId(Constants.UNSPENT_TX_ID);
-            utxo.setStatus((byte) Constants.WAITING);
-            utxo.setUpdateDate(Date.from(Instant.now()));
-        });
-        if (!utxos.isEmpty()) {
-            utxoService.batchEdit(utxos, table);
-        }
         chainJdbcRepository.releaseUtxos(chain, lockRef);
         transaction.setStatus(Constants.DELETE);
         transaction.setUpdateDate(Date.from(Instant.now()));
@@ -343,7 +329,7 @@ public class TransactionService {
                     dto.getConfirmNum().intValue(),
                     null,
                     null);
-            chainJdbcRepository.recordAndCreditDeposit(
+            boolean credited = chainJdbcRepository.recordAndCreditDeposit(
                     event,
                     utxoKey.seq,
                     Math.toIntExact(requiredConfirmations),
@@ -351,6 +337,12 @@ public class TransactionService {
             if (dto.getConfirmNum() >= requiredConfirmations) {
                 chainJdbcRepository.markUtxoCredited(chain, utxoKey.txId, utxoKey.seq);
             }
+            if (credited) {
+                userAssetService.addBalance(address.getUserId(), currency.getIndex(), dto.getBalance());
+                log.info("统一UTXO充值入账成功 userId:{} currency:{} tx:{} amount:{}",
+                        address.getUserId(), currency.getName(), dto.getTxId(), dto.getBalance());
+            }
+            return;
         }
         int marked = utxoService.markCredited(utxoKey.txId, utxoKey.seq, currency);
         if (marked > 0) {
@@ -374,7 +366,8 @@ public class TransactionService {
     }
 
     private boolean isUnifiedBitcoinLike(CurrencyEnum currency) {
-        return currency == CurrencyEnum.LTC
+        return currency == CurrencyEnum.BTC
+                || currency == CurrencyEnum.LTC
                 || currency == CurrencyEnum.DOGE
                 || currency == CurrencyEnum.BCH;
     }

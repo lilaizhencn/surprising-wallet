@@ -11,6 +11,7 @@ import com.surprising.wallet.common.pojo.*;
 import com.surprising.wallet.service.criteria.AddressExample;
 import com.surprising.wallet.service.criteria.CurrencyBalanceExample;
 import com.surprising.wallet.service.criteria.UtxoTransactionExample;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
 import com.surprising.wallet.service.service.CurrencyBalanceService;
 import com.surprising.wallet.service.service.UtxoTransactionService;
@@ -37,6 +38,7 @@ public class WalletController {
     private final CurrencyBalanceService balanceService;
     private final AddressService addressService;
     private final UtxoTransactionService utxoService;
+    private final ChainJdbcRepository chainJdbcRepository;
 
     @Value("${atomex.wallet.pubKey1}")
     private String pubKey1;
@@ -46,11 +48,13 @@ public class WalletController {
     private String pubKey3;
 
     public WalletController(WalletContext context, CurrencyBalanceService balanceService,
-                            AddressService addressService, UtxoTransactionService utxoService) {
+                            AddressService addressService, UtxoTransactionService utxoService,
+                            ChainJdbcRepository chainJdbcRepository) {
         this.context = context;
         this.balanceService = balanceService;
         this.addressService = addressService;
         this.utxoService = utxoService;
+        this.chainJdbcRepository = chainJdbcRepository;
     }
 
     @PostMapping("/address")
@@ -275,6 +279,10 @@ public class WalletController {
             @RequestParam(value = "currency") Integer currency) {
         try {
             CurrencyEnum coin = CurrencyEnum.parseValue(currency);
+            if (isUnifiedBitcoinLike(coin)) {
+                String chain = coin.getName().toUpperCase(Locale.ROOT);
+                return ResultUtils.success(chainJdbcRepository.listUtxosByAddress(chain, address, 50));
+            }
             ShardTable table = ShardTable.builder().prefix(coin.getName()).build();
 
             UtxoTransactionExample example = new UtxoTransactionExample();
@@ -291,5 +299,12 @@ public class WalletController {
             log.error("getAddressTransactions error address={}", address, e);
             return ResultUtils.failure("获取交易列表失败");
         }
+    }
+
+    private boolean isUnifiedBitcoinLike(CurrencyEnum currency) {
+        return currency == CurrencyEnum.BTC
+                || currency == CurrencyEnum.LTC
+                || currency == CurrencyEnum.DOGE
+                || currency == CurrencyEnum.BCH;
     }
 }

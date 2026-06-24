@@ -14,3 +14,6 @@ target/
 logs/
 log/
 *.log
+
+# Local database backups
+db-backups/

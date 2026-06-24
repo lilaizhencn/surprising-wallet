@@ -1,7 +1,6 @@
 package com.surprising.wallet.jobs.transfer;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.common.mybatis.pager.PageInfo;
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.currency.CurrencyEnum;
@@ -12,9 +11,8 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.service.criteria.AddressExample;
-import com.surprising.wallet.service.criteria.UtxoTransactionExample;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
-import com.surprising.wallet.service.service.UtxoTransactionService;
 import com.surprising.wallet.service.service.WithdrawTransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -29,8 +27,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-import static com.surprising.wallet.common.utils.Constants.UNSPENT_TX_ID;
-
 @Slf4j
 @Component
 public class BtcCollectionJob {
@@ -38,8 +34,8 @@ public class BtcCollectionJob {
     private static final int DEFAULT_FEE_RATE = 10;
 
     private final AddressService addressService;
-    private final UtxoTransactionService utxoService;
     private final WithdrawTransactionService transactionService;
+    private final ChainJdbcRepository chainJdbcRepository;
 
     @Value("${atomex.wallet.collection.enabled-currencies:}")
     private String enabledCurrencies;
@@ -53,11 +49,12 @@ public class BtcCollectionJob {
     @Value("${atomex.wallet.hot.address-index:0}")
     private Integer hotAddressIndex;
 
-    public BtcCollectionJob(AddressService addressService, UtxoTransactionService utxoService,
-                            WithdrawTransactionService transactionService) {
+    public BtcCollectionJob(AddressService addressService,
+                            WithdrawTransactionService transactionService,
+                            ChainJdbcRepository chainJdbcRepository) {
         this.addressService = addressService;
-        this.utxoService = utxoService;
         this.transactionService = transactionService;
+        this.chainJdbcRepository = chainJdbcRepository;
     }
 
     @Scheduled(cron = "15/30 * * * * ?")
@@ -105,8 +102,9 @@ public class BtcCollectionJob {
         Date now = Date.from(Instant.now());
         BigDecimal outputAmount = BigDecimal.valueOf(outputSat).divide(currency.getDecimal());
         BigDecimal feeAmount = BigDecimal.valueOf(feeSat).divide(currency.getDecimal());
+        String collectionId = "btc-collection-" + utxos.get(0).getTxId() + "-" + utxos.get(0).getSeq();
         WithdrawRecord output = WithdrawRecord.builder()
-                .withdrawId("btc-collection-" + now.getTime())
+                .withdrawId(collectionId)
                 .txId("collection")
                 .address(hotAddress.getAddress())
                 .userId(hotUserId)
@@ -121,33 +119,47 @@ public class BtcCollectionJob {
 
         JSONObject signature = new JSONObject();
         signature.put("type", "collection");
-        signature.put("collectionId", output.getWithdrawId());
+        signature.put("collectionId", collectionId);
         signature.put("utxos", utxos);
         signature.put("addresses", inputAddresses);
         signature.put("withdraw", List.of(output));
         signature.put("feeRate", feeRate);
         signature.put("totalAmount", inputAmount.toPlainString());
+        String rawPayload = signature.toJSONString();
+
+        chainJdbcRepository.createCollectionRecord(
+                collectionId,
+                "BTC",
+                "BTC",
+                inputAddresses.get(0).getAddress(),
+                hotAddress.getAddress(),
+                outputAmount,
+                feeAmount,
+                rawPayload);
+        if (chainJdbcRepository.claimCollectionSigning("BTC", collectionId, rawPayload) != 1) {
+            return;
+        }
 
         WithdrawTransaction transaction = WithdrawTransaction.builder()
                 .balance(inputAmount)
                 .currency(currency.getIndex())
                 .status(Constants.SIGNING)
                 .txId("signing")
-                .signature(signature.toJSONString())
+                .signature(rawPayload)
                 .createDate(now)
                 .updateDate(now)
                 .build();
         transactionService.add(transaction, table);
 
         String transactionId = transaction.getId().toString();
-        List<UtxoTransaction> spends = utxos.stream().map(utxo -> UtxoTransaction.builder()
-                .id(utxo.getId())
-                .spent((byte) 1)
-                .spentTxId(transactionId)
-                .status((byte) Constants.SIGNING)
-                .updateDate(now)
-                .build()).toList();
-        utxoService.batchEdit(spends, table);
+        for (UtxoTransaction utxo : utxos) {
+            int locked = chainJdbcRepository.lockUtxo(
+                    "BTC", utxo.getTxId(), utxo.getSeq(), transactionId);
+            if (locked != 1) {
+                throw new IllegalStateException(
+                        "failed to lock unified BTC collection UTXO " + utxo.getTxId() + ":" + utxo.getSeq());
+            }
+        }
 
         REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, JSONObject.toJSONString(transaction));
         log.info("BTC归集交易已创建 id={} inputs={} inputSat={} output={} feeSat={} feeRate={}",
@@ -155,18 +167,8 @@ public class BtcCollectionJob {
     }
 
     private List<UtxoTransaction> findCollectableUtxos(ShardTable table, CurrencyEnum currency) {
-        UtxoTransactionExample example = new UtxoTransactionExample();
-        example.createCriteria()
-                .andStatusEqualTo((byte) Constants.WAITING)
-                .andSpentEqualTo((byte) 0)
-                .andSpentTxIdEqualTo(UNSPENT_TX_ID)
-                .andConfirmNumGreaterThanOrEqualTo(currency.getDepositConfirmNum());
-        PageInfo pageInfo = new PageInfo();
-        pageInfo.setPageSize(PAGE_SIZE);
-        pageInfo.setStartIndex(0);
-        pageInfo.setSortItem("id");
-        pageInfo.setSortType(PageInfo.SORT_TYPE_ASC);
-        List<UtxoTransaction> candidates = utxoService.getByPage(pageInfo, example, table);
+        List<UtxoTransaction> candidates = chainJdbcRepository.listSpendableUtxos(
+                "BTC", "BTC", currency.getDepositConfirmNum(), PAGE_SIZE, 0);
         if (CollectionUtils.isEmpty(candidates)) {
             return candidates;
         }

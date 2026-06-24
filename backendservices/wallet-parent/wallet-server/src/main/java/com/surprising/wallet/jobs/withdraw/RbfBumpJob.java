@@ -9,9 +9,7 @@ import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.service.criteria.UtxoTransactionExample;
-import com.surprising.wallet.service.criteria.WithdrawRecordExample;
-import com.surprising.wallet.service.service.UtxoTransactionService;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.WithdrawRecordService;
 import com.surprising.wallet.service.service.WithdrawTransactionService;
 import lombok.extern.slf4j.Slf4j;
@@ -62,7 +60,7 @@ public class RbfBumpJob {
     private WithdrawTransactionService txService;
 
     @Autowired
-    private UtxoTransactionService utxoService;
+    private ChainJdbcRepository chainJdbcRepository;
 
     @Autowired
     private WithdrawRecordService recordService;
@@ -114,18 +112,12 @@ public class RbfBumpJob {
         List<UtxoTransaction> utxos = sigJson.getJSONArray("utxos")
                 .toJavaList(UtxoTransaction.class);
 
-        // 3. 将 UTXO 标记回未花费
+        // 3. 统一 UTXO 运行时不再回写 legacy UTXO 表；RBF 继续复用同一组输入，
+        //    并确保它们仍由当前 withdraw_transaction id 持有锁。
         for (UtxoTransaction utxo : utxos) {
-            UtxoTransaction update = UtxoTransaction.builder()
-                    .id(utxo.getId())
-                    .spent((byte) 0)
-                    .spentTxId(Constants.UNSPENT_TX_ID)
-                    .status((byte) Constants.WAITING)
-                    .updateDate(Date.from(Instant.now()))
-                    .build();
-            utxoService.editById(update, table);
+            chainJdbcRepository.lockUtxo("BTC", utxo.getTxId(), utxo.getSeq(), String.valueOf(txId));
         }
-        log.info("RBF: {} 个UTXO 标记回未花费", utxos.size());
+        log.info("RBF: {} 个UTXO 使用统一表保持锁定", utxos.size());
 
         // 4. 重置 withdraw_record 状态
         List<WithdrawRecord> records = sigJson.getJSONArray("withdraw")

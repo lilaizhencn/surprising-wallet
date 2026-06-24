@@ -120,6 +120,7 @@ abstract public class AbstractBatchWithdrawJob {
         IWallet wallet = walletContext.getWallet(currency);
         long depositConfirmationThreshold = wallet.getDepositConfirmationThreshold();
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
+        boolean unifiedUtxo = isUnifiedBitcoinLike(currency);
         UtxoTransactionExample example = new UtxoTransactionExample();
         example.createCriteria()
                 .andStatusEqualTo((byte) Constants.WAITING)
@@ -134,7 +135,8 @@ abstract public class AbstractBatchWithdrawJob {
         LinkedList<UtxoTransaction> utxos = new LinkedList<>();
         BigDecimal walletAmount = BigDecimal.ZERO;
         while (true) {
-            List<UtxoTransaction> tmps = utxoService.getByPage(pageInfo, example, table);
+            List<UtxoTransaction> tmps = listCandidateUtxos(
+                    unifiedUtxo, depositConfirmationThreshold, pageInfo, example, table);
             if (CollectionUtils.isEmpty(tmps)) {
                 log.error("构建交易失败 钱包余额不足");
                 return null;
@@ -189,7 +191,7 @@ abstract public class AbstractBatchWithdrawJob {
 
         String transactionId = transaction.getId().toString();
 
-        if (currency == LTC || currency == DOGE || currency == BCH) {
+        if (unifiedUtxo) {
             String chain = currency.getName().toUpperCase(Locale.ROOT);
             for (UtxoTransaction utxo : utxos) {
                 int locked = chainJdbcRepository.lockUtxo(
@@ -209,15 +211,17 @@ abstract public class AbstractBatchWithdrawJob {
             });
         }
 
-        //更新utxo和WithdrawRecord的status
-        List<UtxoTransaction> spends = utxos.parallelStream().map((utxo) -> UtxoTransaction.builder()
-                .id(utxo.getId())
-                .spentTxId(transactionId)
-                .spent((byte) 1)
-                .status((byte) Constants.SIGNING)
-                .updateDate(Date.from(Instant.now()))
-                .build()).collect(Collectors.toList());
-        utxoService.batchEdit(spends, table);
+        if (!unifiedUtxo) {
+            //更新 legacy UTXO 和 WithdrawRecord 的 status。BTC-like 新运行时不再写 legacy UTXO 表。
+            List<UtxoTransaction> spends = utxos.parallelStream().map((utxo) -> UtxoTransaction.builder()
+                    .id(utxo.getId())
+                    .spentTxId(transactionId)
+                    .spent((byte) 1)
+                    .status((byte) Constants.SIGNING)
+                    .updateDate(Date.from(Instant.now()))
+                    .build()).collect(Collectors.toList());
+            utxoService.batchEdit(spends, table);
+        }
 
         records.parallelStream().forEach((record) -> {
             record.setStatus((byte) Constants.SIGNING);
@@ -246,5 +250,22 @@ abstract public class AbstractBatchWithdrawJob {
 
     protected long estimateNetworkFeeAtomic(int inputCount, int outputCount, int feeRate) {
         return P2wshFeeCalculator.calculateFeeSat(inputCount, outputCount, feeRate);
+    }
+
+    private List<UtxoTransaction> listCandidateUtxos(boolean unifiedUtxo,
+                                                     long depositConfirmationThreshold,
+                                                     PageInfo pageInfo,
+                                                     UtxoTransactionExample example,
+                                                     ShardTable table) {
+        if (!unifiedUtxo) {
+            return utxoService.getByPage(pageInfo, example, table);
+        }
+        String chain = currency.getName().toUpperCase(Locale.ROOT);
+        return chainJdbcRepository.listSpendableUtxos(
+                chain, chain, depositConfirmationThreshold, pageInfo.getPageSize(), pageInfo.getStartIndex());
+    }
+
+    private boolean isUnifiedBitcoinLike(CurrencyEnum currency) {
+        return currency == BTC || currency == LTC || currency == DOGE || currency == BCH;
     }
 }

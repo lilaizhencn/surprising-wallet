@@ -1,7 +1,6 @@
 package com.surprising.wallet.jobs.transfer;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.common.mybatis.pager.PageInfo;
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.currency.CurrencyEnum;
@@ -13,10 +12,8 @@ import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2shMultisigFeeCalculator;
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinFeePolicy;
 import com.surprising.wallet.service.criteria.AddressExample;
-import com.surprising.wallet.service.criteria.UtxoTransactionExample;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
-import com.surprising.wallet.service.service.UtxoTransactionService;
 import com.surprising.wallet.service.service.WithdrawTransactionService;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,8 +27,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-import static com.surprising.wallet.common.utils.Constants.UNSPENT_TX_ID;
-
 /**
  * Dogecoin legacy P2SH UTXO collection.
  */
@@ -40,7 +35,6 @@ public class DogeCollectionJob {
     private static final int PAGE_SIZE = 10;
 
     private final AddressService addressService;
-    private final UtxoTransactionService utxoService;
     private final WithdrawTransactionService transactionService;
     private final ChainJdbcRepository chainRepository;
 
@@ -57,11 +51,9 @@ public class DogeCollectionJob {
     private Integer hotAddressIndex;
 
     public DogeCollectionJob(AddressService addressService,
-                             UtxoTransactionService utxoService,
                              WithdrawTransactionService transactionService,
                              ChainJdbcRepository chainRepository) {
         this.addressService = addressService;
-        this.utxoService = utxoService;
         this.transactionService = transactionService;
         this.chainRepository = chainRepository;
     }
@@ -160,30 +152,12 @@ public class DogeCollectionJob {
                         "failed to lock DOGE collection UTXO " + utxo.getTxId() + ":" + utxo.getSeq());
             }
         }
-        List<UtxoTransaction> spends = utxos.stream().map(utxo -> UtxoTransaction.builder()
-                .id(utxo.getId())
-                .spent((byte) 1)
-                .spentTxId(transactionId)
-                .status((byte) Constants.SIGNING)
-                .updateDate(now)
-                .build()).toList();
-        utxoService.batchEdit(spends, table);
         REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, JSONObject.toJSONString(transaction));
     }
 
     private List<UtxoTransaction> findCollectableUtxos(ShardTable table, CurrencyEnum currency) {
-        UtxoTransactionExample example = new UtxoTransactionExample();
-        example.createCriteria()
-                .andStatusEqualTo((byte) Constants.WAITING)
-                .andSpentEqualTo((byte) 0)
-                .andSpentTxIdEqualTo(UNSPENT_TX_ID)
-                .andConfirmNumGreaterThanOrEqualTo(currency.getDepositConfirmNum());
-        PageInfo pageInfo = new PageInfo();
-        pageInfo.setPageSize(PAGE_SIZE);
-        pageInfo.setStartIndex(0);
-        pageInfo.setSortItem("id");
-        pageInfo.setSortType(PageInfo.SORT_TYPE_ASC);
-        List<UtxoTransaction> candidates = utxoService.getByPage(pageInfo, example, table);
+        List<UtxoTransaction> candidates = chainRepository.listSpendableUtxos(
+                "DOGE", "DOGE", currency.getDepositConfirmNum(), PAGE_SIZE, 0);
         if (CollectionUtils.isEmpty(candidates)) {
             return candidates;
         }

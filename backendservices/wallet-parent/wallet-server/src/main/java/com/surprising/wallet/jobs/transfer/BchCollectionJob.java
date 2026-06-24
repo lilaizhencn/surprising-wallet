@@ -1,7 +1,6 @@
 package com.surprising.wallet.jobs.transfer;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.common.mybatis.pager.PageInfo;
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.BitcoinLikeChainProfile;
@@ -14,10 +13,8 @@ import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashFeePolicy;
 import com.surprising.wallet.sdk.bitcoinj.core.P2shMultisigFeeCalculator;
 import com.surprising.wallet.service.criteria.AddressExample;
-import com.surprising.wallet.service.criteria.UtxoTransactionExample;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
-import com.surprising.wallet.service.service.UtxoTransactionService;
 import com.surprising.wallet.service.service.WithdrawTransactionService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -36,7 +33,6 @@ public class BchCollectionJob {
     private static final int PAGE_SIZE = 10;
 
     private final AddressService addressService;
-    private final UtxoTransactionService utxoService;
     private final WithdrawTransactionService transactionService;
     private final ChainJdbcRepository repository;
 
@@ -57,11 +53,9 @@ public class BchCollectionJob {
 
     public BchCollectionJob(
             AddressService addressService,
-            UtxoTransactionService utxoService,
             WithdrawTransactionService transactionService,
             ChainJdbcRepository repository) {
         this.addressService = addressService;
-        this.utxoService = utxoService;
         this.transactionService = transactionService;
         this.repository = repository;
     }
@@ -175,16 +169,6 @@ public class BchCollectionJob {
                         "BCH UTXO lock failed " + utxo.getTxId() + ":" + utxo.getSeq());
             }
         }
-        List<UtxoTransaction> spent = utxos.stream()
-                .map(utxo -> UtxoTransaction.builder()
-                        .id(utxo.getId())
-                        .spent((byte) 1)
-                        .spentTxId(transactionId)
-                        .status((byte) Constants.SIGNING)
-                        .updateDate(now)
-                        .build())
-                .toList();
-        utxoService.batchEdit(spent, table);
         REDIS.lPush(
                 Constants.WALLET_WITHDRAW_SIG_FIRST_KEY,
                 JSONObject.toJSONString(transaction));
@@ -192,18 +176,7 @@ public class BchCollectionJob {
 
     private List<UtxoTransaction> findCollectableUtxos(
             ShardTable table, int requiredConfirmations) {
-        UtxoTransactionExample example = new UtxoTransactionExample();
-        example.createCriteria()
-                .andStatusEqualTo((byte) Constants.WAITING)
-                .andSpentEqualTo((byte) 0)
-                .andSpentTxIdEqualTo(Constants.UNSPENT_TX_ID)
-                .andConfirmNumGreaterThanOrEqualTo((long) requiredConfirmations);
-        PageInfo pageInfo = new PageInfo();
-        pageInfo.setPageSize(PAGE_SIZE);
-        pageInfo.setStartIndex(0);
-        pageInfo.setSortItem("id");
-        pageInfo.setSortType(PageInfo.SORT_TYPE_ASC);
-        return utxoService.getByPage(pageInfo, example, table).stream()
+        return repository.listSpendableUtxos("BCH", "BCH", requiredConfirmations, PAGE_SIZE, 0).stream()
                 .filter(utxo -> {
                     Address address = addressService.getAddress(utxo.getAddress(), table);
                     return address != null
