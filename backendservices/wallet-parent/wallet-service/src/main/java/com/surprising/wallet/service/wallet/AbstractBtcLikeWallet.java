@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.googlecode.jsonrpc4j.JsonRpcClientException;
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.wallet.client.command.BtcLikeCommand;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.currency.CurrencyEnum;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.Address;
@@ -16,7 +17,6 @@ import com.surprising.wallet.common.pojo.rpc.ScriptPubKey;
 import com.surprising.wallet.common.pojo.rpc.TxOutput;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.config.PubKeyConfig;
-import com.surprising.wallet.service.criteria.AddressExample;
 import com.surprising.wallet.service.criteria.WithdrawTransactionExample;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.chain.BitcoinLikeSettlementService;
@@ -94,11 +94,10 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
     public synchronized Address genNewAddress(Long userId, Integer biz) {
         log.info("用户获取新地址, 用户id:{}, 业务线:{}, 币种:{} 开始获取", userId, biz, getCurrency().name());
 
-        ShardTable table = ShardTable.builder().prefix(getCurrency().getName()).build();
         for (int attempt = 0; attempt < 5; attempt++) {
             try {
-                Address address = buildNextAddress(userId, biz, table);
-                addressService.add(address, table);
+                Address address = buildNextAddress(userId, biz);
+                chainJdbcRepository.upsertChainAddress(toChainAddressRecord(address));
                 log.info("用户获取新地址, 用户id:{}, 业务线:{}, 币种:{} 第{}个 结束",
                         userId, biz, getCurrency().name(), address.getIndex());
                 return address;
@@ -109,21 +108,12 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         throw new IllegalStateException("failed to allocate a unique address index");
     }
 
-    private Address buildNextAddress(Long userId, Integer biz, ShardTable table) {
-        AddressExample example = new AddressExample();
-        example.createCriteria().andUserIdEqualTo(userId).andBizEqualTo(biz);
-
-        List<Address> addressList = addressService.getByExample(example, table);
-        int index = 0;
-        /**
-         * 获取该userId在biz业务线下面已经生成了多少地址
-         */
-        if (!CollectionUtils.isEmpty(addressList)) {
-
-            Optional<Address> maxAddress = addressList.stream().max(Comparator.comparingInt(Address::getIndex));
-            index = maxAddress.get().getIndex() + 1;
-        }
-
+    private Address buildNextAddress(Long userId, Integer biz) {
+        String chain = getCurrency().getName().toUpperCase(Locale.ROOT);
+        int index = chainJdbcRepository.findMaxChainAddressIndex(
+                        chain, chain, userId, biz, "DEPOSIT")
+                .map(value -> Math.toIntExact(value + 1))
+                .orElse(0);
         /*
         hd的公钥推导path: bip44-currency-biz-userId-index
          */
@@ -153,6 +143,23 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
                 .build();
     }
 
+    private ChainAddressRecord toChainAddressRecord(Address address) {
+        String chain = getCurrency().getName().toUpperCase(Locale.ROOT);
+        return ChainAddressRecord.builder()
+                .chain(chain)
+                .assetSymbol(chain)
+                .accountId(address.getUserId().toString())
+                .userId(address.getUserId())
+                .biz(address.getBiz())
+                .addressIndex(address.getIndex().longValue())
+                .address(address.getAddress())
+                .ownerAddress(null)
+                .derivationPath(address.getDerivationPath())
+                .walletRole("DEPOSIT")
+                .enabled(true)
+                .build();
+    }
+
     /**
      * 解析 {@link org.bitcoinj.core.Transaction} 格式的交易为本地 UtxoTransaction 格式
      */
@@ -171,8 +178,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
                     try {
                         String addressStr = normalizeScannedAddress(
                                 output.getScriptPubKey().getToAddress(getNetworkParameters()).toString());
-                        ShardTable table = ShardTable.builder().prefix(getCurrency().getName()).build();
-                        Address address = addressService.getAddress(addressStr, table);
+                        Address address = addressService.getAddress(addressStr, getCurrency());
                         if (ObjectUtils.isEmpty(address)) {
                             return utxo;
                         }
@@ -327,8 +333,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
                     if (!StringUtils.hasText(addressStr)) {
                         return null;
                     }
-                    ShardTable table = ShardTable.builder().prefix(getCurrency().getName()).build();
-                    Address address = addressService.getAddress(addressStr, table);
+                    Address address = addressService.getAddress(addressStr, getCurrency());
                     Long confirm = this.height - height + 1;
 
                     if (ObjectUtils.isEmpty(address)) {
@@ -587,8 +592,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
     }
 
     private boolean enrichUtxoMetadata(UtxoTransaction utxo, CurrencyEnum currency) {
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        Address address = addressService.getAddress(utxo.getAddress(), table);
+        Address address = addressService.getAddress(utxo.getAddress(), currency);
         if (address == null) {
             return false;
         }

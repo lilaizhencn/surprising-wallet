@@ -15,8 +15,10 @@ Generated: 2026-06-24 Asia/Shanghai.
 - The unified BTC-like UTXO runtime now maps `UtxoTransaction.currency` from
   `chain_profile.runtime_currency_id`, not from `CurrencyEnum`.
 - Legacy UTXO MBG mapper/service/XML classes have been removed. Old
-  `*_utxo_transaction` tables remain only until the separate guarded drop
-  migration is executed.
+  `*_utxo_transaction` tables have been dropped in the local validation DB.
+- BTC/LTC/DOGE/BCH new address generation now writes `chain_address`; legacy
+  `*_address` tables are historical compatibility/backfill sources during the
+  signer-routing migration.
 - The Solana devnet gate validated runtime id `50` with BIP44 coin type `501`; Solana has no `CurrencyEnum` entry and loads profile, assets, tokens, addresses, scan checkpoint, and ledger state from the unified database model.
 - The TON testnet gate validated runtime id `51` with BIP44 coin type `607`; TON has no `CurrencyEnum` entry and loads profile, assets, Jetton token config, addresses, seqno, scan checkpoint, and ledger state from the unified database model.
 - The Aptos devnet gate validated runtime id `52` with BIP44 coin type `637`; Aptos has no `CurrencyEnum` entry and loads profile, assets, Coin<T> token config, addresses, sequence, scan checkpoint, and ledger state from the unified database model.
@@ -40,7 +42,8 @@ The active legacy wallet pipeline still depends on `CurrencyEnum` in these areas
   - `BtcCollectionJob`, `LtcCollectionJob`
   - `AbstractTransferJob`, `FeeRateUpdater`, `RbfBumpJob`
 - Legacy service/mapper routing:
-  - `AddressService`
+  - `AddressService` still supports legacy `*_address` fallback, but
+    BTC/LTC/DOGE/BCH lookups prefer `chain_address`
   - `WithdrawTransactionService`
   - `TransactionService`
   - their current implementations
@@ -82,9 +85,11 @@ Important conflicts:
 - `ledger_balance`: chain + asset + account ledger with guarded available/locked/total balances.
 
 The BTC-like runtime no longer writes or queries legacy `*_utxo_transaction`
-tables. Legacy address, withdraw_record, withdraw_transaction, `user_asset`,
-`currency_balance`, and `best_block_height` compatibility remains until the old
-job/router surface is retired.
+tables. New BTC-like addresses are written to `chain_address`; legacy address
+tables remain only for historical rows and signature metadata fallback.
+Legacy withdraw_record, withdraw_transaction, `user_asset`, `currency_balance`,
+and `best_block_height` compatibility remains until the old job/router surface
+is retired.
 
 ## LTC Compatibility
 
@@ -212,6 +217,10 @@ Legacy cleanup added:
 - Removed `UtxoTransactionMapper.xml`.
 - Added `scripts/drop-legacy-bitcoinlike-utxo-tables.sql` for a separate,
   guarded physical table drop after backup.
+- Added and executed `scripts/migrate-bitcoinlike-chain-address-backfill.sql`
+  locally; 32 historical BTC/LTC/DOGE/BCH address rows were backfilled into
+  `chain_address`.
+- Removed legacy UTXO table creation from init/schema SQL.
 
 ## ID Conflict Risk
 

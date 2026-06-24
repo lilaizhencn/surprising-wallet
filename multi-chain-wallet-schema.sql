@@ -228,11 +228,9 @@ set decimals = excluded.decimals,
     updated_at = now();
 
 create table if not exists ltc_address (like btc_address including defaults including identity);
-create table if not exists ltc_utxo_transaction (like btc_utxo_transaction including defaults including identity);
 create table if not exists ltc_withdraw_record (like btc_withdraw_record including defaults including identity);
 create table if not exists ltc_withdraw_transaction (like btc_withdraw_transaction including defaults including identity);
 create table if not exists doge_address (like btc_address including defaults including identity);
-create table if not exists doge_utxo_transaction (like btc_utxo_transaction including defaults including identity);
 create table if not exists doge_withdraw_record (like btc_withdraw_record including defaults including identity);
 create table if not exists doge_withdraw_transaction (like btc_withdraw_transaction including defaults including identity);
 
@@ -246,12 +244,6 @@ begin
     end if;
     if not exists (select 1 from pg_constraint where conname = 'uq_ltc_address_user_biz_index') then
         alter table ltc_address add constraint uq_ltc_address_user_biz_index unique (user_id, biz, index);
-    end if;
-    if not exists (select 1 from pg_constraint where conname = 'pk_ltc_utxo_transaction') then
-        alter table ltc_utxo_transaction add constraint pk_ltc_utxo_transaction primary key (id);
-    end if;
-    if not exists (select 1 from pg_constraint where conname = 'uq_ltc_utxo_transaction_tx_seq') then
-        alter table ltc_utxo_transaction add constraint uq_ltc_utxo_transaction_tx_seq unique (tx_id, seq);
     end if;
     if not exists (select 1 from pg_constraint where conname = 'pk_ltc_withdraw_record') then
         alter table ltc_withdraw_record add constraint pk_ltc_withdraw_record primary key (id);
@@ -271,12 +263,6 @@ begin
     if not exists (select 1 from pg_constraint where conname = 'uq_doge_address_user_biz_index') then
         alter table doge_address add constraint uq_doge_address_user_biz_index unique (user_id, biz, index);
     end if;
-    if not exists (select 1 from pg_constraint where conname = 'pk_doge_utxo_transaction') then
-        alter table doge_utxo_transaction add constraint pk_doge_utxo_transaction primary key (id);
-    end if;
-    if not exists (select 1 from pg_constraint where conname = 'uq_doge_utxo_transaction_tx_seq') then
-        alter table doge_utxo_transaction add constraint uq_doge_utxo_transaction_tx_seq unique (tx_id, seq);
-    end if;
     if not exists (select 1 from pg_constraint where conname = 'pk_doge_withdraw_record') then
         alter table doge_withdraw_record add constraint pk_doge_withdraw_record primary key (id);
     end if;
@@ -288,10 +274,6 @@ begin
     end if;
 end $$;
 
-create index if not exists idx_ltc_utxo_available
-    on ltc_utxo_transaction (status, confirm_num, spent_tx_id);
-create index if not exists idx_ltc_utxo_address
-    on ltc_utxo_transaction (address);
 create index if not exists idx_ltc_withdraw_record_tx_id
     on ltc_withdraw_record (tx_id);
 create index if not exists idx_ltc_withdraw_record_status
@@ -300,10 +282,6 @@ create index if not exists idx_ltc_withdraw_transaction_tx_id
     on ltc_withdraw_transaction (tx_id);
 create index if not exists idx_ltc_withdraw_transaction_status
     on ltc_withdraw_transaction (status);
-create index if not exists idx_doge_utxo_available
-    on doge_utxo_transaction (status, confirm_num, spent_tx_id);
-create index if not exists idx_doge_utxo_address
-    on doge_utxo_transaction (address);
 create index if not exists idx_doge_withdraw_record_tx_id
     on doge_withdraw_record (tx_id);
 create index if not exists idx_doge_withdraw_record_status
@@ -339,21 +317,16 @@ insert into chain_asset(chain,symbol,asset_kind,decimals,native_asset,active,min
 values('BCH','BCH','NATIVE',8,true,true,546,546)
 on conflict(chain,symbol) do update set decimals=excluded.decimals,active=excluded.active,updated_at=now();
 create table if not exists bch_address(like btc_address including defaults including identity);
-create table if not exists bch_utxo_transaction(like btc_utxo_transaction including defaults including identity);
 create table if not exists bch_withdraw_record(like btc_withdraw_record including defaults including identity);
 create table if not exists bch_withdraw_transaction(like btc_withdraw_transaction including defaults including identity);
 do $$ begin
  if not exists(select 1 from pg_constraint where conname='pk_bch_address')then alter table bch_address add constraint pk_bch_address primary key(id);end if;
  if not exists(select 1 from pg_constraint where conname='uq_bch_address_address')then alter table bch_address add constraint uq_bch_address_address unique(address);end if;
  if not exists(select 1 from pg_constraint where conname='uq_bch_address_user_biz_index')then alter table bch_address add constraint uq_bch_address_user_biz_index unique(user_id,biz,index);end if;
- if not exists(select 1 from pg_constraint where conname='pk_bch_utxo_transaction')then alter table bch_utxo_transaction add constraint pk_bch_utxo_transaction primary key(id);end if;
- if not exists(select 1 from pg_constraint where conname='uq_bch_utxo_transaction_tx_seq')then alter table bch_utxo_transaction add constraint uq_bch_utxo_transaction_tx_seq unique(tx_id,seq);end if;
  if not exists(select 1 from pg_constraint where conname='pk_bch_withdraw_record')then alter table bch_withdraw_record add constraint pk_bch_withdraw_record primary key(id);end if;
  if not exists(select 1 from pg_constraint where conname='uq_bch_withdraw_record_withdraw_id')then alter table bch_withdraw_record add constraint uq_bch_withdraw_record_withdraw_id unique(withdraw_id);end if;
  if not exists(select 1 from pg_constraint where conname='pk_bch_withdraw_transaction')then alter table bch_withdraw_transaction add constraint pk_bch_withdraw_transaction primary key(id);end if;
 end $$;
-create index if not exists idx_bch_utxo_available on bch_utxo_transaction(status,confirm_num,spent_tx_id);
-create index if not exists idx_bch_utxo_address on bch_utxo_transaction(address);
 insert into best_block_height(currency,height,interval_time)values(42,0,600000)on conflict(currency)do nothing;
 insert into currency_balance(currency_index,balance)values(42,0)on conflict(currency_index)do nothing;
 

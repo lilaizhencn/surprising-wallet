@@ -18,19 +18,18 @@ BTC-like runtime paths now use `utxo_record` for:
 - collection UTXO selection and locking;
 - address transaction query API.
 
-Legacy `*_utxo_transaction` tables were **not deleted**. They are now retained
-as historical compatibility data only.
+Legacy `*_utxo_transaction` tables were deleted locally on
+2026-06-24 after a fresh backup and guarded preflight.
 
-Physical deletion conclusion: **code is ready to drop the old UTXO tables, but
-the drop was not executed in this task**.
+Physical deletion conclusion: **old BTC-like UTXO tables have been dropped in
+the local validation DB**.
 
 The legacy MBG mapper/service/XML for UTXO persistence has been removed, Java/XML
 runtime references to `UtxoTransactionService`, `UtxoTransactionRepository`,
 `UtxoTransactionExample`, and `UtxoTransactionMapper` are gone, and one real
 DOGE/BCH local-regtest deposit/withdraw/collection cycle has passed against
-`utxo_record`. Execute `scripts/drop-legacy-bitcoinlike-utxo-tables.sql` only
-after a DB backup/PITR point; the script refuses to drop if spendable legacy
-UTXOs are missing from `utxo_record`.
+`utxo_record`. The checked-in `scripts/drop-legacy-bitcoinlike-utxo-tables.sql`
+remains for other environments; execute it only after a DB backup/PITR point.
 
 Push status: **NO**.
 
@@ -114,6 +113,8 @@ DB initialization updates:
   from DB instead of deriving it from `CurrencyEnum`.
 - `surprising-wallet-init-pgsql.sql` includes the same BTC DB asset/profile
   initialization for clean environments.
+- `surprising-wallet-init-pgsql.sql` and `multi-chain-wallet-schema.sql` no
+  longer create legacy `*_utxo_transaction` tables.
 
 ## 4. Runtime Behavior After Migration
 
@@ -166,6 +167,15 @@ unified `utxo_record` lock reference.
 `UtxoTransaction.currency` from `chain_profile.runtime_currency_id`. They no
 longer use `CurrencyEnum.parseName(chain)` for unified UTXO runtime rows.
 
+### Address Registry
+
+BTC/LTC/DOGE/BCH new address generation now writes `chain_address`. Scanner and
+withdraw UTXO metadata lookup prefer `chain_address`; legacy `*_address` tables
+are read only as historical compatibility/backfill sources. The first validated
+new-chain-address cutover was DOGE user `99042401`, address
+`2N4VqvAwgzRYrrFKUoDkjXxLE8YB99TrFKi`, inserted into `chain_address` with zero
+new rows in `doge_address`.
+
 ## 5. Integrity Checks
 
 Executed checks:
@@ -205,6 +215,9 @@ Results:
   environment-only test extended key.
 - wallet-sig2 `--spring.profiles.active=test`: process started with an
   ephemeral environment-only test extended key.
+- DOGE address API after address-route migration: generated
+  `2N4VqvAwgzRYrrFKUoDkjXxLE8YB99TrFKi`; `chain_address` increased by one and
+  `doge_address` remained unchanged for user `99042401`.
 
 No private key, RPC key, or test funding key was written to source/YAML.
 
@@ -253,9 +266,9 @@ does not expose or write private keys.
 
 ## 7. Risks and Follow-Up
 
-1. Old UTXO tables still exist physically until
-   `scripts/drop-legacy-bitcoinlike-utxo-tables.sql` is executed. The UTXO
-   mapper/service/XML has already been removed from runtime code.
+1. Old UTXO tables have been dropped locally. Other environments must execute
+   the guarded drop script after backup; the source SQL no longer recreates
+   those tables.
 2. wallet-server startup hit transient BTC public RPC SSL/connection-reset errors
    during scheduled scan. The service health remained `UP`; production should
    use a stable BTC RPC endpoint.
@@ -266,19 +279,21 @@ does not expose or write private keys.
 
 ## 8. Old Table Deletion Decision
 
-Current answer: **yes for old UTXO tables only, after backup and preflight**.
+Current answer: **done in the local validation DB**.
 
-The runtime code is now clean enough to drop:
+The local validation DB no longer contains:
 
 - `btc_utxo_transaction`
 - `ltc_utxo_transaction`
 - `doge_utxo_transaction`
 - `bch_utxo_transaction`
 
-Do **not** drop legacy address, withdraw_record, or withdraw_transaction tables
-in this cleanup. They still support old routing/signing compatibility.
+Legacy address, withdraw_record, and withdraw_transaction tables were not
+dropped. Address runtime migration has started by switching new BTC-like address
+generation to `chain_address`; withdraw/signing table routing remains the next
+compatibility layer to retire.
 
-Execute the drop only through:
+For other environments, execute the drop only through:
 
 ```bash
 psql "$DATABASE_URL" -f scripts/drop-legacy-bitcoinlike-utxo-tables.sql
@@ -287,5 +302,4 @@ psql "$DATABASE_URL" -f scripts/drop-legacy-bitcoinlike-utxo-tables.sql
 The script checks every remaining spendable legacy UTXO exists as AVAILABLE in
 `utxo_record`; if any row is missing, it raises an exception and rolls back.
 
-Until that migration is executed, `utxo_record` is the runtime source of truth
-and old UTXO tables are historical compatibility data.
+After that migration, `utxo_record` is the only BTC-like UTXO runtime table.

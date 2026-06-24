@@ -267,6 +267,21 @@ public class ChainJdbcRepository {
         return results.stream().findFirst();
     }
 
+    public Optional<Long> findMaxChainAddressIndex(String chain, String assetSymbol, long userId,
+                                                   int biz, String walletRole) {
+        Long maxIndex = jdbcTemplate.queryForObject("""
+                        select max(address_index)
+                        from chain_address
+                        where chain = ?
+                          and asset_symbol = ?
+                          and user_id = ?
+                          and biz = ?
+                          and wallet_role = ?
+                          and enabled = true
+                        """, Long.class, chain, assetSymbol, userId, biz, walletRole);
+        return Optional.ofNullable(maxIndex);
+    }
+
     public int recordSolanaTransaction(SolanaTransactionRecord tx) {
         return jdbcTemplate.update("""
                         insert into sol_transaction(

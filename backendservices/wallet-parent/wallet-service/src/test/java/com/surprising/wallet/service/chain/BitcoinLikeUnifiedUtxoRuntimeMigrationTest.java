@@ -1,6 +1,7 @@
 package com.surprising.wallet.service.chain;
 
 import com.surprising.wallet.common.chain.ChainType;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
@@ -80,6 +81,39 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                             select count(*) from deposit_record
                             where chain=? and tx_hash=? and log_index=0 and credited=true
                             """, Long.class, chain, depositTx));
+
+                    long userId = 70_000L + chainType.ordinal();
+                    assertTrue(repository.findMaxChainAddressIndex(
+                            chain, chain, userId, 1, "DEPOSIT").isEmpty());
+                    repository.upsertChainAddress(ChainAddressRecord.builder()
+                            .chain(chain)
+                            .assetSymbol(chain)
+                            .accountId(Long.toString(userId))
+                            .userId(userId)
+                            .biz(1)
+                            .addressIndex(0L)
+                            .address("migration-address-" + chain.toLowerCase() + "-0")
+                            .derivationPath("m/44/" + bip44CoinType(chain) + "/1/" + userId + "/0")
+                            .walletRole("DEPOSIT")
+                            .enabled(true)
+                            .build());
+                    repository.upsertChainAddress(ChainAddressRecord.builder()
+                            .chain(chain)
+                            .assetSymbol(chain)
+                            .accountId(Long.toString(userId))
+                            .userId(userId)
+                            .biz(1)
+                            .addressIndex(1L)
+                            .address("migration-address-" + chain.toLowerCase() + "-1")
+                            .derivationPath("m/44/" + bip44CoinType(chain) + "/1/" + userId + "/1")
+                            .walletRole("DEPOSIT")
+                            .enabled(true)
+                            .build());
+                    assertEquals(1L, repository.findMaxChainAddressIndex(
+                                    chain, chain, userId, 1, "DEPOSIT")
+                            .orElseThrow());
+                    assertTrue(repository.findChainAddressByAddress(
+                            chain, "migration-address-" + chain.toLowerCase() + "-1").isPresent());
                 }
             } finally {
                 connection.rollback();
@@ -138,5 +172,15 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                     min_withdraw = excluded.min_withdraw,
                     updated_at = now()
                 """);
+    }
+
+    private static int bip44CoinType(String chain) {
+        return switch (chain) {
+            case "BTC" -> 0;
+            case "LTC" -> 2;
+            case "DOGE" -> 3;
+            case "BCH" -> 145;
+            default -> throw new IllegalArgumentException(chain);
+        };
     }
 }

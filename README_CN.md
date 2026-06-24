@@ -185,16 +185,17 @@ curl http://localhost:8002/actuator/health
 
 项目提供两个 SQL 文件。需要**同时应用**以获得完整的数据库结构。
 
-### `surprising-wallet-init-pgsql.sql` — BTC 旧表结构
+### `surprising-wallet-init-pgsql.sql` — BTC 兼容表结构
 
-创建 BTC UTXO 引擎使用的专用表：
+创建 BTC 兼容表以及统一运行时表：
 
 | 表 | 用途 |
 |---|---|
 | `best_block_height` | 跟踪每种币的扫描进度 |
 | `currency_balance` | 每种币的热钱包总余额 |
-| `btc_address` | 用户充值地址（从 HD 公钥派生的 P2WSH 地址） |
-| `btc_utxo_transaction` | UTXO 集合跟踪（每个输出一行） |
+| `btc_address` | 历史 BTC 地址兼容表 |
+| `chain_address` | BTC-like / Account 链运行时地址注册表 |
+| `utxo_record` | BTC/LTC/DOGE/BCH 运行时 UTXO 集合表 |
 | `btc_withdraw_record` | 提现请求记录 |
 | `btc_withdraw_transaction` | 已签名交易负载 |
 | `user_asset` | 用户余额账本（balance + frozen 列，乐观锁 version） |

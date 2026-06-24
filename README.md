@@ -185,16 +185,17 @@ curl http://localhost:8002/actuator/health
 
 The project provides two SQL files. Apply **both** to have a complete schema.
 
-### `surprising-wallet-init-pgsql.sql` — BTC Legacy Schema
+### `surprising-wallet-init-pgsql.sql` — BTC Compatibility Schema
 
-Creates the BTC-specific tables used by the UTXO engine:
+Creates the BTC-specific compatibility tables plus the unified runtime tables:
 
 | Table | Purpose |
 |---|---|
 | `best_block_height` | Tracks scan progress per currency |
 | `currency_balance` | Hot wallet aggregate balance per currency |
-| `btc_address` | User deposit addresses (P2WSH derived from HD public keys) |
-| `btc_utxo_transaction` | UTXO set tracking (one row per output) |
+| `btc_address` | Historical BTC address compatibility table |
+| `chain_address` | Runtime address registry for new BTC-like/account chains |
+| `utxo_record` | Runtime BTC/LTC/DOGE/BCH UTXO set tracking |
 | `btc_withdraw_record` | Withdrawal request records |
 | `btc_withdraw_transaction` | Signed transaction payloads |
 | `user_asset` | User balance ledger (balance + frozen columns, optimistic locking via `version`) |

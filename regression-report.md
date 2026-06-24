@@ -648,6 +648,46 @@ Old UTXO table decision:
 
 ---
 
+## BTC-like Address Route Migration Update
+
+Generated: 2026-06-24 Asia/Shanghai.
+
+- Fresh local DB backup created:
+  `db-backups/pre-drop-legacy-utxo-20260624140232.sql`.
+- Guarded legacy UTXO drop was executed locally. Because local table ownership
+  was split between `wallet` and `atomex`, the same guard was executed per owner.
+- Confirmed remaining BTC-like UTXO runtime table:
+  `utxo_record`.
+- Confirmed dropped local tables:
+  `btc_utxo_transaction`, `ltc_utxo_transaction`, `doge_utxo_transaction`,
+  `bch_utxo_transaction`.
+- `surprising-wallet-init-pgsql.sql` and `multi-chain-wallet-schema.sql` no
+  longer create legacy `*_utxo_transaction` tables.
+- Added `scripts/migrate-bitcoinlike-chain-address-backfill.sql`.
+- Backfilled historical BTC-like addresses into `chain_address`:
+  BTC `10`, LTC `7`, DOGE `7`, BCH `8`.
+- BTC/LTC/DOGE/BCH new address generation now writes `chain_address` and does
+  not write legacy `*_address` tables.
+- `AddressService` resolves BTC-like addresses from `chain_address` first, then
+  legacy `*_address` as a historical fallback/backfill source.
+- BCH first signer now validates stored redeemScript only when a legacy row
+  provides one; new `chain_address` rows can be signed by deriving scripts from
+  path metadata.
+
+Validation:
+
+- `mvn -q -DskipTests compile`: passed.
+- `mvn -q -pl backendservices/wallet-parent/wallet-service -DskipTests=false -Dutxo.migration.db.enabled=true -Dtest=BitcoinLikeUnifiedUtxoRuntimeMigrationTest test`: passed.
+- `mvn -q -pl backendservices/wallet-parent/wallet-service -DskipTests=false -Dbitcoinlike.regtest.enabled=true -Dtest=BitcoinLikeRegtestFullFlowIntegrationTest test`: passed.
+- `mvn -q clean install -DskipTests=false`: passed.
+- wallet-server address API generated DOGE address
+  `2N4VqvAwgzRYrrFKUoDkjXxLE8YB99TrFKi` for user `99042401`.
+- DB assertion for that DOGE address:
+  `chain_address` row count `1`, `doge_address` row count `0`.
+- Push: no.
+
+---
+
 ## Sui Testnet Gate Final Update
 
 Generated: 2026-06-24 Asia/Shanghai.

@@ -67,7 +67,9 @@ public class BchFirstSignService implements ISignService {
             for (int i = 0; i < utxos.size(); i++) {
                 Address address = addresses.get(i);
                 String derivedRedeemScript = pubKeyConfig.genRedeemScript(address);
-                if (!derivedRedeemScript.equalsIgnoreCase(address.getRedeemScript())) {
+                if (address.getRedeemScript() != null
+                        && !address.getRedeemScript().isBlank()
+                        && !derivedRedeemScript.equalsIgnoreCase(address.getRedeemScript())) {
                     throw new IllegalArgumentException(
                             "stored redeemScript does not match derived BCH keys");
                 }
