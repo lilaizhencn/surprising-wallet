@@ -35,7 +35,9 @@ class LitecoinLiveFlowIntegrationTest {
     private static final String ESPLORA = "https://litecoinspace.org/testnet/api";
 
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final HttpClient HTTP = HttpClient.newHttpClient();
+    private static final HttpClient HTTP = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
+            .build();
     private static String withdrawTx;
     private static String collectionTx;
 
@@ -117,7 +119,8 @@ class LitecoinLiveFlowIntegrationTest {
                     where chain='LTC' and tx_hash=? and status='CONFIRMED'
                     """, collectionTx));
             assertEquals(1L, scalarLong(connection, """
-                    select count(*) from ltc_withdraw_transaction where tx_id=?
+                    select count(*) from chain_signing_transaction
+                    where chain='LTC' and tx_id=?
                     """, collectionTx));
             assertEquals(0L, scalarLong(connection, """
                     select count(*) from ledger_balance
@@ -167,7 +170,11 @@ class LitecoinLiveFlowIntegrationTest {
     }
 
     private static JsonNode esplora(String path) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(ESPLORA + path)).GET().build();
+        HttpRequest request = HttpRequest.newBuilder(URI.create(ESPLORA + path))
+                .version(HttpClient.Version.HTTP_1_1)
+                .header("User-Agent", "surprising-wallet-ltc-live-gate/1.0")
+                .GET()
+                .build();
         HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
         assertEquals(200, response.statusCode(), response.body());
         return JSON.readTree(response.body());

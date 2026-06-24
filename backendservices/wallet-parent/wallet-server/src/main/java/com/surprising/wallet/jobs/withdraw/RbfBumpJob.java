@@ -11,7 +11,6 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.WithdrawRecordService;
-import com.surprising.wallet.service.service.WithdrawTransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -30,7 +29,7 @@ import java.util.List;
  * <h3>操作步骤（仅需一步）</h3>
  * <pre>
  *   Redis> LPUSH newex-wallet:withdraw:rbf 123
- *   （123 是 withdraw_transaction 表的 id）
+ *   （123 是 chain_signing_transaction 表的 id）
  * </pre>
  *
  * <h3>自动处理流程</h3>
@@ -55,9 +54,6 @@ public class RbfBumpJob {
 
     /** 默认费率倍数（当操作人员忘记手动提高 Redis 费率时使用） */
     private static final double DEFAULT_FEE_BUMP_FACTOR = 2.0;
-
-    @Autowired
-    private WithdrawTransactionService txService;
 
     @Autowired
     private ChainJdbcRepository chainJdbcRepository;
@@ -91,7 +87,8 @@ public class RbfBumpJob {
         // 1. 找到原始交易
         CurrencyEnum currency = CurrencyEnum.BTC; // BTC only for now
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        java.util.Optional<WithdrawTransaction> txOpt = txService.getById(txId, table);
+        java.util.Optional<WithdrawTransaction> txOpt =
+                chainJdbcRepository.findBitcoinLikeSigningTransactionById(currency, txId);
         if (txOpt.isEmpty()) {
             log.error("RBF: 交易不存在 id={}", txId);
             return;
@@ -143,7 +140,7 @@ public class RbfBumpJob {
         tx.setSignature(sigJson.toJSONString());
         tx.setStatus(Constants.WAITING);
         tx.setTxId("rbf-" + txId);
-        txService.editById(tx, table);
+        chainJdbcRepository.updateBitcoinLikeSigningTransaction(currency, tx);
 
         // 6. 重新推送签名队列
         String val = JSONObject.toJSONString(tx);

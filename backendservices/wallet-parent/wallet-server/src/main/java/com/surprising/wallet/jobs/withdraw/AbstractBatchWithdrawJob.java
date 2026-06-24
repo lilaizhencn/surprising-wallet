@@ -16,7 +16,6 @@ import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.criteria.WithdrawRecordExample;
 import com.surprising.wallet.service.service.AddressService;
 import com.surprising.wallet.service.service.WithdrawRecordService;
-import com.surprising.wallet.service.service.WithdrawTransactionService;
 import com.surprising.wallet.service.wallet.IWallet;
 import com.surprising.wallet.service.wallet.WalletContext;
 import lombok.extern.slf4j.Slf4j;
@@ -41,8 +40,6 @@ abstract public class AbstractBatchWithdrawJob {
     AddressService addressService;
     @Autowired
     WalletContext walletContext;
-    @Autowired
-    WithdrawTransactionService transactionService;
     @Autowired
     ChainJdbcRepository chainJdbcRepository;
 
@@ -172,10 +169,17 @@ abstract public class AbstractBatchWithdrawJob {
                 .balance(walletAmount)
                 .currency(currency.getIndex())
                 .status(Constants.SIGNING)
-                .txId("singing")
+                .txId("signing")
                 .signature(signature.toJSONString())
                 .build();
-        transactionService.add(transaction, table);
+        String businessNo = records.stream()
+                .map(WithdrawRecord::getWithdrawId)
+                .filter(Objects::nonNull)
+                .sorted()
+                .reduce((left, right) -> left + "|" + right)
+                .orElseThrow(() -> new IllegalStateException("withdraw batch has no withdrawId"));
+        transaction = chainJdbcRepository.createBitcoinLikeSigningTransaction(
+                currency, "WITHDRAW", businessNo, transaction);
 
         String transactionId = transaction.getId().toString();
 

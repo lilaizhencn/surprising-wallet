@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.commons.support.model.ResponseResult;
 import com.surprising.commons.support.util.ResultUtils;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.currency.BizEnum;
 import com.surprising.wallet.common.currency.CurrencyEnum;
 import com.surprising.wallet.common.dto.AddressDto;
@@ -191,20 +192,35 @@ public class WalletController {
             coin = CurrencyEnum.toMainCurrency(coin);
 
             // Hot wallet address at userId=0, biz=0, index=0
-            AddressExample example = new AddressExample();
-            example.createCriteria().andUserIdEqualTo(0L).andBizEqualTo(0);
-            ShardTable table = ShardTable.builder().prefix(coin.getName()).build();
-            Optional<Address> addrOpt = addressService.getOneByExample(example, table);
+            if (isUnifiedBitcoinLike(coin)) {
+                CurrencyEnum finalCoin = coin;
+                String chain = coin.getName().toUpperCase(Locale.ROOT);
+                chainJdbcRepository.findChainAddress(chain, chain, 0L, 0, 0L, "DEPOSIT")
+                        .ifPresent(addr -> {
+                            result.put("address", addr.getAddress());
+                            result.put("childId", Math.toIntExact(addr.getAddressIndex()));
+                            result.put("path", addr.getDerivationPath());
+                            result.put("scriptType", "P2WSH");
+                            result.put("witnessScript", "");
+                            result.put("publicKeys", "");
+                            result.put("currency", finalCoin.getName());
+                        });
+            } else {
+                AddressExample example = new AddressExample();
+                example.createCriteria().andUserIdEqualTo(0L).andBizEqualTo(0);
+                ShardTable table = ShardTable.builder().prefix(coin.getName()).build();
+                Optional<Address> addrOpt = addressService.getOneByExample(example, table);
 
-            if (addrOpt.isPresent()) {
-                Address addr = addrOpt.get();
-                result.put("address", addr.getAddress());
-                result.put("childId", addr.getIndex());
-                result.put("path", addr.getDerivationPath());
-                result.put("scriptType", addr.getScriptType());
-                result.put("witnessScript", addr.getWitnessScript());
-                result.put("publicKeys", addr.getPublicKeys());
-                result.put("currency", coin.getName());
+                if (addrOpt.isPresent()) {
+                    Address addr = addrOpt.get();
+                    result.put("address", addr.getAddress());
+                    result.put("childId", addr.getIndex());
+                    result.put("path", addr.getDerivationPath());
+                    result.put("scriptType", addr.getScriptType());
+                    result.put("witnessScript", addr.getWitnessScript());
+                    result.put("publicKeys", addr.getPublicKeys());
+                    result.put("currency", coin.getName());
+                }
             }
 
             // Balance
@@ -232,6 +248,18 @@ public class WalletController {
         try {
             CurrencyEnum coin = currency != null ? CurrencyEnum.parseValue(currency) : CurrencyEnum.BTC;
             coin = CurrencyEnum.toMainCurrency(coin);
+            if (isUnifiedBitcoinLike(coin)) {
+                String chain = coin.getName().toUpperCase(Locale.ROOT);
+                List<AddressDto> dtos = chainJdbcRepository.listChainAddresses(chain, chain).stream()
+                        .filter(record -> record.getUserId() != null && record.getUserId() > 0)
+                        .filter(record -> userId == null || Objects.equals(record.getUserId(), userId))
+                        .filter(record -> biz == null || Objects.equals(record.getBiz(), biz))
+                        .sorted(Comparator.comparing(ChainAddressRecord::getId).reversed())
+                        .limit(200)
+                        .map(this::toAddressDto)
+                        .collect(Collectors.toList());
+                return ResultUtils.success(dtos);
+            }
             ShardTable table = ShardTable.builder().prefix(coin.getName()).build();
 
             AddressExample example = new AddressExample();
@@ -291,5 +319,20 @@ public class WalletController {
                 || currency == CurrencyEnum.LTC
                 || currency == CurrencyEnum.DOGE
                 || currency == CurrencyEnum.BCH;
+    }
+
+    private AddressDto toAddressDto(ChainAddressRecord record) {
+        AddressDto dto = new AddressDto();
+        dto.setUserId(record.getUserId());
+        dto.setBiz(record.getBiz());
+        dto.setAddress(record.getAddress());
+        dto.setChildId(Math.toIntExact(record.getAddressIndex()));
+        dto.setPath(record.getDerivationPath());
+        dto.setNetwork("");
+        dto.setScriptType("P2WSH");
+        dto.setRedeemScript("");
+        dto.setWitnessScript("");
+        dto.setPublicKeys("");
+        return dto;
     }
 }

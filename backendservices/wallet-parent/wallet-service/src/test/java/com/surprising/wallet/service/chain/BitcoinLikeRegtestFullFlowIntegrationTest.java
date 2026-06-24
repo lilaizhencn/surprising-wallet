@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.LedgerBalanceRecord;
+import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -137,8 +140,22 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 "freeze must reject over-spend and keep ledger non-negative");
         assertEquals(1, repository.updateWithdrawalStatus(
                 chainName, withdrawalOrder, "FROZEN", depositAddress, null, null));
-        assertEquals(1, repository.lockUtxo(chainName, depositTx.txid(), depositOutput.vout(), withdrawalOrder));
-        assertEquals(0, repository.lockUtxo(chainName, depositTx.txid(), depositOutput.vout(), withdrawalOrder + "-again"));
+        CurrencyEnum currency = CurrencyEnum.valueOf(chainName);
+        WithdrawTransaction signing = repository.createBitcoinLikeSigningTransaction(
+                currency,
+                "WITHDRAW",
+                withdrawalOrder,
+                WithdrawTransaction.builder()
+                        .txId("signing")
+                        .balance(chain.depositAmount())
+                        .signature("{}")
+                        .currency(currency.getIndex())
+                        .status(Constants.SIGNING)
+                        .build());
+        assertTrue(repository.findBitcoinLikeSigningTransactionById(currency, signing.getId()).isPresent());
+        String signingLockRef = signing.getId().toString();
+        assertEquals(1, repository.lockUtxo(chainName, depositTx.txid(), depositOutput.vout(), signingLockRef));
+        assertEquals(0, repository.lockUtxo(chainName, depositTx.txid(), depositOutput.vout(), signingLockRef + "-again"));
         assertEquals(1, repository.updateWithdrawalStatus(
                 chainName, withdrawalOrder, "UTXO_LOCKED", depositAddress, null, null));
         assertEquals(1, repository.updateWithdrawalStatus(
@@ -146,12 +163,18 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
 
         RealTx withdrawTx = sendAndMine(root, chain, withdrawAddress, chain.withdrawAmount());
         findOutput(withdrawTx.raw(), withdrawAddress, chain.withdrawAmount());
+        signing.setTxId(withdrawTx.txid());
+        signing.setStatus(Constants.SENT);
+        signing.setSignature(withdrawTx.raw().toString());
+        assertEquals(1, repository.updateBitcoinLikeSigningTransaction(currency, signing));
+        assertTrue(repository.bitcoinLikeSigningTransactionExists(currency, withdrawTx.txid()));
+        assertTrue(repository.findBitcoinLikeSigningTransactionByTxId(currency, withdrawTx.txid()).isPresent());
         assertEquals(1, repository.updateWithdrawalStatus(
                 chainName, withdrawalOrder, "SENT", depositAddress, withdrawTx.txid(), null));
         assertEquals(1, repository.markWithdrawalConfirmed(chainName, withdrawalOrder, withdrawTx.txid()));
         assertEquals(0, repository.markWithdrawalConfirmed(chainName, withdrawalOrder, withdrawTx.txid()));
-        assertEquals(1, repository.markUtxosSpent(chainName, withdrawalOrder, withdrawTx.txid()));
-        assertEquals(0, repository.markUtxosSpent(chainName, withdrawalOrder, withdrawTx.txid()));
+        assertEquals(1, repository.markUtxosSpent(chainName, signingLockRef, withdrawTx.txid()));
+        assertEquals(0, repository.markUtxosSpent(chainName, signingLockRef, withdrawTx.txid()));
         assertTrue(repository.settleLockedDebit(chainName, chainName, accountId, withdrawDebit));
         assertFalse(repository.settleLockedDebit(chainName, chainName, accountId, withdrawDebit));
         assertEquals(Optional.of("CONFIRMED"), repository.findWithdrawalStatus(chainName, withdrawalOrder));
@@ -195,18 +218,34 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 collectionOutputAmount, chain.collectionFee(), "{}"));
         assertEquals(1, repository.claimCollectionSigning(chainName, collectionNo, "{}"));
         assertEquals(0, repository.claimCollectionSigning(chainName, collectionNo, "{}"));
+        WithdrawTransaction collectionSigning = repository.createBitcoinLikeSigningTransaction(
+                currency,
+                "COLLECTION",
+                collectionNo,
+                WithdrawTransaction.builder()
+                        .txId("signing")
+                        .balance(chain.collectionDepositAmount())
+                        .signature("{}")
+                        .currency(currency.getIndex())
+                        .status(Constants.SIGNING)
+                        .build());
+        String collectionLockRef = collectionSigning.getId().toString();
         assertEquals(1, repository.lockUtxo(
-                chainName, collectionDeposit.txid(), collectionOutput.vout(), collectionNo));
+                chainName, collectionDeposit.txid(), collectionOutput.vout(), collectionLockRef));
         assertEquals(0, repository.releaseUtxos(chainName, "unknown-" + collectionNo));
 
         RealTx collectionTx = sendAndMine(root, chain, hotAddress, collectionOutputAmount);
         findOutput(collectionTx.raw(), hotAddress, collectionOutputAmount);
+        collectionSigning.setTxId(collectionTx.txid());
+        collectionSigning.setStatus(Constants.SENT);
+        collectionSigning.setSignature(collectionTx.raw().toString());
+        assertEquals(1, repository.updateBitcoinLikeSigningTransaction(currency, collectionSigning));
         assertEquals(1, repository.updateCollectionStatus(
                 chainName, collectionNo, "SENT", collectionTx.txid(), null, collectionTx.raw().toString()));
         assertEquals(1, repository.markCollectionConfirmed(chainName, collectionNo, collectionTx.txid()));
         assertEquals(0, repository.markCollectionConfirmed(chainName, collectionNo, collectionTx.txid()));
-        assertEquals(1, repository.markUtxosSpent(chainName, collectionNo, collectionTx.txid()));
-        assertEquals(0, repository.releaseUtxos(chainName, collectionNo));
+        assertEquals(1, repository.markUtxosSpent(chainName, collectionLockRef, collectionTx.txid()));
+        assertEquals(0, repository.releaseUtxos(chainName, collectionLockRef));
         assertEquals(Optional.of("CONFIRMED"), repository.findCollectionStatus(chainName, collectionNo));
         assertEquals(Optional.of(collectionTx.txid()), repository.findCollectionTxHash(chainName, collectionNo));
         assertLedger(jdbc, chainName, accountId, afterCollectionDeposit, BigDecimal.ZERO, afterCollectionDeposit);

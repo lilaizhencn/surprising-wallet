@@ -147,7 +147,7 @@ Generated: 2026-06-21 18:50 Asia/Shanghai.
 - Withdrawal destination UTXO `(withdraw txid, vout 0)`: `SPENT`, spent by the collection tx.
 - Withdrawal change UTXO `(withdraw txid, vout 1)`: `AVAILABLE`.
 - Collection hot-wallet UTXO `(collection txid, vout 0)`: `AVAILABLE`.
-- Deposit unique counts: legacy UTXO `1`; unified UTXO `1`.
+- Deposit unique count in unified `utxo_record`: `1`.
 - The live test also transactionally verified single-winner lock and guarded release behavior.
 
 ## 16. Fee / Dust
@@ -176,6 +176,9 @@ Generated: 2026-06-21 18:50 Asia/Shanghai.
 - Exactly one live collection record exists.
 - Status: `CONFIRMED`.
 - Tx hash matches the live collection txid.
+- The migrated terminal signing history contains the live withdrawal and
+  collection txids in `chain_signing_transaction`; runtime signing no longer
+  uses `ltc_withdraw_transaction`.
 
 ## 20. ledger_balance Reconciliation
 

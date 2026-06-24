@@ -10,10 +10,8 @@ import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
-import com.surprising.wallet.service.criteria.AddressExample;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
-import com.surprising.wallet.service.service.WithdrawTransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,7 +32,6 @@ public class BtcCollectionJob {
     private static final int DEFAULT_FEE_RATE = 10;
 
     private final AddressService addressService;
-    private final WithdrawTransactionService transactionService;
     private final ChainJdbcRepository chainJdbcRepository;
 
     @Value("${atomex.wallet.collection.enabled-currencies:}")
@@ -50,10 +47,8 @@ public class BtcCollectionJob {
     private Integer hotAddressIndex;
 
     public BtcCollectionJob(AddressService addressService,
-                            WithdrawTransactionService transactionService,
                             ChainJdbcRepository chainJdbcRepository) {
         this.addressService = addressService;
-        this.transactionService = transactionService;
         this.chainJdbcRepository = chainJdbcRepository;
     }
 
@@ -149,7 +144,8 @@ public class BtcCollectionJob {
                 .createDate(now)
                 .updateDate(now)
                 .build();
-        transactionService.add(transaction, table);
+        transaction = chainJdbcRepository.createBitcoinLikeSigningTransaction(
+                currency, "COLLECTION", collectionId, transaction);
 
         String transactionId = transaction.getId().toString();
         for (UtxoTransaction utxo : utxos) {
@@ -181,12 +177,16 @@ public class BtcCollectionJob {
     }
 
     private Address getHotAddress(ShardTable table) {
-        AddressExample example = new AddressExample();
-        example.createCriteria()
-                .andUserIdEqualTo(hotUserId)
-                .andBizEqualTo(hotBiz)
-                .andIndexEqualTo(hotAddressIndex);
-        return addressService.getOneByExample(example, table).orElse(null);
+        return chainJdbcRepository.findChainAddress(
+                        "BTC", "BTC", hotUserId, hotBiz, hotAddressIndex, "DEPOSIT")
+                .map(record -> Address.builder()
+                        .address(record.getAddress())
+                        .userId(record.getUserId())
+                        .biz(record.getBiz())
+                        .index(Math.toIntExact(record.getAddressIndex()))
+                        .currency(CurrencyEnum.BTC.getName())
+                        .build())
+                .orElse(null);
     }
 
     private int getFeeRate(CurrencyEnum currency) {

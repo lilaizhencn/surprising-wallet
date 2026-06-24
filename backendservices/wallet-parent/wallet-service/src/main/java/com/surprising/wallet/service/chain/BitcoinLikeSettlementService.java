@@ -10,7 +10,6 @@ import com.surprising.wallet.service.criteria.WithdrawRecordExample;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.UserAssetService;
 import com.surprising.wallet.service.service.WithdrawRecordService;
-import com.surprising.wallet.service.service.WithdrawTransactionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,16 +27,13 @@ public class BitcoinLikeSettlementService {
     private final ChainJdbcRepository chainRepository;
     private final UserAssetService userAssetService;
     private final WithdrawRecordService recordService;
-    private final WithdrawTransactionService transactionService;
 
     public BitcoinLikeSettlementService(ChainJdbcRepository chainRepository,
                                         UserAssetService userAssetService,
-                                        WithdrawRecordService recordService,
-                                        WithdrawTransactionService transactionService) {
+                                        WithdrawRecordService recordService) {
         this.chainRepository = chainRepository;
         this.userAssetService = userAssetService;
         this.recordService = recordService;
-        this.transactionService = transactionService;
     }
 
     @Transactional(rollbackFor = Throwable.class)
@@ -54,7 +50,7 @@ public class BitcoinLikeSettlementService {
 
         transaction.setStatus(Constants.CONFIRM);
         transaction.setUpdateDate(Date.from(Instant.now()));
-        transactionService.editById(transaction, table);
+        chainRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
 
         if ("collection".equals(signature.getString("type"))) {
             chainRepository.markCollectionConfirmed(

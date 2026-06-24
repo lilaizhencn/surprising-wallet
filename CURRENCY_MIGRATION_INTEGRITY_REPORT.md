@@ -24,6 +24,21 @@ Legacy `*_utxo_transaction` tables were deleted locally on
 Physical deletion conclusion: **old BTC-like UTXO tables have been dropped in
 the local validation DB**.
 
+2026-06-24 no-fallback follow-up: BTC/LTC/DOGE/BCH address runtime now reads
+`chain_address` only; the previous legacy `*_address` fallback/backfill path was
+removed from `AddressServiceImpl` and BTC-like address listing/hot-info APIs.
+BTC-like signing runtime now writes, recovers, broadcasts, and confirms through
+`chain_signing_transaction` instead of legacy `*_withdraw_transaction` tables.
+Legacy terminal signing history was copied into `chain_signing_transaction` for
+audit/live-test consistency; active legacy signing rows are intentionally
+rejected by `scripts/migrate-bitcoinlike-signing-transaction-cutover.sql` to
+avoid duplicate broadcast risk.
+
+After the post-cutover regtest/live gates passed, the local validation DB also
+dropped the legacy BTC-like `*_withdraw_transaction` tables through
+`scripts/drop-legacy-bitcoinlike-withdraw-transaction-tables.sql`. Clean schema
+initialization no longer creates those tables.
+
 The legacy MBG mapper/service/XML for UTXO persistence has been removed, Java/XML
 runtime references to `UtxoTransactionService`, `UtxoTransactionRepository`,
 `UtxoTransactionExample`, and `UtxoTransactionMapper` are gone, and one real
@@ -89,6 +104,7 @@ Modified files:
 - `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/transfer/DogeCollectionJob.java`
 - `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/transfer/BchCollectionJob.java`
 - `backendservices/wallet-parent/wallet-server/src/main/java/com/surprising/wallet/jobs/WalletController.java`
+- `backendservices/wallet-parent/wallet-service/src/test/java/com/surprising/wallet/service/chain/ltc/LitecoinLiveFlowIntegrationTest.java`
 
 Added files:
 
@@ -96,6 +112,8 @@ Added files:
 - `backendservices/wallet-parent/wallet-service/src/test/java/com/surprising/wallet/service/chain/BitcoinLikeRegtestFullFlowIntegrationTest.java`
 - `scripts/migrate-bitcoinlike-utxo-record-backfill.sql`
 - `scripts/drop-legacy-bitcoinlike-utxo-tables.sql`
+- `scripts/migrate-bitcoinlike-signing-transaction-cutover.sql`
+- `scripts/drop-legacy-bitcoinlike-withdraw-transaction-tables.sql`
 - `CURRENCY_MIGRATION_INTEGRITY_REPORT.md`
 
 Deleted files:
@@ -115,6 +133,12 @@ DB initialization updates:
   initialization for clean environments.
 - `surprising-wallet-init-pgsql.sql` and `multi-chain-wallet-schema.sql` no
   longer create legacy `*_utxo_transaction` tables.
+- `surprising-wallet-init-pgsql.sql` and `multi-chain-wallet-schema.sql` now
+  create `chain_signing_transaction` with unique
+  `(chain, business_type, business_no)` plus `(chain, tx_id)` and
+  `(chain, status, update_date)` indexes.
+- `surprising-wallet-init-pgsql.sql` and `multi-chain-wallet-schema.sql` no
+  longer create BTC/LTC/DOGE/BCH `*_withdraw_transaction` tables.
 
 ## 4. Runtime Behavior After Migration
 
@@ -169,12 +193,31 @@ longer use `CurrencyEnum.parseName(chain)` for unified UTXO runtime rows.
 
 ### Address Registry
 
-BTC/LTC/DOGE/BCH new address generation now writes `chain_address`. Scanner and
-withdraw UTXO metadata lookup prefer `chain_address`; legacy `*_address` tables
-are read only as historical compatibility/backfill sources. The first validated
-new-chain-address cutover was DOGE user `99042401`, address
+BTC/LTC/DOGE/BCH new address generation now writes `chain_address`. Scanner,
+withdraw UTXO metadata lookup, BTC-like hot-info, and BTC-like address listing
+read `chain_address` only; there is no legacy `*_address` runtime fallback. The
+first validated new-chain-address cutover was DOGE user `99042401`, address
 `2N4VqvAwgzRYrrFKUoDkjXxLE8YB99TrFKi`, inserted into `chain_address` with zero
 new rows in `doge_address`.
+
+### Signing Transaction Runtime
+
+`chain_signing_transaction` is the BTC-like signing source of truth. The
+Redis payload remains the existing `WithdrawTransaction` DTO to preserve sig1
+and sig2 signing algorithms, but BTC/LTC/DOGE/BCH no longer insert, update,
+recover, or confirm through `btc/ltc/doge/bch_withdraw_transaction`.
+
+Verified cutover behavior:
+
+- withdrawal build creates one `chain_signing_transaction` row and uses its id
+  as `utxo_record.lock_ref`;
+- collection build creates one deterministic `COLLECTION` row and uses its id
+  as `utxo_record.lock_ref`;
+- broadcast idempotency checks `chain_signing_transaction.status/tx_id`;
+- scanner confirmation lookup resolves sent txids from `chain_signing_transaction`;
+- stale-signing recovery requeues rows from `chain_signing_transaction`;
+- RBF reads and updates `chain_signing_transaction`, while `withdraw_record`
+  remains only the external/business compatibility record.
 
 ## 5. Integrity Checks
 
@@ -201,6 +244,13 @@ mvn -q -pl backendservices/wallet-parent/wallet-service \
   -DskipTests=false \
   -Dbitcoinlike.regtest.enabled=true \
   -Dtest=BitcoinLikeRegtestFullFlowIntegrationTest test
+mvn -q -pl backendservices/wallet-parent/wallet-service -am \
+  -DskipTests=false \
+  -Dtest=LitecoinLiveFlowIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  -Dltc.live.enabled=true \
+  -Dltc.live.withdraw.txid=ede1443842edaace31f1f7e4525f436b6bc69aad952bba2646b8c3be1678880c \
+  -Dltc.live.collection.txid=34c2a03b9696b558c794350039d19ff38f76a44b1a3717f3531be73f31274949 test
 mvn -q clean install -DskipTests=false
 ```
 
@@ -208,6 +258,8 @@ Results:
 
 - Target migration DB test: **passed**.
 - DOGE/BCH real local-regtest deposit/withdraw/collection test: **passed**.
+- LTC real live testnet deposit/withdraw/collection gate: **passed** after
+  forcing the test HTTP client to HTTP/1.1 for litecoinspace TLS compatibility.
 - Full Maven clean install: **passed**.
 - wallet-server `--spring.profiles.active=test`: started.
 - wallet-server `/actuator/health`: `{"groups":["liveness","readiness"],"status":"UP"}`.
@@ -226,14 +278,14 @@ No private key, RPC key, or test funding key was written to source/YAML.
 DOGE local regtest:
 
 - deposit txid:
-  `34ac7f568667775f06a179c9e0b9f9ce6dd02bd0de3ac3c95ed9b0c3db543a68`
+  `4a351af4b94b7398a675818fc3bfe234f6e5f95644959c33754fde75ee7b3e49`
 - withdraw txid:
-  `e7723d5c79a8695727b1df1c52a2159ed5847278d0ff849cace8b79589ef976e`
+  `6ff8854531fc9a1b3b96e7011545ac6edc37e4a86e8385169f255c80a3306e4c`
 - collection txid:
-  `35d53c425773a97776f6c193b196c40604dd175106168d18314fd40b87180802`
-- deposit address: `n3CGohzAycpjHaQqszBDamAzxH1r5KDSfi`
-- withdraw address: `n4hu8Ziwkkr1AeWXSgsEYGj2FJLTvyhUgc`
-- hot address: `mrWGppYoaG963tqtabihbYzxn6Q21S5vhD`
+  `47e88653105ff8a21162cbc5a01556bd378ea541ebd8dfb58ab5b8e39a3d70b9`
+- deposit address: `miUsT5KNY57qmM3wGfb2S7ykzfmAXZPkXx`
+- withdraw address: `muferxGf4kJbyRMXuocUA4oQpXdGrw4WfP`
+- hot address: `mu9LwGVQ9D45KX57nmj8up2XRU4iaqwTod`
 - ledger after rollback-scoped validation: `114.00000000 DOGE`
 - verified: `deposit_record`, `utxo_record`, `withdrawal_order`,
   `collection_record`, `ledger_balance`, duplicate deposit idempotency,
@@ -243,17 +295,17 @@ DOGE local regtest:
 BCH local regtest:
 
 - deposit txid:
-  `ce034235e4907182f1ccf3f20e4b4a69c3baf13a097b3b7d4f337705bb5f3c3a`
+  `1b58a16b7482cb5b4c5d369012260b2702e36f6c5f8ae25efd6fb149230d0287`
 - withdraw txid:
-  `07b2267f08727b0b6bbb61f14f7d2735529d1ff76c126e83dd4b98800d85e976`
+  `59c6c4deff09bfc5cb58bc309cc7f79f876215df779c00641ae1bd5ca8aff0ee`
 - collection txid:
-  `cc9a9b115a8873b728023e33a3a062a9e511349422e6f4600bf88e878f3892c0`
+  `1b002c88cd57717c03f2f6fa154246feaed87d906987b5e88621b44728f794b5`
 - deposit address:
-  `bchreg:qzxtcvjt4nn6gmhme2emk7qtdxrwawrdxgfgeqr2nu`
+  `bchreg:qqsajn05xgjnlgfc3q2fxrg435yztwyhmsxh0qdn4e`
 - withdraw address:
-  `bchreg:qzklqdhmu0cqlwaws8mv76gw5c03sjf9fyckf7jzq6`
+  `bchreg:qruknj6smxk5n4vxhst4lns6eyx4tslzcymac530lj`
 - hot address:
-  `bchreg:qz73fsusqk95lcjwtqxqmjhjs0kl2fzh9cg7yr78hj`
+  `bchreg:qry6uk3k9lc2p2krqwcddt6l4pqgdqvejy9epx46cd`
 - ledger after rollback-scoped validation: `1.14999000 BCH`
 - verified: `deposit_record`, `utxo_record`, `withdrawal_order`,
   `collection_record`, `ledger_balance`, duplicate deposit idempotency,
@@ -269,10 +321,15 @@ does not expose or write private keys.
 1. Old UTXO tables have been dropped locally. Other environments must execute
    the guarded drop script after backup; the source SQL no longer recreates
    those tables.
-2. wallet-server startup hit transient BTC public RPC SSL/connection-reset errors
-   during scheduled scan. The service health remained `UP`; production should
-   use a stable BTC RPC endpoint.
-3. sig1/sig2 test startup requires `ATOMEX_SIG1_MASTER_KEY` /
+2. Old BTC-like withdraw transaction tables have been dropped locally. Other
+   environments must execute
+   `scripts/drop-legacy-bitcoinlike-withdraw-transaction-tables.sql` only after
+   the signing cutover migration and backup/PITR point.
+3. wallet-server startup hit transient BTC public RPC SSL/connection-reset errors
+   during scheduled scan when using the default public endpoint. The final
+   startup check disabled scanning to avoid external RPC noise, and health
+   remained `UP`; production should use a stable BTC RPC endpoint.
+4. sig1/sig2 test startup requires `ATOMEX_SIG1_MASTER_KEY` /
    `ATOMEX_SIG2_MASTER_KEY`. For local startup verification, ephemeral
    environment-only keys were used. Production/testnet signing must use the real
    secure key injection path.
@@ -287,11 +344,17 @@ The local validation DB no longer contains:
 - `ltc_utxo_transaction`
 - `doge_utxo_transaction`
 - `bch_utxo_transaction`
+- `btc_withdraw_transaction`
+- `ltc_withdraw_transaction`
+- `doge_withdraw_transaction`
+- `bch_withdraw_transaction`
 
-Legacy address, withdraw_record, and withdraw_transaction tables were not
-dropped. Address runtime migration has started by switching new BTC-like address
-generation to `chain_address`; withdraw/signing table routing remains the next
-compatibility layer to retire.
+Legacy address and withdraw_record tables were not dropped because non-BTC-like
+and external business compatibility paths still use them. BTC-like runtime no
+longer uses legacy address fallback or legacy `*_withdraw_transaction` signing
+tables. The BTC-like `*_withdraw_transaction` table family has been physically
+dropped in the local validation DB after guarded migration and post-drop
+regtest/live validation.
 
 For other environments, execute the drop only through:
 

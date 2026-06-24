@@ -2,7 +2,6 @@ package com.surprising.wallet.service.wallet;
 
 import com.alibaba.fastjson.JSONObject;
 import com.googlecode.jsonrpc4j.JsonRpcClientException;
-import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.wallet.client.command.BtcLikeCommand;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.currency.CurrencyEnum;
@@ -17,7 +16,6 @@ import com.surprising.wallet.common.pojo.rpc.ScriptPubKey;
 import com.surprising.wallet.common.pojo.rpc.TxOutput;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.config.PubKeyConfig;
-import com.surprising.wallet.service.criteria.WithdrawTransactionExample;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.chain.BitcoinLikeSettlementService;
 import lombok.extern.slf4j.Slf4j;
@@ -302,12 +300,14 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
      */
     @Override
     protected void updateWithdrawTXId(String txid, CurrencyEnum currency) {
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        WithdrawTransactionExample withExam = new WithdrawTransactionExample();
-        withExam.createCriteria().andTxIdEqualTo(txid);
-        Optional<WithdrawTransaction> oneByExample = withdrawTransactionService.getOneByExample(withExam, table);
+        Optional<WithdrawTransaction> oneByExample =
+                chainJdbcRepository.findBitcoinLikeSigningTransactionByTxId(currency, txid);
         if (oneByExample.isPresent()) {
             WithdrawTransaction withdrawTransaction = oneByExample.get();
+            if (withdrawTransaction.getStatus() != null
+                    && withdrawTransaction.getStatus() >= Constants.CONFIRM) {
+                return;
+            }
             JSONObject signature = JSONObject.parseObject(withdrawTransaction.getSignature());
             int confirmations = getConfirm(txid);
             if (confirmations < getWithdrawConfirmationThreshold()) {
@@ -513,10 +513,8 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
     }
 
     private void updatePendingWithdrawConfirmations(CurrencyEnum currency) {
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        WithdrawTransactionExample example = new WithdrawTransactionExample();
-        example.createCriteria().andStatusEqualTo(Constants.SENT);
-        List<WithdrawTransaction> pending = withdrawTransactionService.getByExample(example, table);
+        List<WithdrawTransaction> pending =
+                chainJdbcRepository.findSentBitcoinLikeSigningTransactions(currency);
         for (WithdrawTransaction transaction : pending) {
             if (!StringUtils.hasText(transaction.getTxId())) {
                 continue;

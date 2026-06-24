@@ -12,14 +12,11 @@ import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.Date;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -67,33 +64,17 @@ public class AddressServiceImpl
 
         if (isUnifiedBitcoinLike(currency)) {
             String chain = currency.getName().toUpperCase(Locale.ROOT);
-            Optional<ChainAddressRecord> chainAddress =
-                    chainJdbcRepository.findChainAddressByAddress(chain, addressStr);
-            if (chainAddress.isPresent()) {
-                Address address = legacyAddress(addressStr, currency)
-                        .orElseGet(() -> toAddress(chainAddress.get(), currency));
-                address.setCurrency(currency.getName());
-                return address;
-            }
+            return chainJdbcRepository.findChainAddressByAddress(chain, addressStr)
+                    .map(record -> toAddress(record, currency))
+                    .orElse(null);
         }
 
-        Optional<Address> legacyAddress = legacyAddress(addressStr, currency);
-        legacyAddress.ifPresent(address -> backfillChainAddress(currency, address));
-        return legacyAddress.orElse(null);
-    }
-
-    private Optional<Address> legacyAddress(String addressStr, CurrencyEnum currency) {
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
+        ShardTable legacyTable = ShardTable.builder().prefix(currency.getName()).build();
         AddressExample example = new AddressExample();
         example.createCriteria().andAddressEqualTo(addressStr);
-        try {
-            Optional<Address> oneByExample = getOneByExample(example, table);
-            oneByExample.ifPresent(address -> address.setCurrency(currency.getName()));
-            return oneByExample;
-        } catch (DataAccessException e) {
-            log.warn("legacy address table lookup failed for {} address {}", currency.getName(), addressStr, e);
-            return Optional.empty();
-        }
+        Optional<Address> oneByExample = getOneByExample(example, legacyTable);
+        oneByExample.ifPresent(address -> address.setCurrency(currency.getName()));
+        return oneByExample.orElse(null);
     }
 
     private Address toAddress(ChainAddressRecord record, CurrencyEnum currency) {
@@ -112,33 +93,7 @@ public class AddressServiceImpl
                 .index(Math.toIntExact(record.getAddressIndex()))
                 .status((byte) Constants.WAITING)
                 .currency(currency.getName())
-                .createDate(Date.from(Instant.now()))
-                .updateDate(Date.from(Instant.now()))
                 .build();
-    }
-
-    private void backfillChainAddress(CurrencyEnum currency, Address address) {
-        if (!isUnifiedBitcoinLike(currency) || address.getUserId() == null
-                || address.getBiz() == null || address.getIndex() == null) {
-            return;
-        }
-        String chain = currency.getName().toUpperCase(Locale.ROOT);
-        chainJdbcRepository.upsertChainAddress(ChainAddressRecord.builder()
-                .chain(chain)
-                .assetSymbol(chain)
-                .accountId(address.getUserId().toString())
-                .userId(address.getUserId())
-                .biz(address.getBiz())
-                .addressIndex(address.getIndex().longValue())
-                .address(address.getAddress())
-                .ownerAddress(null)
-                .derivationPath(StringUtils.hasText(address.getDerivationPath())
-                        ? address.getDerivationPath()
-                        : String.format("m/44/%d/%d/%d/%d",
-                        currency.getBip44CoinType(), address.getBiz(), address.getUserId(), address.getIndex()))
-                .walletRole("DEPOSIT")
-                .enabled(true)
-                .build());
     }
 
     private boolean isUnifiedBitcoinLike(CurrencyEnum currency) {

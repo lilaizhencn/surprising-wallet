@@ -573,6 +573,65 @@ Detailed evidence: `DOGECOIN_WALLET_REPORT.md`.
 
 ---
 
+## BTC-like No-Fallback Address and Signing Cutover
+
+Generated: 2026-06-24 15:02 Asia/Shanghai.
+
+- BTC/LTC/DOGE/BCH address runtime now reads `chain_address` only. The previous
+  `AddressServiceImpl` legacy `*_address` fallback/backfill path was removed for
+  BTC-like chains.
+- `/wallet/v1/hot-info` and `/wallet/v1/addresses` now use `chain_address` for
+  BTC/LTC/DOGE/BCH instead of the legacy address tables.
+- BTC/LTC/DOGE/BCH signing runtime now uses `chain_signing_transaction` for
+  build, recovery, broadcast idempotency, and confirmation lookup. The Redis
+  message remains the existing `WithdrawTransaction` DTO to preserve sig1/sig2
+  signing algorithms without using legacy transaction tables as runtime state.
+- `scripts/migrate-bitcoinlike-signing-transaction-cutover.sql` was executed on
+  the local validation DB. It refused active legacy signing rows by design and
+  migrated terminal legacy signing history for audit/live-test consistency.
+- Local migrated terminal signing history:
+  - BTC: 3
+  - LTC: 5
+  - DOGE: 12
+  - BCH: 4
+- Local BTC `chain_profile` was backfilled from checked-in schema because the
+  validation DB had `chain_asset(BTC)` but no BTC profile row. This fixed the
+  unified UTXO runtime lookup of `runtime_currency_id=1`.
+- `scripts/drop-legacy-bitcoinlike-withdraw-transaction-tables.sql` was
+  executed after the post-cutover gates. Local validation DB now has zero
+  `btc/ltc/doge/bch_withdraw_transaction` tables.
+
+### Validation
+
+- `mvn -q -DskipTests compile`: passed.
+- `mvn -q -pl backendservices/wallet-parent/wallet-service -DskipTests=false -Dutxo.migration.db.enabled=true -Dtest=BitcoinLikeUnifiedUtxoRuntimeMigrationTest test`: passed.
+- `mvn -q -pl backendservices/wallet-parent/wallet-service -DskipTests=false -Dbitcoinlike.regtest.enabled=true -Dtest=BitcoinLikeRegtestFullFlowIntegrationTest test`: passed.
+- DOGE regtest:
+  - deposit `4a351af4b94b7398a675818fc3bfe234f6e5f95644959c33754fde75ee7b3e49`
+  - withdraw `6ff8854531fc9a1b3b96e7011545ac6edc37e4a86e8385169f255c80a3306e4c`
+  - collection `47e88653105ff8a21162cbc5a01556bd378ea541ebd8dfb58ab5b8e39a3d70b9`
+- BCH regtest:
+  - deposit `1b58a16b7482cb5b4c5d369012260b2702e36f6c5f8ae25efd6fb149230d0287`
+  - withdraw `59c6c4deff09bfc5cb58bc309cc7f79f876215df779c00641ae1bd5ca8aff0ee`
+  - collection `1b002c88cd57717c03f2f6fa154246feaed87d906987b5e88621b44728f794b5`
+- LTC live gate passed with:
+  - deposit `24aecf832537eb6b9e77722541ab812f3c6f887a75ff40aee83170bd35497f9f`
+  - withdraw `ede1443842edaace31f1f7e4525f436b6bc69aad952bba2646b8c3be1678880c`
+  - collection `34c2a03b9696b558c794350039d19ff38f76a44b1a3717f3531be73f31274949`
+- `mvn -q clean install -DskipTests=false`: passed.
+- wallet-server `--spring.profiles.active=test`: started after drop-table
+  migration and health returned `UP`; BTC/LTC/DOGE/BCH withdraw jobs completed
+  one scheduled pass. The final startup used scan disabled to avoid unrelated
+  public BTC RPC TLS noise.
+- wallet-sig1 and wallet-sig2 `--spring.profiles.active=test`: started with
+  ephemeral environment-only keys.
+- PostgreSQL `select 1`: passed; Redis `PING`: `PONG`.
+- Secret scan: only documentation placeholders and an intentionally empty xprv
+  response field matched.
+- Push: no.
+
+---
+
 ## Unified UTXO Legacy Cleanup Update
 
 Generated: 2026-06-24 Asia/Shanghai.

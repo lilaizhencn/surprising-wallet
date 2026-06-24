@@ -11,10 +11,8 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2shMultisigFeeCalculator;
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinFeePolicy;
-import com.surprising.wallet.service.criteria.AddressExample;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
-import com.surprising.wallet.service.service.WithdrawTransactionService;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -35,7 +33,6 @@ public class DogeCollectionJob {
     private static final int PAGE_SIZE = 10;
 
     private final AddressService addressService;
-    private final WithdrawTransactionService transactionService;
     private final ChainJdbcRepository chainRepository;
 
     @Value("${atomex.wallet.collection.enabled-currencies:}")
@@ -51,10 +48,8 @@ public class DogeCollectionJob {
     private Integer hotAddressIndex;
 
     public DogeCollectionJob(AddressService addressService,
-                             WithdrawTransactionService transactionService,
                              ChainJdbcRepository chainRepository) {
         this.addressService = addressService;
-        this.transactionService = transactionService;
         this.chainRepository = chainRepository;
     }
 
@@ -143,7 +138,8 @@ public class DogeCollectionJob {
                 .createDate(now)
                 .updateDate(now)
                 .build();
-        transactionService.add(transaction, table);
+        transaction = chainRepository.createBitcoinLikeSigningTransaction(
+                currency, "COLLECTION", collectionId, transaction);
 
         String transactionId = transaction.getId().toString();
         for (UtxoTransaction utxo : utxos) {
@@ -170,12 +166,16 @@ public class DogeCollectionJob {
     }
 
     private Address getHotAddress(ShardTable table) {
-        AddressExample example = new AddressExample();
-        example.createCriteria()
-                .andUserIdEqualTo(hotUserId)
-                .andBizEqualTo(hotBiz)
-                .andIndexEqualTo(hotAddressIndex);
-        return addressService.getOneByExample(example, table).orElse(null);
+        return chainRepository.findChainAddress(
+                        "DOGE", "DOGE", hotUserId, hotBiz, hotAddressIndex, "DEPOSIT")
+                .map(record -> Address.builder()
+                        .address(record.getAddress())
+                        .userId(record.getUserId())
+                        .biz(record.getBiz())
+                        .index(Math.toIntExact(record.getAddressIndex()))
+                        .currency(CurrencyEnum.DOGE.getName())
+                        .build())
+                .orElse(null);
     }
 
     private int getFeeRate(CurrencyEnum currency) {

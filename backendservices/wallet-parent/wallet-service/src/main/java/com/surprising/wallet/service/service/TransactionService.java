@@ -195,7 +195,9 @@ public class TransactionService {
             return true;
         }
 
-        var persisted = transactionService.getById(transaction.getId(), table);
+        var persisted = isUnifiedBitcoinLike(currency)
+                ? chainJdbcRepository.findBitcoinLikeSigningTransactionById(currency, transaction.getId())
+                : transactionService.getById(transaction.getId(), table);
         if (persisted.isPresent()
                 && persisted.get().getStatus() != null
                 && persisted.get().getStatus() >= Constants.SENT
@@ -224,7 +226,11 @@ public class TransactionService {
         short status = Constants.SENT;
         transaction.setStatus(status);
         transaction.setUpdateDate(Date.from(Instant.now()));
-        transactionService.editById(transaction, table);
+        if (isUnifiedBitcoinLike(currency)) {
+            chainJdbcRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
+        } else {
+            transactionService.editById(transaction, table);
+        }
 
         //更新withdrawrecord表中的txid
         WithdrawRecordExample example = new WithdrawRecordExample();
@@ -262,6 +268,7 @@ public class TransactionService {
     private void markBitcoinLikeRetrying(WithdrawTransaction transaction, CurrencyEnum currency,
                                          JSONObject signature, String error) {
         String chain = chainName(currency);
+        chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
         if ("collection".equals(signature.getString("type"))) {
             chainJdbcRepository.updateCollectionStatus(
                     chain, signature.getString("collectionId"), "RETRYING", null, error,
@@ -281,7 +288,8 @@ public class TransactionService {
         chainJdbcRepository.releaseUtxos(chain, lockRef);
         transaction.setStatus(Constants.DELETE);
         transaction.setUpdateDate(Date.from(Instant.now()));
-        transactionService.editById(transaction, table);
+        chainJdbcRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
+        chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
 
         if ("collection".equals(signature.getString("type"))) {
             chainJdbcRepository.updateCollectionStatus(
@@ -346,6 +354,9 @@ public class TransactionService {
     }
 
     private boolean isKnownWalletTransaction(String txId, CurrencyEnum currency) {
+        if (isUnifiedBitcoinLike(currency)) {
+            return chainJdbcRepository.bitcoinLikeSigningTransactionExists(currency, txId);
+        }
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
         com.surprising.wallet.service.criteria.WithdrawTransactionExample example =
                 new com.surprising.wallet.service.criteria.WithdrawTransactionExample();

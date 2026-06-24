@@ -826,6 +826,149 @@ public class ChainJdbcRepository {
         return results.stream().findFirst();
     }
 
+    public WithdrawTransaction createBitcoinLikeSigningTransaction(
+            CurrencyEnum currency,
+            String businessType,
+            String businessNo,
+            WithdrawTransaction transaction) {
+        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
+        List<WithdrawTransaction> inserted = jdbcTemplate.query("""
+                        insert into chain_signing_transaction(
+                            chain, asset_symbol, business_type, business_no,
+                            tx_id, balance, signature, currency, status, create_date, update_date
+                        )
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        on conflict (chain, business_type, business_no) do update set
+                            tx_id = excluded.tx_id,
+                            balance = excluded.balance,
+                            signature = excluded.signature,
+                            currency = excluded.currency,
+                            status = excluded.status,
+                            error_message = null,
+                            update_date = excluded.update_date
+                        where chain_signing_transaction.status in (?, ?)
+                        returning id, tx_id, balance, signature, currency, status, create_date, update_date
+                        """,
+                (rs, rowNum) -> mapSigningTransaction(rs),
+                chain,
+                chain,
+                businessType,
+                businessNo,
+                transaction.getTxId(),
+                transaction.getBalance(),
+                transaction.getSignature(),
+                transaction.getCurrency(),
+                transaction.getStatus(),
+                toTs(now()),
+                toTs(now()),
+                Constants.WAITING,
+                Constants.SIGNING);
+        if (!inserted.isEmpty()) {
+            return inserted.get(0);
+        }
+        return findBitcoinLikeSigningTransaction(currency, businessType, businessNo)
+                .orElseThrow(() -> new IllegalStateException(
+                        "failed to create " + chain + " signing transaction " + businessType + "/" + businessNo));
+    }
+
+    public Optional<WithdrawTransaction> findBitcoinLikeSigningTransaction(
+            CurrencyEnum currency, String businessType, String businessNo) {
+        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
+        List<WithdrawTransaction> results = jdbcTemplate.query("""
+                        select id, tx_id, balance, signature, currency, status, create_date, update_date
+                        from chain_signing_transaction
+                        where chain = ? and business_type = ? and business_no = ?
+                        """,
+                (rs, rowNum) -> mapSigningTransaction(rs),
+                chain, businessType, businessNo);
+        return results.stream().findFirst();
+    }
+
+    public Optional<WithdrawTransaction> findBitcoinLikeSigningTransactionById(
+            CurrencyEnum currency, int transactionId) {
+        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
+        List<WithdrawTransaction> results = jdbcTemplate.query("""
+                        select id, tx_id, balance, signature, currency, status, create_date, update_date
+                        from chain_signing_transaction
+                        where chain = ? and id = ?
+                        """,
+                (rs, rowNum) -> mapSigningTransaction(rs),
+                chain, transactionId);
+        return results.stream().findFirst();
+    }
+
+    public Optional<WithdrawTransaction> findBitcoinLikeSigningTransactionByTxId(
+            CurrencyEnum currency, String txId) {
+        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
+        List<WithdrawTransaction> results = jdbcTemplate.query("""
+                        select id, tx_id, balance, signature, currency, status, create_date, update_date
+                        from chain_signing_transaction
+                        where chain = ? and tx_id = ?
+                        order by id desc
+                        limit 1
+                        """,
+                (rs, rowNum) -> mapSigningTransaction(rs),
+                chain, txId);
+        return results.stream().findFirst();
+    }
+
+    public boolean bitcoinLikeSigningTransactionExists(CurrencyEnum currency, String txId) {
+        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
+        Boolean exists = jdbcTemplate.queryForObject("""
+                        select exists(
+                            select 1 from chain_signing_transaction
+                            where chain = ? and tx_id = ?
+                        )
+                        """, Boolean.class, chain, txId);
+        return Boolean.TRUE.equals(exists);
+    }
+
+    public int updateBitcoinLikeSigningTransaction(CurrencyEnum currency, WithdrawTransaction transaction) {
+        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
+        return jdbcTemplate.update("""
+                        update chain_signing_transaction
+                        set tx_id = ?,
+                            balance = ?,
+                            signature = ?,
+                            currency = ?,
+                            status = ?,
+                            error_message = null,
+                            update_date = ?
+                        where chain = ? and id = ?
+                        """,
+                transaction.getTxId(),
+                transaction.getBalance(),
+                transaction.getSignature(),
+                transaction.getCurrency(),
+                transaction.getStatus(),
+                toTs(now()),
+                chain,
+                transaction.getId());
+    }
+
+    public int markBitcoinLikeSigningError(CurrencyEnum currency, int transactionId, String errorMessage) {
+        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
+        return jdbcTemplate.update("""
+                        update chain_signing_transaction
+                        set error_message = ?,
+                            update_date = ?
+                        where chain = ? and id = ?
+                        """,
+                errorMessage, toTs(now()), chain, transactionId);
+    }
+
+    public List<WithdrawTransaction> findSentBitcoinLikeSigningTransactions(CurrencyEnum currency) {
+        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
+        return jdbcTemplate.query("""
+                        select id, tx_id, balance, signature, currency, status, create_date, update_date
+                        from chain_signing_transaction
+                        where chain = ? and status = ?
+                        order by id
+                        """,
+                (rs, rowNum) -> mapSigningTransaction(rs),
+                chain, Constants.SENT);
+    }
+
     public Optional<LedgerBalanceRecord> findLedgerBalance(String chain, String assetSymbol, String accountId) {
         List<LedgerBalanceRecord> results = jdbcTemplate.query("""
                         select chain, asset_symbol, account_id, available_balance, locked_balance, total_balance,
@@ -849,48 +992,43 @@ public class ChainJdbcRepository {
 
     public List<WithdrawTransaction> findStaleBitcoinLikeSigningTransactions(
             CurrencyEnum currency, long staleSeconds) {
-        String table = signingTransactionTable(currency);
+        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         return jdbcTemplate.query("""
                         select id, tx_id, balance, signature, currency, status, create_date, update_date
-                        from %s
-                        where status = 1
+                        from chain_signing_transaction
+                        where chain = ?
+                          and status = ?
                           and update_date < now() - (? * interval '1 second')
                         order by id
                         limit 100
-                        """.formatted(table),
-                (rs, rowNum) -> WithdrawTransaction.builder()
-                        .id(rs.getInt("id"))
-                        .txId(rs.getString("tx_id"))
-                        .balance(rs.getBigDecimal("balance"))
-                        .signature(rs.getString("signature"))
-                        .currency(rs.getInt("currency"))
-                        .status(rs.getShort("status"))
-                        .createDate(rs.getTimestamp("create_date"))
-                        .updateDate(rs.getTimestamp("update_date"))
-                        .build(),
-                staleSeconds);
+                        """,
+                (rs, rowNum) -> mapSigningTransaction(rs),
+                chain, Constants.SIGNING, staleSeconds);
     }
 
     public boolean claimBitcoinLikeSigningRecovery(
             CurrencyEnum currency, int transactionId, long staleSeconds) {
-        String table = signingTransactionTable(currency);
+        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         return jdbcTemplate.update("""
-                        update %s
+                        update chain_signing_transaction
                         set update_date = now()
-                        where id = ? and status = 1
+                        where chain = ? and id = ? and status = ?
                           and update_date < now() - (? * interval '1 second')
-                        """.formatted(table),
-                transactionId, staleSeconds) == 1;
+                        """,
+                chain, transactionId, Constants.SIGNING, staleSeconds) == 1;
     }
 
-    private String signingTransactionTable(CurrencyEnum currency) {
-        return switch (currency) {
-            case LTC -> "ltc_withdraw_transaction";
-            case DOGE -> "doge_withdraw_transaction";
-            case BCH -> "bch_withdraw_transaction";
-            default -> throw new IllegalArgumentException(
-                    "unsupported signing recovery currency " + currency);
-        };
+    private WithdrawTransaction mapSigningTransaction(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return WithdrawTransaction.builder()
+                .id(rs.getInt("id"))
+                .txId(rs.getString("tx_id"))
+                .balance(rs.getBigDecimal("balance"))
+                .signature(rs.getString("signature"))
+                .currency(rs.getInt("currency"))
+                .status(rs.getShort("status"))
+                .createDate(rs.getTimestamp("create_date"))
+                .updateDate(rs.getTimestamp("update_date"))
+                .build();
     }
 
     public int recordEvmTokenTransfer(DepositEvent event, long logIndex, String status) {
