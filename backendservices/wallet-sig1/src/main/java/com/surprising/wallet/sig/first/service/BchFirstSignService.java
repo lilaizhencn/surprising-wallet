@@ -2,7 +2,7 @@ package com.surprising.wallet.sig.first.service;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -42,8 +42,8 @@ public class BchFirstSignService implements ISignService {
     }
 
     @Override
-    public CurrencyEnum getCurrency() {
-        return CurrencyEnum.BCH;
+    public RuntimeAsset getCurrency() {
+        return RuntimeAsset.BCH;
     }
 
     @Override
@@ -63,7 +63,7 @@ public class BchFirstSignService implements ISignService {
                     new BitcoinCashMultisigTransactionBuilder(networkParameters());
             List<ECKey> keys = new ArrayList<>();
             List<String> redeemScripts = new ArrayList<>();
-            BigDecimal decimal = CurrencyEnum.BCH.getDecimal();
+            BigDecimal decimal = RuntimeAsset.BCH.getDecimal();
             for (int i = 0; i < utxos.size(); i++) {
                 Address address = addresses.get(i);
                 String derivedRedeemScript = pubKeyConfig.genRedeemScript(address);

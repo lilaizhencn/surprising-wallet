@@ -1,6 +1,6 @@
 package com.surprising.wallet.service.wallet;
 
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -18,20 +18,20 @@ public class WalletContext {
     @Autowired
     private List<IWallet> cachedWallet;
 
-    public IWallet getWallet(CurrencyEnum currency) {
+    public IWallet getWallet(RuntimeAsset currency) {
         IWallet wallet = findWallet(currency);
         if (wallet != null) {
             return wallet;
         }
 
-        CurrencyEnum mainCurrency = CurrencyEnum.toMainCurrency(currency);
+        RuntimeAsset mainCurrency = RuntimeAsset.toMainCurrency(currency);
         if (mainCurrency != currency) {
             return findWallet(mainCurrency);
         }
         return null;
     }
 
-    private IWallet findWallet(CurrencyEnum currency) {
+    private IWallet findWallet(RuntimeAsset currency) {
         for (IWallet wallet : cachedWallet) {
             if (wallet.getCurrency() == currency) {
                 return wallet;

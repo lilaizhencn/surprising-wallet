@@ -1,7 +1,7 @@
 package com.surprising.wallet.sig.second.impl;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
@@ -24,8 +24,8 @@ public class BchSecondSignService implements ISignService {
     private String network;
 
     @Override
-    public CurrencyEnum getCurrency() {
-        return CurrencyEnum.BCH;
+    public RuntimeAsset getCurrency() {
+        return RuntimeAsset.BCH;
     }
 
     @Override
@@ -48,7 +48,7 @@ public class BchSecondSignService implements ISignService {
             List<ECKey> keys = new ArrayList<>();
             BitcoinCashMultisigTransactionBuilder builder =
                     new BitcoinCashMultisigTransactionBuilder(networkParameters());
-            BigDecimal decimal = CurrencyEnum.BCH.getDecimal();
+            BigDecimal decimal = RuntimeAsset.BCH.getDecimal();
             for (int i = 0; i < addresses.size(); i++) {
                 keys.add(BipNodeUtil.getBipNODE(addresses.get(i)).getEcKey());
                 UtxoTransaction utxo = utxos.get(i);

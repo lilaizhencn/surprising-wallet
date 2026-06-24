@@ -2,7 +2,7 @@ package com.surprising.wallet.sig.first;
 
 import com.google.common.collect.Maps;
 import com.surprising.wallet.common.annotation.StartThread;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.sig.first.service.ISignService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
@@ -33,7 +33,7 @@ public class SignContent implements InitializingBean, ApplicationContextAware, A
     private Map<String, ISignService> cache = Maps.newHashMap();
 
 
-    public ISignService getSignService(CurrencyEnum currency) {
+    public ISignService getSignService(RuntimeAsset currency) {
         return cache.values().stream().filter(sign -> sign.getCurrency() == currency).findFirst().orElse(null);
     }
 

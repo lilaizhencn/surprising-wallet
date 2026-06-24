@@ -1,7 +1,7 @@
 package com.surprising.wallet.jobs.withdraw;
 
 import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.utils.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -52,7 +52,7 @@ public class FeeRateUpdater {
      */
     @Scheduled(cron = "0 */2 * * * ?")
     public void updateFeeRate() {
-        for (CurrencyEnum currency : new CurrencyEnum[]{CurrencyEnum.BTC}) {
+        for (RuntimeAsset currency : new RuntimeAsset[]{RuntimeAsset.BTC}) {
             try {
                 int feeRate = fetchFeeRate();
                 String key = Constants.WALLET_FEE + currency.getIndex();
@@ -108,7 +108,7 @@ public class FeeRateUpdater {
      * 手动强制更新费率（运维接口可调用）
      */
     public void forceUpdate(int feeRate) {
-        String key = Constants.WALLET_FEE + CurrencyEnum.BTC.getIndex();
+        String key = Constants.WALLET_FEE + RuntimeAsset.BTC.getIndex();
         REDIS.set(key, String.valueOf(Math.max(feeRate, MIN_FEE_RATE)));
         log.warn("手动强制费率: {} = {} sat/vB", key, feeRate);
     }

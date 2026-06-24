@@ -2,7 +2,7 @@ package com.surprising.wallet.sig.second;
 
 import com.google.common.collect.Maps;
 import com.surprising.wallet.common.annotation.StartThread;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.InitializingBean;
@@ -28,7 +28,7 @@ public class SignContent implements InitializingBean, ApplicationContextAware {
             TimeUnit.MINUTES, new ArrayBlockingQueue<>(THREAD_COUNT));
     private ApplicationContext context;
 
-    public static ISignService getSignService(CurrencyEnum currency) {
+    public static ISignService getSignService(RuntimeAsset currency) {
         for (Map.Entry<String, ISignService> entry : SignContent.cache.entrySet()) {
 
             ISignService sign = entry.getValue();

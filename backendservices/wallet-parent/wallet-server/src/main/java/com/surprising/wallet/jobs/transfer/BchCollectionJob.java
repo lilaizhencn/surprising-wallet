@@ -4,7 +4,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.BitcoinLikeChainProfile;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -61,7 +61,7 @@ public class BchCollectionJob {
         if (!isEnabled()) {
             return;
         }
-        CurrencyEnum currency = CurrencyEnum.BCH;
+        RuntimeAsset currency = RuntimeAsset.BCH;
         BitcoinLikeChainProfile profile = profile();
         ShardTable table = ShardTable.builder().prefix("bch").build();
         Address hotAddress = getHotAddress(table);
@@ -190,7 +190,7 @@ public class BchCollectionJob {
                         .userId(record.getUserId())
                         .biz(record.getBiz())
                         .index(Math.toIntExact(record.getAddressIndex()))
-                        .currency(CurrencyEnum.BCH.getName())
+                        .currency(RuntimeAsset.BCH.getName())
                         .build())
                 .orElse(null);
     }

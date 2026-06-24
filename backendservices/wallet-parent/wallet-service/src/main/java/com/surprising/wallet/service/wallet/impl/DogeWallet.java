@@ -2,7 +2,7 @@ package com.surprising.wallet.service.wallet.impl;
 
 import com.surprising.wallet.client.command.DogeCommand;
 import com.surprising.wallet.common.chain.BitcoinLikeChainProfile;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinNetworkParameters;
 import com.surprising.wallet.service.config.PubKeyConfig;
@@ -38,17 +38,17 @@ public class DogeWallet extends AbstractBtcLikeWallet implements IWallet {
         runtimeProfile = chainJdbcRepository.findBitcoinLikeProfile("DOGE", profileNetwork)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for DOGE/" + profileNetwork));
-        if (runtimeProfile.getRuntimeCurrencyId() != CurrencyEnum.DOGE.getIndex()) {
+        if (runtimeProfile.getRuntimeCurrencyId() != RuntimeAsset.DOGE.getIndex()) {
             throw new IllegalStateException("DOGE runtime currency id conflicts with legacy routing id");
         }
-        if (runtimeProfile.getBip44CoinType() != CurrencyEnum.DOGE.getBip44CoinType()) {
+        if (runtimeProfile.getBip44CoinType() != RuntimeAsset.DOGE.getBip44CoinType()) {
             throw new IllegalStateException("DOGE BIP44 coin type conflicts with compatibility metadata");
         }
     }
 
     @Override
-    public CurrencyEnum getCurrency() {
-        return CurrencyEnum.DOGE;
+    public RuntimeAsset getCurrency() {
+        return RuntimeAsset.DOGE;
     }
 
     @Override

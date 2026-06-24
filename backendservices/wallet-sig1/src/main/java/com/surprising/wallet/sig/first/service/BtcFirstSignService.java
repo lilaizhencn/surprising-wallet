@@ -1,6 +1,6 @@
 package com.surprising.wallet.sig.first.service;
 
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -16,7 +16,7 @@ public class BtcFirstSignService extends AbstractBtcLikeFirstSign implements ISi
      * @return
      */
     @Override
-    public CurrencyEnum getCurrency() {
-        return CurrencyEnum.BTC;
+    public RuntimeAsset getCurrency() {
+        return RuntimeAsset.BTC;
     }
 }

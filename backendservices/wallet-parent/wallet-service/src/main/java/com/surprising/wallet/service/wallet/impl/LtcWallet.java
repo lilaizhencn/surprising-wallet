@@ -1,6 +1,6 @@
 package com.surprising.wallet.service.wallet.impl;
 
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.chain.BitcoinLikeChainProfile;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinNetworkParameters;
 import com.surprising.wallet.service.chain.ltc.LitecoinEsploraCommand;
@@ -36,17 +36,17 @@ public class LtcWallet extends AbstractBtcLikeWallet implements IWallet {
         runtimeProfile = chainJdbcRepository.findBitcoinLikeProfile("LTC", profileNetwork)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for LTC/" + profileNetwork));
-        if (runtimeProfile.getRuntimeCurrencyId() != CurrencyEnum.LTC.getIndex()) {
+        if (runtimeProfile.getRuntimeCurrencyId() != RuntimeAsset.LTC.getIndex()) {
             throw new IllegalStateException("LTC runtime currency id conflicts with legacy routing id");
         }
-        if (runtimeProfile.getBip44CoinType() != CurrencyEnum.LTC.getBip44CoinType()) {
+        if (runtimeProfile.getBip44CoinType() != RuntimeAsset.LTC.getBip44CoinType()) {
             throw new IllegalStateException("LTC BIP44 coin type conflicts with legacy compatibility metadata");
         }
     }
 
     @Override
-    public CurrencyEnum getCurrency() {
-        return CurrencyEnum.LTC;
+    public RuntimeAsset getCurrency() {
+        return RuntimeAsset.LTC;
     }
 
     @Override

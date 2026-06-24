@@ -2,7 +2,7 @@ package com.surprising.wallet.jobs.transfer;
 
 import com.surprising.common.mybatis.pager.PageInfo;
 import com.surprising.common.mybatis.sharding.ShardTable;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.AccountTransaction;
 import com.surprising.wallet.service.criteria.AccountTransactionExample;
 import com.surprising.wallet.service.service.AccountTransactionService;
@@ -63,7 +63,7 @@ abstract public class AbstractTransferJob {
 
     }
 
-    private boolean isTransferEnabled(CurrencyEnum currency) {
+    private boolean isTransferEnabled(RuntimeAsset currency) {
         return Arrays.stream(enabledCurrencies.split(","))
                 .map(String::trim)
                 .filter(item -> !item.isEmpty())

@@ -2,7 +2,7 @@ package com.surprising.wallet.sig.first.service;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -55,7 +55,7 @@ public class DogeFirstSignService implements ISignService {
                     .toJavaList(Address.class);
             List<WithdrawRecord> records = signature.getJSONArray("withdraw")
                     .toJavaList(WithdrawRecord.class);
-            BigDecimal decimal = CurrencyEnum.DOGE.getDecimal();
+            BigDecimal decimal = RuntimeAsset.DOGE.getDecimal();
             LegacyMultisigTransactionBuilder builder =
                     new LegacyMultisigTransactionBuilder(networkParameters());
             List<ECKey> signingKeys = new ArrayList<>(utxos.size());
@@ -134,13 +134,13 @@ public class DogeFirstSignService implements ISignService {
     }
 
     @Override
-    public CurrencyEnum getCurrency() {
-        return CurrencyEnum.DOGE;
+    public RuntimeAsset getCurrency() {
+        return RuntimeAsset.DOGE;
     }
 
     private Bip32Node derive(Address address) {
         return root.getChild(44)
-                .getChild(CurrencyEnum.DOGE.getBip44CoinType())
+                .getChild(RuntimeAsset.DOGE.getBip44CoinType())
                 .getChild(address.getBiz())
                 .getChild(address.getUserId().intValue())
                 .getChild(address.getIndex());

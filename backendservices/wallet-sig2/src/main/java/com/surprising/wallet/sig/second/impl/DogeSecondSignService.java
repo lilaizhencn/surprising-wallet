@@ -1,7 +1,7 @@
 package com.surprising.wallet.sig.second.impl;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.core.LegacyMultisigTransactionBuilder;
@@ -49,8 +49,8 @@ public class DogeSecondSignService implements ISignService {
     }
 
     @Override
-    public CurrencyEnum getCurrency() {
-        return CurrencyEnum.DOGE;
+    public RuntimeAsset getCurrency() {
+        return RuntimeAsset.DOGE;
     }
 
     private DogecoinNetworkParameters networkParameters() {

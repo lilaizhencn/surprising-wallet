@@ -1,7 +1,7 @@
 package com.surprising.wallet.jobs.withdraw;
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,8 +15,8 @@ import java.util.Arrays;
     public BchSigningRecoveryJob(ChainJdbcRepository repo){this.repo=repo;}
     @Scheduled(cron="19/30 * * * * ?") public void execute(){
         if(Arrays.stream(enabled.split(",")).map(String::trim).noneMatch(v->"*".equals(v)||"bch".equalsIgnoreCase(v)))return;
-        for(var tx:repo.findStaleBitcoinLikeSigningTransactions(CurrencyEnum.BCH,stale))
-            if(repo.claimBitcoinLikeSigningRecovery(CurrencyEnum.BCH,tx.getId(),stale))
+        for(var tx:repo.findStaleBitcoinLikeSigningTransactions(RuntimeAsset.BCH,stale))
+            if(repo.claimBitcoinLikeSigningRecovery(RuntimeAsset.BCH,tx.getId(),stale))
                 REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY,JSONObject.toJSONString(tx));
     }
 }

@@ -3,7 +3,7 @@ package com.surprising.wallet.service.service.impl;
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.common.mybatis.sharding.service.AbstractCrudService;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.criteria.AddressExample;
@@ -60,8 +60,8 @@ public class AddressServiceImpl
         if (!StringUtils.hasText(addressStr)) {
             return null;
         }
-        CurrencyEnum parsedCurrency = CurrencyEnum.parseName(table.getPrefix());
-        final CurrencyEnum currency = assetRoutingService.legacyMainCurrency(parsedCurrency);
+        RuntimeAsset parsedCurrency = RuntimeAsset.parseName(table.getPrefix());
+        final RuntimeAsset currency = assetRoutingService.legacyMainCurrency(parsedCurrency);
         table = ShardTable.builder().prefix(currency.getName()).build();
 
         if (isUnifiedBitcoinLike(currency)) {
@@ -79,7 +79,7 @@ public class AddressServiceImpl
         return oneByExample.orElse(null);
     }
 
-    private Address toAddress(ChainAddressRecord record, CurrencyEnum currency) {
+    private Address toAddress(ChainAddressRecord record, RuntimeAsset currency) {
         return Address.builder()
                 .userId(record.getUserId())
                 .address(record.getAddress())
@@ -98,12 +98,12 @@ public class AddressServiceImpl
                 .build();
     }
 
-    private boolean isUnifiedBitcoinLike(CurrencyEnum currency) {
+    private boolean isUnifiedBitcoinLike(RuntimeAsset currency) {
         return assetRoutingService.isBitcoinLikeRuntimeCurrency(currency);
     }
 
     @Override
-    public Address getAddress(String addressStr, CurrencyEnum currency) {
+    public Address getAddress(String addressStr, RuntimeAsset currency) {
         if (!StringUtils.hasText(addressStr)) {
             return null;
         }

@@ -1,7 +1,7 @@
 package com.surprising.wallet.service.service;
 
 import com.surprising.common.mybatis.sharding.service.CrudService;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.service.criteria.WithdrawTransactionExample;
 
@@ -14,6 +14,6 @@ import com.surprising.wallet.service.criteria.WithdrawTransactionExample;
 public interface WithdrawTransactionService
         extends CrudService<WithdrawTransaction, WithdrawTransactionExample, Integer> {
 
-    WithdrawTransaction getByTxId(String txid, CurrencyEnum currencyEnum);
+    WithdrawTransaction getByTxId(String txid, RuntimeAsset currencyEnum);
 
 }

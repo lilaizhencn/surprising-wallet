@@ -1,7 +1,7 @@
 package com.surprising.wallet.service.wallet.impl;
 
 import com.surprising.wallet.client.command.EthCommand;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.service.wallet.AbstractEthLikeWallet;
 import com.surprising.wallet.service.wallet.IWallet;
@@ -40,9 +40,9 @@ public class EthWallet extends AbstractEthLikeWallet implements IWallet {
     }
 
     @Override
-    public void updateTXConfirmation(CurrencyEnum currency) {
-        super.updateTXConfirmation(CurrencyEnum.ETH);
-        CurrencyEnum.ERC20_SET.parallelStream().forEach(super::updateTXConfirmation);
+    public void updateTXConfirmation(RuntimeAsset currency) {
+        super.updateTXConfirmation(RuntimeAsset.ETH);
+        RuntimeAsset.ERC20_SET.parallelStream().forEach(super::updateTXConfirmation);
     }
 
     @Override
@@ -67,8 +67,8 @@ public class EthWallet extends AbstractEthLikeWallet implements IWallet {
 
 
     @Override
-    public CurrencyEnum getCurrency() {
-        return CurrencyEnum.ETH;
+    public RuntimeAsset getCurrency() {
+        return RuntimeAsset.ETH;
     }
 
     /**
@@ -78,6 +78,6 @@ public class EthWallet extends AbstractEthLikeWallet implements IWallet {
      */
     @Override
     public BigDecimal getDecimal() {
-        return CurrencyEnum.ETH.getDecimal();
+        return RuntimeAsset.ETH.getDecimal();
     }
 }

@@ -2,7 +2,7 @@ package com.surprising.wallet.service.service.impl;
 
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.common.mybatis.sharding.service.AbstractCrudService;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.service.criteria.WithdrawTransactionExample;
 import com.surprising.wallet.service.dao.WithdrawTransactionRepository;
@@ -34,7 +34,7 @@ public class WithdrawTransactionServiceImpl
     }
 
     @Override
-    public WithdrawTransaction getByTxId(String txid, CurrencyEnum currencyEnum) {
+    public WithdrawTransaction getByTxId(String txid, RuntimeAsset currencyEnum) {
         ShardTable table = ShardTable.builder().prefix(currencyEnum.getName()).build();
         WithdrawTransactionExample withExam = new WithdrawTransactionExample();
         withExam.createCriteria().andTxIdEqualTo(txid);

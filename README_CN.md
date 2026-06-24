@@ -245,7 +245,7 @@ VALUES ('bnb-chain-testnet', 'USDC', 'BEP20', '0x你的USDC合约地址', 18, tr
 `JdbcTokenRegistry` 优先读取 `token_config`，在找不到时回退到 `token_registry`，保证向后兼容。
 
 新链以 `chain_profile`、`chain_asset`、`token_config` 为配置事实来源。
-`CurrencyEnum` 和 `CurrencyIds` 仅作为 legacy 兼容层；runtime currency id 与
+legacy `CurrencyEnum` 和 `CurrencyIds` 运行期依赖已移除；runtime currency id 与
 BIP44 coin type 必须分离。
 
 ---

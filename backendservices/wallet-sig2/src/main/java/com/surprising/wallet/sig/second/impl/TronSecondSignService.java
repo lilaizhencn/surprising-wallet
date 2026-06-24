@@ -1,7 +1,7 @@
 package com.surprising.wallet.sig.second.impl;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sig.second.BipNodeUtil;
@@ -16,7 +16,7 @@ import org.tron.wallet.util.ByteArray;
 import java.io.IOException;
 import java.math.BigDecimal;
 
-import static com.surprising.wallet.common.currency.CurrencyEnum.TRX;
+import static com.surprising.wallet.common.chain.RuntimeAsset.TRX;
 
 
 /**
@@ -26,14 +26,14 @@ import static com.surprising.wallet.common.currency.CurrencyEnum.TRX;
 @Slf4j
 public class TronSecondSignService implements ISignService {
     @Override
-    public CurrencyEnum getCurrency() {
+    public RuntimeAsset getCurrency() {
         return TRX;
     }
 
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
         JSONObject sigJson = JSONObject.parseObject(transaction.getSignature());
-        CurrencyEnum currency = CurrencyEnum.parseValue(transaction.getCurrency());
+        RuntimeAsset currency = RuntimeAsset.parseValue(transaction.getCurrency());
         Address address = sigJson.getJSONObject("address").toJavaObject(Address.class);
         String from = sigJson.getString("from");
         String toAddr = sigJson.getString("to");

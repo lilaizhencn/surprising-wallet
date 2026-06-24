@@ -1,26 +1,16 @@
 package com.surprising.wallet.service.wallet;
 
-import com.surprising.common.mybatis.sharding.ShardTable;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.*;
-import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.service.criteria.CurrencyBalanceExample;
-import com.surprising.wallet.service.criteria.WithdrawRecordExample;
-import com.surprising.wallet.service.criteria.WithdrawTransactionExample;
-import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.service.*;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Lazy;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.Date;
-import java.util.List;
-import java.util.Optional;
 
 /**
  * @author atomex
@@ -30,17 +20,10 @@ abstract public class AbstractWallet implements IWallet {
 
 
     @Autowired
-    protected CurrencyBalanceService balanceService;
-    @Autowired(required = false)
-    protected AssetRoutingService assetRoutingService;
-
-    @Autowired
     protected ApplicationContext applicationContext;
 
     @Autowired
     protected WithdrawTransactionService withdrawTransactionService;
-    @Autowired
-    protected WithdrawRecordService recordService;
 
     @Autowired
     protected AccountTransactionService accountTransactionService;
@@ -52,28 +35,9 @@ abstract public class AbstractWallet implements IWallet {
     @Lazy
     protected TransactionService transactionService;
 
-    protected void updateTotalCurrencyBalance(CurrencyEnum currency, BigDecimal balance) {
-        if (isLedgerBackedRuntime(currency)) {
-            log.info("skip legacy currency_balance write for DB asset runtime currency={}", currency.getIndex());
-            return;
-        }
-        CurrencyBalanceExample example = new CurrencyBalanceExample();
-        example.createCriteria().andCurrencyIndexEqualTo(currency.getIndex());
-        Optional<CurrencyBalance> oneByExample = balanceService.getOneByExample(example);
-        CurrencyBalance currencyBalance;
-        if (!oneByExample.isPresent()) {
-            currencyBalance = CurrencyBalance.builder()
-                    .currencyIndex(currency.getIndex())
-                    .balance(balance)
-                    .createDate(Date.from(Instant.now()))
-                    .build();
-            balanceService.add(currencyBalance);
-        } else {
-            currencyBalance = oneByExample.get();
-            currencyBalance.setBalance(balance);
-            currencyBalance.setUpdateDate(Date.from(Instant.now()));
-            balanceService.editById(currencyBalance);
-        }
+    protected void updateTotalCurrencyBalance(RuntimeAsset currency, BigDecimal balance) {
+        log.info("currency_balance write disabled; ledger_balance is runtime source currency={} balance={}",
+                currency.getName(), balance);
     }
 
     /**
@@ -82,20 +46,9 @@ abstract public class AbstractWallet implements IWallet {
      * @param currency
      * @param deltaBalance
      */
-    protected void updateCurrencyDeltaBalance(CurrencyEnum currency, BigDecimal deltaBalance) {
-        if (isLedgerBackedRuntime(currency)) {
-            log.info("skip legacy currency_balance delta write for DB asset runtime currency={}", currency.getIndex());
-            return;
-        }
-        CurrencyBalanceExample example = new CurrencyBalanceExample();
-        example.createCriteria().andCurrencyIndexEqualTo(currency.getIndex());
-        Optional<CurrencyBalance> oneByExample = balanceService.getOneByExample(example);
-        if (oneByExample.isPresent()) {
-            CurrencyBalance currencyBalance = oneByExample.get();
-            currencyBalance.setBalance(currencyBalance.getBalance().add(deltaBalance));
-            currencyBalance.setUpdateDate(Date.from(Instant.now()));
-            balanceService.editById(currencyBalance);
-        }
+    protected void updateCurrencyDeltaBalance(RuntimeAsset currency, BigDecimal deltaBalance) {
+        log.info("currency_balance delta write disabled; ledger_balance is runtime source currency={} delta={}",
+                currency.getName(), deltaBalance);
     }
 
     /**
@@ -103,7 +56,7 @@ abstract public class AbstractWallet implements IWallet {
      */
     @Override
     public void updateTotalCurrencyBalance() {
-        CurrencyEnum currency = getCurrency();
+        RuntimeAsset currency = getCurrency();
         log.info("update {} total Balance begin", currency.getName());
 
         if (shouldUpdateTotalBalance()) {
@@ -117,12 +70,6 @@ abstract public class AbstractWallet implements IWallet {
 
     protected boolean shouldUpdateTotalBalance() {
         return true;
-    }
-
-    protected boolean isLedgerBackedRuntime(CurrencyEnum currency) {
-        return assetRoutingService != null
-                && currency != null
-                && assetRoutingService.hasRuntimeProfile(currency.getIndex());
     }
 
     public TransactionDTO convertUtxoToDto(UtxoTransaction utxo) {
@@ -160,33 +107,16 @@ abstract public class AbstractWallet implements IWallet {
      * @param txId
      * @param currency
      */
-    protected void updateWithdrawTXId(String txId, CurrencyEnum currency) {
-        //先检测是不是我们发出的交易
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        WithdrawTransactionExample withExam = new WithdrawTransactionExample();
-        withExam.createCriteria().andTxIdEqualTo(txId);
-        Optional<WithdrawTransaction> oneByExample = withdrawTransactionService.getOneByExample(withExam, table);
-        if (oneByExample.isPresent()) {
-            WithdrawTransaction withdrawTransaction = oneByExample.get();
-            withdrawTransaction.setStatus(Constants.CONFIRM);
-            withdrawTransaction.setUpdateDate(Date.from(Instant.now()));
-            withdrawTransactionService.editById(withdrawTransaction, table);
-
-            WithdrawRecordExample recordExample = new WithdrawRecordExample();
-            recordExample.createCriteria().andTxIdEqualTo(txId);
-            List<WithdrawRecord> withdrawRecords = recordService.getByExample(recordExample, table);
-            if (!CollectionUtils.isEmpty(withdrawRecords)) {
-                withdrawRecords.parallelStream().forEach((record -> record.setStatus((byte) Constants.CONFIRM)));
-                recordService.batchEdit(withdrawRecords, table);
-            }
-        }
+    protected void updateWithdrawTXId(String txId, RuntimeAsset currency) {
+        log.info("legacy withdraw_record confirmation adapter disabled currency={} txId={}",
+                currency.getName(), txId);
     }
 
     public String getWithdrawAddress() {
         throw new RuntimeException(getCurrency().getName() + " does not support getWithdrawAddress method");
     }
 
-    public void transfer(String address, CurrencyEnum currency, Date deadline) {
+    public void transfer(String address, RuntimeAsset currency, Date deadline) {
         throw new RuntimeException(getCurrency().getName() + " does not support transfer method");
 
     }

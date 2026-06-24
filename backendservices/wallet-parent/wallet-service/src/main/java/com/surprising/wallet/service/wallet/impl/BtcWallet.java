@@ -1,7 +1,7 @@
 package com.surprising.wallet.service.wallet.impl;
 
 import com.surprising.wallet.client.command.BtcCommand;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.service.wallet.AbstractBtcLikeWallet;
 import com.surprising.wallet.service.wallet.IWallet;
 import lombok.extern.slf4j.Slf4j;
@@ -31,8 +31,8 @@ public class BtcWallet extends AbstractBtcLikeWallet implements IWallet {
     }
 
     @Override
-    public CurrencyEnum getCurrency() {
-        return CurrencyEnum.BTC;
+    public RuntimeAsset getCurrency() {
+        return RuntimeAsset.BTC;
     }
 
 

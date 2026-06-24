@@ -3,7 +3,7 @@ package com.surprising.wallet.jobs.withdraw;
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -38,9 +38,9 @@ public class LtcSigningRecoveryJob {
             return;
         }
         for (WithdrawTransaction transaction : repository.findStaleBitcoinLikeSigningTransactions(
-                CurrencyEnum.LTC, staleSeconds)) {
+                RuntimeAsset.LTC, staleSeconds)) {
             if (!repository.claimBitcoinLikeSigningRecovery(
-                    CurrencyEnum.LTC, transaction.getId(), staleSeconds)) {
+                    RuntimeAsset.LTC, transaction.getId(), staleSeconds)) {
                 continue;
             }
             REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, JSONObject.toJSONString(transaction));

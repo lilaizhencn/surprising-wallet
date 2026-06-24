@@ -2,7 +2,7 @@ package com.surprising.wallet.service.service;
 
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.common.mybatis.sharding.service.CrudService;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.service.criteria.AddressExample;
 
@@ -20,7 +20,7 @@ public interface AddressService
 
     Address getAddress(String addressStr, ShardTable table);
 
-    Address getAddress(String addressStr, CurrencyEnum currencyEnum);
+    Address getAddress(String addressStr, RuntimeAsset currencyEnum);
 
     int countByExam(final AddressExample example, final ShardTable table);
 

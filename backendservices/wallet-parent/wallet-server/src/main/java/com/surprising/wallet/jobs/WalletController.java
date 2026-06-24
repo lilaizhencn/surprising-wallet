@@ -1,28 +1,22 @@
 package com.surprising.wallet.web.controller;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.commons.support.model.ResponseResult;
 import com.surprising.commons.support.util.ResultUtils;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.LedgerBalanceRecord;
 import com.surprising.wallet.common.currency.BizEnum;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.AddressDto;
 import com.surprising.wallet.common.pojo.*;
-import com.surprising.wallet.service.criteria.AddressExample;
-import com.surprising.wallet.service.criteria.CurrencyBalanceExample;
 import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import com.surprising.wallet.service.service.AddressService;
-import com.surprising.wallet.service.service.CurrencyBalanceService;
 import com.surprising.wallet.service.wallet.IWallet;
 import com.surprising.wallet.service.wallet.WalletContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.util.ObjectUtils;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -35,8 +29,6 @@ import java.util.stream.Collectors;
 public class WalletController {
 
     private final WalletContext context;
-    private final CurrencyBalanceService balanceService;
-    private final AddressService addressService;
     private final ChainJdbcRepository chainJdbcRepository;
     private final AssetRoutingService assetRoutingService;
 
@@ -47,13 +39,10 @@ public class WalletController {
     @Value("${atomex.wallet.pubKey3}")
     private String pubKey3;
 
-    public WalletController(WalletContext context, CurrencyBalanceService balanceService,
-                            AddressService addressService,
+    public WalletController(WalletContext context,
                             ChainJdbcRepository chainJdbcRepository,
                             AssetRoutingService assetRoutingService) {
         this.context = context;
-        this.balanceService = balanceService;
-        this.addressService = addressService;
         this.chainJdbcRepository = chainJdbcRepository;
         this.assetRoutingService = assetRoutingService;
     }
@@ -64,7 +53,7 @@ public class WalletController {
                                                     @RequestParam(value = "biz") Integer biz) {
         AddressDto addressDto = new AddressDto();
         try {
-            CurrencyEnum coin = CurrencyEnum.parseValue(currency);
+            RuntimeAsset coin = RuntimeAsset.parseValue(currency);
             BizEnum.parseBiz(biz);
             coin = assetRoutingService.legacyMainCurrency(coin);
             IWallet wallet = context.getWallet(coin);
@@ -93,7 +82,7 @@ public class WalletController {
                                             @RequestParam(value = "address") String address) {
         JSONObject json = new JSONObject();
         try {
-            CurrencyEnum coin = CurrencyEnum.parseValue(currency);
+            RuntimeAsset coin = RuntimeAsset.parseValue(currency);
             IWallet wallet = context.getWallet(coin);
             boolean valid = wallet.checkAddress(address);
             json.put("address", address);
@@ -111,21 +100,10 @@ public class WalletController {
 
         JSONObject json = new JSONObject();
         try {
-            CurrencyEnum coin = CurrencyEnum.parseValue(currency);
-            if (assetRoutingService.hasRuntimeProfile(coin.getIndex())) {
-                String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
-                String symbol = assetRoutingService.requireNativeSymbolForRuntimeCurrencyId(coin.getIndex());
-                json.put("balance", chainJdbcRepository.sumLedgerTotalBalance(chain, symbol));
-                return ResultUtils.success(json);
-            }
-            CurrencyBalanceExample example = new CurrencyBalanceExample();
-            example.createCriteria().andCurrencyIndexEqualTo(coin.getIndex());
-            CurrencyBalance balance = balanceService.getOneByExample(example).get();
-            if (ObjectUtils.isEmpty(balance)) {
-                json.put("balance", BigDecimal.ZERO);
-            } else {
-                json.put("balance", balance.getBalance());
-            }
+            RuntimeAsset coin = RuntimeAsset.parseValue(currency);
+            String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
+            String symbol = assetRoutingService.requireNativeSymbolForRuntimeCurrencyId(coin.getIndex());
+            json.put("balance", chainJdbcRepository.sumLedgerTotalBalance(chain, symbol));
 
         } catch (Throwable e) {
             log.error("查询币种余额异常", e);
@@ -136,10 +114,9 @@ public class WalletController {
     }
 
     @GetMapping("/balance/all")
-    public ResponseResult<List<CurrencyBalance>> genAllBalance() {
+    public ResponseResult<List<LedgerBalanceRecord>> genAllBalance() {
         try {
-            List<CurrencyBalance> allCurrencyBalance = balanceService.getAll();
-            return ResultUtils.success(allCurrencyBalance);
+            return ResultUtils.success(chainJdbcRepository.listLedgerBalances());
         } catch (Throwable e) {
             log.error("获取所有余额异常", e);
             return ResultUtils.failure("获取所有余额异常");
@@ -198,46 +175,26 @@ public class WalletController {
             @RequestParam(value = "currency", defaultValue = "1") Integer currency) {
         Map<String, Object> result = new HashMap<>();
         try {
-            CurrencyEnum coin = CurrencyEnum.parseValue(currency);
+            RuntimeAsset coin = RuntimeAsset.parseValue(currency);
             coin = assetRoutingService.legacyMainCurrency(coin);
 
             // Hot wallet address at userId=0, biz=0, index=0
-            if (isUnifiedBitcoinLike(coin)) {
-                CurrencyEnum finalCoin = coin;
-                String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
-                chainJdbcRepository.findChainAddress(chain, chain, 0L, 0, 0L, "DEPOSIT")
-                        .ifPresent(addr -> {
-                            result.put("address", addr.getAddress());
-                            result.put("childId", Math.toIntExact(addr.getAddressIndex()));
-                            result.put("path", addr.getDerivationPath());
-                            result.put("scriptType", "P2WSH");
-                            result.put("witnessScript", "");
-                            result.put("publicKeys", "");
-                            result.put("currency", finalCoin.getName());
-                        });
-            } else {
-                AddressExample example = new AddressExample();
-                example.createCriteria().andUserIdEqualTo(0L).andBizEqualTo(0);
-                ShardTable table = ShardTable.builder().prefix(coin.getName()).build();
-                Optional<Address> addrOpt = addressService.getOneByExample(example, table);
-
-                if (addrOpt.isPresent()) {
-                    Address addr = addrOpt.get();
-                    result.put("address", addr.getAddress());
-                    result.put("childId", addr.getIndex());
-                    result.put("path", addr.getDerivationPath());
-                    result.put("scriptType", addr.getScriptType());
-                    result.put("witnessScript", addr.getWitnessScript());
-                    result.put("publicKeys", addr.getPublicKeys());
-                    result.put("currency", coin.getName());
-                }
-            }
+            String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
+            String symbol = assetRoutingService.requireNativeSymbolForRuntimeCurrencyId(coin.getIndex());
+            RuntimeAsset finalCoin = coin;
+            chainJdbcRepository.findChainAddress(chain, symbol, 0L, 0, 0L, "DEPOSIT")
+                    .ifPresent(addr -> {
+                        result.put("address", addr.getAddress());
+                        result.put("childId", Math.toIntExact(addr.getAddressIndex()));
+                        result.put("path", addr.getDerivationPath());
+                        result.put("scriptType", "P2WSH");
+                        result.put("witnessScript", "");
+                        result.put("publicKeys", "");
+                        result.put("currency", finalCoin.getName());
+                    });
 
             // Balance
-            CurrencyBalanceExample balEx = new CurrencyBalanceExample();
-            balEx.createCriteria().andCurrencyIndexEqualTo(coin.getIndex());
-            Optional<CurrencyBalance> bal = balanceService.getOneByExample(balEx);
-            result.put("balance", bal.map(CurrencyBalance::getBalance).orElse(BigDecimal.ZERO));
+            result.put("balance", chainJdbcRepository.sumLedgerTotalBalance(chain, symbol));
 
             // Computed: derivation chain, witness script from 3 xpubs
             result.put("network", "Bitcoin TestNet3");
@@ -256,49 +213,18 @@ public class WalletController {
             @RequestParam(value = "userId", required = false) Long userId,
             @RequestParam(value = "biz", required = false) Integer biz) {
         try {
-            CurrencyEnum coin = currency != null ? CurrencyEnum.parseValue(currency) : CurrencyEnum.BTC;
+            RuntimeAsset coin = currency != null ? RuntimeAsset.parseValue(currency) : RuntimeAsset.BTC;
             coin = assetRoutingService.legacyMainCurrency(coin);
-            if (isUnifiedBitcoinLike(coin)) {
-                String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
-                List<AddressDto> dtos = chainJdbcRepository.listChainAddresses(chain, chain).stream()
-                        .filter(record -> record.getUserId() != null && record.getUserId() > 0)
-                        .filter(record -> userId == null || Objects.equals(record.getUserId(), userId))
-                        .filter(record -> biz == null || Objects.equals(record.getBiz(), biz))
-                        .sorted(Comparator.comparing(ChainAddressRecord::getId).reversed())
-                        .limit(200)
-                        .map(this::toAddressDto)
-                        .collect(Collectors.toList());
-                return ResultUtils.success(dtos);
-            }
-            ShardTable table = ShardTable.builder().prefix(coin.getName()).build();
-
-            AddressExample example = new AddressExample();
-            var criteria = example.createCriteria();
-            criteria.andUserIdGreaterThan(0L); // exclude hot wallet
-            if (userId != null) criteria.andUserIdEqualTo(userId);
-            if (biz != null) criteria.andBizEqualTo(biz);
-            example.setOrderByClause("id desc");
-
-            com.surprising.common.mybatis.pager.PageInfo pageInfo = new com.surprising.common.mybatis.pager.PageInfo();
-            pageInfo.setPageSize(200);
-            pageInfo.setStartIndex(0);
-
-            List<Address> addrs = addressService.getByPage(pageInfo, example, table);
-            List<AddressDto> dtos = addrs.stream().map(a -> {
-                AddressDto dto = new AddressDto();
-                dto.setUserId(a.getUserId());
-                dto.setBiz(a.getBiz());
-                dto.setAddress(a.getAddress());
-                dto.setChildId(a.getIndex());
-                dto.setPath(a.getDerivationPath());
-                dto.setNetwork(a.getNetwork());
-                dto.setScriptType(a.getScriptType());
-                dto.setRedeemScript(a.getRedeemScript());
-                dto.setWitnessScript(a.getWitnessScript());
-                dto.setPublicKeys(a.getPublicKeys());
-                return dto;
-            }).collect(Collectors.toList());
-
+            String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
+            String symbol = assetRoutingService.requireNativeSymbolForRuntimeCurrencyId(coin.getIndex());
+            List<AddressDto> dtos = chainJdbcRepository.listChainAddresses(chain, symbol).stream()
+                    .filter(record -> record.getUserId() != null && record.getUserId() > 0)
+                    .filter(record -> userId == null || Objects.equals(record.getUserId(), userId))
+                    .filter(record -> biz == null || Objects.equals(record.getBiz(), biz))
+                    .sorted(Comparator.comparing(ChainAddressRecord::getId).reversed())
+                    .limit(200)
+                    .map(this::toAddressDto)
+                    .collect(Collectors.toList());
             return ResultUtils.success(dtos);
         } catch (Exception e) {
             log.error("getAddresses error", e);
@@ -312,7 +238,7 @@ public class WalletController {
             @RequestParam(value = "address") String address,
             @RequestParam(value = "currency") Integer currency) {
         try {
-            CurrencyEnum coin = CurrencyEnum.parseValue(currency);
+            RuntimeAsset coin = RuntimeAsset.parseValue(currency);
             if (isUnifiedBitcoinLike(coin)) {
                 String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
                 return ResultUtils.success(chainJdbcRepository.listUtxosByAddress(chain, address, 50));
@@ -324,7 +250,7 @@ public class WalletController {
         }
     }
 
-    private boolean isUnifiedBitcoinLike(CurrencyEnum currency) {
+    private boolean isUnifiedBitcoinLike(RuntimeAsset currency) {
         return assetRoutingService.isBitcoinLikeRuntimeCurrency(currency);
     }
 

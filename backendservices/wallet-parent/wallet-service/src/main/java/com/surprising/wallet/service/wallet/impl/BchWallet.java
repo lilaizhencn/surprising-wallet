@@ -2,7 +2,7 @@ package com.surprising.wallet.service.wallet.impl;
 
 import com.surprising.wallet.client.command.BchCommand;
 import com.surprising.wallet.common.chain.BitcoinLikeChainProfile;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashAddressCodec;
@@ -44,8 +44,8 @@ public class BchWallet extends AbstractBtcLikeWallet {
     }
 
     @Override
-    public CurrencyEnum getCurrency() {
-        return CurrencyEnum.BCH;
+    public RuntimeAsset getCurrency() {
+        return RuntimeAsset.BCH;
     }
 
     @Override

@@ -1,6 +1,6 @@
 package com.surprising.wallet.sig.second;
 
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,13 +21,13 @@ public class TransactionSignService {
         String sig;
         try {
             transaction.setBalance(new BigDecimal(transaction.getBalanceStr()));
-            CurrencyEnum currency = CurrencyEnum.parseValue(transaction.getCurrency());
+            RuntimeAsset currency = RuntimeAsset.parseValue(transaction.getCurrency());
             ISignService signService = SignContent.getSignService(currency);
             sig = signService.signTransaction(transaction);
-            log.info("签名服务 结束 币种id:{}", CurrencyEnum.parseValue(transaction.getCurrency()).getName());
+            log.info("签名服务 结束 币种id:{}", RuntimeAsset.parseValue(transaction.getCurrency()).getName());
         } catch (Throwable e) {
             sig = "";
-            log.error("签名服务 异常 币种id:{}", CurrencyEnum.parseValue(transaction.getCurrency()).getName(), e);
+            log.error("签名服务 异常 币种id:{}", RuntimeAsset.parseValue(transaction.getCurrency()).getName(), e);
         }
         return sig;
     }

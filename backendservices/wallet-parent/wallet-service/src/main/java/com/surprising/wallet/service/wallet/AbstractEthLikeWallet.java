@@ -5,7 +5,7 @@ import com.surprising.common.mybatis.pager.PageInfo;
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.client.command.EthLikeCommand;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.AccountTransaction;
 import com.surprising.wallet.common.pojo.Address;
@@ -20,7 +20,6 @@ import com.surprising.wallet.service.criteria.AccountTransactionExample;
 import com.surprising.wallet.service.criteria.AddressExample;
 import com.surprising.wallet.service.service.AccountTransactionService;
 import com.surprising.wallet.service.service.AddressService;
-import com.surprising.wallet.service.service.WithdrawRecordService;
 import com.surprising.wallet.service.service.WithdrawTransactionService;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -64,8 +63,6 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
     protected AccountTransactionService accountTransactionService;
     @Autowired
     protected WithdrawTransactionService withdrawTransactionService;
-    @Autowired
-    protected WithdrawRecordService recordService;
     @Autowired
     protected AddressService addressService;
     private String withdrawAddress;
@@ -128,7 +125,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
         /*
         hd的公钥推导path: bip44-currency-biz-userId-index
          */
-        CurrencyEnum currency = getCurrency();
+        RuntimeAsset currency = getCurrency();
         ECKey ecKey = pubKeyConfig.NODE2.getChild(44).getChild(currency.getIndex()).getChild(biz).getChild(userId.intValue()).getChild(index).getEcKey();
         EthECKey ethEcKey = EthECKey.fromPublicOnly(ecKey.getPubKey());
         String addressStr = ETH_ADDRESS_PREFIX + Hex.toHexString(ethEcKey.getAddress());
@@ -155,7 +152,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
     }
 
 
-    public BigDecimal getBalance(CurrencyEnum currency) {
+    public BigDecimal getBalance(RuntimeAsset currency) {
         String currencyName = currency.getName();
         log.info("get {} Balance begin", currencyName);
         try {
@@ -272,7 +269,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
     }
 
     @Override
-    protected void updateWithdrawTXId(String txId, CurrencyEnum currency) {
+    protected void updateWithdrawTXId(String txId, RuntimeAsset currency) {
         super.updateWithdrawTXId(txId, currency);
         updateAccountTransaction(txId, currency);
     }
@@ -313,7 +310,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
         return acTx;
     }
 
-    protected Address searchAddress(String addressStr, CurrencyEnum currency) {
+    protected Address searchAddress(String addressStr, RuntimeAsset currency) {
         if (!StringUtils.hasText(addressStr)) {
             return null;
         }
@@ -324,7 +321,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
 
     @Override
     @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_UNCOMMITTED)
-    public void transfer(String address, CurrencyEnum currency, Date deadline) {
+    public void transfer(String address, RuntimeAsset currency, Date deadline) {
         BigDecimal gasPrice = gasPrice(currency);
         BigDecimal transferGasPrice = transferGasPrice(currency);
 
@@ -342,7 +339,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
                 .andCreateDateLessThan(deadline);
         //balance > 2 * RESERVED
         if (balance.compareTo(RESERVED.add(RESERVED)) > 0) {
-            CurrencyEnum mainCurrency = CurrencyEnum.toMainCurrency(currency);
+            RuntimeAsset mainCurrency = RuntimeAsset.toMainCurrency(currency);
             if (mainCurrency == currency) {
                 //地址中保留的币，用来付手续费
                 balance = balance.subtract(RESERVED);
@@ -385,7 +382,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
         return new BigDecimal("0.00000000000042");
     }
 
-    protected BigDecimal gasPrice(CurrencyEnum currency) {
+    protected BigDecimal gasPrice(RuntimeAsset currency) {
 
         BigDecimal minGasPrice = new BigDecimal("0.000000012");
         BigDecimal maxGasPrice = new BigDecimal("0.0000001");
@@ -394,8 +391,8 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
 
         BigDecimal decimal;
 
-        if (CurrencyEnum.isErc20(currency)) {
-            decimal = CurrencyEnum.ETH.getDecimal();
+        if (RuntimeAsset.isErc20(currency)) {
+            decimal = RuntimeAsset.ETH.getDecimal();
         } else {
             decimal = getDecimal();
         }
@@ -410,19 +407,19 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
 
     }
 
-    protected BigDecimal transferGasPrice(CurrencyEnum currency) {
+    protected BigDecimal transferGasPrice(RuntimeAsset currency) {
         return new BigDecimal("0.00000003");
     }
 
 
     protected WithdrawTransaction buildTransaction(WithdrawRecord record, String from, String type) {
-        CurrencyEnum currency = CurrencyEnum.parseValue(record.getCurrency());
+        RuntimeAsset currency = RuntimeAsset.parseValue(record.getCurrency());
         BigDecimal gas = gas();
 
         AddressExample addrExam = new AddressExample();
         addrExam.createCriteria().andAddressEqualTo(from);
         ShardTable addressTable;
-        addressTable = ShardTable.builder().prefix(CurrencyEnum.toMainCurrency(currency).getName()).build();
+        addressTable = ShardTable.builder().prefix(RuntimeAsset.toMainCurrency(currency).getName()).build();
 
         Address address = addressService.getAndLockOneByExample(addrExam, addressTable);
         if (ObjectUtils.isEmpty(address)) {
@@ -509,7 +506,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
     }
 
     @Override
-    protected BigDecimal getBalance(String address, CurrencyEnum currency) {
+    protected BigDecimal getBalance(String address, RuntimeAsset currency) {
         String tranAmount = command.getBalance(address, "latest");
         BigDecimal amount = new BigDecimal(EthereumUtil.hexToBigInteger(tranAmount));
         return amount.divide(getDecimal());

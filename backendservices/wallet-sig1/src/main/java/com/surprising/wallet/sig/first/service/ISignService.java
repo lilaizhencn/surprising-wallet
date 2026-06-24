@@ -1,6 +1,6 @@
 package com.surprising.wallet.sig.first.service;
 
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 
 /**
@@ -22,5 +22,5 @@ public interface ISignService {
      *
      * @return
      */
-    CurrencyEnum getCurrency();
+    RuntimeAsset getCurrency();
 }

@@ -2,7 +2,7 @@ package com.surprising.wallet.jobs.withdraw;
 
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
@@ -35,9 +35,9 @@ public class DogeSigningRecoveryJob {
             return;
         }
         for (WithdrawTransaction transaction : repository.findStaleBitcoinLikeSigningTransactions(
-                CurrencyEnum.DOGE, staleSeconds)) {
+                RuntimeAsset.DOGE, staleSeconds)) {
             if (!repository.claimBitcoinLikeSigningRecovery(
-                    CurrencyEnum.DOGE, transaction.getId(), staleSeconds)) {
+                    RuntimeAsset.DOGE, transaction.getId(), staleSeconds)) {
                 continue;
             }
             REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, JSONObject.toJSONString(transaction));

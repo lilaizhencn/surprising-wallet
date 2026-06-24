@@ -3,7 +3,7 @@ package com.surprising.wallet.service.wallet.impl;
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.AccountTransaction;
 import com.surprising.wallet.common.pojo.Address;
@@ -57,13 +57,13 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
     }
 
     @Override
-    public CurrencyEnum getCurrency() {
-        return CurrencyEnum.TRX;
+    public RuntimeAsset getCurrency() {
+        return RuntimeAsset.TRX;
     }
 
     @Override
     public BigDecimal getDecimal() {
-        return CurrencyEnum.TRX.getDecimal();
+        return RuntimeAsset.TRX.getDecimal();
     }
 
     @Override
@@ -84,11 +84,11 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
 
     @Override
     protected WithdrawTransaction buildTransaction(WithdrawRecord record, String from, String type) {
-        CurrencyEnum currency = CurrencyEnum.parseValue(record.getCurrency());
+        RuntimeAsset currency = RuntimeAsset.parseValue(record.getCurrency());
         AddressExample addrExam = new AddressExample();
         addrExam.createCriteria().andAddressEqualTo(from);
         ShardTable addressTable;
-        addressTable = ShardTable.builder().prefix(CurrencyEnum.toMainCurrency(currency).getName()).build();
+        addressTable = ShardTable.builder().prefix(RuntimeAsset.toMainCurrency(currency).getName()).build();
 
         Address address = addressService.getAndLockOneByExample(addrExam, addressTable);
         if (ObjectUtils.isEmpty(address)) {
@@ -119,7 +119,7 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
 
     @Override
     @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_UNCOMMITTED)
-    public void transfer(String address, CurrencyEnum currency, Date deadline) {
+    public void transfer(String address, RuntimeAsset currency, Date deadline) {
         BigDecimal balance = getBalance(address, currency);
 
         //tron地址中的钱如果小于0.1个，会转账失败
@@ -198,7 +198,7 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
          * TRON uses the same secp256k1 root key set as BTC/EVM.
          * Address generation must mirror wallet-sig2's m/44/currency/biz/user/index private-key path.
          */
-        CurrencyEnum currency = getCurrency();
+        RuntimeAsset currency = getCurrency();
         ECKey ecKey = pubKeyConfig.NODE2.getChild(44).getChild(currency.getIndex()).getChild(biz).getChild(userId.intValue()).getChild(index).getEcKey();
         String addressStr = TronWalletApi.getAddress(ecKey.getPubKey());
 
@@ -309,7 +309,7 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
     }
 
     @Override
-    protected BigDecimal getBalance(String address, CurrencyEnum currency) {
+    protected BigDecimal getBalance(String address, RuntimeAsset currency) {
         Protocol.Account account = TronWalletApi.queryAccount(address);
         if (ObjectUtils.isEmpty(account)) {
             return BigDecimal.ZERO;

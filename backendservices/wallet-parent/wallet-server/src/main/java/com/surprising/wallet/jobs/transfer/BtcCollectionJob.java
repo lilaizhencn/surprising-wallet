@@ -3,7 +3,7 @@ package com.surprising.wallet.jobs.transfer;
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -58,7 +58,7 @@ public class BtcCollectionJob {
         if (!isEnabled()) {
             return;
         }
-        CurrencyEnum currency = CurrencyEnum.BTC;
+        RuntimeAsset currency = RuntimeAsset.BTC;
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
         Address hotAddress = getHotAddress(table);
         if (hotAddress == null) {
@@ -162,7 +162,7 @@ public class BtcCollectionJob {
                 transaction.getId(), utxos.size(), inputSat, hotAddress.getAddress(), feeSat, feeRate);
     }
 
-    private List<UtxoTransaction> findCollectableUtxos(ShardTable table, CurrencyEnum currency) {
+    private List<UtxoTransaction> findCollectableUtxos(ShardTable table, RuntimeAsset currency) {
         List<UtxoTransaction> candidates = chainJdbcRepository.listSpendableUtxos(
                 "BTC", "BTC", currency.getDepositConfirmNum(), PAGE_SIZE, 0);
         if (CollectionUtils.isEmpty(candidates)) {
@@ -184,12 +184,12 @@ public class BtcCollectionJob {
                         .userId(record.getUserId())
                         .biz(record.getBiz())
                         .index(Math.toIntExact(record.getAddressIndex()))
-                        .currency(CurrencyEnum.BTC.getName())
+                        .currency(RuntimeAsset.BTC.getName())
                         .build())
                 .orElse(null);
     }
 
-    private int getFeeRate(CurrencyEnum currency) {
+    private int getFeeRate(RuntimeAsset currency) {
         Integer redisFeeRate = REDIS.getInt(Constants.WALLET_FEE + currency.getIndex());
         if (redisFeeRate == null || redisFeeRate <= 0) {
             return DEFAULT_FEE_RATE;
@@ -200,7 +200,7 @@ public class BtcCollectionJob {
     private boolean isEnabled() {
         for (String item : enabledCurrencies.split(",")) {
             String value = item.trim();
-            if ("*".equals(value) || CurrencyEnum.BTC.getName().equalsIgnoreCase(value)) {
+            if ("*".equals(value) || RuntimeAsset.BTC.getName().equalsIgnoreCase(value)) {
                 return true;
             }
         }

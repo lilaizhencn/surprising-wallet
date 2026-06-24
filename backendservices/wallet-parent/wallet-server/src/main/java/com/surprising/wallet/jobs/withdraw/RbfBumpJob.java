@@ -1,23 +1,18 @@
 package com.surprising.wallet.jobs.withdraw;
 
-import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import com.surprising.wallet.service.service.WithdrawRecordService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
-import java.util.Date;
 import java.util.List;
 
 /**
@@ -36,7 +31,7 @@ import java.util.List;
  * <ol>
  *   <li>找到原始交易，提取 UTXO 列表和提现记录</li>
  *   <li>将 UTXO 标记回未花费（spent=0）</li>
- *   <li>将 withdraw_record 状态重置为 WAITING</li>
+ *   <li>保持 withdrawal_order 为 SIGNING，复用同一批订单和 UTXO 输入</li>
  *   <li>费率自动 ×2（若 Redis 中费率已由 FeeRateUpdater 提高则用最新值）</li>
  *   <li>用提高后的费率重建 signature JSON</li>
  *   <li>推送到首次签名队列 → sig1 → sig2 → 广播</li>
@@ -57,9 +52,6 @@ public class RbfBumpJob {
 
     @Autowired
     private ChainJdbcRepository chainJdbcRepository;
-
-    @Autowired
-    private WithdrawRecordService recordService;
 
     /**
      * 每 30 秒检查一次 RBF 触发队列
@@ -85,8 +77,8 @@ public class RbfBumpJob {
 
     private void bumpFee(int txId) {
         // 1. 找到原始交易
-        CurrencyEnum currency = CurrencyEnum.BTC; // BTC only for now
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
+        RuntimeAsset currency = RuntimeAsset.BTC; // BTC only for now
+        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         java.util.Optional<WithdrawTransaction> txOpt =
                 chainJdbcRepository.findBitcoinLikeSigningTransactionById(currency, txId);
         if (txOpt.isEmpty()) {
@@ -109,26 +101,25 @@ public class RbfBumpJob {
         List<UtxoTransaction> utxos = sigJson.getJSONArray("utxos")
                 .toJavaList(UtxoTransaction.class);
 
-        // 3. 统一 UTXO 运行时不再回写 legacy UTXO 表；RBF 继续复用同一组输入，
-        //    并确保它们仍由当前 withdraw_transaction id 持有锁。
+        // 3. RBF 继续复用同一组输入，并确保它们仍由当前签名交易 id 持有锁。
         for (UtxoTransaction utxo : utxos) {
-            chainJdbcRepository.lockUtxo("BTC", utxo.getTxId(), utxo.getSeq(), String.valueOf(txId));
+            chainJdbcRepository.lockUtxo(chain, utxo.getTxId(), utxo.getSeq(), String.valueOf(txId));
         }
         log.info("RBF: {} 个UTXO 使用统一表保持锁定", utxos.size());
 
-        // 4. 重置 withdraw_record 状态
+        // 4. 订单继续保持 SIGNING；不回写 legacy withdraw_record。
         List<WithdrawRecord> records = sigJson.getJSONArray("withdraw")
                 .toJavaList(WithdrawRecord.class);
         for (WithdrawRecord record : records) {
-            record.setStatus((byte) Constants.WAITING);
-            record.setUpdateDate(Date.from(Instant.now()));
+            chainJdbcRepository.updateWithdrawalStatus(
+                    chain, record.getWithdrawId(), "SIGNING", null, null, null);
         }
-        recordService.batchEdit(records, table);
-        log.info("RBF: {} 条提现记录重置", records.size());
+        log.info("RBF: {} 条提现订单保持签名中", records.size());
 
         // 5. 提高费率
         long oldFeeRate = sigJson.getLongValue("feeRate");
-        long newFeeRate = REDIS.getInt(Constants.WALLET_FEE + currency.getIndex());
+        Integer configuredFeeRate = REDIS.getInt(Constants.WALLET_FEE + currency.getIndex());
+        long newFeeRate = configuredFeeRate == null ? 0L : configuredFeeRate;
 
         if (newFeeRate <= oldFeeRate) {
             // MemPool API 还没刷新，自动 x2

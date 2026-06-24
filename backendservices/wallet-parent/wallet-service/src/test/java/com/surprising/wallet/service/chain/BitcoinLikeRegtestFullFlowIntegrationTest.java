@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.LedgerBalanceRecord;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
@@ -140,7 +140,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 "freeze must reject over-spend and keep ledger non-negative");
         assertEquals(1, repository.updateWithdrawalStatus(
                 chainName, withdrawalOrder, "FROZEN", depositAddress, null, null));
-        CurrencyEnum currency = CurrencyEnum.valueOf(chainName);
+        RuntimeAsset currency = RuntimeAsset.valueOf(chainName);
         WithdrawTransaction signing = repository.createBitcoinLikeSigningTransaction(
                 currency,
                 "WITHDRAW",

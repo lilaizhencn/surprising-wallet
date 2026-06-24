@@ -1,6 +1,6 @@
 package com.surprising.wallet.sig.second.impl;
 
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.sig.second.ISignService;
 import org.springframework.stereotype.Component;
 
@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class EthSecondSignService extends AbstractEthLikeSecondSign implements ISignService {
     @Override
-    public CurrencyEnum getCurrency() {
-        return CurrencyEnum.ETH;
+    public RuntimeAsset getCurrency() {
+        return RuntimeAsset.ETH;
     }
 }

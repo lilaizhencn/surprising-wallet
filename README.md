@@ -245,8 +245,8 @@ VALUES ('bnb-chain-testnet', 'USDC', 'BEP20', '0xYOUR_USDC_CONTRACT', 18, true, 
 The `JdbcTokenRegistry` reads `token_config` first, falling back to `token_registry` for backward compatibility.
 
 For new chains, `chain_profile`, `chain_asset`, and `token_config` are the source of truth.
-`CurrencyEnum` and `CurrencyIds` are legacy compatibility layers only. Runtime currency ids
-must not be confused with BIP44 coin types.
+Legacy `CurrencyEnum` and `CurrencyIds` runtime dependencies have been removed.
+Runtime currency ids must not be confused with BIP44 coin types.
 
 ---
 

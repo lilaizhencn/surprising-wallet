@@ -3,7 +3,7 @@ package com.surprising.wallet.jobs.transfer;
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -59,7 +59,7 @@ public class DogeCollectionJob {
         if (!isEnabled()) {
             return;
         }
-        CurrencyEnum currency = CurrencyEnum.DOGE;
+        RuntimeAsset currency = RuntimeAsset.DOGE;
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
         Address hotAddress = getHotAddress(table);
         if (hotAddress == null) {
@@ -151,7 +151,7 @@ public class DogeCollectionJob {
         REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, JSONObject.toJSONString(transaction));
     }
 
-    private List<UtxoTransaction> findCollectableUtxos(ShardTable table, CurrencyEnum currency) {
+    private List<UtxoTransaction> findCollectableUtxos(ShardTable table, RuntimeAsset currency) {
         List<UtxoTransaction> candidates = chainRepository.listSpendableUtxos(
                 "DOGE", "DOGE", currency.getDepositConfirmNum(), PAGE_SIZE, 0);
         if (CollectionUtils.isEmpty(candidates)) {
@@ -173,12 +173,12 @@ public class DogeCollectionJob {
                         .userId(record.getUserId())
                         .biz(record.getBiz())
                         .index(Math.toIntExact(record.getAddressIndex()))
-                        .currency(CurrencyEnum.DOGE.getName())
+                        .currency(RuntimeAsset.DOGE.getName())
                         .build())
                 .orElse(null);
     }
 
-    private int getFeeRate(CurrencyEnum currency) {
+    private int getFeeRate(RuntimeAsset currency) {
         Integer configured = REDIS.getInt(Constants.WALLET_FEE + currency.getIndex());
         long feeRate = configured == null || configured <= 0
                 ? DogecoinFeePolicy.DEFAULT_FEE_RATE_KOINU_PER_BYTE : configured;
@@ -188,7 +188,7 @@ public class DogeCollectionJob {
     private boolean isEnabled() {
         for (String item : enabledCurrencies.split(",")) {
             String value = item.trim();
-            if ("*".equals(value) || CurrencyEnum.DOGE.getName().equalsIgnoreCase(value)) {
+            if ("*".equals(value) || RuntimeAsset.DOGE.getName().equalsIgnoreCase(value)) {
                 return true;
             }
         }

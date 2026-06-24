@@ -4,7 +4,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.googlecode.jsonrpc4j.JsonRpcClientException;
 import com.surprising.wallet.client.command.BtcLikeCommand;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
@@ -238,7 +238,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         return getBalance(getCurrency());
     }
 
-    public BigDecimal getBalance(CurrencyEnum currencyEnum) {
+    public BigDecimal getBalance(RuntimeAsset currencyEnum) {
         String currencyName = currencyEnum.getName();
         log.info("get {} Balance begin", currencyName);
         try {
@@ -299,7 +299,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
      * @param txid
      */
     @Override
-    protected void updateWithdrawTXId(String txid, CurrencyEnum currency) {
+    protected void updateWithdrawTXId(String txid, RuntimeAsset currency) {
         Optional<WithdrawTransaction> oneByExample =
                 chainJdbcRepository.findBitcoinLikeSigningTransactionByTxId(currency, txid);
         if (oneByExample.isPresent()) {
@@ -368,7 +368,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         if (pubKey == null) {
             return null;
         }
-        if (getCurrency() == CurrencyEnum.BCH && !CollectionUtils.isEmpty(pubKey.getCashAddrs())) {
+        if (getCurrency() == RuntimeAsset.BCH && !CollectionUtils.isEmpty(pubKey.getCashAddrs())) {
             return pubKey.getCashAddrs().get(0);
         }
         if (StringUtils.hasText(pubKey.getAddress())) {
@@ -479,14 +479,14 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
     }
 
     @Override
-    public void updateTXConfirmation(CurrencyEnum currency) {
+    public void updateTXConfirmation(RuntimeAsset currency) {
         log.info("{} 更新交易确认数开始", getCurrency().getName());
         updateUnifiedUtxoConfirmations(currency);
         updatePendingWithdrawConfirmations(currency);
         log.info("{} 更新交易确认数结束", currency.getName());
     }
 
-    private void updateUnifiedUtxoConfirmations(CurrencyEnum currency) {
+    private void updateUnifiedUtxoConfirmations(RuntimeAsset currency) {
         int pageSize = 500;
         int offset = 0;
         String chain = currency.getName().toUpperCase(Locale.ROOT);
@@ -512,7 +512,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         }
     }
 
-    private void updatePendingWithdrawConfirmations(CurrencyEnum currency) {
+    private void updatePendingWithdrawConfirmations(RuntimeAsset currency) {
         List<WithdrawTransaction> pending =
                 chainJdbcRepository.findSentBitcoinLikeSigningTransactions(currency);
         for (WithdrawTransaction transaction : pending) {
@@ -549,11 +549,11 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         return usesUnifiedUtxoModel(getCurrency());
     }
 
-    protected boolean usesUnifiedUtxoModel(CurrencyEnum currency) {
-        return currency == CurrencyEnum.BTC
-                || currency == CurrencyEnum.LTC
-                || currency == CurrencyEnum.DOGE
-                || currency == CurrencyEnum.BCH;
+    protected boolean usesUnifiedUtxoModel(RuntimeAsset currency) {
+        return currency == RuntimeAsset.BTC
+                || currency == RuntimeAsset.LTC
+                || currency == RuntimeAsset.DOGE
+                || currency == RuntimeAsset.BCH;
     }
 
     protected String normalizeScannedAddress(String address) {
@@ -589,7 +589,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         syncUnifiedUtxos(utxos);
     }
 
-    private boolean enrichUtxoMetadata(UtxoTransaction utxo, CurrencyEnum currency) {
+    private boolean enrichUtxoMetadata(UtxoTransaction utxo, RuntimeAsset currency) {
         Address address = addressService.getAddress(utxo.getAddress(), currency);
         if (address == null) {
             return false;

@@ -1,19 +1,17 @@
 package com.surprising.wallet.service.service;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.currency.BizEnum;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.service.AddressService;
-import com.surprising.wallet.service.criteria.WithdrawRecordExample;
 import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.wallet.IWallet;
@@ -42,13 +40,7 @@ public class TransactionService {
     AddressService addressService;
 
     @Autowired
-    UserAssetService userAssetService;
-
-    @Autowired
     AccountTransactionService accountTransactionService;
-
-    @Autowired
-    WithdrawRecordService withdrawRecordService;
 
     @Autowired
     WalletContext walletContext;
@@ -78,7 +70,7 @@ public class TransactionService {
             return;
         }
         log.info("saveTransaction dto: {} begin", dto.getTxId());
-        CurrencyEnum currency = CurrencyEnum.parseValue(dto.getCurrency());
+        RuntimeAsset currency = RuntimeAsset.parseValue(dto.getCurrency());
         long requiredConfirmations =
                 walletContext.getWallet(currency).getDepositConfirmationThreshold();
         UtxoKey utxoKey = UtxoKey.parse(dto.getTxId());
@@ -106,17 +98,14 @@ public class TransactionService {
     public boolean withdraw(WithdrawRecord record) {
         log.info("提现操作 开始 提现id:{}", record.getWithdrawId());
 
-        CurrencyEnum currency = CurrencyEnum.parseValue(record.getCurrency());
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        WithdrawRecordExample duplicateExample = new WithdrawRecordExample();
-        duplicateExample.createCriteria().andWithdrawIdEqualTo(record.getWithdrawId());
-        if (!withdrawRecordService.getByExample(duplicateExample, table).isEmpty()) {
-            log.info("提现操作 重复提现id已存在:{}", record.getWithdrawId());
-            return true;
-        }
+        RuntimeAsset currency = RuntimeAsset.parseValue(record.getCurrency());
         if (isUnifiedBitcoinLike(currency)) {
             String chain = chainName(currency);
-            chainJdbcRepository.createWithdrawalOrder(
+            if (chainJdbcRepository.findWithdrawalStatus(chain, record.getWithdrawId()).isPresent()) {
+                log.info("提现操作 重复提现id已存在:{}", record.getWithdrawId());
+                return true;
+            }
+            int created = chainJdbcRepository.createWithdrawalOrder(
                     record.getWithdrawId(),
                     record.getUserId(),
                     chain,
@@ -124,54 +113,24 @@ public class TransactionService {
                     record.getAddress(),
                     record.getBalance(),
                     record.getFee() == null ? BigDecimal.ZERO : record.getFee());
-        }
-        BigDecimal frozenAmount = withdrawFrozenAmount(record);
-        if (!userAssetService.freeze(record.getUserId(), currency.getIndex(), frozenAmount)) {
-            log.warn("提现操作 用户余额不足 userId:{} currency:{} amount:{}",
-                    record.getUserId(), currency.getName(), frozenAmount);
-            return false;
-        }
-        if (isUnifiedBitcoinLike(currency)
-                && !chainJdbcRepository.freezeLedgerBalance(
-                chainName(currency), chainName(currency), record.getUserId().toString(), frozenAmount)) {
-            userAssetService.unfreeze(record.getUserId(), currency.getIndex(), frozenAmount);
-            chainJdbcRepository.updateWithdrawalStatus(
-                    chainName(currency), record.getWithdrawId(), "FAILED", null, null, "ledger freeze failed");
-            return false;
-        }
-        if (isUnifiedBitcoinLike(currency)) {
+            if (created == 0) {
+                return true;
+            }
+            BigDecimal frozenAmount = withdrawFrozenAmount(record);
+            if (!chainJdbcRepository.freezeLedgerBalance(
+                    chain, chain, record.getUserId().toString(), frozenAmount)) {
+                chainJdbcRepository.updateWithdrawalStatus(
+                        chain, record.getWithdrawId(), "FAILED", null, null, "ledger freeze failed");
+                return false;
+            }
             chainJdbcRepository.updateWithdrawalStatus(
                     chainName(currency), record.getWithdrawId(), "FROZEN", null, null, null);
-        }
-        //在交易未构建成功之前，用withdrawId占位，然后入库
-        record.setTxId(record.getWithdrawId());
-        record.setStatus((byte) Constants.WAITING);
-        withdrawRecordService.add(record, table);
-        WithdrawRecordExample example = new WithdrawRecordExample();
-        example.createCriteria().andWithdrawIdEqualTo(record.getWithdrawId());
-        List<WithdrawRecord> exist = withdrawRecordService.getByExample(example, table);
-        if (exist.size() > 1) {
-            withdrawRecordService.removeById(record.getId(), table);
+            log.info("提现操作 结束 提现id:{}", record.getWithdrawId());
             return true;
         }
-        //获取币种钱包bean,通过对应的bean的withdraw方法提现
-        IWallet wallet = walletContext.getWallet(currency);
-        boolean success = wallet.withdraw(record);
-        if (!success) {
-            log.error("提现操作失败 删除提现记录 {}", record.getId());
-            withdrawRecordService.removeById(record.getId(), table);
-            userAssetService.unfreeze(record.getUserId(), currency.getIndex(), frozenAmount);
-            if (isUnifiedBitcoinLike(currency)) {
-                String chain = chainName(currency);
-                chainJdbcRepository.releaseLockedBalance(
-                        chain, chain, record.getUserId().toString(), frozenAmount);
-                chainJdbcRepository.updateWithdrawalStatus(
-                        chain, record.getWithdrawId(), "FAILED", null, null, "wallet rejected withdrawal");
-            }
-        }
 
-        log.info("提现操作 结束 提现id:{}", record.getWithdrawId());
-        return success;
+        throw new IllegalArgumentException(
+                "legacy withdraw_record runtime is disabled for currency " + record.getCurrency());
     }
 
     /**
@@ -185,8 +144,7 @@ public class TransactionService {
     public boolean sendWithdrawTransaction(WithdrawTransaction transaction) {
         log.info("广播签名后的交易 开始 币种id:{} 交易id:{}", transaction.getCurrency(), transaction.getId());
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
-        CurrencyEnum currency = CurrencyEnum.parseValue(transaction.getCurrency());
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
+        RuntimeAsset currency = RuntimeAsset.parseValue(transaction.getCurrency());
 
         //签名是否成功
         if (!signature.containsKey("valid") || !signature.getBoolean("valid")) {
@@ -199,7 +157,7 @@ public class TransactionService {
 
         var persisted = isUnifiedBitcoinLike(currency)
                 ? chainJdbcRepository.findBitcoinLikeSigningTransactionById(currency, transaction.getId())
-                : transactionService.getById(transaction.getId(), table);
+                : java.util.Optional.<WithdrawTransaction>empty();
         if (persisted.isPresent()
                 && persisted.get().getStatus() != null
                 && persisted.get().getStatus() >= Constants.SENT
@@ -231,24 +189,19 @@ public class TransactionService {
         if (isUnifiedBitcoinLike(currency)) {
             chainJdbcRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
         } else {
-            transactionService.editById(transaction, table);
+            throw new IllegalArgumentException(
+                    "legacy withdraw transaction runtime is disabled for currency " + transaction.getCurrency());
         }
 
-        //更新withdrawrecord表中的txid
-        WithdrawRecordExample example = new WithdrawRecordExample();
-        example.createCriteria().andTxIdEqualTo(transaction.getId().toString());
-        List<WithdrawRecord> records = withdrawRecordService.getByExample(example, table);
+        List<WithdrawRecord> records = signature.getJSONArray("withdraw") == null
+                ? List.of()
+                : signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
         records.forEach((record) -> {
             record.setTxId(txId);
             record.setStatus((byte) status);
             record.setUpdateDate(Date.from(Instant.now()));
-            withdrawRecordService.editById(record, table);
-            if (!isUnifiedBitcoinLike(currency)) {
-                userAssetService.deduct(record.getUserId(), currency.getIndex(), withdrawFrozenAmount(record));
-            } else {
-                chainJdbcRepository.updateWithdrawalStatus(
-                        chainName(currency), record.getWithdrawId(), "SENT", null, txId, null);
-            }
+            chainJdbcRepository.updateWithdrawalStatus(
+                    chainName(currency), record.getWithdrawId(), "SENT", null, txId, null);
             // String key = Constants.WALLET_WITHDRAW_TX_BIZ_KEY + record.getBiz();
             String key = Constants.WALLET_WITHDRAW_TX_BIZ_KEY;
             String val = JSONObject.toJSONString(record);
@@ -267,7 +220,7 @@ public class TransactionService {
         return true;
     }
 
-    private void markBitcoinLikeRetrying(WithdrawTransaction transaction, CurrencyEnum currency,
+    private void markBitcoinLikeRetrying(WithdrawTransaction transaction, RuntimeAsset currency,
                                          JSONObject signature, String error) {
         String chain = chainName(currency);
         chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
@@ -282,11 +235,10 @@ public class TransactionService {
                 chain, record.getWithdrawId(), "RETRYING", null, null, error));
     }
 
-    private void failBitcoinLikeTransaction(WithdrawTransaction transaction, CurrencyEnum currency, String error) {
+    private void failBitcoinLikeTransaction(WithdrawTransaction transaction, RuntimeAsset currency, String error) {
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
         String lockRef = transaction.getId().toString();
         String chain = chainName(currency);
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
         chainJdbcRepository.releaseUtxos(chain, lockRef);
         transaction.setStatus(Constants.DELETE);
         transaction.setUpdateDate(Date.from(Instant.now()));
@@ -302,19 +254,17 @@ public class TransactionService {
         List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
         records.forEach(record -> {
             BigDecimal amount = withdrawFrozenAmount(record);
-            userAssetService.unfreeze(record.getUserId(), currency.getIndex(), amount);
             chainJdbcRepository.releaseLockedBalance(
                     chain, chain, record.getUserId().toString(), amount);
             chainJdbcRepository.updateWithdrawalStatus(
                     chain, record.getWithdrawId(), "FAILED", null, null, error);
             record.setStatus((byte) Constants.DELETE);
             record.setUpdateDate(Date.from(Instant.now()));
-            withdrawRecordService.editById(record, table);
         });
     }
 
     private void creditDepositIfNeeded(
-            TransactionDTO dto, CurrencyEnum currency, long requiredConfirmations) {
+            TransactionDTO dto, RuntimeAsset currency, long requiredConfirmations) {
         UtxoKey utxoKey = UtxoKey.parse(dto.getTxId());
         if (utxoKey == null) {
             return;
@@ -345,7 +295,6 @@ public class TransactionService {
                 chainJdbcRepository.markUtxoCredited(chain, utxoKey.txId, utxoKey.seq);
             }
             if (credited) {
-                userAssetService.addBalance(address.getUserId(), currency.getIndex(), dto.getBalance());
                 log.info("统一UTXO充值入账成功 userId:{} currency:{} tx:{} amount:{}",
                         address.getUserId(), currency.getName(), dto.getTxId(), dto.getBalance());
             }
@@ -355,15 +304,11 @@ public class TransactionService {
                 currency.getName(), dto.getTxId());
     }
 
-    private boolean isKnownWalletTransaction(String txId, CurrencyEnum currency) {
+    private boolean isKnownWalletTransaction(String txId, RuntimeAsset currency) {
         if (isUnifiedBitcoinLike(currency)) {
             return chainJdbcRepository.bitcoinLikeSigningTransactionExists(currency, txId);
         }
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        com.surprising.wallet.service.criteria.WithdrawTransactionExample example =
-                new com.surprising.wallet.service.criteria.WithdrawTransactionExample();
-        example.createCriteria().andTxIdEqualTo(txId);
-        return transactionService.getOneByExample(example, table).isPresent();
+        return false;
     }
 
     private BigDecimal withdrawFrozenAmount(WithdrawRecord record) {
@@ -371,11 +316,11 @@ public class TransactionService {
         return record.getBalance().add(fee);
     }
 
-    private boolean isUnifiedBitcoinLike(CurrencyEnum currency) {
+    private boolean isUnifiedBitcoinLike(RuntimeAsset currency) {
         return assetRoutingService.isBitcoinLikeRuntimeCurrency(currency);
     }
 
-    private String chainName(CurrencyEnum currency) {
+    private String chainName(RuntimeAsset currency) {
         return assetRoutingService.requireChainForRuntimeCurrencyId(currency.getIndex());
     }
 

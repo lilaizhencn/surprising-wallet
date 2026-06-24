@@ -2,13 +2,12 @@ package com.surprising.wallet.service.wallet.impl;
 
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.wallet.client.command.EthCommand;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.AccountTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.common.utils.EthereumUtil;
 import com.surprising.wallet.service.criteria.AccountTransactionExample;
-import com.surprising.wallet.service.service.CurrencyBalanceService;
 import com.surprising.wallet.service.wallet.AbstractEthLikeWallet;
 import com.surprising.wallet.service.wallet.IWallet;
 import lombok.extern.slf4j.Slf4j;
@@ -57,8 +56,6 @@ import java.util.stream.Collectors;
 public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
   @Autowired
   EthCommand command;
-  @Autowired
-  protected CurrencyBalanceService balanceService;
   protected Web3j web3j;
   @Value("${atomex.eth.withdraw.address}")
   protected String withdrawAddress;
@@ -75,7 +72,7 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
   }
 
   @Override
-  public BigDecimal getBalance(CurrencyEnum currency) {
+  public BigDecimal getBalance(RuntimeAsset currency) {
     String currencyName = currency.getName();
     log.info("get {} Balance begin", currencyName);
 
@@ -138,7 +135,7 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
   }
 
   @Override
-  public BigDecimal getBalance(String address, CurrencyEnum currency) {
+  public BigDecimal getBalance(String address, RuntimeAsset currency) {
     BigDecimal balance = new BigDecimal("0");
 
     Function function = new Function("balanceOf", Arrays
@@ -167,7 +164,7 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
 
   @Override
   @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_UNCOMMITTED)
-  public void transfer(String address, CurrencyEnum currency, Date deadline) {
+  public void transfer(String address, RuntimeAsset currency, Date deadline) {
     BigDecimal tokenBalance = getBalance(address, currency);
     if (tokenBalance.compareTo(BigDecimal.ZERO) <= 0) {
       log.info("{} balance of {} is {}", currency.getName(), address, tokenBalance);
@@ -187,18 +184,18 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
 
   private BigDecimal getEthBalance(String address) {
     String tranAmount = command.getBalance(address, "latest");
-    return new BigDecimal(EthereumUtil.hexToBigInteger(tranAmount)).divide(CurrencyEnum.ETH.getDecimal());
+    return new BigDecimal(EthereumUtil.hexToBigInteger(tranAmount)).divide(RuntimeAsset.ETH.getDecimal());
   }
 
-  private BigDecimal estimateGasFee(CurrencyEnum currency) {
-    BigDecimal gasLimit = gas().multiply(CurrencyEnum.ETH.getDecimal());
+  private BigDecimal estimateGasFee(RuntimeAsset currency) {
+    BigDecimal gasLimit = gas().multiply(RuntimeAsset.ETH.getDecimal());
     return gasLimit.multiply(gasPrice(currency));
   }
 
   @Override
   public void updateTotalCurrencyBalance() {
     log.info("updateTotalCurrencyBalance erc20 begin");
-    CurrencyEnum.ERC20_SET.parallelStream().forEach((currency) -> {
+    RuntimeAsset.ERC20_SET.parallelStream().forEach((currency) -> {
       log.info("update {} total Balance begin", currency.getName());
       BigDecimal balance = getBalance(currency);
       updateTotalCurrencyBalance(currency, balance);
@@ -213,14 +210,14 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
 
   public List<TransactionDTO> findRelatedTxs(Long height, Long bestHeight) {
     log.info("erc20 findRelatedTxs, height:{} begin", height);
-    List<AccountTransaction> txs = CurrencyEnum.ERC20_SET.parallelStream().map(currency -> findErc20Txs(height, bestHeight, currency))
+    List<AccountTransaction> txs = RuntimeAsset.ERC20_SET.parallelStream().map(currency -> findErc20Txs(height, bestHeight, currency))
             .filter((transactions) -> !CollectionUtils.isEmpty(transactions)).flatMap(List::parallelStream).collect(Collectors.toList());
 
     List<TransactionDTO> dtos = new LinkedList<>();
     if (!org.apache.commons.collections4.CollectionUtils.isEmpty(txs)) {
       dtos = txs.parallelStream()
               .map(tx -> {
-                CurrencyEnum currency = CurrencyEnum.parseValue(tx.getCurrency());
+                RuntimeAsset currency = RuntimeAsset.parseValue(tx.getCurrency());
                 ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
                 accountTransactionService.addOnDuplicateKey(tx, table);
                 return convertAccountTxToDto(tx);
@@ -238,7 +235,7 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
     return address;
   }
 
-  protected List<AccountTransaction> findErc20Txs(Long height, Long bestHeight, CurrencyEnum currency) {
+  protected List<AccountTransaction> findErc20Txs(Long height, Long bestHeight, RuntimeAsset currency) {
     try {
       log.info("{} findRelatedTxs, height:{} begin", currency.getName(), height);
       // ERC20 deposit detection is event-based: scan Transfer(address,address,uint256)
@@ -272,7 +269,7 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
           //先检测是不是我们发出的交易
           super.updateWithdrawTXId(txId, currency);
           String to = analyseAddress(lg.getTopics().get(2));
-          CurrencyEnum mainCurrency = CurrencyEnum.toMainCurrency(currency);
+          RuntimeAsset mainCurrency = RuntimeAsset.toMainCurrency(currency);
           com.surprising.wallet.common.pojo.Address address = searchAddress(to, mainCurrency);
           if (ObjectUtils.isEmpty(address)) {
             continue;
@@ -306,8 +303,8 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
   }
 
   @Override
-  public CurrencyEnum getCurrency() {
-    return CurrencyEnum.USDT;
+  public RuntimeAsset getCurrency() {
+    return RuntimeAsset.USDT;
   }
 
   /**
@@ -317,6 +314,6 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
    */
   @Override
   public BigDecimal getDecimal() {
-    return CurrencyEnum.USDT.getDecimal();
+    return RuntimeAsset.USDT.getDecimal();
   }
 }

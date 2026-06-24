@@ -1,6 +1,6 @@
 package com.surprising.wallet.jobs.withdraw;
 
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -17,7 +17,7 @@ public class BatchBtcWithdrawJob extends AbstractBatchWithdrawJob {
 
     @PostConstruct
     public void init() {
-        currency = CurrencyEnum.BTC;
+        currency = RuntimeAsset.BTC;
     }
 
     //    @Scheduled(cron = "1 1/2 * * * ?")

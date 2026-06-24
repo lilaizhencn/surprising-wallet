@@ -1,6 +1,6 @@
 package com.surprising.wallet.service.wallet;
 
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -21,7 +21,7 @@ public interface IWallet {
      *
      * @return
      */
-    CurrencyEnum getCurrency();
+    RuntimeAsset getCurrency();
 
     /**
      * Runtime deposit threshold. New chains override this from chain_profile;
@@ -141,7 +141,7 @@ public interface IWallet {
      *
      * @param currency
      */
-    void updateTXConfirmation(CurrencyEnum currency);
+    void updateTXConfirmation(RuntimeAsset currency);
 
 
 }

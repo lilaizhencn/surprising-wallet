@@ -3,7 +3,7 @@ package com.surprising.wallet.jobs.transfer;
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -58,7 +58,7 @@ public class LtcCollectionJob {
         if (!isEnabled()) {
             return;
         }
-        CurrencyEnum currency = CurrencyEnum.LTC;
+        RuntimeAsset currency = RuntimeAsset.LTC;
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
         Address hotAddress = getHotAddress(table);
         if (hotAddress == null) {
@@ -162,7 +162,7 @@ public class LtcCollectionJob {
                 transaction.getId(), utxos.size(), inputLitoshi, hotAddress.getAddress(), feeLitoshi, feeRate);
     }
 
-    private List<UtxoTransaction> findCollectableUtxos(ShardTable table, CurrencyEnum currency) {
+    private List<UtxoTransaction> findCollectableUtxos(ShardTable table, RuntimeAsset currency) {
         List<UtxoTransaction> candidates = chainJdbcRepository.listSpendableUtxos(
                 "LTC", "LTC", currency.getDepositConfirmNum(), PAGE_SIZE, 0);
         if (CollectionUtils.isEmpty(candidates)) {
@@ -184,12 +184,12 @@ public class LtcCollectionJob {
                         .userId(record.getUserId())
                         .biz(record.getBiz())
                         .index(Math.toIntExact(record.getAddressIndex()))
-                        .currency(CurrencyEnum.LTC.getName())
+                        .currency(RuntimeAsset.LTC.getName())
                         .build())
                 .orElse(null);
     }
 
-    private int getFeeRate(CurrencyEnum currency) {
+    private int getFeeRate(RuntimeAsset currency) {
         Integer redisFeeRate = REDIS.getInt(Constants.WALLET_FEE + currency.getIndex());
         if (redisFeeRate == null || redisFeeRate <= 0) {
             return (int) LitecoinFeePolicy.DEFAULT_FEE_RATE_LITOSHI_PER_VBYTE;
@@ -200,7 +200,7 @@ public class LtcCollectionJob {
     private boolean isEnabled() {
         for (String item : enabledCurrencies.split(",")) {
             String value = item.trim();
-            if ("*".equals(value) || CurrencyEnum.LTC.getName().equalsIgnoreCase(value)) {
+            if ("*".equals(value) || RuntimeAsset.LTC.getName().equalsIgnoreCase(value)) {
                 return true;
             }
         }

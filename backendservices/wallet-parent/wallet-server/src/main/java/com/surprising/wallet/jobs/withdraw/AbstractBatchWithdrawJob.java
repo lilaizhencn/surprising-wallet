@@ -3,9 +3,10 @@ package com.surprising.wallet.jobs.withdraw;
 import com.alibaba.fastjson.JSONObject;
 import com.google.common.collect.Sets;
 import com.surprising.common.mybatis.pager.PageInfo;
-import com.surprising.common.mybatis.sharding.ShardTable;
 import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -13,9 +14,6 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import com.surprising.wallet.service.criteria.WithdrawRecordExample;
-import com.surprising.wallet.service.service.AddressService;
-import com.surprising.wallet.service.service.WithdrawRecordService;
 import com.surprising.wallet.service.wallet.IWallet;
 import com.surprising.wallet.service.wallet.WalletContext;
 import lombok.extern.slf4j.Slf4j;
@@ -33,37 +31,30 @@ import java.util.*;
 abstract public class AbstractBatchWithdrawJob {
     //一次处理10笔交易
     private final int COUNT = 10;
-    public CurrencyEnum currency;
-    @Autowired
-    WithdrawRecordService recordService;
-    @Autowired
-    AddressService addressService;
+    public RuntimeAsset currency;
     @Autowired
     WalletContext walletContext;
     @Autowired
     ChainJdbcRepository chainJdbcRepository;
 
-    private static final Set<CurrencyEnum> SINGLE_SIG_CURRENCY = Collections.emptySet();
+    private static final Set<RuntimeAsset> SINGLE_SIG_CURRENCY = Collections.emptySet();
     private static final int DEFAULT_FEE_RATE = 10;
 
     public void execute() {
         log.info("提现任务开始 币种:{}", currency.getName());
 
         try {
-            ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-            WithdrawRecordExample example = new WithdrawRecordExample();
-            example.createCriteria().andStatusEqualTo((byte) Constants.WAITING);
-            PageInfo pageInfo = new PageInfo();
-            pageInfo.setPageSize(COUNT);
-            pageInfo.setStartIndex(0);
-            pageInfo.setSortItem("id");
-            pageInfo.setSortType(PageInfo.SORT_TYPE_ASC);
+            String chain = currency.getName().toUpperCase(Locale.ROOT);
 
             while (true) {
-                List<WithdrawRecord> records = recordService.getByPage(pageInfo, example, table);
-                if (CollectionUtils.isEmpty(records)) {
+                List<WithdrawalOrderRecord> orders =
+                        chainJdbcRepository.listWithdrawalsForSigning(chain, chain, COUNT);
+                if (CollectionUtils.isEmpty(orders)) {
                     break;
                 }
+                List<WithdrawRecord> records = orders.stream()
+                        .map(order -> toWithdrawRecord(order, currency))
+                        .toList();
                 WithdrawTransaction transaction = buildTransaction(records);
                 if (transaction == null) {
                     log.error("提现任务异常 交易创建失败 币种:{}", currency.getName());
@@ -109,7 +100,6 @@ abstract public class AbstractBatchWithdrawJob {
         int feeRate = redisFeeRate == null || redisFeeRate <= 0 ? defaultFeeRate() : redisFeeRate;
         IWallet wallet = walletContext.getWallet(currency);
         long depositConfirmationThreshold = wallet.getDepositConfirmationThreshold();
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
         PageInfo pageInfo = new PageInfo();
         pageInfo.setPageSize(size);
         pageInfo.setStartIndex(0);
@@ -145,7 +135,11 @@ abstract public class AbstractBatchWithdrawJob {
             UtxoTransaction utxo = descendingIterator.next();
             utxos.add(utxo);
             walletAmount = walletAmount.add(utxo.getBalance());
-            Address address = addressService.getAddress(utxo.getAddress(), table);
+            String chain = currency.getName().toUpperCase(Locale.ROOT);
+            Address address = chainJdbcRepository.findChainAddressByAddress(chain, utxo.getAddress())
+                    .map(record -> toAddress(record, currency))
+                    .orElseThrow(() -> new IllegalStateException(
+                            "missing chain_address for " + chain + " UTXO address " + utxo.getAddress()));
             addresses.add(address);
             if (walletAmount.compareTo(requiredAmount(totalAmount, withdrawAmount, utxos.size(), records.size(), feeRate)) > 0) {
                 break;
@@ -206,8 +200,6 @@ abstract public class AbstractBatchWithdrawJob {
             record.setTxId(transactionId);
             record.setUpdateDate(Date.from(Instant.now()));
         });
-        recordService.batchEdit(records, table);
-
 
         log.info("交易创建完成");
         return transaction;
@@ -235,5 +227,35 @@ abstract public class AbstractBatchWithdrawJob {
         String chain = currency.getName().toUpperCase(Locale.ROOT);
         return chainJdbcRepository.listSpendableUtxos(
                 chain, chain, depositConfirmationThreshold, pageInfo.getPageSize(), pageInfo.getStartIndex());
+    }
+
+    private WithdrawRecord toWithdrawRecord(WithdrawalOrderRecord order, RuntimeAsset currency) {
+        return WithdrawRecord.builder()
+                .withdrawId(order.getOrderNo())
+                .userId(order.getUserId())
+                .currency(currency.getIndex())
+                .address(order.getToAddress())
+                .balance(order.getAmount())
+                .fee(order.getFee() == null ? BigDecimal.ZERO : order.getFee())
+                .status((byte) Constants.WAITING)
+                .createDate(toDate(order.getCreatedAt()))
+                .updateDate(toDate(order.getUpdatedAt()))
+                .build();
+    }
+
+    private Address toAddress(ChainAddressRecord record, RuntimeAsset currency) {
+        return Address.builder()
+                .userId(record.getUserId())
+                .address(record.getAddress())
+                .currency(currency.getName())
+                .biz(record.getBiz())
+                .index(Math.toIntExact(record.getAddressIndex()))
+                .derivationPath(record.getDerivationPath())
+                .scriptType("P2WSH")
+                .build();
+    }
+
+    private Date toDate(Instant instant) {
+        return instant == null ? Date.from(Instant.now()) : Date.from(instant);
     }
 }

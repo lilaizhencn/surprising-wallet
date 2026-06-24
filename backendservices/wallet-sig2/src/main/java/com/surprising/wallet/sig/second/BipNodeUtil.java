@@ -1,6 +1,6 @@
 package com.surprising.wallet.sig.second;
 
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.signature.KeyConfig;
@@ -19,7 +19,7 @@ public class BipNodeUtil {
             //final String dk = SecretConfig.decryptKey(mk);
             BipNodeUtil.NODE = Bip32Node.decode(mk);
         }
-        CurrencyEnum currencyEnum = CurrencyEnum.parseName(address.getCurrency());
+        RuntimeAsset currencyEnum = RuntimeAsset.parseName(address.getCurrency());
         Bip32Node node = BipNodeUtil.NODE.getChild(44)
                 .getChild(currencyEnum.getBip44CoinType())
                 .getChild(address.getBiz())

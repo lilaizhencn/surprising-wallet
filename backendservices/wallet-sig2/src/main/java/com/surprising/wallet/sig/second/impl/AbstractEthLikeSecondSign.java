@@ -1,7 +1,7 @@
 package com.surprising.wallet.sig.second.impl;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
@@ -51,7 +51,7 @@ abstract public class AbstractEthLikeSecondSign implements ISignService {
         Bip32Node node = BipNodeUtil.getBipNODE(address);
         String signResult = sign(
                 BigInteger.valueOf(address.getNonce()),
-                sigJson.getBigDecimal("gasPrice").multiply(CurrencyEnum.ETH.getDecimal()).toBigInteger(),
+                sigJson.getBigDecimal("gasPrice").multiply(RuntimeAsset.ETH.getDecimal()).toBigInteger(),
                 sigJson.getBigDecimal("gas").multiply(getCurrency().getDecimal()).toBigInteger(),
                 sigJson.getString("to"),
                 transaction.getBalance().multiply(getCurrency().getDecimal()).toBigInteger(),

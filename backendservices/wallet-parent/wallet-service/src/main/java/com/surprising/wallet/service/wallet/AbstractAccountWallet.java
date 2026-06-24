@@ -3,8 +3,7 @@ package com.surprising.wallet.service.wallet;
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.common.mybatis.pager.PageInfo;
 import com.surprising.common.mybatis.sharding.ShardTable;
-import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.currency.CurrencyEnum;
+import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.AccountTransaction;
 import com.surprising.wallet.common.pojo.Address;
@@ -12,13 +11,10 @@ import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.criteria.AccountTransactionExample;
-import com.surprising.wallet.service.criteria.WithdrawRecordExample;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
-import org.springframework.util.StringUtils;
 import org.web3j.crypto.Hash;
 
 import java.math.BigDecimal;
@@ -71,8 +67,8 @@ public abstract class AbstractAccountWallet extends AbstractWallet {
      * @param currency
      * @return
      */
-    protected BigDecimal getBalance(String address, CurrencyEnum currency) {
-        throw new RuntimeException(getClass().getName() + "{} does not support getBalance( String address,  CurrencyEnum currency) method");
+    protected BigDecimal getBalance(String address, RuntimeAsset currency) {
+        throw new RuntimeException(getClass().getName() + "{} does not support getBalance( String address,  RuntimeAsset currency) method");
     }
 
 
@@ -96,34 +92,12 @@ public abstract class AbstractAccountWallet extends AbstractWallet {
     @Override
     @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_UNCOMMITTED)
     public boolean withdraw(WithdrawRecord record) {
-        CurrencyEnum currency = CurrencyEnum.parseValue(record.getCurrency());
-        BigDecimal balance = getBalance(getWithdrawAddress(), currency);
-        if (balance.compareTo(record.getBalance()) < 0) {
-            log.error("The {} 钱包余额不足", currency.getName());
-            return false;
-        }
-        WithdrawTransaction transaction = buildTransaction(record);
-        if (transaction == null) {
-            log.error(" {} 提现失败, 构建交易对象失败 {}", currency.getName(), transaction);
-            return false;
-        }
-        ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
-        String transactionId = transaction.getId().toString();
-
-        record.setStatus((byte) Constants.SIGNING);
-        record.setTxId(transactionId);
-        record.setUpdateDate(Date.from(Instant.now()));
-        recordService.editById(record, table);
-        //把交易推送到待签名队列
-        String val = JSONObject.toJSONString(transaction);
-        //只支持单签，所以直接用第二台机器签名
-        REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_SECOND_KEY, val);
-        log.info("{} 交易构建完成, id:{}", currency.getName(), transaction.getId());
-        return true;
+        throw new IllegalStateException(
+                "legacy account withdraw_record runtime is disabled for currency " + record.getCurrency());
     }
 
     //当币种需要从多个地址划转到一个统一地址时，需要更新划转状态
-    protected void updateAccountTransaction(String txId, CurrencyEnum currency) {
+    protected void updateAccountTransaction(String txId, RuntimeAsset currency) {
         try {
             ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
 
@@ -145,21 +119,13 @@ public abstract class AbstractAccountWallet extends AbstractWallet {
 
 
     protected boolean checkInternalTransferTx(String from, String txId) {
-        if (StringUtils.hasText(from) && from.equals(getWithdrawAddress())) {
-            WithdrawRecordExample recordExample = new WithdrawRecordExample();
-            recordExample.createCriteria().andTxIdEqualTo(txId);
-            ShardTable table = ShardTable.builder().prefix(getCurrency().getName()).build();
-            List<WithdrawRecord> withdrawRecords = recordService.getByExample(recordExample, table);
-            //如果发送者是内部的提现地址，但是找不到提现记录 @WithdrawRecord, 说明是往内转转账（比如往erc20地址上转0.03eth），不是用户充值
-            if (CollectionUtils.isEmpty(withdrawRecords)) {
-                return true;
-            }
-        }
+        log.info("legacy withdraw_record internal-transfer check disabled currency={} txId={}",
+                getCurrency().getName(), txId);
         return false;
     }
 
     @Override
-    public void updateTXConfirmation(CurrencyEnum currency) {
+    public void updateTXConfirmation(RuntimeAsset currency) {
         log.info("更新 {} 交易确认数 开始", currency.getName());
         ShardTable table = ShardTable.builder().prefix(currency.getName()).build();
         PageInfo page = new PageInfo();
