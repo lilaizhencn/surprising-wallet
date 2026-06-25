@@ -6,13 +6,13 @@
       "symbol": "USDT",
       "name": "Tether USD",
       "decimals": 6,
-      "address": "0xc56d9D5Fb9202C6c91BeD66E27FB816fa2E54b89"
+      "address": "0x278E80923f1a7194c0777500d794c489990259FA"
     },
     "USDC": {
       "symbol": "USDC",
       "name": "USD Coin",
       "decimals": 6,
-      "address": "0xAB9F64Fff7CC373D77C1E52C4BC75190DDbcBfB9"
+      "address": "0x9478eC397A2F4Be6A84916dD8a353c91b78c6238"
     }
   }
 }
