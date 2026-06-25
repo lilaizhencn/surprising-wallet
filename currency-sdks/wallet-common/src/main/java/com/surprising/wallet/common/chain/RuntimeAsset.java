@@ -5,13 +5,8 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Runtime asset metadata value.
@@ -28,13 +23,6 @@ public final class RuntimeAsset {
     public static final RuntimeAsset ETH = nativeAsset("ETH", 121, 12, 120, 60);
     public static final RuntimeAsset TRX = nativeAsset("TRON", "TRX", 121, 12, 120, 195);
     public static final RuntimeAsset USDT = tokenAsset("ETH", "USDT", 121, 12, 120, 60);
-
-    public static final Set<RuntimeAsset> ERC20_SET = Set.of(USDT);
-
-    private static final List<RuntimeAsset> KNOWN = List.of(BTC, LTC, DOGE, BCH, ETH, TRX, USDT);
-    private static final Map<String, RuntimeAsset> BY_SYMBOL =
-            KNOWN.stream().collect(Collectors.toUnmodifiableMap(
-                    asset -> asset.getName().toUpperCase(Locale.ROOT), Function.identity(), (left, right) -> left));
 
     private final Integer runtimeCurrencyId;
     private final String chain;
@@ -173,32 +161,6 @@ public final class RuntimeAsset {
                             + token.getChain() + "/" + token.getSymbol());
         }
         return token.getContractAddress();
-    }
-
-    public static RuntimeAsset parseName(String name) {
-        if (StringUtils.hasText(name)) {
-            RuntimeAsset asset = BY_SYMBOL.get(name.toUpperCase(Locale.ROOT));
-            if (asset != null) {
-                return asset;
-            }
-        }
-        throw new UnsupportedCurrency(name);
-    }
-
-    public static RuntimeAsset valueOf(String name) {
-        return parseName(name);
-    }
-
-    public static RuntimeAsset parseContract(String contract) {
-        if (StringUtils.hasText(contract)) {
-            for (RuntimeAsset asset : KNOWN) {
-                if (StringUtils.hasText(asset.getContractAddress())
-                        && asset.getContractAddress().equalsIgnoreCase(contract)) {
-                    return asset;
-                }
-            }
-        }
-        return null;
     }
 
     public static boolean isErc20(RuntimeAsset asset) {

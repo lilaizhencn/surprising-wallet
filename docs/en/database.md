@@ -22,7 +22,7 @@ Use `surprising-wallet-init-pgsql.sql` only on a disposable or fresh database. I
 
 ## Seed Data Scope
 
-The initialization file includes static configuration rows for `chain_profile`, `chain_asset`, `token_config`, `token_registry`, `wallet_system_config`, `wallet_public_key`, and `chain_rpc_node`.
+The initialization file includes static configuration rows for `chain_profile`, `chain_asset`, `token_config`, `wallet_system_config`, `wallet_public_key`, and `chain_rpc_node`.
 
 It does not include runtime rows from address, balance, scan-height, deposit, withdrawal, collection, signing, UTXO, or chain transaction tables.
 

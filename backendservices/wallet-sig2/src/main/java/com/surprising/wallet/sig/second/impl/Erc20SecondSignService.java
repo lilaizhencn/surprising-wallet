@@ -20,8 +20,21 @@ import java.math.BigDecimal;
 @Slf4j
 public class Erc20SecondSignService extends AbstractEthLikeSecondSign implements ISignService {
     @Override
-    public RuntimeAsset getCurrency() {
-        return RuntimeAsset.USDT;
+    public String chain() {
+        return "ETH";
+    }
+
+    @Override
+    public String assetSymbol() {
+        return "*";
+    }
+
+    @Override
+    public boolean supports(RuntimeAsset asset) {
+        return asset != null
+                && chain().equalsIgnoreCase(asset.chain())
+                && !chain().equalsIgnoreCase(asset.assetSymbol())
+                && !asset.getContractAddress().isBlank();
     }
 
     @Override

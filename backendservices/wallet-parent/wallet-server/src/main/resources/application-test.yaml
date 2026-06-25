@@ -5,10 +5,7 @@ sw:
   wallet:
     admin:
       username: ${SW_WALLET_ADMIN_USERNAME:admin}
-      password: ${SW_WALLET_ADMIN_PASSWORD:wallet-admin}
+      password: ${SW_WALLET_ADMIN_PASSWORD:}
     network: test
     ed25519:
       master-seed: ${SW_ED25519_SEED:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f}
-    legacy:
-      eth-withdraw-address: "0xa69c190e7c823fe23dcf6ed7c32877214458d4d3"
-      tron-withdraw-address: "TB1x9vmH5SbBd1EUaUePGbZzqmXGosFtxK"

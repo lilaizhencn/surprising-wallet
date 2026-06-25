@@ -22,5 +22,17 @@ public interface ISignService {
      *
      * @return
      */
-    RuntimeAsset getCurrency();
+    String chain();
+
+    default String assetSymbol() {
+        return chain();
+    }
+
+    default boolean supports(RuntimeAsset asset) {
+        if (asset == null || !chain().equalsIgnoreCase(asset.chain())) {
+            return false;
+        }
+        String symbol = assetSymbol();
+        return "*".equals(symbol) || symbol.equalsIgnoreCase(asset.assetSymbol());
+    }
 }

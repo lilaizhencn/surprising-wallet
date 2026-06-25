@@ -9,6 +9,3 @@ sw:
     network: main
     ed25519:
       master-seed: ${SW_ED25519_SEED:}
-    legacy:
-      eth-withdraw-address: ${SW_ETH_WITHDRAW_ADDRESS:}
-      tron-withdraw-address: ${SW_TRON_WITHDRAW_ADDRESS:}

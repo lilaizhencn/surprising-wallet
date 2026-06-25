@@ -22,7 +22,7 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 
 ## 种子数据范围
 
-初始化文件包含 `chain_profile`、`chain_asset`、`token_config`、`token_registry`、`wallet_system_config`、`wallet_public_key`、`chain_rpc_node` 的静态配置数据。
+初始化文件包含 `chain_profile`、`chain_asset`、`token_config`、`wallet_system_config`、`wallet_public_key`、`chain_rpc_node` 的静态配置数据。
 
 它不包含地址、余额、scan-height、充值、提现、归集、签名、UTXO、链上交易等运行期数据。
 

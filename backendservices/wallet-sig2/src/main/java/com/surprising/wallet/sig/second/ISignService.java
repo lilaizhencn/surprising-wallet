@@ -18,5 +18,17 @@ public interface ISignService {
     /**
      * 获取currency对应的签名类
      */
-    RuntimeAsset getCurrency();
+    String chain();
+
+    default String assetSymbol() {
+        return chain();
+    }
+
+    default boolean supports(RuntimeAsset asset) {
+        if (asset == null || !chain().equalsIgnoreCase(asset.chain())) {
+            return false;
+        }
+        String symbol = assetSymbol();
+        return "*".equals(symbol) || symbol.equalsIgnoreCase(asset.assetSymbol());
+    }
 }

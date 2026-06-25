@@ -9,7 +9,6 @@ import com.surprising.wallet.service.wallet.AbstractEthLikeWallet;
 import com.surprising.wallet.service.wallet.IWallet;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
@@ -48,8 +47,6 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
   @Autowired
   ChainRpcNodeService rpcNodeService;
   protected Web3j web3j;
-  @Value("${sw.wallet.legacy.eth-withdraw-address}")
-  protected String withdrawAddress;
   private RuntimeAsset mainCurrency;
   private RuntimeAsset currency;
   private List<RuntimeAsset> trackedTokens = List.of();
@@ -57,7 +54,7 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
   @PostConstruct
   public void init() {
     super.setCommand(command);
-    super.setWithdrawAddress(withdrawAddress);
+    super.setWithdrawAddress("");
     mainCurrency = loadRuntimeAssetByChain("ETH");
     trackedTokens = assetRoutingService.runtimeTokenAssets("ETH");
     currency = trackedTokens.stream()
@@ -203,7 +200,7 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
             .filter(token -> token.getIndex() == runtimeCurrencyId)
             .findFirst()
             .orElseThrow(() -> new IllegalStateException(
-                    "missing enabled token_config/token_registry for runtime id " + runtimeCurrencyId));
+                    "missing enabled token_config for runtime id " + runtimeCurrencyId));
   }
 
   @Override

@@ -23,8 +23,13 @@ import java.math.BigDecimal;
 @Slf4j
 public class TronSecondSignService implements ISignService {
     @Override
-    public RuntimeAsset getCurrency() {
-        return RuntimeAsset.TRX;
+    public String chain() {
+        return "TRON";
+    }
+
+    @Override
+    public String assetSymbol() {
+        return "TRX";
     }
 
     @Override

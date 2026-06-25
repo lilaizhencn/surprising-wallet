@@ -11,7 +11,6 @@ import com.surprising.wallet.service.wallet.IWallet;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.crypto.ECKey;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
@@ -34,9 +33,6 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
 
     @Autowired
     private ChainRpcNodeService rpcNodeService;
-
-    @Value("${sw.wallet.legacy.tron-withdraw-address}")
-    private String withdrawAddress;
 
     protected Long height = 0L;
 
@@ -69,7 +65,7 @@ public class TronWallet extends AbstractEthLikeWallet implements IWallet {
 
     @Override
     public String getWithdrawAddress() {
-        return withdrawAddress;
+        return "";
     }
 
     @Override

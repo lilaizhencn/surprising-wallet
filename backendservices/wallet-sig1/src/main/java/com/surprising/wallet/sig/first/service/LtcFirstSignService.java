@@ -1,6 +1,5 @@
 package com.surprising.wallet.sig.first.service;
 
-import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinFeePolicy;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinNetworkParameters;
 import lombok.extern.slf4j.Slf4j;
@@ -15,8 +14,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class LtcFirstSignService extends AbstractBtcLikeFirstSign implements ISignService {
     @Override
-    public RuntimeAsset getCurrency() {
-        return RuntimeAsset.LTC;
+    public String chain() {
+        return "LTC";
     }
 
     @Override

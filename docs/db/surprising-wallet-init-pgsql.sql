@@ -40,9 +40,6 @@ ALTER TABLE IF EXISTS ONLY "public"."tron_token_transfer" DROP CONSTRAINT IF EXI
 ALTER TABLE IF EXISTS ONLY "public"."tron_token_transfer" DROP CONSTRAINT IF EXISTS "tron_token_transfer_chain_tx_hash_log_index_key";
 ALTER TABLE IF EXISTS ONLY "public"."ton_transaction" DROP CONSTRAINT IF EXISTS "ton_transaction_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."ton_transaction" DROP CONSTRAINT IF EXISTS "ton_transaction_chain_tx_hash_key";
-ALTER TABLE IF EXISTS ONLY "public"."token_registry" DROP CONSTRAINT IF EXISTS "token_registry_pkey";
-ALTER TABLE IF EXISTS ONLY "public"."token_registry" DROP CONSTRAINT IF EXISTS "token_registry_chain_symbol_key";
-ALTER TABLE IF EXISTS ONLY "public"."token_registry" DROP CONSTRAINT IF EXISTS "token_registry_chain_contract_address_key";
 ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_chain_symbol_key";
 ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_chain_contract_address_key";
@@ -94,7 +91,6 @@ ALTER TABLE IF EXISTS "public"."tron_tx" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."tron_transaction" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."tron_token_transfer" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."ton_transaction" ALTER COLUMN "id" DROP DEFAULT;
-ALTER TABLE IF EXISTS "public"."token_registry" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."token_config" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."sui_transaction" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."sol_transaction" ALTER COLUMN "id" DROP DEFAULT;
@@ -128,8 +124,6 @@ DROP SEQUENCE IF EXISTS "public"."tron_token_transfer_id_seq";
 DROP TABLE IF EXISTS "public"."tron_token_transfer";
 DROP SEQUENCE IF EXISTS "public"."ton_transaction_id_seq";
 DROP TABLE IF EXISTS "public"."ton_transaction";
-DROP SEQUENCE IF EXISTS "public"."token_registry_id_seq";
-DROP TABLE IF EXISTS "public"."token_registry";
 DROP SEQUENCE IF EXISTS "public"."token_config_id_seq";
 DROP TABLE IF EXISTS "public"."token_config";
 DROP SEQUENCE IF EXISTS "public"."sui_transaction_id_seq";
@@ -1002,43 +996,6 @@ ALTER SEQUENCE "public"."token_config_id_seq" OWNED BY "public"."token_config"."
 
 
 --
--- Name: token_registry; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE "public"."token_registry" (
-    "id" bigint NOT NULL,
-    "chain" character varying(32) NOT NULL,
-    "symbol" character varying(32) NOT NULL,
-    "contract_address" character varying(128) NOT NULL,
-    "decimals" integer DEFAULT 18 NOT NULL,
-    "standard" character varying(32) NOT NULL,
-    "native_asset" boolean DEFAULT false NOT NULL,
-    "active" boolean DEFAULT true NOT NULL,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
-);
-
-
---
--- Name: token_registry_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE "public"."token_registry_id_seq"
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: token_registry_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE "public"."token_registry_id_seq" OWNED BY "public"."token_registry"."id";
-
-
---
 -- Name: ton_transaction; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1454,13 +1411,6 @@ ALTER TABLE ONLY "public"."token_config" ALTER COLUMN "id" SET DEFAULT "nextval"
 
 
 --
--- Name: token_registry id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY "public"."token_registry" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."token_registry_id_seq"'::"regclass");
-
-
---
 -- Name: ton_transaction id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1863,30 +1813,6 @@ ALTER TABLE ONLY "public"."token_config"
 
 
 --
--- Name: token_registry token_registry_chain_contract_address_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY "public"."token_registry"
-    ADD CONSTRAINT "token_registry_chain_contract_address_key" UNIQUE ("chain", "contract_address");
-
-
---
--- Name: token_registry token_registry_chain_symbol_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY "public"."token_registry"
-    ADD CONSTRAINT "token_registry_chain_symbol_key" UNIQUE ("chain", "symbol");
-
-
---
--- Name: token_registry token_registry_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY "public"."token_registry"
-    ADD CONSTRAINT "token_registry_pkey" PRIMARY KEY ("id");
-
-
---
 -- Name: ton_transaction ton_transaction_chain_tx_hash_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2210,12 +2136,6 @@ INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contr
 
 
 --
--- Data for Name: token_registry; Type: TABLE DATA; Schema: public; Owner: -
---
-
-
-
---
 -- Data for Name: wallet_public_key; Type: TABLE DATA; Schema: public; Owner: -
 --
 
@@ -2261,13 +2181,6 @@ SELECT pg_catalog.setval('"public"."chain_rpc_node_id_seq"', 31, true);
 --
 
 SELECT pg_catalog.setval('"public"."token_config_id_seq"', 105, true);
-
-
---
--- Name: token_registry_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
---
-
-SELECT pg_catalog.setval('"public"."token_registry_id_seq"', 1, false);
 
 
 --

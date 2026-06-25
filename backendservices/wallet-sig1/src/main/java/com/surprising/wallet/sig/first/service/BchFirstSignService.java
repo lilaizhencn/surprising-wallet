@@ -42,8 +42,8 @@ public class BchFirstSignService implements ISignService {
     }
 
     @Override
-    public RuntimeAsset getCurrency() {
-        return RuntimeAsset.BCH;
+    public String chain() {
+        return "BCH";
     }
 
     @Override

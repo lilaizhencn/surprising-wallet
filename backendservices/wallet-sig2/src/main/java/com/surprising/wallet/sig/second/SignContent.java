@@ -33,7 +33,7 @@ public class SignContent implements InitializingBean, ApplicationContextAware {
 
             ISignService sign = entry.getValue();
 
-            if (sign.getCurrency().sameAsset(currency)) {
+            if (sign.supports(currency)) {
                 return sign;
             }
         }

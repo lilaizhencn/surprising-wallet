@@ -24,8 +24,8 @@ public class BchSecondSignService implements ISignService {
     private String network;
 
     @Override
-    public RuntimeAsset getCurrency() {
-        return RuntimeAsset.BCH;
+    public String chain() {
+        return "BCH";
     }
 
     @Override

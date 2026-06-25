@@ -15,9 +15,9 @@ import java.util.Optional;
 /**
  * DB Asset Model routing facade.
  *
- * <p>Runtime code should resolve chain and asset metadata from chain_profile,
- * chain_asset and token_config. RuntimeAsset conversion is kept here only for
- * legacy wallet beans, sharded tables, queues and signer adapters.</p>
+ * <p>Runtime code resolves chain and asset metadata from chain_profile,
+ * chain_asset and token_config. RuntimeAsset conversion remains an internal
+ * adapter for wallet beans, sharded tables, queues and signer adapters.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -87,7 +87,7 @@ public class AssetRoutingService {
                         "missing enabled chain_profile for chain " + chain));
         TokenDefinition token = chainRepository.findToken(profile.getChain(), symbol)
                 .orElseThrow(() -> new IllegalStateException(
-                        "missing enabled token_config/token_registry for "
+                        "missing enabled token_config for "
                                 + profile.getChain() + "/" + symbol));
         return RuntimeAsset.fromToken(profile, token);
     }
@@ -101,7 +101,4 @@ public class AssetRoutingService {
                 .toList();
     }
 
-    public RuntimeAsset legacyMainCurrency(RuntimeAsset currency) {
-        return RuntimeAsset.toMainCurrency(currency);
-    }
 }

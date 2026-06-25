@@ -50,8 +50,8 @@ public class DogeSecondSignService implements ISignService {
     }
 
     @Override
-    public RuntimeAsset getCurrency() {
-        return RuntimeAsset.DOGE;
+    public String chain() {
+        return "DOGE";
     }
 
     private DogecoinNetworkParameters networkParameters() {

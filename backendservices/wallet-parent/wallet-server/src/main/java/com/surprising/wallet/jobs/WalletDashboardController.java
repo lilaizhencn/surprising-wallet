@@ -535,7 +535,7 @@ public class WalletDashboardController {
     private Map<String, Object> apiInfo() {
         Map<String, Object> api = orderedMap();
         api.put("dashboard", "GET /wallet/v1/dashboard");
-        api.put("address", "POST /wallet/v1/address?currency={runtimeCurrencyId}&userId={userId}&biz={biz}");
+        api.put("address", "POST /wallet/v1/address?chain={chain}&userId={userId}&biz={biz}");
         api.put("balances", "GET /wallet/v1/balance/all");
         api.put("addressTransactions", "GET /wallet/v1/dashboard/address-transactions?address={address}&chain={chain}");
         api.put("adminLogin", "POST /wallet/v1/admin/login with Basic Authorization");
@@ -577,7 +577,7 @@ public class WalletDashboardController {
         docs.put("chainFlows", chainFlows());
         docs.put("databaseTables", databaseTables());
         docs.put("addChain", List.of(
-                "Add chain_profile with one enabled network and a runtime_currency_id.",
+                "Add chain_profile with one enabled network. runtime_currency_id is internal runtime metadata, not a public API parameter.",
                 "Add chain_asset for the native asset, then token_config rows for supported tokens.",
                 "Add chain_rpc_node rows for the current environment and each required purpose.",
                 "Implement or enable the chain adapter/scanner/withdraw/collection service in wallet-service.",
@@ -594,7 +594,7 @@ public class WalletDashboardController {
                 "WalletDashboardController exposes dashboard/admin APIs for TokDou.",
                 "ChainJdbcRepository centralizes DB asset/config/ledger operations.",
                 "HotWalletAddressService derives and validates each chain's default hot wallet at startup.",
-                "AssetRoutingService maps runtime_currency_id to chain/native/token runtime assets.",
+                "AssetRoutingService maps chain/native/token metadata into internal runtime assets.",
                 "WalletContext selects the chain wallet implementation.",
                 "Signing transactions are created by wallet-server and signed by wallet-sig1/wallet-sig2."
         ));

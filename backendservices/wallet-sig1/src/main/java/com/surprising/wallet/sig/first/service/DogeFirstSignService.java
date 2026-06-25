@@ -135,8 +135,8 @@ public class DogeFirstSignService implements ISignService {
     }
 
     @Override
-    public RuntimeAsset getCurrency() {
-        return RuntimeAsset.DOGE;
+    public String chain() {
+        return "DOGE";
     }
 
     private Bip32Node derive(Address address, RuntimeAsset currency) {

@@ -12,7 +12,7 @@ import java.util.Optional;
 /**
  * Database-backed token registry used by production EVM/TRON scanners and
  * withdrawal builders. Token support is data driven; a token is available only
- * when an enabled row exists in token_config or the legacy token_registry table.
+ * when an enabled row exists in token_config.
  */
 @Primary
 @Component

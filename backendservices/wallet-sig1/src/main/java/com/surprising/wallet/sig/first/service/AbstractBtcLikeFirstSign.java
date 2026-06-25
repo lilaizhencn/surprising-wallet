@@ -53,9 +53,6 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
         }catch(Throwable e){log.error("sign error",e); signature.put("valid",false); signature.put("error",e.getMessage());}
         transaction.setSignature(signature.toJSONString());
     }
-    @Override abstract public RuntimeAsset getCurrency();
-    public Bip32Node getBipNODE(Address a){RuntimeAsset ce=RuntimeAsset.parseName(a.getCurrency());
-        return NODE.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex());}
     public Bip32Node getBipNODE(Address a,RuntimeAsset currency){
         return NODE.getChild(44).getChild(currency.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex());}
     protected long defaultFeeRate(){return DEFAULT_FEE_RATE;}

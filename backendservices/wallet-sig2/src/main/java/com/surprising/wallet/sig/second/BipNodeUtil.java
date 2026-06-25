@@ -13,10 +13,6 @@ import org.springframework.util.ObjectUtils;
 public class BipNodeUtil {
     private static Bip32Node NODE;
 
-    public static Bip32Node getBipNODE(Address address) {
-        return getBipNODE(address, RuntimeAsset.parseName(address.getCurrency()));
-    }
-
     public static Bip32Node getBipNODE(Address address, RuntimeAsset currency) {
         if (ObjectUtils.isEmpty(BipNodeUtil.NODE)) {
             String mk = KeyConfig.getValue("masterNode");

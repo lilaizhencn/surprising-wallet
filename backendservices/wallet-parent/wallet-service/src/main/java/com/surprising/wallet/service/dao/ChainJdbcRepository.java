@@ -160,23 +160,6 @@ public class ChainJdbcRepository {
         return Boolean.TRUE.equals(exists);
     }
 
-    public int upsertToken(TokenDefinition token) {
-        return jdbcTemplate.update("""
-                insert into token_registry(chain, symbol, contract_address, decimals, standard, native_asset, active,
-                                           created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict (chain, symbol) do update set
-                    contract_address = excluded.contract_address,
-                    decimals = excluded.decimals,
-                    standard = excluded.standard,
-                    native_asset = excluded.native_asset,
-                    active = excluded.active,
-                    updated_at = excluded.updated_at
-                """,
-                token.getChain(), token.getSymbol(), token.getContractAddress(), token.getDecimals(),
-                token.getStandard(), token.getNativeAsset(), token.getActive(), toTs(now()), toTs(now()));
-    }
-
     public int reserveNonce(EvmNonceRecord nonceRecord) {
         return jdbcTemplate.update("""
                 insert into evm_nonce(chain, address, chain_nonce, reserved_nonce, status, created_at, updated_at)
@@ -1418,12 +1401,6 @@ public class ChainJdbcRepository {
                        false as native_asset, enabled as active
                 from token_config where chain = ? and symbol = ? and enabled = true
                 """, chain, symbol);
-        if (results.isEmpty()) {
-            results = queryTokens("""
-                    select id, chain, symbol, contract_address, decimals, standard, native_asset, active
-                    from token_registry where chain = ? and symbol = ? and active = true
-                    """, chain, symbol);
-        }
         return results.stream().findFirst();
     }
 
@@ -1439,30 +1416,17 @@ public class ChainJdbcRepository {
                        or lower(contract_address_base58) = lower(?)
                        or lower(contract_address_hex) = lower(?))
                 """, chain, contractAddress, contractAddress, contractAddress);
-        if (results.isEmpty()) {
-            results = queryTokens("""
-                    select id, chain, symbol, contract_address, decimals, standard, native_asset, active
-                    from token_registry where chain = ? and lower(contract_address) = lower(?) and active = true
-                    """, chain, contractAddress);
-        }
         return results.stream().findFirst();
     }
 
     public List<TokenDefinition> listTokens(String chain) {
-        List<TokenDefinition> results = queryTokens("""
+        return queryTokens("""
                 select id, chain, symbol,
                        coalesce(contract_address, contract_address_base58, contract_address_hex) as contract_address,
                        decimals, coalesce(token_standard, standard) as standard,
                        false as native_asset, enabled as active
                 from token_config where chain = ? and enabled = true order by symbol
                 """, chain);
-        if (results.isEmpty()) {
-            results = queryTokens("""
-                    select id, chain, symbol, contract_address, decimals, standard, native_asset, active
-                    from token_registry where chain = ? and active = true order by symbol
-                    """, chain);
-        }
-        return results;
     }
 
     public Optional<ChainAsset> findAsset(String chain, String symbol) {

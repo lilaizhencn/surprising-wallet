@@ -12,9 +12,6 @@ public class PubKeyConfig {
     @Value("${sw.wallet.pubKey3}") private String pub3;
     private Bip32Node NODE1,NODE2,NODE3;
     @PostConstruct public void init(){NODE1=Bip32Node.decode(pub1); NODE2=Bip32Node.decode(pub2); NODE3=Bip32Node.decode(pub3);}
-    public String genWitnessScript(Address a){
-        return genWitnessScript(a, RuntimeAsset.parseName(a.getCurrency()));
-    }
     public String genWitnessScript(Address a, RuntimeAsset ce){
         ECKey k1=NODE1.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
         ECKey k2=NODE2.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
@@ -23,9 +20,6 @@ public class PubKeyConfig {
         String addr=g.generateAddress(Constants.NET_PARAMS,2);
         log.info("P2WSH witnessScript: bech32={}, addrRef={}",addr,a.getAddress());
         return g.getWitnessScriptStr();
-    }
-    public String genRedeemScript(Address a){
-        return genRedeemScript(a, RuntimeAsset.parseName(a.getCurrency()));
     }
     public String genRedeemScript(Address a, RuntimeAsset ce){
         ECKey k1=NODE1.getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();

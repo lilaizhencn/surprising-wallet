@@ -7,7 +7,6 @@ import com.surprising.wallet.service.wallet.AbstractEthLikeWallet;
 import com.surprising.wallet.service.wallet.IWallet;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
@@ -31,14 +30,12 @@ public class EthWallet extends AbstractEthLikeWallet implements IWallet {
     @Autowired
     com.surprising.wallet.service.wallet.impl.Erc20Wallet erc20Wallet;
 
-    @Value("${sw.wallet.legacy.eth-withdraw-address}")
-    private String ethWithdrawAddress;
     private RuntimeAsset currency;
 
     @PostConstruct
     public void init() {
         super.setCommand(command);
-        super.setWithdrawAddress(ethWithdrawAddress);
+        super.setWithdrawAddress("");
         currency = loadRuntimeAssetByChain("ETH");
     }
 
