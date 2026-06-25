@@ -26,6 +26,11 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestController
 @RequestMapping("/wallet/v1")
+@CrossOrigin(
+        origins = {"http://localhost:5173", "http://127.0.0.1:5173", "https://tokdou.com", "https://www.tokdou.com"},
+        allowedHeaders = "*",
+        methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS}
+)
 public class WalletController {
 
     private final WalletContext context;

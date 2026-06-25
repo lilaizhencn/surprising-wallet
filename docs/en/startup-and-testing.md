@@ -8,7 +8,7 @@ This guide describes how to configure the project, start the local services, and
 
 Install:
 
-- JDK 17+
+- JDK 21
 - Maven 3.8+
 - PostgreSQL 14+
 - Redis 6+
@@ -90,13 +90,15 @@ SOL/TON/APTOS/SUI use one Ed25519 master seed:
 export SW_ED25519_SEED='<32-byte hex or base64 seed>'
 ```
 
-For local testing, `application.yaml` and `application-test.yaml` contain a fallback Ed25519 seed. Production must use an environment secret instead.
+For local tests, `application-test.yaml` contains a fallback Ed25519 seed. Production must use an environment secret instead.
 
 Common wallet-server environment variables:
 
 ```bash
 export SW_DB_PASSWORD='<PostgreSQL password>'
 export SW_ED25519_SEED='<32-byte Ed25519 seed in hex or base64>'
+export SW_WALLET_ADMIN_USERNAME='<wallet admin username>'
+export SW_WALLET_ADMIN_PASSWORD='<wallet admin password>'
 ```
 
 Common signer-service environment variables:
@@ -117,6 +119,14 @@ Chain runtime configuration no longer comes from YAML/env:
 | Chain network, confirmations, chain ID, gas policy | `chain_profile` |
 | RPC/fullnode/indexer/faucet nodes | `chain_rpc_node` |
 | Three wallet-server public keys | `wallet_public_key` |
+
+The TokDou wallet page reads wallet-server:
+
+| Scenario | API base |
+|---|---|
+| `npm run dev` | `http://localhost:8002` |
+| build/deploy | `https://api.tokdou.com` |
+| temporary override | `VITE_WALLET_API_BASE=https://... npm run dev` |
 
 ## 6. Application Configuration
 
@@ -139,6 +149,7 @@ Required local settings:
 - Enabled `wallet_public_key` slots 1/2/3
 - Signer private roots
 - `SW_ED25519_SEED` for Ed25519 chains
+- `SW_WALLET_ADMIN_USERNAME` and `SW_WALLET_ADMIN_PASSWORD` for the wallet admin page
 
 Startup validation logs every chain network, task switch, scan start, batch size, and RPC node count. Missing or disabled settings are logged as WARN. Production startup fails if any enabled profile uses testnet/devnet/regtest.
 
@@ -189,6 +200,13 @@ Expected coverage:
 | `test-evm` | EVM fork tests for ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C |
 | `test-live` | External testnet connectivity and optional spending tests |
 | `test-all` | UTXO, EVM, DB tests, and optional live tests |
+
+Current automated-test boundary:
+
+- `test-utxo` simulates address creation, deposit scanning/crediting, collection, withdrawal, UTXO lock/selection, two signatures, broadcast, and confirmation on local BTC/LTC/DOGE/BCH regtest.
+- `test-evm` simulates EVM native/ERC20 deposit, withdrawal, collection, and confirmation flows on Hardhat forks.
+- `test-live` checks external testnet/devnet connectivity by default; real spending/broadcast requires `RUN_LIVE_SPENDING=true`, test funds, signer private roots, and the Ed25519 seed.
+- Production-style all-chain end-to-end rehearsal still requires wallet-sig1, wallet-sig2, and wallet-server to run together, with requests triggered by the frontend or APIs.
 
 ## 9. Run DB-Only Tests
 

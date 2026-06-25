@@ -8,7 +8,7 @@
 
 需要安装：
 
-- JDK 17+
+- JDK 21
 - Maven 3.8+
 - PostgreSQL 14+
 - Redis 6+
@@ -90,13 +90,15 @@ SOL/TON/APTOS/SUI 使用一个 Ed25519 master seed：
 export SW_ED25519_SEED='<32 字节 hex 或 base64 seed>'
 ```
 
-本地测试配置中有 Ed25519 fallback seed。生产环境必须使用环境变量或密钥系统注入。
+`application-test.yaml` 中有 Ed25519 fallback seed。生产环境必须使用环境变量或密钥系统注入。
 
 wallet-server 常用环境变量：
 
 ```bash
 export SW_DB_PASSWORD='<PostgreSQL 密码>'
 export SW_ED25519_SEED='<32 字节 Ed25519 seed，hex 或 base64>'
+export SW_WALLET_ADMIN_USERNAME='<钱包后台配置账号>'
+export SW_WALLET_ADMIN_PASSWORD='<钱包后台配置密码>'
 ```
 
 签名服务常用环境变量：
@@ -117,6 +119,14 @@ export SW_SIG2_MASTER_KEY='<第二签 BIP32 tprv>'
 | 链网络、确认数、链 ID、gas policy | `chain_profile` |
 | RPC/fullnode/indexer/faucet 节点 | `chain_rpc_node` |
 | wallet-server 三个 public key | `wallet_public_key` |
+
+TokDou 钱包页面读取 wallet-server：
+
+| 场景 | API Base |
+|---|---|
+| `npm run dev` | `http://localhost:8002` |
+| build/部署 | `https://api.tokdou.com` |
+| 临时覆盖 | `VITE_WALLET_API_BASE=https://... npm run dev` |
 
 ## 6. 应用配置
 
@@ -139,6 +149,7 @@ export SW_SIG2_MASTER_KEY='<第二签 BIP32 tprv>'
 - `wallet_public_key` 中 slot 1/2/3 必须启用
 - 签名服务私钥
 - Ed25519 链使用的 `SW_ED25519_SEED`
+- 钱包后台配置页使用的 `SW_WALLET_ADMIN_USERNAME`、`SW_WALLET_ADMIN_PASSWORD`
 
 启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量。缺配置或关闭项会以 WARN 输出；生产环境如果启用了 testnet/devnet/regtest profile 会直接失败。
 
@@ -189,6 +200,13 @@ scripts/regtest/all-chain-regtest.sh matrix
 | `test-evm` | ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C 的 EVM fork 测试 |
 | `test-live` | 外部 testnet 连通性测试，以及可选花费测试 |
 | `test-all` | UTXO、EVM、DB 测试，以及可选 live 测试 |
+
+当前自动化测试的边界：
+
+- `test-utxo` 会在本地 BTC/LTC/DOGE/BCH regtest 中模拟地址创建、充值扫描入账、归集、提现、UTXO 锁定/选择、两次签名、广播和确认。
+- `test-evm` 会在 Hardhat fork 中模拟 EVM 原生币/ERC20 充值、提现、归集和确认流程。
+- `test-live` 默认验证外部 testnet/devnet 连通性；真实花费广播需要 `RUN_LIVE_SPENDING=true`、测试币余额、签名私钥和 Ed25519 seed。
+- 生产级全链端到端演练还需要同时启动 `wallet-sig1`、`wallet-sig2`、`wallet-server`，并由前端或 API 触发真实业务请求。
 
 ## 9. 运行 DB-only 测试
 

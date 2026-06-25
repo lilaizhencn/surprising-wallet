@@ -73,6 +73,24 @@ rpc_chain_matches() {
   [[ "${actual_chain_id}" == "${expected_chain_id}" ]]
 }
 
+latest_block_number() {
+  local rpc_url="$1"
+  local response
+  response="$(curl -fsS -m 8 \
+    -H 'content-type: application/json' \
+    --data '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}' \
+    "${rpc_url}" 2>/dev/null || true)"
+  if [[ -z "${response}" ]]; then
+    return 1
+  fi
+  node -e 'const r=JSON.parse(process.argv[1]); console.log(BigInt(r.result).toString())' "${response}" 2>/dev/null
+}
+
+should_pin_latest_block() {
+  local chain="$1"
+  [[ "${FORK_PIN_LATEST:-true}" == "true" && ( "${chain}" == "POLYGON" || "${chain}" == "BNB" ) ]]
+}
+
 start_fork() {
   local chain="$1"
   local rpc_url="$2"
@@ -115,15 +133,19 @@ run_chain() {
   local started=0
   local fork_block_var="${chain}_FORK_BLOCK"
   local fork_block="${!fork_block_var:-}"
-  if [[ "${chain}" == "POLYGON" && -z "${fork_block}" ]]; then
-    fork_block="40491200"
-  fi
   for rpc_url in "$@"; do
     if ! rpc_chain_matches "${rpc_url}" "${expected_chain_id}"; then
       echo "${chain} rpc chainId mismatch or unavailable for ${rpc_url}; trying next endpoint"
       continue
     fi
-    if start_fork "${chain}" "${rpc_url}" "${expected_chain_id}" "${fork_block}"; then
+    local candidate_fork_block="${fork_block}"
+    if [[ -z "${candidate_fork_block}" ]] && should_pin_latest_block "${chain}"; then
+      candidate_fork_block="$(latest_block_number "${rpc_url}" || true)"
+      if [[ -n "${candidate_fork_block}" ]]; then
+        echo "${chain} fork block pinned to latest ${candidate_fork_block} for ${rpc_url}"
+      fi
+    fi
+    if start_fork "${chain}" "${rpc_url}" "${expected_chain_id}" "${candidate_fork_block}"; then
       started=1
       echo "${chain} fork started with ${rpc_url}"
       break
@@ -197,4 +219,7 @@ run_chain AVAX_C AVAX_C 43113 \
 
 if [[ "${#BLOCKED_CHAINS[@]}" -gt 0 ]]; then
   echo "BLOCKED_CHAINS=${BLOCKED_CHAINS[*]}"
+  if [[ "${REQUIRE_ALL_EVM_FORKS:-false}" == "true" ]]; then
+    exit 1
+  fi
 fi

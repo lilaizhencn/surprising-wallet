@@ -26,7 +26,7 @@
 
 依赖环境：
 
-- JDK 17+
+- JDK 21
 - Maven 3.8+
 - PostgreSQL 14+
 - Redis 6+
@@ -70,10 +70,34 @@ export SW_DB_PASSWORD='<PostgreSQL 密码>'
 export SW_SIG1_MASTER_KEY='<第一签 BIP32 tprv>'
 export SW_SIG2_MASTER_KEY='<第二签 BIP32 tprv>'
 export SW_ED25519_SEED='<32 字节 Ed25519 seed，hex 或 base64>'
+export SW_WALLET_ADMIN_USERNAME='<钱包后台配置账号>'
+export SW_WALLET_ADMIN_PASSWORD='<钱包后台配置密码>'
 ```
 
 生产环境中第三个 BIP32 私钥根应离线保存，wallet-server 只配置三组公钥。
 wallet-server 三组公钥配置在 `wallet_public_key`，不是 YAML/env。
+
+## TokDou 前端接入
+
+`~/Desktop/surprising/tokdou` 的钱包页面已接入本项目接口：
+
+| 场景 | API Base |
+|---|---|
+| `npm run dev` | `http://localhost:8002` |
+| build/部署 | `https://api.tokdou.com` |
+| 临时覆盖 | `VITE_WALLET_API_BASE=https://... npm run dev` |
+
+新增后端接口：
+
+| 接口 | 用途 |
+|---|---|
+| `GET /wallet/v1/dashboard` | 钱包项目总览、总开关、链配置、RPC、token、地址、余额、交易记录、架构/测试/DB 文档 |
+| `GET /wallet/v1/dashboard/address-transactions` | 查询地址充值/提现/归集记录 |
+| `POST /wallet/v1/admin/login` | 钱包后台配置登录，HTTP Basic Auth |
+| `GET /wallet/v1/admin/config` | 查询可管理配置表 |
+| `PATCH /wallet/v1/admin/config/{table}/{id}` | 白名单字段更新配置 |
+
+后台配置账号密码来自 `SW_WALLET_ADMIN_USERNAME`、`SW_WALLET_ADMIN_PASSWORD`，生产环境必须覆盖默认值。
 
 ## 测试环境
 
@@ -103,6 +127,12 @@ cd evm-fork
 npm install
 cd ..
 scripts/regtest/all-chain-regtest.sh test-evm
+```
+
+BNB 与 Polygon 的公共 fork RPC 不再作为脚本默认值。若必须覆盖这两条链，需要配置经过验证、支持当前区块 fork 的私有或 archive-capable RPC，例如：
+
+```bash
+BNB_RPC_URL='https://...' POLYGON_RPC_URL='https://...' REQUIRE_ALL_EVM_FORKS=true scripts/regtest/all-chain-regtest.sh test-evm
 ```
 
 外部 live/devnet 花费测试需要测试钱包有余额，并依赖 RPC/faucet 可用：

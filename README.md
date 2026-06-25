@@ -26,7 +26,7 @@ Supported chain families:
 
 Prerequisites:
 
-- JDK 17+
+- JDK 21
 - Maven 3.8+
 - PostgreSQL 14+
 - Redis 6+
@@ -70,10 +70,34 @@ export SW_DB_PASSWORD='<PostgreSQL password>'
 export SW_SIG1_MASTER_KEY='<BIP32 tprv for signer 1>'
 export SW_SIG2_MASTER_KEY='<BIP32 tprv for signer 2>'
 export SW_ED25519_SEED='<32-byte Ed25519 seed in hex or base64>'
+export SW_WALLET_ADMIN_USERNAME='<wallet admin username>'
+export SW_WALLET_ADMIN_PASSWORD='<wallet admin password>'
 ```
 
 For production, keep the third BIP32 private root offline and configure only the three public keys in the wallet server.
 The three wallet-server public keys are configured in `wallet_public_key`, not YAML/env.
+
+## TokDou Frontend Integration
+
+The wallet page in `~/Desktop/surprising/tokdou` is wired to this project:
+
+| Scenario | API base |
+|---|---|
+| `npm run dev` | `http://localhost:8002` |
+| build/deploy | `https://api.tokdou.com` |
+| temporary override | `VITE_WALLET_API_BASE=https://... npm run dev` |
+
+New backend APIs:
+
+| API | Purpose |
+|---|---|
+| `GET /wallet/v1/dashboard` | Project overview, switches, chains, RPC nodes, tokens, addresses, balances, transaction records, architecture/testing/DB docs |
+| `GET /wallet/v1/dashboard/address-transactions` | Address deposit/withdrawal/collection records |
+| `POST /wallet/v1/admin/login` | Wallet admin login with HTTP Basic Auth |
+| `GET /wallet/v1/admin/config` | Query manageable config tables |
+| `PATCH /wallet/v1/admin/config/{table}/{id}` | Update allowlisted config fields |
+
+Admin credentials come from `SW_WALLET_ADMIN_USERNAME` and `SW_WALLET_ADMIN_PASSWORD`; production must override local defaults.
 
 ## Test Environment
 
@@ -103,6 +127,12 @@ cd evm-fork
 npm install
 cd ..
 scripts/regtest/all-chain-regtest.sh test-evm
+```
+
+BNB and Polygon public fork RPCs are no longer script defaults. If those chains are required, configure verified private or archive-capable RPC endpoints that support current-block forking:
+
+```bash
+BNB_RPC_URL='https://...' POLYGON_RPC_URL='https://...' REQUIRE_ALL_EVM_FORKS=true scripts/regtest/all-chain-regtest.sh test-evm
 ```
 
 External live/devnet spending tests require funded test wallets and RPC/faucet availability:
