@@ -2,8 +2,10 @@ package com.surprising.wallet.service.chain.ton;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.surprising.wallet.common.chain.ChainRpcNode;
+import com.surprising.wallet.service.config.ChainRpcNodeService;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.net.ssl.SSLContext;
@@ -18,18 +20,31 @@ import java.time.Duration;
 
 @Component
 public class TonApiClient {
+    private static final String CHAIN = "TON";
+
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
-    private final String baseUrl;
-    private final String apiKey;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedBaseUrl;
+    private final String fixedApiKey;
 
     @Autowired
-    public TonApiClient(
-            @Value("${atomex.ton.indexer-url:https://testnet.tonapi.io}") String baseUrl,
-            @Value("${atomex.ton.indexer-api-key:}") String apiKey) {
+    public TonApiClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
         this.objectMapper = new ObjectMapper();
-        this.baseUrl = baseUrl.replaceAll("/+$", "");
-        this.apiKey = apiKey;
+        this.repository = repository;
+        this.rpcNodeService = rpcNodeService;
+        this.fixedBaseUrl = "";
+        this.fixedApiKey = "";
+        this.httpClient = buildHttpClient();
+    }
+
+    TonApiClient(ObjectMapper objectMapper, String baseUrl, String apiKey) {
+        this.objectMapper = objectMapper;
+        this.repository = null;
+        this.rpcNodeService = null;
+        this.fixedBaseUrl = trim(baseUrl);
+        this.fixedApiKey = apiKey == null ? "" : apiKey;
         this.httpClient = buildHttpClient();
     }
 
@@ -44,13 +59,26 @@ public class TonApiClient {
     }
 
     private JsonNode get(String path) {
+        if (!fixedBaseUrl.isBlank()) {
+            return execute(fixedBaseUrl + path, null, fixedApiKey);
+        }
+        String network = repository.findProfileByChain(CHAIN)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN))
+                .getNetwork();
+        return rpcNodeService.withFailover(CHAIN, network, "indexer",
+                node -> execute(trim(node.getRpcUrl()) + path, node, ""));
+    }
+
+    private JsonNode execute(String url, ChainRpcNode node, String apiKey) {
         try {
-            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(baseUrl + path))
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
                     .timeout(Duration.ofSeconds(30))
                     .header("accept", "application/json")
                     .header("user-agent", "surprising-wallet/1.0")
                     .GET();
-            if (!apiKey.isBlank()) {
+            if (node != null) {
+                rpcNodeService.applyAuthHeaders(builder, node);
+            } else if (!apiKey.isBlank()) {
                 builder.header("Authorization", "Bearer " + apiKey);
             }
             HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
@@ -68,6 +96,10 @@ public class TonApiClient {
 
     private static String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private static String trim(String value) {
+        return value == null ? "" : value.replaceAll("/+$", "");
     }
 
     private static HttpClient buildHttpClient() {

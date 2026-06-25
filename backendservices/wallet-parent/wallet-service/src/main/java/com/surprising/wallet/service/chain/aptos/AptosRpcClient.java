@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.surprising.wallet.common.chain.ChainRpcNode;
+import com.surprising.wallet.service.config.ChainRpcNodeService;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -22,24 +24,33 @@ import java.util.regex.Pattern;
 
 @Component
 public class AptosRpcClient {
+    private static final String CHAIN = "APTOS";
     private static final String APT_COIN = "0x1::aptos_coin::AptosCoin";
     private static final Pattern ADDRESS_PATTERN = Pattern.compile("(?i)^0x[0-9a-f]{1,64}$");
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
-    private final String rpcUrl;
-    private final String faucetUrl;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedRpcUrl;
+    private final String fixedFaucetUrl;
 
     @Autowired
-    public AptosRpcClient(@Value("${atomex.aptos.rpc-url:https://fullnode.devnet.aptoslabs.com/v1}") String rpcUrl,
-                          @Value("${atomex.aptos.faucet-url:https://faucet.devnet.aptoslabs.com}") String faucetUrl) {
-        this(new ObjectMapper(), rpcUrl, faucetUrl);
+    public AptosRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
+        this(new ObjectMapper(), repository, rpcNodeService, null, null);
     }
 
     AptosRpcClient(ObjectMapper objectMapper, String rpcUrl, String faucetUrl) {
+        this(objectMapper, null, null, rpcUrl, faucetUrl);
+    }
+
+    private AptosRpcClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
+                           ChainRpcNodeService rpcNodeService, String fixedRpcUrl, String fixedFaucetUrl) {
         this.objectMapper = objectMapper;
-        this.rpcUrl = trim(rpcUrl);
-        this.faucetUrl = trim(faucetUrl);
+        this.repository = repository;
+        this.rpcNodeService = rpcNodeService;
+        this.fixedRpcUrl = trim(fixedRpcUrl);
+        this.fixedFaucetUrl = trim(fixedFaucetUrl);
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .version(HttpClient.Version.HTTP_1_1)
@@ -143,11 +154,13 @@ public class AptosRpcClient {
     }
 
     public JsonNode fundDevnetAccount(String address, long amountOctas) {
-        if (faucetUrl == null || faucetUrl.isBlank()) {
-            throw new IllegalStateException("Aptos faucet URL is not configured");
-        }
         String path = "/mint?amount=" + amountOctas + "&address=" + AptosHex.normalizeAddress(address);
-        return request("POST", faucetUrl + path, null, false);
+        if (fixedFaucetUrl != null && !fixedFaucetUrl.isBlank()) {
+            return request("POST", fixedFaucetUrl + path, null, false, null);
+        }
+        String network = network();
+        return rpcNodeService.withFailover(CHAIN, network, "faucet",
+                node -> request("POST", trim(node.getRpcUrl()) + path, null, false, node));
     }
 
     private JsonNode resource(String address, String resourceType) {
@@ -157,18 +170,34 @@ public class AptosRpcClient {
     }
 
     private JsonNode get(String path) {
-        return request("GET", rpcUrl + path, null, false);
+        return rpcRequest("GET", path, null, false);
     }
 
     private JsonNode getOrNull(String path) {
-        return request("GET", rpcUrl + path, null, true);
+        return rpcRequest("GET", path, null, true);
     }
 
     private JsonNode post(String path, JsonNode body) {
-        return request("POST", rpcUrl + path, body, false);
+        return rpcRequest("POST", path, body, false);
     }
 
-    private JsonNode request(String method, String url, JsonNode body, boolean nullOnNotFound) {
+    private JsonNode rpcRequest(String method, String path, JsonNode body, boolean nullOnNotFound) {
+        if (fixedRpcUrl != null && !fixedRpcUrl.isBlank()) {
+            return request(method, fixedRpcUrl + path, body, nullOnNotFound, null);
+        }
+        String network = network();
+        return rpcNodeService.withFailover(CHAIN, network,
+                node -> request(method, trim(node.getRpcUrl()) + path, body, nullOnNotFound, node));
+    }
+
+    private String network() {
+        return repository.findProfileByChain(CHAIN)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN))
+                .getNetwork();
+    }
+
+    private JsonNode request(String method, String url, JsonNode body, boolean nullOnNotFound,
+                             ChainRpcNode node) {
         String requestBody = null;
         try {
             if (body != null) {
@@ -179,6 +208,9 @@ public class AptosRpcClient {
                         .timeout(Duration.ofSeconds(30))
                         .header("accept", "application/json")
                         .header("user-agent", "surprising-wallet/1.0");
+                if (node != null) {
+                    rpcNodeService.applyAuthHeaders(builder, node);
+                }
                 if (requestBody == null) {
                     builder.method(method, HttpRequest.BodyPublishers.noBody());
                 } else {

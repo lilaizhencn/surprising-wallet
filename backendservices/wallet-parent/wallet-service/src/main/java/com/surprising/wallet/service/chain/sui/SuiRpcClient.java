@@ -4,13 +4,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.surprising.wallet.common.chain.ChainRpcNode;
+import com.surprising.wallet.service.config.ChainRpcNodeService;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -25,21 +27,31 @@ import java.util.List;
 
 @Component
 public class SuiRpcClient {
+    private static final String CHAIN = "SUI";
     static final String SUI_COIN_TYPE = "0x2::sui::SUI";
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final OkHttpClient okHttpClient;
-    private final String rpcUrl;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedRpcUrl;
 
     @Autowired
-    public SuiRpcClient(@Value("${atomex.sui.rpc-url:https://fullnode.testnet.sui.io:443}") String rpcUrl) {
-        this(new ObjectMapper(), rpcUrl);
+    public SuiRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
+        this(new ObjectMapper(), repository, rpcNodeService, null);
     }
 
     SuiRpcClient(ObjectMapper objectMapper, String rpcUrl) {
+        this(objectMapper, null, null, rpcUrl);
+    }
+
+    private SuiRpcClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
+                         ChainRpcNodeService rpcNodeService, String fixedRpcUrl) {
         this.objectMapper = objectMapper;
-        this.rpcUrl = rpcUrl;
+        this.repository = repository;
+        this.rpcNodeService = rpcNodeService;
+        this.fixedRpcUrl = fixedRpcUrl;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .version(HttpClient.Version.HTTP_1_1)
@@ -185,15 +197,33 @@ public class SuiRpcClient {
         String requestBody = null;
         try {
             requestBody = objectMapper.writeValueAsString(body);
+            if (fixedRpcUrl != null && !fixedRpcUrl.isBlank()) {
+                return execute(method, requestBody, fixedRpcUrl, null);
+            }
+            String network = repository.findProfileByChain(CHAIN)
+                    .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN))
+                    .getNetwork();
+            String finalRequestBody = requestBody;
+            return rpcNodeService.withFailover(CHAIN, network,
+                    node -> execute(method, finalRequestBody, node.getRpcUrl(), node));
+        } catch (IOException e) {
+            throw new IllegalStateException("Sui RPC serialization failed for " + method, e);
+        }
+    }
+
+    private JsonNode execute(String method, String requestBody, String rpcUrl, ChainRpcNode node) {
+        try {
             for (int attempt = 1; attempt <= 4; attempt++) {
-                HttpRequest request = HttpRequest.newBuilder(URI.create(rpcUrl))
+                HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(rpcUrl))
                         .timeout(Duration.ofSeconds(30))
                         .header("content-type", "application/json")
                         .header("accept", "application/json")
                         .header("user-agent", "surprising-wallet/1.0")
-                        .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                        .build();
-                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                        .POST(HttpRequest.BodyPublishers.ofString(requestBody));
+                if (node != null) {
+                    rpcNodeService.applyAuthHeaders(builder, node);
+                }
+                HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
                 if ((response.statusCode() == 429 || response.statusCode() / 100 == 5) && attempt < 4) {
                     Thread.sleep(attempt * 1_000L);
                     continue;
@@ -211,28 +241,27 @@ public class SuiRpcClient {
             }
             throw new IllegalStateException("Sui retry loop exhausted for " + method);
         } catch (IOException e) {
-            if (requestBody != null) {
-                return callWithOkHttp(method, requestBody);
-            }
-            throw new IllegalStateException("Sui RPC IO failed for " + method, e);
+            return callWithOkHttp(method, requestBody, rpcUrl, node);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Sui RPC interrupted for " + method, e);
         }
     }
 
-    private JsonNode callWithOkHttp(String method, String requestBody) {
+    private JsonNode callWithOkHttp(String method, String requestBody, String rpcUrl, ChainRpcNode node) {
         MediaType jsonMediaType = MediaType.get("application/json; charset=utf-8");
         try {
             for (int attempt = 1; attempt <= 4; attempt++) {
-                Request request = new Request.Builder()
+                Request.Builder builder = new Request.Builder()
                         .url(rpcUrl)
                         .header("content-type", "application/json")
                         .header("accept", "application/json")
                         .header("user-agent", "surprising-wallet/1.0")
-                        .post(RequestBody.create(jsonMediaType, requestBody))
-                        .build();
-                try (Response response = okHttpClient.newCall(request).execute()) {
+                        .post(RequestBody.create(jsonMediaType, requestBody));
+                if (node != null) {
+                    rpcNodeService.authHeaders(node).forEach(builder::header);
+                }
+                try (Response response = okHttpClient.newCall(builder.build()).execute()) {
                     String output = response.body() == null ? "" : response.body().string();
                     if ((response.code() == 429 || response.code() / 100 == 5) && attempt < 4) {
                         Thread.sleep(attempt * 1_000L);

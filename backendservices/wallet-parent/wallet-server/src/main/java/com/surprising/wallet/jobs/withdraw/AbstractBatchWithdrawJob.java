@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.google.common.collect.Sets;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
@@ -13,6 +14,7 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.wallet.IWallet;
 import com.surprising.wallet.service.wallet.WalletContext;
@@ -38,11 +40,17 @@ abstract public class AbstractBatchWithdrawJob {
     ChainJdbcRepository chainJdbcRepository;
     @Autowired
     protected AssetRoutingService assetRoutingService;
+    @Autowired
+    protected WalletRuntimeConfigService runtimeConfigService;
 
     private static final Set<RuntimeAsset> SINGLE_SIG_CURRENCY = Collections.emptySet();
     private static final int DEFAULT_FEE_RATE = 10;
 
     public void execute() {
+        if (!runtimeConfigService.isTaskEnabled(currency, WalletRuntimeConfigService.TASK_WITHDRAW)) {
+            log.warn("提现任务跳过 币种:{} DB withdraw switch disabled", currency.getName());
+            return;
+        }
         log.info("提现任务开始 币种:{}", currency.getName());
 
         try {
@@ -146,7 +154,7 @@ abstract public class AbstractBatchWithdrawJob {
 
         //初始化交易
         JSONObject signature = new JSONObject();
-        Address changeAddress = wallet.genNewAddress(Constants.USER_ID, Constants.BIZ);
+        Address changeAddress = defaultHotChangeAddress(currency);
         signature.put("utxos", utxos);
         signature.put("addresses", addresses);
         signature.put("withdraw", records);
@@ -227,6 +235,20 @@ abstract public class AbstractBatchWithdrawJob {
         String chain = currency.getName().toUpperCase(Locale.ROOT);
         return chainJdbcRepository.listSpendableUtxos(
                 chain, chain, depositConfirmationThreshold, limit, offset);
+    }
+
+    private Address defaultHotChangeAddress(RuntimeAsset currency) {
+        return chainJdbcRepository.findChainAddress(
+                        currency.chain(),
+                        currency.assetSymbol(),
+                        HotWalletRules.DEFAULT_HOT_USER_ID,
+                        HotWalletRules.DEFAULT_HOT_BIZ,
+                        HotWalletRules.DEFAULT_HOT_ADDRESS_INDEX,
+                        HotWalletRules.DEFAULT_HOT_WALLET_ROLE)
+                .map(record -> toAddress(record, currency))
+                .orElseThrow(() -> new IllegalStateException(
+                        "missing default hot wallet change address for "
+                                + currency.chain() + "/" + currency.assetSymbol()));
     }
 
     private WithdrawRecord toWithdrawRecord(WithdrawalOrderRecord order, RuntimeAsset currency) {

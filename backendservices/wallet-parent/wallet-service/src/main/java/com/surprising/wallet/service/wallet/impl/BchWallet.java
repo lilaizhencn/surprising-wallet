@@ -13,7 +13,6 @@ import jakarta.annotation.PostConstruct;
 import org.bitcoinj.base.LegacyAddress;
 import org.bitcoinj.core.NetworkParameters;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -25,20 +24,16 @@ public class BchWallet extends AbstractBtcLikeWallet {
     @Autowired
     private BchCommand bchCommand;
 
-    @Value("${atomex.bch.network:testnet}")
-    private String network;
-
     private BitcoinLikeChainProfile profile;
     private RuntimeAsset currency;
 
     @PostConstruct
     public void init() {
         setCommand(bchCommand);
-        String profileNetwork = isMainnet() ? "mainnet" : isRegtest() ? "regtest" : "testnet";
-        profile = chainJdbcRepository.findBitcoinLikeProfile("BCH", profileNetwork)
-                .orElseThrow(() -> new IllegalStateException(
-                        "missing enabled chain_profile for BCH/" + profileNetwork));
-        currency = loadBitcoinLikeRuntimeAsset("BCH", profileNetwork);
+        profile = chainJdbcRepository.findProfileByChain("BCH")
+                .flatMap(enabled -> chainJdbcRepository.findBitcoinLikeProfile("BCH", enabled.getNetwork()))
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for BCH"));
+        currency = loadBitcoinLikeRuntimeAsset("BCH", profile.getNetwork());
     }
 
     @Override
@@ -138,10 +133,10 @@ public class BchWallet extends AbstractBtcLikeWallet {
     }
 
     private boolean isMainnet() {
-        return "main".equalsIgnoreCase(network) || "mainnet".equalsIgnoreCase(network);
+        return "main".equalsIgnoreCase(profile.getNetwork()) || "mainnet".equalsIgnoreCase(profile.getNetwork());
     }
 
     private boolean isRegtest() {
-        return "regtest".equalsIgnoreCase(network);
+        return "regtest".equalsIgnoreCase(profile.getNetwork());
     }
 }

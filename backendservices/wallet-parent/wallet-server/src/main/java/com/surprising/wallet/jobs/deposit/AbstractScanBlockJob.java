@@ -4,16 +4,15 @@ import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.BestBlockHeight;
 import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.TransactionService;
 import com.surprising.wallet.service.wallet.AbstractWallet;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.ObjectUtils;
 
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
@@ -30,22 +29,13 @@ abstract public class AbstractScanBlockJob {
     ChainJdbcRepository chainJdbcRepository;
     @Autowired
     AssetRoutingService assetRoutingService;
-
-    @Value("${atomex.app.env.name}")
-    private String env;
-
-    @Value("${atomex.wallet.scan.enabled-currencies:btc}")
-    private String enabledCurrencies;
-
-    @Value("${atomex.wallet.scan.start-height:0}")
-    private Long configuredStartHeight;
-
-    @Value("${atomex.wallet.scan.max-blocks-per-run:0}")
-    private Long maxBlocksPerRun;
+    @Autowired
+    WalletRuntimeConfigService runtimeConfigService;
 
     public void execute() {
 
         if (!isScanEnabled(wallet.getCurrency())) {
+            log.warn("{} scan skipped: DB scan switch disabled", wallet.getCurrency().getName());
             return;
         }
         log.info("扫描 {} 交易 开始", wallet.getCurrency().getName());
@@ -68,7 +58,8 @@ abstract public class AbstractScanBlockJob {
                     return;
                 }
             }
-            if (storedHeight.getHeight() <= 0 && (configuredStartHeight == null || configuredStartHeight <= 0)) {
+            long configuredStartHeight = runtimeConfigService.scanStartHeight(wallet.getCurrency());
+            if (storedHeight.getHeight() <= 0 && configuredStartHeight <= 0) {
                 log.info("{} scan start-height is 0, initializing DB height to current best height {}",
                         wallet.getCurrency().getName(), bestHeight);
                 updateStoreHeight(bestHeight, storedHeight);
@@ -91,7 +82,8 @@ abstract public class AbstractScanBlockJob {
                     : Math.max(0L, storedHeight.getHeight()
                             - wallet.getDepositConfirmationThreshold());
             long scanEnd = bestHeight;
-            if (maxBlocksPerRun != null && maxBlocksPerRun > 0) {
+            long maxBlocksPerRun = runtimeConfigService.scanMaxBlocksPerRun(wallet.getCurrency());
+            if (maxBlocksPerRun > 0) {
                 scanEnd = Math.min(scanEnd, scanBegin + maxBlocksPerRun - 1L);
             }
             long lastScannedHeight = storedHeight.getHeight();
@@ -127,10 +119,7 @@ abstract public class AbstractScanBlockJob {
     }
 
     private boolean isScanEnabled(RuntimeAsset currency) {
-        return Arrays.stream(enabledCurrencies.split(","))
-                .map(String::trim)
-                .filter(item -> !item.isEmpty())
-                .anyMatch(item -> "*".equals(item) || item.equalsIgnoreCase(currency.getName()));
+        return runtimeConfigService.isTaskEnabled(currency, WalletRuntimeConfigService.TASK_SCAN);
     }
 
     /**
@@ -177,7 +166,8 @@ abstract public class AbstractScanBlockJob {
      */
     protected boolean initCurrencyBestHeight(BestBlockHeight storedHeight, Long bestHeight) {
         long initialHeight = bestHeight;
-        if (configuredStartHeight != null && configuredStartHeight > 0) {
+        long configuredStartHeight = runtimeConfigService.scanStartHeight(wallet.getCurrency());
+        if (configuredStartHeight > 0) {
             initialHeight = Math.min(configuredStartHeight, bestHeight);
         }
         storedHeight.setHeight(initialHeight);

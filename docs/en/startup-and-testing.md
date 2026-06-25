@@ -119,6 +119,9 @@ Chain runtime configuration no longer comes from YAML/env:
 | Chain network, confirmations, chain ID, gas policy | `chain_profile` |
 | RPC/fullnode/indexer/faucet nodes | `chain_rpc_node` |
 | Three wallet-server public keys | `wallet_public_key` |
+| Per-chain default hot wallet | Native-asset `chain_address` row with `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT` |
+
+Runtime code now enforces `global.all.enabled`, scan, withdrawal and collection switches. `transfer_enabled` is reserved for future internal transfer entry points; any new transfer flow must call `WalletRuntimeConfigService.requireTaskEnabled(chain, TASK_TRANSFER, ...)`, and this switch must not be repurposed for address generation or withdrawal.
 
 The TokDou wallet page reads wallet-server:
 
@@ -147,11 +150,12 @@ Required local settings:
 - Only one enabled network per chain in `chain_profile`
 - At least one enabled `chain_rpc_node` for every enabled chain and current `sw.app.env.name`
 - Enabled `wallet_public_key` slots 1/2/3
+- Exactly one default hot wallet address for every enabled chain: native-asset `chain_address`, `user_id=0`, `biz=0`, `address_index=0`, `wallet_role=DEPOSIT`
 - Signer private roots
 - `SW_ED25519_SEED` for Ed25519 chains
 - `SW_WALLET_ADMIN_USERNAME` and `SW_WALLET_ADMIN_PASSWORD` for the wallet admin page
 
-Startup validation logs every chain network, task switch, scan start, batch size, and RPC node count. Missing or disabled settings are logged as WARN. Production startup fails if any enabled profile uses testnet/devnet/regtest.
+Startup validation logs every chain network, task switch, scan start, batch size, and RPC node count. wallet-server derives every enabled chain's `0/0/0` default hot wallet from `wallet_public_key` or `SW_ED25519_SEED` and compares it with `chain_address`; startup fails on missing, duplicate, address mismatch or path mismatch. Production startup also fails if any enabled profile uses testnet/devnet/regtest.
 
 ## 7. Start Services
 

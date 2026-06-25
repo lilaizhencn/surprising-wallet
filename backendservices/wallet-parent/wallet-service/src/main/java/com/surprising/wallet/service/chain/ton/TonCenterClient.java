@@ -3,8 +3,10 @@ package com.surprising.wallet.service.chain.ton;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.surprising.wallet.common.chain.ChainRpcNode;
+import com.surprising.wallet.service.config.ChainRpcNodeService;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -17,23 +19,32 @@ import java.time.Duration;
 
 @Component
 public class TonCenterClient {
+    private static final String CHAIN = "TON";
+
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
-    private final String baseUrl;
-    private final String apiKey;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedBaseUrl;
+    private final String fixedApiKey;
     private long lastRequestMillis;
 
     @Autowired
-    public TonCenterClient(
-            @Value("${atomex.ton.rpc-url:https://testnet.toncenter.com/api/v2}") String baseUrl,
-            @Value("${atomex.ton.api-key:}") String apiKey) {
-        this(new ObjectMapper(), baseUrl, apiKey);
+    public TonCenterClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
+        this(new ObjectMapper(), repository, rpcNodeService, null, null);
     }
 
     TonCenterClient(ObjectMapper objectMapper, String baseUrl, String apiKey) {
+        this(objectMapper, null, null, baseUrl, apiKey);
+    }
+
+    private TonCenterClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
+                            ChainRpcNodeService rpcNodeService, String baseUrl, String apiKey) {
         this.objectMapper = objectMapper;
-        this.baseUrl = baseUrl.replaceAll("/+$", "");
-        this.apiKey = apiKey;
+        this.repository = repository;
+        this.rpcNodeService = rpcNodeService;
+        this.fixedBaseUrl = trim(baseUrl);
+        this.fixedApiKey = apiKey == null ? "" : apiKey;
         this.httpClient = buildHttpClient();
     }
 
@@ -78,18 +89,30 @@ public class TonCenterClient {
     }
 
     private JsonNode get(String path) {
-        return execute("GET", URI.create(baseUrl + path), null);
+        return request("GET", path, null);
     }
 
     private JsonNode post(String path, JsonNode body) {
         try {
-            return execute("POST", URI.create(baseUrl + path), objectMapper.writeValueAsString(body));
+            return request("POST", path, objectMapper.writeValueAsString(body));
         } catch (java.io.IOException e) {
             throw new IllegalStateException("TON request serialization failed", e);
         }
     }
 
-    private synchronized JsonNode execute(String method, URI uri, String body) {
+    private JsonNode request(String method, String path, String body) {
+        if (fixedBaseUrl != null && !fixedBaseUrl.isBlank()) {
+            return execute(method, URI.create(fixedBaseUrl + path), body, null, fixedApiKey);
+        }
+        String network = repository.findProfileByChain(CHAIN)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN))
+                .getNetwork();
+        return rpcNodeService.withFailover(CHAIN, network,
+                node -> execute(method, URI.create(trim(node.getRpcUrl()) + path), body, node,
+                        node.getApiKey() == null ? "" : node.getApiKey()));
+    }
+
+    private synchronized JsonNode execute(String method, URI uri, String body, ChainRpcNode node, String apiKey) {
         int attempts = 3;
         IllegalStateException lastFailure = null;
         for (int attempt = 1; attempt <= attempts; attempt++) {
@@ -108,7 +131,9 @@ public class TonCenterClient {
                 if (body != null) {
                     builder.header("content-type", "application/json");
                 }
-                if (!apiKey.isBlank()) {
+                if (node != null) {
+                    rpcNodeService.applyAuthHeaders(builder, node);
+                } else if (!apiKey.isBlank()) {
                     builder.header("X-API-Key", apiKey);
                 }
                 HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
@@ -171,6 +196,10 @@ public class TonCenterClient {
 
     private static String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private static String trim(String value) {
+        return value == null ? "" : value.replaceAll("/+$", "");
     }
 
     private static HttpClient buildHttpClient() {

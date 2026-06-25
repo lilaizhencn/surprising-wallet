@@ -56,6 +56,13 @@ public interface IWallet {
     Address genNewAddress(Long userId, Integer biz);
 
     /**
+     * Deterministically derive an address without writing it to storage.
+     */
+    default Address deriveAddress(Long userId, Integer biz, int index) {
+        throw new UnsupportedOperationException(getCurrency().getName() + " does not support deriveAddress method");
+    }
+
+    /**
      * 返回当前币种钱包中的余额
      *
      * @return

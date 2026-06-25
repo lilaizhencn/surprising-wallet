@@ -5,9 +5,10 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.SuiTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -26,8 +27,8 @@ public class SuiTransactionService {
     private final SuiTransactionSigner signer;
     private final ChainJdbcRepository repository;
 
-    @Value("${atomex.sui.network:testnet}")
-    private String network = "testnet";
+    @Autowired(required = false)
+    private WalletRuntimeConfigService runtimeConfigService;
 
     public String sendNative(long derivationIndex, String fromAddress, String toAddress, long amountMist) {
         long gasBudget = profile().getDefaultFee();
@@ -51,6 +52,7 @@ public class SuiTransactionService {
 
     public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amountMist) {
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "sui withdrawNative");
         Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -85,6 +87,7 @@ public class SuiTransactionService {
 
     public String withdrawCoin(String orderNo, long userId, ChainAddressRecord from,
                                String coinType, String toAddress, BigDecimal amountAtomic) {
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "sui withdrawCoin");
         Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -119,6 +122,7 @@ public class SuiTransactionService {
 
     public String collectNative(String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountMist) {
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "sui collectNative");
         Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -145,6 +149,7 @@ public class SuiTransactionService {
 
     public String collectCoin(String collectionNo, ChainAddressRecord from, String coinType,
                               String hotAddress, BigDecimal amountAtomic) {
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "sui collectCoin");
         Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -224,8 +229,14 @@ public class SuiTransactionService {
     }
 
     private AccountChainProfile profile() {
-        return repository.findAccountChainProfile(CHAIN, network)
-                .orElseThrow(() -> new IllegalStateException("missing enabled SUI/" + network + " profile"));
+        return repository.findProfileByChain(CHAIN)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
+    }
+
+    private void requireTaskEnabled(String task, String operation) {
+        if (runtimeConfigService != null) {
+            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
+        }
     }
 
     private void record(String digest, String sender, String receiver, String symbol, String coinType,

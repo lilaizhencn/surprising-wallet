@@ -17,7 +17,7 @@ class TonTestnetConnectivityIntegrationTest {
         Assumptions.assumeTrue(Boolean.getBoolean("ton.testnet.enabled"),
                 "set -Dton.testnet.enabled=true for TON testnet connectivity validation");
 
-        String seed = env("ATOMEX_MASTER_SEED", FALLBACK_TEST_SEED);
+        String seed = env("SW_ED25519_SEED", FALLBACK_TEST_SEED);
         TonKeyService keys = new TonKeyService(seed);
         String address = keys.wallet(1_100_001L).getAddress().toString(true, true, false, true);
         assertFalse(address.isBlank());

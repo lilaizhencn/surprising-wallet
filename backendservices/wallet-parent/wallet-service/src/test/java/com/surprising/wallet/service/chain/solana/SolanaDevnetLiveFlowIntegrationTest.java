@@ -29,9 +29,9 @@ class SolanaDevnetLiveFlowIntegrationTest {
     @Test
     void liveSolAndMockSplDepositWithdrawCollectionAreIdempotent() {
         Assumptions.assumeTrue(Boolean.getBoolean("solana.live.enabled"),
-                "set -Dsolana.live.enabled=true and ATOMEX_MASTER_SEED for live devnet validation");
-        String masterSeed = System.getenv("ATOMEX_MASTER_SEED");
-        Assumptions.assumeTrue(masterSeed != null && !masterSeed.isBlank(), "ATOMEX_MASTER_SEED is required");
+                "set -Dsolana.live.enabled=true and SW_ED25519_SEED for live devnet validation");
+        String masterSeed = System.getenv("SW_ED25519_SEED");
+        Assumptions.assumeTrue(masterSeed != null && !masterSeed.isBlank(), "SW_ED25519_SEED is required");
 
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 env("SOLANA_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
@@ -53,13 +53,12 @@ class SolanaDevnetLiveFlowIntegrationTest {
         long funderIndex = Long.getLong("solana.live.funder-index", runBase);
         long userAIndex = runBase + 1;
         long userBIndex = runBase + 2;
-        long hotIndex = runBase + 3;
         long externalIndex = runBase + 4;
         Account funder = keys.account(funderIndex);
         Account external = keys.account(externalIndex);
         ChainAddressRecord userA = addresses.createNativeAddress(2001, 0, userAIndex, "DEPOSIT");
         ChainAddressRecord userB = addresses.createNativeAddress(2002, 0, userBIndex, "DEPOSIT");
-        ChainAddressRecord hot = addresses.createNativeAddress(0, 0, hotIndex, "HOT_WITHDRAW");
+        ChainAddressRecord hot = addresses.createNativeAddress(0, 0, 0L, "DEPOSIT");
 
         System.out.println("SOLANA_FUNDER=" + funder.getPublicKeyBase58());
         if (rpc.getBalance(funder.getPublicKeyBase58()) < 100_000_000L
@@ -191,9 +190,6 @@ class SolanaDevnetLiveFlowIntegrationTest {
                 nativeUserA.getUserId(), 0, nativeUserA.getAddressIndex(), "DEPOSIT");
         ChainAddressRecord userB = addresses.createTokenAddress(symbol, mint.getPublicKeyBase58(),
                 nativeUserB.getUserId(), 0, nativeUserB.getAddressIndex(), "DEPOSIT");
-        addresses.createTokenAddress(symbol, mint.getPublicKeyBase58(),
-                hot.getUserId(), 0, hot.getAddressIndex(), "HOT_WITHDRAW");
-
         String depositA = transactions.sendToken(funderIndex, mint.getPublicKeyBase58(),
                 nativeUserA.getAddress(), 10_000_000L, decimals);
         String depositB = transactions.sendToken(funderIndex, mint.getPublicKeyBase58(),

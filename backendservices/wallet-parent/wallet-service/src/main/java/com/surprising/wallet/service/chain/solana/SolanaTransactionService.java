@@ -5,15 +5,16 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.SolanaTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.p2p.solanaj.core.Account;
 import org.p2p.solanaj.core.PublicKey;
 import org.p2p.solanaj.core.Transaction;
 import org.p2p.solanaj.programs.AssociatedTokenProgram;
 import org.p2p.solanaj.programs.SystemProgram;
 import org.p2p.solanaj.programs.TokenProgram;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -32,8 +33,8 @@ public class SolanaTransactionService {
     private final SolanaAddressService addressService;
     private final ChainJdbcRepository repository;
 
-    @Value("${atomex.solana.network:devnet}")
-    private String network = "devnet";
+    @Autowired(required = false)
+    private WalletRuntimeConfigService runtimeConfigService;
 
     public String sendNative(long derivationIndex, String toAddress, long lamports) {
         if (lamports <= 0) {
@@ -71,6 +72,7 @@ public class SolanaTransactionService {
 
     public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amountLamports) {
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "solana withdrawNative");
         Optional<String> previous = repository.findWithdrawalTxHash(CHAIN, orderNo);
         if (previous.isPresent()) {
             return previous.get();
@@ -105,6 +107,7 @@ public class SolanaTransactionService {
 
     public String withdrawToken(String orderNo, long userId, ChainAddressRecord from,
                                 String mintAddress, String toOwnerAddress, BigDecimal atomicAmount) {
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "solana withdrawToken");
         Optional<String> previous = repository.findWithdrawalTxHash(CHAIN, orderNo);
         if (previous.isPresent()) {
             return previous.get();
@@ -140,6 +143,7 @@ public class SolanaTransactionService {
 
     public String collectNative(String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountLamports) {
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "solana collectNative");
         Optional<String> previous = repository.findCollectionTxHash(CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
@@ -165,6 +169,7 @@ public class SolanaTransactionService {
 
     public String collectToken(String collectionNo, ChainAddressRecord from, String mintAddress,
                                String hotOwnerAddress, BigDecimal atomicAmount) {
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "solana collectToken");
         Optional<String> previous = repository.findCollectionTxHash(CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
@@ -241,8 +246,14 @@ public class SolanaTransactionService {
     }
 
     private AccountChainProfile profile() {
-        return repository.findAccountChainProfile(CHAIN, network)
-                .orElseThrow(() -> new IllegalStateException("missing enabled SOLANA/" + network + " profile"));
+        return repository.findProfileByChain(CHAIN)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
+    }
+
+    private void requireTaskEnabled(String task, String operation) {
+        if (runtimeConfigService != null) {
+            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
+        }
     }
 
     private void recordTransaction(String signature, String from, String to, String symbol, String mint,

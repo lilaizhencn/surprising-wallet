@@ -1,6 +1,7 @@
 package com.surprising.wallet.service.chain.solana;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.key.Ed25519DerivedKey;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class SolanaAddressService {
     private final ChainJdbcRepository repository;
 
     public ChainAddressRecord createNativeAddress(long userId, int biz, long derivationIndex, String walletRole) {
+        HotWalletRules.requireAllowedReservedAddress(CHAIN, "SOL", "SOL", userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, "SOL", userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     Ed25519DerivedKey key = keyService.derive(derivationIndex);
@@ -45,6 +47,7 @@ public class SolanaAddressService {
 
     public ChainAddressRecord createTokenAddress(String symbol, String mintAddress, long userId, int biz,
                                                   long derivationIndex, String walletRole) {
+        HotWalletRules.requireAllowedReservedAddress(CHAIN, symbol, "SOL", userId, biz, derivationIndex, walletRole);
         ChainAddressRecord owner = createNativeAddress(userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {

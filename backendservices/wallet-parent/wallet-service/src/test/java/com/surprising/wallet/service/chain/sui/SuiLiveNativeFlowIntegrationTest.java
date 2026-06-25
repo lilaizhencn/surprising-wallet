@@ -25,15 +25,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SuiLiveNativeFlowIntegrationTest {
     private static final long OWNER_INDEX = 1_400_001L;
     private static final long EXTERNAL_INDEX = 1_400_002L;
-    private static final long HOT_INDEX = 1_400_003L;
+    private static final long HOT_INDEX = 0L;
     private static final long ONE_SUI = 1_000_000_000L;
 
     @Test
     void liveSuiDepositWithdrawCollectionAreIdempotent() {
         Assumptions.assumeTrue(Boolean.getBoolean("sui.live.enabled"),
-                "set -Dsui.live.enabled=true and ATOMEX_MASTER_SEED for Sui testnet live validation");
-        String masterSeed = System.getenv("ATOMEX_MASTER_SEED");
-        Assumptions.assumeTrue(masterSeed != null && !masterSeed.isBlank(), "ATOMEX_MASTER_SEED is required");
+                "set -Dsui.live.enabled=true and SW_ED25519_SEED for Sui testnet live validation");
+        String masterSeed = System.getenv("SW_ED25519_SEED");
+        Assumptions.assumeTrue(masterSeed != null && !masterSeed.isBlank(), "SW_ED25519_SEED is required");
 
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 env("SUI_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
@@ -51,7 +51,7 @@ class SuiLiveNativeFlowIntegrationTest {
 
         ChainAddressRecord owner = addresses.createNativeAddress(7001, 0, OWNER_INDEX, "DEPOSIT");
         ChainAddressRecord external = addresses.createNativeAddress(7002, 0, EXTERNAL_INDEX, "EXTERNAL");
-        ChainAddressRecord hot = addresses.createNativeAddress(0, 0, HOT_INDEX, "HOT_WITHDRAW");
+        ChainAddressRecord hot = addresses.createNativeAddress(0, 0, HOT_INDEX, "DEPOSIT");
 
         String faucetDigest = "existing-balance";
         if (rpc.balance(owner.getAddress(), SuiRpcClient.SUI_COIN_TYPE).compareTo(BigDecimal.valueOf(ONE_SUI)) < 0) {

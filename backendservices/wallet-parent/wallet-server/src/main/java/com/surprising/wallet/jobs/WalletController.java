@@ -4,17 +4,19 @@ import com.alibaba.fastjson.JSONObject;
 import com.surprising.commons.support.model.ResponseResult;
 import com.surprising.commons.support.util.ResultUtils;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.LedgerBalanceRecord;
+import com.surprising.wallet.common.chain.WalletPublicKey;
 import com.surprising.wallet.common.currency.BizEnum;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.AddressDto;
 import com.surprising.wallet.common.pojo.*;
 import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.wallet.IWallet;
 import com.surprising.wallet.service.wallet.WalletContext;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -36,20 +38,16 @@ public class WalletController {
     private final WalletContext context;
     private final ChainJdbcRepository chainJdbcRepository;
     private final AssetRoutingService assetRoutingService;
-
-    @Value("${atomex.wallet.pubKey1}")
-    private String pubKey1;
-    @Value("${atomex.wallet.pubKey2}")
-    private String pubKey2;
-    @Value("${atomex.wallet.pubKey3}")
-    private String pubKey3;
+    private final WalletRuntimeConfigService runtimeConfigService;
 
     public WalletController(WalletContext context,
                             ChainJdbcRepository chainJdbcRepository,
-                            AssetRoutingService assetRoutingService) {
+                            AssetRoutingService assetRoutingService,
+                            WalletRuntimeConfigService runtimeConfigService) {
         this.context = context;
         this.chainJdbcRepository = chainJdbcRepository;
         this.assetRoutingService = assetRoutingService;
+        this.runtimeConfigService = runtimeConfigService;
     }
 
     @PostMapping("/address")
@@ -58,6 +56,12 @@ public class WalletController {
                                                     @RequestParam(value = "biz") Integer biz) {
         AddressDto addressDto = new AddressDto();
         try {
+            if (HotWalletRules.isDefaultHotUser(userId, biz)) {
+                return ResultUtils.failure("userId=0,biz=0 是每条链默认热提钱包保留组合，不能通过创建充值地址接口生成");
+            }
+            if (!runtimeConfigService.isGlobalEnabled()) {
+                return ResultUtils.failure("项目总开关 global.all.enabled 已关闭，不能创建新的充值地址");
+            }
             RuntimeAsset coin = assetRoutingService.runtimeAsset(currency);
             BizEnum.parseBiz(biz);
             coin = assetRoutingService.legacyMainCurrency(coin);
@@ -151,9 +155,10 @@ public class WalletController {
         Map<String, Object> result = new HashMap<>();
         try {
             List<Map<String, String>> keys = new ArrayList<>();
-            addKeyInfo(keys, "KEY 1 (Hot - Sig1)", pubKey1, "sig1 首签 (hot wallet)", "m/44/1/0/0/0");
-            addKeyInfo(keys, "KEY 2 (Cold - Sig2)", pubKey2, "sig2 二次签名 (cold wallet)", "m/44/1/0/0/0");
-            addKeyInfo(keys, "KEY 3 (Offline Backup)", pubKey3, "离线备份", "m/44/1/0/0/0");
+            for (WalletPublicKey key : chainJdbcRepository.listEnabledWalletPublicKeys()) {
+                addKeyInfo(keys, "KEY " + key.getKeySlot() + " (" + key.getKeyRole() + ")",
+                        key.getPublicKey(), key.getRemark(), "m/44/1/0/0/0");
+            }
             result.put("keys", keys);
             result.put("scriptType", "P2WSH 2-of-3 Multisig (Native SegWit)");
             result.put("network", "Bitcoin TestNet3");
@@ -183,11 +188,17 @@ public class WalletController {
             RuntimeAsset coin = assetRoutingService.runtimeAsset(currency);
             coin = assetRoutingService.legacyMainCurrency(coin);
 
-            // Hot wallet address at userId=0, biz=0, index=0
+            // Default hot wallet address is fixed at userId=0, biz=0, index=0.
             String chain = assetRoutingService.requireChainForRuntimeCurrencyId(coin.getIndex());
             String symbol = assetRoutingService.requireNativeSymbolForRuntimeCurrencyId(coin.getIndex());
             RuntimeAsset finalCoin = coin;
-            chainJdbcRepository.findChainAddress(chain, symbol, 0L, 0, 0L, "DEPOSIT")
+            chainJdbcRepository.findChainAddress(
+                            chain,
+                            symbol,
+                            HotWalletRules.DEFAULT_HOT_USER_ID,
+                            HotWalletRules.DEFAULT_HOT_BIZ,
+                            HotWalletRules.DEFAULT_HOT_ADDRESS_INDEX,
+                            HotWalletRules.DEFAULT_HOT_WALLET_ROLE)
                     .ifPresent(addr -> {
                         result.put("address", addr.getAddress());
                         result.put("childId", Math.toIntExact(addr.getAddressIndex()));

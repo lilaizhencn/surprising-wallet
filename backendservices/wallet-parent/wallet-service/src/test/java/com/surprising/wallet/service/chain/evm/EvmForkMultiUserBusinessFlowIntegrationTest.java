@@ -273,13 +273,25 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
                     chain.name(), account, account);
             jdbcTemplate.update("delete from ledger_balance where chain = ? and lower(account_id) = lower(?)", chain.name(), account);
             jdbcTemplate.update("delete from evm_nonce where chain = ? and lower(address) = lower(?)", chain.name(), account);
-            jdbcTemplate.update("delete from hot_wallet_address where chain = ? and wallet_role = ?", chain.name(), actor.role());
+            jdbcTemplate.update("delete from chain_address where chain = ? and lower(address) = lower(?)",
+                    chain.name(), account);
             jdbcTemplate.update("""
-                            insert into hot_wallet_address(chain, asset_symbol, address, address_index, wallet_role, enabled, kms_key_ref)
-                            values (?, ?, ?, ?, ?, true, ?)
+                            insert into chain_address(chain, asset_symbol, account_id, user_id, biz, address_index,
+                                                      address, owner_address, derivation_path, wallet_role, enabled)
+                            values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, true)
+                            on conflict (chain, asset_symbol, address) do update set
+                                account_id = excluded.account_id,
+                                user_id = excluded.user_id,
+                                biz = excluded.biz,
+                                address_index = excluded.address_index,
+                                owner_address = excluded.owner_address,
+                                derivation_path = excluded.derivation_path,
+                                wallet_role = excluded.wallet_role,
+                                enabled = true,
+                                updated_at = now()
                             """,
-                    chain.name(), nativeSymbol, account, actor.derivationIndex(), actor.role(),
-                    "derived:wallet-sig2-master:" + actor.path());
+                    chain.name(), nativeSymbol, account, actor.userId(), actor.derivationIndex(),
+                    account, account, actor.path(), actor.role());
         }
     }
 
@@ -397,7 +409,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
                 actor("USER_B", 810_002L, base + 2),
                 actor("USER_C", 810_003L, base + 3),
                 actor("USER_D", 810_004L, base + 4),
-                actor("HOT", 0L, base + 90));
+                actor("HOT", 810_090L, base + 90));
     }
 
     private static Actor actor(String label, long userId, int derivationIndex) throws Exception {
@@ -417,7 +429,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         if (isValidMasterKey(fromProperty)) {
             return fromProperty.trim();
         }
-        String fromEnv = System.getenv("ATOMEX_SIG2_MASTER_KEY");
+        String fromEnv = System.getenv("SW_SIG2_MASTER_KEY");
         if (isValidMasterKey(fromEnv)) {
             return fromEnv.trim();
         }

@@ -16,7 +16,7 @@ public class AptosKeyService {
     private final String encodedMasterSeed;
     private volatile Ed25519KeyProvider provider;
 
-    public AptosKeyService(@Value("${atomex.wallet.ed25519.master-seed:}") String encodedMasterSeed) {
+    public AptosKeyService(@Value("${sw.wallet.ed25519.master-seed:}") String encodedMasterSeed) {
         this.encodedMasterSeed = encodedMasterSeed;
     }
 

@@ -36,7 +36,7 @@ It does not include runtime rows from address, balance, scan-height, deposit, wi
 | `wallet_public_key` | Three BIP32 public keys required by wallet-server startup |
 | `chain_asset` | Chain-native and chain-scoped asset definitions |
 | `token_config` | Token contract, decimals, enabled flag, min deposit/withdraw, collection policy |
-| `chain_address` | Address registry for UTXO/account chains |
+| `chain_address` | Address registry for UTXO/account chains; each enabled chain's default hot wallet is fixed to the native-asset `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT` row |
 | `chain_scan_height` | Scanner checkpoints |
 | `deposit_record` | Normalized deposit events |
 | `ledger_balance` | Chain-scoped account balance |
@@ -61,6 +61,7 @@ wallet-server validates at startup:
 - Each `chain` in `chain_profile` may have only one enabled network.
 - With `sw.app.env.name=prod`, enabled profiles may not use testnet/devnet/regtest.
 - Every enabled profile must have at least one `chain_rpc_node` for the current environment.
+- Every enabled chain must have exactly one default hot wallet address: native-asset `chain_address`, `user_id=0`, `biz=0`, `address_index=0`, `wallet_role=DEPOSIT`. Startup re-derives the address/path and compares them with the database.
 - Task switches, scan start, batch size, and RPC node count are logged for every chain. Missing or disabled settings are logged as WARN.
 
 ## Permissions

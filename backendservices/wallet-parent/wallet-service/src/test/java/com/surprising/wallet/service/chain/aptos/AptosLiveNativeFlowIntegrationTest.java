@@ -20,15 +20,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AptosLiveNativeFlowIntegrationTest {
     private static final long OWNER_INDEX = 1_300_001L;
     private static final long EXTERNAL_INDEX = 1_300_002L;
-    private static final long HOT_INDEX = 1_300_003L;
+    private static final long HOT_INDEX = 0L;
     private static final long ONE_APT = 100_000_000L;
 
     @Test
     void liveAptDepositWithdrawCollectionAreIdempotent() {
         Assumptions.assumeTrue(Boolean.getBoolean("aptos.live.enabled"),
-                "set -Daptos.live.enabled=true and ATOMEX_MASTER_SEED for Aptos devnet live validation");
-        String masterSeed = System.getenv("ATOMEX_MASTER_SEED");
-        Assumptions.assumeTrue(masterSeed != null && !masterSeed.isBlank(), "ATOMEX_MASTER_SEED is required");
+                "set -Daptos.live.enabled=true and SW_ED25519_SEED for Aptos devnet live validation");
+        String masterSeed = System.getenv("SW_ED25519_SEED");
+        Assumptions.assumeTrue(masterSeed != null && !masterSeed.isBlank(), "SW_ED25519_SEED is required");
 
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 env("APTOS_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
@@ -47,7 +47,7 @@ class AptosLiveNativeFlowIntegrationTest {
 
         ChainAddressRecord owner = addresses.createNativeAddress(6001, 0, OWNER_INDEX, "DEPOSIT");
         ChainAddressRecord external = addresses.createNativeAddress(6002, 0, EXTERNAL_INDEX, "EXTERNAL");
-        ChainAddressRecord hot = addresses.createNativeAddress(0, 0, HOT_INDEX, "HOT_WITHDRAW");
+        ChainAddressRecord hot = addresses.createNativeAddress(0, 0, HOT_INDEX, "DEPOSIT");
 
         rpc.fundDevnetAccount(owner.getAddress(), ONE_APT);
         waitForBalanceAtLeast(rpc, owner.getAddress(), ONE_APT, Duration.ofMinutes(2));

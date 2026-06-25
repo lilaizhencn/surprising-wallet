@@ -2,6 +2,7 @@ package com.surprising.wallet.service.wallet;
 
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.client.command.EthLikeCommand;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
@@ -94,6 +95,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
     @Transactional(rollbackFor = Throwable.class)
     public synchronized Address genNewAddress(Long userId, Integer biz) {
         log.info("生成新地址 开始 用户id:{}, 业务线:{}, 币种:{}", userId, biz, getCurrency().name());
+        rejectReservedHotAddress(userId, biz);
 
         RuntimeAsset currency = getCurrency();
         for (int attempt = 0; attempt < 5; attempt++) {
@@ -112,6 +114,19 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
             }
         }
         throw new IllegalStateException("failed to allocate a unique address index for " + currency);
+    }
+
+    @Override
+    public Address deriveAddress(Long userId, Integer biz, int index) {
+        RuntimeAsset currency = getCurrency();
+        ECKey ecKey = deriveAddressKey(currency, userId, biz, index);
+        return buildRuntimeAddress(currency, userId, biz, index, formatDerivedAddress(ecKey));
+    }
+
+    private void rejectReservedHotAddress(Long userId, Integer biz) {
+        if (HotWalletRules.isDefaultHotUser(userId, biz)) {
+            throw new IllegalArgumentException("userId=0,biz=0 is reserved for the unique default hot wallet address");
+        }
     }
 
     private int nextChainAddressIndex(RuntimeAsset currency, Long userId, Integer biz) {

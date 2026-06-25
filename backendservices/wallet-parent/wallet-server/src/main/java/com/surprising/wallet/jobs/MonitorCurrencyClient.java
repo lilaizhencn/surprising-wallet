@@ -18,10 +18,10 @@ public class MonitorCurrencyClient {
 
     private final ChainJdbcRepository chainJdbcRepository;
 
-    @Value("${atomex.warning.contacts}")
+    @Value("${sw.warning.contacts}")
     private String[] contacts;
 
-    @Value("${atomex.warning.scan-stale-ms:300000}")
+    @Value("${sw.warning.scan-stale-ms:300000}")
     private long scanStaleMs;
 
     public MonitorCurrencyClient(ChainJdbcRepository chainJdbcRepository) {

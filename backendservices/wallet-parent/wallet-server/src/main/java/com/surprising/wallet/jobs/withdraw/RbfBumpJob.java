@@ -8,6 +8,7 @@ import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,7 +25,7 @@ import java.util.List;
  *
  * <h3>操作步骤（仅需一步）</h3>
  * <pre>
- *   Redis> LPUSH newex-wallet:withdraw:rbf 123
+ *   Redis> LPUSH sw:wallet:withdraw:rbf 123
  *   （123 是 chain_signing_transaction 表的 id）
  * </pre>
  *
@@ -46,7 +47,7 @@ import java.util.List;
 public class RbfBumpJob {
 
     /** RBF 触发队列 */
-    public static final String WALLET_WITHDRAW_RBF_KEY = "newex-wallet:withdraw:rbf";
+    public static final String WALLET_WITHDRAW_RBF_KEY = "sw:wallet:withdraw:rbf";
 
     /** 默认费率倍数（当操作人员忘记手动提高 Redis 费率时使用） */
     private static final double DEFAULT_FEE_BUMP_FACTOR = 2.0;
@@ -55,12 +56,18 @@ public class RbfBumpJob {
     private ChainJdbcRepository chainJdbcRepository;
     @Autowired
     private AssetRoutingService assetRoutingService;
+    @Autowired
+    private WalletRuntimeConfigService runtimeConfigService;
 
     /**
      * 每 30 秒检查一次 RBF 触发队列
      */
     @Scheduled(cron = "0/30 * * * * ?")
     public void execute() {
+        if (!runtimeConfigService.isTaskEnabled("BTC", WalletRuntimeConfigService.TASK_WITHDRAW)) {
+            log.warn("RBF bump skipped: BTC withdraw switch disabled");
+            return;
+        }
         Long len = REDIS.lLen(WALLET_WITHDRAW_RBF_KEY);
         if (len == 0) return;
 

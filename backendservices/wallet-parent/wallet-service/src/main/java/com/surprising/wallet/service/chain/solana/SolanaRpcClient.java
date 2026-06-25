@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.surprising.wallet.common.chain.ChainRpcNode;
+import com.surprising.wallet.service.config.ChainRpcNodeService;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -21,20 +23,30 @@ import javax.net.ssl.SSLContext;
 
 @Component
 public class SolanaRpcClient {
+    private static final String CHAIN = "SOLANA";
+
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final AtomicLong requestId = new AtomicLong();
-    private final String rpcUrl;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedRpcUrl;
 
     @Autowired
-    public SolanaRpcClient(
-            @Value("${atomex.solana.rpc-url:https://api.devnet.solana.com}") String rpcUrl) {
-        this(new ObjectMapper(), rpcUrl);
+    public SolanaRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
+        this(new ObjectMapper(), repository, rpcNodeService, null);
     }
 
     SolanaRpcClient(ObjectMapper objectMapper, String rpcUrl) {
+        this(objectMapper, null, null, rpcUrl);
+    }
+
+    private SolanaRpcClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
+                            ChainRpcNodeService rpcNodeService, String fixedRpcUrl) {
         this.objectMapper = objectMapper;
-        this.rpcUrl = rpcUrl;
+        this.repository = repository;
+        this.rpcNodeService = rpcNodeService;
+        this.fixedRpcUrl = fixedRpcUrl;
         this.httpClient = buildHttpClient();
     }
 
@@ -119,15 +131,32 @@ public class SolanaRpcClient {
         payload.set("params", objectMapper.valueToTree(params));
         try {
             String requestBody = objectMapper.writeValueAsString(payload);
+            if (fixedRpcUrl != null) {
+                return execute(method, requestBody, fixedRpcUrl, null);
+            }
+            String network = repository.findProfileByChain(CHAIN)
+                    .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN))
+                    .getNetwork();
+            return rpcNodeService.withFailover(CHAIN, network,
+                    node -> execute(method, requestBody, node.getRpcUrl(), node));
+        } catch (IOException e) {
+            throw new IllegalStateException("Solana RPC serialization/IO failed for " + method, e);
+        }
+    }
+
+    private JsonNode execute(String method, String requestBody, String rpcUrl, ChainRpcNode node) {
+        try {
             for (int attempt = 1; attempt <= 6; attempt++) {
                 try {
-                    HttpRequest request = HttpRequest.newBuilder(URI.create(rpcUrl))
+                    HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(rpcUrl))
                             .timeout(Duration.ofSeconds(30))
                             .header("content-type", "application/json")
                             .header("user-agent", "surprising-wallet/1.0")
-                            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                            .build();
-                    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                            .POST(HttpRequest.BodyPublishers.ofString(requestBody));
+                    if (node != null) {
+                        rpcNodeService.applyAuthHeaders(builder, node);
+                    }
+                    HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
                     if (response.statusCode() == 429 && attempt < 6) {
                         Thread.sleep(attempt * 1_000L);
                         continue;
@@ -149,7 +178,7 @@ public class SolanaRpcClient {
             }
             throw new IllegalStateException("Solana RPC retry loop exhausted for " + method);
         } catch (IOException e) {
-            throw new IllegalStateException("Solana RPC serialization/IO failed for " + method, e);
+            throw new IllegalStateException("Solana RPC IO failed for " + method, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Solana RPC interrupted for " + method, e);

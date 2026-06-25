@@ -86,12 +86,12 @@ Collection：
 
 - 扫描可归集用户余额。
 - 从 `token_config` 读取资产策略。
-- 构建到热钱包的转账。
+- 构建到固定默认热提钱包的转账；默认热提钱包为每条链原生资产 `chain_address` 的 `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT`。
 - 确认并幂等更新 ledger 状态。
 
 ## 启动配置校验
 
-wallet-server 启动时会检查 `chain_profile`、`chain_rpc_node`、`wallet_public_key` 和 `wallet_system_config`。同一链只能启用一个网络；生产环境禁止启用测试网络；启用链必须至少有一个匹配当前环境的 RPC 节点。校验结果会按链打印状态，缺失配置或关闭开关会输出 WARN。
+wallet-server 启动时会检查 `chain_profile`、`chain_rpc_node`、`wallet_public_key`、默认热提钱包和 `wallet_system_config`。同一链只能启用一个网络；生产环境禁止启用测试网络；启用链必须至少有一个匹配当前环境的 RPC 节点。默认热提钱包会通过代码推导后与 `chain_address` 比对，缺失或不一致会启动失败。校验结果会按链打印状态，缺失配置或关闭开关会输出 WARN。
 
 ## 运行目录
 

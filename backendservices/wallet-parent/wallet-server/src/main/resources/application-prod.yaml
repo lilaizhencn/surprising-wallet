@@ -1,110 +1,14 @@
-atomex:
+sw:
   app:
     env:
       name: prod
   wallet:
+    admin:
+      username: ${SW_WALLET_ADMIN_USERNAME:}
+      password: ${SW_WALLET_ADMIN_PASSWORD:}
     network: main
     ed25519:
-      master-seed: ${ATOMEX_MASTER_SEED:}
-    pubKey1: ${ATOMEX_PROD_PUBKEY1:}
-    pubKey2: ${ATOMEX_PROD_PUBKEY2:}
-    pubKey3: ${ATOMEX_PROD_PUBKEY3:}
-  btc:
-    server: https://bitcoin-rpc.publicnode.com
-  ltc:
-    network: mainnet
-    server: ${LTC_MAINNET_RPC_URL:http://127.0.0.1:9332}
-    server.user: ${LTC_MAINNET_RPC_USER:}
-    server.pwd: ${LTC_MAINNET_RPC_PASSWORD:}
-    esplora-url: ${LTC_MAINNET_ESPLORA_URL:https://litecoinspace.org/api}
-  doge:
-    network: ${DOGE_NETWORK:mainnet}
-    server: ${DOGE_MAINNET_RPC_URL:http://127.0.0.1:22555}
-    server.user: ${DOGE_MAINNET_RPC_USER:}
-    server.pwd: ${DOGE_MAINNET_RPC_PASSWORD:}
-  bch:
-    network: ${BCH_NETWORK:mainnet}
-    server: ${BCH_MAINNET_RPC_URL:http://127.0.0.1:8332}
-    server.user: ${BCH_MAINNET_RPC_USER:}
-    server.pwd: ${BCH_MAINNET_RPC_PASSWORD:}
-  solana:
-    network: ${SOLANA_NETWORK:mainnet}
-    rpc-url: ${SOLANA_RPC_URL:}
-    scan-limit: ${SOLANA_SCAN_LIMIT:100}
-  ton:
-    network: ${TON_NETWORK:mainnet}
-    rpc-url: ${TON_RPC_URL:}
-    api-key: ${TONCENTER_API_KEY:}
-    indexer-url: ${TON_INDEXER_URL:}
-    indexer-api-key: ${TON_INDEXER_API_KEY:}
-    scan-limit: ${TON_SCAN_LIMIT:100}
-  aptos:
-    network: ${APTOS_NETWORK:mainnet}
-    rpc-url: ${APTOS_RPC_URL:}
-    faucet-url: ${APTOS_FAUCET_URL:}
-    scan-limit: ${APTOS_SCAN_LIMIT:100}
-  sui:
-    network: ${SUI_NETWORK:mainnet}
-    rpc-url: ${SUI_RPC_URL:}
-    faucet-url: ${SUI_FAUCET_URL:}
-    scan-limit: ${SUI_SCAN_LIMIT:50}
-  eth:
-    server: https://ethereum-rpc.publicnode.com
-    chain-id: 1
-  tron:
-    server: grpc.trongrid.io:50051
-    fullnode: grpc.trongrid.io:50051
-    soliditynode: grpc.trongrid.io:50052
-    eventserver: https://api.trongrid.io
-  chains:
-    btc-testnet:
-      enabled: false
-    litecoin-testnet:
-      enabled: false
-    ethereum-sepolia:
-      enabled: false
-    bnb-chain-testnet:
-      enabled: false
-    polygon-amoy:
-      enabled: false
-    arbitrum-sepolia:
-      enabled: false
-    optimism-sepolia:
-      enabled: false
-    base-sepolia:
-      enabled: false
-    avalanche-fuji:
-      enabled: false
-    ethereum-mainnet:
-      enabled: true
-      rpcUrl: https://ethereum-rpc.publicnode.com
-    bnb-chain-mainnet:
-      enabled: true
-      rpcUrl: https://bsc-rpc.publicnode.com
-    polygon-mainnet:
-      enabled: true
-      rpcUrl: https://polygon-bor-rpc.publicnode.com
-    arbitrum-one:
-      enabled: true
-      rpcUrl: https://arbitrum-one-rpc.publicnode.com
-    optimism-mainnet:
-      enabled: true
-      rpcUrl: https://optimism-rpc.publicnode.com
-    base-mainnet:
-      enabled: true
-      rpcUrl: https://base-rpc.publicnode.com
-    avalanche-mainnet:
-      enabled: true
-      rpcUrl: https://avalanche-c-chain-rpc.publicnode.com
-    tron-mainnet:
-      enabled: true
-      rpcUrl: grpc.trongrid.io:50051
-    litecoin-mainnet:
-      enabled: false
-      rpcUrl: ${LTC_MAINNET_RPC_URL:http://127.0.0.1:9332}
-    dogecoin-mainnet:
-      enabled: false
-      rpcUrl: ${DOGE_MAINNET_RPC_URL:http://127.0.0.1:22555}
-    bitcoin-cash-mainnet:
-      enabled: false
-      rpcUrl: ${BCH_MAINNET_RPC_URL:http://127.0.0.1:8332}
+      master-seed: ${SW_ED25519_SEED:}
+    legacy:
+      eth-withdraw-address: ${SW_ETH_WITHDRAW_ADDRESS:}
+      tron-withdraw-address: ${SW_TRON_WITHDRAW_ADDRESS:}

@@ -24,15 +24,15 @@ class AptosLiveTokenFlowIntegrationTest {
     private static final long PUBLISHER_INDEX = 1_300_010L;
     private static final long OWNER_INDEX = 1_300_011L;
     private static final long EXTERNAL_INDEX = 1_300_012L;
-    private static final long HOT_INDEX = 1_300_013L;
+    private static final long HOT_INDEX = 0L;
     private static final long ONE_APT = 100_000_000L;
 
     @Test
     void liveMockCoinDepositWithdrawCollectionAreIdempotent() {
         Assumptions.assumeTrue(Boolean.getBoolean("aptos.token.live.enabled"),
-                "set -Daptos.token.live.enabled=true and ATOMEX_MASTER_SEED for Aptos devnet token validation");
-        String masterSeed = System.getenv("ATOMEX_MASTER_SEED");
-        Assumptions.assumeTrue(masterSeed != null && !masterSeed.isBlank(), "ATOMEX_MASTER_SEED is required");
+                "set -Daptos.token.live.enabled=true and SW_ED25519_SEED for Aptos devnet token validation");
+        String masterSeed = System.getenv("SW_ED25519_SEED");
+        Assumptions.assumeTrue(masterSeed != null && !masterSeed.isBlank(), "SW_ED25519_SEED is required");
 
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 env("APTOS_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
@@ -55,7 +55,7 @@ class AptosLiveTokenFlowIntegrationTest {
 
         ChainAddressRecord owner = addresses.createCoinAddress(SYMBOL, 6011, 0, OWNER_INDEX, "DEPOSIT");
         ChainAddressRecord external = addresses.createCoinAddress(SYMBOL, 6012, 0, EXTERNAL_INDEX, "EXTERNAL");
-        ChainAddressRecord hot = addresses.createCoinAddress(SYMBOL, 0, 0, HOT_INDEX, "HOT_WITHDRAW");
+        ChainAddressRecord hot = addresses.createNativeAddress(0, 0, HOT_INDEX, "DEPOSIT");
 
         fundAndWait(rpc, publisher, ONE_APT);
         fundAndWait(rpc, owner.getAddress(), ONE_APT);

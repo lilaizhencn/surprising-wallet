@@ -2,6 +2,7 @@ package com.surprising.wallet.jobs.transfer;
 
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.starters.redis.REDIS;
+import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
@@ -10,11 +11,11 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,25 +36,16 @@ public class BtcCollectionJob {
     private final AddressService addressService;
     private final ChainJdbcRepository chainJdbcRepository;
     private final AssetRoutingService assetRoutingService;
-
-    @Value("${atomex.wallet.collection.enabled-currencies:}")
-    private String enabledCurrencies;
-
-    @Value("${atomex.wallet.hot.user-id:0}")
-    private Long hotUserId;
-
-    @Value("${atomex.wallet.hot.biz:0}")
-    private Integer hotBiz;
-
-    @Value("${atomex.wallet.hot.address-index:0}")
-    private Integer hotAddressIndex;
+    private final WalletRuntimeConfigService runtimeConfigService;
 
     public BtcCollectionJob(AddressService addressService,
                             ChainJdbcRepository chainJdbcRepository,
-                            AssetRoutingService assetRoutingService) {
+                            AssetRoutingService assetRoutingService,
+                            WalletRuntimeConfigService runtimeConfigService) {
         this.addressService = addressService;
         this.chainJdbcRepository = chainJdbcRepository;
         this.assetRoutingService = assetRoutingService;
+        this.runtimeConfigService = runtimeConfigService;
     }
 
     @Scheduled(cron = "15/30 * * * * ?")
@@ -65,7 +57,10 @@ public class BtcCollectionJob {
         RuntimeAsset currency = assetRoutingService.runtimeAssetByChain(CHAIN);
         Address hotAddress = getHotAddress(currency);
         if (hotAddress == null) {
-            log.warn("BTC归集跳过: 未找到热提地址 userId={} biz={} index={}", hotUserId, hotBiz, hotAddressIndex);
+            log.warn("BTC归集跳过: 未找到热提地址 userId={} biz={} index={}",
+                    HotWalletRules.DEFAULT_HOT_USER_ID,
+                    HotWalletRules.DEFAULT_HOT_BIZ,
+                    HotWalletRules.DEFAULT_HOT_ADDRESS_INDEX);
             return;
         }
 
@@ -105,10 +100,10 @@ public class BtcCollectionJob {
                 .withdrawId(collectionId)
                 .txId("collection")
                 .address(hotAddress.getAddress())
-                .userId(hotUserId)
+                .userId(HotWalletRules.DEFAULT_HOT_USER_ID)
                 .balance(outputAmount)
                 .currency(currency.getIndex())
-                .biz(hotBiz)
+                .biz(HotWalletRules.DEFAULT_HOT_BIZ)
                 .fee(feeAmount)
                 .status((byte) Constants.SIGNING)
                 .createDate(now)
@@ -182,7 +177,12 @@ public class BtcCollectionJob {
 
     private Address getHotAddress(RuntimeAsset currency) {
         return chainJdbcRepository.findChainAddress(
-                        CHAIN, CHAIN, hotUserId, hotBiz, hotAddressIndex, "DEPOSIT")
+                        CHAIN,
+                        CHAIN,
+                        HotWalletRules.DEFAULT_HOT_USER_ID,
+                        HotWalletRules.DEFAULT_HOT_BIZ,
+                        HotWalletRules.DEFAULT_HOT_ADDRESS_INDEX,
+                        HotWalletRules.DEFAULT_HOT_WALLET_ROLE)
                 .map(record -> Address.builder()
                         .address(record.getAddress())
                         .userId(record.getUserId())
@@ -202,12 +202,6 @@ public class BtcCollectionJob {
     }
 
     private boolean isEnabled() {
-        for (String item : enabledCurrencies.split(",")) {
-            String value = item.trim();
-            if ("*".equals(value) || CHAIN.equalsIgnoreCase(value)) {
-                return true;
-            }
-        }
-        return false;
+        return runtimeConfigService.isTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION);
     }
 }

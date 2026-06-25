@@ -119,6 +119,9 @@ export SW_SIG2_MASTER_KEY='<第二签 BIP32 tprv>'
 | 链网络、确认数、链 ID、gas policy | `chain_profile` |
 | RPC/fullnode/indexer/faucet 节点 | `chain_rpc_node` |
 | wallet-server 三个 public key | `wallet_public_key` |
+| 每链默认热提钱包 | `chain_address` 中原生资产 `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT` |
+
+当前运行时代码已接入 `global.all.enabled`、扫描、提现和归集开关。`transfer_enabled` 保留给后续内部划转入口；新增划转入口时必须调用 `WalletRuntimeConfigService.requireTaskEnabled(chain, TASK_TRANSFER, ...)`，不要把该开关套用到创建地址或提现流程。
 
 TokDou 钱包页面读取 wallet-server：
 
@@ -147,11 +150,12 @@ TokDou 钱包页面读取 wallet-server：
 - `chain_profile` 中每条启用链只能启用一个 network
 - 启用链至少有一个匹配当前 `sw.app.env.name` 的 `chain_rpc_node`
 - `wallet_public_key` 中 slot 1/2/3 必须启用
+- 每条启用链必须且只能有一条默认热提钱包地址：`chain_address` 原生资产、`user_id=0`、`biz=0`、`address_index=0`、`wallet_role=DEPOSIT`
 - 签名服务私钥
 - Ed25519 链使用的 `SW_ED25519_SEED`
 - 钱包后台配置页使用的 `SW_WALLET_ADMIN_USERNAME`、`SW_WALLET_ADMIN_PASSWORD`
 
-启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量。缺配置或关闭项会以 WARN 输出；生产环境如果启用了 testnet/devnet/regtest profile 会直接失败。
+启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量。wallet-server 会按 `wallet_public_key` 或 `SW_ED25519_SEED` 推导每条启用链的 `0/0/0` 默认热提地址，并和 `chain_address` 比对；缺失、重复或地址/path 不一致会直接启动失败。生产环境如果启用了 testnet/devnet/regtest profile 也会直接失败。
 
 ## 7. 启动服务
 

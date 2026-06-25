@@ -11,7 +11,6 @@ import com.surprising.wallet.service.wallet.IWallet;
 import jakarta.annotation.PostConstruct;
 import org.bitcoinj.core.NetworkParameters;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -26,20 +25,16 @@ public class DogeWallet extends AbstractBtcLikeWallet implements IWallet {
     @Autowired
     private DogeCommand dogeCommand;
 
-    @Value("${atomex.doge.network:testnet}")
-    private String network;
-
     private BitcoinLikeChainProfile runtimeProfile;
     private RuntimeAsset currency;
 
     @PostConstruct
     public void init() {
         super.setCommand(dogeCommand);
-        String profileNetwork = isMainnet() ? "mainnet" : isRegtest() ? "regtest" : "testnet";
-        runtimeProfile = chainJdbcRepository.findBitcoinLikeProfile("DOGE", profileNetwork)
-                .orElseThrow(() -> new IllegalStateException(
-                        "missing enabled chain_profile for DOGE/" + profileNetwork));
-        currency = loadBitcoinLikeRuntimeAsset("DOGE", profileNetwork);
+        runtimeProfile = chainJdbcRepository.findProfileByChain("DOGE")
+                .flatMap(profile -> chainJdbcRepository.findBitcoinLikeProfile("DOGE", profile.getNetwork()))
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for DOGE"));
+        currency = loadBitcoinLikeRuntimeAsset("DOGE", runtimeProfile.getNetwork());
     }
 
     @Override
@@ -92,10 +87,10 @@ public class DogeWallet extends AbstractBtcLikeWallet implements IWallet {
     }
 
     private boolean isMainnet() {
-        return "mainnet".equalsIgnoreCase(network) || "main".equalsIgnoreCase(network);
+        return "mainnet".equalsIgnoreCase(runtimeProfile.getNetwork()) || "main".equalsIgnoreCase(runtimeProfile.getNetwork());
     }
 
     private boolean isRegtest() {
-        return "regtest".equalsIgnoreCase(network);
+        return "regtest".equalsIgnoreCase(runtimeProfile.getNetwork());
     }
 }

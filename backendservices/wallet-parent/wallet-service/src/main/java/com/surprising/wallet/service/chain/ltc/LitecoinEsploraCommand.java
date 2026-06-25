@@ -7,7 +7,8 @@ import com.surprising.wallet.common.pojo.rpc.BtcLikeBlock;
 import com.surprising.wallet.common.pojo.rpc.BtcLikeRawTransaction;
 import com.surprising.wallet.common.pojo.rpc.ScriptPubKey;
 import com.surprising.wallet.common.pojo.rpc.TxOutput;
-import org.springframework.beans.factory.annotation.Value;
+import com.surprising.wallet.service.config.ChainRpcNodeService;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -30,13 +31,15 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
-    private final String baseUrl;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
     private volatile long cachedTipHeight;
 
-    public LitecoinEsploraCommand(
-            @Value("${atomex.ltc.esplora-url:https://litecoinspace.org/testnet/api}") String baseUrl) {
+    public LitecoinEsploraCommand(ChainJdbcRepository repository,
+                                  ChainRpcNodeService rpcNodeService) {
+        this.repository = repository;
+        this.rpcNodeService = rpcNodeService;
         this.objectMapper = new ObjectMapper();
-        this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(20))
                 .build();
@@ -125,12 +128,14 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
 
     @Override
     public String sendRawTransaction(String hex) {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/tx"))
-                .timeout(Duration.ofSeconds(30))
-                .header("Content-Type", "text/plain")
-                .POST(HttpRequest.BodyPublishers.ofString(hex))
-                .build();
-        return send(request).trim();
+        return withEndpoint(baseUrl -> {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/tx"))
+                    .timeout(Duration.ofSeconds(30))
+                    .header("Content-Type", "text/plain")
+                    .POST(HttpRequest.BodyPublishers.ofString(hex))
+                    .build();
+            return send(request).trim();
+        });
     }
 
     private JsonNode getJson(String path) {
@@ -142,11 +147,26 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
     }
 
     private String getText(String path) {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + path))
-                .timeout(Duration.ofSeconds(30))
-                .GET()
-                .build();
-        return send(request);
+        return withEndpoint(baseUrl -> {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + path))
+                    .timeout(Duration.ofSeconds(30))
+                    .GET()
+                    .build();
+            return send(request);
+        });
+    }
+
+    private String withEndpoint(java.util.function.Function<String, String> request) {
+        String network = repository.findProfileByChain("LTC")
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for LTC"))
+                .getNetwork();
+        return rpcNodeService.withFailover("LTC", network, node -> {
+            String baseUrl = node.getRpcUrl();
+            if (baseUrl.endsWith("/")) {
+                baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+            }
+            return request.apply(baseUrl);
+        });
     }
 
     private String send(HttpRequest request) {

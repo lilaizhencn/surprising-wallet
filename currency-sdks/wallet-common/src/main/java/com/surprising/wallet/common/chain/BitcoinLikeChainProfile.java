@@ -29,4 +29,13 @@ public class BitcoinLikeChainProfile {
     private Long defaultFeeRate;
     private Long dustThreshold;
     private Boolean enabled;
+    private Long chainId;
+    private String gasPolicy;
+    private Integer scanBatchSize;
+    private Boolean scanEnabled;
+    private Boolean withdrawEnabled;
+    private Boolean collectionEnabled;
+    private Boolean transferEnabled;
+    private Long scanStartHeight;
+    private Long scanMaxBlocksPerRun;
 }

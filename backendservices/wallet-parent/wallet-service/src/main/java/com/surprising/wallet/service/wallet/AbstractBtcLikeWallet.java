@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.googlecode.jsonrpc4j.JsonRpcClientException;
 import com.surprising.wallet.client.command.BtcLikeCommand;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.Address;
@@ -99,6 +100,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
     @Transactional(rollbackFor = Throwable.class)
     public synchronized Address genNewAddress(Long userId, Integer biz) {
         log.info("用户获取新地址, 用户id:{}, 业务线:{}, 币种:{} 开始获取", userId, biz, getCurrency().name());
+        rejectReservedHotAddress(userId, biz);
 
         for (int attempt = 0; attempt < 5; attempt++) {
             try {
@@ -112,6 +114,17 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
             }
         }
         throw new IllegalStateException("failed to allocate a unique address index");
+    }
+
+    @Override
+    public Address deriveAddress(Long userId, Integer biz, int index) {
+        return buildAddress(userId, biz, index);
+    }
+
+    private void rejectReservedHotAddress(Long userId, Integer biz) {
+        if (HotWalletRules.isDefaultHotUser(userId, biz)) {
+            throw new IllegalArgumentException("userId=0,biz=0 is reserved for the unique default hot wallet address");
+        }
     }
 
     private Address buildNextAddress(Long userId, Integer biz) {

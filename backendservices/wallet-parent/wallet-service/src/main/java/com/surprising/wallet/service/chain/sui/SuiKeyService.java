@@ -14,7 +14,7 @@ public class SuiKeyService {
     private final String encodedMasterSeed;
     private volatile Ed25519KeyProvider provider;
 
-    public SuiKeyService(@Value("${atomex.wallet.ed25519.master-seed:}") String encodedMasterSeed) {
+    public SuiKeyService(@Value("${sw.wallet.ed25519.master-seed:}") String encodedMasterSeed) {
         this.encodedMasterSeed = encodedMasterSeed;
     }
 

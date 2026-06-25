@@ -1,20 +1,13 @@
 package com.surprising.wallet.client.command;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.annotation.RpcConfig;
 import retrofit2.http.GET;
 import retrofit2.http.Path;
 import retrofit2.http.Query;
 
-import static com.surprising.wallet.common.annotation.RpcConfig.RpcType.REST_RPC;
-
 /**
  * @author lilaizhen
  */
-@RpcConfig(
-        server = "${blockchain.api}",
-        type = REST_RPC
-)
 public interface BlockChainBtcCommand {
 
     /**

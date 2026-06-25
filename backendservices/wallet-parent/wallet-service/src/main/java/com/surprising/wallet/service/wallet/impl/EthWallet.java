@@ -8,6 +8,7 @@ import com.surprising.wallet.service.wallet.IWallet;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
@@ -22,6 +23,7 @@ import java.util.List;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "sw.legacy.account-wallet.enabled", havingValue = "true")
 public class EthWallet extends AbstractEthLikeWallet implements IWallet {
     @Autowired
     EthCommand command;
@@ -29,7 +31,7 @@ public class EthWallet extends AbstractEthLikeWallet implements IWallet {
     @Autowired
     com.surprising.wallet.service.wallet.impl.Erc20Wallet erc20Wallet;
 
-    @Value("${atomex.eth.withdraw.address}")
+    @Value("${sw.wallet.legacy.eth-withdraw-address}")
     private String ethWithdrawAddress;
     private RuntimeAsset currency;
 

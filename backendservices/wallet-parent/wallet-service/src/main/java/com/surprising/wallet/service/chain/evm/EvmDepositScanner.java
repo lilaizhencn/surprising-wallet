@@ -3,10 +3,12 @@ package com.surprising.wallet.service.chain.evm;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.EvmTransactionRecord;
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.service.config.ChainRpcNodeService;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.DefaultBlockParameter;
@@ -39,18 +41,21 @@ public class EvmDepositScanner {
 
     private final ChainJdbcRepository repository;
     private final EvmLogScanner logScanner;
-    private final String sepoliaRpcUrl;
-    private final int sepoliaConfirmations;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedRpcUrl;
+    private final int fixedConfirmations;
+
+    @Autowired(required = false)
+    private WalletRuntimeConfigService runtimeConfigService;
 
     @Autowired
     public EvmDepositScanner(ChainJdbcRepository repository, EvmLogScanner logScanner,
-                             @Value("${atomex.chains.ethereum-sepolia.rpcUrl:https://ethereum-sepolia-rpc.publicnode.com}")
-                             String sepoliaRpcUrl,
-                             @Value("${atomex.chains.ethereum-sepolia.confirmations:12}") int sepoliaConfirmations) {
+                             ChainRpcNodeService rpcNodeService) {
         this.repository = repository;
         this.logScanner = logScanner;
-        this.sepoliaRpcUrl = sepoliaRpcUrl;
-        this.sepoliaConfirmations = sepoliaConfirmations;
+        this.rpcNodeService = rpcNodeService;
+        this.fixedRpcUrl = null;
+        this.fixedConfirmations = 0;
     }
 
     public EvmDepositScanner(ChainJdbcRepository repository,
@@ -59,8 +64,17 @@ public class EvmDepositScanner {
         this(repository, new EvmLogScanner(), sepoliaRpcUrl, sepoliaConfirmations);
     }
 
+    public EvmDepositScanner(ChainJdbcRepository repository, EvmLogScanner logScanner,
+                             String sepoliaRpcUrl, int sepoliaConfirmations) {
+        this.repository = repository;
+        this.logScanner = logScanner;
+        this.rpcNodeService = null;
+        this.fixedRpcUrl = sepoliaRpcUrl;
+        this.fixedConfirmations = sepoliaConfirmations;
+    }
+
     public BigDecimal getNativeBalance(String address) throws IOException {
-        return getNativeBalance(sepoliaRpcUrl, address);
+        return withDefaultRpc(rpcUrl -> getNativeBalance(rpcUrl, address));
     }
 
     public BigDecimal getNativeBalance(String rpcUrl, String address) throws IOException {
@@ -74,7 +88,7 @@ public class EvmDepositScanner {
     }
 
     public BigInteger getPendingNonce(String address) throws IOException {
-        return getPendingNonce(sepoliaRpcUrl, address);
+        return withDefaultRpc(rpcUrl -> getPendingNonce(rpcUrl, address));
     }
 
     public BigInteger getPendingNonce(String rpcUrl, String address) throws IOException {
@@ -87,7 +101,7 @@ public class EvmDepositScanner {
     }
 
     public BigDecimal getGasPriceGwei() throws IOException {
-        return getGasPriceGwei(sepoliaRpcUrl);
+        return withDefaultRpc(this::getGasPriceGwei);
     }
 
     public BigDecimal getGasPriceGwei(String rpcUrl) throws IOException {
@@ -101,7 +115,7 @@ public class EvmDepositScanner {
     }
 
     public BigInteger getLatestBlockNumber() throws IOException {
-        return getLatestBlockNumber(sepoliaRpcUrl);
+        return withDefaultRpc(this::getLatestBlockNumber);
     }
 
     public BigInteger getLatestBlockNumber(String rpcUrl) throws IOException {
@@ -114,11 +128,15 @@ public class EvmDepositScanner {
     }
 
     public List<DepositEvent> scanNativeEthDeposits(long blockHeight) throws IOException {
-        return scanNativeDeposits(ChainType.ETH, "ETH", sepoliaRpcUrl, blockHeight);
+        return withDefaultRpc(rpcUrl -> scanNativeDeposits(ChainType.ETH, profile(ChainType.ETH).getNativeSymbol(),
+                rpcUrl, blockHeight));
     }
 
     public List<DepositEvent> scanAndCreditNativeEth(long blockHeight) throws IOException {
-        return scanAndCreditNative(ChainType.ETH, "ETH", sepoliaRpcUrl, sepoliaConfirmations, blockHeight);
+        AccountChainProfile profile = profile(ChainType.ETH);
+        int confirmations = fixedRpcUrl != null ? fixedConfirmations : profile.getDepositConfirmations();
+        return withDefaultRpc(rpcUrl -> scanAndCreditNative(ChainType.ETH, profile.getNativeSymbol(),
+                rpcUrl, confirmations, blockHeight));
     }
 
     public List<DepositEvent> scanNativeDeposits(ChainType chainType, String nativeSymbol,
@@ -133,6 +151,7 @@ public class EvmDepositScanner {
 
     public List<DepositEvent> scanAndCreditNative(ChainType chainType, String nativeSymbol, String rpcUrl,
                                                   int requiredConfirmations, long blockHeight) throws IOException {
+        requireTaskEnabled(chainType, WalletRuntimeConfigService.TASK_SCAN, "evm scanAndCreditNative");
         List<DepositEvent> events = scanNativeDeposits(chainType, nativeSymbol, rpcUrl, blockHeight);
         for (DepositEvent event : events) {
             repository.recordAndCreditDeposit(event, requiredConfirmations);
@@ -159,13 +178,14 @@ public class EvmDepositScanner {
 
     public List<DepositEvent> scanAndCreditErc20(ChainType chainType, String rpcUrl,
                                                  int requiredConfirmations, long blockHeight) throws IOException {
+        requireTaskEnabled(chainType, WalletRuntimeConfigService.TASK_SCAN, "evm scanAndCreditErc20");
         Web3j web3j = web3j(rpcUrl);
         try {
             BigInteger latest = web3j.ethBlockNumber().send().getBlockNumber();
             int confirmations = confirmations(latest, blockHeight);
-            Set<String> trackedAddresses = repository.listEnabledHotWalletAddresses(chainType.name());
+            Set<String> trackedAddresses = repository.listEnabledChainScanAddresses(chainType.name());
             if (trackedAddresses.isEmpty()) {
-                log.warn("EVM token scanner skipped: no enabled {} hot_wallet_address rows", chainType.name());
+                log.warn("EVM token scanner skipped: no enabled {} chain_address rows", chainType.name());
                 return List.of();
             }
 
@@ -207,9 +227,9 @@ public class EvmDepositScanner {
 
     private List<DepositEvent> scanNativeDeposits(Web3j web3j, ChainType chainType,
                                                   String nativeSymbol, long blockHeight) throws IOException {
-        Set<String> trackedAddresses = repository.listEnabledHotWalletAddresses(chainType.name());
+        Set<String> trackedAddresses = repository.listEnabledChainScanAddresses(chainType.name());
         if (trackedAddresses.isEmpty()) {
-            log.warn("EVM native scanner skipped: no enabled {} hot_wallet_address rows", chainType.name());
+            log.warn("EVM native scanner skipped: no enabled {} chain_address rows", chainType.name());
             return List.of();
         }
 
@@ -244,12 +264,47 @@ public class EvmDepositScanner {
         return events;
     }
 
-    private Web3j web3j() {
-        return web3j(sepoliaRpcUrl);
-    }
-
     private Web3j web3j(String rpcUrl) {
         return Web3j.build(new HttpService(rpcUrl));
+    }
+
+    private AccountChainProfile profile(ChainType chainType) {
+        return repository.findProfileByChain(chainType.name())
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
+    }
+
+    private <T> T withDefaultRpc(IoRpcRequest<T> request) throws IOException {
+        if (fixedRpcUrl != null && !fixedRpcUrl.isBlank()) {
+            return request.apply(fixedRpcUrl);
+        }
+        AccountChainProfile profile = profile(ChainType.ETH);
+        try {
+            return rpcNodeService.withFailover(ChainType.ETH.name(), profile.getNetwork(), node -> {
+                try {
+                    return request.apply(node.getRpcUrl());
+                } catch (IOException e) {
+                    throw new RpcIoException(e);
+                }
+            });
+        } catch (RpcIoException e) {
+            throw e.getCause();
+        }
+    }
+
+    @FunctionalInterface
+    private interface IoRpcRequest<T> {
+        T apply(String rpcUrl) throws IOException;
+    }
+
+    private static class RpcIoException extends RuntimeException {
+        RpcIoException(IOException cause) {
+            super(cause);
+        }
+
+        @Override
+        public synchronized IOException getCause() {
+            return (IOException) super.getCause();
+        }
     }
 
     private static int confirmations(BigInteger latest, long blockHeight) {
@@ -259,6 +314,12 @@ public class EvmDepositScanner {
 
     private static BigDecimal weiToEth(BigInteger wei) {
         return new BigDecimal(wei).divide(WEI_PER_ETH, 18, RoundingMode.DOWN);
+    }
+
+    private void requireTaskEnabled(ChainType chainType, String task, String operation) {
+        if (runtimeConfigService != null) {
+            runtimeConfigService.requireTaskEnabled(chainType.name(), task, operation);
+        }
     }
 
     private static String lower(String address) {

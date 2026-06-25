@@ -1,16 +1,19 @@
 package com.surprising.wallet.service.config;
 
+import com.surprising.wallet.common.chain.WalletPublicKey;
 import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sdk.bitcoinj.core.LegacyMultiSignAddressGenerator;
 import com.surprising.wallet.sdk.bitcoinj.core.SegwitMultiSignAddressGenerator;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.crypto.ECKey;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
 import java.util.HexFormat;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -18,11 +21,29 @@ import java.util.stream.Stream;
 public class PubKeyConfig {
     private static final HexFormat HEX = HexFormat.of();
     public Bip32Node NODE1, NODE2, NODE3;
-    @Value("${atomex.wallet.pubKey1}") private String pub1;
-    @Value("${atomex.wallet.pubKey2}") private String pub2;
-    @Value("${atomex.wallet.pubKey3}") private String pub3;
 
-    @PostConstruct public void init() { NODE1=Bip32Node.decode(pub1); NODE2=Bip32Node.decode(pub2); NODE3=Bip32Node.decode(pub3); }
+    private final ChainJdbcRepository repository;
+
+    public PubKeyConfig(ChainJdbcRepository repository) {
+        this.repository = repository;
+    }
+
+    @PostConstruct
+    public void init() {
+        Map<Integer, WalletPublicKey> keys = repository.listEnabledWalletPublicKeys().stream()
+                .collect(Collectors.toMap(WalletPublicKey::getKeySlot, Function.identity(), (left, right) -> left));
+        NODE1 = Bip32Node.decode(requirePublicKey(keys, 1));
+        NODE2 = Bip32Node.decode(requirePublicKey(keys, 2));
+        NODE3 = Bip32Node.decode(requirePublicKey(keys, 3));
+    }
+
+    private String requirePublicKey(Map<Integer, WalletPublicKey> keys, int slot) {
+        WalletPublicKey key = keys.get(slot);
+        if (key == null || key.getPublicKey() == null || key.getPublicKey().isBlank()) {
+            throw new IllegalStateException("missing enabled wallet_public_key slot " + slot);
+        }
+        return key.getPublicKey();
+    }
 
     public String genThree_TwoAddress(int currency, int userId, int biz, int index) {
         return genThreeTwoAddressMetadata(currency, userId, biz, index).address;
@@ -33,10 +54,16 @@ public class PubKeyConfig {
     }
 
     public AddressMetadata genThreeTwoAddressMetadata(NetworkParameters params, int currency, int userId, int biz, int index) {
+        return genThreeTwoAddressMetadata(params, currency, userId, biz, index, NODE1, NODE2, NODE3);
+    }
+
+    public static AddressMetadata genThreeTwoAddressMetadata(NetworkParameters params, int currency, int userId,
+                                                             int biz, int index, Bip32Node node1,
+                                                             Bip32Node node2, Bip32Node node3) {
         SegwitMultiSignAddressGenerator g = new SegwitMultiSignAddressGenerator();
-        ECKey key1 = childKey(NODE1, currency, biz, userId, index);
-        ECKey key2 = childKey(NODE2, currency, biz, userId, index);
-        ECKey key3 = childKey(NODE3, currency, biz, userId, index);
+        ECKey key1 = childKey(node1, currency, biz, userId, index);
+        ECKey key2 = childKey(node2, currency, biz, userId, index);
+        ECKey key3 = childKey(node3, currency, biz, userId, index);
         g.addECKey(key1);
         g.addECKey(key2);
         g.addECKey(key3);
@@ -50,10 +77,16 @@ public class PubKeyConfig {
 
     public AddressMetadata genLegacyThreeTwoAddressMetadata(
             NetworkParameters params, int coinType, int userId, int biz, int index) {
+        return genLegacyThreeTwoAddressMetadata(params, coinType, userId, biz, index, NODE1, NODE2, NODE3);
+    }
+
+    public static AddressMetadata genLegacyThreeTwoAddressMetadata(
+            NetworkParameters params, int coinType, int userId, int biz, int index,
+            Bip32Node node1, Bip32Node node2, Bip32Node node3) {
         LegacyMultiSignAddressGenerator generator = new LegacyMultiSignAddressGenerator();
-        ECKey key1 = childKey(NODE1, coinType, biz, userId, index);
-        ECKey key2 = childKey(NODE2, coinType, biz, userId, index);
-        ECKey key3 = childKey(NODE3, coinType, biz, userId, index);
+        ECKey key1 = childKey(node1, coinType, biz, userId, index);
+        ECKey key2 = childKey(node2, coinType, biz, userId, index);
+        ECKey key3 = childKey(node3, coinType, biz, userId, index);
         generator.addECKey(key1);
         generator.addECKey(key2);
         generator.addECKey(key3);
@@ -65,7 +98,7 @@ public class PubKeyConfig {
         return new AddressMetadata(address, path, generator.getRedeemScriptHex(), "", pubKeys);
     }
 
-    private ECKey childKey(Bip32Node node, int currency, int biz, int userId, int index) {
+    private static ECKey childKey(Bip32Node node, int currency, int biz, int userId, int index) {
         return node.getChild(44).getChild(currency).getChild(biz).getChild(userId).getChild(index).getEcKey();
     }
 

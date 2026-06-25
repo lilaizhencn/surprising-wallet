@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Litecoin block scanner. Execution is gated by atomex.wallet.scan.enabled-currencies.
+ * Litecoin block scanner. Execution is gated by wallet_system_config and chain_profile.
  */
 @Component
 @Slf4j

@@ -27,15 +27,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TonLiveMockJettonFlowIntegrationTest {
     private static final long OWNER_INDEX = 1_100_001L;
     private static final long EXTERNAL_INDEX = 1_100_002L;
-    private static final long HOT_INDEX = 1_100_003L;
+    private static final long HOT_INDEX = 0L;
     private static final long NANO = 1_000_000_000L;
 
     @Test
     void liveNativeAndMockJettonDepositWithdrawCollectionAreIdempotent() {
         Assumptions.assumeTrue(Boolean.getBoolean("ton.live.enabled"),
-                "set -Dton.live.enabled=true and ATOMEX_MASTER_SEED for TON live validation");
-        String masterSeed = System.getenv("ATOMEX_MASTER_SEED");
-        Assumptions.assumeTrue(masterSeed != null && !masterSeed.isBlank(), "ATOMEX_MASTER_SEED is required");
+                "set -Dton.live.enabled=true and SW_ED25519_SEED for TON live validation");
+        String masterSeed = System.getenv("SW_ED25519_SEED");
+        Assumptions.assumeTrue(masterSeed != null && !masterSeed.isBlank(), "SW_ED25519_SEED is required");
 
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 env("TON_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
@@ -53,7 +53,7 @@ class TonLiveMockJettonFlowIntegrationTest {
 
         ChainAddressRecord owner = addresses.createNativeAddress(4001, 0, OWNER_INDEX, "DEPOSIT");
         ChainAddressRecord external = addresses.createNativeAddress(4002, 0, EXTERNAL_INDEX, "EXTERNAL");
-        ChainAddressRecord hot = addresses.createNativeAddress(0, 0, HOT_INDEX, "HOT_WITHDRAW");
+        ChainAddressRecord hot = addresses.createNativeAddress(0, 0, HOT_INDEX, "DEPOSIT");
         long startBalance = rpc.balance(owner.getAddress());
         Assumptions.assumeTrue(startBalance > NANO,
                 "fund " + owner.getAddress() + " with at least 1 testnet TON");

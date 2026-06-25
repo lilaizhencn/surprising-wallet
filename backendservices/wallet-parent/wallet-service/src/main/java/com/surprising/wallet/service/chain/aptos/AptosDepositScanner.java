@@ -7,9 +7,10 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -33,15 +34,13 @@ public class AptosDepositScanner {
     private final AptosRpcClient rpc;
     private final ChainJdbcRepository repository;
 
-    @Value("${atomex.aptos.network:devnet}")
-    private String network = "devnet";
-
-    @Value("${atomex.aptos.scan-limit:100}")
-    private int scanLimit = 100;
+    @Autowired(required = false)
+    private WalletRuntimeConfigService runtimeConfigService;
 
     public List<DepositEvent> scanAndCredit() {
-        AccountChainProfile profile = repository.findAccountChainProfile(CHAIN, network)
-                .orElseThrow(() -> new IllegalStateException("missing enabled APTOS/" + network + " profile"));
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "aptos scanAndCredit");
+        AccountChainProfile profile = profile();
+        int scanLimit = scanLimit(profile);
         long ledgerVersion = rpc.ledgerVersion();
         List<DepositEvent> events = new ArrayList<>();
         Map<String, ChainAddressRecord> nativeAddresses = repository.listChainAddresses(CHAIN, "APT").stream()
@@ -70,7 +69,7 @@ public class AptosDepositScanner {
             }
             start += limit;
         }
-        scanCoinStoreDeposits(profile, ledgerVersion, events);
+        scanCoinStoreDeposits(profile, ledgerVersion, events, scanLimit);
         long safeVersion = Math.max(0, ledgerVersion - profile.getDepositConfirmations() + 1L);
         repository.updateScanHeight(CHAIN, SCANNER, ledgerVersion, safeVersion);
         return events;
@@ -138,7 +137,7 @@ public class AptosDepositScanner {
     }
 
     private void scanCoinStoreDeposits(AccountChainProfile profile, long ledgerVersion,
-                                       List<DepositEvent> events) {
+                                       List<DepositEvent> events, int scanLimit) {
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
             String coinType = token.getContractAddress();
             if (coinType == null || !coinType.contains("::")) {
@@ -203,6 +202,22 @@ public class AptosDepositScanner {
         repository.recordAndCreditDeposit(event, eventIndex, profile.getDepositConfirmations(),
                 address.getAccountId());
         events.add(event);
+    }
+
+    private AccountChainProfile profile() {
+        return repository.findProfileByChain(CHAIN)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
+    }
+
+    private int scanLimit(AccountChainProfile profile) {
+        Integer batchSize = profile.getScanBatchSize();
+        return batchSize == null || batchSize <= 0 ? 100 : batchSize;
+    }
+
+    private void requireTaskEnabled(String task, String operation) {
+        if (runtimeConfigService != null) {
+            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
+        }
     }
 
     private ResolvedAsset resolveAsset(String owner, String metadata,

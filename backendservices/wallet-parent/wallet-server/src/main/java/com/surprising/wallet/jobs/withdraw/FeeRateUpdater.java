@@ -21,7 +21,7 @@ import java.time.Duration;
  * <p>每 2 分钟从 mempool.space API 拉取当前推荐费率 (sat/vB)。
  * 取 fastestFee / economyFee 的中位数作为推荐值。
  *
- * <p>Redis key: {@code newex-wallet:withdraw:fee:currency:{index}}
+ * <p>Redis key: {@code sw:wallet:withdraw:fee:currency:{index}}
  *
  * <h3>费率来源</h3>
  * <ul>

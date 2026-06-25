@@ -6,12 +6,10 @@ import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import java.util.Arrays;
 
 /**
  * Requeues stale DOGE signing rows that were lost from Redis.
@@ -20,17 +18,16 @@ import java.util.Arrays;
 public class DogeSigningRecoveryJob {
     private final ChainJdbcRepository repository;
     private final AssetRoutingService assetRoutingService;
+    private final WalletRuntimeConfigService runtimeConfigService;
 
-    @Value("${atomex.wallet.recovery.enabled-currencies:}")
-    private String enabledCurrencies;
-
-    @Value("${atomex.wallet.recovery.signing-stale-seconds:60}")
-    private long staleSeconds;
+    private static final long STALE_SECONDS = 60;
 
     public DogeSigningRecoveryJob(ChainJdbcRepository repository,
-                                  AssetRoutingService assetRoutingService) {
+                                  AssetRoutingService assetRoutingService,
+                                  WalletRuntimeConfigService runtimeConfigService) {
         this.repository = repository;
         this.assetRoutingService = assetRoutingService;
+        this.runtimeConfigService = runtimeConfigService;
     }
 
     @Scheduled(cron = "17/30 * * * * ?")
@@ -40,9 +37,9 @@ public class DogeSigningRecoveryJob {
         }
         RuntimeAsset currency = assetRoutingService.runtimeAssetByChain("DOGE");
         for (WithdrawTransaction transaction : repository.findStaleBitcoinLikeSigningTransactions(
-                currency, staleSeconds)) {
+                currency, STALE_SECONDS)) {
             if (!repository.claimBitcoinLikeSigningRecovery(
-                    currency, transaction.getId(), staleSeconds)) {
+                    currency, transaction.getId(), STALE_SECONDS)) {
                 continue;
             }
             currency.applyTo(transaction);
@@ -51,8 +48,6 @@ public class DogeSigningRecoveryJob {
     }
 
     private boolean isEnabled() {
-        return Arrays.stream(enabledCurrencies.split(","))
-                .map(String::trim)
-                .anyMatch(item -> "*".equals(item) || "doge".equalsIgnoreCase(item));
+        return runtimeConfigService.isTaskEnabled("DOGE", WalletRuntimeConfigService.TASK_WITHDRAW);
     }
 }

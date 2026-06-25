@@ -36,7 +36,7 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 | `wallet_public_key` | wallet-server 启动必需的三组 BIP32 public key |
 | `chain_asset` | 链原生资产和链内资产定义 |
 | `token_config` | token 合约、decimals、启用状态、最小充值/提现、归集策略 |
-| `chain_address` | UTXO/账户链地址注册表 |
+| `chain_address` | UTXO/账户链地址注册表；每条启用链的默认热提钱包固定为原生资产 `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT` |
 | `chain_scan_height` | scanner checkpoint |
 | `deposit_record` | 归一化充值事件 |
 | `ledger_balance` | 按链隔离的账户余额 |
@@ -61,6 +61,7 @@ wallet-server 启动时会检查：
 - `chain_profile` 中同一 `chain` 只能有一个启用 network。
 - `sw.app.env.name=prod` 时，启用 profile 不允许是 testnet/devnet/regtest。
 - 每个启用 profile 至少要有一个当前环境可用的 `chain_rpc_node`。
+- 每条启用链必须存在且只能存在一条默认热提钱包地址：`chain_address` 原生资产、`user_id=0`、`biz=0`、`address_index=0`、`wallet_role=DEPOSIT`。启动时会重新推导地址和 path 并比对数据库。
 - 每条链的任务开关、扫描起始高度、扫描批量和 RPC 节点数量会打印到日志；缺失或关闭项会输出 WARN。
 
 ## 权限

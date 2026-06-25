@@ -355,16 +355,21 @@ class TronLiveFullFlowIntegrationTest {
 
     private static void insertAddress(JdbcTemplate jdbcTemplate, Actor actor, String role) {
         jdbcTemplate.update("""
-                        insert into hot_wallet_address(chain, asset_symbol, address, address_index, wallet_role,
-                                                       enabled, kms_key_ref)
-                        values (?, 'TRX', ?, ?, ?, true, ?)
-                        on conflict (chain, asset_symbol, wallet_role) do update set
-                            address = excluded.address,
+                        insert into chain_address(chain, asset_symbol, account_id, user_id, biz, address_index,
+                                                  address, owner_address, derivation_path, wallet_role, enabled)
+                        values (?, 'TRX', ?, ?, 1, 0, ?, ?, ?, ?, true)
+                        on conflict (chain, asset_symbol, address) do update set
+                            account_id = excluded.account_id,
+                            user_id = excluded.user_id,
+                            biz = excluded.biz,
                             address_index = excluded.address_index,
+                            owner_address = excluded.owner_address,
+                            derivation_path = excluded.derivation_path,
+                            wallet_role = excluded.wallet_role,
                             enabled = true,
-                            kms_key_ref = excluded.kms_key_ref,
                             updated_at = now()
-                        """, CHAIN, actor.address(), actor.userId(), role, "derived:wallet-sig2-master:" + actor.path());
+                        """, CHAIN, actor.address(), actor.userId(), actor.address(), actor.address(),
+                actor.path(), role);
     }
 
     private static void upsertNileUsdt(JdbcTemplate jdbcTemplate) {
@@ -522,7 +527,7 @@ class TronLiveFullFlowIntegrationTest {
         if (fromProperty != null && !fromProperty.isBlank()) {
             return fromProperty.trim();
         }
-        String fromEnv = System.getenv("ATOMEX_SIG2_MASTER_KEY");
+        String fromEnv = System.getenv("SW_SIG2_MASTER_KEY");
         if (fromEnv != null && !fromEnv.isBlank()) {
             return fromEnv.trim();
         }

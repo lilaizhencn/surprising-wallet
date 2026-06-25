@@ -8,7 +8,6 @@ import com.surprising.wallet.common.chain.TransferQuote;
 import com.surprising.wallet.common.chain.TransferRequest;
 import com.surprising.wallet.service.chain.BlockchainAdapter;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -16,11 +15,10 @@ import java.util.List;
 
 @Component
 public class AptosChainAdapter implements BlockchainAdapter {
+    private static final String CHAIN = "APTOS";
+
     private final AptosDepositScanner scanner;
     private final ChainJdbcRepository repository;
-
-    @Value("${atomex.aptos.network:devnet}")
-    private String network = "devnet";
 
     public AptosChainAdapter(AptosDepositScanner scanner, ChainJdbcRepository repository) {
         this.scanner = scanner;
@@ -52,7 +50,7 @@ public class AptosChainAdapter implements BlockchainAdapter {
 
     @Override
     public TransferQuote quoteTokenTransfer(TransferRequest request) {
-        TokenDefinition token = repository.findToken("APTOS", request.assetSymbol())
+        TokenDefinition token = repository.findToken(CHAIN, request.assetSymbol())
                 .orElseThrow(() -> new IllegalArgumentException("Aptos token not configured: "
                         + request.assetSymbol()));
         return new TransferQuote(ChainType.APTOS, token.getSymbol(), request.fromAddress(), request.toAddress(),
@@ -66,7 +64,7 @@ public class AptosChainAdapter implements BlockchainAdapter {
     }
 
     private AccountChainProfile profile() {
-        return repository.findAccountChainProfile("APTOS", network)
-                .orElseThrow(() -> new IllegalStateException("missing enabled APTOS/" + network + " profile"));
+        return repository.findProfileByChain(CHAIN)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
 }

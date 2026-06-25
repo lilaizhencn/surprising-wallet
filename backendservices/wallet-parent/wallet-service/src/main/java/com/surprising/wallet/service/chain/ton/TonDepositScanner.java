@@ -7,9 +7,10 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TonTransactionRecord;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.ton.ton4j.cell.Cell;
 import org.ton.ton4j.cell.CellSlice;
@@ -33,15 +34,12 @@ public class TonDepositScanner {
     private final TonAddressService addressService;
     private final ChainJdbcRepository repository;
 
-    @Value("${atomex.ton.network:testnet}")
-    private String network = "testnet";
-
-    @Value("${atomex.ton.scan-limit:100}")
-    private int scanLimit = 100;
+    @Autowired(required = false)
+    private WalletRuntimeConfigService runtimeConfigService;
 
     public List<DepositEvent> scanAndCredit() {
-        AccountChainProfile profile = repository.findAccountChainProfile(CHAIN, network)
-                .orElseThrow(() -> new IllegalStateException("missing enabled TON/" + network + " profile"));
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "ton scanAndCredit");
+        AccountChainProfile profile = profile();
         List<DepositEvent> events = new ArrayList<>();
         for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, "TON")) {
             if ("DEPOSIT".equals(address.getWalletRole())) {
@@ -61,7 +59,7 @@ public class TonDepositScanner {
     }
 
     private void scanNative(ChainAddressRecord tracked, AccountChainProfile profile, List<DepositEvent> events) {
-        JsonNode transactions = rpc.transactions(tracked.getAddress(), scanLimit);
+        JsonNode transactions = rpc.transactions(tracked.getAddress(), scanLimit(profile));
         for (JsonNode tx : transactions) {
             JsonNode in = tx.path("in_msg");
             String destination = in.path("destination").asText();
@@ -81,7 +79,7 @@ public class TonDepositScanner {
 
     private void scanJetton(ChainAddressRecord tracked, TokenDefinition token,
                             AccountChainProfile profile, List<DepositEvent> events) {
-        JsonNode transactions = rpc.transactions(tracked.getAddress(), scanLimit);
+        JsonNode transactions = rpc.transactions(tracked.getAddress(), scanLimit(profile));
         for (JsonNode tx : transactions) {
             JsonNode in = tx.path("in_msg");
             if (!sameAddress(in.path("destination").asText(), tracked.getAddress())) {
@@ -116,10 +114,10 @@ public class TonDepositScanner {
             String sender;
             if (opcode == JETTON_TRANSFER_NOTIFICATION) {
                 sender = slice.loadAddress().toString(true, true, true,
-                        "testnet".equalsIgnoreCase(network));
+                        isTestnet());
             } else if (opcode == JETTON_INTERNAL_TRANSFER) {
                 sender = slice.loadAddress().toString(true, true, true,
-                        "testnet".equalsIgnoreCase(network));
+                        isTestnet());
             } else {
                 return null;
             }
@@ -200,6 +198,26 @@ public class TonDepositScanner {
 
     private static BigDecimal decimal(String value) {
         return value == null || value.isBlank() ? BigDecimal.ZERO : new BigDecimal(value);
+    }
+
+    private AccountChainProfile profile() {
+        return repository.findProfileByChain(CHAIN)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
+    }
+
+    private int scanLimit(AccountChainProfile profile) {
+        Integer batchSize = profile.getScanBatchSize();
+        return batchSize == null || batchSize <= 0 ? 100 : batchSize;
+    }
+
+    private void requireTaskEnabled(String task, String operation) {
+        if (runtimeConfigService != null) {
+            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
+        }
+    }
+
+    private boolean isTestnet() {
+        return profile().getNetwork().toLowerCase(java.util.Locale.ROOT).contains("test");
     }
 
     record JettonNotification(BigInteger amount, String sender) {

@@ -9,7 +9,6 @@ import com.surprising.wallet.service.wallet.IWallet;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.NetworkParameters;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
@@ -24,20 +23,19 @@ public class LtcWallet extends AbstractBtcLikeWallet implements IWallet {
     @Autowired
     LitecoinEsploraCommand command;
 
-    @Value("${atomex.ltc.network:testnet}")
-    private String network;
     private BitcoinLikeChainProfile runtimeProfile;
     private RuntimeAsset currency;
 
     @PostConstruct
     public void init() {
         super.setCommand(command);
-        String profileNetwork = "mainnet".equalsIgnoreCase(network) || "main".equalsIgnoreCase(network)
-                ? "mainnet" : "testnet";
-        runtimeProfile = chainJdbcRepository.findBitcoinLikeProfile("LTC", profileNetwork)
-                .orElseThrow(() -> new IllegalStateException(
-                        "missing enabled chain_profile for LTC/" + profileNetwork));
-        currency = loadBitcoinLikeRuntimeAsset("LTC", profileNetwork);
+        runtimeProfile = chainJdbcRepository.findProfileByChain("LTC")
+                .flatMap(profile -> chainJdbcRepository.findBitcoinLikeProfile("LTC", profile.getNetwork()))
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for LTC"));
+        if ("regtest".equalsIgnoreCase(runtimeProfile.getNetwork())) {
+            throw new IllegalStateException("LTC regtest network parameters are not implemented");
+        }
+        currency = loadBitcoinLikeRuntimeAsset("LTC", runtimeProfile.getNetwork());
     }
 
     @Override
@@ -47,7 +45,7 @@ public class LtcWallet extends AbstractBtcLikeWallet implements IWallet {
 
     @Override
     public NetworkParameters getNetworkParameters() {
-        return "mainnet".equalsIgnoreCase(network) || "main".equalsIgnoreCase(network)
+        return "mainnet".equalsIgnoreCase(runtimeProfile.getNetwork()) || "main".equalsIgnoreCase(runtimeProfile.getNetwork())
                 ? LitecoinNetworkParameters.mainnet()
                 : LitecoinNetworkParameters.testnet();
     }

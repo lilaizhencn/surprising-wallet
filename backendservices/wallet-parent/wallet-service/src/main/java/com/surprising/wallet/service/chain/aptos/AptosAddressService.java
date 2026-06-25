@@ -1,6 +1,7 @@
 package com.surprising.wallet.service.chain.aptos;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.key.Ed25519DerivedKey;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ public class AptosAddressService {
     private final ChainJdbcRepository repository;
 
     public ChainAddressRecord createNativeAddress(long userId, int biz, long derivationIndex, String walletRole) {
+        HotWalletRules.requireAllowedReservedAddress(CHAIN, "APT", "APT", userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, "APT", userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     Ed25519DerivedKey key = keyService.derive(derivationIndex);
@@ -40,6 +42,7 @@ public class AptosAddressService {
 
     public ChainAddressRecord createCoinAddress(String symbol, long userId, int biz,
                                                 long derivationIndex, String walletRole) {
+        HotWalletRules.requireAllowedReservedAddress(CHAIN, symbol, "APT", userId, biz, derivationIndex, walletRole);
         ChainAddressRecord owner = createNativeAddress(userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {

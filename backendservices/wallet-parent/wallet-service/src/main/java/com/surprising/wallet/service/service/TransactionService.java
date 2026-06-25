@@ -12,6 +12,7 @@ import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.wallet.IWallet;
 import com.surprising.wallet.service.wallet.WalletContext;
@@ -45,6 +46,8 @@ public class TransactionService {
     ChainJdbcRepository chainJdbcRepository;
     @Autowired
     AssetRoutingService assetRoutingService;
+    @Autowired
+    WalletRuntimeConfigService runtimeConfigService;
 
     /**
      * 充值，把充值交易推送到各自的业务线队列
@@ -64,6 +67,8 @@ public class TransactionService {
         }
         log.info("saveTransaction dto: {} begin", dto.getTxId());
         RuntimeAsset currency = assetRoutingService.runtimeAsset(dto.getCurrency());
+        runtimeConfigService.requireTaskEnabled(chainName(currency), WalletRuntimeConfigService.TASK_SCAN,
+                "legacy saveTransaction");
         long requiredConfirmations =
                 walletContext.getWallet(currency).getDepositConfirmationThreshold();
         UtxoKey utxoKey = UtxoKey.parse(dto.getTxId());
@@ -92,6 +97,8 @@ public class TransactionService {
         log.info("提现操作 开始 提现id:{}", record.getWithdrawId());
 
         RuntimeAsset currency = assetRoutingService.runtimeAsset(record.getCurrency());
+        runtimeConfigService.requireTaskEnabled(chainName(currency), WalletRuntimeConfigService.TASK_WITHDRAW,
+                "legacy withdraw");
         if (isUnifiedBitcoinLike(currency)) {
             String chain = chainName(currency);
             if (chainJdbcRepository.findWithdrawalStatus(chain, record.getWithdrawId()).isPresent()) {

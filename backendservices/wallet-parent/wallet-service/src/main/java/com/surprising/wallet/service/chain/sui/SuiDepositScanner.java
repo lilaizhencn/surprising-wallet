@@ -7,9 +7,10 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.SuiTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -25,15 +26,12 @@ public class SuiDepositScanner {
     private final SuiRpcClient rpc;
     private final ChainJdbcRepository repository;
 
-    @Value("${atomex.sui.network:testnet}")
-    private String network = "testnet";
-
-    @Value("${atomex.sui.scan-limit:50}")
-    private int scanLimit = 50;
+    @Autowired(required = false)
+    private WalletRuntimeConfigService runtimeConfigService;
 
     public List<DepositEvent> scanAndCredit() {
-        AccountChainProfile profile = repository.findAccountChainProfile(CHAIN, network)
-                .orElseThrow(() -> new IllegalStateException("missing enabled SUI/" + network + " profile"));
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "sui scanAndCredit");
+        AccountChainProfile profile = profile();
         long checkpoint = rpc.latestCheckpoint();
         List<DepositEvent> events = new ArrayList<>();
         scanSymbol("SUI", SuiRpcClient.SUI_COIN_TYPE, profile, checkpoint, events);
@@ -52,7 +50,7 @@ public class SuiDepositScanner {
             if (!"DEPOSIT".equals(address.getWalletRole())) {
                 continue;
             }
-            JsonNode page = rpc.queryToAddress(address.getAddress(), null, scanLimit, true);
+            JsonNode page = rpc.queryToAddress(address.getAddress(), null, scanLimit(profile), true);
             JsonNode data = page.path("data");
             for (int txIndex = 0; txIndex < data.size(); txIndex++) {
                 scanTransaction(data.get(txIndex), symbol, coinType, address, profile, bestCheckpoint, events);
@@ -154,5 +152,21 @@ public class SuiDepositScanner {
         return gas.path("computationCost").asLong(0)
                 + gas.path("storageCost").asLong(0)
                 - gas.path("storageRebate").asLong(0);
+    }
+
+    private AccountChainProfile profile() {
+        return repository.findProfileByChain(CHAIN)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
+    }
+
+    private int scanLimit(AccountChainProfile profile) {
+        Integer batchSize = profile.getScanBatchSize();
+        return batchSize == null || batchSize <= 0 ? 50 : batchSize;
+    }
+
+    private void requireTaskEnabled(String task, String operation) {
+        if (runtimeConfigService != null) {
+            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
+        }
     }
 }

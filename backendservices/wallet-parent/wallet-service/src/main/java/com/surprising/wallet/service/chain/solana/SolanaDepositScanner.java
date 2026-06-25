@@ -8,9 +8,10 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.SolanaTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -28,15 +29,12 @@ public class SolanaDepositScanner {
     private final SolanaRpcClient rpc;
     private final ChainJdbcRepository repository;
 
-    @Value("${atomex.solana.network:devnet}")
-    private String network = "devnet";
-
-    @Value("${atomex.solana.scan-limit:100}")
-    private int scanLimit = 100;
+    @Autowired(required = false)
+    private WalletRuntimeConfigService runtimeConfigService;
 
     public List<DepositEvent> scanAndCredit() {
-        AccountChainProfile profile = repository.findAccountChainProfile(CHAIN, network)
-                .orElseThrow(() -> new IllegalStateException("missing enabled SOLANA/" + network + " profile"));
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "solana scanAndCredit");
+        AccountChainProfile profile = profile();
         long currentSlot = rpc.getSlot();
         List<DepositEvent> events = new ArrayList<>();
         Set<String> processed = new HashSet<>();
@@ -60,7 +58,7 @@ public class SolanaDepositScanner {
 
     private void scanAddress(ChainAddressRecord tracked, TokenDefinition token, AccountChainProfile profile,
                              long currentSlot, Set<String> processed, List<DepositEvent> events) {
-        ArrayNode signatures = rpc.getSignaturesForAddress(tracked.getAddress(), scanLimit);
+        ArrayNode signatures = rpc.getSignaturesForAddress(tracked.getAddress(), scanLimit(profile));
         for (JsonNode signatureInfo : signatures) {
             if (!signatureInfo.path("err").isNull() && !signatureInfo.path("err").isMissingNode()) {
                 continue;
@@ -146,5 +144,21 @@ public class SolanaDepositScanner {
             group.path("instructions").forEach(instructions::add);
         }
         return instructions;
+    }
+
+    private AccountChainProfile profile() {
+        return repository.findProfileByChain(CHAIN)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
+    }
+
+    private int scanLimit(AccountChainProfile profile) {
+        Integer batchSize = profile.getScanBatchSize();
+        return batchSize == null || batchSize <= 0 ? 100 : batchSize;
+    }
+
+    private void requireTaskEnabled(String task, String operation) {
+        if (runtimeConfigService != null) {
+            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
+        }
     }
 }

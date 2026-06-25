@@ -1,5 +1,6 @@
 package com.surprising.wallet.service.chain.evm;
 
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainProfile;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
@@ -7,6 +8,7 @@ import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TransferQuote;
 import com.surprising.wallet.common.chain.TransferRequest;
 import com.surprising.wallet.service.chain.BlockchainAdapter;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -25,18 +27,21 @@ public class EvmChainAdapter implements BlockchainAdapter {
     private final EvmLogScanner logScanner;
     private final EvmDepositScanner depositScanner;
     private final Map<ChainType, ChainProfile> profiles = new EnumMap<>(ChainType.class);
+    private final ChainJdbcRepository repository;
 
     @Autowired
     public EvmChainAdapter(EvmNonceManager nonceManager, TokenRegistry tokenRegistry,
                            EvmGasEstimator gasEstimator, EvmTransactionBuilder transactionBuilder,
-                           EvmLogScanner logScanner, EvmDepositScanner depositScanner) {
+                           EvmLogScanner logScanner, EvmDepositScanner depositScanner,
+                           ChainJdbcRepository repository) {
         this.nonceManager = nonceManager;
         this.tokenRegistry = tokenRegistry;
         this.gasEstimator = gasEstimator;
         this.transactionBuilder = transactionBuilder;
         this.logScanner = logScanner;
         this.depositScanner = depositScanner;
-        registerProfiles();
+        this.repository = repository;
+        registerDbProfiles();
     }
 
     public EvmChainAdapter(EvmNonceManager nonceManager, TokenRegistry tokenRegistry,
@@ -48,6 +53,7 @@ public class EvmChainAdapter implements BlockchainAdapter {
         this.transactionBuilder = transactionBuilder;
         this.logScanner = logScanner;
         this.depositScanner = null;
+        this.repository = null;
         registerProfiles();
     }
 
@@ -123,6 +129,32 @@ public class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.OPTIMISM, "ETH_OP", 11155420L, 1L);
         registerProfile(ChainType.BASE, "ETH_BASE", 84532L, 1L);
         registerProfile(ChainType.AVAX_C, "AVAX_C", 43113L, 1L);
+    }
+
+    private void registerDbProfiles() {
+        for (AccountChainProfile profile : repository.listEnabledChainProfiles()) {
+            if (!"evm".equalsIgnoreCase(profile.getFamily())) {
+                continue;
+            }
+            ChainType chainType = ChainType.valueOf(profile.getChain());
+            Long chainId = profile.getChainId();
+            if (chainId == null || chainId <= 0) {
+                throw new IllegalStateException("missing chain_profile.chain_id for " + profile.getChain());
+            }
+            profiles.put(chainType, ChainProfile.builder()
+                    .chainType(chainType)
+                    .nativeSymbol(profile.getNativeSymbol())
+                    .depositConfirmations(profile.getDepositConfirmations())
+                    .withdrawConfirmations(profile.getWithdrawConfirmations())
+                    .defaultGasLimit(BigDecimal.valueOf(21_000L))
+                    .gasPriceFloor(BigDecimal.valueOf(
+                            profile.getDefaultFee() == null || profile.getDefaultFee() <= 0 ? 1L : profile.getDefaultFee()))
+                    .chainId(chainId)
+                    .build());
+        }
+        if (profiles.isEmpty()) {
+            throw new IllegalStateException("missing enabled EVM chain_profile rows");
+        }
     }
 
     private void registerProfile(ChainType chainType, String nativeSymbol, Long chainId, Long gasFloorGwei) {

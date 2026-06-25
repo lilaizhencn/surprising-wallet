@@ -9,7 +9,6 @@ import com.surprising.wallet.common.chain.TransferRequest;
 import com.surprising.wallet.service.chain.BlockchainAdapter;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -18,11 +17,10 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 public class SuiChainAdapter implements BlockchainAdapter {
+    private static final String CHAIN = "SUI";
+
     private final SuiDepositScanner scanner;
     private final ChainJdbcRepository repository;
-
-    @Value("${atomex.sui.network:testnet}")
-    private String network = "testnet";
 
     @Override
     public ChainType chainType() {
@@ -50,7 +48,7 @@ public class SuiChainAdapter implements BlockchainAdapter {
 
     @Override
     public TransferQuote quoteTokenTransfer(TransferRequest request) {
-        TokenDefinition token = repository.findToken("SUI", request.assetSymbol())
+        TokenDefinition token = repository.findToken(CHAIN, request.assetSymbol())
                 .orElseThrow(() -> new IllegalArgumentException("unsupported Sui token " + request.assetSymbol()));
         BigDecimal fee = BigDecimal.valueOf(profile().getDefaultFee());
         return new TransferQuote(ChainType.SUI, token.getSymbol(), request.fromAddress(), request.toAddress(),
@@ -64,7 +62,7 @@ public class SuiChainAdapter implements BlockchainAdapter {
     }
 
     private AccountChainProfile profile() {
-        return repository.findAccountChainProfile("SUI", network)
-                .orElseThrow(() -> new IllegalStateException("missing enabled SUI/" + network + " profile"));
+        return repository.findProfileByChain(CHAIN)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
 }

@@ -85,12 +85,12 @@ Withdraw:
 Collection:
 
 - Scans spendable user balances.
-- Builds transfer to hot wallet.
+- Builds transfer to the fixed default hot wallet; this is the native-asset `chain_address` row with `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT`.
 - Confirms and updates ledger state idempotently.
 
 ## Startup Configuration Validation
 
-wallet-server validates `chain_profile`, `chain_rpc_node`, `wallet_public_key`, and `wallet_system_config` at startup. A chain can have only one enabled network. Production cannot enable test networks. Every enabled chain must have at least one RPC node for the current environment. The validator logs each chain state and emits WARN logs for missing settings or disabled switches.
+wallet-server validates `chain_profile`, `chain_rpc_node`, `wallet_public_key`, the default hot wallet, and `wallet_system_config` at startup. A chain can have only one enabled network. Production cannot enable test networks. Every enabled chain must have at least one RPC node for the current environment. The default hot wallet is re-derived and compared with `chain_address`; missing or mismatched rows fail startup. The validator logs each chain state and emits WARN logs for missing settings or disabled switches.
 
 ## Operational Directories
 

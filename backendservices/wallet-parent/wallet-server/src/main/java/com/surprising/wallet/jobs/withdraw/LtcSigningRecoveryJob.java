@@ -6,13 +6,11 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import java.util.Arrays;
 
 /**
  * Recovers LTC withdrawal and collection transactions that were locked in the
@@ -23,17 +21,16 @@ import java.util.Arrays;
 public class LtcSigningRecoveryJob {
     private final ChainJdbcRepository repository;
     private final AssetRoutingService assetRoutingService;
+    private final WalletRuntimeConfigService runtimeConfigService;
 
-    @Value("${atomex.wallet.recovery.enabled-currencies:}")
-    private String enabledCurrencies;
-
-    @Value("${atomex.wallet.recovery.signing-stale-seconds:60}")
-    private long staleSeconds;
+    private static final long STALE_SECONDS = 60;
 
     public LtcSigningRecoveryJob(ChainJdbcRepository repository,
-                                 AssetRoutingService assetRoutingService) {
+                                 AssetRoutingService assetRoutingService,
+                                 WalletRuntimeConfigService runtimeConfigService) {
         this.repository = repository;
         this.assetRoutingService = assetRoutingService;
+        this.runtimeConfigService = runtimeConfigService;
     }
 
     @Scheduled(cron = "15/30 * * * * ?")
@@ -43,9 +40,9 @@ public class LtcSigningRecoveryJob {
         }
         RuntimeAsset currency = assetRoutingService.runtimeAssetByChain("LTC");
         for (WithdrawTransaction transaction : repository.findStaleBitcoinLikeSigningTransactions(
-                currency, staleSeconds)) {
+                currency, STALE_SECONDS)) {
             if (!repository.claimBitcoinLikeSigningRecovery(
-                    currency, transaction.getId(), staleSeconds)) {
+                    currency, transaction.getId(), STALE_SECONDS)) {
                 continue;
             }
             currency.applyTo(transaction);
@@ -55,8 +52,6 @@ public class LtcSigningRecoveryJob {
     }
 
     private boolean isEnabled() {
-        return Arrays.stream(enabledCurrencies.split(","))
-                .map(String::trim)
-                .anyMatch(item -> "*".equals(item) || "ltc".equalsIgnoreCase(item));
+        return runtimeConfigService.isTaskEnabled("LTC", WalletRuntimeConfigService.TASK_WITHDRAW);
     }
 }

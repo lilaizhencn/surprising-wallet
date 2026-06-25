@@ -1,6 +1,7 @@
 package com.surprising.wallet.service.chain.sui;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.key.Ed25519DerivedKey;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class SuiAddressService {
 
     private ChainAddressRecord createAddress(String symbol, long userId, int biz,
                                              long derivationIndex, String walletRole) {
+        HotWalletRules.requireAllowedReservedAddress(CHAIN, symbol, "SUI", userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     Ed25519DerivedKey key = keyService.derive(derivationIndex);

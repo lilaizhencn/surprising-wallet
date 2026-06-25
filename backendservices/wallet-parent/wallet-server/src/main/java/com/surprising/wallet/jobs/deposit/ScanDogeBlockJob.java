@@ -6,7 +6,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Dogecoin block scanner, gated by atomex.wallet.scan.enabled-currencies.
+ * Dogecoin block scanner, gated by wallet_system_config and chain_profile.
  */
 @Component
 public class ScanDogeBlockJob extends AbstractScanUtxoBlockJob {

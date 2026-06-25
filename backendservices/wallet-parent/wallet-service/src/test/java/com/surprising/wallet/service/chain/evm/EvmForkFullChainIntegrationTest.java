@@ -156,16 +156,21 @@ class EvmForkFullChainIntegrationTest {
                 chain.name(), account, account);
         jdbcTemplate.update("delete from ledger_balance where chain = ? and lower(account_id) = lower(?)", chain.name(), account);
         jdbcTemplate.update("""
-                        insert into hot_wallet_address(chain, asset_symbol, address, address_index, wallet_role, enabled, kms_key_ref)
-                        values (?, ?, ?, ?, 'FORK_TEST', true, ?)
-                        on conflict (chain, asset_symbol, wallet_role) do update set
-                            address = excluded.address,
+                        insert into chain_address(chain, asset_symbol, account_id, user_id, biz, address_index,
+                                                  address, owner_address, derivation_path, wallet_role, enabled)
+                        values (?, ?, ?, ?, 1, 0, ?, ?, ?, 'FORK_TEST', true)
+                        on conflict (chain, asset_symbol, address) do update set
+                            account_id = excluded.account_id,
+                            user_id = excluded.user_id,
+                            biz = excluded.biz,
                             address_index = excluded.address_index,
+                            owner_address = excluded.owner_address,
+                            derivation_path = excluded.derivation_path,
+                            wallet_role = excluded.wallet_role,
                             enabled = true,
-                            kms_key_ref = excluded.kms_key_ref,
                             updated_at = now()
-                        """, chain.name(), nativeSymbol, account, derivationIndex(chain),
-                "derived:wallet-sig2-master:" + derivationPath);
+                        """, chain.name(), nativeSymbol, account, derivationIndex(chain), account, account,
+                derivationPath);
     }
 
     private static TokenContracts tokenContracts(JdbcTemplate jdbcTemplate, ChainType chain) {
@@ -199,7 +204,7 @@ class EvmForkFullChainIntegrationTest {
         if (isValidMasterKey(fromProperty)) {
             return fromProperty.trim();
         }
-        String fromEnv = System.getenv("ATOMEX_SIG2_MASTER_KEY");
+        String fromEnv = System.getenv("SW_SIG2_MASTER_KEY");
         if (isValidMasterKey(fromEnv)) {
             return fromEnv.trim();
         }

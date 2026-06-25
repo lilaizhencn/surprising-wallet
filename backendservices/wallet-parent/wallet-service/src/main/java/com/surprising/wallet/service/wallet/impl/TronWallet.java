@@ -5,11 +5,14 @@ import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.service.config.ChainRpcNodeService;
 import com.surprising.wallet.service.wallet.AbstractEthLikeWallet;
 import com.surprising.wallet.service.wallet.IWallet;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.crypto.ECKey;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
 import org.tron.TronWalletApi;
@@ -26,20 +29,24 @@ import java.util.*;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "sw.legacy.account-wallet.enabled", havingValue = "true")
 public class TronWallet extends AbstractEthLikeWallet implements IWallet {
 
-    @Value("${atomex.tron.withdraw.address}")
+    @Autowired
+    private ChainRpcNodeService rpcNodeService;
+
+    @Value("${sw.wallet.legacy.tron-withdraw-address}")
     private String withdrawAddress;
 
     protected Long height = 0L;
 
-    @Value("${atomex.tron.server}")
-    private String tronServer;
     private RuntimeAsset currency;
 
     @PostConstruct
     public void init() {
-//        log.info("tronserver url = {}", tronServer);
+        String tronServer = rpcNodeService.primaryRpcUrl("TRON", chainJdbcRepository.findProfileByChain("TRON")
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for TRON"))
+                .getNetwork());
         TronWalletApi.init(tronServer);
         currency = loadRuntimeAssetByChain("TRON");
     }

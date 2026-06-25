@@ -9,12 +9,15 @@ import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.EvmNonceRecord;
 import com.surprising.wallet.common.chain.EvmTransactionRecord;
 import com.surprising.wallet.common.chain.ChainScanHeightRecord;
+import com.surprising.wallet.common.chain.ChainRpcNode;
+import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TronTransactionRecord;
 import com.surprising.wallet.common.chain.SolanaTransactionRecord;
 import com.surprising.wallet.common.chain.TonTransactionRecord;
 import com.surprising.wallet.common.chain.SuiTransactionRecord;
+import com.surprising.wallet.common.chain.WalletPublicKey;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
@@ -27,9 +30,12 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -63,25 +69,12 @@ public class ChainJdbcRepository {
         List<BitcoinLikeChainProfile> results = jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
                                rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled
+                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
+                               collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
                         from chain_profile
                         where chain = ? and network = ? and enabled = true
                         """,
-                (rs, rowNum) -> BitcoinLikeChainProfile.builder()
-                        .chain(rs.getString("chain"))
-                        .network(rs.getString("network"))
-                        .family(rs.getString("family"))
-                        .runtimeCurrencyId(rs.getInt("runtime_currency_id"))
-                        .bip44CoinType(rs.getInt("bip44_coin_type"))
-                        .nativeSymbol(rs.getString("native_symbol"))
-                        .rpcUrl(rs.getString("rpc_url"))
-                        .explorerUrl(rs.getString("explorer_url"))
-                        .depositConfirmations(rs.getInt("deposit_confirmations"))
-                        .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
-                        .defaultFeeRate(rs.getObject("default_fee_rate", Long.class))
-                        .dustThreshold(rs.getObject("dust_threshold", Long.class))
-                        .enabled(rs.getBoolean("enabled"))
-                        .build(),
+                (rs, rowNum) -> mapBitcoinLikeProfile(rs),
                 chain, network);
         return results.stream().findFirst();
     }
@@ -90,25 +83,12 @@ public class ChainJdbcRepository {
         List<AccountChainProfile> results = jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
                                rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled
+                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
+                               collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
                         from chain_profile
                         where chain = ? and network = ? and enabled = true
                         """,
-                (rs, rowNum) -> AccountChainProfile.builder()
-                        .chain(rs.getString("chain"))
-                        .network(rs.getString("network"))
-                        .family(rs.getString("family"))
-                        .runtimeCurrencyId(rs.getInt("runtime_currency_id"))
-                        .bip44CoinType(rs.getInt("bip44_coin_type"))
-                        .nativeSymbol(rs.getString("native_symbol"))
-                        .rpcUrl(rs.getString("rpc_url"))
-                        .explorerUrl(rs.getString("explorer_url"))
-                        .depositConfirmations(rs.getInt("deposit_confirmations"))
-                        .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
-                        .defaultFee(rs.getObject("default_fee_rate", Long.class))
-                        .dustThreshold(rs.getObject("dust_threshold", Long.class))
-                        .enabled(rs.getBoolean("enabled"))
-                        .build(),
+                (rs, rowNum) -> mapAccountProfile(rs),
                 chain, network);
         return results.stream().findFirst();
     }
@@ -117,7 +97,8 @@ public class ChainJdbcRepository {
         List<AccountChainProfile> results = jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
                                rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled
+                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
+                               collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
                         from chain_profile
                         where runtime_currency_id = ? and enabled = true
                         order by case network
@@ -129,21 +110,7 @@ public class ChainJdbcRepository {
                         end
                         limit 1
                         """,
-                (rs, rowNum) -> AccountChainProfile.builder()
-                        .chain(rs.getString("chain"))
-                        .network(rs.getString("network"))
-                        .family(rs.getString("family"))
-                        .runtimeCurrencyId(rs.getInt("runtime_currency_id"))
-                        .bip44CoinType(rs.getInt("bip44_coin_type"))
-                        .nativeSymbol(rs.getString("native_symbol"))
-                        .rpcUrl(rs.getString("rpc_url"))
-                        .explorerUrl(rs.getString("explorer_url"))
-                        .depositConfirmations(rs.getInt("deposit_confirmations"))
-                        .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
-                        .defaultFee(rs.getObject("default_fee_rate", Long.class))
-                        .dustThreshold(rs.getObject("dust_threshold", Long.class))
-                        .enabled(rs.getBoolean("enabled"))
-                        .build(),
+                (rs, rowNum) -> mapAccountProfile(rs),
                 runtimeCurrencyId);
         return results.stream().findFirst();
     }
@@ -152,7 +119,8 @@ public class ChainJdbcRepository {
         List<AccountChainProfile> results = jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
                                rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled
+                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
+                               collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
                         from chain_profile
                         where upper(chain) = upper(?) and enabled = true
                         order by case network
@@ -164,21 +132,7 @@ public class ChainJdbcRepository {
                         end
                         limit 1
                         """,
-                (rs, rowNum) -> AccountChainProfile.builder()
-                        .chain(rs.getString("chain"))
-                        .network(rs.getString("network"))
-                        .family(rs.getString("family"))
-                        .runtimeCurrencyId(rs.getInt("runtime_currency_id"))
-                        .bip44CoinType(rs.getInt("bip44_coin_type"))
-                        .nativeSymbol(rs.getString("native_symbol"))
-                        .rpcUrl(rs.getString("rpc_url"))
-                        .explorerUrl(rs.getString("explorer_url"))
-                        .depositConfirmations(rs.getInt("deposit_confirmations"))
-                        .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
-                        .defaultFee(rs.getObject("default_fee_rate", Long.class))
-                        .dustThreshold(rs.getObject("dust_threshold", Long.class))
-                        .enabled(rs.getBoolean("enabled"))
-                        .build(),
+                (rs, rowNum) -> mapAccountProfile(rs),
                 chain);
         return results.stream().findFirst();
     }
@@ -311,8 +265,12 @@ public class ChainJdbcRepository {
     }
 
     public Set<String> listEnabledHotWalletAddresses(String chain) {
+        return listEnabledChainScanAddresses(chain);
+    }
+
+    public Set<String> listEnabledChainScanAddresses(String chain) {
         return jdbcTemplate.queryForList("""
-                        select lower(address) from hot_wallet_address
+                        select lower(address) from chain_address
                         where chain = ? and enabled = true
                         """, String.class, chain)
                 .stream()
@@ -353,6 +311,42 @@ public class ChainJdbcRepository {
                 (rs, rowNum) -> mapChainAddress(rs),
                 chain, assetSymbol, userId, biz, addressIndex, walletRole);
         return results.stream().findFirst();
+    }
+
+    public List<ChainAddressRecord> listDefaultHotAddressCandidates(String chain, String assetSymbol) {
+        return jdbcTemplate.query("""
+                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                               owner_address, derivation_path, wallet_role, enabled
+                        from chain_address
+                        where chain = ?
+                          and asset_symbol = ?
+                          and user_id = ?
+                          and biz = ?
+                          and wallet_role = ?
+                        order by address_index, id
+                        """,
+                (rs, rowNum) -> mapChainAddress(rs),
+                chain,
+                assetSymbol,
+                HotWalletRules.DEFAULT_HOT_USER_ID,
+                HotWalletRules.DEFAULT_HOT_BIZ,
+                HotWalletRules.DEFAULT_HOT_WALLET_ROLE);
+    }
+
+    public List<ChainAddressRecord> listReservedHotNamespaceAddresses(String chain) {
+        return jdbcTemplate.query("""
+                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                               owner_address, derivation_path, wallet_role, enabled
+                        from chain_address
+                        where chain = ?
+                          and user_id = ?
+                          and biz = ?
+                        order by asset_symbol, wallet_role, address_index, id
+                        """,
+                (rs, rowNum) -> mapChainAddress(rs),
+                chain,
+                HotWalletRules.DEFAULT_HOT_USER_ID,
+                HotWalletRules.DEFAULT_HOT_BIZ);
     }
 
     public List<ChainAddressRecord> listChainAddresses(String chain, String assetSymbol) {
@@ -1475,7 +1469,7 @@ public class ChainJdbcRepository {
         List<ChainAsset> results = jdbcTemplate.query("""
                         select id, chain, symbol, asset_kind, contract_address, decimals, native_asset, active,
                                min_transfer, min_withdraw, created_at, updated_at
-                        from chain_asset where chain = ? and symbol = ?
+                        from chain_asset where chain = ? and symbol = ? and active = true
                         """,
                 (rs, rowNum) -> ChainAsset.builder()
                         .id(rs.getLong("id"))
@@ -1493,6 +1487,107 @@ public class ChainJdbcRepository {
                         .build(),
                 chain, symbol);
         return results.stream().findFirst();
+    }
+
+    public List<AccountChainProfile> listEnabledChainProfiles() {
+        return jdbcTemplate.query("""
+                        select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+                               rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
+                               collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
+                        from chain_profile
+                        where enabled = true
+                        order by chain, network
+                        """,
+                (rs, rowNum) -> mapAccountProfile(rs));
+    }
+
+    public List<AccountChainProfile> listAllChainProfiles() {
+        return jdbcTemplate.query("""
+                        select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+                               rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
+                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
+                               collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
+                        from chain_profile
+                        order by chain, network
+                        """,
+                (rs, rowNum) -> mapAccountProfile(rs));
+    }
+
+    public boolean systemBoolean(String configKey, boolean defaultValue) {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+                        select config_value, enabled
+                        from wallet_system_config
+                        where config_key = ?
+                        limit 1
+                        """, configKey);
+        if (rows.isEmpty()) {
+            return defaultValue;
+        }
+        Map<String, Object> row = rows.get(0);
+        Object enabled = row.get("enabled");
+        if (enabled instanceof Boolean bool && !bool) {
+            return false;
+        }
+        return Boolean.parseBoolean(String.valueOf(row.get("config_value")));
+    }
+
+    public Optional<String> systemValue(String configKey) {
+        List<String> values = jdbcTemplate.queryForList("""
+                        select config_value
+                        from wallet_system_config
+                        where config_key = ? and enabled = true
+                        limit 1
+                        """, String.class, configKey);
+        return values.stream().findFirst();
+    }
+
+    public List<WalletPublicKey> listEnabledWalletPublicKeys() {
+        return jdbcTemplate.query("""
+                        select key_slot, key_role, key_type, network, public_key, enabled, remark
+                        from wallet_public_key
+                        where enabled = true
+                        order by key_slot
+                        """,
+                (rs, rowNum) -> WalletPublicKey.builder()
+                        .keySlot(rs.getInt("key_slot"))
+                        .keyRole(rs.getString("key_role"))
+                        .keyType(rs.getString("key_type"))
+                        .network(rs.getString("network"))
+                        .publicKey(rs.getString("public_key"))
+                        .enabled(rs.getBoolean("enabled"))
+                        .remark(rs.getString("remark"))
+                        .build());
+    }
+
+    public List<ChainRpcNode> listEnabledRpcNodes(String chain, String network, String environment, String purpose) {
+        String env = environment == null ? "" : environment;
+        String nodePurpose = purpose == null ? "rpc" : purpose;
+        return jdbcTemplate.query("""
+                        select id, chain, network, environment, node_label, purpose, connection_type, rpc_url,
+                               auth_type, auth_header_name, api_key, api_key_ref, username, username_ref,
+                               password, password_ref,
+                               priority, enabled, renewal_due_at, remark
+                        from chain_rpc_node
+                        where upper(chain) = upper(?)
+                          and lower(network) = lower(?)
+                          and enabled = true
+                          and (
+                              lower(environment) = lower(?)
+                              or lower(environment) = 'all'
+                              or (
+                                  lower(?) in ('dev', 'test', 'local')
+                                  and lower(environment) in ('dev', 'test', 'local')
+                              )
+                          )
+                          and (lower(purpose) = lower(?) or lower(purpose) = 'all')
+                        order by priority asc, id asc
+                        """,
+                (rs, rowNum) -> mapRpcNode(rs), chain, network, env, env, nodePurpose);
+    }
+
+    public List<ChainRpcNode> listEnabledRpcNodes(String chain, String network, String environment) {
+        return listEnabledRpcNodes(chain, network, environment, "rpc");
     }
 
     private static Timestamp toTs(Instant instant) {
@@ -1528,6 +1623,85 @@ public class ChainJdbcRepository {
         } catch (DataAccessException ignored) {
             return List.of();
         }
+    }
+
+    private static AccountChainProfile mapAccountProfile(ResultSet rs) throws SQLException {
+        return AccountChainProfile.builder()
+                .chain(rs.getString("chain"))
+                .network(rs.getString("network"))
+                .family(rs.getString("family"))
+                .runtimeCurrencyId(rs.getInt("runtime_currency_id"))
+                .bip44CoinType(rs.getInt("bip44_coin_type"))
+                .nativeSymbol(rs.getString("native_symbol"))
+                .rpcUrl(rs.getString("rpc_url"))
+                .explorerUrl(rs.getString("explorer_url"))
+                .depositConfirmations(rs.getInt("deposit_confirmations"))
+                .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
+                .defaultFee(rs.getObject("default_fee_rate", Long.class))
+                .dustThreshold(rs.getObject("dust_threshold", Long.class))
+                .enabled(rs.getBoolean("enabled"))
+                .chainId(rs.getObject("chain_id", Long.class))
+                .gasPolicy(rs.getString("gas_policy"))
+                .scanBatchSize(rs.getObject("scan_batch_size", Integer.class))
+                .scanEnabled(rs.getBoolean("scan_enabled"))
+                .withdrawEnabled(rs.getBoolean("withdraw_enabled"))
+                .collectionEnabled(rs.getBoolean("collection_enabled"))
+                .transferEnabled(rs.getBoolean("transfer_enabled"))
+                .scanStartHeight(rs.getObject("scan_start_height", Long.class))
+                .scanMaxBlocksPerRun(rs.getObject("scan_max_blocks_per_run", Long.class))
+                .build();
+    }
+
+    private static BitcoinLikeChainProfile mapBitcoinLikeProfile(ResultSet rs) throws SQLException {
+        return BitcoinLikeChainProfile.builder()
+                .chain(rs.getString("chain"))
+                .network(rs.getString("network"))
+                .family(rs.getString("family"))
+                .runtimeCurrencyId(rs.getInt("runtime_currency_id"))
+                .bip44CoinType(rs.getInt("bip44_coin_type"))
+                .nativeSymbol(rs.getString("native_symbol"))
+                .rpcUrl(rs.getString("rpc_url"))
+                .explorerUrl(rs.getString("explorer_url"))
+                .depositConfirmations(rs.getInt("deposit_confirmations"))
+                .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
+                .defaultFeeRate(rs.getObject("default_fee_rate", Long.class))
+                .dustThreshold(rs.getObject("dust_threshold", Long.class))
+                .enabled(rs.getBoolean("enabled"))
+                .chainId(rs.getObject("chain_id", Long.class))
+                .gasPolicy(rs.getString("gas_policy"))
+                .scanBatchSize(rs.getObject("scan_batch_size", Integer.class))
+                .scanEnabled(rs.getBoolean("scan_enabled"))
+                .withdrawEnabled(rs.getBoolean("withdraw_enabled"))
+                .collectionEnabled(rs.getBoolean("collection_enabled"))
+                .transferEnabled(rs.getBoolean("transfer_enabled"))
+                .scanStartHeight(rs.getObject("scan_start_height", Long.class))
+                .scanMaxBlocksPerRun(rs.getObject("scan_max_blocks_per_run", Long.class))
+                .build();
+    }
+
+    private static ChainRpcNode mapRpcNode(ResultSet rs) throws SQLException {
+        return ChainRpcNode.builder()
+                .id(rs.getLong("id"))
+                .chain(rs.getString("chain"))
+                .network(rs.getString("network"))
+                .environment(rs.getString("environment"))
+                .nodeLabel(rs.getString("node_label"))
+                .purpose(rs.getString("purpose"))
+                .connectionType(rs.getString("connection_type"))
+                .rpcUrl(rs.getString("rpc_url"))
+                .authType(rs.getString("auth_type"))
+                .authHeaderName(rs.getString("auth_header_name"))
+                .apiKey(rs.getString("api_key"))
+                .apiKeyRef(rs.getString("api_key_ref"))
+                .username(rs.getString("username"))
+                .usernameRef(rs.getString("username_ref"))
+                .password(rs.getString("password"))
+                .passwordRef(rs.getString("password_ref"))
+                .priority(rs.getInt("priority"))
+                .enabled(rs.getBoolean("enabled"))
+                .renewalDueAt(toInstant(rs.getTimestamp("renewal_due_at")))
+                .remark(rs.getString("remark"))
+                .build();
     }
 
     private static ChainAddressRecord mapChainAddress(java.sql.ResultSet rs) throws java.sql.SQLException {

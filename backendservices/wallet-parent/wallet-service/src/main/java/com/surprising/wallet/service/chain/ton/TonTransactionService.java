@@ -4,9 +4,10 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TonTransactionRecord;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.ton.ton4j.address.Address;
 import org.ton.ton4j.cell.Cell;
@@ -33,8 +34,8 @@ public class TonTransactionService {
     private final TonKeyService keyService;
     private final ChainJdbcRepository repository;
 
-    @Value("${atomex.ton.network:testnet}")
-    private String network = "testnet";
+    @Autowired(required = false)
+    private WalletRuntimeConfigService runtimeConfigService;
 
     public PreparedTransfer prepareNative(long derivationIndex, String toAddress,
                                           BigInteger amountNano, String comment) {
@@ -113,6 +114,7 @@ public class TonTransactionService {
 
     public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amountNano, String memo) {
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "ton withdrawNative");
         Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -149,6 +151,7 @@ public class TonTransactionService {
     public String withdrawJetton(String orderNo, long userId, ChainAddressRecord from,
                                  String jettonMaster, String destinationOwner,
                                  BigDecimal atomicAmount, String memo) {
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "ton withdrawJetton");
         Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -200,6 +203,7 @@ public class TonTransactionService {
 
     public String collectNative(String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountNano, String memo) {
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "ton collectNative");
         Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -227,6 +231,7 @@ public class TonTransactionService {
 
     public String collectJetton(String collectionNo, ChainAddressRecord from, String jettonMaster,
                                 String hotOwnerAddress, BigDecimal atomicAmount, String memo) {
+        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "ton collectJetton");
         Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -271,8 +276,14 @@ public class TonTransactionService {
     }
 
     private AccountChainProfile profile() {
-        return repository.findAccountChainProfile(CHAIN, network)
-                .orElseThrow(() -> new IllegalStateException("missing enabled TON/" + network + " profile"));
+        return repository.findProfileByChain(CHAIN)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
+    }
+
+    private void requireTaskEnabled(String task, String operation) {
+        if (runtimeConfigService != null) {
+            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
+        }
     }
 
     private void record(String hash, String from, String to, String symbol, String master,
@@ -294,7 +305,7 @@ public class TonTransactionService {
     }
 
     private String friendly(Address address, boolean bounceable) {
-        boolean testnet = "testnet".equalsIgnoreCase(network);
+        boolean testnet = profile().getNetwork().toLowerCase(java.util.Locale.ROOT).contains("test");
         return address.toString(true, true, bounceable, testnet);
     }
 

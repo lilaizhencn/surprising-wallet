@@ -4,11 +4,13 @@ import com.surprising.wallet.client.command.EthCommand;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.utils.EthereumUtil;
+import com.surprising.wallet.service.config.ChainRpcNodeService;
 import com.surprising.wallet.service.wallet.AbstractEthLikeWallet;
 import com.surprising.wallet.service.wallet.IWallet;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -39,14 +41,15 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "sw.legacy.account-wallet.enabled", havingValue = "true")
 public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
   @Autowired
   EthCommand command;
+  @Autowired
+  ChainRpcNodeService rpcNodeService;
   protected Web3j web3j;
-  @Value("${atomex.eth.withdraw.address}")
+  @Value("${sw.wallet.legacy.eth-withdraw-address}")
   protected String withdrawAddress;
-  @Value("${atomex.eth.server}")
-  private String rpcServerUrl;
   private RuntimeAsset mainCurrency;
   private RuntimeAsset currency;
   private List<RuntimeAsset> trackedTokens = List.of();
@@ -61,6 +64,9 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
             .filter(token -> token.sameAsset(RuntimeAsset.USDT))
             .findFirst()
             .orElse(trackedTokens.isEmpty() ? null : trackedTokens.get(0));
+    String rpcServerUrl = rpcNodeService.primaryRpcUrl("ETH", chainJdbcRepository.findProfileByChain("ETH")
+            .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for ETH"))
+            .getNetwork());
     Web3jService web3jService = new HttpService(rpcServerUrl);
     web3j = Web3j.build(web3jService);
   }

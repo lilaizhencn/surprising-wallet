@@ -15,7 +15,7 @@ public class SolanaKeyService {
     private final String encodedMasterSeed;
     private volatile Ed25519KeyProvider provider;
 
-    public SolanaKeyService(@Value("${atomex.wallet.ed25519.master-seed:}") String encodedMasterSeed) {
+    public SolanaKeyService(@Value("${sw.wallet.ed25519.master-seed:}") String encodedMasterSeed) {
         this.encodedMasterSeed = encodedMasterSeed;
     }
 

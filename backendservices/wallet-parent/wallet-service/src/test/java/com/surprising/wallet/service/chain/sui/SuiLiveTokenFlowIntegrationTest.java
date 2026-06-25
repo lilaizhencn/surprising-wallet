@@ -21,15 +21,15 @@ class SuiLiveTokenFlowIntegrationTest {
     private static final String SYMBOL = "MUSD";
     private static final long OWNER_INDEX = 1_400_001L;
     private static final long EXTERNAL_INDEX = 1_400_002L;
-    private static final long HOT_INDEX = 1_400_003L;
+    private static final long HOT_INDEX = 0L;
 
     @Test
     void liveSuiCoinDepositWithdrawCollectionAreIdempotent() {
         Assumptions.assumeTrue(Boolean.getBoolean("sui.token.live.enabled"),
-                "set -Dsui.token.live.enabled=true, ATOMEX_MASTER_SEED and SUI_MOCK_COIN_TYPE");
-        String masterSeed = System.getenv("ATOMEX_MASTER_SEED");
+                "set -Dsui.token.live.enabled=true, SW_ED25519_SEED and SUI_MOCK_COIN_TYPE");
+        String masterSeed = System.getenv("SW_ED25519_SEED");
         String coinType = System.getenv("SUI_MOCK_COIN_TYPE");
-        Assumptions.assumeTrue(masterSeed != null && !masterSeed.isBlank(), "ATOMEX_MASTER_SEED is required");
+        Assumptions.assumeTrue(masterSeed != null && !masterSeed.isBlank(), "SW_ED25519_SEED is required");
         Assumptions.assumeTrue(coinType != null && !coinType.isBlank(), "SUI_MOCK_COIN_TYPE is required");
 
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
@@ -50,7 +50,7 @@ class SuiLiveTokenFlowIntegrationTest {
 
         ChainAddressRecord owner = addresses.createCoinAddress(SYMBOL, 7001, 0, OWNER_INDEX, "DEPOSIT");
         ChainAddressRecord external = addresses.createCoinAddress(SYMBOL, 7002, 0, EXTERNAL_INDEX, "EXTERNAL");
-        ChainAddressRecord hot = addresses.createCoinAddress(SYMBOL, 0, 0, HOT_INDEX, "HOT_WITHDRAW");
+        ChainAddressRecord hot = addresses.createNativeAddress(0, 0, HOT_INDEX, "DEPOSIT");
 
         waitForBalanceAtLeast(rpc, owner.getAddress(), coinType, 10_000_000L, Duration.ofMinutes(2));
         scanner.scanAndCredit();

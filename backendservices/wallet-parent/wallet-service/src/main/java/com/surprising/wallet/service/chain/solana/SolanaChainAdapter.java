@@ -8,7 +8,6 @@ import com.surprising.wallet.common.chain.TransferQuote;
 import com.surprising.wallet.common.chain.TransferRequest;
 import com.surprising.wallet.service.chain.BlockchainAdapter;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -16,11 +15,10 @@ import java.util.List;
 
 @Component
 public class SolanaChainAdapter implements BlockchainAdapter {
+    private static final String CHAIN = "SOLANA";
+
     private final SolanaDepositScanner scanner;
     private final ChainJdbcRepository repository;
-
-    @Value("${atomex.solana.network:devnet}")
-    private String network;
 
     public SolanaChainAdapter(SolanaDepositScanner scanner, ChainJdbcRepository repository) {
         this.scanner = scanner;
@@ -52,7 +50,7 @@ public class SolanaChainAdapter implements BlockchainAdapter {
 
     @Override
     public TransferQuote quoteTokenTransfer(TransferRequest request) {
-        TokenDefinition token = repository.findToken("SOLANA", request.assetSymbol())
+        TokenDefinition token = repository.findToken(CHAIN, request.assetSymbol())
                 .orElseThrow(() -> new IllegalArgumentException("SPL token not configured: " + request.assetSymbol()));
         return new TransferQuote(ChainType.SOLANA, token.getSymbol(), request.fromAddress(),
                 request.toAddress(), request.amount(), BigDecimal.valueOf(profile().getDefaultFee()),
@@ -66,7 +64,7 @@ public class SolanaChainAdapter implements BlockchainAdapter {
     }
 
     private AccountChainProfile profile() {
-        return repository.findAccountChainProfile("SOLANA", network)
-                .orElseThrow(() -> new IllegalStateException("missing enabled SOLANA/" + network + " profile"));
+        return repository.findProfileByChain(CHAIN)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
 }
