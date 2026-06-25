@@ -12,7 +12,7 @@ import java.util.Properties;
 
 /**
  * @author atomex
- * program arguments 添加--keyFile=/Users/atomexcn/Documents/code/atomex/key-atomex.conf
+ * program arguments 添加--keyFile=/Users/atomexcn/Documents/code/atomex/key-sw.conf
  */
 @SpringBootApplication(scanBasePackages = {
         "com.surprising.wallet.sig.second",
@@ -22,7 +22,7 @@ import java.util.Properties;
 @Slf4j
 public class WalletSig2Application {
 
-    @Value("${atomex.wallet.masterKey}")
+    @Value("${sw.wallet.masterKey}")
     private String masterKey;
 
     public static void main(String[] args) {

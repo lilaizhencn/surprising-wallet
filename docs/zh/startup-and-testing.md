@@ -73,32 +73,50 @@ mvn clean install -DskipTests
 mvn -pl backendservices/wallet-parent/wallet-service -am test -DskipTests
 ```
 
-## 5. 密钥配置
+## 5. 密钥与运行配置
 
 Bitcoin-like 链、EVM 和 TRON 使用 BIP32/secp256k1 根密钥。
 
 ```bash
-export ATOMEX_SIG1_MASTER_KEY='<第一签 BIP32 tprv>'
-export ATOMEX_SIG2_MASTER_KEY='<第二签 BIP32 tprv>'
+export SW_SIG1_MASTER_KEY='<第一签 BIP32 tprv>'
+export SW_SIG2_MASTER_KEY='<第二签 BIP32 tprv>'
 ```
 
-wallet-server 需要配置三组公钥：
-
-```yaml
-atomex:
-  wallet:
-    pubKey1: <第一签 xpub/tpub>
-    pubKey2: <第二签 xpub/tpub>
-    pubKey3: <离线恢复签 xpub/tpub>
-```
+wallet-server 的三组 public key 从 `wallet_public_key` 表读取。初始化 SQL 已写入当前测试 public key；生产环境必须把 1/2/3 三个 slot 替换为生产 xpub，并保持 `enabled=true`。启动时缺任何一个 slot 都会失败。
 
 SOL/TON/APTOS/SUI 使用一个 Ed25519 master seed：
 
 ```bash
-export ATOMEX_MASTER_SEED='<32 字节 hex 或 base64 seed>'
+export SW_ED25519_SEED='<32 字节 hex 或 base64 seed>'
 ```
 
 本地测试配置中有 Ed25519 fallback seed。生产环境必须使用环境变量或密钥系统注入。
+
+wallet-server 常用环境变量：
+
+```bash
+export SW_DB_PASSWORD='<PostgreSQL 密码>'
+export SW_ED25519_SEED='<32 字节 Ed25519 seed，hex 或 base64>'
+```
+
+签名服务常用环境变量：
+
+```bash
+export SW_SIG1_MASTER_KEY='<第一签 BIP32 tprv>'
+export SW_SIG2_MASTER_KEY='<第二签 BIP32 tprv>'
+```
+
+链运行配置不再通过 YAML/env 配置：
+
+| 配置 | 数据库来源 |
+|---|---|
+| 全局扫描/提现/归集/划转开关 | `wallet_system_config` |
+| 单链扫描/提现/归集/划转开关 | `chain_profile.scan_enabled/withdraw_enabled/collection_enabled/transfer_enabled` |
+| 单链扫描起始高度与单轮扫描上限 | `chain_profile.scan_start_height/scan_max_blocks_per_run` |
+| 单链扫描批量 | `chain_profile.scan_batch_size` |
+| 链网络、确认数、链 ID、gas policy | `chain_profile` |
+| RPC/fullnode/indexer/faucet 节点 | `chain_rpc_node` |
+| wallet-server 三个 public key | `wallet_public_key` |
 
 ## 6. 应用配置
 
@@ -116,9 +134,13 @@ export ATOMEX_MASTER_SEED='<32 字节 hex 或 base64 seed>'
 
 - PostgreSQL URL、用户名、密码
 - Redis host/port
-- 要测试的链 RPC URL
-- BIP32 公钥和签名服务私钥
-- Ed25519 链使用的 `ATOMEX_MASTER_SEED`
+- `chain_profile` 中每条启用链只能启用一个 network
+- 启用链至少有一个匹配当前 `sw.app.env.name` 的 `chain_rpc_node`
+- `wallet_public_key` 中 slot 1/2/3 必须启用
+- 签名服务私钥
+- Ed25519 链使用的 `SW_ED25519_SEED`
+
+启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量。缺配置或关闭项会以 WARN 输出；生产环境如果启用了 testnet/devnet/regtest profile 会直接失败。
 
 ## 7. 启动服务
 

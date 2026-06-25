@@ -47,6 +47,8 @@ psql -U postgres -d wallet -c "grant all on schema public to wallet;"
 psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 ```
 
+初始化 SQL 已包含 `chain_profile`、`chain_rpc_node`、`wallet_system_config` 和 `wallet_public_key`。链开关、扫描起点、扫描批量、RPC 节点和 wallet-server 三个 public key 都从数据库读取。
+
 构建：
 
 ```bash
@@ -64,12 +66,14 @@ mvn -pl backendservices/wallet-parent/wallet-server -am spring-boot:run
 关键运行密钥：
 
 ```bash
-export ATOMEX_SIG1_MASTER_KEY='<第一签 BIP32 tprv>'
-export ATOMEX_SIG2_MASTER_KEY='<第二签 BIP32 tprv>'
-export ATOMEX_MASTER_SEED='<32 字节 Ed25519 seed，hex 或 base64>'
+export SW_DB_PASSWORD='<PostgreSQL 密码>'
+export SW_SIG1_MASTER_KEY='<第一签 BIP32 tprv>'
+export SW_SIG2_MASTER_KEY='<第二签 BIP32 tprv>'
+export SW_ED25519_SEED='<32 字节 Ed25519 seed，hex 或 base64>'
 ```
 
 生产环境中第三个 BIP32 私钥根应离线保存，wallet-server 只配置三组公钥。
+wallet-server 三组公钥配置在 `wallet_public_key`，不是 YAML/env。
 
 ## 测试环境
 

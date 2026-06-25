@@ -47,6 +47,8 @@ Initialize a fresh test database:
 psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 ```
 
+The initialization SQL includes `chain_profile`, `chain_rpc_node`, `wallet_system_config`, and `wallet_public_key`. Chain switches, scan start, scan batch size, RPC nodes, and the three wallet-server public keys are read from the database.
+
 Build:
 
 ```bash
@@ -64,12 +66,14 @@ mvn -pl backendservices/wallet-parent/wallet-server -am spring-boot:run
 Important runtime secrets:
 
 ```bash
-export ATOMEX_SIG1_MASTER_KEY='<BIP32 tprv for signer 1>'
-export ATOMEX_SIG2_MASTER_KEY='<BIP32 tprv for signer 2>'
-export ATOMEX_MASTER_SEED='<32-byte Ed25519 seed in hex or base64>'
+export SW_DB_PASSWORD='<PostgreSQL password>'
+export SW_SIG1_MASTER_KEY='<BIP32 tprv for signer 1>'
+export SW_SIG2_MASTER_KEY='<BIP32 tprv for signer 2>'
+export SW_ED25519_SEED='<32-byte Ed25519 seed in hex or base64>'
 ```
 
 For production, keep the third BIP32 private root offline and configure only the three public keys in the wallet server.
+The three wallet-server public keys are configured in `wallet_public_key`, not YAML/env.
 
 ## Test Environment
 

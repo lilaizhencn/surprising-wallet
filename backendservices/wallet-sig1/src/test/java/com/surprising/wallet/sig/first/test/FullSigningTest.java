@@ -26,8 +26,8 @@ public class FullSigningTest {
     static final String PK3 = ROOT3.pubSerialize(0, false);
 
     public static void main(String[] args) throws Exception {
-        System.setProperty("atomex.wallet.masterKey", SIG1_MK);
-        System.setProperty("atomex.wallet.network", "test");
+        System.setProperty("sw.wallet.masterKey", SIG1_MK);
+        System.setProperty("sw.wallet.network", "test");
         Constants c0 = new Constants(); c0.NETWORK = "test"; c0.init();
 
         // Init sig2's KeyConfig with a DIFFERENT master key

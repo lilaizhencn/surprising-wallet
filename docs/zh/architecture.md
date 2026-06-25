@@ -12,7 +12,10 @@
 
 | 表 | 作用 |
 |---|---|
-| `chain_profile` | 链 key、链族、网络、RPC 元数据、BIP44 coin type、确认策略 |
+| `chain_profile` | 链 key、链族、启用网络、确认策略、扫描/提现/归集/划转开关、扫描起始高度、BIP44 coin type |
+| `chain_rpc_node` | 每条链的 RPC/fullnode/indexer/faucet 节点、环境标签、优先级、认证和备注 |
+| `wallet_system_config` | 全局扫描/提现/归集/划转总开关 |
+| `wallet_public_key` | wallet-server 启动必需的三组 BIP32 public key |
 | `chain_asset` | 原生资产和链内资产定义 |
 | `token_config` | token 合约/配置、decimals、归集/提现策略 |
 | `ledger_balance` | 按链隔离的用户/系统余额状态 |
@@ -58,7 +61,7 @@ BIP32 root #3 -> pubKey3，离线恢复私钥 root
 SOL/TON/APTOS/SUI 使用一个 Ed25519 master seed：
 
 ```text
-ATOMEX_MASTER_SEED -> SLIP-0010 Ed25519 派生 -> 每条链/每个用户 key
+SW_ED25519_SEED -> SLIP-0010 Ed25519 派生 -> 每条链/每个用户 key
 ```
 
 生产环境不要把 BIP32 raw seed 复用为 Ed25519 seed。不同生产根密钥材料应隔离。
@@ -86,7 +89,10 @@ Collection：
 - 构建到热钱包的转账。
 - 确认并幂等更新 ledger 状态。
 
+## 启动配置校验
+
+wallet-server 启动时会检查 `chain_profile`、`chain_rpc_node`、`wallet_public_key` 和 `wallet_system_config`。同一链只能启用一个网络；生产环境禁止启用测试网络；启用链必须至少有一个匹配当前环境的 RPC 节点。校验结果会按链打印状态，缺失配置或关闭开关会输出 WARN。
+
 ## 运行目录
 
 `scripts/`、`infra/` 和 `evm-fork/` 保留在仓库根目录，因为测试和脚本直接引用这些路径。它们的说明文档位于 `docs/`。
-

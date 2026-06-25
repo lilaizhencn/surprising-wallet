@@ -32,10 +32,10 @@ public class DogeFirstSignService implements ISignService {
     @Autowired
     private PubKeyConfig pubKeyConfig;
 
-    @Value("${atomex.wallet.masterKey}")
+    @Value("${sw.wallet.masterKey}")
     private String masterKey;
 
-    @Value("${atomex.doge.network:testnet}")
+    @Value("${sw.doge.network:testnet}")
     private String network;
 
     private Bip32Node root;

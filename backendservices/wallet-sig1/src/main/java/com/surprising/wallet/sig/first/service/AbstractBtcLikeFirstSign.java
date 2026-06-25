@@ -8,7 +8,7 @@ import org.bitcoinj.crypto.ECKey;import org.springframework.beans.factory.annota
 import jakarta.annotation.PostConstruct;import java.math.BigDecimal;import java.util.ArrayList;import java.util.List;
 @Slf4j
 abstract public class AbstractBtcLikeFirstSign implements ISignService {
-    public Bip32Node NODE; @Autowired protected PubKeyConfig pubKeyConfig; @Value("${atomex.wallet.masterKey}") String masterKey;
+    public Bip32Node NODE; @Autowired protected PubKeyConfig pubKeyConfig; @Value("${sw.wallet.masterKey}") String masterKey;
     private static final long DEFAULT_FEE_RATE = 10L;
     private static final long DUST_THRESHOLD_SAT = 546L;
     @PostConstruct public void init(){NODE=Bip32Node.decode(masterKey);}

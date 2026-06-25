@@ -28,10 +28,10 @@ public class BchFirstSignService implements ISignService {
     @Autowired
     private PubKeyConfig pubKeyConfig;
 
-    @Value("${atomex.wallet.masterKey}")
+    @Value("${sw.wallet.masterKey}")
     private String masterKey;
 
-    @Value("${atomex.bch.network:testnet}")
+    @Value("${sw.bch.network:testnet}")
     private String network;
 
     private Bip32Node root;

@@ -73,32 +73,50 @@ For a faster compile check:
 mvn -pl backendservices/wallet-parent/wallet-service -am test -DskipTests
 ```
 
-## 5. Key Configuration
+## 5. Keys and Runtime Configuration
 
 Bitcoin-like chains, EVM, and TRON use BIP32/secp256k1 roots.
 
 ```bash
-export ATOMEX_SIG1_MASTER_KEY='<BIP32 tprv for signer 1>'
-export ATOMEX_SIG2_MASTER_KEY='<BIP32 tprv for signer 2>'
+export SW_SIG1_MASTER_KEY='<BIP32 tprv for signer 1>'
+export SW_SIG2_MASTER_KEY='<BIP32 tprv for signer 2>'
 ```
 
-The wallet server needs the public roots:
-
-```yaml
-atomex:
-  wallet:
-    pubKey1: <xpub/tpub for signer 1>
-    pubKey2: <xpub/tpub for signer 2>
-    pubKey3: <xpub/tpub for offline recovery signer>
-```
+The wallet server reads the three public roots from `wallet_public_key`. The initialization SQL seeds the current test public keys. In production, replace slots 1/2/3 with production xpub values and keep them `enabled=true`. Startup fails when any required slot is missing.
 
 SOL/TON/APTOS/SUI use one Ed25519 master seed:
 
 ```bash
-export ATOMEX_MASTER_SEED='<32-byte hex or base64 seed>'
+export SW_ED25519_SEED='<32-byte hex or base64 seed>'
 ```
 
 For local testing, `application.yaml` and `application-test.yaml` contain a fallback Ed25519 seed. Production must use an environment secret instead.
+
+Common wallet-server environment variables:
+
+```bash
+export SW_DB_PASSWORD='<PostgreSQL password>'
+export SW_ED25519_SEED='<32-byte Ed25519 seed in hex or base64>'
+```
+
+Common signer-service environment variables:
+
+```bash
+export SW_SIG1_MASTER_KEY='<BIP32 tprv for signer 1>'
+export SW_SIG2_MASTER_KEY='<BIP32 tprv for signer 2>'
+```
+
+Chain runtime configuration no longer comes from YAML/env:
+
+| Setting | Database source |
+|---|---|
+| Global scan/withdraw/collection/transfer switches | `wallet_system_config` |
+| Per-chain scan/withdraw/collection/transfer switches | `chain_profile.scan_enabled/withdraw_enabled/collection_enabled/transfer_enabled` |
+| Per-chain scan start height and per-run scan cap | `chain_profile.scan_start_height/scan_max_blocks_per_run` |
+| Per-chain scan batch size | `chain_profile.scan_batch_size` |
+| Chain network, confirmations, chain ID, gas policy | `chain_profile` |
+| RPC/fullnode/indexer/faucet nodes | `chain_rpc_node` |
+| Three wallet-server public keys | `wallet_public_key` |
 
 ## 6. Application Configuration
 
@@ -116,9 +134,13 @@ Required local settings:
 
 - PostgreSQL URL/user/password
 - Redis host/port
-- RPC URLs for the chains being tested
-- BIP32 public keys and signer private roots
-- `ATOMEX_MASTER_SEED` for Ed25519 chains
+- Only one enabled network per chain in `chain_profile`
+- At least one enabled `chain_rpc_node` for every enabled chain and current `sw.app.env.name`
+- Enabled `wallet_public_key` slots 1/2/3
+- Signer private roots
+- `SW_ED25519_SEED` for Ed25519 chains
+
+Startup validation logs every chain network, task switch, scan start, batch size, and RPC node count. Missing or disabled settings are logged as WARN. Production startup fails if any enabled profile uses testnet/devnet/regtest.
 
 ## 7. Start Services
 

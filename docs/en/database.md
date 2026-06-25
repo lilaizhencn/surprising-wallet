@@ -22,7 +22,7 @@ Use `surprising-wallet-init-pgsql.sql` only on a disposable or fresh database. I
 
 ## Seed Data Scope
 
-The initialization file includes static configuration rows for `chain_profile`, `chain_asset`, `token_config`, and `token_registry`.
+The initialization file includes static configuration rows for `chain_profile`, `chain_asset`, `token_config`, `token_registry`, `wallet_system_config`, `wallet_public_key`, and `chain_rpc_node`.
 
 It does not include runtime rows from address, balance, scan-height, deposit, withdrawal, collection, signing, UTXO, or chain transaction tables.
 
@@ -30,7 +30,10 @@ It does not include runtime rows from address, balance, scan-height, deposit, wi
 
 | Table | Runtime role |
 |---|---|
-| `chain_profile` | Chain key, family, network, RPC/explorer metadata, BIP44 coin type |
+| `chain_profile` | Chain key, family, network, confirmations, scan/withdraw/collection/transfer switches, scan start height, BIP44 coin type |
+| `chain_rpc_node` | RPC/fullnode/indexer/faucet nodes per chain/network/environment/purpose, priority, auth, remarks |
+| `wallet_system_config` | Global scan/withdraw/collection/transfer switches |
+| `wallet_public_key` | Three BIP32 public keys required by wallet-server startup |
 | `chain_asset` | Chain-native and chain-scoped asset definitions |
 | `token_config` | Token contract, decimals, enabled flag, min deposit/withdraw, collection policy |
 | `chain_address` | Address registry for UTXO/account chains |
@@ -49,6 +52,16 @@ If a product needs a global USDT display balance, aggregate it in the query/API 
 
 Runtime state is stored in `ledger_balance`, `chain_address`, `token_config`,
 `chain_scan_height`, and chain-specific transaction tables/services.
+
+## Startup Validation
+
+wallet-server validates at startup:
+
+- `wallet_public_key` slots 1, 2, and 3 must be enabled.
+- Each `chain` in `chain_profile` may have only one enabled network.
+- With `sw.app.env.name=prod`, enabled profiles may not use testnet/devnet/regtest.
+- Every enabled profile must have at least one `chain_rpc_node` for the current environment.
+- Task switches, scan start, batch size, and RPC node count are logged for every chain. Missing or disabled settings are logged as WARN.
 
 ## Permissions
 

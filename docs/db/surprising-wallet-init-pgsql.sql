@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict IppSelh0C3y5UxPuOmVV4jFmo6GDOjn9eltqRvfrfOCHp23hVyn7JWWrtP3uRch
+\restrict u57OHvqSag6SqhfB2Qz4gmcyqHuwAbv1WRVW4E6Z0DXFIP6BetuzPHvn4D8Imsw
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -26,6 +26,8 @@ DROP INDEX IF EXISTS "public"."idx_chain_signing_transaction_status";
 DROP INDEX IF EXISTS "public"."idx_chain_address_scan";
 DROP INDEX IF EXISTS "public"."idx_chain_address_owner";
 ALTER TABLE IF EXISTS ONLY "public"."withdrawal_order" DROP CONSTRAINT IF EXISTS "withdrawal_order_pkey";
+ALTER TABLE IF EXISTS ONLY "public"."wallet_system_config" DROP CONSTRAINT IF EXISTS "wallet_system_config_pkey";
+ALTER TABLE IF EXISTS ONLY "public"."wallet_public_key" DROP CONSTRAINT IF EXISTS "wallet_public_key_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."utxo_record" DROP CONSTRAINT IF EXISTS "utxo_record_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."utxo_record" DROP CONSTRAINT IF EXISTS "utxo_record_chain_tx_hash_vout_key";
 ALTER TABLE IF EXISTS ONLY "public"."withdrawal_order" DROP CONSTRAINT IF EXISTS "uq_withdrawal_order_chain_order_no";
@@ -71,6 +73,8 @@ ALTER TABLE IF EXISTS ONLY "public"."chain_signing_transaction" DROP CONSTRAINT 
 ALTER TABLE IF EXISTS ONLY "public"."chain_signing_transaction" DROP CONSTRAINT IF EXISTS "chain_signing_transaction_chain_business_type_business_no_key";
 ALTER TABLE IF EXISTS ONLY "public"."chain_scan_height" DROP CONSTRAINT IF EXISTS "chain_scan_height_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."chain_scan_height" DROP CONSTRAINT IF EXISTS "chain_scan_height_chain_scanner_name_key";
+ALTER TABLE IF EXISTS ONLY "public"."chain_rpc_node" DROP CONSTRAINT IF EXISTS "chain_rpc_node_unique_label";
+ALTER TABLE IF EXISTS ONLY "public"."chain_rpc_node" DROP CONSTRAINT IF EXISTS "chain_rpc_node_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."chain_profile" DROP CONSTRAINT IF EXISTS "chain_profile_runtime_currency_id_network_key";
 ALTER TABLE IF EXISTS ONLY "public"."chain_profile" DROP CONSTRAINT IF EXISTS "chain_profile_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."chain_profile" DROP CONSTRAINT IF EXISTS "chain_profile_chain_network_key";
@@ -103,6 +107,7 @@ ALTER TABLE IF EXISTS "public"."evm_nonce" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."deposit_record" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."collection_record" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."chain_scan_height" ALTER COLUMN "id" DROP DEFAULT;
+ALTER TABLE IF EXISTS "public"."chain_rpc_node" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."chain_profile" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."chain_asset" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."chain_address" ALTER COLUMN "id" DROP DEFAULT;
@@ -110,6 +115,8 @@ ALTER TABLE IF EXISTS "public"."aptos_transaction" ALTER COLUMN "id" DROP DEFAUL
 ALTER TABLE IF EXISTS "public"."account_sequence" ALTER COLUMN "id" DROP DEFAULT;
 DROP SEQUENCE IF EXISTS "public"."withdrawal_order_id_seq";
 DROP TABLE IF EXISTS "public"."withdrawal_order";
+DROP TABLE IF EXISTS "public"."wallet_system_config";
+DROP TABLE IF EXISTS "public"."wallet_public_key";
 DROP SEQUENCE IF EXISTS "public"."utxo_record_id_seq";
 DROP TABLE IF EXISTS "public"."utxo_record";
 DROP SEQUENCE IF EXISTS "public"."tron_tx_id_seq";
@@ -149,6 +156,8 @@ DROP TABLE IF EXISTS "public"."collection_record";
 DROP TABLE IF EXISTS "public"."chain_signing_transaction";
 DROP SEQUENCE IF EXISTS "public"."chain_scan_height_id_seq";
 DROP TABLE IF EXISTS "public"."chain_scan_height";
+DROP SEQUENCE IF EXISTS "public"."chain_rpc_node_id_seq";
+DROP TABLE IF EXISTS "public"."chain_rpc_node";
 DROP SEQUENCE IF EXISTS "public"."chain_profile_id_seq";
 DROP TABLE IF EXISTS "public"."chain_profile";
 DROP SEQUENCE IF EXISTS "public"."chain_asset_id_seq";
@@ -349,7 +358,16 @@ CREATE TABLE "public"."chain_profile" (
     "dust_threshold" bigint,
     "enabled" boolean DEFAULT true NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "chain_id" bigint,
+    "gas_policy" character varying(64),
+    "scan_batch_size" integer DEFAULT 100,
+    "scan_enabled" boolean DEFAULT false NOT NULL,
+    "withdraw_enabled" boolean DEFAULT false NOT NULL,
+    "collection_enabled" boolean DEFAULT false NOT NULL,
+    "transfer_enabled" boolean DEFAULT false NOT NULL,
+    "scan_start_height" bigint DEFAULT 0 NOT NULL,
+    "scan_max_blocks_per_run" bigint DEFAULT 0 NOT NULL
 );
 
 
@@ -370,6 +388,55 @@ CREATE SEQUENCE "public"."chain_profile_id_seq"
 --
 
 ALTER SEQUENCE "public"."chain_profile_id_seq" OWNED BY "public"."chain_profile"."id";
+
+
+--
+-- Name: chain_rpc_node; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE "public"."chain_rpc_node" (
+    "id" bigint NOT NULL,
+    "chain" character varying(32) NOT NULL,
+    "network" character varying(32) NOT NULL,
+    "environment" character varying(32) DEFAULT 'dev'::character varying NOT NULL,
+    "node_label" character varying(64) NOT NULL,
+    "purpose" character varying(32) DEFAULT 'rpc'::character varying NOT NULL,
+    "connection_type" character varying(32) DEFAULT 'HTTP_JSON_RPC'::character varying NOT NULL,
+    "rpc_url" "text" NOT NULL,
+    "auth_type" character varying(32) DEFAULT 'NONE'::character varying NOT NULL,
+    "auth_header_name" character varying(64),
+    "api_key_ref" character varying(128),
+    "username_ref" character varying(128),
+    "password_ref" character varying(128),
+    "priority" integer DEFAULT 100 NOT NULL,
+    "enabled" boolean DEFAULT true NOT NULL,
+    "renewal_due_at" timestamp with time zone,
+    "remark" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "api_key" character varying(1024),
+    "username" character varying(256),
+    "password" character varying(1024)
+);
+
+
+--
+-- Name: chain_rpc_node_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE "public"."chain_rpc_node_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: chain_rpc_node_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE "public"."chain_rpc_node_id_seq" OWNED BY "public"."chain_rpc_node"."id";
 
 
 --
@@ -1180,6 +1247,38 @@ ALTER SEQUENCE "public"."utxo_record_id_seq" OWNED BY "public"."utxo_record"."id
 
 
 --
+-- Name: wallet_public_key; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE "public"."wallet_public_key" (
+    "key_slot" integer NOT NULL,
+    "key_role" character varying(64) NOT NULL,
+    "key_type" character varying(32) DEFAULT 'BIP32_XPUB'::character varying NOT NULL,
+    "network" character varying(32) DEFAULT 'test'::character varying NOT NULL,
+    "public_key" "text" NOT NULL,
+    "enabled" boolean DEFAULT true NOT NULL,
+    "remark" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+--
+-- Name: wallet_system_config; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE "public"."wallet_system_config" (
+    "config_key" character varying(128) NOT NULL,
+    "config_value" "text" NOT NULL,
+    "value_type" character varying(32) DEFAULT 'boolean'::character varying NOT NULL,
+    "enabled" boolean DEFAULT true NOT NULL,
+    "remark" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+--
 -- Name: withdrawal_order; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1253,6 +1352,13 @@ ALTER TABLE ONLY "public"."chain_asset" ALTER COLUMN "id" SET DEFAULT "nextval"(
 --
 
 ALTER TABLE ONLY "public"."chain_profile" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."chain_profile_id_seq"'::"regclass");
+
+
+--
+-- Name: chain_rpc_node id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."chain_rpc_node" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."chain_rpc_node_id_seq"'::"regclass");
 
 
 --
@@ -1489,6 +1595,22 @@ ALTER TABLE ONLY "public"."chain_profile"
 
 ALTER TABLE ONLY "public"."chain_profile"
     ADD CONSTRAINT "chain_profile_runtime_currency_id_network_key" UNIQUE ("runtime_currency_id", "network");
+
+
+--
+-- Name: chain_rpc_node chain_rpc_node_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."chain_rpc_node"
+    ADD CONSTRAINT "chain_rpc_node_pkey" PRIMARY KEY ("id");
+
+
+--
+-- Name: chain_rpc_node chain_rpc_node_unique_label; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."chain_rpc_node"
+    ADD CONSTRAINT "chain_rpc_node_unique_label" UNIQUE ("chain", "network", "environment", "purpose", "node_label");
 
 
 --
@@ -1852,6 +1974,22 @@ ALTER TABLE ONLY "public"."utxo_record"
 
 
 --
+-- Name: wallet_public_key wallet_public_key_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."wallet_public_key"
+    ADD CONSTRAINT "wallet_public_key_pkey" PRIMARY KEY ("key_slot");
+
+
+--
+-- Name: wallet_system_config wallet_system_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."wallet_system_config"
+    ADD CONSTRAINT "wallet_system_config_pkey" PRIMARY KEY ("config_key");
+
+
+--
 -- Name: withdrawal_order withdrawal_order_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1905,13 +2043,13 @@ CREATE INDEX "idx_utxo_record_spendable" ON "public"."utxo_record" USING "btree"
 -- PostgreSQL database dump complete
 --
 
-\unrestrict IppSelh0C3y5UxPuOmVV4jFmo6GDOjn9eltqRvfrfOCHp23hVyn7JWWrtP3uRch
+\unrestrict u57OHvqSag6SqhfB2Qz4gmcyqHuwAbv1WRVW4E6Z0DXFIP6BetuzPHvn4D8Imsw
 
 --
 -- PostgreSQL database dump
 --
 
-\restrict bjqNN0t14eWj4c7qSXOJEQUjjYyrWOceDTxgF24JoezZIbQkg44OuC1vcHug53l
+\restrict 9Kpi8hXJ4id9GXP43FVP7ZCSSFGYuxl1ckMhU4r3jA1jBkYZd1EtR0ZsAls1RQg
 
 -- Dumped from database version 18.3 (Homebrew)
 -- Dumped by pg_dump version 18.3 (Homebrew)
@@ -1958,27 +2096,80 @@ INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "cont
 -- Data for Name: chain_profile; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (43, 'SUI', 'testnet', 'sui', 53, 784, 'SUI', 'https://fullnode.testnet.sui.io:443', 'https://suiexplorer.com/txblock/', 1, 1, 10000000, 1, true, '2026-06-23 23:21:21.428505+08', '2026-06-23 23:21:21.428505+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (44, 'SUI', 'mainnet', 'sui', 53, 784, 'SUI', NULL, 'https://suiexplorer.com/txblock/', 1, 1, 10000000, 1, false, '2026-06-23 23:21:21.428505+08', '2026-06-23 23:21:21.428505+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (97, 'BTC', 'regtest', 'bitcoin-like', 1, 0, 'BTC', NULL, NULL, 6, 6, 1, 546, true, '2026-06-24 17:50:02.98325+08', '2026-06-24 18:07:33.452523+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (98, 'LTC', 'regtest', 'bitcoin-like', 24, 2, 'LTC', NULL, NULL, 6, 6, 10, 100000, true, '2026-06-24 17:50:02.98325+08', '2026-06-24 18:07:33.452523+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (16, 'DOGE', 'regtest', 'bitcoin-like', 41, 3, 'DOGE', 'http://127.0.0.1:22555', NULL, 6, 6, 1000, 1000000, true, '2026-06-23 10:11:12.947084+08', '2026-06-24 18:07:33.452523+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (17, 'BCH', 'regtest', 'bitcoin-like', 42, 145, 'BCH', 'http://127.0.0.1:18443', NULL, 6, 6, 1, 546, true, '2026-06-23 11:36:08.628091+08', '2026-06-24 18:07:33.452523+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (81, 'BTC', 'testnet3', 'bitcoin-like', 1, 0, 'BTC', 'https://bitcoin-testnet-rpc.publicnode.com', 'https://mempool.space/testnet/tx/', 1, 6, 10, 546, true, '2026-06-24 14:56:38.262511+08', '2026-06-24 14:56:38.262511+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (82, 'BTC', 'mainnet', 'bitcoin-like', 1, 0, 'BTC', NULL, 'https://mempool.space/tx/', 1, 6, 10, 546, true, '2026-06-24 14:56:38.262511+08', '2026-06-24 14:56:38.262511+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (1, 'LTC', 'testnet', 'bitcoin-like', 24, 2, 'LTC', NULL, 'https://litecoinspace.org/testnet/tx/', 1, 6, 2, 1000, true, '2026-06-21 18:09:31.766008+08', '2026-06-23 21:01:38.382613+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (3, 'LTC', 'mainnet', 'bitcoin-like', 24, 2, 'LTC', NULL, 'https://litecoinspace.org/tx/', 1, 6, 2, 1000, true, '2026-06-21 18:32:14.57969+08', '2026-06-23 21:01:38.420274+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (8, 'DOGE', 'testnet', 'bitcoin-like', 41, 3, 'DOGE', NULL, 'https://doge-testnet-explorer.qed.me/tx/', 6, 12, 1000, 1000000, true, '2026-06-21 19:13:13.385044+08', '2026-06-23 21:01:38.425665+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (9, 'DOGE', 'mainnet', 'bitcoin-like', 41, 3, 'DOGE', NULL, 'https://dogechain.info/tx/', 6, 12, 1000, 1000000, true, '2026-06-21 19:13:13.385893+08', '2026-06-23 21:01:38.426238+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (14, 'BCH', 'testnet', 'bitcoin-like', 42, 145, 'BCH', NULL, 'https://tbch.loping.net/tx/', 1, 6, 1, 546, true, '2026-06-21 23:17:57.795865+08', '2026-06-23 21:01:38.494439+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (15, 'BCH', 'mainnet', 'bitcoin-like', 42, 145, 'BCH', NULL, 'https://blockchair.com/bitcoin-cash/transaction/', 1, 6, 1, 546, true, '2026-06-21 23:17:57.795865+08', '2026-06-23 21:01:38.494439+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (26, 'SOLANA', 'devnet', 'solana', 50, 501, 'SOL', 'https://api.devnet.solana.com', 'https://explorer.solana.com/tx/', 1, 1, 5000, 890880, true, '2026-06-23 14:47:05.346909+08', '2026-06-23 21:01:38.531176+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (27, 'SOLANA', 'mainnet', 'solana', 50, 501, 'SOL', NULL, 'https://explorer.solana.com/tx/', 32, 32, 5000, 890880, false, '2026-06-23 14:47:05.346909+08', '2026-06-23 21:01:38.531176+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (38, 'TON', 'testnet', 'ton', 51, 607, 'TON', 'https://testnet.toncenter.com/api/v2', 'https://testnet.tonviewer.com/transaction/', 1, 1, 5000000, 1000000, true, '2026-06-23 21:01:38.587522+08', '2026-06-23 21:01:38.587522+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (39, 'TON', 'mainnet', 'ton', 51, 607, 'TON', NULL, 'https://tonviewer.com/transaction/', 1, 1, 5000000, 1000000, false, '2026-06-23 21:01:38.587522+08', '2026-06-23 21:01:38.587522+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (40, 'APTOS', 'devnet', 'aptos', 52, 637, 'APT', 'https://fullnode.devnet.aptoslabs.com/v1', 'https://explorer.aptoslabs.com/txn/', 1, 1, 5000000, 1, true, '2026-06-23 22:24:58.095994+08', '2026-06-23 22:34:56.292463+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (42, 'APTOS', 'mainnet', 'aptos', 52, 637, 'APT', NULL, 'https://explorer.aptoslabs.com/txn/', 1, 1, 5000000, 1, false, '2026-06-23 22:24:58.095994+08', '2026-06-23 22:34:56.292463+08');
-INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at") VALUES (41, 'APTOS', 'testnet', 'aptos', 52, 637, 'APT', 'https://fullnode.testnet.aptoslabs.com/v1', 'https://explorer.aptoslabs.com/txn/', 1, 1, 5000000, 1, false, '2026-06-23 22:24:58.095994+08', '2026-06-23 22:34:56.292463+08');
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (81, 'BTC', 'testnet3', 'bitcoin-like', 1, 0, 'BTC', 'https://bitcoin-testnet-rpc.publicnode.com', 'https://mempool.space/testnet/tx/', 1, 6, 10, 546, true, '2026-06-24 14:56:38.262511+08', '2026-06-25 00:11:35.416831+08', NULL, 'utxo', 6, true, true, true, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (1, 'LTC', 'testnet', 'bitcoin-like', 24, 2, 'LTC', NULL, 'https://litecoinspace.org/testnet/tx/', 1, 6, 2, 1000, true, '2026-06-21 18:09:31.766008+08', '2026-06-25 00:11:35.416831+08', NULL, 'utxo', 6, true, true, true, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (8, 'DOGE', 'testnet', 'bitcoin-like', 41, 3, 'DOGE', NULL, 'https://doge-testnet-explorer.qed.me/tx/', 6, 12, 1000, 1000000, true, '2026-06-21 19:13:13.385044+08', '2026-06-25 00:11:35.416831+08', NULL, 'utxo', 6, true, true, true, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (14, 'BCH', 'testnet', 'bitcoin-like', 42, 145, 'BCH', NULL, 'https://tbch.loping.net/tx/', 1, 6, 1, 546, true, '2026-06-21 23:17:57.795865+08', '2026-06-25 00:11:35.416831+08', NULL, 'utxo', 6, true, true, true, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (43, 'SUI', 'testnet', 'sui', 53, 784, 'SUI', 'https://fullnode.testnet.sui.io:443', 'https://suiexplorer.com/txblock/', 1, 1, 10000000, 1, true, '2026-06-23 23:21:21.428505+08', '2026-06-25 00:11:35.418443+08', NULL, 'sui', 100, true, true, true, true, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (44, 'SUI', 'mainnet', 'sui', 53, 784, 'SUI', NULL, 'https://suiexplorer.com/txblock/', 1, 1, 10000000, 1, false, '2026-06-23 23:21:21.428505+08', '2026-06-25 00:11:35.413224+08', NULL, NULL, 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (97, 'BTC', 'regtest', 'bitcoin-like', 1, 0, 'BTC', NULL, NULL, 6, 6, 1, 546, false, '2026-06-24 17:50:02.98325+08', '2026-06-25 00:11:35.413224+08', NULL, NULL, 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (98, 'LTC', 'regtest', 'bitcoin-like', 24, 2, 'LTC', NULL, NULL, 6, 6, 10, 100000, false, '2026-06-24 17:50:02.98325+08', '2026-06-25 00:11:35.413224+08', NULL, NULL, 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (16, 'DOGE', 'regtest', 'bitcoin-like', 41, 3, 'DOGE', 'http://127.0.0.1:22555', NULL, 6, 6, 1000, 1000000, false, '2026-06-23 10:11:12.947084+08', '2026-06-25 00:11:35.413224+08', NULL, NULL, 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (17, 'BCH', 'regtest', 'bitcoin-like', 42, 145, 'BCH', 'http://127.0.0.1:18443', NULL, 6, 6, 1, 546, false, '2026-06-23 11:36:08.628091+08', '2026-06-25 00:11:35.413224+08', NULL, NULL, 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (82, 'BTC', 'mainnet', 'bitcoin-like', 1, 0, 'BTC', NULL, 'https://mempool.space/tx/', 1, 6, 10, 546, false, '2026-06-24 14:56:38.262511+08', '2026-06-25 00:11:35.413224+08', NULL, NULL, 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (3, 'LTC', 'mainnet', 'bitcoin-like', 24, 2, 'LTC', NULL, 'https://litecoinspace.org/tx/', 1, 6, 2, 1000, false, '2026-06-21 18:32:14.57969+08', '2026-06-25 00:11:35.413224+08', NULL, NULL, 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (9, 'DOGE', 'mainnet', 'bitcoin-like', 41, 3, 'DOGE', NULL, 'https://dogechain.info/tx/', 6, 12, 1000, 1000000, false, '2026-06-21 19:13:13.385893+08', '2026-06-25 00:11:35.413224+08', NULL, NULL, 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (15, 'BCH', 'mainnet', 'bitcoin-like', 42, 145, 'BCH', NULL, 'https://blockchair.com/bitcoin-cash/transaction/', 1, 6, 1, 546, false, '2026-06-21 23:17:57.795865+08', '2026-06-25 00:11:35.413224+08', NULL, NULL, 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (27, 'SOLANA', 'mainnet', 'solana', 50, 501, 'SOL', NULL, 'https://explorer.solana.com/tx/', 32, 32, 5000, 890880, false, '2026-06-23 14:47:05.346909+08', '2026-06-25 00:11:35.413224+08', NULL, NULL, 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (39, 'TON', 'mainnet', 'ton', 51, 607, 'TON', NULL, 'https://tonviewer.com/transaction/', 1, 1, 5000000, 1000000, false, '2026-06-23 21:01:38.587522+08', '2026-06-25 00:11:35.413224+08', NULL, NULL, 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (42, 'APTOS', 'mainnet', 'aptos', 52, 637, 'APT', NULL, 'https://explorer.aptoslabs.com/txn/', 1, 1, 5000000, 1, false, '2026-06-23 22:24:58.095994+08', '2026-06-25 00:11:35.413224+08', NULL, NULL, 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (41, 'APTOS', 'testnet', 'aptos', 52, 637, 'APT', 'https://fullnode.testnet.aptoslabs.com/v1', 'https://explorer.aptoslabs.com/txn/', 1, 1, 5000000, 1, false, '2026-06-23 22:24:58.095994+08', '2026-06-25 00:11:35.413224+08', NULL, NULL, 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (26, 'SOLANA', 'devnet', 'solana', 50, 501, 'SOL', 'https://api.devnet.solana.com', 'https://explorer.solana.com/tx/', 1, 1, 5000, 890880, true, '2026-06-23 14:47:05.346909+08', '2026-06-25 00:11:35.418443+08', NULL, 'solana', 100, true, true, true, true, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (38, 'TON', 'testnet', 'ton', 51, 607, 'TON', 'https://testnet.toncenter.com/api/v2', 'https://testnet.tonviewer.com/transaction/', 1, 1, 5000000, 1000000, true, '2026-06-23 21:01:38.587522+08', '2026-06-25 00:11:35.418443+08', NULL, 'ton', 100, true, true, true, true, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (40, 'APTOS', 'devnet', 'aptos', 52, 637, 'APT', 'https://fullnode.devnet.aptoslabs.com/v1', 'https://explorer.aptoslabs.com/txn/', 1, 1, 5000000, 1, true, '2026-06-23 22:24:58.095994+08', '2026-06-25 00:11:35.418443+08', NULL, 'aptos', 100, true, true, true, true, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (137, 'ETH', 'sepolia', 'evm', 60, 60, 'ETH', 'https://ethereum-sepolia-rpc.publicnode.com', 'https://sepolia.etherscan.io/tx/', 12, 12, 1, 0, true, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 11155111, 'eip1559', 100, true, true, true, true, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (138, 'ETH', 'mainnet', 'evm', 60, 60, 'ETH', 'https://ethereum-rpc.publicnode.com', 'https://etherscan.io/tx/', 24, 24, 1, 0, false, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 1, 'eip1559', 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (139, 'BNB', 'testnet', 'evm', 714, 714, 'BNB', 'https://bsc-testnet-rpc.publicnode.com', 'https://testnet.bscscan.com/tx/', 20, 20, 1, 0, true, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 97, 'legacy-gas-price', 200, true, true, true, true, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (140, 'BNB', 'mainnet', 'evm', 714, 714, 'BNB', 'https://bsc-rpc.publicnode.com', 'https://bscscan.com/tx/', 20, 20, 1, 0, false, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 56, 'legacy-gas-price', 200, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (141, 'POLYGON', 'amoy', 'evm', 966, 966, 'MATIC', 'https://polygon-amoy-bor-rpc.publicnode.com', 'https://amoy.polygonscan.com/tx/', 64, 64, 1, 0, true, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 80002, 'eip1559', 300, true, true, true, true, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (142, 'POLYGON', 'mainnet', 'evm', 966, 966, 'MATIC', 'https://polygon-bor-rpc.publicnode.com', 'https://polygonscan.com/tx/', 128, 128, 1, 0, false, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 137, 'eip1559', 300, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (143, 'ARBITRUM', 'sepolia', 'evm', 9001, 60, 'ETH_ARB', 'https://arbitrum-sepolia-rpc.publicnode.com', 'https://sepolia.arbiscan.io/tx/', 40, 40, 1, 0, true, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 421614, 'eip1559-l2', 500, true, true, true, true, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (144, 'ARBITRUM', 'mainnet', 'evm', 9001, 60, 'ETH_ARB', 'https://arbitrum-one-rpc.publicnode.com', 'https://arbiscan.io/tx/', 40, 40, 1, 0, false, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 42161, 'eip1559-l2', 500, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (145, 'OPTIMISM', 'sepolia', 'evm', 9002, 60, 'ETH_OP', 'https://optimism-sepolia-rpc.publicnode.com', 'https://sepolia-optimism.etherscan.io/tx/', 40, 40, 1, 0, true, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 11155420, 'eip1559-l2', 500, true, true, true, true, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (146, 'OPTIMISM', 'mainnet', 'evm', 9002, 60, 'ETH_OP', 'https://optimism-rpc.publicnode.com', 'https://optimistic.etherscan.io/tx/', 40, 40, 1, 0, false, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 10, 'eip1559-l2', 500, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (147, 'BASE', 'sepolia', 'evm', 9003, 60, 'ETH_BASE', 'https://base-sepolia-rpc.publicnode.com', 'https://sepolia.basescan.org/tx/', 40, 40, 1, 0, true, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 84532, 'eip1559-l2', 500, true, true, true, true, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (148, 'BASE', 'mainnet', 'evm', 9003, 60, 'ETH_BASE', 'https://base-rpc.publicnode.com', 'https://basescan.org/tx/', 40, 40, 1, 0, false, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 8453, 'eip1559-l2', 500, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (149, 'AVAX_C', 'fuji', 'evm', 9000, 9000, 'AVAX_C', 'https://avalanche-fuji-c-chain-rpc.publicnode.com', 'https://testnet.snowtrace.io/tx/', 20, 20, 1, 0, true, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 43113, 'eip1559', 200, true, true, true, true, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (150, 'AVAX_C', 'mainnet', 'evm', 9000, 9000, 'AVAX_C', 'https://avalanche-c-chain-rpc.publicnode.com', 'https://snowtrace.io/tx/', 20, 20, 1, 0, false, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 43114, 'eip1559', 200, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (151, 'TRON', 'nile', 'tron', 195, 195, 'TRX', 'grpc.nile.trongrid.io:50051', 'https://nile.tronscan.org/#/transaction/', 20, 20, 1, 0, true, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', NULL, 'energy-bandwidth', 100, true, true, true, true, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (152, 'TRON', 'mainnet', 'tron', 195, 195, 'TRX', 'grpc.trongrid.io:50051', 'https://tronscan.org/#/transaction/', 20, 20, 1, 0, false, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', NULL, 'energy-bandwidth', 100, false, false, false, false, 0, 0);
+
+
+--
+-- Data for Name: chain_rpc_node; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (1, 'BTC', 'testnet3', 'dev', 'publicnode-btc-testnet', 'rpc', 'HTTP_JSON_RPC', 'https://bitcoin-testnet-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'public BTC testnet JSON-RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (2, 'LTC', 'testnet', 'dev', 'litecoinspace-testnet', 'rpc', 'ESPLORA_HTTP', 'https://litecoinspace.org/testnet/api', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Litecoin testnet Esplora API', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (3, 'DOGE', 'testnet', 'dev', 'tatum-doge-testnet', 'rpc', 'HTTP_JSON_RPC', 'https://dogecoin-testnet.gateway.tatum.io', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Dogecoin testnet RPC gateway', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (4, 'BCH', 'testnet', 'dev', 'tatum-bch-testnet', 'rpc', 'HTTP_JSON_RPC', 'https://bitcoin-cash-testnet.gateway.tatum.io', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Bitcoin Cash testnet RPC gateway', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (5, 'SOLANA', 'devnet', 'dev', 'solana-devnet-public', 'rpc', 'HTTP_JSON_RPC', 'https://api.devnet.solana.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Solana devnet public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (6, 'TON', 'testnet', 'dev', 'toncenter-testnet', 'rpc', 'HTTP_JSON', 'https://testnet.toncenter.com/api/v2', 'API_KEY_OPTIONAL', NULL, NULL, NULL, NULL, 10, true, NULL, 'TON Center testnet API, optional API key', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (7, 'TON', 'testnet', 'dev', 'tonapi-testnet', 'indexer', 'HTTP_JSON', 'https://testnet.tonapi.io', 'API_KEY_OPTIONAL', NULL, NULL, NULL, NULL, 20, true, NULL, 'TON API testnet indexer, optional API key', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (8, 'APTOS', 'devnet', 'dev', 'aptos-devnet-public', 'rpc', 'HTTP_REST', 'https://fullnode.devnet.aptoslabs.com/v1', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Aptos devnet fullnode', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (9, 'APTOS', 'devnet', 'dev', 'aptos-devnet-faucet', 'faucet', 'HTTP_REST', 'https://faucet.devnet.aptoslabs.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Aptos devnet faucet', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (10, 'SUI', 'testnet', 'dev', 'sui-testnet-public', 'rpc', 'HTTP_JSON_RPC', 'https://fullnode.testnet.sui.io:443', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Sui testnet fullnode', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (11, 'SUI', 'testnet', 'dev', 'sui-testnet-faucet', 'faucet', 'HTTP_REST', 'https://faucet.testnet.sui.io/v2/gas', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Sui testnet faucet', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (12, 'ETH', 'sepolia', 'dev', 'publicnode-eth-sepolia', 'rpc', 'HTTP_JSON_RPC', 'https://ethereum-sepolia-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Ethereum Sepolia public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (13, 'BNB', 'testnet', 'dev', 'publicnode-bnb-testnet', 'rpc', 'HTTP_JSON_RPC', 'https://bsc-testnet-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'BNB Chain testnet public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (14, 'POLYGON', 'amoy', 'dev', 'publicnode-polygon-amoy', 'rpc', 'HTTP_JSON_RPC', 'https://polygon-amoy-bor-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Polygon Amoy public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (15, 'ARBITRUM', 'sepolia', 'dev', 'publicnode-arbitrum-sepolia', 'rpc', 'HTTP_JSON_RPC', 'https://arbitrum-sepolia-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Arbitrum Sepolia public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (16, 'OPTIMISM', 'sepolia', 'dev', 'publicnode-optimism-sepolia', 'rpc', 'HTTP_JSON_RPC', 'https://optimism-sepolia-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Optimism Sepolia public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (17, 'BASE', 'sepolia', 'dev', 'publicnode-base-sepolia', 'rpc', 'HTTP_JSON_RPC', 'https://base-sepolia-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Base Sepolia public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (18, 'AVAX_C', 'fuji', 'dev', 'publicnode-avax-fuji', 'rpc', 'HTTP_JSON_RPC', 'https://avalanche-fuji-c-chain-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Avalanche Fuji C-Chain public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (19, 'TRON', 'nile', 'dev', 'trongrid-nile-fullnode', 'rpc', 'GRPC', 'grpc.nile.trongrid.io:50051', 'API_KEY_OPTIONAL', NULL, NULL, NULL, NULL, 10, true, NULL, 'TRON Nile fullnode gRPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (20, 'TRON', 'nile', 'dev', 'trongrid-nile-solidity', 'solidity', 'GRPC', 'grpc.nile.trongrid.io:50061', 'API_KEY_OPTIONAL', NULL, NULL, NULL, NULL, 20, true, NULL, 'TRON Nile solidity gRPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (21, 'TRON', 'nile', 'dev', 'trongrid-nile-event', 'event', 'HTTP_JSON', 'https://nile.trongrid.io', 'API_KEY_OPTIONAL', NULL, NULL, NULL, NULL, 30, true, NULL, 'TRON Nile event server', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (22, 'ETH', 'mainnet', 'prod', 'publicnode-eth-mainnet', 'rpc', 'HTTP_JSON_RPC', 'https://ethereum-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Ethereum mainnet public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (23, 'BNB', 'mainnet', 'prod', 'publicnode-bnb-mainnet', 'rpc', 'HTTP_JSON_RPC', 'https://bsc-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'BNB Chain mainnet public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (24, 'POLYGON', 'mainnet', 'prod', 'publicnode-polygon-mainnet', 'rpc', 'HTTP_JSON_RPC', 'https://polygon-bor-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Polygon mainnet public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (25, 'ARBITRUM', 'mainnet', 'prod', 'publicnode-arbitrum-mainnet', 'rpc', 'HTTP_JSON_RPC', 'https://arbitrum-one-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Arbitrum One public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (26, 'OPTIMISM', 'mainnet', 'prod', 'publicnode-optimism-mainnet', 'rpc', 'HTTP_JSON_RPC', 'https://optimism-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Optimism mainnet public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (27, 'BASE', 'mainnet', 'prod', 'publicnode-base-mainnet', 'rpc', 'HTTP_JSON_RPC', 'https://base-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Base mainnet public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (28, 'AVAX_C', 'mainnet', 'prod', 'publicnode-avax-mainnet', 'rpc', 'HTTP_JSON_RPC', 'https://avalanche-c-chain-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 10, true, NULL, 'Avalanche C-Chain mainnet public RPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (29, 'TRON', 'mainnet', 'prod', 'trongrid-mainnet-fullnode', 'rpc', 'GRPC', 'grpc.trongrid.io:50051', 'API_KEY_OPTIONAL', NULL, NULL, NULL, NULL, 10, true, NULL, 'TRON mainnet fullnode gRPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (30, 'TRON', 'mainnet', 'prod', 'trongrid-mainnet-solidity', 'solidity', 'GRPC', 'grpc.trongrid.io:50052', 'API_KEY_OPTIONAL', NULL, NULL, NULL, NULL, 20, true, NULL, 'TRON mainnet solidity gRPC', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (31, 'TRON', 'mainnet', 'prod', 'trongrid-mainnet-event', 'event', 'HTTP_JSON', 'https://api.trongrid.io', 'API_KEY_OPTIONAL', NULL, NULL, NULL, NULL, 30, true, NULL, 'TRON mainnet event API', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
 
 
 --
@@ -2016,6 +2207,26 @@ INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contr
 
 
 --
+-- Data for Name: wallet_public_key; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+INSERT INTO "public"."wallet_public_key" ("key_slot", "key_role", "key_type", "network", "public_key", "enabled", "remark", "created_at", "updated_at") VALUES (1, 'sig1-hot', 'BIP32_XPUB', 'test', 'tpubD6NzVbkrYhZ4YeTnP6ae6en8YvKSvxvvCwh5X7gNpwqEeix6o7etGgsyGywcB9gS1bGTmC4WfLKAdK6vxDEzedd7PMRLcYk5yZLj5JkLAVB', true, 'online first signer public root', '2026-06-25 00:10:43.489237+08', '2026-06-25 00:10:43.489237+08');
+INSERT INTO "public"."wallet_public_key" ("key_slot", "key_role", "key_type", "network", "public_key", "enabled", "remark", "created_at", "updated_at") VALUES (2, 'sig2-cold', 'BIP32_XPUB', 'test', 'tpubD6NzVbkrYhZ4WuN2bmdffo5p894oRYGQVCfKe3TKT4QVw7qQT18jG1FYbYyB3ePESejLdfaEFMRpsYGVjb4Bh6HiiWaSU8iJRVE46EirNBT', true, 'online second signer public root', '2026-06-25 00:10:43.489237+08', '2026-06-25 00:10:43.489237+08');
+INSERT INTO "public"."wallet_public_key" ("key_slot", "key_role", "key_type", "network", "public_key", "enabled", "remark", "created_at", "updated_at") VALUES (3, 'offline-recovery', 'BIP32_XPUB', 'test', 'tpubD6NzVbkrYhZ4XKeuSHwv2p3snJxWjacFsu2rEEht2qMaM5FYV2RkbMaJEYNZGK7B3i8D46RTs83DJNPh2Jd5MzXivXCiHLbqAFKv8MKxrC4', true, 'offline recovery public root', '2026-06-25 00:10:43.489237+08', '2026-06-25 00:10:43.489237+08');
+
+
+--
+-- Data for Name: wallet_system_config; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.all.enabled', 'true', 'boolean', true, 'Global master switch for all wallet runtime jobs', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
+INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.scan.enabled', 'true', 'boolean', true, 'Global block/account scanner switch', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
+INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.withdraw.enabled', 'true', 'boolean', true, 'Global withdrawal switch', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
+INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.collection.enabled', 'true', 'boolean', true, 'Global collection switch', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
+INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.transfer.enabled', 'true', 'boolean', true, 'Global internal transfer switch', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
+
+
+--
 -- Name: chain_asset_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
@@ -2026,7 +2237,14 @@ SELECT pg_catalog.setval('"public"."chain_asset_id_seq"', 135, true);
 -- Name: chain_profile_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('"public"."chain_profile_id_seq"', 136, true);
+SELECT pg_catalog.setval('"public"."chain_profile_id_seq"', 152, true);
+
+
+--
+-- Name: chain_rpc_node_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('"public"."chain_rpc_node_id_seq"', 31, true);
 
 
 --
@@ -2047,5 +2265,5 @@ SELECT pg_catalog.setval('"public"."token_registry_id_seq"', 1, false);
 -- PostgreSQL database dump complete
 --
 
-\unrestrict bjqNN0t14eWj4c7qSXOJEQUjjYyrWOceDTxgF24JoezZIbQkg44OuC1vcHug53l
+\unrestrict 9Kpi8hXJ4id9GXP43FVP7ZCSSFGYuxl1ckMhU4r3jA1jBkYZd1EtR0ZsAls1RQg
 

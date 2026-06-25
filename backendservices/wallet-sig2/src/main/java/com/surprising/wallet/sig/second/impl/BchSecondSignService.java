@@ -20,7 +20,7 @@ import java.util.List;
 
 @Component
 public class BchSecondSignService implements ISignService {
-    @Value("${atomex.bch.network:testnet}")
+    @Value("${sw.bch.network:testnet}")
     private String network;
 
     @Override

@@ -12,7 +12,10 @@ The runtime asset source is:
 
 | Table | Role |
 |---|---|
-| `chain_profile` | Chain key, family, network, RPC metadata, BIP44 coin type, confirmation policy |
+| `chain_profile` | Chain key, family, enabled network, confirmation policy, scan/withdraw/collection/transfer switches, scan start height, BIP44 coin type |
+| `chain_rpc_node` | RPC/fullnode/indexer/faucet nodes, environment tag, priority, authentication, and remarks for each chain |
+| `wallet_system_config` | Global scan/withdraw/collection/transfer switches |
+| `wallet_public_key` | Three BIP32 public keys required by wallet-server startup |
 | `chain_asset` | Native assets and chain-scoped asset definitions |
 | `token_config` | Token contract/configuration, decimals, collect/withdraw policy |
 | `ledger_balance` | Chain-scoped user/system balance state |
@@ -58,7 +61,7 @@ BIP32 root #3 -> pubKey3, offline recovery private root
 SOL/TON/APTOS/SUI use one Ed25519 master seed:
 
 ```text
-ATOMEX_MASTER_SEED -> SLIP-0010 Ed25519 derivation -> per-chain/user key
+SW_ED25519_SEED -> SLIP-0010 Ed25519 derivation -> per-chain/user key
 ```
 
 Do not reuse production BIP32 raw seeds as the Ed25519 seed. Keep production root materials separated.
@@ -85,7 +88,10 @@ Collection:
 - Builds transfer to hot wallet.
 - Confirms and updates ledger state idempotently.
 
+## Startup Configuration Validation
+
+wallet-server validates `chain_profile`, `chain_rpc_node`, `wallet_public_key`, and `wallet_system_config` at startup. A chain can have only one enabled network. Production cannot enable test networks. Every enabled chain must have at least one RPC node for the current environment. The validator logs each chain state and emits WARN logs for missing settings or disabled switches.
+
 ## Operational Directories
 
 `scripts/`, `infra/`, and `evm-fork/` remain at the repository root because tests and scripts reference those paths directly. Documentation for them is under `docs/`.
-

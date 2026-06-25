@@ -22,7 +22,7 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 
 ## 种子数据范围
 
-初始化文件包含 `chain_profile`、`chain_asset`、`token_config`、`token_registry` 的静态配置数据。
+初始化文件包含 `chain_profile`、`chain_asset`、`token_config`、`token_registry`、`wallet_system_config`、`wallet_public_key`、`chain_rpc_node` 的静态配置数据。
 
 它不包含地址、余额、scan-height、充值、提现、归集、签名、UTXO、链上交易等运行期数据。
 
@@ -30,7 +30,10 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 
 | 表 | 运行时作用 |
 |---|---|
-| `chain_profile` | 链 key、链族、网络、RPC/explorer 元数据、BIP44 coin type |
+| `chain_profile` | 链 key、链族、网络、确认数、扫描/提现/归集/划转开关、扫描起始高度、BIP44 coin type |
+| `chain_rpc_node` | 每条链/网络/环境/purpose 的 RPC/fullnode/indexer/faucet 节点、优先级、认证、备注 |
+| `wallet_system_config` | 全局扫描/提现/归集/划转总开关 |
+| `wallet_public_key` | wallet-server 启动必需的三组 BIP32 public key |
 | `chain_asset` | 链原生资产和链内资产定义 |
 | `token_config` | token 合约、decimals、启用状态、最小充值/提现、归集策略 |
 | `chain_address` | UTXO/账户链地址注册表 |
@@ -49,6 +52,16 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 
 运行时状态存储在 `ledger_balance`、`chain_address`、`token_config`、
 `chain_scan_height` 以及链专用交易服务/表中。
+
+## 启动校验
+
+wallet-server 启动时会检查：
+
+- `wallet_public_key` 必须启用 slot 1、2、3。
+- `chain_profile` 中同一 `chain` 只能有一个启用 network。
+- `sw.app.env.name=prod` 时，启用 profile 不允许是 testnet/devnet/regtest。
+- 每个启用 profile 至少要有一个当前环境可用的 `chain_rpc_node`。
+- 每条链的任务开关、扫描起始高度、扫描批量和 RPC 节点数量会打印到日志；缺失或关闭项会输出 WARN。
 
 ## 权限
 

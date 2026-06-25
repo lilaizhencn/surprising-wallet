@@ -7,9 +7,9 @@ import lombok.Data; import lombok.extern.slf4j.Slf4j; import org.bitcoinj.crypto
 import org.springframework.beans.factory.annotation.Value; import org.springframework.stereotype.Component; import jakarta.annotation.PostConstruct;
 @Slf4j @Component @Data
 public class PubKeyConfig {
-    @Value("${atomex.wallet.pubKey1}") private String pub1;
-    @Value("${atomex.wallet.pubKey2}") private String pub2;
-    @Value("${atomex.wallet.pubKey3}") private String pub3;
+    @Value("${sw.wallet.pubKey1}") private String pub1;
+    @Value("${sw.wallet.pubKey2}") private String pub2;
+    @Value("${sw.wallet.pubKey3}") private String pub3;
     private Bip32Node NODE1,NODE2,NODE3;
     @PostConstruct public void init(){NODE1=Bip32Node.decode(pub1); NODE2=Bip32Node.decode(pub2); NODE3=Bip32Node.decode(pub3);}
     public String genWitnessScript(Address a){

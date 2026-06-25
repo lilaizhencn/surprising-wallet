@@ -20,7 +20,7 @@ import java.util.List;
  */
 @Component
 public class DogeSecondSignService implements ISignService {
-    @Value("${atomex.doge.network:testnet}")
+    @Value("${sw.doge.network:testnet}")
     private String network;
 
     @Override
