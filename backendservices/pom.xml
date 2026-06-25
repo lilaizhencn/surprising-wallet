@@ -8,7 +8,7 @@
         <groupId>com.surprising</groupId>
         <artifactId>surprising-parent</artifactId>
         <version>1.0.0-SNAPSHOT</version>
-        <relativePath/>
+        <relativePath>../surprising-parent/pom.xml</relativePath>
     </parent>
 
     <artifactId>backendservices</artifactId>
