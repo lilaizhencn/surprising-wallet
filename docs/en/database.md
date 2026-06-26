@@ -18,7 +18,7 @@ For a new local test database:
 psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 ```
 
-Use `surprising-wallet-init-pgsql.sql` only on a disposable or fresh database. It contains reset statements from `pg_dump --clean` and is not a production migration script.
+Use `surprising-wallet-init-pgsql.sql` only on a disposable or fresh database. It contains reset statements from `pg_dump --clean` and is not for in-place production upgrades.
 
 ## Seed Data Scope
 

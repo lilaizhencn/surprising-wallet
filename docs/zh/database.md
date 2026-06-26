@@ -18,7 +18,7 @@
 psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 ```
 
-`surprising-wallet-init-pgsql.sql` 只用于可丢弃或全新的数据库。它包含 `pg_dump --clean` 生成的重置语句，不是生产迁移脚本。
+`surprising-wallet-init-pgsql.sql` 只用于可丢弃或全新的数据库。它包含 `pg_dump --clean` 生成的重置语句，不用于生产库原地升级。
 
 ## 种子数据范围
 

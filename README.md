@@ -163,5 +163,5 @@ docs/                            Documentation, SQL schema, document assets
 docs/db/                         Database initialization and historical backups
 evm-fork/                        Hardhat fork runtime, kept at root for scripts/tests
 infra/                           Docker and mock coin infrastructure
-scripts/                         Regtest and migration scripts, kept at root for tests
+scripts/                         Regtest and test helper scripts, kept at root for tests
 ```

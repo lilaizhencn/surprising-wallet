@@ -28,6 +28,6 @@ docs/
 
 Operational directories remain at the repository root:
 
-- `scripts/` for regtest and migration executables
+- `scripts/` for regtest and test helper executables
 - `infra/` for Docker and mock coin infrastructure
 - `evm-fork/` for Hardhat fork runtime

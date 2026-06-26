@@ -28,6 +28,6 @@ docs/
 
 运行目录仍保留在仓库根目录：
 
-- `scripts/` 用于 regtest 和迁移执行脚本
+- `scripts/` 用于 regtest 和测试辅助脚本
 - `infra/` 用于 Docker 和 mock coin 基础设施
 - `evm-fork/` 用于 Hardhat fork 运行环境

@@ -199,7 +199,7 @@ scripts/regtest/all-chain-regtest.sh matrix
 
 | 命令 | 覆盖 |
 |---|---|
-| `test-db` | SOL/TON/APTOS/SUI/DOGE 和 UTXO migration 的 DB-only scanner/ledger/flow 测试 |
+| `test-db` | SOL/TON/APTOS/SUI/DOGE 和 UTXO 运行状态的 DB-only scanner/ledger/flow 测试 |
 | `test-utxo` | BTC/LTC/DOGE/BCH 本地 regtest、并发、广播测试 |
 | `test-evm` | ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C 的 EVM fork 测试 |
 | `test-live` | 外部 testnet 连通性测试，以及可选花费测试 |

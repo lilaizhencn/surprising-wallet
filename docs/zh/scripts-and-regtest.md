@@ -73,9 +73,13 @@ RUN_LIVE_SPENDING=true scripts/regtest/all-chain-regtest.sh test-live
 
 这些流程依赖测试账户余额以及外部 RPC/faucet 可用性。
 
-## 迁移脚本
+## 数据库初始化
 
-`scripts/` 顶层 SQL 是可执行 migration/cutover 脚本，不是通用启动 schema 文件。
+项目只保留一份数据库初始化文件：
 
-全新本地库初始化请使用 `docs/db/`。
+```text
+docs/db/surprising-wallet-init-pgsql.sql
+```
+
+`scripts/` 目录不再保存独立 SQL 升级或 cutover 脚本。全新本地库、test2/sandbox 库都以这份 init SQL 为准。
 

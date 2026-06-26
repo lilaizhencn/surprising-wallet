@@ -199,7 +199,7 @@ Expected coverage:
 
 | Command | Coverage |
 |---|---|
-| `test-db` | DB-only scanner/ledger/flow tests for SOL/TON/APTOS/SUI/DOGE and UTXO migration |
+| `test-db` | DB-only scanner/ledger/flow tests for SOL/TON/APTOS/SUI/DOGE and UTXO runtime state |
 | `test-utxo` | Local BTC/LTC/DOGE/BCH regtest flow, concurrency, and broadcast tests |
 | `test-evm` | EVM fork tests for ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C |
 | `test-live` | External testnet connectivity and optional spending tests |

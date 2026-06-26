@@ -163,5 +163,5 @@ docs/                            文档、SQL schema、文档图片
 docs/db/                         数据库初始化脚本与历史备份
 evm-fork/                        Hardhat fork 运行环境，因脚本/测试引用保留在根目录
 infra/                           Docker 与 mock coin 基础设施
-scripts/                         Regtest 与迁移脚本，因测试引用保留在根目录
+scripts/                         Regtest 与测试辅助脚本，因测试引用保留在根目录
 ```

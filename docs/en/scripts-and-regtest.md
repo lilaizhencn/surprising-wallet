@@ -73,9 +73,13 @@ RUN_LIVE_SPENDING=true scripts/regtest/all-chain-regtest.sh test-live
 
 These flows depend on funded test accounts and external RPC/faucet availability.
 
-## Migration Scripts
+## Database Initialization
 
-Top-level SQL files under `scripts/` are executable migration/cutover scripts. They are not general startup schema files.
+The project keeps a single database initialization file:
 
-Use `docs/db/` for fresh local schema initialization.
+```text
+docs/db/surprising-wallet-init-pgsql.sql
+```
+
+The `scripts/` directory no longer stores standalone SQL upgrade or cutover scripts. Fresh local databases and test2/sandbox databases should start from this init SQL.
 
