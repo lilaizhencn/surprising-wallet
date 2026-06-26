@@ -17,13 +17,17 @@ public class SuiTransactionSigner {
     private final SuiKeyService keyService;
 
     public String signTransactionBytes(long derivationIndex, String txBytesBase64) {
+        return signTransactionBytes(0L, 0, derivationIndex, txBytesBase64);
+    }
+
+    public String signTransactionBytes(long userId, int biz, long derivationIndex, String txBytesBase64) {
         byte[] txBytes = Base64.getDecoder().decode(txBytesBase64);
         byte[] intentMessage = new byte[TRANSACTION_DATA_INTENT.length + txBytes.length];
         System.arraycopy(TRANSACTION_DATA_INTENT, 0, intentMessage, 0, TRANSACTION_DATA_INTENT.length);
         System.arraycopy(txBytes, 0, intentMessage, TRANSACTION_DATA_INTENT.length, txBytes.length);
         byte[] digest = new Blake2b.Blake2b256().digest(intentMessage);
-        byte[] signature = keyService.sign(derivationIndex, digest);
-        Ed25519DerivedKey key = keyService.derive(derivationIndex);
+        byte[] signature = keyService.sign(userId, biz, derivationIndex, digest);
+        Ed25519DerivedKey key = keyService.derive(userId, biz, derivationIndex);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream(1 + signature.length + key.publicKey().length);
         out.write(ED25519_SCHEME);

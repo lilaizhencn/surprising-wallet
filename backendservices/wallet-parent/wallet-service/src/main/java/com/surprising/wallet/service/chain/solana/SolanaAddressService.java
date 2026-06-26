@@ -24,7 +24,7 @@ public class SolanaAddressService {
         HotWalletRules.requireAllowedReservedAddress(CHAIN, "SOL", "SOL", userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, "SOL", userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
-                    Ed25519DerivedKey key = keyService.derive(derivationIndex);
+                    Ed25519DerivedKey key = keyService.derive(userId, biz, derivationIndex);
                     String address = new PublicKey(key.publicKey()).toBase58();
                     ChainAddressRecord record = ChainAddressRecord.builder()
                             .chain(CHAIN)

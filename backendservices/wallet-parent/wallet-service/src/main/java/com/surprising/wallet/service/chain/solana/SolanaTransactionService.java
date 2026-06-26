@@ -41,6 +41,18 @@ public class SolanaTransactionService {
             throw new IllegalArgumentException("lamports must be positive");
         }
         Account sender = keyService.account(derivationIndex);
+        return sendNative(sender, toAddress, lamports);
+    }
+
+    public String sendNative(ChainAddressRecord from, String toAddress, long lamports) {
+        if (lamports <= 0) {
+            throw new IllegalArgumentException("lamports must be positive");
+        }
+        Account sender = keyService.account(from.getUserId(), from.getBiz(), from.getAddressIndex());
+        return sendNative(sender, toAddress, lamports);
+    }
+
+    private String sendNative(Account sender, String toAddress, long lamports) {
         Transaction transaction = new Transaction()
                 .addInstruction(SystemProgram.transfer(
                         sender.getPublicKey(), new PublicKey(toAddress), lamports));
@@ -53,6 +65,20 @@ public class SolanaTransactionService {
             throw new IllegalArgumentException("token amount must be positive");
         }
         Account sender = keyService.account(derivationIndex);
+        return sendToken(sender, mintAddress, toOwnerAddress, atomicAmount, decimals);
+    }
+
+    public String sendToken(ChainAddressRecord from, String mintAddress, String toOwnerAddress,
+                            long atomicAmount, int decimals) {
+        if (atomicAmount <= 0) {
+            throw new IllegalArgumentException("token amount must be positive");
+        }
+        Account sender = keyService.account(from.getUserId(), from.getBiz(), from.getAddressIndex());
+        return sendToken(sender, mintAddress, toOwnerAddress, atomicAmount, decimals);
+    }
+
+    private String sendToken(Account sender, String mintAddress, String toOwnerAddress,
+                             long atomicAmount, int decimals) {
         PublicKey mint = new PublicKey(mintAddress);
         PublicKey sourceAta = new PublicKey(addressService.associatedTokenAddress(
                 sender.getPublicKeyBase58(), mintAddress));
@@ -94,7 +120,7 @@ public class SolanaTransactionService {
         repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
-            String signature = sendNative(from.getAddressIndex(), toAddress, amount);
+            String signature = sendNative(from, toAddress, amount);
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), signature, null);
             recordTransaction(signature, from.getAddress(), toAddress, "SOL", null, amountLamports, fee, "SENT");
             return signature;
@@ -128,7 +154,7 @@ public class SolanaTransactionService {
         repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getOwnerAddress(), null, null);
         try {
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getOwnerAddress(), null, null);
-            String signature = sendToken(from.getAddressIndex(), mintAddress, toOwnerAddress,
+            String signature = sendToken(from, mintAddress, toOwnerAddress,
                     atomicAmount.longValueExact(), token.getDecimals());
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getOwnerAddress(), signature, null);
             recordTransaction(signature, from.getAddress(), toOwnerAddress, token.getSymbol(), mintAddress,
@@ -156,7 +182,7 @@ public class SolanaTransactionService {
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
         }
         try {
-            String signature = sendNative(from.getAddressIndex(), hotAddress, amountLamports.longValueExact());
+            String signature = sendNative(from, hotAddress, amountLamports.longValueExact());
             repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", signature, null, null);
             recordTransaction(signature, from.getAddress(), hotAddress, "SOL", null,
                     amountLamports, fee, "SENT");
@@ -183,7 +209,7 @@ public class SolanaTransactionService {
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
         }
         try {
-            String signature = sendToken(from.getAddressIndex(), mintAddress, hotOwnerAddress,
+            String signature = sendToken(from, mintAddress, hotOwnerAddress,
                     atomicAmount.longValueExact(), token.getDecimals());
             repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", signature, null, null);
             recordTransaction(signature, from.getAddress(), hotOwnerAddress, token.getSymbol(), mintAddress,

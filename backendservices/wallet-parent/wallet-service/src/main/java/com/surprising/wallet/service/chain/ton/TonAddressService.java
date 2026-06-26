@@ -20,7 +20,7 @@ public class TonAddressService {
         HotWalletRules.requireAllowedReservedAddress(CHAIN, "TON", "TON", userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, "TON", userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
-                    WalletV4R2 wallet = keyService.wallet(derivationIndex);
+                    WalletV4R2 wallet = keyService.wallet(userId, biz, derivationIndex);
                     String address = friendly(wallet.getAddress(), false);
                     ChainAddressRecord record = ChainAddressRecord.builder()
                             .chain(CHAIN)
@@ -31,7 +31,7 @@ public class TonAddressService {
                             .addressIndex(derivationIndex)
                             .address(address)
                             .ownerAddress(address)
-                            .derivationPath(keyService.derive(derivationIndex).derivationPath())
+                            .derivationPath(keyService.derive(userId, biz, derivationIndex).derivationPath())
                             .walletRole(walletRole)
                             .enabled(true)
                             .build();

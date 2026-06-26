@@ -30,22 +30,42 @@ public class AptosTransactionService {
     private WalletRuntimeConfigService runtimeConfigService;
 
     public String sendNative(long derivationIndex, String fromAddress, String toAddress, long amountOctas) {
+        return sendNative(0L, 0, derivationIndex, fromAddress, toAddress, amountOctas);
+    }
+
+    public String sendNative(ChainAddressRecord from, String toAddress, long amountOctas) {
+        return sendNative(from.getUserId(), from.getBiz(), from.getAddressIndex(),
+                from.getAddress(), toAddress, amountOctas);
+    }
+
+    private String sendNative(long userId, int biz, long derivationIndex,
+                              String fromAddress, String toAddress, long amountOctas) {
         GasPlan gas = gasPlan();
         long chainSequence = rpc.sequenceNumber(fromAddress);
         long sequence = repository.reserveAccountSequence(CHAIN, AptosHex.normalizeAddress(fromAddress), chainSequence);
         AptosTransactionSigner.SignedTransaction tx = signer.nativeTransfer(
-                derivationIndex, fromAddress, sequence, toAddress, amountOctas,
+                userId, biz, derivationIndex, fromAddress, sequence, toAddress, amountOctas,
                 gas.maxGasAmount(), gas.gasUnitPrice(), rpc.chainId());
         return rpc.submitTransaction(tx.json());
     }
 
     public String sendCoin(long derivationIndex, String fromAddress, String coinType,
                            String toAddress, long amountAtomic) {
+        return sendCoin(0L, 0, derivationIndex, fromAddress, coinType, toAddress, amountAtomic);
+    }
+
+    public String sendCoin(ChainAddressRecord from, String coinType, String toAddress, long amountAtomic) {
+        return sendCoin(from.getUserId(), from.getBiz(), from.getAddressIndex(),
+                from.getAddress(), coinType, toAddress, amountAtomic);
+    }
+
+    private String sendCoin(long userId, int biz, long derivationIndex, String fromAddress, String coinType,
+                            String toAddress, long amountAtomic) {
         GasPlan gas = gasPlan();
         long chainSequence = rpc.sequenceNumber(fromAddress);
         long sequence = repository.reserveAccountSequence(CHAIN, AptosHex.normalizeAddress(fromAddress), chainSequence);
         AptosTransactionSigner.SignedTransaction tx = signer.coinTransfer(
-                derivationIndex, fromAddress, sequence, coinType, toAddress, amountAtomic,
+                userId, biz, derivationIndex, fromAddress, sequence, coinType, toAddress, amountAtomic,
                 gas.maxGasAmount(), gas.gasUnitPrice(), rpc.chainId());
         return rpc.submitTransaction(tx.json());
     }
@@ -100,7 +120,7 @@ public class AptosTransactionService {
         try {
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
             long sequenceBefore = rpc.sequenceNumber(from.getAddress());
-            String hash = sendNative(from.getAddressIndex(), from.getAddress(), toAddress, amount);
+            String hash = sendNative(from, toAddress, amount);
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), hash, null);
             record(hash, from.getAddress(), toAddress, "APT", AptosRpcClient.aptCoinType(), amountOctas,
                     feeReserve, sequenceBefore, "SENT", null);
@@ -135,8 +155,7 @@ public class AptosTransactionService {
         try {
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
             long sequenceBefore = rpc.sequenceNumber(from.getAddress());
-            String hash = sendCoin(from.getAddressIndex(), from.getAddress(), coinType,
-                    toAddress, atomicAmount.longValueExact());
+            String hash = sendCoin(from, coinType, toAddress, atomicAmount.longValueExact());
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), hash, null);
             record(hash, from.getAddress(), toAddress, token.getSymbol(), coinType, atomicAmount,
                     profile().getDefaultFee(), sequenceBefore, "SENT", null);
@@ -164,8 +183,7 @@ public class AptosTransactionService {
         }
         try {
             long sequenceBefore = rpc.sequenceNumber(from.getAddress());
-            String hash = sendNative(from.getAddressIndex(), from.getAddress(), hotAddress,
-                    amountOctas.longValueExact());
+            String hash = sendNative(from, hotAddress, amountOctas.longValueExact());
             repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", hash, null, null);
             record(hash, from.getAddress(), hotAddress, "APT", AptosRpcClient.aptCoinType(), amountOctas,
                     feeReserve, sequenceBefore, "SENT", null);
@@ -193,8 +211,7 @@ public class AptosTransactionService {
         }
         try {
             long sequenceBefore = rpc.sequenceNumber(from.getAddress());
-            String hash = sendCoin(from.getAddressIndex(), from.getAddress(), coinType, hotAddress,
-                    atomicAmount.longValueExact());
+            String hash = sendCoin(from, coinType, hotAddress, atomicAmount.longValueExact());
             repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", hash, null, null);
             record(hash, from.getAddress(), hotAddress, token.getSymbol(), coinType, atomicAmount,
                     profile().getDefaultFee(), sequenceBefore, "SENT", null);

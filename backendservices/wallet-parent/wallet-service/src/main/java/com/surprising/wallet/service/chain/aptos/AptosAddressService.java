@@ -19,7 +19,7 @@ public class AptosAddressService {
         HotWalletRules.requireAllowedReservedAddress(CHAIN, "APT", "APT", userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, "APT", userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
-                    Ed25519DerivedKey key = keyService.derive(derivationIndex);
+                    Ed25519DerivedKey key = keyService.derive(userId, biz, derivationIndex);
                     String address = AptosKeyService.address(key.publicKey());
                     ChainAddressRecord record = ChainAddressRecord.builder()
                             .chain(CHAIN)

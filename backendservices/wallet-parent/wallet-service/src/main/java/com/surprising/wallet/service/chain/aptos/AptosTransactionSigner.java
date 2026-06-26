@@ -26,7 +26,15 @@ public class AptosTransactionSigner {
     public SignedTransaction nativeTransfer(long derivationIndex, String sender, long sequenceNumber,
                                             String recipient, long amountOctas, long maxGasAmount,
                                             long gasUnitPrice, int chainId) {
-        return sign(derivationIndex, sender, sequenceNumber,
+        return nativeTransfer(0L, 0, derivationIndex, sender, sequenceNumber,
+                recipient, amountOctas, maxGasAmount, gasUnitPrice, chainId);
+    }
+
+    public SignedTransaction nativeTransfer(long userId, int biz, long derivationIndex,
+                                            String sender, long sequenceNumber,
+                                            String recipient, long amountOctas, long maxGasAmount,
+                                            long gasUnitPrice, int chainId) {
+        return sign(userId, biz, derivationIndex, sender, sequenceNumber,
                 APTOS_ACCOUNT_MODULE, "transfer", List.of(),
                 List.of(FunctionArgument.address(recipient), FunctionArgument.u64(amountOctas)),
                 maxGasAmount, gasUnitPrice, chainId);
@@ -35,7 +43,15 @@ public class AptosTransactionSigner {
     public SignedTransaction coinTransfer(long derivationIndex, String sender, long sequenceNumber,
                                           String coinType, String recipient, long amountAtomic,
                                           long maxGasAmount, long gasUnitPrice, int chainId) {
-        return sign(derivationIndex, sender, sequenceNumber,
+        return coinTransfer(0L, 0, derivationIndex, sender, sequenceNumber,
+                coinType, recipient, amountAtomic, maxGasAmount, gasUnitPrice, chainId);
+    }
+
+    public SignedTransaction coinTransfer(long userId, int biz, long derivationIndex,
+                                          String sender, long sequenceNumber,
+                                          String coinType, String recipient, long amountAtomic,
+                                          long maxGasAmount, long gasUnitPrice, int chainId) {
+        return sign(userId, biz, derivationIndex, sender, sequenceNumber,
                 APTOS_ACCOUNT_MODULE, "transfer_coins", List.of(coinType),
                 List.of(FunctionArgument.address(recipient), FunctionArgument.u64(amountAtomic)),
                 maxGasAmount, gasUnitPrice, chainId);
@@ -44,7 +60,15 @@ public class AptosTransactionSigner {
     public SignedTransaction managedCoinRegister(long derivationIndex, String sender, long sequenceNumber,
                                                  String coinType, long maxGasAmount,
                                                  long gasUnitPrice, int chainId) {
-        return sign(derivationIndex, sender, sequenceNumber,
+        return managedCoinRegister(0L, 0, derivationIndex, sender, sequenceNumber,
+                coinType, maxGasAmount, gasUnitPrice, chainId);
+    }
+
+    public SignedTransaction managedCoinRegister(long userId, int biz, long derivationIndex,
+                                                 String sender, long sequenceNumber,
+                                                 String coinType, long maxGasAmount,
+                                                 long gasUnitPrice, int chainId) {
+        return sign(userId, biz, derivationIndex, sender, sequenceNumber,
                 "0x1::managed_coin", "register", List.of(coinType), List.of(),
                 maxGasAmount, gasUnitPrice, chainId);
     }
@@ -53,11 +77,21 @@ public class AptosTransactionSigner {
                                            String module, String function, List<String> typeArguments,
                                            List<FunctionArgument> arguments, long maxGasAmount,
                                            long gasUnitPrice, int chainId) {
-        return sign(derivationIndex, sender, sequenceNumber, module, function, typeArguments,
+        return entryFunction(0L, 0, derivationIndex, sender, sequenceNumber,
+                module, function, typeArguments, arguments, maxGasAmount, gasUnitPrice, chainId);
+    }
+
+    public SignedTransaction entryFunction(long userId, int biz, long derivationIndex,
+                                           String sender, long sequenceNumber,
+                                           String module, String function, List<String> typeArguments,
+                                           List<FunctionArgument> arguments, long maxGasAmount,
+                                           long gasUnitPrice, int chainId) {
+        return sign(userId, biz, derivationIndex, sender, sequenceNumber, module, function, typeArguments,
                 arguments, maxGasAmount, gasUnitPrice, chainId);
     }
 
-    private SignedTransaction sign(long derivationIndex, String sender, long sequenceNumber,
+    private SignedTransaction sign(long userId, int biz, long derivationIndex,
+                                   String sender, long sequenceNumber,
                                    String module, String function, List<String> typeArguments,
                                    List<FunctionArgument> arguments, long maxGasAmount, long gasUnitPrice,
                                    int chainId) {
@@ -67,8 +101,8 @@ public class AptosTransactionSigner {
         byte[] raw = AptosBcs.rawEntryFunctionTransaction(sender, sequenceNumber, payload,
                 maxGasAmount, gasUnitPrice, expiration, chainId);
         byte[] signingMessage = signingMessage(raw);
-        byte[] signature = keyService.sign(derivationIndex, signingMessage);
-        Ed25519DerivedKey key = keyService.derive(derivationIndex);
+        byte[] signature = keyService.sign(userId, biz, derivationIndex, signingMessage);
+        Ed25519DerivedKey key = keyService.derive(userId, biz, derivationIndex);
 
         ObjectNode request = objectMapper.createObjectNode();
         request.put("sender", AptosHex.normalizeAddress(sender));

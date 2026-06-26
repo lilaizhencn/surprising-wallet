@@ -31,22 +31,42 @@ public class SuiTransactionService {
     private WalletRuntimeConfigService runtimeConfigService;
 
     public String sendNative(long derivationIndex, String fromAddress, String toAddress, long amountMist) {
+        return sendNative(0L, 0, derivationIndex, fromAddress, toAddress, amountMist);
+    }
+
+    public String sendNative(ChainAddressRecord from, String toAddress, long amountMist) {
+        return sendNative(from.getUserId(), from.getBiz(), from.getAddressIndex(),
+                from.getAddress(), toAddress, amountMist);
+    }
+
+    private String sendNative(long userId, int biz, long derivationIndex,
+                              String fromAddress, String toAddress, long amountMist) {
         long gasBudget = profile().getDefaultFee();
         List<String> inputCoins = selectCoins(fromAddress, SuiRpcClient.SUI_COIN_TYPE,
                 BigDecimal.valueOf(amountMist + gasBudget));
         String txBytes = rpc.buildPaySui(fromAddress, inputCoins, toAddress, amountMist, gasBudget);
-        String signature = signer.signTransactionBytes(derivationIndex, txBytes);
+        String signature = signer.signTransactionBytes(userId, biz, derivationIndex, txBytes);
         return rpc.executeTransactionBlock(txBytes, signature).path("digest").asText();
     }
 
     public String sendCoin(long derivationIndex, String fromAddress, String coinType,
                            String toAddress, long amountAtomic) {
+        return sendCoin(0L, 0, derivationIndex, fromAddress, coinType, toAddress, amountAtomic);
+    }
+
+    public String sendCoin(ChainAddressRecord from, String coinType, String toAddress, long amountAtomic) {
+        return sendCoin(from.getUserId(), from.getBiz(), from.getAddressIndex(),
+                from.getAddress(), coinType, toAddress, amountAtomic);
+    }
+
+    private String sendCoin(long userId, int biz, long derivationIndex, String fromAddress, String coinType,
+                            String toAddress, long amountAtomic) {
         long gasBudget = profile().getDefaultFee();
         List<String> inputCoins = selectCoins(fromAddress, coinType, BigDecimal.valueOf(amountAtomic));
         String gasObject = selectCoins(fromAddress, SuiRpcClient.SUI_COIN_TYPE,
                 BigDecimal.valueOf(gasBudget)).get(0);
         String txBytes = rpc.buildPayCoin(fromAddress, inputCoins, toAddress, amountAtomic, gasObject, gasBudget);
-        String signature = signer.signTransactionBytes(derivationIndex, txBytes);
+        String signature = signer.signTransactionBytes(userId, biz, derivationIndex, txBytes);
         return rpc.executeTransactionBlock(txBytes, signature).path("digest").asText();
     }
 
@@ -72,8 +92,7 @@ public class SuiTransactionService {
         repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
-            String digest = sendNative(from.getAddressIndex(), from.getAddress(), toAddress,
-                    amountMist.longValueExact());
+            String digest = sendNative(from, toAddress, amountMist.longValueExact());
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), digest, null);
             record(digest, from.getAddress(), toAddress, "SUI", SuiRpcClient.SUI_COIN_TYPE, amountMist,
                     feeReserve, "SENT", null);
@@ -107,8 +126,7 @@ public class SuiTransactionService {
         repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
-            String digest = sendCoin(from.getAddressIndex(), from.getAddress(), coinType,
-                    toAddress, amountAtomic.longValueExact());
+            String digest = sendCoin(from, coinType, toAddress, amountAtomic.longValueExact());
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), digest, null);
             record(digest, from.getAddress(), toAddress, token.getSymbol(), coinType, amountAtomic,
                     profile().getDefaultFee(), "SENT", null);
@@ -135,8 +153,7 @@ public class SuiTransactionService {
                     .orElseThrow(() -> new IllegalStateException("Sui collection is not retryable"));
         }
         try {
-            String digest = sendNative(from.getAddressIndex(), from.getAddress(), hotAddress,
-                    amountMist.longValueExact());
+            String digest = sendNative(from, hotAddress, amountMist.longValueExact());
             repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", digest, null, null);
             record(digest, from.getAddress(), hotAddress, "SUI", SuiRpcClient.SUI_COIN_TYPE, amountMist,
                     feeReserve, "SENT", null);
@@ -163,8 +180,7 @@ public class SuiTransactionService {
                     .orElseThrow(() -> new IllegalStateException("Sui coin collection is not retryable"));
         }
         try {
-            String digest = sendCoin(from.getAddressIndex(), from.getAddress(), coinType, hotAddress,
-                    amountAtomic.longValueExact());
+            String digest = sendCoin(from, coinType, hotAddress, amountAtomic.longValueExact());
             repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", digest, null, null);
             record(digest, from.getAddress(), hotAddress, token.getSymbol(), coinType, amountAtomic,
                     profile().getDefaultFee(), "SENT", null);

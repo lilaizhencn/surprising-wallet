@@ -26,12 +26,26 @@ public class SuiKeyService {
         return provider().derive(Ed25519Chain.SUI, derivationIndex);
     }
 
+    public Ed25519DerivedKey derive(long userId, int biz, long derivationIndex) {
+        if (userId == 0 && biz == 0) {
+            return derive(derivationIndex);
+        }
+        return provider().derive(Ed25519Chain.SUI, biz, userId, derivationIndex);
+    }
+
     public String address(long derivationIndex) {
         return address(derive(derivationIndex).publicKey());
     }
 
     public byte[] sign(long derivationIndex, byte[] message) {
         return provider().sign(Ed25519Chain.SUI, derivationIndex, message);
+    }
+
+    public byte[] sign(long userId, int biz, long derivationIndex, byte[] message) {
+        if (userId == 0 && biz == 0) {
+            return sign(derivationIndex, message);
+        }
+        return provider().sign(Ed25519Chain.SUI, biz, userId, derivationIndex, message);
     }
 
     public static String address(byte[] publicKey) {

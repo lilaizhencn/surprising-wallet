@@ -39,7 +39,18 @@ public class TonTransactionService {
 
     public PreparedTransfer prepareNative(long derivationIndex, String toAddress,
                                           BigInteger amountNano, String comment) {
-        WalletV4R2 wallet = keyService.wallet(derivationIndex);
+        return prepareNative(0L, 0, derivationIndex, toAddress, amountNano, comment);
+    }
+
+    public PreparedTransfer prepareNative(ChainAddressRecord from, String toAddress,
+                                          BigInteger amountNano, String comment) {
+        return prepareNative(from.getUserId(), from.getBiz(), from.getAddressIndex(),
+                toAddress, amountNano, comment);
+    }
+
+    private PreparedTransfer prepareNative(long userId, int biz, long derivationIndex,
+                                           String toAddress, BigInteger amountNano, String comment) {
+        WalletV4R2 wallet = keyService.wallet(userId, biz, derivationIndex);
         String from = friendly(wallet.getAddress(), false);
         long chainSeqno = rpc.seqno(from);
         long seqno = repository.reserveAccountSequence(CHAIN, from, chainSeqno);
@@ -58,7 +69,21 @@ public class TonTransactionService {
     public PreparedTransfer prepareJetton(long derivationIndex, String sourceJettonWallet,
                                           String destinationOwner, BigInteger tokenAmount,
                                           String responseAddress, String comment) {
-        WalletV4R2 wallet = keyService.wallet(derivationIndex);
+        return prepareJetton(0L, 0, derivationIndex, sourceJettonWallet,
+                destinationOwner, tokenAmount, responseAddress, comment);
+    }
+
+    public PreparedTransfer prepareJetton(ChainAddressRecord from, String sourceJettonWallet,
+                                          String destinationOwner, BigInteger tokenAmount,
+                                          String responseAddress, String comment) {
+        return prepareJetton(from.getUserId(), from.getBiz(), from.getAddressIndex(),
+                sourceJettonWallet, destinationOwner, tokenAmount, responseAddress, comment);
+    }
+
+    private PreparedTransfer prepareJetton(long userId, int biz, long derivationIndex, String sourceJettonWallet,
+                                           String destinationOwner, BigInteger tokenAmount,
+                                           String responseAddress, String comment) {
+        WalletV4R2 wallet = keyService.wallet(userId, biz, derivationIndex);
         String from = friendly(wallet.getAddress(), false);
         long chainSeqno = rpc.seqno(from);
         long seqno = repository.reserveAccountSequence(CHAIN, from, chainSeqno);
@@ -134,8 +159,7 @@ public class TonTransactionService {
         repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
-            PreparedTransfer prepared = prepareNative(from.getAddressIndex(), toAddress,
-                    amountNano.toBigIntegerExact(), memo);
+            PreparedTransfer prepared = prepareNative(from, toAddress, amountNano.toBigIntegerExact(), memo);
             String hash = broadcast(prepared);
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), hash, null);
             record(hash, from.getAddress(), toAddress, "TON", null, amountNano, fee,
@@ -169,7 +193,7 @@ public class TonTransactionService {
             throw new IllegalStateException("insufficient Jetton ledger balance");
         }
         try {
-            PreparedTransfer prepared = prepareJetton(from.getAddressIndex(), from.getAddress(),
+            PreparedTransfer prepared = prepareJetton(from, from.getAddress(),
                     destinationOwner, atomicAmount.toBigIntegerExact(), from.getOwnerAddress(), memo);
             String hash = broadcast(prepared);
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getOwnerAddress(), hash, null);
@@ -216,8 +240,7 @@ public class TonTransactionService {
                     .orElseThrow(() -> new IllegalStateException("TON collection is not retryable"));
         }
         try {
-            PreparedTransfer prepared = prepareNative(from.getAddressIndex(), hotAddress,
-                    amountNano.toBigIntegerExact(), memo);
+            PreparedTransfer prepared = prepareNative(from, hotAddress, amountNano.toBigIntegerExact(), memo);
             String hash = broadcast(prepared);
             repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", hash, null, prepared.bocBase64());
             record(hash, from.getAddress(), hotAddress, "TON", null, amountNano, fee,
@@ -245,7 +268,7 @@ public class TonTransactionService {
                     .orElseThrow(() -> new IllegalStateException("TON Jetton collection is not retryable"));
         }
         try {
-            PreparedTransfer prepared = prepareJetton(from.getAddressIndex(), from.getAddress(),
+            PreparedTransfer prepared = prepareJetton(from, from.getAddress(),
                     hotOwnerAddress, atomicAmount.toBigIntegerExact(), from.getOwnerAddress(), memo);
             String hash = broadcast(prepared);
             repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", hash, null, prepared.bocBase64());

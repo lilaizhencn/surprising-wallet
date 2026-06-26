@@ -29,7 +29,7 @@ public class SuiAddressService {
         HotWalletRules.requireAllowedReservedAddress(CHAIN, symbol, "SUI", userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
-                    Ed25519DerivedKey key = keyService.derive(derivationIndex);
+                    Ed25519DerivedKey key = keyService.derive(userId, biz, derivationIndex);
                     String address = SuiKeyService.address(key.publicKey());
                     ChainAddressRecord record = ChainAddressRecord.builder()
                             .chain(CHAIN)

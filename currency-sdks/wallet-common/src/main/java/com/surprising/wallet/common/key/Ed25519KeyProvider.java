@@ -39,12 +39,21 @@ public final class Ed25519KeyProvider {
     }
 
     public Ed25519DerivedKey derive(Ed25519Chain chain, long userIndex) {
+        return derive(chain.pathForUser(userIndex), chain.pathString(userIndex));
+    }
+
+    public Ed25519DerivedKey derive(Ed25519Chain chain, int biz, long userId, long addressIndex) {
+        return derive(chain.pathForAccount(biz, userId, addressIndex),
+                chain.pathString(biz, userId, addressIndex));
+    }
+
+    private Ed25519DerivedKey derive(int[] path, String pathString) {
         byte[] digest = hmacSha512(MASTER_KEY, masterSeed);
         byte[] key = Arrays.copyOfRange(digest, 0, 32);
         byte[] chainCode = Arrays.copyOfRange(digest, 32, 64);
         Arrays.fill(digest, (byte) 0);
 
-        for (int index : chain.pathForUser(userIndex)) {
+        for (int index : path) {
             byte[] data = ByteBuffer.allocate(37)
                     .put((byte) 0)
                     .put(key)
@@ -61,7 +70,7 @@ public final class Ed25519KeyProvider {
 
         EdDSAPrivateKeySpec privateSpec = new EdDSAPrivateKeySpec(key, ED25519);
         byte[] publicKey = privateSpec.getA().toByteArray();
-        Ed25519DerivedKey result = new Ed25519DerivedKey(chain.pathString(userIndex), key, publicKey);
+        Ed25519DerivedKey result = new Ed25519DerivedKey(pathString, key, publicKey);
         Arrays.fill(key, (byte) 0);
         Arrays.fill(chainCode, (byte) 0);
         return result;
@@ -69,6 +78,15 @@ public final class Ed25519KeyProvider {
 
     public byte[] sign(Ed25519Chain chain, long userIndex, byte[] message) {
         Ed25519DerivedKey derived = derive(chain, userIndex);
+        return sign(derived, message);
+    }
+
+    public byte[] sign(Ed25519Chain chain, int biz, long userId, long addressIndex, byte[] message) {
+        Ed25519DerivedKey derived = derive(chain, biz, userId, addressIndex);
+        return sign(derived, message);
+    }
+
+    private byte[] sign(Ed25519DerivedKey derived, byte[] message) {
         EdDSAPrivateKey privateKey = new EdDSAPrivateKey(new EdDSAPrivateKeySpec(derived.privateSeed(), ED25519));
         EdDSAEngine signer = new EdDSAEngine();
         try {

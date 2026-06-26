@@ -29,13 +29,32 @@ public class TonKeyService {
         return provider().derive(Ed25519Chain.TON, derivationIndex);
     }
 
+    public Ed25519DerivedKey derive(long userId, int biz, long derivationIndex) {
+        if (userId == 0 && biz == 0) {
+            return derive(derivationIndex);
+        }
+        return provider().derive(Ed25519Chain.TON, biz, userId, derivationIndex);
+    }
+
     public TweetNaclFast.Signature.KeyPair keyPair(long derivationIndex) {
         return Utils.generateSignatureKeyPairFromSeed(derive(derivationIndex).privateSeed());
+    }
+
+    public TweetNaclFast.Signature.KeyPair keyPair(long userId, int biz, long derivationIndex) {
+        return Utils.generateSignatureKeyPairFromSeed(derive(userId, biz, derivationIndex).privateSeed());
     }
 
     public WalletV4R2 wallet(long derivationIndex) {
         return WalletV4R2.builder()
                 .keyPair(keyPair(derivationIndex))
+                .walletId(WALLET_V4R2_SUBWALLET_ID)
+                .wc(0)
+                .build();
+    }
+
+    public WalletV4R2 wallet(long userId, int biz, long derivationIndex) {
+        return WalletV4R2.builder()
+                .keyPair(keyPair(userId, biz, derivationIndex))
                 .walletId(WALLET_V4R2_SUBWALLET_ID)
                 .wc(0)
                 .build();
