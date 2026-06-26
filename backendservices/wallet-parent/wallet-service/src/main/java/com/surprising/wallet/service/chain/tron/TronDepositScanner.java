@@ -5,12 +5,14 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TronTransactionRecord;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
+import lombok.RequiredArgsConstructor;
 import org.tron.trident.core.ApiWrapper;
 import org.tron.trident.core.NodeType;
 import org.tron.trident.proto.Chain;
 import org.tron.trident.proto.Contract;
 import org.tron.trident.proto.Response;
 import org.tron.trident.utils.Numeric;
+import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -25,16 +27,13 @@ import java.util.Set;
  * reusing EVM log scanners because TRON uses 21-byte addresses and protobuf
  * contract payloads for native transfers.
  */
+@Service
+@RequiredArgsConstructor
 public class TronDepositScanner {
     private static final BigDecimal SUN_PER_TRX = new BigDecimal("1000000");
 
     private final ChainJdbcRepository repository;
     private final TronScanner tronScanner;
-
-    public TronDepositScanner(ChainJdbcRepository repository, TronScanner tronScanner) {
-        this.repository = repository;
-        this.tronScanner = tronScanner;
-    }
 
     public List<DepositEvent> scanAndCreditTrx(TronTridentClient client,
                                                long blockHeight,

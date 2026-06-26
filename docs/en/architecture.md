@@ -45,7 +45,7 @@ The application should resolve assets by `chain + symbol` or `chain + contract`,
 | TRON | TRON | DB tests | Nile live flow |
 | Solana | SOL, SPL tokens | DB tests | Devnet live flow |
 | TON | TON, Jetton | DB tests | Testnet connectivity and funded live flow |
-| Aptos | APT, coin resources | DB tests | Devnet live flow |
+| Aptos | APT, coin resources | DB tests | Testnet live flow |
 | Sui | SUI, coin resources | DB tests | Testnet live flow |
 
 ## Signing Model

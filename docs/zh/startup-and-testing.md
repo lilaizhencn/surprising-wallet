@@ -291,7 +291,7 @@ live 花费测试需要测试钱包有余额，并且 RPC/faucet 可用：
 - TRON Nile 需要测试 TRX/TRC20 余额。
 - SOL devnet 如果 `requestAirdrop` 限流，需要手动充值。
 - TON full flow 要求派生 owner 地址至少有 1 testnet TON。
-- Aptos devnet 可能需要不限流或低限流 RPC。
+- Aptos testnet 使用 Aptos Labs fullnode；testnet 没有程序化 faucet，需要提前给系统 faucet 或热钱包充值测试币。
 - Sui testnet faucet 有限流，token 测试还需要 `SUI_MOCK_COIN_TYPE`。
 
 ## 13. 常见问题
@@ -316,6 +316,6 @@ lsof -ti tcp:8545 | xargs kill
 
 外部 RPC 限流：
 
-- 通过对应环境变量切换私有 RPC。
+- 通过 `chain_rpc_node.rpc_url` 或 `api_key` 切换私有 RPC。
 - 等待 faucet/RPC 冷却后重试。
 - CI 优先使用 DB-only 测试。

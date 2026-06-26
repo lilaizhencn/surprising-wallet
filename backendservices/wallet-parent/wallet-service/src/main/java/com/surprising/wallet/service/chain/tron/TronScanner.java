@@ -3,6 +3,7 @@ package com.surprising.wallet.service.chain.tron;
 import com.google.protobuf.ByteString;
 import org.tron.trident.proto.Response;
 import org.tron.trident.utils.Numeric;
+import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.Map;
  * It deliberately does not reuse EVM scanner logic because TRON log addresses
  * use 21-byte contract addresses and 20-byte indexed address topics.
  */
+@Component
 public class TronScanner {
     public List<TronTokenTransferEvent> decodeTrc20Transfers(Response.TransactionInfo txInfo,
                                                              Map<String, TokenConfig> tokenByContractHex) {

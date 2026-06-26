@@ -6,6 +6,7 @@ import org.tron.trident.abi.datatypes.Type;
 import org.tron.trident.abi.datatypes.generated.Uint256;
 import org.tron.trident.core.key.KeyPair;
 import org.tron.trident.proto.Chain;
+import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.List;
  * Builds signed TRC20 transfer transactions through triggerSmartContract.
  * Token contract addresses and decimals must be loaded from token_config.
  */
+@Service
 public class TronTrc20Service {
     public TronTransactionService.SignedTronTransaction signTransfer(TronTridentClient client,
                                                                     KeyPair keyPair,

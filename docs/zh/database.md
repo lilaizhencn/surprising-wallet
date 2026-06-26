@@ -31,7 +31,7 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 | 表 | 运行时作用 |
 |---|---|
 | `chain_profile` | 链 key、链族、网络、确认数、扫描/提现/归集/划转开关、扫描起始高度、BIP44 coin type |
-| `chain_rpc_node` | 每条链/网络/环境/purpose 的 RPC/fullnode/indexer/faucet 节点、优先级、认证、备注 |
+| `chain_rpc_node` | 每条链/网络/环境/purpose 的 RPC/fullnode/indexer/faucet 节点、优先级、认证、请求间隔、备注 |
 | `wallet_system_config` | 全局扫描/提现/归集/划转总开关 |
 | `wallet_public_key` | wallet-server 启动必需的三组 BIP32 public key |
 | `chain_asset` | 链原生资产和链内资产定义 |

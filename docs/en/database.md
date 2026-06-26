@@ -31,7 +31,7 @@ It does not include runtime rows from address, balance, scan-height, deposit, wi
 | Table | Runtime role |
 |---|---|
 | `chain_profile` | Chain key, family, network, confirmations, scan/withdraw/collection/transfer switches, scan start height, BIP44 coin type |
-| `chain_rpc_node` | RPC/fullnode/indexer/faucet nodes per chain/network/environment/purpose, priority, auth, remarks |
+| `chain_rpc_node` | RPC/fullnode/indexer/faucet nodes per chain/network/environment/purpose, priority, auth, request pacing, remarks |
 | `wallet_system_config` | Global scan/withdraw/collection/transfer switches |
 | `wallet_public_key` | Three BIP32 public keys required by wallet-server startup |
 | `chain_asset` | Chain-native and chain-scoped asset definitions |

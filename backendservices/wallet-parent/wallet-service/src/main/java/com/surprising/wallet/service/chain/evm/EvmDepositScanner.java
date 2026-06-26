@@ -127,6 +127,10 @@ public class EvmDepositScanner {
         }
     }
 
+    public BigInteger getLatestBlockNumber(ChainType chainType) throws IOException {
+        return withDefaultRpc(chainType, this::getLatestBlockNumber);
+    }
+
     public List<DepositEvent> scanNativeEthDeposits(long blockHeight) throws IOException {
         return withDefaultRpc(rpcUrl -> scanNativeDeposits(ChainType.ETH, profile(ChainType.ETH).getNativeSymbol(),
                 rpcUrl, blockHeight));
@@ -135,8 +139,21 @@ public class EvmDepositScanner {
     public List<DepositEvent> scanAndCreditNativeEth(long blockHeight) throws IOException {
         AccountChainProfile profile = profile(ChainType.ETH);
         int confirmations = fixedRpcUrl != null ? fixedConfirmations : profile.getDepositConfirmations();
-        return withDefaultRpc(rpcUrl -> scanAndCreditNative(ChainType.ETH, profile.getNativeSymbol(),
+        return withDefaultRpc(ChainType.ETH, rpcUrl -> scanAndCreditNative(ChainType.ETH, profile.getNativeSymbol(),
                 rpcUrl, confirmations, blockHeight));
+    }
+
+    public List<DepositEvent> scanAndCreditNative(ChainType chainType, long blockHeight) throws IOException {
+        AccountChainProfile profile = profile(chainType);
+        int confirmations = fixedRpcUrl != null ? fixedConfirmations : profile.getDepositConfirmations();
+        return withDefaultRpc(chainType, rpcUrl -> scanAndCreditNative(chainType, profile.getNativeSymbol(),
+                rpcUrl, confirmations, blockHeight));
+    }
+
+    public List<DepositEvent> scanAndCreditErc20(ChainType chainType, long blockHeight) throws IOException {
+        AccountChainProfile profile = profile(chainType);
+        int confirmations = fixedRpcUrl != null ? fixedConfirmations : profile.getDepositConfirmations();
+        return withDefaultRpc(chainType, rpcUrl -> scanAndCreditErc20(chainType, rpcUrl, confirmations, blockHeight));
     }
 
     public List<DepositEvent> scanNativeDeposits(ChainType chainType, String nativeSymbol,
@@ -274,12 +291,16 @@ public class EvmDepositScanner {
     }
 
     private <T> T withDefaultRpc(IoRpcRequest<T> request) throws IOException {
+        return withDefaultRpc(ChainType.ETH, request);
+    }
+
+    private <T> T withDefaultRpc(ChainType chainType, IoRpcRequest<T> request) throws IOException {
         if (fixedRpcUrl != null && !fixedRpcUrl.isBlank()) {
             return request.apply(fixedRpcUrl);
         }
-        AccountChainProfile profile = profile(ChainType.ETH);
+        AccountChainProfile profile = profile(chainType);
         try {
-            return rpcNodeService.withFailover(ChainType.ETH.name(), profile.getNetwork(), node -> {
+            return rpcNodeService.withFailover(chainType.name(), profile.getNetwork(), node -> {
                 try {
                     return request.apply(node.getRpcUrl());
                 } catch (IOException e) {

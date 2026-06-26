@@ -7,7 +7,6 @@ import com.surprising.wallet.common.chain.SuiTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -19,16 +18,29 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
-@RequiredArgsConstructor
 public class SuiTransactionService {
     private static final String CHAIN = "SUI";
 
     private final SuiRpcClient rpc;
     private final SuiTransactionSigner signer;
+    private final SuiPtbTransactionBuilder ptbBuilder;
     private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
+
+    @Autowired
+    public SuiTransactionService(SuiRpcClient rpc, SuiTransactionSigner signer,
+                                 SuiPtbTransactionBuilder ptbBuilder, ChainJdbcRepository repository) {
+        this.rpc = rpc;
+        this.signer = signer;
+        this.ptbBuilder = ptbBuilder;
+        this.repository = repository;
+    }
+
+    SuiTransactionService(SuiRpcClient rpc, SuiTransactionSigner signer, ChainJdbcRepository repository) {
+        this(rpc, signer, new SuiPtbTransactionBuilder(), repository);
+    }
 
     public String sendNative(long derivationIndex, String fromAddress, String toAddress, long amountMist) {
         return sendNative(0L, 0, derivationIndex, fromAddress, toAddress, amountMist);
@@ -42,11 +54,13 @@ public class SuiTransactionService {
     private String sendNative(long userId, int biz, long derivationIndex,
                               String fromAddress, String toAddress, long amountMist) {
         long gasBudget = profile().getDefaultFee();
-        List<String> inputCoins = selectCoins(fromAddress, SuiRpcClient.SUI_COIN_TYPE,
+        long gasPrice = rpc.referenceGasPrice();
+        List<SuiRpcClient.SuiCoin> gasPayment = selectCoins(fromAddress, SuiRpcClient.SUI_COIN_TYPE,
                 BigDecimal.valueOf(amountMist + gasBudget));
-        String txBytes = rpc.buildPaySui(fromAddress, inputCoins, toAddress, amountMist, gasBudget);
+        String txBytes = ptbBuilder.buildSuiTransfer(fromAddress, gasPayment, toAddress,
+                amountMist, gasPrice, gasBudget);
         String signature = signer.signTransactionBytes(userId, biz, derivationIndex, txBytes);
-        return rpc.executeTransactionBlock(txBytes, signature).path("digest").asText();
+        return rpc.executeSignedTransaction(txBytes, signature).path("digest").asText();
     }
 
     public String sendCoin(long derivationIndex, String fromAddress, String coinType,
@@ -62,12 +76,14 @@ public class SuiTransactionService {
     private String sendCoin(long userId, int biz, long derivationIndex, String fromAddress, String coinType,
                             String toAddress, long amountAtomic) {
         long gasBudget = profile().getDefaultFee();
-        List<String> inputCoins = selectCoins(fromAddress, coinType, BigDecimal.valueOf(amountAtomic));
-        String gasObject = selectCoins(fromAddress, SuiRpcClient.SUI_COIN_TYPE,
-                BigDecimal.valueOf(gasBudget)).get(0);
-        String txBytes = rpc.buildPayCoin(fromAddress, inputCoins, toAddress, amountAtomic, gasObject, gasBudget);
+        long gasPrice = rpc.referenceGasPrice();
+        List<SuiRpcClient.SuiCoin> inputCoins = selectCoins(fromAddress, coinType, BigDecimal.valueOf(amountAtomic));
+        List<SuiRpcClient.SuiCoin> gasPayment = selectCoins(fromAddress, SuiRpcClient.SUI_COIN_TYPE,
+                BigDecimal.valueOf(gasBudget));
+        String txBytes = ptbBuilder.buildCoinTransfer(fromAddress, inputCoins, gasPayment,
+                toAddress, amountAtomic, gasPrice, gasBudget);
         String signature = signer.signTransactionBytes(userId, biz, derivationIndex, txBytes);
-        return rpc.executeTransactionBlock(txBytes, signature).path("digest").asText();
+        return rpc.executeSignedTransaction(txBytes, signature).path("digest").asText();
     }
 
     public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
@@ -231,11 +247,11 @@ public class SuiTransactionService {
         throw new IllegalStateException("Sui confirmation timeout for " + digest);
     }
 
-    private List<String> selectCoins(String owner, String coinType, BigDecimal required) {
-        List<String> selected = new ArrayList<>();
+    private List<SuiRpcClient.SuiCoin> selectCoins(String owner, String coinType, BigDecimal required) {
+        List<SuiRpcClient.SuiCoin> selected = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
         for (SuiRpcClient.SuiCoin coin : rpc.coins(owner, coinType, 50)) {
-            selected.add(coin.objectId());
+            selected.add(coin);
             total = total.add(coin.balance());
             if (total.compareTo(required) >= 0) {
                 return selected;

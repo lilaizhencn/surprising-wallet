@@ -5,11 +5,13 @@ import org.tron.trident.core.exceptions.IllegalException;
 import org.tron.trident.core.key.KeyPair;
 import org.tron.trident.proto.Chain;
 import org.tron.trident.proto.Response;
+import org.springframework.stereotype.Service;
 
 /**
  * Builds and signs native TRX transfer transactions with Trident.
  * The KeyPair must be created from the existing Bitcoin ECKey-derived private key.
  */
+@Service
 public class TronTransactionService {
     public SignedTronTransaction signTrxTransfer(TronTridentClient client, KeyPair keyPair,
                                                  String toAddress, long amountSun) throws IllegalException {

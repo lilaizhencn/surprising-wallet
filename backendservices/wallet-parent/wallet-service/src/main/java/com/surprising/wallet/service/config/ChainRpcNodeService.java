@@ -13,6 +13,8 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
 @Slf4j
@@ -20,16 +22,21 @@ import java.util.function.Function;
 @RequiredArgsConstructor
 public class ChainRpcNodeService {
     private final ChainJdbcRepository repository;
+    private final Map<Long, AtomicLong> lastRequestMillisByNode = new ConcurrentHashMap<>();
 
     @Value("${sw.app.env.name:dev}")
     private String environmentName;
 
     public List<ChainRpcNode> enabledNodes(String chain, String network) {
-        return repository.listEnabledRpcNodes(chain, network, environmentName);
+        return repository.listEnabledRpcNodes(chain, network, environmentName).stream()
+                .filter(node -> node.getRpcUrl() != null && !node.getRpcUrl().isBlank())
+                .toList();
     }
 
     public List<ChainRpcNode> enabledNodes(String chain, String network, String purpose) {
-        return repository.listEnabledRpcNodes(chain, network, environmentName, purpose);
+        return repository.listEnabledRpcNodes(chain, network, environmentName, purpose).stream()
+                .filter(node -> node.getRpcUrl() != null && !node.getRpcUrl().isBlank())
+                .toList();
     }
 
     public String primaryRpcUrl(String chain, String network) {
@@ -53,6 +60,7 @@ public class ChainRpcNodeService {
         RuntimeException last = null;
         for (ChainRpcNode node : nodes) {
             try {
+                throttle(node);
                 return request.apply(node);
             } catch (RuntimeException e) {
                 last = e;
@@ -93,6 +101,37 @@ public class ChainRpcNodeService {
     public HttpRequest.Builder applyAuthHeaders(HttpRequest.Builder builder, ChainRpcNode node) {
         authHeaders(node).forEach(builder::header);
         return builder;
+    }
+
+    private void throttle(ChainRpcNode node) {
+        int intervalMs = node.getMinRequestIntervalMs() == null ? 0 : node.getMinRequestIntervalMs();
+        if (intervalMs <= 0) {
+            return;
+        }
+        Long nodeId = node.getId() == null ? Long.MIN_VALUE : node.getId();
+        AtomicLong lastRequestMillis = lastRequestMillisByNode.computeIfAbsent(nodeId, ignored -> new AtomicLong(0L));
+        while (true) {
+            long now = System.currentTimeMillis();
+            long previous = lastRequestMillis.get();
+            long nextAllowed = previous + intervalMs;
+            long waitMs = nextAllowed - now;
+            if (waitMs > 0) {
+                sleep(waitMs);
+            }
+            long candidate = Math.max(System.currentTimeMillis(), nextAllowed);
+            if (lastRequestMillis.compareAndSet(previous, candidate)) {
+                return;
+            }
+        }
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("RPC rate limit sleep interrupted", e);
+        }
     }
 
     private static String trim(String value) {

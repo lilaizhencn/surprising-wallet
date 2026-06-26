@@ -68,6 +68,10 @@ public class SuiRpcClient {
         return call("sui_getLatestCheckpointSequenceNumber", objectMapper.createArrayNode()).asLong();
     }
 
+    public long referenceGasPrice() {
+        return call("suix_getReferenceGasPrice", objectMapper.createArrayNode()).asLong();
+    }
+
     public BigDecimal balance(String owner, String coinType) {
         ArrayNode params = objectMapper.createArrayNode();
         params.add(SuiHex.normalizeAddress(owner));
@@ -129,39 +133,7 @@ public class SuiRpcClient {
         return call("sui_getTransactionBlock", params);
     }
 
-    public String buildPaySui(String signer, List<String> inputCoins,
-                              String recipient, long amountMist, long gasBudget) {
-        ArrayNode params = objectMapper.createArrayNode();
-        params.add(SuiHex.normalizeAddress(signer));
-        params.add(array(inputCoins));
-        ArrayNode recipients = objectMapper.createArrayNode();
-        recipients.add(SuiHex.normalizeAddress(recipient));
-        params.add(recipients);
-        ArrayNode amounts = objectMapper.createArrayNode();
-        amounts.add(Long.toUnsignedString(amountMist));
-        params.add(amounts);
-        params.add(Long.toUnsignedString(gasBudget));
-        return call("unsafe_paySui", params).path("txBytes").asText();
-    }
-
-    public String buildPayCoin(String signer, List<String> inputCoins,
-                               String recipient, long amountAtomic,
-                               String gasObjectId, long gasBudget) {
-        ArrayNode params = objectMapper.createArrayNode();
-        params.add(SuiHex.normalizeAddress(signer));
-        params.add(array(inputCoins));
-        ArrayNode recipients = objectMapper.createArrayNode();
-        recipients.add(SuiHex.normalizeAddress(recipient));
-        params.add(recipients);
-        ArrayNode amounts = objectMapper.createArrayNode();
-        amounts.add(Long.toUnsignedString(amountAtomic));
-        params.add(amounts);
-        params.add(gasObjectId);
-        params.add(Long.toUnsignedString(gasBudget));
-        return call("unsafe_pay", params).path("txBytes").asText();
-    }
-
-    public JsonNode executeTransactionBlock(String txBytesBase64, String signatureBase64) {
+    public JsonNode executeSignedTransaction(String txBytesBase64, String signatureBase64) {
         ArrayNode params = objectMapper.createArrayNode();
         params.add(txBytesBase64);
         ArrayNode signatures = objectMapper.createArrayNode();
@@ -180,12 +152,6 @@ public class SuiRpcClient {
         options.put("showBalanceChanges", true);
         options.put("showObjectChanges", true);
         return options;
-    }
-
-    private ArrayNode array(List<String> values) {
-        ArrayNode array = objectMapper.createArrayNode();
-        values.forEach(array::add);
-        return array;
     }
 
     private JsonNode call(String method, JsonNode params) {

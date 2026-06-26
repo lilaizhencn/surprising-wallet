@@ -337,6 +337,9 @@ public class WalletDashboardController {
                 normalized.put("api_key_ref", null);
                 normalized.put("username_ref", null);
                 normalized.put("password_ref", null);
+                normalized.put("api_key", null);
+                normalized.put("username", null);
+                normalized.put("password", null);
             }
             return normalized;
         } else {
@@ -374,8 +377,12 @@ public class WalletDashboardController {
                 """));
         runtime.put("rpcNodes", queryRows("""
                 select id, chain, network, environment, node_label, purpose, connection_type, rpc_url, auth_type,
-                       auth_header_name, api_key_ref, username_ref, password_ref, priority, enabled, renewal_due_at,
-                       remark, updated_at
+                       auth_header_name,
+                       (api_key is not null and api_key <> '') as api_key_configured,
+                       (username is not null and username <> '') as username_configured,
+                       (password is not null and password <> '') as password_configured,
+                       priority, min_request_interval_ms,
+                       enabled, renewal_due_at, remark, updated_at
                   from chain_rpc_node
                  order by chain, network, environment, purpose, priority, id
                 """));
@@ -645,7 +652,7 @@ public class WalletDashboardController {
                 "Disabling wallet_system_config switches stops a whole class of jobs.",
                 "Changing chain_profile network/chain_id/rpc policy can break scanning and transaction replay safety.",
                 "Changing wallet_public_key affects address derivation; the admin API rejects changes that no longer match existing default hot wallet rows.",
-                "Do not store raw RPC API keys in Git; use api_key_ref/password_ref or environment-backed secret injection."
+                "Runtime RPC keys are read from chain_rpc_node.api_key or the stored rpc_url; keep real keys out of Git init SQL."
         ));
         operations.put("testedOn2026_06_25", List.of(
                 "DB-only account-chain tests passed.",
@@ -829,7 +836,8 @@ public class WalletDashboardController {
                 "Changing network, chain_id or scan height can cause missed deposits or duplicate scans."));
         tables.put("chain_rpc_node", new TableSpec("id", set("rpc_url", "enabled", "priority", "remark", "purpose",
                 "environment", "network", "node_label", "connection_type", "auth_type", "auth_header_name",
-                "api_key_ref", "username_ref", "password_ref"),
+                "api_key", "username", "password", "api_key_ref", "username_ref", "password_ref",
+                "min_request_interval_ms"),
                 "chain, network, environment, priority, id",
                 "RPC/fullnode/indexer/faucet endpoints used by scanners and broadcasters.",
                 "Disable unstable public RPCs instead of leaving them as high-priority nodes."));

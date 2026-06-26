@@ -29,6 +29,7 @@ public class ChainRpcNode {
     private String password;
     private String passwordRef;
     private Integer priority;
+    private Integer minRequestIntervalMs;
     private Boolean enabled;
     private Instant renewalDueAt;
     private String remark;

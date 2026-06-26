@@ -5,11 +5,13 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.AptosTransactionRecord;
 import com.surprising.wallet.common.chain.BitcoinLikeChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.ChainCollectionRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.EvmNonceRecord;
 import com.surprising.wallet.common.chain.EvmTransactionRecord;
 import com.surprising.wallet.common.chain.ChainScanHeightRecord;
 import com.surprising.wallet.common.chain.ChainRpcNode;
+import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
@@ -842,6 +844,32 @@ public class ChainJdbcRepository {
                 chain, assetSymbol, limit);
     }
 
+    public List<WithdrawalOrderRecord> listWithdrawalsForSigning(String chain, int limit) {
+        return jdbcTemplate.query("""
+                        select id, order_no, user_id, chain, asset_symbol, from_address, to_address,
+                               amount, fee, tx_hash, status, error_message, created_at, updated_at
+                        from withdrawal_order
+                        where chain = ? and status in ('FROZEN', 'RETRYING')
+                        order by id
+                        limit ?
+                        """,
+                (rs, rowNum) -> mapWithdrawalOrder(rs),
+                chain, limit);
+    }
+
+    public List<WithdrawalOrderRecord> listWithdrawalsByStatus(String chain, String status, int limit) {
+        return jdbcTemplate.query("""
+                        select id, order_no, user_id, chain, asset_symbol, from_address, to_address,
+                               amount, fee, tx_hash, status, error_message, created_at, updated_at
+                        from withdrawal_order
+                        where chain = ? and status = ?
+                        order by id
+                        limit ?
+                        """,
+                (rs, rowNum) -> mapWithdrawalOrder(rs),
+                chain, status, limit);
+    }
+
     public int claimWithdrawalSigning(String chain, String orderNo, String fromAddress) {
         return jdbcTemplate.update("""
                         update withdrawal_order
@@ -924,6 +952,32 @@ public class ChainJdbcRepository {
                 toTs(now()), toTs(now()));
     }
 
+    public List<ChainCollectionRecord> listCollectionsForSigning(String chain, int limit) {
+        return jdbcTemplate.query("""
+                        select id, collection_no, chain, asset_symbol, from_address, to_address,
+                               amount, fee, tx_hash, status, error_message, raw_payload, created_at, updated_at
+                        from collection_record
+                        where chain = ? and status in ('CREATED', 'RETRYING')
+                        order by id
+                        limit ?
+                        """,
+                (rs, rowNum) -> mapCollectionRecord(rs),
+                chain, limit);
+    }
+
+    public List<ChainCollectionRecord> listCollectionsByStatus(String chain, String status, int limit) {
+        return jdbcTemplate.query("""
+                        select id, collection_no, chain, asset_symbol, from_address, to_address,
+                               amount, fee, tx_hash, status, error_message, raw_payload, created_at, updated_at
+                        from collection_record
+                        where chain = ? and status = ?
+                        order by id
+                        limit ?
+                        """,
+                (rs, rowNum) -> mapCollectionRecord(rs),
+                chain, status, limit);
+    }
+
     public int updateCollectionStatus(String chain, String collectionNo, String status, String txHash,
                                       String errorMessage, String rawPayload) {
         return jdbcTemplate.update("""
@@ -978,6 +1032,25 @@ public class ChainJdbcRepository {
                         where chain = ? and collection_no = ? and tx_hash is not null
                         """, String.class, chain, collectionNo);
         return results.stream().findFirst();
+    }
+
+    private ChainCollectionRecord mapCollectionRecord(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return ChainCollectionRecord.builder()
+                .id(rs.getLong("id"))
+                .collectionNo(rs.getString("collection_no"))
+                .chain(rs.getString("chain"))
+                .assetSymbol(rs.getString("asset_symbol"))
+                .fromAddress(rs.getString("from_address"))
+                .toAddress(rs.getString("to_address"))
+                .amount(rs.getBigDecimal("amount"))
+                .fee(rs.getBigDecimal("fee"))
+                .txHash(rs.getString("tx_hash"))
+                .status(rs.getString("status"))
+                .errorMessage(rs.getString("error_message"))
+                .rawPayload(rs.getString("raw_payload"))
+                .createdAt(toInstant(rs.getTimestamp("created_at")))
+                .updatedAt(toInstant(rs.getTimestamp("updated_at")))
+                .build();
     }
 
     public WithdrawTransaction createBitcoinLikeSigningTransaction(
@@ -1350,6 +1423,63 @@ public class ChainJdbcRepository {
         return updated == 1;
     }
 
+    public List<CollectionCandidateRecord> listCollectableLedgerBalances(String chain,
+                                                                         BigDecimal minimumAmount,
+                                                                         int limit) {
+        return jdbcTemplate.query("""
+                        with collected as (
+                            select chain, asset_symbol, lower(from_address) as from_address, coalesce(sum(amount), 0) amount
+                            from collection_record
+                            where chain = ?
+                              and status <> 'FAILED'
+                            group by chain, asset_symbol, lower(from_address)
+                        ),
+                        candidates as (
+                            select ca.chain, ca.asset_symbol, ca.account_id, ca.address, ca.owner_address,
+                                   ca.user_id, ca.biz, ca.address_index, ca.wallet_role,
+                                   greatest(lb.available_balance - coalesce(collected.amount, 0), 0) as amount,
+                                   greatest(coalesce(a.min_transfer, 0), ?) as minimum_amount
+                            from ledger_balance lb
+                            join chain_address ca
+                              on ca.chain = lb.chain
+                             and ca.asset_symbol = lb.asset_symbol
+                             and lower(ca.account_id) = lower(lb.account_id)
+                             and ca.enabled = true
+                             and ca.wallet_role = 'DEPOSIT'
+                             and ca.user_id <> ?
+                            join chain_asset a
+                              on a.chain = lb.chain
+                             and a.symbol = lb.asset_symbol
+                             and a.active = true
+                            left join collected
+                              on collected.chain = lb.chain
+                             and collected.asset_symbol = lb.asset_symbol
+                             and collected.from_address = lower(ca.address)
+                            where lb.chain = ?
+                              and lb.available_balance > 0
+                        )
+                        select chain, asset_symbol, account_id, address, owner_address,
+                               user_id, biz, address_index, wallet_role, amount
+                        from candidates
+                        where amount >= minimum_amount
+                        order by amount desc, address_index
+                        limit ?
+                        """,
+                (rs, rowNum) -> CollectionCandidateRecord.builder()
+                        .chain(rs.getString("chain"))
+                        .assetSymbol(rs.getString("asset_symbol"))
+                        .accountId(rs.getString("account_id"))
+                        .address(rs.getString("address"))
+                        .ownerAddress(rs.getString("owner_address"))
+                        .userId(rs.getLong("user_id"))
+                        .biz(rs.getInt("biz"))
+                        .addressIndex(rs.getLong("address_index"))
+                        .walletRole(rs.getString("wallet_role"))
+                        .amount(rs.getBigDecimal("amount"))
+                        .build(),
+                chain, minimumAmount, HotWalletRules.DEFAULT_HOT_USER_ID, chain, limit);
+    }
+
     public void updateScanHeight(String chain, String scannerName, long bestHeight, long safeHeight) {
         jdbcTemplate.update("""
                         insert into chain_scan_height(chain, scanner_name, best_height, safe_height, status,
@@ -1531,23 +1661,16 @@ public class ChainJdbcRepository {
                         select id, chain, network, environment, node_label, purpose, connection_type, rpc_url,
                                auth_type, auth_header_name, api_key, api_key_ref, username, username_ref,
                                password, password_ref,
-                               priority, enabled, renewal_due_at, remark
+                               priority, min_request_interval_ms, enabled, renewal_due_at, remark
                         from chain_rpc_node
                         where upper(chain) = upper(?)
                           and lower(network) = lower(?)
                           and enabled = true
-                          and (
-                              lower(environment) = lower(?)
-                              or lower(environment) = 'all'
-                              or (
-                                  lower(?) in ('dev', 'test', 'local')
-                                  and lower(environment) in ('dev', 'test', 'local')
-                              )
-                          )
+                          and lower(environment) = lower(?)
                           and (lower(purpose) = lower(?) or lower(purpose) = 'all')
                         order by priority asc, id asc
                         """,
-                (rs, rowNum) -> mapRpcNode(rs), chain, network, env, env, nodePurpose);
+                (rs, rowNum) -> mapRpcNode(rs), chain, network, env, nodePurpose);
     }
 
     public List<ChainRpcNode> listEnabledRpcNodes(String chain, String network, String environment) {
@@ -1662,6 +1785,7 @@ public class ChainJdbcRepository {
                 .password(rs.getString("password"))
                 .passwordRef(rs.getString("password_ref"))
                 .priority(rs.getInt("priority"))
+                .minRequestIntervalMs(rs.getObject("min_request_interval_ms", Integer.class))
                 .enabled(rs.getBoolean("enabled"))
                 .renewalDueAt(toInstant(rs.getTimestamp("renewal_due_at")))
                 .remark(rs.getString("remark"))

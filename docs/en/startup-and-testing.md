@@ -291,7 +291,7 @@ Live spending requires funded wallets and reliable RPC/faucet access:
 - TRON Nile needs funded TRX/TRC20 test accounts.
 - SOL devnet may need manual funding when `requestAirdrop` is rate-limited.
 - TON full flow requires at least 1 testnet TON on the derived owner address.
-- Aptos devnet may need a less rate-limited RPC endpoint.
+- Aptos testnet uses the Aptos Labs fullnode; pre-fund the system faucet or hot wallet because there is no programmatic testnet faucet.
 - Sui testnet faucet is rate-limited and token tests need `SUI_MOCK_COIN_TYPE`.
 
 ## 13. Useful Troubleshooting
@@ -316,6 +316,6 @@ lsof -ti tcp:8545 | xargs kill
 
 External RPC rate limit:
 
-- Use a private RPC endpoint through the matching environment variable.
+- Use `chain_rpc_node.rpc_url` or `api_key` to switch private RPC endpoints.
 - Retry after faucet/RPC cooldown.
 - Prefer DB-only tests for deterministic CI.
