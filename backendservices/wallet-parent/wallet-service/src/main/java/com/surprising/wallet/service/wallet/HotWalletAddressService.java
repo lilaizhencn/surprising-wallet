@@ -3,6 +3,7 @@ package com.surprising.wallet.service.wallet;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainAsset;
+import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.chain.WalletPublicKey;
@@ -251,7 +252,7 @@ public class HotWalletAddressService {
             AccountChainProfile profile, long userId, int biz, long addressIndex, String walletRole,
             Bip32Node node, AddressFormat format) {
         ECKey ecKey = node.getChild(44)
-                .getChild(profile.getBip44CoinType())
+                .getChild(derivationCoinType(profile))
                 .getChild(biz)
                 .getChild(Math.toIntExact(userId))
                 .getChild(Math.toIntExact(addressIndex))
@@ -279,7 +280,7 @@ public class HotWalletAddressService {
     private ChainAddressRecord deriveSecp256k1(AccountChainProfile profile, long userId, int biz,
                                                long addressIndex, String walletRole, AddressFormat format) {
         ECKey ecKey = pubKeyConfig.NODE2.getChild(44)
-                .getChild(profile.getBip44CoinType())
+                .getChild(derivationCoinType(profile))
                 .getChild(biz)
                 .getChild(Math.toIntExact(userId))
                 .getChild(Math.toIntExact(addressIndex))
@@ -394,7 +395,11 @@ public class HotWalletAddressService {
     }
 
     private String derivationPath(AccountChainProfile profile, long userId, int biz, long index) {
-        return String.format("m/44/%d/%d/%d/%d", profile.getBip44CoinType(), biz, userId, index);
+        return String.format("m/44/%d/%d/%d/%d", derivationCoinType(profile), biz, userId, index);
+    }
+
+    private int derivationCoinType(AccountChainProfile profile) {
+        return ChainType.derivationCoinType(profile.getChain(), profile.getBip44CoinType());
     }
 
     private String normalize(String value) {

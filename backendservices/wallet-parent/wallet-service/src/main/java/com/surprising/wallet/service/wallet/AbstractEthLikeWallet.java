@@ -138,7 +138,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
 
     private ECKey deriveAddressKey(RuntimeAsset currency, Long userId, Integer biz, int index) {
         return pubKeyConfig.NODE2.getChild(44)
-                .getChild(currency.getBip44CoinType())
+                .getChild(currency.getDerivationCoinType())
                 .getChild(biz)
                 .getChild(userId.intValue())
                 .getChild(index)
@@ -162,7 +162,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
     }
 
     private String derivationPath(RuntimeAsset currency, Long userId, Integer biz, int index) {
-        return String.format("m/44/%d/%d/%d/%d", currency.getBip44CoinType(), biz, userId, index);
+        return String.format("m/44/%d/%d/%d/%d", currency.getDerivationCoinType(), biz, userId, index);
     }
 
     private ChainAddressRecord toChainAddressRecord(Address address, RuntimeAsset currency) {

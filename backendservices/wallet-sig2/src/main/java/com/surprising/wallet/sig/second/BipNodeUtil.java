@@ -20,7 +20,7 @@ public class BipNodeUtil {
             BipNodeUtil.NODE = Bip32Node.decode(mk);
         }
         Bip32Node node = BipNodeUtil.NODE.getChild(44)
-                .getChild(currency.getBip44CoinType())
+                .getChild(currency.getDerivationCoinType())
                 .getChild(address.getBiz())
                 .getChild(address.getUserId().intValue())
                 .getChild(address.getIndex());

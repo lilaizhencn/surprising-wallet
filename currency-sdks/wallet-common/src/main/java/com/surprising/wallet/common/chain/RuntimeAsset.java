@@ -241,6 +241,10 @@ public final class RuntimeAsset {
         return bip44CoinType;
     }
 
+    public int getDerivationCoinType() {
+        return ChainType.derivationCoinType(chain, bip44CoinType);
+    }
+
     public String getName() {
         return assetSymbol.toLowerCase(Locale.ROOT);
     }

@@ -146,7 +146,7 @@ public class WalletAppService {
         String symbol = requireSymbol(request.symbol());
         AssetMeta asset = requireAsset(chain, symbol);
         ChainAddressRecord record = latestAddress(user.id(), DEFAULT_BIZ, chain, symbol);
-        if (record == null || forceNew) {
+        if (record == null || forceNew || staleEvmAddress(record, asset)) {
             record = createDepositAddress(user.id(), DEFAULT_BIZ, asset, forceNew);
         }
         return addressPayload(record, asset);
@@ -270,11 +270,11 @@ public class WalletAppService {
 
     private ChainAddressRecord createDepositAddress(long userId, int biz, AssetMeta asset, boolean forceNew) {
         ChainAddressRecord existing = latestAddress(userId, biz, asset.chain(), asset.symbol());
-        if (existing != null && !forceNew) {
+        if (existing != null && !forceNew && !staleEvmAddress(existing, asset)) {
             return existing;
         }
         if (asset.nativeAsset()) {
-            return createNativeAddress(userId, biz, asset);
+            return createNativeAddress(userId, biz, asset, existing == null ? null : existing.getAddressIndex());
         }
         if (isEvm(asset.chain()) || "TRON".equals(asset.chain())) {
             AssetMeta nativeAsset = requireAsset(asset.chain(), asset.nativeSymbol());
@@ -301,6 +301,10 @@ public class WalletAppService {
     }
 
     private ChainAddressRecord createNativeAddress(long userId, int biz, AssetMeta asset) {
+        return createNativeAddress(userId, biz, asset, null);
+    }
+
+    private ChainAddressRecord createNativeAddress(long userId, int biz, AssetMeta asset, Long preferredIndex) {
         ChainType chainType = ChainType.valueOf(asset.chain());
         if (chainType.isUtxo()) {
             RuntimeAsset runtimeAsset = assetRoutingService.runtimeAssetByChain(asset.chain());
@@ -314,7 +318,9 @@ public class WalletAppService {
                     address.getIndex(), WALLET_ROLE_DEPOSIT).orElseThrow();
         }
         if (isEvm(asset.chain()) || "TRON".equals(asset.chain())) {
-            long index = nextAddressIndex(asset.chain(), asset.symbol(), userId, biz);
+            long index = preferredIndex == null
+                    ? nextAddressIndex(asset.chain(), asset.symbol(), userId, biz)
+                    : preferredIndex;
             return deriveAccountAddress(userId, biz, index, asset);
         }
         if ("SOLANA".equals(asset.chain())) {
@@ -338,11 +344,19 @@ public class WalletAppService {
     }
 
     private ChainAddressRecord deriveAccountAddress(long userId, int biz, long index, AssetMeta asset) {
+        ChainAddressRecord record = buildAccountAddressRecord(userId, biz, index, asset);
+        repository.upsertChainAddress(record);
+        return repository.findChainAddress(asset.chain(), asset.symbol(), userId, biz, index, WALLET_ROLE_DEPOSIT)
+                .orElseThrow();
+    }
+
+    private ChainAddressRecord buildAccountAddressRecord(long userId, int biz, long index, AssetMeta asset) {
         AccountChainProfile profile = repository.findProfileByChain(asset.chain())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "chain profile is not enabled"));
+        int coinType = ChainType.derivationCoinType(asset.chain(), profile.getBip44CoinType());
         ECKey ecKey = pubKeyConfig.NODE2.getChild(44)
-                .getChild(profile.getBip44CoinType())
+                .getChild(coinType)
                 .getChild(biz)
                 .getChild(Math.toIntExact(userId))
                 .getChild(Math.toIntExact(index))
@@ -362,20 +376,20 @@ public class WalletAppService {
                 .addressIndex(index)
                 .address("TRON".equals(asset.chain()) ? address : address.toLowerCase(Locale.ROOT))
                 .ownerAddress(address)
-                .derivationPath("m/44/" + profile.getBip44CoinType() + "/" + biz + "/" + userId + "/" + index)
+                .derivationPath("m/44/" + coinType + "/" + biz + "/" + userId + "/" + index)
                 .walletRole(WALLET_ROLE_DEPOSIT)
                 .enabled(true)
                 .build();
-        repository.upsertChainAddress(record);
-        return repository.findChainAddress(asset.chain(), asset.symbol(), userId, biz, index, WALLET_ROLE_DEPOSIT)
-                .orElseThrow();
+        return record;
     }
 
     private ChainAddressRecord mirrorTokenAddress(AssetMeta token, ChainAddressRecord nativeAddress) {
         ChainAddressRecord existing = repository.findChainAddress(
                 token.chain(), token.symbol(), nativeAddress.getUserId(), nativeAddress.getBiz(),
                 nativeAddress.getAddressIndex(), WALLET_ROLE_DEPOSIT).orElse(null);
-        if (existing != null) {
+        if (existing != null
+                && sameAddress(existing.getAddress(), nativeAddress.getAddress())
+                && Objects.equals(existing.getDerivationPath(), nativeAddress.getDerivationPath())) {
             return existing;
         }
         ChainAddressRecord record = ChainAddressRecord.builder()
@@ -395,6 +409,20 @@ public class WalletAppService {
         return repository.findChainAddress(
                 token.chain(), token.symbol(), nativeAddress.getUserId(), nativeAddress.getBiz(),
                 nativeAddress.getAddressIndex(), WALLET_ROLE_DEPOSIT).orElseThrow();
+    }
+
+    private boolean staleEvmAddress(ChainAddressRecord record, AssetMeta asset) {
+        if (record == null || !isEvm(asset.chain()) || record.getAddressIndex() == null) {
+            return false;
+        }
+        ChainAddressRecord expected = buildAccountAddressRecord(
+                record.getUserId(), record.getBiz(), record.getAddressIndex(), asset);
+        return !sameAddress(record.getAddress(), expected.getAddress())
+                || !Objects.equals(record.getDerivationPath(), expected.getDerivationPath());
+    }
+
+    private boolean sameAddress(String left, String right) {
+        return left != null && right != null && left.equalsIgnoreCase(right);
     }
 
     private ChainAddressRecord latestAddress(long userId, int biz, String chain, String symbol) {

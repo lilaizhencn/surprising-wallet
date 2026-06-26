@@ -1,5 +1,7 @@
 package com.surprising.wallet.common.chain;
 
+import java.util.Locale;
+
 /**
  * Canonical chain family used by the unified wallet adapters.
  */
@@ -20,6 +22,8 @@ public enum ChainType {
     TON("ton", "account"),
     APTOS("aptos", "account"),
     SUI("sui", "object");
+
+    public static final int EVM_SHARED_BIP44_COIN_TYPE = 60;
 
     private final String family;
     private final String model;
@@ -43,5 +47,15 @@ public enum ChainType {
 
     public boolean isUtxo() {
         return "utxo".equals(model);
+    }
+
+    public static int derivationCoinType(String chain, int configuredCoinType) {
+        try {
+            return ChainType.valueOf(chain.toUpperCase(Locale.ROOT)).isEvm()
+                    ? EVM_SHARED_BIP44_COIN_TYPE
+                    : configuredCoinType;
+        } catch (RuntimeException e) {
+            return configuredCoinType;
+        }
     }
 }
