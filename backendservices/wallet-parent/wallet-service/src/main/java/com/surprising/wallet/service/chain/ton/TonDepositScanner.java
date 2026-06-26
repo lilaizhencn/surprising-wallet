@@ -217,6 +217,9 @@ public class TonDepositScanner {
     }
 
     private boolean isTestnet() {
+        if (repository == null) {
+            return true;
+        }
         return profile().getNetwork().toLowerCase(java.util.Locale.ROOT).contains("test");
     }
 

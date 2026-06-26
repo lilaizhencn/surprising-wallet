@@ -1,6 +1,7 @@
 package com.surprising.wallet.service.chain.ton;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.junit.jupiter.api.Test;
 import org.ton.ton4j.address.Address;
@@ -115,6 +116,14 @@ class TonMessageEncodingTest {
         public Optional<com.surprising.wallet.common.chain.AccountChainProfile> findAccountChainProfile(
                 String chain, String network) {
             return Optional.empty();
+        }
+
+        @Override
+        public Optional<AccountChainProfile> findProfileByChain(String chain) {
+            return Optional.of(AccountChainProfile.builder()
+                    .chain(chain)
+                    .network("testnet")
+                    .build());
         }
     }
 }

@@ -109,7 +109,7 @@ public class WalletController {
         JSONObject json = new JSONObject();
         try {
             RuntimeAsset coin = assetRoutingService.runtimeAssetByChain(chain);
-            json.put("balance", chainJdbcRepository.sumLedgerTotalBalance(coin.getChain(), coin.getAssetSymbol()));
+            json.put("balance", chainJdbcRepository.sumLedgerTotalBalance(coin.chain(), coin.assetSymbol()));
 
         } catch (Throwable e) {
             log.error("查询币种余额异常", e);
@@ -185,8 +185,8 @@ public class WalletController {
             RuntimeAsset coin = assetRoutingService.runtimeAssetByChain(chainParam);
 
             // Default hot wallet address is fixed at userId=0, biz=0, index=0.
-            String chain = coin.getChain();
-            String symbol = coin.getAssetSymbol();
+            String chain = coin.chain();
+            String symbol = coin.assetSymbol();
             RuntimeAsset finalCoin = coin;
             chainJdbcRepository.findChainAddress(
                             chain,
@@ -226,8 +226,8 @@ public class WalletController {
             @RequestParam(value = "biz", required = false) Integer biz) {
         try {
             RuntimeAsset coin = assetRoutingService.runtimeAssetByChain(chainParam);
-            String chain = coin.getChain();
-            String symbol = coin.getAssetSymbol();
+            String chain = coin.chain();
+            String symbol = coin.assetSymbol();
             List<AddressDto> dtos = chainJdbcRepository.listChainAddresses(chain, symbol).stream()
                     .filter(record -> record.getUserId() != null && record.getUserId() > 0)
                     .filter(record -> userId == null || Objects.equals(record.getUserId(), userId))
@@ -251,7 +251,7 @@ public class WalletController {
         try {
             RuntimeAsset coin = assetRoutingService.runtimeAssetByChain(chainParam);
             if (isUnifiedBitcoinLike(coin)) {
-                return ResultUtils.success(chainJdbcRepository.listUtxosByAddress(coin.getChain(), address, 50));
+                return ResultUtils.success(chainJdbcRepository.listUtxosByAddress(coin.chain(), address, 50));
             }
             return ResultUtils.failure("仅支持BTC/LTC/DOGE/BCH UTXO交易查询");
         } catch (Exception e) {
