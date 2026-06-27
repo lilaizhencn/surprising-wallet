@@ -21,6 +21,7 @@ import com.surprising.wallet.common.chain.TonTransactionRecord;
 import com.surprising.wallet.common.chain.SuiTransactionRecord;
 import com.surprising.wallet.common.chain.WalletPublicKey;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
+import com.surprising.wallet.common.chain.XrpTransactionRecord;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.chain.RuntimeAsset;
@@ -232,6 +233,29 @@ public class ChainJdbcRepository {
                 tx.getChain(), tx.getTxHash(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),
                 tx.getContractAddress(), tx.getAmount(), tx.getFee(), tx.getBlockHeight(), tx.getConfirmations(),
                 tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
+    }
+
+    public int recordXrpTransaction(XrpTransactionRecord tx) {
+        return jdbcTemplate.update("""
+                        insert into xrp_transaction(
+                            chain, tx_hash, from_address, to_address, asset_symbol, issuer_address, currency_code,
+                            amount, fee_drops, ledger_index, sequence_number, confirmations, status, raw_payload,
+                            created_at, updated_at
+                        )
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        on conflict (chain, tx_hash) do update set
+                            fee_drops = coalesce(excluded.fee_drops, xrp_transaction.fee_drops),
+                            ledger_index = coalesce(excluded.ledger_index, xrp_transaction.ledger_index),
+                            sequence_number = coalesce(excluded.sequence_number, xrp_transaction.sequence_number),
+                            confirmations = greatest(xrp_transaction.confirmations, excluded.confirmations),
+                            status = excluded.status,
+                            raw_payload = coalesce(excluded.raw_payload, xrp_transaction.raw_payload),
+                            updated_at = excluded.updated_at
+                        """,
+                tx.getChain(), tx.getTxHash(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),
+                tx.getIssuerAddress(), tx.getCurrencyCode(), tx.getAmount(), tx.getFeeDrops(), tx.getLedgerIndex(),
+                tx.getSequenceNumber(), tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(),
+                toTs(now()), toTs(now()));
     }
 
     public int upsertLedgerBalance(LedgerBalanceRecord record) {

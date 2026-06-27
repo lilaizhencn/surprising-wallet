@@ -13,6 +13,7 @@ import com.surprising.wallet.service.chain.aptos.AptosKeyService;
 import com.surprising.wallet.service.chain.solana.SolanaKeyService;
 import com.surprising.wallet.service.chain.sui.SuiKeyService;
 import com.surprising.wallet.service.chain.ton.TonKeyService;
+import com.surprising.wallet.service.chain.xrp.XrpKeyService;
 import com.surprising.wallet.service.config.PubKeyConfig;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
@@ -51,6 +52,7 @@ public class HotWalletAddressService {
     private final SuiKeyService suiKeyService;
     private final AptosKeyService aptosKeyService;
     private final TonKeyService tonKeyService;
+    private final XrpKeyService xrpKeyService;
 
     public Optional<ChainAddressRecord> findDefaultHotAddress(String chain, String assetSymbol) {
         return repository.findChainAddress(
@@ -148,6 +150,7 @@ public class HotWalletAddressService {
             case "sui" -> deriveSui(profile, userId, biz, addressIndex, walletRole);
             case "aptos" -> deriveAptos(profile, userId, biz, addressIndex, walletRole);
             case "ton" -> deriveTon(profile, userId, biz, addressIndex, walletRole);
+            case "xrp" -> deriveXrp(profile, userId, biz, addressIndex, walletRole);
             default -> throw new IllegalStateException("unsupported hot wallet derivation family: "
                     + profile.getChain() + "/" + profile.getFamily());
         };
@@ -175,6 +178,8 @@ public class HotWalletAddressService {
                     walletRole, nodes.get(2), AddressFormat.EVM);
             case "tron" -> deriveSecp256k1WithCandidateBip32Node(profile, userId, biz, addressIndex,
                     walletRole, nodes.get(2), AddressFormat.TRON);
+            case "xrp" -> deriveSecp256k1WithCandidateBip32Node(profile, userId, biz, addressIndex,
+                    walletRole, nodes.get(2), AddressFormat.XRP);
             default -> throw new IllegalStateException("wallet_public_key does not derive family: "
                     + profile.getChain() + "/" + profile.getFamily());
         };
@@ -260,6 +265,7 @@ public class HotWalletAddressService {
         String address = switch (format) {
             case EVM -> "0x" + Hex.toHexString(EthECKey.fromPublicOnly(ecKey.getPubKey()).getAddress());
             case TRON -> TronWalletApi.getAddress(ecKey.getPubKey());
+            case XRP -> XrpKeyService.address(ecKey);
         };
         return baseRecord(profile, userId, biz, addressIndex, address, address,
                 derivationPath(profile, userId, biz, addressIndex), walletRole);
@@ -288,6 +294,7 @@ public class HotWalletAddressService {
         String address = switch (format) {
             case EVM -> "0x" + Hex.toHexString(EthECKey.fromPublicOnly(ecKey.getPubKey()).getAddress());
             case TRON -> TronWalletApi.getAddress(ecKey.getPubKey());
+            case XRP -> XrpKeyService.address(ecKey);
         };
         return baseRecord(profile, userId, biz, addressIndex, address, address,
                 derivationPath(profile, userId, biz, addressIndex), walletRole);
@@ -321,6 +328,13 @@ public class HotWalletAddressService {
         boolean testnet = normalize(profile.getNetwork()).contains("test");
         String address = rawAddress.toString(true, true, false, testnet);
         return baseRecord(profile, userId, biz, addressIndex, address, address, key.derivationPath(), walletRole);
+    }
+
+    private ChainAddressRecord deriveXrp(AccountChainProfile profile, long userId, int biz,
+                                         long addressIndex, String walletRole) {
+        String address = xrpKeyService.address(profile, userId, biz, addressIndex);
+        return baseRecord(profile, userId, biz, addressIndex, address, address,
+                derivationPath(profile, userId, biz, addressIndex), walletRole);
     }
 
     private ChainAddressRecord baseRecord(AccountChainProfile profile, long userId, int biz,
@@ -384,7 +398,10 @@ public class HotWalletAddressService {
 
     private boolean candidatePublicKeysAffect(AccountChainProfile profile) {
         String family = normalize(profile.getFamily());
-        return "bitcoin-like".equals(family) || "evm".equals(family) || "tron".equals(family);
+        return "bitcoin-like".equals(family)
+                || "evm".equals(family)
+                || "tron".equals(family)
+                || "xrp".equals(family);
     }
 
     private boolean isDefaultHotAddressRow(AccountChainProfile profile, ChainAddressRecord record) {
@@ -408,6 +425,7 @@ public class HotWalletAddressService {
 
     private enum AddressFormat {
         EVM,
-        TRON
+        TRON,
+        XRP
     }
 }

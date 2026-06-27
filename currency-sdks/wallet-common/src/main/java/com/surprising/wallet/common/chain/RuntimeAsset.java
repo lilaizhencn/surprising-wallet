@@ -22,6 +22,7 @@ public final class RuntimeAsset {
     public static final RuntimeAsset BCH = nativeAsset("BCH", 7, 1, 6, 145);
     public static final RuntimeAsset ETH = nativeAsset("ETH", 121, 12, 120, 60);
     public static final RuntimeAsset TRX = nativeAsset("TRON", "TRX", 121, 12, 120, 195);
+    public static final RuntimeAsset XRP = nativeAsset("XRP", 4, 1, 3, 144);
     public static final RuntimeAsset USDT = tokenAsset("ETH", "USDT", 121, 12, 120, 60);
 
     private final Integer runtimeCurrencyId;

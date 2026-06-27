@@ -45,6 +45,8 @@ ALTER TABLE IF EXISTS ONLY "public"."ton_transaction" DROP CONSTRAINT IF EXISTS 
 ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_chain_symbol_key";
 ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_chain_contract_address_key";
+ALTER TABLE IF EXISTS ONLY "public"."xrp_transaction" DROP CONSTRAINT IF EXISTS "xrp_transaction_pkey";
+ALTER TABLE IF EXISTS ONLY "public"."xrp_transaction" DROP CONSTRAINT IF EXISTS "xrp_transaction_chain_tx_hash_key";
 ALTER TABLE IF EXISTS ONLY "public"."sui_transaction" DROP CONSTRAINT IF EXISTS "sui_transaction_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."sui_transaction" DROP CONSTRAINT IF EXISTS "sui_transaction_chain_tx_digest_key";
 ALTER TABLE IF EXISTS ONLY "public"."sol_transaction" DROP CONSTRAINT IF EXISTS "sol_transaction_pkey";
@@ -94,6 +96,7 @@ ALTER TABLE IF EXISTS "public"."tron_transaction" ALTER COLUMN "id" DROP DEFAULT
 ALTER TABLE IF EXISTS "public"."tron_token_transfer" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."ton_transaction" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."token_config" ALTER COLUMN "id" DROP DEFAULT;
+ALTER TABLE IF EXISTS "public"."xrp_transaction" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."sui_transaction" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."sol_transaction" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."ledger_balance" ALTER COLUMN "id" DROP DEFAULT;
@@ -131,6 +134,8 @@ DROP SEQUENCE IF EXISTS "public"."ton_transaction_id_seq";
 DROP TABLE IF EXISTS "public"."ton_transaction";
 DROP SEQUENCE IF EXISTS "public"."token_config_id_seq";
 DROP TABLE IF EXISTS "public"."token_config";
+DROP SEQUENCE IF EXISTS "public"."xrp_transaction_id_seq";
+DROP TABLE IF EXISTS "public"."xrp_transaction";
 DROP SEQUENCE IF EXISTS "public"."sui_transaction_id_seq";
 DROP TABLE IF EXISTS "public"."sui_transaction";
 DROP SEQUENCE IF EXISTS "public"."sol_transaction_id_seq";
@@ -954,6 +959,50 @@ ALTER SEQUENCE "public"."sui_transaction_id_seq" OWNED BY "public"."sui_transact
 
 
 --
+-- Name: xrp_transaction; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE "public"."xrp_transaction" (
+    "id" bigint NOT NULL,
+    "chain" character varying(32) DEFAULT 'XRP'::character varying NOT NULL,
+    "tx_hash" character varying(128) NOT NULL,
+    "from_address" character varying(160),
+    "to_address" character varying(160) NOT NULL,
+    "asset_symbol" character varying(32) NOT NULL,
+    "issuer_address" character varying(160),
+    "currency_code" character varying(64),
+    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
+    "fee_drops" bigint DEFAULT 0 NOT NULL,
+    "ledger_index" bigint,
+    "sequence_number" bigint,
+    "confirmations" integer DEFAULT 0 NOT NULL,
+    "status" character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
+    "raw_payload" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+--
+-- Name: xrp_transaction_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE "public"."xrp_transaction_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: xrp_transaction_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE "public"."xrp_transaction_id_seq" OWNED BY "public"."xrp_transaction"."id";
+
+
+--
 -- Name: token_config; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1474,6 +1523,13 @@ ALTER TABLE ONLY "public"."sui_transaction" ALTER COLUMN "id" SET DEFAULT "nextv
 
 
 --
+-- Name: xrp_transaction id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."xrp_transaction" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."xrp_transaction_id_seq"'::"regclass");
+
+
+--
 -- Name: token_config id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1859,6 +1915,22 @@ ALTER TABLE ONLY "public"."sui_transaction"
 
 
 --
+-- Name: xrp_transaction xrp_transaction_chain_tx_hash_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."xrp_transaction"
+    ADD CONSTRAINT "xrp_transaction_chain_tx_hash_key" UNIQUE ("chain", "tx_hash");
+
+
+--
+-- Name: xrp_transaction xrp_transaction_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."xrp_transaction"
+    ADD CONSTRAINT "xrp_transaction_pkey" PRIMARY KEY ("id");
+
+
+--
 -- Name: token_config token_config_chain_contract_address_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2109,6 +2181,7 @@ INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "cont
 INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (35, 'TON', 'USDC', 'JETTON', 'kQCzPT6908-8TR862TQo1S43-2kEme8UKRCRSWkaxNLD7H_2', 6, false, true, 1, 1, '2026-06-23 21:38:19.051838+08', '2026-06-23 21:59:40.049688+08');
 INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (44, 'APTOS', 'APT', 'NATIVE', NULL, 8, true, true, 1, 1, '2026-06-23 22:24:58.098309+08', '2026-06-23 22:24:58.098309+08');
 INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (45, 'SUI', 'SUI', 'NATIVE', NULL, 9, true, true, 1, 1, '2026-06-23 23:21:21.429955+08', '2026-06-23 23:21:21.429955+08');
+INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (136, 'XRP', 'XRP', 'NATIVE', NULL, 6, true, true, 0.000001, 0.000001, '2026-06-27 12:10:00+08', '2026-06-27 12:10:00+08');
 
 
 --
@@ -2152,6 +2225,8 @@ INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runti
 INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (150, 'AVAX_C', 'mainnet', 'evm', 9000, 60, 'AVAX_C', 'https://avalanche-c-chain-rpc.publicnode.com', 'https://snowtrace.io/tx/', 20, 20, 1, 0, false, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', 43114, 'eip1559', 200, false, false, false, false, 0, 0);
 INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (151, 'TRON', 'nile', 'tron', 195, 195, 'TRX', 'grpc.nile.trongrid.io:50051', 'https://nile.tronscan.org/#/transaction/', 20, 20, 1, 0, true, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', NULL, 'energy-bandwidth', 100, true, true, true, true, 0, 0);
 INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (152, 'TRON', 'mainnet', 'tron', 195, 195, 'TRX', 'grpc.trongrid.io:50051', 'https://tronscan.org/#/transaction/', 20, 20, 1, 0, false, '2026-06-25 00:11:35.419133+08', '2026-06-25 00:11:35.419133+08', NULL, 'energy-bandwidth', 100, false, false, false, false, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (153, 'XRP', 'testnet', 'xrp', 144, 144, 'XRP', 'https://s.altnet.rippletest.net:51234/', 'https://testnet.xrpl.org/transactions/', 1, 1, 12, 1, true, '2026-06-27 12:10:00+08', '2026-06-27 12:10:00+08', NULL, 'xrpl', 100, true, true, true, true, 0, 0);
+INSERT INTO "public"."chain_profile" ("id", "chain", "network", "family", "runtime_currency_id", "bip44_coin_type", "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations", "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled", "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size", "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled", "scan_start_height", "scan_max_blocks_per_run") VALUES (154, 'XRP', 'mainnet', 'xrp', 144, 144, 'XRP', 'https://s1.ripple.com:51234/', 'https://livenet.xrpl.org/transactions/', 3, 3, 12, 1, false, '2026-06-27 12:10:00+08', '2026-06-27 12:10:00+08', NULL, 'xrpl', 100, false, false, false, false, 0, 0);
 
 
 --
@@ -2228,6 +2303,10 @@ INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", 
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (37, 'AVAX_C', 'fuji', 'dev', 'publicnode-avax-fuji', 'rpc', 'HTTP_JSON_RPC', 'https://avalanche-fuji-c-chain-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 50, 500, true, NULL, 'PublicNode backup for Avalanche Fuji C-Chain.', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (38, 'SUI', 'testnet', 'dev', 'publicnode-sui-testnet', 'rpc', 'HTTP_JSON_RPC', 'https://sui-testnet-rpc.publicnode.com', 'NONE', NULL, NULL, NULL, NULL, 50, 500, true, NULL, 'PublicNode backup for Sui testnet JSON-RPC.', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (39, 'TRON', 'nile', 'dev', 'trongrid-nile-jsonrpc', 'jsonrpc', 'HTTP_JSON_RPC', 'https://nile.trongrid.io/jsonrpc/', 'API_KEY_OPTIONAL', 'TRON-PRO-API-KEY', NULL, NULL, NULL, 40, 250, true, NULL, 'Official TRON Nile JSON-RPC endpoint for tools that need JSON-RPC.', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (40, 'XRP', 'testnet', 'dev', 'xrpl-testnet-official', 'rpc', 'HTTP_JSON_RPC', 'https://s.altnet.rippletest.net:51234/', 'NONE', NULL, NULL, NULL, NULL, 10, 250, true, NULL, 'Official XRP Ledger testnet JSON-RPC public server.', '2026-06-27 12:10:00+08', '2026-06-27 12:10:00+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (41, 'XRP', 'mainnet', 'prod', 'xrpl-mainnet-official', 'rpc', 'HTTP_JSON_RPC', 'https://s1.ripple.com:51234/', 'NONE', NULL, NULL, NULL, NULL, 10, 250, true, NULL, 'Official XRP Ledger mainnet JSON-RPC public server; profile is disabled by default.', '2026-06-27 12:10:00+08', '2026-06-27 12:10:00+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (42, 'XRP', 'testnet', 'dev', 'drpc-xrp-testnet', 'rpc', 'HTTP_JSON_RPC', 'https://ripple-testnet.drpc.org', 'NONE', NULL, NULL, NULL, NULL, 20, 500, true, NULL, 'dRPC XRP Ledger testnet backup endpoint.', '2026-06-27 12:10:00+08', '2026-06-27 12:10:00+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (43, 'XRP', 'testnet', 'dev', 'tatum-xrp-testnet', 'rpc', 'HTTP_JSON_RPC', 'https://ripple-testnet.gateway.tatum.io', 'NONE', NULL, NULL, NULL, NULL, 30, 500, true, NULL, 'Tatum XRP Ledger testnet backup endpoint.', '2026-06-27 12:10:00+08', '2026-06-27 12:10:00+08', NULL, NULL, NULL);
 
 -- Dedicated test2 RPC nodes. Runtime lookup is environment-exact: test2 never reads dev/prod nodes.
 -- Provider keys are stored directly in chain_rpc_node.api_key or in the stored rpc_url. Replace CHANGE_ME_* values in DB before use.
@@ -2321,14 +2400,14 @@ INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "valu
 -- Name: chain_asset_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('"public"."chain_asset_id_seq"', 135, true);
+SELECT pg_catalog.setval('"public"."chain_asset_id_seq"', 136, true);
 
 
 --
 -- Name: chain_profile_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('"public"."chain_profile_id_seq"', 152, true);
+SELECT pg_catalog.setval('"public"."chain_profile_id_seq"', 154, true);
 
 
 --
@@ -2363,6 +2442,7 @@ WITH token_data(chain, symbol, standard, network, token_standard, contract_addre
         ('APTOS', 'USDC', 'APTOS_FA', 'testnet', 'APTOS_FA', '0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832', 6, NULL, NULL, 'APT_GAS'),
         ('SUI', 'USDC', 'SUI_COIN', 'testnet', 'COIN', '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC', 6, NULL, NULL, 'SUI_GAS_OBJECT'),
         ('TON', 'USDC', 'JETTON', 'testnet', 'JETTON', 'kQCzPT6908-8TR862TQo1S43-2kEme8UKRCRSWkaxNLD7H_2', 6, NULL, NULL, 'TON_FORWARD_FEE'),
+        ('XRP', 'USDC', 'XRPL_ISSUED', 'testnet', 'ISSUED_CURRENCY', 'rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt:5553444300000000000000000000000000000000', 6, NULL, '5553444300000000000000000000000000000000', 'XRP_TRUSTLINE'),
         ('ETH', 'USDT', 'ERC20', 'sepolia', 'ERC20', '0x01a6810727db185bbf7f30ec158c3ac8b8112627', 6, NULL, NULL, 'native-gas'),
         ('POLYGON', 'USDT', 'ERC20', 'amoy', 'ERC20', '0xb5F6211f94FCC162D5c8cebba4f656c965577392', 6, NULL, NULL, 'native-gas'),
         ('ARBITRUM', 'USDT', 'ERC20', 'sepolia', 'ERC20', '0xEf54C221Fc94517877F0F40eCd71E0A3866D66C2', 6, NULL, NULL, 'native-gas'),
@@ -2452,6 +2532,12 @@ UPDATE "public"."chain_asset"
 UPDATE "public"."chain_asset"
    SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
  WHERE "chain" IN ('APTOS', 'SUI') AND "native_asset" = false;
+UPDATE "public"."chain_asset"
+   SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
+ WHERE "chain" = 'XRP' AND "symbol" = 'XRP';
+UPDATE "public"."chain_asset"
+   SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
+ WHERE "chain" = 'XRP' AND "symbol" = 'USDC';
 
 
 --

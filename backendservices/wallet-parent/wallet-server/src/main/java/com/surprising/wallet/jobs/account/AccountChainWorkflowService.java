@@ -27,6 +27,8 @@ import com.surprising.wallet.service.chain.tron.TronTransactionService;
 import com.surprising.wallet.service.chain.tron.TronTrc20Service;
 import com.surprising.wallet.service.chain.tron.TronTridentClient;
 import com.surprising.wallet.service.chain.tron.TronTridentKeyFactory;
+import com.surprising.wallet.service.chain.xrp.XrpDepositScanner;
+import com.surprising.wallet.service.chain.xrp.XrpTransactionService;
 import com.surprising.wallet.service.config.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
@@ -64,7 +66,7 @@ public class AccountChainWorkflowService {
     private static final BigDecimal TRX_SUN = new BigDecimal("1000000");
     private static final List<String> ACCOUNT_CHAIN_PRIORITY = List.of(
             "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C",
-            "SOLANA", "TRON", "TON", "APTOS", "SUI");
+            "SOLANA", "TRON", "XRP", "TON", "APTOS", "SUI");
 
     private final ChainJdbcRepository repository;
     private final WalletRuntimeConfigService runtimeConfigService;
@@ -81,6 +83,8 @@ public class AccountChainWorkflowService {
     private final SuiTransactionService suiTransactionService;
     private final TonDepositScanner tonDepositScanner;
     private final TonTransactionService tonTransactionService;
+    private final XrpDepositScanner xrpDepositScanner;
+    private final XrpTransactionService xrpTransactionService;
 
     private final TronClientFactory tronClientFactory;
     private final TronDepositScanner tronDepositScanner;
@@ -119,6 +123,7 @@ public class AccountChainWorkflowService {
                     case "APTOS" -> scanAptos();
                     case "SUI" -> scanSui();
                     case "TON" -> scanTon();
+                    case "XRP" -> scanXrp();
                     case "TRON" -> scanTron(profile);
                     default -> {
                         if ("evm".equalsIgnoreCase(profile.getFamily())) {
@@ -248,6 +253,10 @@ public class AccountChainWorkflowService {
             case "TON" -> isNative(profile, order.getAssetSymbol())
                     ? broadcastTonNative(order, from)
                     : broadcastTonJetton(order, from, requireToken(chain, order.getAssetSymbol()));
+            case "XRP" -> isNative(profile, order.getAssetSymbol())
+                    ? xrpTransactionService.sendNative(from, order.getToAddress(), order.getAmount())
+                    : xrpTransactionService.sendIssuedCurrency(
+                    from, requireToken(chain, order.getAssetSymbol()), order.getToAddress(), order.getAmount());
             case "TRON" -> broadcastTron(profile, order, from);
             default -> throw new IllegalStateException("unsupported account-chain withdrawal: " + chain);
         };
@@ -268,6 +277,8 @@ public class AccountChainWorkflowService {
             case "SUI" -> suiTransactionService.confirmWithdrawal(
                     order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), order.getAmount());
             case "TON" -> confirmTonWithdrawal(order, from);
+            case "XRP" -> xrpTransactionService.confirmWithdrawal(
+                    profile, order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), order.getAmount());
             case "TRON" -> confirmTronWithdrawal(profile, order, from);
             default -> {
             }
@@ -345,6 +356,16 @@ public class AccountChainWorkflowService {
                             record.getCollectionNo());
                 }
             }
+            case "XRP" -> {
+                if (isNative(profile, record.getAssetSymbol())) {
+                    xrpTransactionService.collectNative(record.getCollectionNo(), from,
+                            record.getToAddress(), record.getAmount());
+                } else {
+                    xrpTransactionService.collectIssuedCurrency(record.getCollectionNo(), from,
+                            requireToken(record.getChain(), record.getAssetSymbol()),
+                            record.getToAddress(), record.getAmount());
+                }
+            }
             case "TRON" -> processTronCollection(profile, record, from);
             default -> {
             }
@@ -361,6 +382,7 @@ public class AccountChainWorkflowService {
             case "APTOS" -> aptosTransactionService.confirmCollection(record.getCollectionNo());
             case "SUI" -> suiTransactionService.confirmCollection(record.getCollectionNo());
             case "TON" -> tonTransactionService.confirmCollection(record.getCollectionNo());
+            case "XRP" -> xrpTransactionService.confirmCollection(profile, record.getCollectionNo());
             case "TRON" -> confirmTronCollection(profile, record);
             default -> {
             }
@@ -392,6 +414,10 @@ public class AccountChainWorkflowService {
 
     private void scanTon() {
         tonDepositScanner.scanAndCredit();
+    }
+
+    private void scanXrp() {
+        xrpDepositScanner.scanAndCredit();
     }
 
     private void scanTron(AccountChainProfile profile) throws Exception {
@@ -569,6 +595,7 @@ public class AccountChainWorkflowService {
             feeReserve = switch (profile.getChain()) {
                 case "SOLANA" -> configured.max(new BigDecimal("0.00002"));
                 case "TON" -> configured.max(new BigDecimal("0.02"));
+                case "XRP" -> configured.max(new BigDecimal("0.000012"));
                 case "SUI" -> configured.max(new BigDecimal("0.02"));
                 case "APTOS" -> configured.max(new BigDecimal("0.05"));
                 case "TRON" -> configured.max(new BigDecimal("1"));

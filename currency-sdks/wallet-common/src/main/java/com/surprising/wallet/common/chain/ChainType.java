@@ -18,6 +18,7 @@ public enum ChainType {
     BASE("evm", "account"),
     AVAX_C("evm", "account"),
     TRON("tron", "account"),
+    XRP("xrp", "account"),
     SOLANA("solana", "account"),
     TON("ton", "account"),
     APTOS("aptos", "account"),

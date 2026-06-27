@@ -13,6 +13,7 @@ import com.surprising.wallet.service.chain.aptos.AptosAddressService;
 import com.surprising.wallet.service.chain.solana.SolanaAddressService;
 import com.surprising.wallet.service.chain.sui.SuiAddressService;
 import com.surprising.wallet.service.chain.ton.TonAddressService;
+import com.surprising.wallet.service.chain.xrp.XrpAddressService;
 import com.surprising.wallet.service.config.ChainRpcNodeService;
 import com.surprising.wallet.service.config.PubKeyConfig;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
@@ -60,6 +61,7 @@ public class WalletAppService {
     private final TonAddressService tonAddressService;
     private final AptosAddressService aptosAddressService;
     private final SuiAddressService suiAddressService;
+    private final XrpAddressService xrpAddressService;
 
     @Value("${sw.app.env.name:dev}")
     private String environmentName;
@@ -73,7 +75,8 @@ public class WalletAppService {
                             SolanaAddressService solanaAddressService,
                             TonAddressService tonAddressService,
                             AptosAddressService aptosAddressService,
-                            SuiAddressService suiAddressService) {
+                            SuiAddressService suiAddressService,
+                            XrpAddressService xrpAddressService) {
         this.jdbcTemplate = jdbcTemplate;
         this.repository = repository;
         this.assetRoutingService = assetRoutingService;
@@ -84,6 +87,7 @@ public class WalletAppService {
         this.tonAddressService = tonAddressService;
         this.aptosAddressService = aptosAddressService;
         this.suiAddressService = suiAddressService;
+        this.xrpAddressService = xrpAddressService;
     }
 
     public Map<String, Object> assetCatalog() {
@@ -326,7 +330,7 @@ public class WalletAppService {
         if (asset.nativeAsset()) {
             return createNativeAddress(userId, biz, asset, existing == null ? null : existing.getAddressIndex());
         }
-        if (isEvm(asset.chain()) || "TRON".equals(asset.chain())) {
+        if (isEvm(asset.chain()) || "TRON".equals(asset.chain()) || "XRP".equals(asset.chain())) {
             AssetMeta nativeAsset = requireAsset(asset.chain(), asset.nativeSymbol());
             ChainAddressRecord nativeAddress = forceNew
                     ? createNativeAddress(userId, biz, nativeAsset)
@@ -397,6 +401,10 @@ public class WalletAppService {
         if ("SUI".equals(asset.chain())) {
             long index = nextAddressIndex(asset.chain(), asset.symbol(), userId, biz);
             return suiAddressService.createNativeAddress(userId, biz, index, WALLET_ROLE_DEPOSIT);
+        }
+        if ("XRP".equals(asset.chain())) {
+            long index = nextAddressIndex(asset.chain(), asset.symbol(), userId, biz);
+            return xrpAddressService.createNativeAddress(userId, biz, index, WALLET_ROLE_DEPOSIT);
         }
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "wallet runtime is not available for " + asset.chain());
@@ -697,6 +705,9 @@ public class WalletAppService {
         if (!asset.nativeAsset()) {
             warnings.add(asset.symbol() + " deposits on other chains require switching to that chain first.");
             warnings.add("This token transfer needs " + asset.nativeSymbol() + " as gas on " + asset.chain() + ".");
+            if ("XRP".equals(asset.chain())) {
+                warnings.add("XRPL issued-currency deposits require this address to be activated and to have a matching trustline.");
+            }
         }
         return warnings;
     }
@@ -719,6 +730,9 @@ public class WalletAppService {
         }
         if ("TRON".equals(chain) && !value.matches("^T[1-9A-HJ-NP-Za-km-z]{33}$")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid TRON address");
+        }
+        if ("XRP".equals(chain) && !value.matches("^r[1-9A-HJ-NP-Za-km-z]{25,34}$")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid XRP address");
         }
     }
 

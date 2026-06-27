@@ -242,6 +242,12 @@ public class ChainRpcNodeService {
         if (text.contains("cloudflare")) {
             return "cloudflare";
         }
+        if (text.contains("tatum")) {
+            return "tatum";
+        }
+        if (text.contains("xrpl") || text.contains("ripple")) {
+            return "xrpl";
+        }
         if (text.contains("toncenter")) {
             return "toncenter";
         }
