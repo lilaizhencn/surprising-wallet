@@ -24,8 +24,7 @@ public class TronClientFactory {
                 "missing enabled TRON full node");
         ChainRpcNode solidityNode = firstOrSame(
                 rpcNodeService.enabledNodes(CHAIN, profile.getNetwork(), "solidity"), fullNode);
-        String apiKey = firstNonBlank(fullNode.getApiKey(), solidityNode.getApiKey());
-        return new TronTridentClient(fullNode.getRpcUrl(), solidityNode.getRpcUrl(), apiKey);
+        return new TronTridentClient(fullNode, solidityNode, rpcNodeService);
     }
 
     private static ChainRpcNode first(List<ChainRpcNode> nodes, String message) {
@@ -39,7 +38,4 @@ public class TronClientFactory {
         return nodes == null || nodes.isEmpty() ? fallback : nodes.get(0);
     }
 
-    private static String firstNonBlank(String first, String second) {
-        return first != null && !first.isBlank() ? first : second;
-    }
 }

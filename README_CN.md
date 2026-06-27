@@ -49,6 +49,8 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 
 初始化 SQL 已包含 `chain_profile`、`chain_rpc_node`、`wallet_system_config` 和 `wallet_public_key`。链开关、扫描起点、扫描批量、RPC 节点和 wallet-server 三个 public key 都从数据库读取。
 
+部署前必须按环境提前确认已扫描区块高度。全新系统通常把 `chain_scan_height` 设置到当前最新安全块附近，再从后续新区块开始扫描；只有明确需要补历史充值时，才把扫描高度往前调。不要让新部署环境从创世块或很早的历史高度开始扫，否则会造成启动追块时间过长、RPC 配额被快速消耗，甚至遗漏真实测试窗口。
+
 构建：
 
 ```bash

@@ -25,6 +25,7 @@ import java.util.List;
 public class TonDepositScanner {
     private static final String CHAIN = "TON";
     private static final String SCANNER = "ton-account-message-scanner";
+    private static final int TON_DECIMALS = 9;
     private static final long JETTON_TRANSFER_NOTIFICATION = 0x7362d09cL;
     private static final long JETTON_INTERNAL_TRANSFER = 0x178d4519L;
     private static final long JETTON_EXCESSES = 0xd53276dbL;
@@ -64,7 +65,7 @@ public class TonDepositScanner {
             JsonNode in = tx.path("in_msg");
             String destination = in.path("destination").asText();
             String source = in.path("source").asText();
-            BigDecimal amount = decimal(in.path("value").asText());
+            BigDecimal amount = displayAmount(decimal(in.path("value").asText()), TON_DECIMALS);
             if (destination.isBlank() || source.isBlank() || amount.signum() <= 0
                     || !sameAddress(destination, tracked.getAddress())
                     || isPlatformAddress(source)
@@ -91,7 +92,7 @@ public class TonDepositScanner {
                 continue;
             }
             DepositEvent event = event(tx, tracked, token.getSymbol(), notification.sender(),
-                    tracked.getAddress(), new BigDecimal(notification.amount()),
+                    tracked.getAddress(), displayAmount(new BigDecimal(notification.amount()), token.getDecimals()),
                     token.getContractAddress());
             persist(event, tx, token.getContractAddress(), profile, tracked.getAccountId());
             events.add(event);
@@ -198,6 +199,10 @@ public class TonDepositScanner {
 
     private static BigDecimal decimal(String value) {
         return value == null || value.isBlank() ? BigDecimal.ZERO : new BigDecimal(value);
+    }
+
+    private static BigDecimal displayAmount(BigDecimal atomicAmount, int decimals) {
+        return atomicAmount.movePointLeft(decimals);
     }
 
     private AccountChainProfile profile() {

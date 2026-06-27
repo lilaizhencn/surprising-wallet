@@ -1,5 +1,6 @@
 package com.surprising.wallet.jobs.walletapp;
 
+import com.googlecode.jsonrpc4j.JsonRpcHttpClient;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
@@ -12,6 +13,7 @@ import com.surprising.wallet.service.chain.aptos.AptosAddressService;
 import com.surprising.wallet.service.chain.solana.SolanaAddressService;
 import com.surprising.wallet.service.chain.sui.SuiAddressService;
 import com.surprising.wallet.service.chain.ton.TonAddressService;
+import com.surprising.wallet.service.config.ChainRpcNodeService;
 import com.surprising.wallet.service.config.PubKeyConfig;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.wallet.IWallet;
@@ -19,17 +21,21 @@ import com.surprising.wallet.service.wallet.WalletContext;
 import org.bitcoinj.crypto.ECKey;
 import org.ethereum.crypto.EthECKey;
 import org.spongycastle.util.encoders.Hex;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.ton.ton4j.smartcontract.token.ft.JettonWallet;
 import org.tron.TronWalletApi;
 
 import java.math.BigDecimal;
+import java.net.URL;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -40,22 +46,29 @@ import java.util.Objects;
 public class WalletAppService {
     private static final int DEFAULT_BIZ = 0;
     private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";
+    private static final int DOGE_REGTEST_RPC_TIMEOUT_MS = 120_000;
+    private static final BigDecimal DOGE_REGTEST_FAUCET_AMOUNT = new BigDecimal("25");
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final JdbcTemplate jdbcTemplate;
     private final ChainJdbcRepository repository;
     private final AssetRoutingService assetRoutingService;
     private final WalletContext walletContext;
+    private final ChainRpcNodeService rpcNodeService;
     private final PubKeyConfig pubKeyConfig;
     private final SolanaAddressService solanaAddressService;
     private final TonAddressService tonAddressService;
     private final AptosAddressService aptosAddressService;
     private final SuiAddressService suiAddressService;
 
+    @Value("${sw.app.env.name:dev}")
+    private String environmentName;
+
     public WalletAppService(JdbcTemplate jdbcTemplate,
                             ChainJdbcRepository repository,
                             AssetRoutingService assetRoutingService,
                             WalletContext walletContext,
+                            ChainRpcNodeService rpcNodeService,
                             PubKeyConfig pubKeyConfig,
                             SolanaAddressService solanaAddressService,
                             TonAddressService tonAddressService,
@@ -65,6 +78,7 @@ public class WalletAppService {
         this.repository = repository;
         this.assetRoutingService = assetRoutingService;
         this.walletContext = walletContext;
+        this.rpcNodeService = rpcNodeService;
         this.pubKeyConfig = pubKeyConfig;
         this.solanaAddressService = solanaAddressService;
         this.tonAddressService = tonAddressService;
@@ -162,18 +176,20 @@ public class WalletAppService {
         }
         AssetMeta asset = requireAsset(chain, symbol);
         validateExternalAddress(chain, request.toAddress());
+        WithdrawalTarget target = withdrawalTarget(asset, request.toAddress());
         SpendAccount spend = spendAccount(user.id(), DEFAULT_BIZ, chain, symbol, amount);
+        String sourceAddress = withdrawalSourceAddress(asset, spend);
         String orderNo = "WD-" + user.id() + "-" + System.currentTimeMillis() + "-" + randomSuffix();
         int created = repository.createWithdrawalOrder(orderNo, user.id(), chain, symbol,
-                request.toAddress().trim(), amount, BigDecimal.ZERO);
+                sourceAddress, spend.accountId(), target.broadcastAddress(), amount, BigDecimal.ZERO);
         if (created == 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "duplicate withdrawal order");
         }
         if (!repository.freezeLedgerBalance(chain, symbol, spend.accountId(), amount)) {
-            repository.updateWithdrawalStatus(chain, orderNo, "FAILED", spend.address(), null, "insufficient balance");
+            repository.updateWithdrawalStatus(chain, orderNo, "FAILED", sourceAddress, null, "insufficient balance");
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "insufficient available balance");
         }
-        repository.updateWithdrawalStatus(chain, orderNo, "FROZEN", spend.address(), null, null);
+        repository.updateWithdrawalStatus(chain, orderNo, "FROZEN", sourceAddress, null, null);
 
         Map<String, Object> payload = orderedMap();
         payload.put("orderNo", orderNo);
@@ -182,8 +198,10 @@ public class WalletAppService {
         payload.put("symbol", symbol);
         payload.put("amount", amount);
         payload.put("fee", BigDecimal.ZERO);
-        payload.put("toAddress", request.toAddress().trim());
-        payload.put("fromAddress", spend.address());
+        payload.put("toAddress", target.broadcastAddress());
+        payload.put("requestedToAddress", target.requestedAddress());
+        payload.put("fromAddress", sourceAddress);
+        payload.put("debitAddress", spend.address());
         payload.put("warning", withdrawWarning(asset));
         return payload;
     }
@@ -242,6 +260,38 @@ public class WalletAppService {
         return payload;
     }
 
+    public Map<String, Object> dogeRegtestFaucet(WalletUser user) {
+        if (isProductionEnvironment()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "test coin faucet is disabled in production");
+        }
+
+        AssetMeta asset = requireAsset("DOGE", "DOGE");
+        if (!asset.nativeAsset() || !"regtest".equalsIgnoreCase(asset.network())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "DOGE test coin faucet requires the active DOGE network to be regtest");
+        }
+
+        ChainAddressRecord record = createDepositAddress(user.id(), DEFAULT_BIZ, asset, false);
+        String txHash = dogeRegtestRpc("sendtoaddress", String.class,
+                record.getAddress(), DOGE_REGTEST_FAUCET_AMOUNT);
+        String minerAddress = dogeRegtestRpc("getnewaddress", String.class);
+        dogeRegtestRpc("generatetoaddress", Object.class, 1, minerAddress);
+        Object blockHeight = dogeRegtestRpc("getblockcount", Object.class);
+
+        Map<String, Object> payload = orderedMap();
+        payload.put("status", "SENT");
+        payload.put("chain", asset.chain());
+        payload.put("symbol", asset.symbol());
+        payload.put("network", asset.network());
+        payload.put("amount", DOGE_REGTEST_FAUCET_AMOUNT);
+        payload.put("txHash", txHash);
+        payload.put("blockHeight", Long.parseLong(String.valueOf(blockHeight)));
+        payload.put("toAddress", record.getAddress());
+        payload.put("addressIndex", record.getAddressIndex());
+        payload.put("warning", "DOGE regtest coins were sent. Balance updates after the scanner processes the block.");
+        return payload;
+    }
+
     public List<Map<String, Object>> orders(WalletUser user, int limit) {
         int rowLimit = Math.max(1, Math.min(limit, 100));
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -287,6 +337,15 @@ public class WalletAppService {
             long index = nextAddressIndex(asset.chain(), asset.symbol(), userId, biz);
             return solanaAddressService.createTokenAddress(
                     asset.symbol(), asset.contractAddress(), userId, biz, index, WALLET_ROLE_DEPOSIT);
+        }
+        if ("TON".equals(asset.chain())) {
+            AssetMeta nativeAsset = requireAsset(asset.chain(), asset.nativeSymbol());
+            ChainAddressRecord nativeAddress = forceNew
+                    ? createNativeAddress(userId, biz, nativeAsset)
+                    : createDepositAddress(userId, biz, nativeAsset, false);
+            String jettonWalletAddress = tonJettonWalletAddress(nativeAddress.getAddress(), asset.contractAddress());
+            return tonAddressService.registerJettonWallet(asset.symbol(), jettonWalletAddress,
+                    userId, biz, nativeAddress.getAddressIndex(), WALLET_ROLE_DEPOSIT);
         }
         if ("APTOS".equals(asset.chain())) {
             long index = nextAddressIndex(asset.chain(), asset.symbol(), userId, biz);
@@ -411,6 +470,21 @@ public class WalletAppService {
                 nativeAddress.getAddressIndex(), WALLET_ROLE_DEPOSIT).orElseThrow();
     }
 
+    private String tonJettonWalletAddress(String ownerAddress, String jettonMasterAddress) {
+        if (jettonMasterAddress == null || jettonMasterAddress.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TON token contract address is not configured");
+        }
+        boolean testnet = repository.findProfileByChain("TON")
+                .map(profile -> profile.getNetwork().toLowerCase(Locale.ROOT).contains("test"))
+                .orElse(true);
+        return JettonWallet.calculateUserJettonWalletAddress(
+                        0,
+                        org.ton.ton4j.address.Address.of(ownerAddress),
+                        org.ton.ton4j.address.Address.of(jettonMasterAddress),
+                        JettonWallet.CODE_CELL)
+                .toString(true, true, true, testnet);
+    }
+
     private boolean staleEvmAddress(ChainAddressRecord record, AssetMeta asset) {
         if (record == null || !isEvm(asset.chain()) || record.getAddressIndex() == null) {
             return false;
@@ -481,6 +555,29 @@ public class WalletAppService {
         }
         Map<String, Object> row = rows.get(0);
         return new SpendAccount(String.valueOf(row.get("account_id")), String.valueOf(row.get("address")));
+    }
+
+    private String withdrawalSourceAddress(AssetMeta asset, SpendAccount spend) {
+        if (!isAccountChain(asset.chain())) {
+            return spend.address();
+        }
+        String hotSymbol = asset.nativeAsset() ? asset.symbol() : asset.nativeSymbol();
+        if ("TON".equals(asset.chain()) && !asset.nativeAsset()) {
+            hotSymbol = asset.symbol();
+        }
+        List<ChainAddressRecord> candidates = repository.listDefaultHotAddressCandidates(asset.chain(), hotSymbol);
+        if (candidates.isEmpty() && !asset.nativeAsset()) {
+            candidates = repository.listDefaultHotAddressCandidates(asset.chain(), asset.nativeSymbol());
+        }
+        return candidates.isEmpty() ? spend.address() : candidates.getFirst().getAddress();
+    }
+
+    private static boolean isAccountChain(String chain) {
+        try {
+            return !ChainType.valueOf(chain).isUtxo();
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private WalletUser findUserByEmail(String email) {
@@ -625,6 +722,58 @@ public class WalletAppService {
         }
     }
 
+    private WithdrawalTarget withdrawalTarget(AssetMeta asset, String address) {
+        String value = address == null ? "" : address.trim();
+        ChainAddressRecord record = repository.findChainAddressByAddress(asset.chain(), asset.symbol(), value)
+                .or(() -> repository.findChainAddressByAddress(asset.chain(), value))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "withdrawal address must belong to this wallet project"));
+        String broadcastAddress = value;
+        if (!asset.nativeAsset() && ("SOLANA".equals(asset.chain()) || "TON".equals(asset.chain()))) {
+            broadcastAddress = tokenOwnerAddress(record);
+        }
+        return new WithdrawalTarget(value, broadcastAddress);
+    }
+
+    private static String tokenOwnerAddress(ChainAddressRecord record) {
+        String owner = record.getOwnerAddress();
+        if (owner == null || owner.isBlank()) {
+            owner = record.getAccountId();
+        }
+        if (owner == null || owner.isBlank()) {
+            return record.getAddress();
+        }
+        return owner;
+    }
+
+    private <T> T dogeRegtestRpc(String method, Class<T> responseType, Object... params) {
+        return rpcNodeService.withFailover("DOGE", "regtest", "rpc", node -> {
+            try {
+                Map<String, String> headers = new HashMap<>();
+                headers.put("Content-type", "application/json");
+                headers.putAll(rpcNodeService.authHeaders(node));
+                JsonRpcHttpClient client = new JsonRpcHttpClient(new URL(node.getRpcUrl()), headers);
+                client.setConnectionTimeoutMillis(DOGE_REGTEST_RPC_TIMEOUT_MS);
+                client.setReadTimeoutMillis(DOGE_REGTEST_RPC_TIMEOUT_MS);
+                T result = client.invoke(method, params, responseType);
+                if (result == null) {
+                    throw new IllegalStateException("DOGE regtest RPC returned empty result: " + method);
+                }
+                return result;
+            } catch (Throwable e) {
+                if (e instanceof RuntimeException runtimeException) {
+                    throw runtimeException;
+                }
+                throw new IllegalStateException("DOGE regtest RPC call failed: " + method, e);
+            }
+        });
+    }
+
+    private boolean isProductionEnvironment() {
+        String value = environmentName == null ? "" : environmentName.trim();
+        return "prod".equalsIgnoreCase(value) || "production".equalsIgnoreCase(value);
+    }
+
     private static boolean isEvm(String chain) {
         try {
             return ChainType.valueOf(chain).isEvm();
@@ -711,6 +860,9 @@ public class WalletAppService {
     }
 
     private record SpendAccount(String accountId, String address) {
+    }
+
+    private record WithdrawalTarget(String requestedAddress, String broadcastAddress) {
     }
 
     public record DepositAddressRequest(String chain, String symbol) {

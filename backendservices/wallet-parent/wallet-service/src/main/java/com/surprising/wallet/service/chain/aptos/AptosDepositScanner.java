@@ -94,8 +94,8 @@ public class AptosDepositScanner {
             if (!FUNGIBLE_DEPOSIT.equals(eventNode.path("type").asText())) {
                 continue;
             }
-            BigDecimal amount = new BigDecimal(eventNode.path("data").path("amount").asText("0"));
-            if (amount.signum() <= 0) {
+            BigDecimal rawAmount = new BigDecimal(eventNode.path("data").path("amount").asText("0"));
+            if (rawAmount.signum() <= 0) {
                 continue;
             }
             String store = AptosHex.normalizeAddress(eventNode.path("data").path("store").asText("0x0"));
@@ -108,6 +108,7 @@ public class AptosDepositScanner {
             if (asset == null) {
                 continue;
             }
+            BigDecimal amount = rawAmount.movePointLeft(asset.decimals());
             long version = transaction.path("version").asLong();
             String hash = transaction.path("hash").asText(Long.toString(version));
             int confirmations = (int) Math.min(Integer.MAX_VALUE, Math.max(1, ledgerVersion - version + 1));
@@ -162,10 +163,11 @@ public class AptosDepositScanner {
     private void scanCoinStoreDepositEvent(JsonNode eventNode, TokenDefinition token,
                                            ChainAddressRecord address, AccountChainProfile profile,
                                            long ledgerVersion, List<DepositEvent> events) {
-        BigDecimal amount = new BigDecimal(eventNode.path("data").path("amount").asText("0"));
-        if (amount.signum() <= 0) {
+        BigDecimal rawAmount = new BigDecimal(eventNode.path("data").path("amount").asText("0"));
+        if (rawAmount.signum() <= 0) {
             return;
         }
+        BigDecimal amount = rawAmount.movePointLeft(token.getDecimals());
         long version = eventNode.path("version").asLong(0);
         JsonNode transaction = rpc.transactionByVersion(version);
         if (transaction == null || transaction.isNull()
@@ -224,7 +226,9 @@ public class AptosDepositScanner {
                                        Map<String, ChainAddressRecord> nativeAddresses,
                                        Map<String, TokenDefinition> metadataTokens) {
         if (APT_METADATA.equals(metadata) && nativeAddresses.containsKey(owner)) {
-            return new ResolvedAsset("APT", AptosRpcClient.aptCoinType(), null, nativeAddresses.get(owner));
+            int decimals = repository.findAsset(CHAIN, "APT").map(asset -> asset.getDecimals()).orElse(8);
+            return new ResolvedAsset("APT", AptosRpcClient.aptCoinType(), null, nativeAddresses.get(owner),
+                    decimals);
         }
         TokenDefinition token = metadataTokens.get(metadata);
         if (token == null) {
@@ -233,7 +237,7 @@ public class AptosDepositScanner {
         for (ChainAddressRecord record : repository.listChainAddresses(CHAIN, token.getSymbol())) {
             if ("DEPOSIT".equals(record.getWalletRole()) && sameAddress(owner, record.getAddress())) {
                 return new ResolvedAsset(token.getSymbol(), token.getContractAddress(),
-                        metadata, record);
+                        metadata, record, token.getDecimals());
             }
         }
         return null;
@@ -284,6 +288,7 @@ public class AptosDepositScanner {
         }
     }
 
-    private record ResolvedAsset(String symbol, String coinType, String tokenAddress, ChainAddressRecord address) {
+    private record ResolvedAsset(String symbol, String coinType, String tokenAddress, ChainAddressRecord address,
+                                 int decimals) {
     }
 }

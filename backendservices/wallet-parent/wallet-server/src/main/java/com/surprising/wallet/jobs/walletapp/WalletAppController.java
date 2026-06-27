@@ -104,4 +104,9 @@ public class WalletAppController {
                                                         HttpServletRequest servletRequest) {
         return ResultUtils.success(appService.transfer(authService.requireUser(servletRequest), request));
     }
+
+    @PostMapping("/app/test-faucet/doge")
+    public ResponseResult<Map<String, Object>> dogeRegtestFaucet(HttpServletRequest servletRequest) {
+        return ResultUtils.success(appService.dogeRegtestFaucet(authService.requireUser(servletRequest)));
+    }
 }

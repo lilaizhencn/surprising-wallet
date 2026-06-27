@@ -83,7 +83,11 @@ abstract class DbBtcLikeJsonRpcCommand implements BtcLikeCommand {
                 JsonRpcHttpClient client = new JsonRpcHttpClient(new URL(node.getRpcUrl()), headers);
                 client.setConnectionTimeoutMillis(TIMEOUT_MS);
                 client.setReadTimeoutMillis(TIMEOUT_MS);
-                return client.invoke(method, params, responseType);
+                T result = client.invoke(method, params, responseType);
+                if (result == null) {
+                    throw new IllegalStateException("RPC returned empty result: " + chain + " " + method);
+                }
+                return result;
             } catch (Throwable e) {
                 if (e instanceof RuntimeException runtimeException) {
                     throw runtimeException;

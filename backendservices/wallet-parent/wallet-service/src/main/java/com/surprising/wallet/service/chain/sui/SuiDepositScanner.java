@@ -80,10 +80,11 @@ public class SuiDepositScanner {
             if (!ownerMatches(change.path("owner"), address.getAddress())) {
                 continue;
             }
-            BigDecimal amount = new BigDecimal(change.path("amount").asText("0"));
-            if (amount.signum() <= 0) {
+            BigDecimal rawAmount = new BigDecimal(change.path("amount").asText("0"));
+            if (rawAmount.signum() <= 0) {
                 continue;
             }
+            BigDecimal amount = rawAmount.movePointLeft(decimals(symbol));
             DepositEvent event = new DepositEvent(ChainType.SUI, symbol, digest, sender,
                     address.getAddress(), amount, checkpoint, confirmations,
                     SuiRpcClient.SUI_COIN_TYPE.equals(coinType) ? null : coinType,
@@ -146,6 +147,14 @@ public class SuiDepositScanner {
             return value;
         }
         return SuiHex.normalizeAddress(parts[0]) + "::" + parts[1] + "::" + parts[2];
+    }
+
+    private int decimals(String symbol) {
+        return repository.findAsset(CHAIN, symbol)
+                .map(asset -> asset.getDecimals())
+                .orElseGet(() -> repository.findToken(CHAIN, symbol)
+                        .map(TokenDefinition::getDecimals)
+                        .orElse(9));
     }
 
     private long totalGas(JsonNode gas) {

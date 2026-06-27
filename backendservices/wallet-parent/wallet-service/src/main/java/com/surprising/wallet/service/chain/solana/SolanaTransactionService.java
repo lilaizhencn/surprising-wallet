@@ -18,6 +18,7 @@ import org.p2p.solanaj.programs.TokenProgram;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -77,11 +78,21 @@ public class SolanaTransactionService {
         return sendToken(sender, mintAddress, toOwnerAddress, atomicAmount, decimals);
     }
 
+    public String sendTokenAmount(ChainAddressRecord from, String mintAddress, String toOwnerAddress,
+                                  BigDecimal amount, int decimals) {
+        return sendToken(from, mintAddress, toOwnerAddress, toAtomicAmount(amount, decimals), decimals);
+    }
+
     private String sendToken(Account sender, String mintAddress, String toOwnerAddress,
                              long atomicAmount, int decimals) {
+        return sendTokenWithFeePayer(sender, sender, mintAddress, toOwnerAddress, atomicAmount, decimals);
+    }
+
+    private String sendTokenWithFeePayer(Account sourceOwner, Account feePayer, String mintAddress,
+                                         String toOwnerAddress, long atomicAmount, int decimals) {
         PublicKey mint = new PublicKey(mintAddress);
         PublicKey sourceAta = new PublicKey(addressService.associatedTokenAddress(
-                sender.getPublicKeyBase58(), mintAddress));
+                sourceOwner.getPublicKeyBase58(), mintAddress));
         PublicKey destinationOwner = new PublicKey(toOwnerAddress);
         PublicKey destinationAta = new PublicKey(addressService.associatedTokenAddress(
                 toOwnerAddress, mintAddress));
@@ -89,11 +100,13 @@ public class SolanaTransactionService {
         Transaction transaction = new Transaction();
         if (rpc.getAccountInfo(destinationAta.toBase58()).isNull()) {
             transaction.addInstruction(AssociatedTokenProgram.createIdempotent(
-                    sender.getPublicKey(), destinationOwner, mint));
+                    feePayer.getPublicKey(), destinationOwner, mint));
         }
         transaction.addInstruction(TokenProgram.transferChecked(
-                sourceAta, destinationAta, atomicAmount, (byte) decimals, sender.getPublicKey(), mint));
-        return signAndSend(transaction, List.of(sender));
+                sourceAta, destinationAta, atomicAmount, (byte) decimals, sourceOwner.getPublicKey(), mint));
+        return sourceOwner.getPublicKeyBase58().equals(feePayer.getPublicKeyBase58())
+                ? signAndSend(transaction, List.of(sourceOwner))
+                : signAndSend(transaction, List.of(feePayer, sourceOwner));
     }
 
     public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
@@ -132,7 +145,7 @@ public class SolanaTransactionService {
     }
 
     public String withdrawToken(String orderNo, long userId, ChainAddressRecord from,
-                                String mintAddress, String toOwnerAddress, BigDecimal atomicAmount) {
+                                String mintAddress, String toOwnerAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "solana withdrawToken");
         Optional<String> previous = repository.findWithdrawalTxHash(CHAIN, orderNo);
         if (previous.isPresent()) {
@@ -141,12 +154,12 @@ public class SolanaTransactionService {
         TokenDefinition token = repository.findTokenByContract(CHAIN, mintAddress)
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Solana mint " + mintAddress));
         int inserted = repository.createWithdrawalOrder(orderNo, userId, CHAIN, token.getSymbol(), toOwnerAddress,
-                atomicAmount, BigDecimal.ZERO);
+                amount, BigDecimal.ZERO);
         if (inserted == 0) {
             return repository.findWithdrawalTxHash(CHAIN, orderNo)
                     .orElseThrow(() -> new IllegalStateException("withdrawal already claimed without tx hash"));
         }
-        if (!repository.freezeLedgerBalance(CHAIN, token.getSymbol(), from.getAccountId(), atomicAmount)) {
+        if (!repository.freezeLedgerBalance(CHAIN, token.getSymbol(), from.getAccountId(), amount)) {
             repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getOwnerAddress(), null,
                     "insufficient available token ledger balance");
             throw new IllegalStateException("insufficient " + token.getSymbol() + " ledger balance");
@@ -154,14 +167,13 @@ public class SolanaTransactionService {
         repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getOwnerAddress(), null, null);
         try {
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getOwnerAddress(), null, null);
-            String signature = sendToken(from, mintAddress, toOwnerAddress,
-                    atomicAmount.longValueExact(), token.getDecimals());
+            String signature = sendTokenAmount(from, mintAddress, toOwnerAddress, amount, token.getDecimals());
             repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getOwnerAddress(), signature, null);
             recordTransaction(signature, from.getAddress(), toOwnerAddress, token.getSymbol(), mintAddress,
-                    atomicAmount, profile().getDefaultFee(), "SENT");
+                    amount, profile().getDefaultFee(), "SENT");
             return signature;
         } catch (RuntimeException e) {
-            repository.releaseLockedBalance(CHAIN, token.getSymbol(), from.getAccountId(), atomicAmount);
+            repository.releaseLockedBalance(CHAIN, token.getSymbol(), from.getAccountId(), amount);
             repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getOwnerAddress(), null, e.getMessage());
             throw e;
         }
@@ -194,7 +206,7 @@ public class SolanaTransactionService {
     }
 
     public String collectToken(String collectionNo, ChainAddressRecord from, String mintAddress,
-                               String hotOwnerAddress, BigDecimal atomicAmount) {
+                               String hotOwnerAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "solana collectToken");
         Optional<String> previous = repository.findCollectionTxHash(CHAIN, collectionNo);
         if (previous.isPresent()) {
@@ -203,17 +215,22 @@ public class SolanaTransactionService {
         TokenDefinition token = repository.findTokenByContract(CHAIN, mintAddress)
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Solana mint " + mintAddress));
         repository.createCollectionRecord(collectionNo, CHAIN, token.getSymbol(), from.getAddress(),
-                hotOwnerAddress, atomicAmount, BigDecimal.valueOf(profile().getDefaultFee()), null);
+                hotOwnerAddress, amount, BigDecimal.valueOf(profile().getDefaultFee()), null);
         if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
             return repository.findCollectionTxHash(CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
         }
         try {
-            String signature = sendToken(from, mintAddress, hotOwnerAddress,
-                    atomicAmount.longValueExact(), token.getDecimals());
+            ChainAddressRecord hot = repository.findChainAddressByAddress(CHAIN, "SOL", hotOwnerAddress)
+                    .or(() -> repository.findChainAddressByAddress(CHAIN, hotOwnerAddress))
+                    .orElseThrow(() -> new IllegalStateException("missing Solana hot fee payer " + hotOwnerAddress));
+            Account sourceOwner = keyService.account(from.getUserId(), from.getBiz(), from.getAddressIndex());
+            Account feePayer = keyService.account(hot.getUserId(), hot.getBiz(), hot.getAddressIndex());
+            String signature = sendTokenWithFeePayer(sourceOwner, feePayer, mintAddress, hotOwnerAddress,
+                    toAtomicAmount(amount, token.getDecimals()), token.getDecimals());
             repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", signature, null, null);
             recordTransaction(signature, from.getAddress(), hotOwnerAddress, token.getSymbol(), mintAddress,
-                    atomicAmount, profile().getDefaultFee(), "SENT");
+                    amount, profile().getDefaultFee(), "SENT");
             return signature;
         } catch (RuntimeException e) {
             repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
@@ -280,6 +297,11 @@ public class SolanaTransactionService {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
+    }
+
+    private long toAtomicAmount(BigDecimal amount, int decimals) {
+        BigInteger atomic = amount.movePointRight(decimals).toBigIntegerExact();
+        return atomic.longValueExact();
     }
 
     private void recordTransaction(String signature, String from, String to, String symbol, String mint,

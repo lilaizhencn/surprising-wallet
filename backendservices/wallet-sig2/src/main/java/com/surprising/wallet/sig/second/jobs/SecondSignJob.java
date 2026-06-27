@@ -73,8 +73,7 @@ public class SecondSignJob implements Runnable {
             } catch (DataAccessException e) {
                 log.info("Signature second job redis error", e);
             } catch (Throwable e) {
-                log.error("Signature second job quit", e);
-                break;
+                log.error("Signature second job error, will retry", e);
             }
 
             try {

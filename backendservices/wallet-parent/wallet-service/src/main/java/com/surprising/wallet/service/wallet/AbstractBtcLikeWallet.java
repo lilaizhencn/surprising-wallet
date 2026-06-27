@@ -297,9 +297,14 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         List<UtxoTransaction> results = txidList.parallelStream()
                 .map((txid) -> {
                     //先更新提现交易的的状态
-                    updateWithdrawTXId(txid, getCurrency());
-                    List<UtxoTransaction> utxos = getUtxo(txid, height);
-                    return utxos;
+                    try {
+                        updateWithdrawTXId(txid, getCurrency());
+                        return getUtxo(txid, height);
+                    } catch (Throwable e) {
+                        log.warn("{} skip tx while scanning block height={} txid={} error={}",
+                                getCurrency().getName(), height, txid, e.getMessage());
+                        return List.<UtxoTransaction>of();
+                    }
                 })
                 .filter((utxos) -> !CollectionUtils.isEmpty(utxos))
                 .collect(LinkedList::new, LinkedList::addAll, LinkedList::addAll);
@@ -456,7 +461,17 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
         try {
             return command.getRawTransaction(txid, true);
         } catch (JsonRpcClientException e) {
-            return command.getRawTransaction(txid, 1);
+            try {
+                return command.getRawTransaction(txid, 1);
+            } catch (Throwable retryError) {
+                log.warn("{} getRawTransaction retry failed txid={} error={}",
+                        getCurrency().getName(), txid, retryError.getMessage());
+                return null;
+            }
+        } catch (Throwable e) {
+            log.warn("{} getRawTransaction failed txid={} error={}",
+                    getCurrency().getName(), txid, e.getMessage());
+            return null;
         }
 
 //        final String rawTx = this.command.getRawTransactionStr(txid);
@@ -485,7 +500,7 @@ public abstract class AbstractBtcLikeWallet extends AbstractWallet implements IW
     public int getConfirm(String txId) {
         BtcLikeRawTransaction transaction = getRawTransaction(txId);
         if (ObjectUtils.isEmpty(transaction)) {
-            return -1;
+            return 0;
         } else {
             return transaction.getConfirmations();
         }

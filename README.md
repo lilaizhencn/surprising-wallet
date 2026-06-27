@@ -49,6 +49,8 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 
 The initialization SQL includes `chain_profile`, `chain_rpc_node`, `wallet_system_config`, and `wallet_public_key`. Chain switches, scan start, scan batch size, RPC nodes, and the three wallet-server public keys are read from the database.
 
+Before deployment, set the scanner checkpoint for each environment deliberately. A fresh system should normally set `chain_scan_height` near the latest safe block and scan only new blocks after deployment. Move the checkpoint backward only when a known historical deposit window must be replayed. Do not start a new deployment from genesis or very old blocks because it can take a long time to catch up and can quickly exhaust public RPC quotas.
+
 Build:
 
 ```bash

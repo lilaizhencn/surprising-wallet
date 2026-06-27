@@ -13,6 +13,7 @@ import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -25,12 +26,16 @@ import java.util.Set;
 public class SolanaDepositScanner {
     private static final String CHAIN = "SOLANA";
     private static final String SCANNER = "solana-signature-scanner";
+    private static final int SOL_DECIMALS = 9;
 
     private final SolanaRpcClient rpc;
     private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
+
+    @Autowired(required = false)
+    private SolanaAddressService addressService;
 
     public List<DepositEvent> scanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "solana scanAndCredit");
@@ -45,7 +50,7 @@ public class SolanaDepositScanner {
             }
         }
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
-            for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, token.getSymbol())) {
+            for (ChainAddressRecord address : tokenScanAddresses(token)) {
                 if ("DEPOSIT".equals(address.getWalletRole())) {
                     scanAddress(address, token, profile, currentSlot, processed, events);
                 }
@@ -106,14 +111,52 @@ public class SolanaDepositScanner {
         }
     }
 
+    private List<ChainAddressRecord> tokenScanAddresses(TokenDefinition token) {
+        List<ChainAddressRecord> addresses = new ArrayList<>(repository.listChainAddresses(CHAIN, token.getSymbol()));
+        if (addressService == null || !StringUtils.hasText(token.getContractAddress())) {
+            return addresses;
+        }
+        Set<String> existing = new HashSet<>();
+        for (ChainAddressRecord address : addresses) {
+            existing.add(normalize(address.getAddress()));
+        }
+        for (ChainAddressRecord owner : repository.listChainAddresses(CHAIN, "SOL")) {
+            if (!"DEPOSIT".equals(owner.getWalletRole())) {
+                continue;
+            }
+            String ownerAddress = StringUtils.hasText(owner.getOwnerAddress())
+                    ? owner.getOwnerAddress()
+                    : owner.getAddress();
+            String ata = addressService.associatedTokenAddress(ownerAddress, token.getContractAddress());
+            if (!existing.add(normalize(ata))) {
+                continue;
+            }
+            addresses.add(ChainAddressRecord.builder()
+                    .chain(CHAIN)
+                    .assetSymbol(token.getSymbol())
+                    .accountId(owner.getAccountId())
+                    .userId(owner.getUserId())
+                    .biz(owner.getBiz())
+                    .addressIndex(owner.getAddressIndex())
+                    .address(ata)
+                    .ownerAddress(ownerAddress)
+                    .derivationPath(owner.getDerivationPath())
+                    .walletRole(owner.getWalletRole())
+                    .enabled(owner.getEnabled())
+                    .build());
+        }
+        return addresses;
+    }
+
     private DepositEvent nativeDeposit(String signature, ChainAddressRecord tracked, long slot, int confirmations,
                                        JsonNode transaction, String type, JsonNode info) {
         if (!"transfer".equals(type) || !tracked.getAddress().equals(info.path("destination").asText())
                 || !info.has("lamports")) {
             return null;
         }
+        BigDecimal displayAmount = new BigDecimal(info.path("lamports").asText()).movePointLeft(SOL_DECIMALS);
         return new DepositEvent(ChainType.SOLANA, "SOL", signature, info.path("source").asText(),
-                tracked.getAddress(), new BigDecimal(info.path("lamports").asText()), slot, confirmations,
+                tracked.getAddress(), displayAmount, slot, confirmations,
                 null, transaction.toString());
     }
 
@@ -124,14 +167,20 @@ public class SolanaDepositScanner {
                 || !tracked.getAddress().equals(info.path("destination").asText())) {
             return null;
         }
+        if (StringUtils.hasText(token.getContractAddress())
+                && info.hasNonNull("mint")
+                && !token.getContractAddress().equals(info.path("mint").asText())) {
+            return null;
+        }
         String amount = info.has("amount")
                 ? info.path("amount").asText()
                 : info.path("tokenAmount").path("amount").asText();
         if (amount.isBlank()) {
             return null;
         }
+        BigDecimal displayAmount = new BigDecimal(amount).movePointLeft(token.getDecimals());
         return new DepositEvent(ChainType.SOLANA, token.getSymbol(), signature,
-                info.path("source").asText(), tracked.getAddress(), new BigDecimal(amount), slot, confirmations,
+                info.path("source").asText(), tracked.getAddress(), displayAmount, slot, confirmations,
                 token.getContractAddress(), transaction.toString());
     }
 
@@ -154,6 +203,10 @@ public class SolanaDepositScanner {
     private int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 100 : batchSize;
+    }
+
+    private String normalize(String address) {
+        return address == null ? "" : address;
     }
 
     private void requireTaskEnabled(String task, String operation) {

@@ -2,11 +2,10 @@ package com.surprising.wallet.service.chain.evm;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.EvmTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.config.ChainRpcNodeService;
-import com.surprising.wallet.service.config.PubKeyConfig;
+import com.surprising.wallet.service.config.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
 import org.bitcoinj.crypto.ECKey;
@@ -36,7 +35,7 @@ public class EvmAccountTransactionService {
 
     private final ChainJdbcRepository repository;
     private final ChainRpcNodeService rpcNodeService;
-    private final PubKeyConfig pubKeyConfig;
+    private final AccountSecp256k1KeyService keyService;
     private final EvmTransactionBuilder transactionBuilder;
 
     public String sendNative(String chain, ChainAddressRecord from, String toAddress, BigDecimal amount) {
@@ -153,15 +152,7 @@ public class EvmAccountTransactionService {
     }
 
     private Credentials credentials(AccountChainProfile profile, ChainAddressRecord from) {
-        ECKey ecKey = pubKeyConfig.NODE2.getChild(44)
-                .getChild(ChainType.derivationCoinType(profile.getChain(), profile.getBip44CoinType()))
-                .getChild(from.getBiz())
-                .getChild(Math.toIntExact(from.getUserId()))
-                .getChild(Math.toIntExact(from.getAddressIndex()))
-                .getEcKey();
-        if (!ecKey.hasPrivKey()) {
-            throw new IllegalStateException("EVM signer key does not contain a private key");
-        }
+        ECKey ecKey = keyService.key(profile, from);
         return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(ecKey.getPrivKey(), 64));
     }
 

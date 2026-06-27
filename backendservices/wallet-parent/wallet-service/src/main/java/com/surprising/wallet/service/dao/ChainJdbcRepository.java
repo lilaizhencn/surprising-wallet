@@ -822,18 +822,26 @@ public class ChainJdbcRepository {
 
     public int createWithdrawalOrder(String orderNo, long userId, String chain, String assetSymbol,
                                      String toAddress, BigDecimal amount, BigDecimal fee) {
+        return createWithdrawalOrder(orderNo, userId, chain, assetSymbol, null, null, toAddress, amount, fee);
+    }
+
+    public int createWithdrawalOrder(String orderNo, long userId, String chain, String assetSymbol,
+                                     String fromAddress, String debitAccountId, String toAddress,
+                                     BigDecimal amount, BigDecimal fee) {
         return jdbcTemplate.update("""
-                        insert into withdrawal_order(order_no, user_id, chain, asset_symbol, to_address,
-                                                     amount, fee, status, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?)
+                        insert into withdrawal_order(order_no, user_id, chain, asset_symbol, from_address,
+                                                     debit_account_id, to_address, amount, fee, status,
+                                                     created_at, updated_at)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?)
                         on conflict (chain, order_no) do nothing
                         """,
-                orderNo, userId, chain, assetSymbol, toAddress, amount, fee, toTs(now()), toTs(now()));
+                orderNo, userId, chain, assetSymbol, fromAddress, debitAccountId, toAddress, amount, fee,
+                toTs(now()), toTs(now()));
     }
 
     public List<WithdrawalOrderRecord> listWithdrawalsForSigning(String chain, String assetSymbol, int limit) {
         return jdbcTemplate.query("""
-                        select id, order_no, user_id, chain, asset_symbol, from_address, to_address,
+                        select id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
                                amount, fee, tx_hash, status, error_message, created_at, updated_at
                         from withdrawal_order
                         where chain = ? and asset_symbol = ? and status in ('FROZEN', 'RETRYING')
@@ -846,7 +854,7 @@ public class ChainJdbcRepository {
 
     public List<WithdrawalOrderRecord> listWithdrawalsForSigning(String chain, int limit) {
         return jdbcTemplate.query("""
-                        select id, order_no, user_id, chain, asset_symbol, from_address, to_address,
+                        select id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
                                amount, fee, tx_hash, status, error_message, created_at, updated_at
                         from withdrawal_order
                         where chain = ? and status in ('FROZEN', 'RETRYING')
@@ -859,7 +867,7 @@ public class ChainJdbcRepository {
 
     public List<WithdrawalOrderRecord> listWithdrawalsByStatus(String chain, String status, int limit) {
         return jdbcTemplate.query("""
-                        select id, order_no, user_id, chain, asset_symbol, from_address, to_address,
+                        select id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
                                amount, fee, tx_hash, status, error_message, created_at, updated_at
                         from withdrawal_order
                         where chain = ? and status = ?
@@ -920,6 +928,18 @@ public class ChainJdbcRepository {
         return results.stream().findFirst();
     }
 
+    public Optional<WithdrawalOrderRecord> findWithdrawalOrder(String chain, String orderNo) {
+        List<WithdrawalOrderRecord> results = jdbcTemplate.query("""
+                        select id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
+                               amount, fee, tx_hash, status, error_message, created_at, updated_at
+                        from withdrawal_order
+                        where chain = ? and order_no = ?
+                        """,
+                (rs, rowNum) -> mapWithdrawalOrder(rs),
+                chain, orderNo);
+        return results.stream().findFirst();
+    }
+
     private WithdrawalOrderRecord mapWithdrawalOrder(java.sql.ResultSet rs) throws java.sql.SQLException {
         return WithdrawalOrderRecord.builder()
                 .id(rs.getLong("id"))
@@ -928,6 +948,7 @@ public class ChainJdbcRepository {
                 .chain(rs.getString("chain"))
                 .assetSymbol(rs.getString("asset_symbol"))
                 .fromAddress(rs.getString("from_address"))
+                .debitAccountId(rs.getString("debit_account_id"))
                 .toAddress(rs.getString("to_address"))
                 .amount(rs.getBigDecimal("amount"))
                 .fee(rs.getBigDecimal("fee"))
@@ -1058,12 +1079,14 @@ public class ChainJdbcRepository {
             String businessType,
             String businessNo,
             WithdrawTransaction transaction) {
-        return createBitcoinLikeSigningTransaction(
+        WithdrawTransaction persisted = createBitcoinLikeSigningTransaction(
                 currency.getName().toUpperCase(java.util.Locale.ROOT),
                 currency.getName().toUpperCase(java.util.Locale.ROOT),
                 businessType,
                 businessNo,
                 transaction);
+        currency.applyTo(persisted);
+        return persisted;
     }
 
     public WithdrawTransaction createBitcoinLikeSigningTransaction(
@@ -1434,34 +1457,50 @@ public class ChainJdbcRepository {
                               and status <> 'FAILED'
                             group by chain, asset_symbol, lower(from_address)
                         ),
+                        deposited as (
+                            select chain, asset_symbol, lower(to_address) as to_address, coalesce(sum(amount), 0) amount
+                            from deposit_record
+                            where chain = ?
+                              and credited = true
+                            group by chain, asset_symbol, lower(to_address)
+                        ),
                         candidates as (
                             select ca.chain, ca.asset_symbol, ca.account_id, ca.address, ca.owner_address,
                                    ca.user_id, ca.biz, ca.address_index, ca.wallet_role,
-                                   greatest(lb.available_balance - coalesce(collected.amount, 0), 0) as amount,
+                                   greatest(deposited.amount - coalesce(collected.amount, 0), 0) as amount,
                                    greatest(coalesce(a.min_transfer, 0), ?) as minimum_amount
-                            from ledger_balance lb
+                            from deposited
                             join chain_address ca
-                              on ca.chain = lb.chain
-                             and ca.asset_symbol = lb.asset_symbol
-                             and lower(ca.account_id) = lower(lb.account_id)
+                              on ca.chain = deposited.chain
+                             and ca.asset_symbol = deposited.asset_symbol
+                             and lower(ca.address) = deposited.to_address
                              and ca.enabled = true
                              and ca.wallet_role = 'DEPOSIT'
                              and ca.user_id <> ?
+                            left join ledger_balance lb
+                              on lb.chain = ca.chain
+                             and lb.asset_symbol = ca.asset_symbol
+                             and lower(lb.account_id) = lower(ca.account_id)
                             join chain_asset a
-                              on a.chain = lb.chain
-                             and a.symbol = lb.asset_symbol
+                              on a.chain = ca.chain
+                             and a.symbol = ca.asset_symbol
                              and a.active = true
                             left join collected
-                              on collected.chain = lb.chain
-                             and collected.asset_symbol = lb.asset_symbol
+                              on collected.chain = ca.chain
+                             and collected.asset_symbol = ca.asset_symbol
                              and collected.from_address = lower(ca.address)
-                            where lb.chain = ?
-                              and lb.available_balance > 0
+                            where deposited.chain = ?
+                        ),
+                        positive_candidates as (
+                            select chain, asset_symbol, account_id, address, owner_address,
+                                   user_id, biz, address_index, wallet_role, amount, minimum_amount
+                            from candidates
+                            where amount > 0
+                              and amount >= minimum_amount
                         )
                         select chain, asset_symbol, account_id, address, owner_address,
                                user_id, biz, address_index, wallet_role, amount
-                        from candidates
-                        where amount >= minimum_amount
+                        from positive_candidates
                         order by amount desc, address_index
                         limit ?
                         """,
@@ -1477,7 +1516,7 @@ public class ChainJdbcRepository {
                         .walletRole(rs.getString("wallet_role"))
                         .amount(rs.getBigDecimal("amount"))
                         .build(),
-                chain, minimumAmount, HotWalletRules.DEFAULT_HOT_USER_ID, chain, limit);
+                chain, chain, minimumAmount, HotWalletRules.DEFAULT_HOT_USER_ID, chain, limit);
     }
 
     public void updateScanHeight(String chain, String scannerName, long bestHeight, long safeHeight) {

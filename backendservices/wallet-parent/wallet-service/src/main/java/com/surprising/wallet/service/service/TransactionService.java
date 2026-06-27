@@ -60,24 +60,18 @@ public class TransactionService {
 
     @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_COMMITTED)
     public void saveTransaction(TransactionDTO dto) {
-        // INTERNAL 一般代表是内部找零地址的默认业务线，不需要通知到账
-        if (BizEnum.INTERNAL.getIndex() == dto.getBiz()) {
+        log.info("saveTransaction dto: {} begin", dto.getTxId());
+        RuntimeAsset currency = assetRoutingService.runtimeAsset(dto.getCurrency());
+        // Wallet app deposit addresses currently use biz=0; only hot/internal addresses are skipped.
+        if (BizEnum.INTERNAL.getIndex() == dto.getBiz()
+                && isInternalAddress(dto, currency)) {
             log.warn("internal类型的转账不需要通知 交易id:{}", dto.getTxId());
             return;
         }
-        log.info("saveTransaction dto: {} begin", dto.getTxId());
-        RuntimeAsset currency = assetRoutingService.runtimeAsset(dto.getCurrency());
         runtimeConfigService.requireTaskEnabled(chainName(currency), WalletRuntimeConfigService.TASK_SCAN,
                 "legacy saveTransaction");
         long requiredConfirmations =
                 walletContext.getWallet(currency).getDepositConfirmationThreshold();
-        UtxoKey utxoKey = UtxoKey.parse(dto.getTxId());
-        if (isUnifiedBitcoinLike(currency)
-                && utxoKey != null
-                && isKnownWalletTransaction(utxoKey.txId, currency)) {
-            log.info("skip {} self-transfer deposit event for tx={}", currency.getName(), utxoKey.txId);
-            return;
-        }
         if (dto.getConfirmNum() != null && dto.getConfirmNum() >= requiredConfirmations) {
             creditDepositIfNeeded(dto, currency, requiredConfirmations);
         }
@@ -110,6 +104,8 @@ public class TransactionService {
                     record.getUserId(),
                     chain,
                     chain,
+                    null,
+                    record.getUserId().toString(),
                     record.getAddress(),
                     record.getBalance(),
                     record.getFee() == null ? BigDecimal.ZERO : record.getFee());
@@ -254,8 +250,9 @@ public class TransactionService {
         List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
         records.forEach(record -> {
             BigDecimal amount = withdrawFrozenAmount(record);
+            String debitAccountId = withdrawalDebitAccount(chain, record);
             chainJdbcRepository.releaseLockedBalance(
-                    chain, chain, record.getUserId().toString(), amount);
+                    chain, chain, debitAccountId, amount);
             chainJdbcRepository.updateWithdrawalStatus(
                     chain, record.getWithdrawId(), "FAILED", null, null, error);
             record.setStatus((byte) Constants.DELETE);
@@ -304,16 +301,21 @@ public class TransactionService {
                 currency.getName(), dto.getTxId());
     }
 
-    private boolean isKnownWalletTransaction(String txId, RuntimeAsset currency) {
-        if (isUnifiedBitcoinLike(currency)) {
-            return chainJdbcRepository.bitcoinLikeSigningTransactionExists(currency, txId);
-        }
-        return false;
-    }
-
     private BigDecimal withdrawFrozenAmount(WithdrawRecord record) {
         BigDecimal fee = record.getFee() == null ? BigDecimal.ZERO : record.getFee();
         return record.getBalance().add(fee);
+    }
+
+    private boolean isInternalAddress(TransactionDTO dto, RuntimeAsset currency) {
+        Address address = addressService.getAddress(dto.getAddress(), currency);
+        return address == null || address.getUserId() == null || address.getUserId() <= 0;
+    }
+
+    private String withdrawalDebitAccount(String chain, WithdrawRecord record) {
+        return chainJdbcRepository.findWithdrawalOrder(chain, record.getWithdrawId())
+                .map(order -> order.getDebitAccountId())
+                .filter(StringUtils::hasText)
+                .orElse(record.getUserId().toString());
     }
 
     private boolean isUnifiedBitcoinLike(RuntimeAsset currency) {

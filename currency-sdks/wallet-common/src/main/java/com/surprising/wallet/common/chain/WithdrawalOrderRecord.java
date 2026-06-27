@@ -22,6 +22,7 @@ public class WithdrawalOrderRecord {
     private String chain;
     private String assetSymbol;
     private String fromAddress;
+    private String debitAccountId;
     private String toAddress;
     private BigDecimal amount;
     private BigDecimal fee;

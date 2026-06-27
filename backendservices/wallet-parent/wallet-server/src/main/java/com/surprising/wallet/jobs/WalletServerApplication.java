@@ -27,7 +27,13 @@ import java.util.concurrent.TimeUnit;
 public class WalletServerApplication {
 
     public static void main(String[] args) {
+        configureTlsNamedGroups();
         SpringApplication.run(WalletServerApplication.class, args);
+    }
+
+    private static void configureTlsNamedGroups() {
+        System.setProperty("jdk.tls.namedGroups",
+                "secp256r1,secp384r1,secp521r1,ffdhe2048,ffdhe3072");
     }
 
     @Autowired

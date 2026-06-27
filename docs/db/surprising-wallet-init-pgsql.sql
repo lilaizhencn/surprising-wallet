@@ -312,8 +312,8 @@ CREATE TABLE "public"."chain_asset" (
     "decimals" integer DEFAULT 18 NOT NULL,
     "native_asset" boolean DEFAULT false NOT NULL,
     "active" boolean DEFAULT true NOT NULL,
-    "min_transfer" numeric(78,0),
-    "min_withdraw" numeric(78,0),
+    "min_transfer" numeric(78,18),
+    "min_withdraw" numeric(78,18),
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
 );
@@ -1316,6 +1316,7 @@ CREATE TABLE "public"."withdrawal_order" (
     "chain" character varying(32) NOT NULL,
     "asset_symbol" character varying(32) NOT NULL,
     "from_address" character varying(160),
+    "debit_account_id" character varying(160),
     "to_address" character varying(160) NOT NULL,
     "amount" numeric(78,18) NOT NULL,
     "fee" numeric(78,18) DEFAULT 0 NOT NULL,
@@ -2101,7 +2102,7 @@ INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "cont
 INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (17, 'DOGE', 'DOGE', 'NATIVE', NULL, 8, true, true, 1000000, 1000000, '2026-06-21 19:13:13.386542+08', '2026-06-24 18:07:33.46956+08');
 INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (20, 'BCH', 'BCH', 'NATIVE', NULL, 8, true, true, 546, 546, '2026-06-21 23:17:57.796638+08', '2026-06-24 18:07:33.46956+08');
 INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (25, 'SOLANA', 'USDT', 'TOKEN', '2VHdVaW1jBGmvU1PdQpvmPnWV5AiAxrmxmUTLvf8951y', 6, false, true, 1, 1, '2026-06-23 15:01:18.906314+08', '2026-06-23 15:02:47.92829+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (26, 'SOLANA', 'USDC', 'TOKEN', 'FUez5CPP3C4VN7JGkgKxamC8f4cvt397R3unqUX6tekt', 6, false, true, 1, 1, '2026-06-23 15:01:43.41494+08', '2026-06-23 15:03:11.79609+08');
+INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (26, 'SOLANA', 'USDC', 'TOKEN', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', 6, false, true, 1, 1, '2026-06-23 15:01:43.41494+08', '2026-06-23 15:03:11.79609+08');
 INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (10, 'SOLANA', 'SOL', 'NATIVE', NULL, 9, true, true, 1, 1, '2026-06-20 15:10:22.823199+08', '2026-06-23 21:01:38.531755+08');
 INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (11, 'TON', 'TON', 'NATIVE', NULL, 9, true, true, 1000000, 1000000, '2026-06-20 15:10:22.823199+08', '2026-06-23 21:01:38.590086+08');
 INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (34, 'TON', 'USDT', 'JETTON', 'kQCZ5SAA78W_0vA5eSoU23YomxnUwah3KYagqeesNQI5jOXT', 6, false, true, 1, 1, '2026-06-23 21:37:58.688905+08', '2026-06-23 21:59:30.209563+08');
@@ -2279,7 +2280,7 @@ INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contr
 INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (21, 'OPTIMISM', 'USDT', 'ERC20', '0xcb4CB0127B079d42b81F53e747b763d206D050f9', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:23.204371+08', '2026-06-20 21:01:27.95842+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (22, 'OPTIMISM', 'USDC', 'ERC20', '0x66C9A0b2971316079d31dda472f4eB5bF900C53b', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:23.207534+08', '2026-06-20 21:01:27.961714+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (23, 'BASE', 'USDT', 'ERC20', '0x210BBd033630e5e611B7922D70b0Caabe64636d9', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:38.653475+08', '2026-06-20 21:02:57.968281+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (24, 'BASE', 'USDC', 'ERC20', '0xeba5CEc9257045Df0B44eA784F9a7Fa07DeeF6d4', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:38.656754+08', '2026-06-20 21:02:57.971571+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (24, 'BASE', 'USDC', 'ERC20', '0x036cbd53842c5426634e7929541ec2318f3dcf7e', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:38.656754+08', '2026-06-20 21:02:57.971571+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (25, 'AVAX_C', 'USDT', 'ERC20', '0x1B43cbC6879C8237469794F9B8Ed290810e502d9', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:54.422415+08', '2026-06-20 21:04:18.705305+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (26, 'AVAX_C', 'USDC', 'ERC20', '0xe757C06f170C8EE956E7d80793087c971Ab5D7b5', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:54.425852+08', '2026-06-20 21:04:18.708504+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (94, 'APTOS', 'MUSD', 'APTOS_COIN', '0x0efda149ef9237e8a6cb23228ec986bec0898f320f0d03e8f8b744208244759e::mock_coin::MockCoin', 6, true, 1.000000000000000000, 1.000000000000000000, true, '2026-06-23 22:48:57.330957+08', '2026-06-23 23:03:51.458057+08', 'devnet', 'COIN', NULL, NULL, 1.000000000000000000, 1.000000000000000000, 1.000000000000000000, 'APT_GAS', 1);
@@ -2290,7 +2291,7 @@ INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contr
 INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (1, 'ETH', 'USDT', 'ERC20', '0x278E80923f1a7194c0777500d794c489990259FA', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:23:33.141962+08', '2026-06-24 17:27:12.470424+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (75, 'TRON', 'USDT', 'TRC20', 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', 6, true, 0.000001000000000000, 0.000001000000000000, true, '2026-06-21 00:25:35.727551+08', '2026-06-21 00:28:58.580102+08', 'NILE', 'TRC20', 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', '41eca9bc828a3005b9a3b909f2cc5c2a54794de05f', 0.000001000000000000, 0.000001000000000000, 1.000000000000000000, 'energy-bandwidth', 1);
 INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (78, 'SOLANA', 'USDT', 'SPL', '2VHdVaW1jBGmvU1PdQpvmPnWV5AiAxrmxmUTLvf8951y', 6, true, 1.000000000000000000, 1.000000000000000000, true, '2026-06-23 15:01:18.893717+08', '2026-06-23 15:02:47.901793+08', 'devnet', 'SPL', '2VHdVaW1jBGmvU1PdQpvmPnWV5AiAxrmxmUTLvf8951y', NULL, 1.000000000000000000, 1.000000000000000000, 1.000000000000000000, 'SOL_FEE_PAYER', 1);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (79, 'SOLANA', 'USDC', 'SPL', 'FUez5CPP3C4VN7JGkgKxamC8f4cvt397R3unqUX6tekt', 6, true, 1.000000000000000000, 1.000000000000000000, true, '2026-06-23 15:01:43.398652+08', '2026-06-23 15:03:11.78696+08', 'devnet', 'SPL', 'FUez5CPP3C4VN7JGkgKxamC8f4cvt397R3unqUX6tekt', NULL, 1.000000000000000000, 1.000000000000000000, 1.000000000000000000, 'SOL_FEE_PAYER', 1);
+INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (79, 'SOLANA', 'USDC', 'SPL', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', 6, true, 1.000000000000000000, 1.000000000000000000, true, '2026-06-23 15:01:43.398652+08', '2026-06-23 15:03:11.78696+08', 'devnet', 'SPL', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', NULL, 1.000000000000000000, 1.000000000000000000, 1.000000000000000000, 'SOL_FEE_PAYER', 1);
 INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (2, 'ETH', 'USDC', 'ERC20', '0x9478eC397A2F4Be6A84916dD8a353c91b78c6238', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:23:33.151844+08', '2026-06-24 17:27:12.473627+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
 UPDATE "public"."token_config" SET "enabled" = false, "collect_enabled" = false, "network" = 'testnet', "updated_at" = "now"() WHERE "id" = 94;
@@ -2342,6 +2343,115 @@ SELECT pg_catalog.setval('"public"."chain_rpc_node_id_seq"', 224, true);
 --
 
 SELECT pg_catalog.setval('"public"."token_config_id_seq"', 105, true);
+
+
+--
+-- Normalize testnet token contracts and expose enabled wallet-app token assets.
+--
+
+WITH token_data(chain, symbol, standard, network, token_standard, contract_address, decimals,
+                contract_address_base58, contract_address_hex, gas_strategy) AS (
+    VALUES
+        ('ETH', 'USDC', 'ERC20', 'sepolia', 'ERC20', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', 6, NULL, NULL, 'native-gas'),
+        ('POLYGON', 'USDC', 'ERC20', 'amoy', 'ERC20', '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582', 6, NULL, NULL, 'native-gas'),
+        ('ARBITRUM', 'USDC', 'ERC20', 'sepolia', 'ERC20', '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', 6, NULL, NULL, 'native-gas'),
+        ('OPTIMISM', 'USDC', 'ERC20', 'sepolia', 'ERC20', '0x5fd84259d66Cd46123540766Be93DFE6D43130D7', 6, NULL, NULL, 'native-gas'),
+        ('BASE', 'USDC', 'ERC20', 'sepolia', 'ERC20', '0x036CbD53842c5426634e7929541eC2318f3dCF7e', 6, NULL, NULL, 'native-gas'),
+        ('AVAX_C', 'USDC', 'ERC20', 'fuji', 'ERC20', '0x5425890298aed601595a70AB815c96711a31Bc65', 6, NULL, NULL, 'native-gas'),
+        ('BNB', 'USDC', 'ERC20', 'testnet', 'ERC20', '0x31873b5804bABE258d6ea008f55e08DD00b7d51E', 6, NULL, NULL, 'native-gas'),
+        ('SOLANA', 'USDC', 'SPL', 'devnet', 'SPL', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', 6, '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', NULL, 'SOL_FEE_PAYER'),
+        ('APTOS', 'USDC', 'APTOS_FA', 'testnet', 'APTOS_FA', '0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832', 6, NULL, NULL, 'APT_GAS'),
+        ('SUI', 'USDC', 'SUI_COIN', 'testnet', 'COIN', '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC', 6, NULL, NULL, 'SUI_GAS_OBJECT'),
+        ('TON', 'USDC', 'JETTON', 'testnet', 'JETTON', 'kQCzPT6908-8TR862TQo1S43-2kEme8UKRCRSWkaxNLD7H_2', 6, NULL, NULL, 'TON_FORWARD_FEE'),
+        ('ETH', 'USDT', 'ERC20', 'sepolia', 'ERC20', '0x01a6810727db185bbf7f30ec158c3ac8b8112627', 6, NULL, NULL, 'native-gas'),
+        ('POLYGON', 'USDT', 'ERC20', 'amoy', 'ERC20', '0xb5F6211f94FCC162D5c8cebba4f656c965577392', 6, NULL, NULL, 'native-gas'),
+        ('ARBITRUM', 'USDT', 'ERC20', 'sepolia', 'ERC20', '0xEf54C221Fc94517877F0F40eCd71E0A3866D66C2', 6, NULL, NULL, 'native-gas'),
+        ('OPTIMISM', 'USDT', 'ERC20', 'sepolia', 'ERC20', '0xcb4CB0127B079d42b81F53e747b763d206D050f9', 6, NULL, NULL, 'native-gas'),
+        ('BASE', 'USDT', 'ERC20', 'sepolia', 'ERC20', '0x210BBd033630e5e611B7922D70b0Caabe64636d9', 6, NULL, NULL, 'native-gas'),
+        ('AVAX_C', 'USDT', 'ERC20', 'fuji', 'ERC20', '0x1B43cbC6879C8237469794F9B8Ed290810e502d9', 6, NULL, NULL, 'native-gas'),
+        ('BNB', 'USDT', 'ERC20', 'testnet', 'ERC20', '0xE8709025f99dd1B8533FB9b78Ca879Ee4ec7E70a', 6, NULL, NULL, 'native-gas'),
+        ('TRON', 'USDT', 'TRC20', 'NILE', 'TRC20', 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', 6, 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', '41eca9bc828a3005b9a3b909f2cc5c2a54794de05f', 'energy-bandwidth'),
+        ('SOLANA', 'USDT', 'SPL', 'devnet', 'SPL', '2VHdVaW1jBGmvU1PdQpvmPnWV5AiAxrmxmUTLvf8951y', 6, '2VHdVaW1jBGmvU1PdQpvmPnWV5AiAxrmxmUTLvf8951y', NULL, 'SOL_FEE_PAYER'),
+        ('TON', 'USDT', 'JETTON', 'testnet', 'JETTON', 'kQCZ5SAA78W_0vA5eSoU23YomxnUwah3KYagqeesNQI5jOXT', 6, NULL, NULL, 'TON_FORWARD_FEE')
+)
+INSERT INTO "public"."token_config" ("chain", "symbol", "standard", "contract_address", "decimals", "enabled",
+                                     "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at",
+                                     "network", "token_standard", "contract_address_base58", "contract_address_hex",
+                                     "min_deposit_amount", "min_withdraw_amount", "collect_threshold",
+                                     "gas_strategy", "confirmation_required")
+SELECT chain, symbol, standard, contract_address, decimals, true,
+       1, 1, true, now(), now(),
+       network, token_standard, contract_address_base58, contract_address_hex,
+       1, 1, 1, gas_strategy, 1
+  FROM token_data
+ON CONFLICT ("chain", "symbol") DO UPDATE SET
+    "standard" = EXCLUDED."standard",
+    "contract_address" = EXCLUDED."contract_address",
+    "decimals" = EXCLUDED."decimals",
+    "enabled" = true,
+    "min_deposit" = EXCLUDED."min_deposit",
+    "min_withdraw" = EXCLUDED."min_withdraw",
+    "collect_enabled" = true,
+    "updated_at" = now(),
+    "network" = EXCLUDED."network",
+    "token_standard" = EXCLUDED."token_standard",
+    "contract_address_base58" = EXCLUDED."contract_address_base58",
+    "contract_address_hex" = EXCLUDED."contract_address_hex",
+    "min_deposit_amount" = EXCLUDED."min_deposit_amount",
+    "min_withdraw_amount" = EXCLUDED."min_withdraw_amount",
+    "collect_threshold" = EXCLUDED."collect_threshold",
+    "gas_strategy" = EXCLUDED."gas_strategy",
+    "confirmation_required" = EXCLUDED."confirmation_required";
+
+INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
+                                    "native_asset", "active", "min_transfer", "min_withdraw",
+                                    "created_at", "updated_at")
+SELECT "chain", "symbol",
+       CASE WHEN "standard" = 'JETTON' THEN 'JETTON' ELSE 'TOKEN' END,
+       "contract_address", "decimals", false, true,
+       COALESCE("min_deposit_amount", "min_deposit", 1),
+       COALESCE("min_withdraw_amount", "min_withdraw", 1),
+       now(), now()
+  FROM "public"."token_config"
+ WHERE "enabled" = true
+   AND "symbol" IN ('USDC', 'USDT')
+ON CONFLICT ("chain", "symbol") DO UPDATE SET
+    "asset_kind" = EXCLUDED."asset_kind",
+    "contract_address" = EXCLUDED."contract_address",
+    "decimals" = EXCLUDED."decimals",
+    "native_asset" = false,
+    "active" = true,
+    "min_transfer" = EXCLUDED."min_transfer",
+    "min_withdraw" = EXCLUDED."min_withdraw",
+    "updated_at" = now();
+
+UPDATE "public"."chain_asset"
+   SET "min_transfer" = 0.00000546, "min_withdraw" = 0.00000546
+ WHERE "chain" IN ('BTC', 'BCH') AND "symbol" IN ('BTC', 'BCH');
+UPDATE "public"."chain_asset"
+   SET "min_transfer" = 0.001, "min_withdraw" = 0.001
+ WHERE "chain" = 'LTC' AND "symbol" = 'LTC';
+UPDATE "public"."chain_asset"
+   SET "min_transfer" = 0.01, "min_withdraw" = 0.01
+ WHERE "chain" = 'DOGE' AND "symbol" = 'DOGE';
+UPDATE "public"."chain_asset"
+   SET "min_transfer" = 0.001, "min_withdraw" = 0.001
+ WHERE "chain" = 'SOLANA' AND "symbol" = 'SOL';
+UPDATE "public"."chain_asset"
+   SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
+ WHERE "chain" = 'SOLANA' AND "symbol" IN ('USDC', 'USDT');
+UPDATE "public"."chain_asset"
+   SET "min_transfer" = 0.01, "min_withdraw" = 0.01
+ WHERE "chain" = 'TON' AND "symbol" = 'TON';
+UPDATE "public"."chain_asset"
+   SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
+ WHERE "chain" = 'TON' AND "symbol" IN ('USDC', 'USDT');
+UPDATE "public"."chain_asset"
+   SET "min_transfer" = 0.001, "min_withdraw" = 0.001
+ WHERE "chain" IN ('APTOS', 'SUI') AND "native_asset" = true;
+UPDATE "public"."chain_asset"
+   SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
+ WHERE "chain" IN ('APTOS', 'SUI') AND "native_asset" = false;
 
 
 --

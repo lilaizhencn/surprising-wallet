@@ -133,6 +133,8 @@ docs/db/surprising-wallet-init-pgsql.sql
 
 所有链的充值、提现、归集和划转能力都以 `chain_profile` 和 `wallet_system_config` 为准。
 
+部署 test2/sandbox 前要提前设置每条链的已扫描高度。新库、新环境一般把 `chain_scan_height.best_height/safe_height` 设置到当前最新安全块附近，只扫描后续新区块；如果正在验证一笔已知测试交易，可以把高度设置到该交易所在区块之前少量区块，例如交易在 `4777845`，可从 `4777840` 开始。不要从创世块或很早的历史高度开始扫，公共 RPC 和测试网节点很容易被打满。
+
 ## 后端新增能力
 
 ### 领取测试币

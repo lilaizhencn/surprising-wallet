@@ -1,6 +1,7 @@
 package com.surprising.wallet.jobs.account;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.ChainAsset;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainCollectionRecord;
 import com.surprising.wallet.common.chain.ChainType;
@@ -26,7 +27,7 @@ import com.surprising.wallet.service.chain.tron.TronTransactionService;
 import com.surprising.wallet.service.chain.tron.TronTrc20Service;
 import com.surprising.wallet.service.chain.tron.TronTridentClient;
 import com.surprising.wallet.service.chain.tron.TronTridentKeyFactory;
-import com.surprising.wallet.service.config.PubKeyConfig;
+import com.surprising.wallet.service.config.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.wallet.HotWalletAddressService;
@@ -41,10 +42,12 @@ import org.tron.trident.proto.Response;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -59,11 +62,14 @@ public class AccountChainWorkflowService {
     private static final int CONFIRM_LIMIT = 50;
     private static final int COLLECTION_LIMIT = 20;
     private static final BigDecimal TRX_SUN = new BigDecimal("1000000");
+    private static final List<String> ACCOUNT_CHAIN_PRIORITY = List.of(
+            "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C",
+            "SOLANA", "TRON", "TON", "APTOS", "SUI");
 
     private final ChainJdbcRepository repository;
     private final WalletRuntimeConfigService runtimeConfigService;
     private final HotWalletAddressService hotWalletAddressService;
-    private final PubKeyConfig pubKeyConfig;
+    private final AccountSecp256k1KeyService secp256k1KeyService;
 
     private final EvmDepositScanner evmDepositScanner;
     private final EvmAccountTransactionService evmTransactionService;
@@ -168,6 +174,8 @@ public class AccountChainWorkflowService {
                 try {
                     processCollection(profile, record);
                 } catch (Exception e) {
+                    repository.updateCollectionStatus(record.getChain(), record.getCollectionNo(),
+                            "FAILED", null, e.getMessage(), null);
                     log.warn("account-chain collection failed: chain={} collectionNo={} error={}",
                             record.getChain(), record.getCollectionNo(), e.getMessage(), e);
                 }
@@ -200,7 +208,7 @@ public class AccountChainWorkflowService {
                     from.getAddress(), txHash, null);
         } catch (Exception e) {
             repository.releaseLockedBalance(order.getChain(), order.getAssetSymbol(),
-                    from.getAccountId(), order.getAmount());
+                    debitAccountId(order, from), order.getAmount());
             repository.updateWithdrawalStatus(order.getChain(), order.getOrderNo(), "FAILED",
                     from.getAddress(), null, e.getMessage());
             throw new IllegalStateException(e);
@@ -218,19 +226,25 @@ public class AccountChainWorkflowService {
             return evmTransactionService.sendToken(chain, from, token, order.getToAddress(), order.getAmount());
         }
         return switch (chain) {
-            case "SOLANA" -> isNative(profile, order.getAssetSymbol())
-                    ? solanaTransactionService.sendNative(from, order.getToAddress(), order.getAmount().longValueExact())
-                    : solanaTransactionService.sendToken(from, requireToken(chain, order.getAssetSymbol()).getContractAddress(),
-                    order.getToAddress(), order.getAmount().longValueExact(),
-                    requireToken(chain, order.getAssetSymbol()).getDecimals());
+            case "SOLANA" -> {
+                if (isNative(profile, order.getAssetSymbol())) {
+                    yield solanaTransactionService.sendNative(
+                            from, order.getToAddress(), toAtomicLong(order.getAmount(), assetDecimals(order)));
+                }
+                TokenDefinition token = requireToken(chain, order.getAssetSymbol());
+                yield solanaTransactionService.sendTokenAmount(
+                        from, token.getContractAddress(), order.getToAddress(), order.getAmount(), token.getDecimals());
+            }
             case "APTOS" -> isNative(profile, order.getAssetSymbol())
-                    ? aptosTransactionService.sendNative(from, order.getToAddress(), order.getAmount().longValueExact())
+                    ? aptosTransactionService.sendNative(from, order.getToAddress(),
+                    toAtomicLong(order.getAmount(), assetDecimals(order)))
                     : aptosTransactionService.sendCoin(from, requireToken(chain, order.getAssetSymbol()).getContractAddress(),
-                    order.getToAddress(), order.getAmount().longValueExact());
+                    order.getToAddress(), toAtomicLong(order.getAmount(), assetDecimals(order)));
             case "SUI" -> isNative(profile, order.getAssetSymbol())
-                    ? suiTransactionService.sendNative(from, order.getToAddress(), order.getAmount().longValueExact())
+                    ? suiTransactionService.sendNative(from, order.getToAddress(),
+                    toAtomicLong(order.getAmount(), assetDecimals(order)))
                     : suiTransactionService.sendCoin(from, requireToken(chain, order.getAssetSymbol()).getContractAddress(),
-                    order.getToAddress(), order.getAmount().longValueExact());
+                    order.getToAddress(), toAtomicLong(order.getAmount(), assetDecimals(order)));
             case "TON" -> isNative(profile, order.getAssetSymbol())
                     ? broadcastTonNative(order, from)
                     : broadcastTonJetton(order, from, requireToken(chain, order.getAssetSymbol()));
@@ -243,16 +257,16 @@ public class AccountChainWorkflowService {
         ChainAddressRecord from = requireAddress(order.getChain(), order.getAssetSymbol(), order.getFromAddress());
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
             evmTransactionService.confirmWithdrawal(order.getChain(), order.getOrderNo(),
-                    order.getAssetSymbol(), from.getAccountId(), order.getAmount());
+                    order.getAssetSymbol(), debitAccountId(order, from), order.getAmount());
             return;
         }
         switch (profile.getChain()) {
             case "SOLANA" -> solanaTransactionService.confirmWithdrawal(
-                    order.getOrderNo(), order.getAssetSymbol(), from.getAccountId(), order.getAmount());
+                    order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), order.getAmount());
             case "APTOS" -> aptosTransactionService.confirmWithdrawal(
-                    order.getOrderNo(), order.getAssetSymbol(), from.getAccountId(), order.getAmount());
+                    order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), order.getAmount());
             case "SUI" -> suiTransactionService.confirmWithdrawal(
-                    order.getOrderNo(), order.getAssetSymbol(), from.getAccountId(), order.getAmount());
+                    order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), order.getAmount());
             case "TON" -> confirmTonWithdrawal(order, from);
             case "TRON" -> confirmTronWithdrawal(profile, order, from);
             default -> {
@@ -266,10 +280,14 @@ public class AccountChainWorkflowService {
             if (!canCollect(profile, candidate)) {
                 continue;
             }
+            BigDecimal amount = collectionAmount(profile, candidate);
+            if (amount.signum() <= 0) {
+                continue;
+            }
             String hotAddress = hotAddress(profile, candidate.getAssetSymbol());
-            repository.createCollectionRecord(collectionNo(candidate), candidate.getChain(),
+            repository.createCollectionRecord(collectionNo(candidate, amount), candidate.getChain(),
                     candidate.getAssetSymbol(), candidate.getAddress(), hotAddress,
-                    candidate.getAmount(), BigDecimal.ZERO, null);
+                    amount, BigDecimal.ZERO, null);
         }
     }
 
@@ -290,7 +308,7 @@ public class AccountChainWorkflowService {
             case "SOLANA" -> {
                 if (isNative(profile, record.getAssetSymbol())) {
                     solanaTransactionService.collectNative(record.getCollectionNo(), from,
-                            record.getToAddress(), record.getAmount());
+                            record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)));
                 } else {
                     TokenDefinition token = requireToken(record.getChain(), record.getAssetSymbol());
                     solanaTransactionService.collectToken(record.getCollectionNo(), from,
@@ -300,27 +318,28 @@ public class AccountChainWorkflowService {
             case "APTOS" -> {
                 if (isNative(profile, record.getAssetSymbol())) {
                     aptosTransactionService.collectNative(record.getCollectionNo(), from,
-                            record.getToAddress(), record.getAmount());
+                            record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)));
                 } else {
                     aptosTransactionService.collectCoin(record.getCollectionNo(), from,
                             requireToken(record.getChain(), record.getAssetSymbol()).getContractAddress(),
-                            record.getToAddress(), record.getAmount());
+                            record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)));
                 }
             }
             case "SUI" -> {
                 if (isNative(profile, record.getAssetSymbol())) {
                     suiTransactionService.collectNative(record.getCollectionNo(), from,
-                            record.getToAddress(), record.getAmount());
+                            record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)));
                 } else {
                     suiTransactionService.collectCoin(record.getCollectionNo(), from,
                             requireToken(record.getChain(), record.getAssetSymbol()).getContractAddress(),
-                            record.getToAddress(), record.getAmount());
+                            record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)));
                 }
             }
             case "TON" -> {
                 if (isNative(profile, record.getAssetSymbol())) {
                     tonTransactionService.collectNative(record.getCollectionNo(), from,
-                            record.getToAddress(), record.getAmount(), "collection:" + record.getCollectionNo());
+                            record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)),
+                            "collection:" + record.getCollectionNo());
                 } else {
                     log.warn("TON Jetton collection skipped until jetton wallet addresses are materialized: collectionNo={}",
                             record.getCollectionNo());
@@ -392,14 +411,16 @@ public class AccountChainWorkflowService {
 
     private String broadcastTonNative(WithdrawalOrderRecord order, ChainAddressRecord from) {
         TonTransactionService.PreparedTransfer prepared = tonTransactionService.prepareNative(
-                from, order.getToAddress(), order.getAmount().toBigIntegerExact(), "withdraw:" + order.getOrderNo());
+                from, order.getToAddress(), toAtomicBigInteger(order.getAmount(), assetDecimals(order)),
+                "withdraw:" + order.getOrderNo());
         String hash = tonTransactionService.broadcast(prepared);
         return hash == null || hash.isBlank() ? prepared.messageHashHex() : hash;
     }
 
     private String broadcastTonJetton(WithdrawalOrderRecord order, ChainAddressRecord from, TokenDefinition token) {
         TonTransactionService.PreparedTransfer prepared = tonTransactionService.prepareJetton(
-                from, from.getAddress(), order.getToAddress(), order.getAmount().toBigIntegerExact(),
+                from, from.getAddress(), order.getToAddress(),
+                toAtomicBigInteger(order.getAmount(), token.getDecimals()),
                 from.getOwnerAddress(), "withdraw:" + order.getOrderNo());
         String hash = tonTransactionService.broadcast(prepared);
         return hash == null || hash.isBlank() ? prepared.messageHashHex() : hash;
@@ -468,7 +489,7 @@ public class AccountChainWorkflowService {
         if (isTronConfirmed(profile, order.getTxHash())) {
             if (repository.markWithdrawalConfirmed(order.getChain(), order.getOrderNo(), order.getTxHash()) == 1) {
                 repository.settleLockedDebit(order.getChain(), order.getAssetSymbol(),
-                        from.getAccountId(), order.getAmount());
+                        debitAccountId(order, from), order.getAmount());
             }
         }
     }
@@ -499,7 +520,8 @@ public class AccountChainWorkflowService {
             return;
         }
         if (repository.markWithdrawalConfirmed(order.getChain(), order.getOrderNo(), order.getTxHash()) == 1) {
-            repository.settleLockedDebit(order.getChain(), order.getAssetSymbol(), from.getAccountId(), order.getAmount());
+            repository.settleLockedDebit(order.getChain(), order.getAssetSymbol(),
+                    debitAccountId(order, from), order.getAmount());
         }
     }
 
@@ -526,6 +548,39 @@ public class AccountChainWorkflowService {
         return true;
     }
 
+    private BigDecimal collectionAmount(AccountChainProfile profile, CollectionCandidateRecord candidate) {
+        BigDecimal amount = candidate.getAmount() == null ? BigDecimal.ZERO : candidate.getAmount();
+        if (!isNative(profile, candidate.getAssetSymbol())) {
+            return amount;
+        }
+        BigDecimal reserve = nativeCollectionFeeReserve(profile, candidate);
+        return amount.subtract(reserve).max(BigDecimal.ZERO);
+    }
+
+    private BigDecimal nativeCollectionFeeReserve(AccountChainProfile profile, CollectionCandidateRecord candidate) {
+        int decimals = assetDecimals(candidate.getChain(), candidate.getAssetSymbol());
+        BigDecimal configured = profile.getDefaultFee() == null
+                ? BigDecimal.ZERO
+                : BigDecimal.valueOf(profile.getDefaultFee()).movePointLeft(decimals);
+        BigDecimal feeReserve;
+        if ("evm".equalsIgnoreCase(profile.getFamily())) {
+            feeReserve = configured.max(new BigDecimal("0.0001"));
+        } else {
+            feeReserve = switch (profile.getChain()) {
+                case "SOLANA" -> configured.max(new BigDecimal("0.00002"));
+                case "TON" -> configured.max(new BigDecimal("0.02"));
+                case "SUI" -> configured.max(new BigDecimal("0.02"));
+                case "APTOS" -> configured.max(new BigDecimal("0.05"));
+                case "TRON" -> configured.max(new BigDecimal("1"));
+                default -> configured;
+            };
+        }
+        BigDecimal dustReserve = profile.getDustThreshold() == null
+                ? BigDecimal.ZERO
+                : BigDecimal.valueOf(profile.getDustThreshold()).movePointLeft(decimals);
+        return feeReserve.add(dustReserve);
+    }
+
     private String hotAddress(AccountChainProfile profile, String assetSymbol) {
         ChainAddressRecord hot = hotWalletAddressService.findDefaultHotAddress(profile.getChain(), assetSymbol)
                 .orElseGet(() -> hotWalletAddressService.requireVerifiedDefaultHotAddress(profile));
@@ -547,14 +602,55 @@ public class AccountChainWorkflowService {
                 .orElseThrow(() -> new IllegalStateException("missing token_config for " + chain + "/" + symbol));
     }
 
+    private int assetDecimals(WithdrawalOrderRecord order) {
+        return assetDecimals(order.getChain(), order.getAssetSymbol());
+    }
+
+    private int assetDecimals(ChainCollectionRecord record) {
+        return assetDecimals(record.getChain(), record.getAssetSymbol());
+    }
+
+    private int assetDecimals(String chain, String symbol) {
+        return repository.findAsset(chain, symbol)
+                .map(ChainAsset::getDecimals)
+                .orElseGet(() -> requireToken(chain, symbol).getDecimals());
+    }
+
+    private BigDecimal toAtomicDecimal(BigDecimal amount, int decimals) {
+        return new BigDecimal(toAtomicBigInteger(amount, decimals));
+    }
+
+    private BigInteger toAtomicBigInteger(BigDecimal amount, int decimals) {
+        return amount.movePointRight(decimals).setScale(0, RoundingMode.UNNECESSARY).toBigIntegerExact();
+    }
+
+    private long toAtomicLong(BigDecimal amount, int decimals) {
+        return toAtomicBigInteger(amount, decimals).longValueExact();
+    }
+
     private boolean isNative(AccountChainProfile profile, String symbol) {
         return symbol != null && symbol.equalsIgnoreCase(profile.getNativeSymbol());
+    }
+
+    private String debitAccountId(WithdrawalOrderRecord order, ChainAddressRecord from) {
+        String debitAccountId = order.getDebitAccountId();
+        return debitAccountId == null || debitAccountId.isBlank() ? from.getAccountId() : debitAccountId;
     }
 
     private List<AccountChainProfile> enabledAccountProfiles() {
         return repository.listEnabledChainProfiles().stream()
                 .filter(profile -> !"utxo".equalsIgnoreCase(profile.getFamily()))
+                .filter(profile -> !"bitcoin-like".equalsIgnoreCase(profile.getFamily()))
+                .sorted(Comparator
+                        .comparingInt((AccountChainProfile profile) -> accountChainPriority(profile.getChain()))
+                        .thenComparing(AccountChainProfile::getChain)
+                        .thenComparing(AccountChainProfile::getNetwork))
                 .toList();
+    }
+
+    private int accountChainPriority(String chain) {
+        int index = ACCOUNT_CHAIN_PRIORITY.indexOf(chain);
+        return index < 0 ? ACCOUNT_CHAIN_PRIORITY.size() : index;
     }
 
     private long scanStart(AccountChainProfile profile, long latest, String... scannerNames) {
@@ -597,12 +693,7 @@ public class AccountChainWorkflowService {
     }
 
     private KeyPair tronKey(AccountChainProfile profile, ChainAddressRecord from) {
-        ECKey ecKey = pubKeyConfig.NODE2.getChild(44)
-                .getChild(ChainType.derivationCoinType(profile.getChain(), profile.getBip44CoinType()))
-                .getChild(from.getBiz())
-                .getChild(Math.toIntExact(from.getUserId()))
-                .getChild(Math.toIntExact(from.getAddressIndex()))
-                .getEcKey();
+        ECKey ecKey = secp256k1KeyService.key(profile, from);
         return TronTridentKeyFactory.fromBitcoinEcKey(ecKey);
     }
 
@@ -611,9 +702,10 @@ public class AccountChainWorkflowService {
         return configured == null || configured <= 0 ? 30_000_000L : Math.max(10_000_000L, configured);
     }
 
-    private String collectionNo(CollectionCandidateRecord candidate) {
+    private String collectionNo(CollectionCandidateRecord candidate, BigDecimal amount) {
         String basis = candidate.getChain() + "|" + candidate.getAssetSymbol() + "|"
-                + candidate.getAccountId() + "|" + candidate.getAmount() + "|" + Instant.now().toEpochMilli();
+                + candidate.getAccountId() + "|" + candidate.getAddress() + "|"
+                + amount.stripTrailingZeros().toPlainString();
         return "COLL-" + candidate.getChain() + "-" + candidate.getAssetSymbol() + "-"
                 + shortHash(basis);
     }

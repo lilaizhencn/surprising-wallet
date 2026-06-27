@@ -2,6 +2,7 @@ package com.surprising.wallet.service.chain;
 
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
@@ -59,8 +60,12 @@ public class BitcoinLikeSettlementService {
             if (confirmed == 1) {
                 BigDecimal fee = record.getFee() == null ? BigDecimal.ZERO : record.getFee();
                 BigDecimal settled = record.getBalance().add(fee);
+                String debitAccountId = chainRepository.findWithdrawalOrder(chain, record.getWithdrawId())
+                        .map(WithdrawalOrderRecord::getDebitAccountId)
+                        .filter(value -> value != null && !value.isBlank())
+                        .orElse(record.getUserId().toString());
                 if (!chainRepository.settleLockedDebit(
-                        chain, chain, record.getUserId().toString(), settled)) {
+                        chain, chain, debitAccountId, settled)) {
                     throw new IllegalStateException(
                             "failed to settle " + chain + " ledger for " + record.getWithdrawId());
                 }

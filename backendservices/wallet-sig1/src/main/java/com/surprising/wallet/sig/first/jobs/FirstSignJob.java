@@ -46,7 +46,14 @@ public class FirstSignJob implements Runnable {
                     WithdrawTransaction transaction = txJson.toJavaObject(WithdrawTransaction.class);
                     RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
                     ISignService signService = signContent.getSignService(currency);
-                    signService.signTransaction(transaction);
+                    if (signService == null) {
+                        JSONObject signature = JSONObject.parseObject(transaction.getSignature());
+                        signature.put("valid", false);
+                        signature.put("error", "no first sign service for " + currency.getName());
+                        transaction.setSignature(signature.toJSONString());
+                    } else {
+                        signService.signTransaction(transaction);
+                    }
                     String signatureStr = transaction.getSignature();
                     JSONObject sigJson = JSONObject.parseObject(signatureStr);
                     String rKey;
@@ -68,8 +75,7 @@ public class FirstSignJob implements Runnable {
                 log.info("Signature first job error", e);
 
             } catch (Throwable e) {
-                log.error("Signature first job quit", e);
-                break;
+                log.error("Signature first job error, will retry", e);
             }
 
             try {

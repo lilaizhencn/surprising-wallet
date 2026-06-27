@@ -42,6 +42,7 @@ public class SignContent implements InitializingBean, ApplicationContextAware {
 
     @Override
     public void afterPropertiesSet() {
+        SignContent.cache = context.getBeansOfType(ISignService.class);
         Map<String, Object> threads = context.getBeansWithAnnotation(StartThread.class);
         threads.forEach((key, obj) -> {
             pool.execute((Runnable) obj);
@@ -51,7 +52,6 @@ public class SignContent implements InitializingBean, ApplicationContextAware {
             pool.shutdown();
             SignContent.log.info("ExecutorService quit");
         }));
-        SignContent.cache = context.getBeansOfType(ISignService.class);
 
     }
 

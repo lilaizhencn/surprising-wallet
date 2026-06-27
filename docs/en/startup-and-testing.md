@@ -121,6 +121,8 @@ Chain runtime configuration no longer comes from YAML/env:
 | Three wallet-server public keys | `wallet_public_key` |
 | Per-chain default hot wallet | Native-asset `chain_address` row with `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT` |
 
+Before deployment, set the scanner checkpoint for the target environment deliberately. A fresh system should normally set `chain_scan_height.best_height/safe_height` near the latest safe block so the service scans only new blocks after deployment. Move the checkpoint backward only when a known historical deposit window must be replayed. Do not scan from genesis or very old blocks because catch-up can take a long time and can exhaust public RPC quotas.
+
 Runtime code now enforces `global.all.enabled`, scan, withdrawal and collection switches. `transfer_enabled` is reserved for future internal transfer entry points; any new transfer flow must call `WalletRuntimeConfigService.requireTaskEnabled(chain, TASK_TRANSFER, ...)`, and this switch must not be repurposed for address generation or withdrawal.
 
 The TokDou wallet page reads wallet-server:

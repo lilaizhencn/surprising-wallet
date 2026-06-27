@@ -31,7 +31,8 @@ import java.util.Set;
 
 /**
  * RPC-backed native ETH scanner for Sepolia validation and production-safe EVM deposit flow.
- * It only credits addresses already known to the wallet database and skips internal sends.
+ * It only credits addresses already known to the wallet database. Platform-to-platform
+ * sends are still credited because sandbox withdrawals may target project-owned addresses.
  */
 @Slf4j
 @Component
@@ -223,9 +224,6 @@ public class EvmDepositScanner {
                         if (!trackedAddresses.contains(lower(event.toAddress()))) {
                             continue;
                         }
-                        if (trackedAddresses.contains(lower(event.fromAddress()))) {
-                            continue;
-                        }
                         long logIndex = log.getLogIndex() == null ? 0L : log.getLogIndex().longValue();
                         repository.recordAndCreditDeposit(event, logIndex, requiredConfirmations);
                         String status = event.confirmations() >= requiredConfirmations ? "CREDITED" : "CONFIRMING";
@@ -269,9 +267,6 @@ public class EvmDepositScanner {
                 continue;
             }
             String from = lower(tx.getFrom());
-            if (from != null && trackedAddresses.contains(from)) {
-                continue;
-            }
             if (tx.getValue() == null || tx.getValue().signum() <= 0) {
                 continue;
             }

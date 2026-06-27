@@ -133,8 +133,8 @@ abstract public class AbstractScanBlockJob {
         storedHeight.setUpdateDate(Date.from(Instant.now()));
         if (isDatabaseDrivenUtxo(wallet.getCurrency())) {
             String chain = chainName(wallet.getCurrency());
-            long safeHeight = Math.max(
-                    0L, bestHeight - wallet.getDepositConfirmationThreshold());
+            // UTXO confirmations are refreshed from stored transactions; this checkpoint is the last scanned block.
+            long safeHeight = Math.max(0L, bestHeight);
             chainJdbcRepository.updateScanHeight(
                     chain, scannerName(wallet.getCurrency()), bestHeight, safeHeight);
             return;
