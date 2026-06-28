@@ -10,7 +10,10 @@ public enum Ed25519Chain {
     SOLANA(501, 4),
     TON(607, 4),
     APTOS(637, 5),
-    SUI(784, 5);
+    SUI(784, 5),
+    CARDANO(1815, 5),
+    POLKADOT(354, 5),
+    NEAR(397, 5);
 
     private final int coinType;
     private final int depth;

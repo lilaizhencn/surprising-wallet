@@ -6,6 +6,7 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
+import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.XrpTransactionRecord;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
@@ -55,17 +56,20 @@ public class XrpDepositScanner {
 
         Map<String, ChainAddressRecord> nativeAddresses = repository.listChainAddresses(CHAIN, NATIVE_SYMBOL).stream()
                 .filter(address -> "DEPOSIT".equals(address.getWalletRole()))
+                .filter(this::isUserDepositAddress)
                 .collect(Collectors.toMap(ChainAddressRecord::getAddress, Function.identity(), (a, b) -> a));
         Map<String, TokenDefinition> tokens = tokenMap();
         Map<String, ChainAddressRecord> tokenAddresses = repository.listChainAddresses(CHAIN).stream()
                 .filter(address -> !"XRP".equalsIgnoreCase(address.getAssetSymbol()))
                 .filter(address -> "DEPOSIT".equals(address.getWalletRole()))
+                .filter(this::isUserDepositAddress)
                 .collect(Collectors.toMap(
                         address -> address.getAssetSymbol().toUpperCase(Locale.ROOT) + "|" + address.getAddress(),
                         Function.identity(),
                         (a, b) -> a));
         Set<String> scanAddresses = repository.listChainAddresses(CHAIN).stream()
                 .filter(address -> "DEPOSIT".equals(address.getWalletRole()))
+                .filter(this::isUserDepositAddress)
                 .map(ChainAddressRecord::getAddress)
                 .collect(Collectors.toCollection(HashSet::new));
         Set<String> processed = new HashSet<>();
@@ -104,6 +108,9 @@ public class XrpDepositScanner {
         long ledgerIndex = ledgerIndex(entry, tx);
         int confirmations = (int) Math.min(Integer.MAX_VALUE, Math.max(1L, latest - ledgerIndex + 1L));
         if (amountNode.isTextual()) {
+            if (isSystemActivationTransaction(txHash)) {
+                return;
+            }
             ChainAddressRecord address = nativeAddresses.get(destination);
             if (address == null) {
                 return;
@@ -226,6 +233,16 @@ public class XrpDepositScanner {
     private int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 100 : batchSize;
+    }
+
+    private boolean isUserDepositAddress(ChainAddressRecord address) {
+        return address.getUserId() != HotWalletRules.DEFAULT_HOT_USER_ID;
+    }
+
+    private boolean isSystemActivationTransaction(String txHash) {
+        return repository.findXrpTransactionAssetSymbol(CHAIN, txHash)
+                .filter(XrpTransactionService.ACTIVATION_SYMBOL::equals)
+                .isPresent();
     }
 
     private void requireTaskEnabled(String task, String operation) {

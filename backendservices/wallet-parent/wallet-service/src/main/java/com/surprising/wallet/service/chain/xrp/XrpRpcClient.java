@@ -62,6 +62,15 @@ public class XrpRpcClient {
         return info.path("ledger_current_index").asLong(0);
     }
 
+    public ReserveInfo reserveInfo() {
+        JsonNode validated = call("server_info", objectMapper.createObjectNode())
+                .path("info")
+                .path("validated_ledger");
+        return new ReserveInfo(
+                new BigDecimal(validated.path("reserve_base_xrp").asText("1")),
+                new BigDecimal(validated.path("reserve_inc_xrp").asText("0.2")));
+    }
+
     public long feeDrops() {
         JsonNode drops = call("fee", objectMapper.createObjectNode()).path("drops");
         String fee = drops.path("open_ledger_fee").asText("");
@@ -78,13 +87,13 @@ public class XrpRpcClient {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("account", address);
         params.put("ledger_index", "validated");
-        params.put("queue", true);
         try {
             JsonNode data = call("account_info", params).path("account_data");
             return Optional.of(new AccountState(
                     data.path("Account").asText(address),
                     data.path("Sequence").asLong(0),
-                    new BigDecimal(data.path("Balance").asText("0"))));
+                    new BigDecimal(data.path("Balance").asText("0")),
+                    data.path("OwnerCount").asInt(0)));
         } catch (XrpRpcException e) {
             if ("actNotFound".equals(e.error())) {
                 return Optional.empty();
@@ -218,7 +227,10 @@ public class XrpRpcClient {
         }
     }
 
-    public record AccountState(String account, long sequence, BigDecimal balanceDrops) {
+    public record AccountState(String account, long sequence, BigDecimal balanceDrops, int ownerCount) {
+    }
+
+    public record ReserveInfo(BigDecimal baseXrp, BigDecimal ownerXrp) {
     }
 
     public static class XrpRpcException extends RuntimeException {

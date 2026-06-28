@@ -5,19 +5,30 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.common.key.Ed25519DerivedKey;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.common.QrCodeUtil;
 import com.surprising.wallet.jobs.walletapp.WalletAuthService.WalletUser;
 import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.chain.aptos.AptosAddressService;
+import com.surprising.wallet.service.chain.cardano.CardanoKeyService;
+import com.surprising.wallet.service.chain.monero.MoneroAddressValidator;
+import com.surprising.wallet.service.chain.monero.MoneroAddressService;
+import com.surprising.wallet.service.chain.monero.MoneroWalletRpcClient;
+import com.surprising.wallet.service.chain.near.NearKeyService;
+import com.surprising.wallet.service.chain.near.NearTransactionService;
+import com.surprising.wallet.service.chain.polkadot.PolkadotKeyService;
 import com.surprising.wallet.service.chain.solana.SolanaAddressService;
 import com.surprising.wallet.service.chain.sui.SuiAddressService;
 import com.surprising.wallet.service.chain.ton.TonAddressService;
 import com.surprising.wallet.service.chain.xrp.XrpAddressService;
+import com.surprising.wallet.service.chain.xrp.XrpTransactionService;
 import com.surprising.wallet.service.config.ChainRpcNodeService;
 import com.surprising.wallet.service.config.PubKeyConfig;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.wallet.IWallet;
+import com.surprising.wallet.service.wallet.HotWalletAddressService;
 import com.surprising.wallet.service.wallet.WalletContext;
 import org.bitcoinj.crypto.ECKey;
 import org.ethereum.crypto.EthECKey;
@@ -32,6 +43,7 @@ import org.ton.ton4j.smartcontract.token.ft.JettonWallet;
 import org.tron.TronWalletApi;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.net.URL;
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -49,6 +61,10 @@ public class WalletAppService {
     private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";
     private static final int DOGE_REGTEST_RPC_TIMEOUT_MS = 120_000;
     private static final BigDecimal DOGE_REGTEST_FAUCET_AMOUNT = new BigDecimal("25");
+    private static final BigDecimal XMR_REGTEST_FAUCET_AMOUNT = new BigDecimal("0.25");
+    private static final int XMR_REGTEST_FAUCET_CONFIRMATION_BLOCKS = 12;
+    private static final BigInteger DEFAULT_NEAR_TOKEN_ACCOUNT_ACTIVATION_YOCTO =
+            new BigInteger("50000000000000000000000");
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final JdbcTemplate jdbcTemplate;
@@ -62,6 +78,14 @@ public class WalletAppService {
     private final AptosAddressService aptosAddressService;
     private final SuiAddressService suiAddressService;
     private final XrpAddressService xrpAddressService;
+    private final XrpTransactionService xrpTransactionService;
+    private final CardanoKeyService cardanoKeyService;
+    private final MoneroAddressService moneroAddressService;
+    private final MoneroWalletRpcClient moneroWalletRpcClient;
+    private final NearKeyService nearKeyService;
+    private final NearTransactionService nearTransactionService;
+    private final PolkadotKeyService polkadotKeyService;
+    private final HotWalletAddressService hotWalletAddressService;
 
     @Value("${sw.app.env.name:dev}")
     private String environmentName;
@@ -76,7 +100,15 @@ public class WalletAppService {
                             TonAddressService tonAddressService,
                             AptosAddressService aptosAddressService,
                             SuiAddressService suiAddressService,
-                            XrpAddressService xrpAddressService) {
+                            XrpAddressService xrpAddressService,
+                            XrpTransactionService xrpTransactionService,
+                            CardanoKeyService cardanoKeyService,
+                            MoneroAddressService moneroAddressService,
+                            MoneroWalletRpcClient moneroWalletRpcClient,
+                            NearKeyService nearKeyService,
+                            NearTransactionService nearTransactionService,
+                            PolkadotKeyService polkadotKeyService,
+                            HotWalletAddressService hotWalletAddressService) {
         this.jdbcTemplate = jdbcTemplate;
         this.repository = repository;
         this.assetRoutingService = assetRoutingService;
@@ -88,6 +120,14 @@ public class WalletAppService {
         this.aptosAddressService = aptosAddressService;
         this.suiAddressService = suiAddressService;
         this.xrpAddressService = xrpAddressService;
+        this.xrpTransactionService = xrpTransactionService;
+        this.cardanoKeyService = cardanoKeyService;
+        this.moneroAddressService = moneroAddressService;
+        this.moneroWalletRpcClient = moneroWalletRpcClient;
+        this.nearKeyService = nearKeyService;
+        this.nearTransactionService = nearTransactionService;
+        this.polkadotKeyService = polkadotKeyService;
+        this.hotWalletAddressService = hotWalletAddressService;
     }
 
     public Map<String, Object> assetCatalog() {
@@ -158,7 +198,6 @@ public class WalletAppService {
         return payload;
     }
 
-    @Transactional(rollbackFor = Throwable.class)
     public Map<String, Object> depositAddress(WalletUser user, DepositAddressRequest request, boolean forceNew) {
         String chain = requireChain(request.chain());
         String symbol = requireSymbol(request.symbol());
@@ -167,7 +206,23 @@ public class WalletAppService {
         if (record == null || forceNew || staleEvmAddress(record, asset)) {
             record = createDepositAddress(user.id(), DEFAULT_BIZ, asset, forceNew);
         }
-        return addressPayload(record, asset);
+        XrpTransactionService.DepositPreparation preparation = null;
+        NearTokenPreparation nearPreparation = null;
+        if ("XRP".equals(asset.chain()) && !asset.nativeAsset()) {
+            try {
+                preparation = xrpTransactionService.ensureIssuedCurrencyDepositReady(record, asset.symbol());
+            } catch (IllegalStateException e) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage(), e);
+            }
+        }
+        if ("NEAR".equals(asset.chain()) && !asset.nativeAsset()) {
+            try {
+                nearPreparation = prepareNearTokenStorage(record, asset);
+            } catch (IllegalStateException e) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage(), e);
+            }
+        }
+        return addressPayload(record, asset, preparation, nearPreparation);
     }
 
     @Transactional(rollbackFor = Throwable.class)
@@ -181,15 +236,17 @@ public class WalletAppService {
         AssetMeta asset = requireAsset(chain, symbol);
         validateExternalAddress(chain, request.toAddress());
         WithdrawalTarget target = withdrawalTarget(asset, request.toAddress());
-        SpendAccount spend = spendAccount(user.id(), DEFAULT_BIZ, chain, symbol, amount);
+        BigDecimal feeReserve = withdrawalFeeReserve(asset);
+        BigDecimal frozenAmount = amount.add(feeReserve);
+        SpendAccount spend = spendAccount(user.id(), DEFAULT_BIZ, chain, symbol, frozenAmount);
         String sourceAddress = withdrawalSourceAddress(asset, spend);
         String orderNo = "WD-" + user.id() + "-" + System.currentTimeMillis() + "-" + randomSuffix();
         int created = repository.createWithdrawalOrder(orderNo, user.id(), chain, symbol,
-                sourceAddress, spend.accountId(), target.broadcastAddress(), amount, BigDecimal.ZERO);
+                sourceAddress, spend.accountId(), target.broadcastAddress(), amount, feeReserve);
         if (created == 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "duplicate withdrawal order");
         }
-        if (!repository.freezeLedgerBalance(chain, symbol, spend.accountId(), amount)) {
+        if (!repository.freezeLedgerBalance(chain, symbol, spend.accountId(), frozenAmount)) {
             repository.updateWithdrawalStatus(chain, orderNo, "FAILED", sourceAddress, null, "insufficient balance");
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "insufficient available balance");
         }
@@ -201,7 +258,7 @@ public class WalletAppService {
         payload.put("chain", chain);
         payload.put("symbol", symbol);
         payload.put("amount", amount);
-        payload.put("fee", BigDecimal.ZERO);
+        payload.put("fee", feeReserve);
         payload.put("toAddress", target.broadcastAddress());
         payload.put("requestedToAddress", target.requestedAddress());
         payload.put("fromAddress", sourceAddress);
@@ -296,6 +353,44 @@ public class WalletAppService {
         return payload;
     }
 
+    public Map<String, Object> xmrRegtestFaucet(WalletUser user) {
+        if (isProductionEnvironment()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "test coin faucet is disabled in production");
+        }
+
+        AssetMeta asset = requireAsset("XMR", "XMR");
+        if (!asset.nativeAsset() || !"regtest".equalsIgnoreCase(asset.network())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "XMR test coin faucet requires the active XMR network to be regtest");
+        }
+
+        ChainAddressRecord record = createDepositAddress(user.id(), DEFAULT_BIZ, asset, false);
+        MoneroWalletRpcClient.Transfer transfer = moneroWalletRpcClient.transfer(
+                0, record.getAddress(), XMR_REGTEST_FAUCET_AMOUNT, asset.network(), "faucet");
+        String minerAddress = moneroWalletRpcClient.primaryAddress(asset.network(), "faucet").address();
+        Object generated = xmrDaemonRpc(asset.network(), "generateblocks", Object.class, Map.of(
+                "amount_of_blocks", XMR_REGTEST_FAUCET_CONFIRMATION_BLOCKS,
+                "wallet_address", minerAddress,
+                "starting_nonce", 0
+        ));
+        moneroWalletRpcClient.refresh(asset.network(), "faucet");
+        moneroWalletRpcClient.refresh(asset.network(), "rpc");
+
+        Map<String, Object> payload = orderedMap();
+        payload.put("status", "SENT");
+        payload.put("chain", asset.chain());
+        payload.put("symbol", asset.symbol());
+        payload.put("network", asset.network());
+        payload.put("amount", XMR_REGTEST_FAUCET_AMOUNT);
+        payload.put("txHash", transfer.txHash());
+        payload.put("blockHeight", moneroWalletRpcClient.height(asset.network(), "rpc"));
+        payload.put("toAddress", record.getAddress());
+        payload.put("addressIndex", record.getAddressIndex());
+        payload.put("generatedBlocks", generated);
+        payload.put("warning", "XMR regtest coins were sent. Balance updates after the scanner processes wallet-rpc transfers.");
+        return payload;
+    }
+
     public List<Map<String, Object>> orders(WalletUser user, int limit) {
         int rowLimit = Math.max(1, Math.min(limit, 100));
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -330,7 +425,7 @@ public class WalletAppService {
         if (asset.nativeAsset()) {
             return createNativeAddress(userId, biz, asset, existing == null ? null : existing.getAddressIndex());
         }
-        if (isEvm(asset.chain()) || "TRON".equals(asset.chain()) || "XRP".equals(asset.chain())) {
+        if (usesMirroredNativeTokenAddress(asset.chain())) {
             AssetMeta nativeAsset = requireAsset(asset.chain(), asset.nativeSymbol());
             ChainAddressRecord nativeAddress = forceNew
                     ? createNativeAddress(userId, biz, nativeAsset)
@@ -369,6 +464,12 @@ public class WalletAppService {
 
     private ChainAddressRecord createNativeAddress(long userId, int biz, AssetMeta asset, Long preferredIndex) {
         ChainType chainType = ChainType.valueOf(asset.chain());
+        if ("ADA".equals(asset.chain())) {
+            long index = preferredIndex == null
+                    ? nextAddressIndex(asset.chain(), asset.symbol(), userId, biz)
+                    : preferredIndex;
+            return createCardanoAddress(userId, biz, index, asset);
+        }
         if (chainType.isUtxo()) {
             RuntimeAsset runtimeAsset = assetRoutingService.runtimeAssetByChain(asset.chain());
             IWallet wallet = walletContext.getWallet(runtimeAsset);
@@ -405,6 +506,18 @@ public class WalletAppService {
         if ("XRP".equals(asset.chain())) {
             long index = nextAddressIndex(asset.chain(), asset.symbol(), userId, biz);
             return xrpAddressService.createNativeAddress(userId, biz, index, WALLET_ROLE_DEPOSIT);
+        }
+        if ("XMR".equals(asset.chain())) {
+            long index = nextAddressIndex(asset.chain(), asset.symbol(), userId, biz);
+            return moneroAddressService.createNativeAddress(userId, biz, index, WALLET_ROLE_DEPOSIT);
+        }
+        if ("NEAR".equals(asset.chain())) {
+            long index = nextAddressIndex(asset.chain(), asset.symbol(), userId, biz);
+            return createNearAddress(userId, biz, index, asset);
+        }
+        if ("DOT".equals(asset.chain())) {
+            long index = nextAddressIndex(asset.chain(), asset.symbol(), userId, biz);
+            return createPolkadotAddress(userId, biz, index, asset);
         }
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "wallet runtime is not available for " + asset.chain());
@@ -448,6 +561,57 @@ public class WalletAppService {
                 .enabled(true)
                 .build();
         return record;
+    }
+
+    private ChainAddressRecord createNearAddress(long userId, int biz, long index, AssetMeta asset) {
+        Ed25519DerivedKey key = nearKeyService.derive(userId, biz, index);
+        return upsertEd25519Address(userId, biz, index, asset,
+                NearKeyService.address(key.publicKey()), key.derivationPath());
+    }
+
+    private ChainAddressRecord createCardanoAddress(long userId, int biz, long index, AssetMeta asset) {
+        Ed25519DerivedKey key = cardanoKeyService.derive(userId, biz, index);
+        return upsertEd25519Address(userId, biz, index, asset,
+                CardanoKeyService.enterpriseAddress(key.publicKey(), "mainnet".equalsIgnoreCase(asset.network())),
+                key.derivationPath());
+    }
+
+    private ChainAddressRecord createPolkadotAddress(long userId, int biz, long index, AssetMeta asset) {
+        AccountChainProfile profile = repository.findProfileByChain(asset.chain())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "chain profile is not enabled"));
+        Ed25519DerivedKey key = polkadotKeyService.derive(userId, biz, index);
+        return upsertEd25519Address(userId, biz, index, asset,
+                PolkadotKeyService.ss58Address(key.publicKey(), polkadotSs58Prefix(profile)),
+                key.derivationPath());
+    }
+
+    private ChainAddressRecord upsertEd25519Address(long userId, int biz, long index, AssetMeta asset,
+                                                    String address, String derivationPath) {
+        ChainAddressRecord record = ChainAddressRecord.builder()
+                .chain(asset.chain())
+                .assetSymbol(asset.symbol())
+                .accountId(address)
+                .userId(userId)
+                .biz(biz)
+                .addressIndex(index)
+                .address(address)
+                .ownerAddress(address)
+                .derivationPath(derivationPath)
+                .walletRole(WALLET_ROLE_DEPOSIT)
+                .enabled(true)
+                .build();
+        repository.upsertChainAddress(record);
+        return repository.findChainAddress(asset.chain(), asset.symbol(), userId, biz, index, WALLET_ROLE_DEPOSIT)
+                .orElseThrow();
+    }
+
+    private int polkadotSs58Prefix(AccountChainProfile profile) {
+        if (profile.getChainId() != null && profile.getChainId() >= 0 && profile.getChainId() <= 16383) {
+            return Math.toIntExact(profile.getChainId());
+        }
+        String network = profile.getNetwork() == null ? "" : profile.getNetwork().toLowerCase(Locale.ROOT);
+        return network.equals("main") || network.equals("mainnet") ? 0 : 42;
     }
 
     private ChainAddressRecord mirrorTokenAddress(AssetMeta token, ChainAddressRecord nativeAddress) {
@@ -606,17 +770,22 @@ public class WalletAppService {
     }
 
     private List<Map<String, Object>> listAssets() {
-        return jdbcTemplate.queryForList("""
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
                 select a.chain, a.symbol, a.asset_kind as assetKind, a.contract_address as contractAddress,
                        a.decimals, a.native_asset as nativeAsset, a.min_transfer as minTransfer,
                        a.min_withdraw as minWithdraw, cp.network, cp.family, cp.native_symbol as nativeSymbol,
                        tc.standard, tc.token_standard as tokenStandard
-                  from chain_asset a
-                  join chain_profile cp on cp.chain = a.chain and cp.enabled = true
-                  left join token_config tc on tc.chain = a.chain and tc.symbol = a.symbol and tc.enabled = true
+                 from chain_asset a
+                 join chain_profile cp on cp.chain = a.chain and cp.enabled = true
+                 left join token_config tc on tc.chain = a.chain and tc.symbol = a.symbol and tc.enabled = true
                  where a.active = true
                  order by a.native_asset desc, a.symbol, a.chain
                 """);
+        for (Map<String, Object> row : rows) {
+            decorateAddressStrategy(row, value(row, "chain"),
+                    boolValue(row, "nativeAsset"));
+        }
+        return rows;
     }
 
     private List<Map<String, Object>> userBalanceRows(long userId, int biz) {
@@ -656,7 +825,7 @@ public class WalletAppService {
     private AssetMeta requireAsset(String chain, String symbol) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
                 select a.chain, a.symbol, a.asset_kind, a.contract_address, a.decimals, a.native_asset,
-                       cp.network, cp.family, cp.native_symbol,
+                       cp.network, cp.family, cp.native_symbol, cp.default_fee_rate, cp.dust_threshold,
                        tc.standard, tc.token_standard,
                        coalesce(tc.contract_address, tc.contract_address_base58, tc.contract_address_hex,
                                 a.contract_address) as token_contract_address
@@ -670,6 +839,7 @@ public class WalletAppService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "asset is not enabled: " + chain + "/" + symbol);
         }
         Map<String, Object> row = rows.get(0);
+        int decimals = row.get("decimals") instanceof Number number ? number.intValue() : 18;
         return new AssetMeta(
                 value(row, "chain"),
                 value(row, "symbol"),
@@ -677,17 +847,98 @@ public class WalletAppService {
                 value(row, "native_symbol"),
                 value(row, "family"),
                 value(row, "network"),
-                row.get("decimals") instanceof Number number ? number.intValue() : 18,
+                decimals,
                 valueOr(row, "token_contract_address", value(row, "contract_address")),
-                valueOr(row, "token_standard", value(row, "standard")));
+                valueOr(row, "token_standard", value(row, "standard")),
+                feeReserve(value(row, "chain"), row.get("default_fee_rate"), row.get("dust_threshold"), decimals));
     }
 
-    private Map<String, Object> addressPayload(ChainAddressRecord record, AssetMeta asset) {
+    private static BigDecimal feeReserve(String chain, Object defaultFeeRate, Object dustThreshold, int decimals) {
+        if (!"XMR".equals(chain)) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal configured = atomicToDecimal(defaultFeeRate, decimals);
+        BigDecimal dust = atomicToDecimal(dustThreshold, decimals);
+        return configured.max(dust).max(new BigDecimal("0.0001")).stripTrailingZeros();
+    }
+
+    private static BigDecimal atomicToDecimal(Object value, int decimals) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        return decimal(value).movePointLeft(decimals);
+    }
+
+    private static BigDecimal withdrawalFeeReserve(AssetMeta asset) {
+        return asset.networkFeeReserve() == null ? BigDecimal.ZERO : asset.networkFeeReserve();
+    }
+
+    private NearTokenPreparation prepareNearTokenStorage(ChainAddressRecord record, AssetMeta asset) {
+        TokenDefinition token = repository.findToken("NEAR", asset.symbol())
+                .orElseThrow(() -> new IllegalStateException("missing token_config for NEAR/" + asset.symbol()));
+        boolean activatedBefore = nearTransactionService.accountExists(record.getAddress());
+        boolean registeredBefore = activatedBefore
+                && nearTransactionService.tokenStorageRegistered(token, record.getAddress());
+        if (activatedBefore && registeredBefore) {
+            return new NearTokenPreparation(true, true, true, true,
+                    BigInteger.ZERO, null, BigInteger.ZERO, null);
+        }
+        ChainAddressRecord payer = hotWalletAddressService.findDefaultHotAddress("NEAR", "NEAR")
+                .orElseThrow(() -> new IllegalStateException(
+                        "missing default NEAR hot wallet address for token account preparation"));
+        BigInteger activationAmount = BigInteger.ZERO;
+        String activationTxHash = null;
+        if (!activatedBefore) {
+            activationAmount = nearTokenActivationAmountYocto();
+            activationTxHash = nearTransactionService.activateImplicitAccount(
+                    payer, record.getAddress(), activationAmount);
+        }
+        boolean activatedAfter = activatedBefore || nearTransactionService.accountExists(record.getAddress());
+        if (!activatedAfter) {
+            throw new IllegalStateException("NEAR token account activation did not create account");
+        }
+        BigInteger minimum = BigInteger.ZERO;
+        String storageTxHash = null;
+        if (!registeredBefore) {
+            minimum = nearTransactionService.tokenStorageMinimum(token);
+            if (minimum.signum() <= 0) {
+                throw new IllegalStateException("NEAR token storage minimum is not configured by contract");
+            }
+            storageTxHash = nearTransactionService.storageDeposit(payer, token, record.getAddress(), minimum);
+        }
+        boolean registeredAfter = nearTransactionService.tokenStorageRegistered(token, record.getAddress());
+        return new NearTokenPreparation(activatedAfter, registeredAfter, activatedBefore, registeredBefore,
+                activationAmount, activationTxHash, minimum, storageTxHash);
+    }
+
+    private BigInteger nearTokenActivationAmountYocto() {
+        String configured = repository.systemValue("near.token.account.activation.yocto").orElse("");
+        if (configured == null || configured.isBlank()) {
+            return DEFAULT_NEAR_TOKEN_ACCOUNT_ACTIVATION_YOCTO;
+        }
+        try {
+            BigInteger value = new BigInteger(configured.trim());
+            if (value.signum() <= 0) {
+                throw new NumberFormatException("non-positive");
+            }
+            return value;
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException("invalid near.token.account.activation.yocto system config", e);
+        }
+    }
+
+    private Map<String, Object> addressPayload(ChainAddressRecord record, AssetMeta asset,
+                                               XrpTransactionService.DepositPreparation xrpPreparation,
+                                               NearTokenPreparation nearPreparation) {
         Map<String, Object> payload = orderedMap();
         payload.put("chain", record.getChain());
         payload.put("symbol", record.getAssetSymbol());
         payload.put("network", asset.network());
         payload.put("standard", asset.standard());
+        payload.put("nativeAsset", asset.nativeAsset());
+        payload.put("nativeSymbol", asset.nativeSymbol());
+        payload.put("contractAddress", asset.contractAddress());
+        decorateAddressStrategy(payload, asset.chain(), asset.nativeAsset());
         payload.put("address", record.getAddress());
         payload.put("qrCodeDataUrl", "data:image/png;base64," + QrCodeUtil.base64(record.getAddress()));
         payload.put("ownerAddress", record.getOwnerAddress());
@@ -696,6 +947,29 @@ public class WalletAppService {
         payload.put("derivationPath", record.getDerivationPath());
         payload.put("memo", null);
         payload.put("warnings", depositWarnings(asset));
+        if (xrpPreparation != null) {
+            Map<String, Object> preparation = orderedMap();
+            preparation.put("activated", xrpPreparation.activated());
+            preparation.put("trustlineReady", xrpPreparation.trustLineReady());
+            preparation.put("activatedBefore", xrpPreparation.activatedBefore());
+            preparation.put("trustlineBefore", xrpPreparation.trustLineBefore());
+            preparation.put("activationAmount", xrpPreparation.activationAmount());
+            preparation.put("activationTxHash", xrpPreparation.activationTxHash());
+            preparation.put("trustSetTxHash", xrpPreparation.trustSetTxHash());
+            payload.put("xrpPreparation", preparation);
+        }
+        if (nearPreparation != null) {
+            Map<String, Object> preparation = orderedMap();
+            preparation.put("activated", nearPreparation.activated());
+            preparation.put("storageReady", nearPreparation.storageReady());
+            preparation.put("activatedBefore", nearPreparation.activatedBefore());
+            preparation.put("registeredBefore", nearPreparation.registeredBefore());
+            preparation.put("activationAmountYocto", nearPreparation.activationAmountYocto().toString());
+            preparation.put("activationTxHash", nearPreparation.activationTxHash());
+            preparation.put("storageDepositAmountYocto", nearPreparation.storageDepositAmountYocto().toString());
+            preparation.put("storageDepositTxHash", nearPreparation.storageDepositTxHash());
+            payload.put("nearPreparation", preparation);
+        }
         return payload;
     }
 
@@ -706,7 +980,10 @@ public class WalletAppService {
             warnings.add(asset.symbol() + " deposits on other chains require switching to that chain first.");
             warnings.add("This token transfer needs " + asset.nativeSymbol() + " as gas on " + asset.chain() + ".");
             if ("XRP".equals(asset.chain())) {
-                warnings.add("XRPL issued-currency deposits require this address to be activated and to have a matching trustline.");
+                warnings.add("XRPL issued-currency deposits require an activated address and matching trustline; this wallet prepares them automatically.");
+            }
+            if ("NEAR".equals(asset.chain())) {
+                warnings.add("NEAR NEP-141 token deposits require account activation and token-contract storage registration; this wallet prepares both automatically.");
             }
         }
         return warnings;
@@ -734,19 +1011,58 @@ public class WalletAppService {
         if ("XRP".equals(chain) && !value.matches("^r[1-9A-HJ-NP-Za-km-z]{25,34}$")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid XRP address");
         }
+        if ("XMR".equals(chain) && !MoneroAddressValidator.isValid(value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid XMR address");
+        }
+        if ("ADA".equals(chain) && !CardanoKeyService.isValidAddress(value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid ADA address");
+        }
+        if ("DOT".equals(chain) && !PolkadotKeyService.isValidSs58Address(value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid DOT address");
+        }
+        if ("NEAR".equals(chain) && !NearKeyService.isValidAccountId(value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid NEAR address");
+        }
     }
 
     private WithdrawalTarget withdrawalTarget(AssetMeta asset, String address) {
         String value = address == null ? "" : address.trim();
-        ChainAddressRecord record = repository.findChainAddressByAddress(asset.chain(), asset.symbol(), value)
-                .or(() -> repository.findChainAddressByAddress(asset.chain(), value))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "withdrawal address must belong to this wallet project"));
+        ChainAddressRecord record = asset.nativeAsset()
+                ? nativeWithdrawalRecipient(asset, value)
+                : tokenWithdrawalRecipient(asset, value);
         String broadcastAddress = value;
         if (!asset.nativeAsset() && ("SOLANA".equals(asset.chain()) || "TON".equals(asset.chain()))) {
             broadcastAddress = tokenOwnerAddress(record);
         }
         return new WithdrawalTarget(value, broadcastAddress);
+    }
+
+    private ChainAddressRecord nativeWithdrawalRecipient(AssetMeta asset, String address) {
+        return repository.findChainAddressByAddress(asset.chain(), asset.symbol(), address)
+                .or(() -> repository.findChainAddressByAddress(asset.chain(), address))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "withdrawal address must belong to this wallet project"));
+    }
+
+    private ChainAddressRecord tokenWithdrawalRecipient(AssetMeta asset, String address) {
+        return repository.findChainAddressByAddress(asset.chain(), asset.symbol(), address)
+                .orElseGet(() -> materializeTokenWithdrawalRecipient(asset, address));
+    }
+
+    private ChainAddressRecord materializeTokenWithdrawalRecipient(AssetMeta asset, String address) {
+        if (requiresPreparedTokenAddress(asset.chain())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "token withdrawal address must be generated from the "
+                            + asset.chain() + "/" + asset.symbol() + " deposit page first");
+        }
+        if (!usesMirroredNativeTokenAddress(asset.chain())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "token withdrawal address must belong to this wallet project");
+        }
+        ChainAddressRecord baseAddress = repository.findChainAddressByAddress(asset.chain(), address)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "withdrawal address must belong to this wallet project"));
+        return mirrorTokenAddress(asset, baseAddress);
     }
 
     private static String tokenOwnerAddress(ChainAddressRecord record) {
@@ -783,6 +1099,38 @@ public class WalletAppService {
         });
     }
 
+    private <T> T xmrDaemonRpc(String network, String method, Class<T> responseType, Map<String, Object> params) {
+        return rpcNodeService.withFailover("XMR", network, "daemon", node -> {
+            try {
+                Map<String, String> headers = new HashMap<>();
+                headers.put("Content-type", "application/json");
+                headers.putAll(rpcNodeService.authHeaders(node));
+                JsonRpcHttpClient client = new JsonRpcHttpClient(new URL(moneroJsonRpcEndpoint(node.getRpcUrl())),
+                        headers);
+                client.setConnectionTimeoutMillis(DOGE_REGTEST_RPC_TIMEOUT_MS);
+                client.setReadTimeoutMillis(DOGE_REGTEST_RPC_TIMEOUT_MS);
+                T result = client.invoke(method, params == null ? Map.of() : params, responseType);
+                if (result == null) {
+                    throw new IllegalStateException("XMR daemon RPC returned empty result: " + method);
+                }
+                return result;
+            } catch (Throwable e) {
+                if (e instanceof RuntimeException runtimeException) {
+                    throw runtimeException;
+                }
+                throw new IllegalStateException("XMR daemon RPC call failed: " + method, e);
+            }
+        });
+    }
+
+    private static String moneroJsonRpcEndpoint(String rpcUrl) {
+        String value = rpcUrl == null ? "" : rpcUrl.trim().replaceAll("/+$", "");
+        if (value.endsWith("/json_rpc")) {
+            return value;
+        }
+        return value + "/json_rpc";
+    }
+
     private boolean isProductionEnvironment() {
         String value = environmentName == null ? "" : environmentName.trim();
         return "prod".equalsIgnoreCase(value) || "production".equalsIgnoreCase(value);
@@ -794,6 +1142,61 @@ public class WalletAppService {
         } catch (IllegalArgumentException e) {
             return false;
         }
+    }
+
+    static boolean usesMirroredNativeTokenAddress(String chain) {
+        return isEvm(chain)
+                || "TRON".equals(chain)
+                || "ADA".equals(chain)
+                || "DOT".equals(chain)
+                || "XRP".equals(chain)
+                || "NEAR".equals(chain);
+    }
+
+    static boolean requiresPreparedTokenAddress(String chain) {
+        return "XRP".equals(chain)
+                || "NEAR".equals(chain)
+                || "SOLANA".equals(chain)
+                || "TON".equals(chain)
+                || "APTOS".equals(chain)
+                || "SUI".equals(chain);
+    }
+
+    static String tokenAddressStrategy(String chain, boolean nativeAsset) {
+        if (nativeAsset) {
+            return "NATIVE";
+        }
+        boolean mirrored = usesMirroredNativeTokenAddress(chain);
+        boolean prepared = requiresPreparedTokenAddress(chain);
+        if (mirrored && prepared) {
+            return "PREPARED_NATIVE_ACCOUNT";
+        }
+        if (prepared) {
+            return "PREPARED_TOKEN_ACCOUNT";
+        }
+        if (mirrored) {
+            return "MIRROR_NATIVE_ACCOUNT";
+        }
+        return "DEDICATED_TOKEN_ACCOUNT";
+    }
+
+    private static void decorateAddressStrategy(Map<String, Object> row, String chain, boolean nativeAsset) {
+        boolean mirrored = !nativeAsset && usesMirroredNativeTokenAddress(chain);
+        boolean prepared = !nativeAsset && requiresPreparedTokenAddress(chain);
+        row.put("tokenAddressStrategy", tokenAddressStrategy(chain, nativeAsset));
+        row.put("mirrorsNativeAddress", mirrored);
+        row.put("requiresPreparedAddress", prepared);
+    }
+
+    private static boolean boolValue(Map<String, Object> row, String key) {
+        Object value = row.get(key);
+        if (value == null) {
+            value = row.get(key.toLowerCase(Locale.ROOT));
+        }
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        return value != null && Boolean.parseBoolean(String.valueOf(value));
     }
 
     private static String requireChain(String chain) {
@@ -869,7 +1272,8 @@ public class WalletAppService {
             String network,
             int decimals,
             String contractAddress,
-            String standard
+            String standard,
+            BigDecimal networkFeeReserve
     ) {
     }
 
@@ -877,6 +1281,12 @@ public class WalletAppService {
     }
 
     private record WithdrawalTarget(String requestedAddress, String broadcastAddress) {
+    }
+
+    private record NearTokenPreparation(boolean activated, boolean storageReady,
+                                        boolean activatedBefore, boolean registeredBefore,
+                                        BigInteger activationAmountYocto, String activationTxHash,
+                                        BigInteger storageDepositAmountYocto, String storageDepositTxHash) {
     }
 
     public record DepositAddressRequest(String chain, String symbol) {

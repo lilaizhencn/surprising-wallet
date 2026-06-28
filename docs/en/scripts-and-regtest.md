@@ -15,26 +15,38 @@ Commands:
 | Command | Purpose |
 |---|---|
 | `matrix` | Show supported local/fork/live coverage |
-| `init` | Start BTC/LTC/DOGE/BCH local regtest nodes |
+| `init` | Start BTC/LTC/DOGE/BCH local regtest nodes and XMR wallet-rpc regtest |
 | `status` | Show node and EVM fork status |
-| `stop` | Stop local UTXO regtest nodes |
-| `reset` | Reset local UTXO regtest nodes and volumes |
+| `stop` | Stop local UTXO/XMR regtest nodes |
+| `reset` | Reset local UTXO/XMR regtest nodes and volumes |
 | `test-utxo` | Run BTC/LTC/DOGE/BCH local full-flow tests |
+| `test-xmr` | Run XMR local deposit/withdraw/collection regtest integration |
 | `test-evm` | Run EVM fork regression tests |
 | `test-db` | Run DB-only account-chain tests |
 | `test-live` | Run external testnet connectivity and optional spend tests |
 | `test-local` | Run UTXO and EVM tests |
 | `test-all` | Run local and DB tests, plus optional live tests |
 
-## Local UTXO Nodes
+## Local UTXO And XMR Nodes
 
-The UTXO regtest scripts use Docker images under `infra/regtest/`.
+The UTXO regtest scripts use Docker images under `infra/regtest/`. XMR uses
+`monerod --regtest` plus two `monero-wallet-rpc` containers: one application
+wallet and one funder wallet.
 
 ```bash
 scripts/regtest/all-chain-regtest.sh init
 scripts/regtest/all-chain-regtest.sh status
 scripts/regtest/all-chain-regtest.sh test-utxo
+scripts/regtest/all-chain-regtest.sh test-xmr
 ```
+
+`test-xmr` requires Docker, `curl`, `python3`, Maven, and a PostgreSQL database
+initialized from `docs/db/surprising-wallet-init-pgsql.sql`. By default it uses
+`jdbc:postgresql://127.0.0.1:5432/wallet`, user `wallet`, and an empty password;
+override with `MONERO_REGTEST_DB_URL`, `MONERO_REGTEST_DB_USER`, and
+`MONERO_REGTEST_DB_PASSWORD`. If the wallet-rpc containers are started with
+authentication, set `MONERO_REGTEST_RPC_LOGIN=user:password`; the Java test will
+upsert the regtest RPC node as `DIGEST`, otherwise it uses `NONE`.
 
 Tune broadcast pressure:
 

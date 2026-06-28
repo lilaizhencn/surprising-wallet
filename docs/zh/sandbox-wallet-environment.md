@@ -41,6 +41,7 @@
 | LTC | regtest | 可控发币、挖块、确认数、UTXO 归集 |
 | DOGE | regtest | 可控发币、挖块、确认数、UTXO 归集 |
 | BCH | regtest | 可控发币、挖块、确认数、UTXO 归集 |
+| XMR | regtest | 可控发币、挖块、wallet-rpc 子地址、提现和归集 |
 
 项目已有脚本：
 
@@ -48,6 +49,7 @@
 scripts/regtest/all-chain-regtest.sh init
 scripts/regtest/all-chain-regtest.sh status
 scripts/regtest/bitcoinlike-regtest.sh mine 1 btc ltc doge bch
+scripts/regtest/all-chain-regtest.sh test-xmr
 ```
 
 长期运行时需要把 regtest RPC 从仅本机访问调整为沙盒链机器内网可访问，并通过安全组只允许钱包服务机访问。
@@ -60,6 +62,9 @@ scripts/regtest/bitcoinlike-regtest.sh mine 1 btc ltc doge bch
 | LTC | `http://<sandbox-chain-private-ip>:19443` |
 | DOGE | `http://<sandbox-chain-private-ip>:22555` |
 | BCH | `http://<sandbox-chain-private-ip>:18443` |
+| XMR wallet-rpc | `http://<sandbox-chain-private-ip>:18088` |
+| XMR funder wallet-rpc | `http://<sandbox-chain-private-ip>:18090` |
+| XMR daemon RPC | `http://<sandbox-chain-private-ip>:18081` |
 
 ### 建议本地运行的 EVM 沙盒链
 

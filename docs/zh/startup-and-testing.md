@@ -151,13 +151,14 @@ TokDou 钱包页面读取 wallet-server：
 - Redis host/port
 - `chain_profile` 中每条启用链只能启用一个 network
 - 启用链至少有一个匹配当前 `sw.app.env.name` 的 `chain_rpc_node`
+- 启用的 `chain_rpc_node` 必须配置真实 RPC URL 和认证信息；启动时会拒绝 `CHANGE_ME`、`YOUR_*`、`REPLACE_ME` 等占位符
 - `wallet_public_key` 中 slot 1/2/3 必须启用
 - 每条启用链必须且只能有一条默认热提钱包地址：`chain_address` 原生资产、`user_id=0`、`biz=0`、`address_index=0`、`wallet_role=DEPOSIT`
 - 签名服务私钥
-- Ed25519 链使用的 `SW_ED25519_SEED`
+- Ed25519 链使用的 `SW_ED25519_SEED`：SOLANA、TON、APTOS、SUI、ADA、DOT、NEAR
 - 钱包后台配置页使用的 `SW_WALLET_ADMIN_USERNAME`、`SW_WALLET_ADMIN_PASSWORD`
 
-启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量。wallet-server 会按 `wallet_public_key` 或 `SW_ED25519_SEED` 推导每条启用链的 `0/0/0` 默认热提地址，并和 `chain_address` 比对；缺失、重复或地址/path 不一致会直接启动失败。生产环境如果启用了 testnet/devnet/regtest profile 也会直接失败。
+启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量。wallet-server 会按 `wallet_public_key` 或 `SW_ED25519_SEED` 推导每条启用链的 `0/0/0` 默认热提地址，并和 `chain_address` 比对；缺失、重复或地址/path 不一致会直接启动失败。启用的 RPC 节点如果仍包含占位符 URL 或认证信息，也会直接启动失败。生产环境如果启用了 testnet/devnet/regtest profile 也会直接失败。
 
 ## 7. 启动服务
 
@@ -203,6 +204,7 @@ scripts/regtest/all-chain-regtest.sh matrix
 |---|---|
 | `test-db` | SOL/TON/APTOS/SUI/DOGE 和 UTXO 运行状态的 DB-only scanner/ledger/flow 测试 |
 | `test-utxo` | BTC/LTC/DOGE/BCH 本地 regtest、并发、广播测试 |
+| `test-xmr` | XMR 本地 wallet-rpc regtest 充值、提现、归集和幂等测试 |
 | `test-evm` | ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C 的 EVM fork 测试 |
 | `test-live` | 外部 testnet 连通性测试，以及可选花费测试 |
 | `test-all` | UTXO、EVM、DB 测试，以及可选 live 测试 |
@@ -210,6 +212,7 @@ scripts/regtest/all-chain-regtest.sh matrix
 当前自动化测试的边界：
 
 - `test-utxo` 会在本地 BTC/LTC/DOGE/BCH regtest 中模拟地址创建、充值扫描入账、归集、提现、UTXO 锁定/选择、两次签名、广播和确认。
+- `test-xmr` 会启动 XMR regtest wallet-rpc，创建真实子地址，充值并扫描入账，广播项目内提现，验证扫描幂等，并确认归集流程。
 - `test-evm` 会在 Hardhat fork 中模拟 EVM 原生币/ERC20 充值、提现、归集和确认流程。
 - `test-live` 默认验证外部 testnet/devnet 连通性；真实花费广播需要 `RUN_LIVE_SPENDING=true`、测试币余额、签名私钥和 Ed25519 seed。
 - 生产级全链端到端演练还需要同时启动 `wallet-sig1`、`wallet-sig2`、`wallet-server`，并由前端或 API 触发真实业务请求。
@@ -222,7 +225,7 @@ scripts/regtest/all-chain-regtest.sh test-db
 
 这些测试不需要本地区块链节点，但需要本地 PostgreSQL。
 
-## 10. 运行本地 UTXO Regtest
+## 10. 运行本地 UTXO 和 XMR Regtest
 
 启动本地节点：
 
@@ -235,6 +238,12 @@ scripts/regtest/all-chain-regtest.sh status
 
 ```bash
 scripts/regtest/all-chain-regtest.sh test-utxo
+```
+
+运行 XMR wallet-rpc 流程：
+
+```bash
+scripts/regtest/all-chain-regtest.sh test-xmr
 ```
 
 调整广播压力：

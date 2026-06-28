@@ -13,6 +13,7 @@ target/
 # Logs
 logs/
 log/
+runlogs/
 *.log
 
 # Local database backups

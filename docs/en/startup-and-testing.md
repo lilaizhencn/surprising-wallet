@@ -151,13 +151,14 @@ Required local settings:
 - Redis host/port
 - Only one enabled network per chain in `chain_profile`
 - At least one enabled `chain_rpc_node` for every enabled chain and current `sw.app.env.name`
+- Enabled `chain_rpc_node` rows must have real RPC URLs and credentials; startup rejects `CHANGE_ME`, `YOUR_*`, `REPLACE_ME`, and similar placeholder values
 - Enabled `wallet_public_key` slots 1/2/3
 - Exactly one default hot wallet address for every enabled chain: native-asset `chain_address`, `user_id=0`, `biz=0`, `address_index=0`, `wallet_role=DEPOSIT`
 - Signer private roots
-- `SW_ED25519_SEED` for Ed25519 chains
+- `SW_ED25519_SEED` for Ed25519 chains: SOLANA, TON, APTOS, SUI, ADA, DOT, and NEAR
 - `SW_WALLET_ADMIN_USERNAME` and `SW_WALLET_ADMIN_PASSWORD` for the wallet admin page
 
-Startup validation logs every chain network, task switch, scan start, batch size, and RPC node count. wallet-server derives every enabled chain's `0/0/0` default hot wallet from `wallet_public_key` or `SW_ED25519_SEED` and compares it with `chain_address`; startup fails on missing, duplicate, address mismatch or path mismatch. Production startup also fails if any enabled profile uses testnet/devnet/regtest.
+Startup validation logs every chain network, task switch, scan start, batch size, and RPC node count. wallet-server derives every enabled chain's `0/0/0` default hot wallet from `wallet_public_key` or `SW_ED25519_SEED` and compares it with `chain_address`; startup fails on missing, duplicate, address mismatch or path mismatch. Startup also fails when an enabled RPC node still contains placeholder URL or credential values. Production startup also fails if any enabled profile uses testnet/devnet/regtest.
 
 ## 7. Start Services
 
@@ -203,6 +204,7 @@ Expected coverage:
 |---|---|
 | `test-db` | DB-only scanner/ledger/flow tests for SOL/TON/APTOS/SUI/DOGE and UTXO runtime state |
 | `test-utxo` | Local BTC/LTC/DOGE/BCH regtest flow, concurrency, and broadcast tests |
+| `test-xmr` | Local XMR wallet-rpc regtest deposit, withdrawal, collection, and idempotency test |
 | `test-evm` | EVM fork tests for ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C |
 | `test-live` | External testnet connectivity and optional spending tests |
 | `test-all` | UTXO, EVM, DB tests, and optional live tests |
@@ -210,6 +212,7 @@ Expected coverage:
 Current automated-test boundary:
 
 - `test-utxo` simulates address creation, deposit scanning/crediting, collection, withdrawal, UTXO lock/selection, two signatures, broadcast, and confirmation on local BTC/LTC/DOGE/BCH regtest.
+- `test-xmr` starts XMR regtest wallet-rpc, creates real subaddresses, funds them, scans and credits deposits, broadcasts an internal withdrawal, verifies scanner idempotency, and confirms collection.
 - `test-evm` simulates EVM native/ERC20 deposit, withdrawal, collection, and confirmation flows on Hardhat forks.
 - `test-live` checks external testnet/devnet connectivity by default; real spending/broadcast requires `RUN_LIVE_SPENDING=true`, test funds, signer private roots, and the Ed25519 seed.
 - Production-style all-chain end-to-end rehearsal still requires wallet-sig1, wallet-sig2, and wallet-server to run together, with requests triggered by the frontend or APIs.
@@ -222,7 +225,7 @@ scripts/regtest/all-chain-regtest.sh test-db
 
 These tests do not need local chain nodes. They do need the local PostgreSQL database.
 
-## 10. Run Local UTXO Regtest
+## 10. Run Local UTXO And XMR Regtest
 
 Start local nodes:
 
@@ -235,6 +238,12 @@ Run full local UTXO flow:
 
 ```bash
 scripts/regtest/all-chain-regtest.sh test-utxo
+```
+
+Run XMR wallet-rpc flow:
+
+```bash
+scripts/regtest/all-chain-regtest.sh test-xmr
 ```
 
 Tune broadcast pressure:

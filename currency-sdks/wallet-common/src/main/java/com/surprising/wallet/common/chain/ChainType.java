@@ -22,7 +22,11 @@ public enum ChainType {
     SOLANA("solana", "account"),
     TON("ton", "account"),
     APTOS("aptos", "account"),
-    SUI("sui", "object");
+    SUI("sui", "object"),
+    ADA("cardano", "utxo"),
+    DOT("polkadot", "account"),
+    NEAR("near", "account"),
+    XMR("monero", "privacy");
 
     public static final int EVM_SHARED_BIP44_COIN_TYPE = 60;
 

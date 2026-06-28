@@ -24,6 +24,8 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 
 初始化文件包含 `chain_profile`、`chain_asset`、`token_config`、`wallet_system_config`、`wallet_public_key`、`chain_rpc_node` 的静态配置数据。
 
+初始化文件允许保留未启用的 RPC 和 token 模板行；脚本末尾会把仍带占位 URL、密钥或 token 合约的 `chain_rpc_node`、`token_config`、`chain_asset` 统一设为禁用/不活跃。填入真实值后，再在对应环境启用节点、token 和资产。
+
 它不包含地址、余额、scan-height、充值、提现、归集、签名、UTXO、链上交易等运行期数据。
 
 ## DB Asset Model
@@ -60,7 +62,13 @@ wallet-server 启动时会检查：
 - `wallet_public_key` 必须启用 slot 1、2、3。
 - `chain_profile` 中同一 `chain` 只能有一个启用 network。
 - `sw.app.env.name=prod` 时，启用 profile 不允许是 testnet/devnet/regtest。
-- 每个启用 profile 至少要有一个当前环境可用的 `chain_rpc_node`。
+- 每个启用 profile 必须有当前环境可用的必需 `chain_rpc_node`；例如 DOT 需要 `rpc` 和 `runtime`，启用 DOT token 时还需要 `asset_rpc`。
+- XMR `regtest` 还必须同时配置 `rpc`、`faucet` 和 `daemon` 节点，确保非生产获取测试币流程在启动后立即可用。
+- 启用 SOLANA、TON、APTOS、SUI、ADA、DOT、NEAR profile 时，必须配置并能正确解码 `SW_ED25519_SEED`。
+- 启用的 `chain_rpc_node` 不能包含 `CHANGE_ME`、`YOUR_*`、`REPLACE_ME` 等占位符 URL 或认证信息。
+- 启用的 `token_config` 和非原生 `chain_asset` 必须配置真实合约地址/asset id，不能为空或包含占位符。
+- 启用的 `token_config.network` 如果有值，必须和同链当前启用的 `chain_profile.network` 一致。只有旧数据确实由部署策略绑定到当前 profile 时，才允许保持为空。
+- 每个 active 的非原生 `chain_asset` 都必须存在同 `chain`、同 `symbol` 且已启用的 `token_config`，两张表的合约地址/asset id 必须一致。这样可以避免前端已经展示 token，但扫描或提现服务无法解析 token 配置。
 - 每条启用链必须存在且只能存在一条默认热提钱包地址：`chain_address` 原生资产、`user_id=0`、`biz=0`、`address_index=0`、`wallet_role=DEPOSIT`。启动时会重新推导地址和 path 并比对数据库。
 - 每条链的任务开关、扫描起始高度、扫描批量和 RPC 节点数量会打印到日志；缺失或关闭项会输出 WARN。
 

@@ -245,6 +245,9 @@ public class ChainRpcNodeService {
         if (text.contains("tatum")) {
             return "tatum";
         }
+        if (text.contains("monero")) {
+            return "monero";
+        }
         if (text.contains("xrpl") || text.contains("ripple")) {
             return "xrpl";
         }

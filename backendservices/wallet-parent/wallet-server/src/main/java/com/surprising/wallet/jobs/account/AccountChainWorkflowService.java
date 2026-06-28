@@ -11,8 +11,16 @@ import com.surprising.wallet.common.chain.TronTransactionRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.service.chain.aptos.AptosDepositScanner;
 import com.surprising.wallet.service.chain.aptos.AptosTransactionService;
+import com.surprising.wallet.service.chain.cardano.CardanoDepositScanner;
+import com.surprising.wallet.service.chain.cardano.CardanoTransactionService;
 import com.surprising.wallet.service.chain.evm.EvmAccountTransactionService;
 import com.surprising.wallet.service.chain.evm.EvmDepositScanner;
+import com.surprising.wallet.service.chain.monero.MoneroDepositScanner;
+import com.surprising.wallet.service.chain.monero.MoneroTransactionService;
+import com.surprising.wallet.service.chain.near.NearDepositScanner;
+import com.surprising.wallet.service.chain.near.NearTransactionService;
+import com.surprising.wallet.service.chain.polkadot.PolkadotDepositScanner;
+import com.surprising.wallet.service.chain.polkadot.PolkadotTransactionService;
 import com.surprising.wallet.service.chain.solana.SolanaDepositScanner;
 import com.surprising.wallet.service.chain.solana.SolanaTransactionService;
 import com.surprising.wallet.service.chain.sui.SuiDepositScanner;
@@ -65,8 +73,9 @@ public class AccountChainWorkflowService {
     private static final int COLLECTION_LIMIT = 20;
     private static final BigDecimal TRX_SUN = new BigDecimal("1000000");
     private static final List<String> ACCOUNT_CHAIN_PRIORITY = List.of(
+            "XMR",
             "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C",
-            "SOLANA", "TRON", "XRP", "TON", "APTOS", "SUI");
+            "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
 
     private final ChainJdbcRepository repository;
     private final WalletRuntimeConfigService runtimeConfigService;
@@ -85,6 +94,14 @@ public class AccountChainWorkflowService {
     private final TonTransactionService tonTransactionService;
     private final XrpDepositScanner xrpDepositScanner;
     private final XrpTransactionService xrpTransactionService;
+    private final CardanoDepositScanner cardanoDepositScanner;
+    private final CardanoTransactionService cardanoTransactionService;
+    private final MoneroDepositScanner moneroDepositScanner;
+    private final MoneroTransactionService moneroTransactionService;
+    private final NearDepositScanner nearDepositScanner;
+    private final NearTransactionService nearTransactionService;
+    private final PolkadotDepositScanner polkadotDepositScanner;
+    private final PolkadotTransactionService polkadotTransactionService;
 
     private final TronClientFactory tronClientFactory;
     private final TronDepositScanner tronDepositScanner;
@@ -112,92 +129,135 @@ public class AccountChainWorkflowService {
         confirmCollections();
     }
 
+    @Scheduled(cron = "3/10 * * * * ?")
+    public void moneroWorkflowJob() {
+        AccountChainProfile profile = repository.findProfileByChain("XMR")
+                .filter(candidate -> Boolean.TRUE.equals(candidate.getEnabled()))
+                .orElse(null);
+        if (profile == null) {
+            return;
+        }
+        processSingleAccountChain(profile);
+    }
+
     public void scanDeposits() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
-            if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_SCAN)) {
-                continue;
-            }
-            try {
-                switch (profile.getChain()) {
-                    case "SOLANA" -> scanSolana();
-                    case "APTOS" -> scanAptos();
-                    case "SUI" -> scanSui();
-                    case "TON" -> scanTon();
-                    case "XRP" -> scanXrp();
-                    case "TRON" -> scanTron(profile);
-                    default -> {
-                        if ("evm".equalsIgnoreCase(profile.getFamily())) {
-                            scanEvm(profile);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("account-chain deposit scan failed: chain={} error={}",
-                        profile.getChain(), e.getMessage(), e);
-            }
+            scanDeposits(profile);
         }
     }
 
     public void processWithdrawals() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
-            if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_WITHDRAW)) {
-                continue;
-            }
-            for (WithdrawalOrderRecord order : repository.listWithdrawalsForSigning(profile.getChain(), WITHDRAW_LIMIT)) {
-                try {
-                    processWithdrawal(profile, order);
-                } catch (Exception e) {
-                    log.warn("account-chain withdrawal failed: chain={} orderNo={} error={}",
-                            order.getChain(), order.getOrderNo(), e.getMessage(), e);
-                }
-            }
+            processWithdrawals(profile);
         }
     }
 
     public void confirmWithdrawals() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
-            for (WithdrawalOrderRecord order : repository.listWithdrawalsByStatus(
-                    profile.getChain(), "SENT", CONFIRM_LIMIT)) {
-                try {
-                    confirmWithdrawal(profile, order);
-                } catch (Exception e) {
-                    log.warn("account-chain withdrawal confirmation failed: chain={} orderNo={} error={}",
-                            order.getChain(), order.getOrderNo(), e.getMessage(), e);
-                }
-            }
+            confirmWithdrawals(profile);
         }
     }
 
     public void processCollections() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
-            if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_COLLECTION)) {
-                continue;
-            }
-            createCollectionCandidates(profile);
-            for (ChainCollectionRecord record : repository.listCollectionsForSigning(
-                    profile.getChain(), COLLECTION_LIMIT)) {
-                try {
-                    processCollection(profile, record);
-                } catch (Exception e) {
-                    repository.updateCollectionStatus(record.getChain(), record.getCollectionNo(),
-                            "FAILED", null, e.getMessage(), null);
-                    log.warn("account-chain collection failed: chain={} collectionNo={} error={}",
-                            record.getChain(), record.getCollectionNo(), e.getMessage(), e);
-                }
-            }
+            processCollections(profile);
         }
     }
 
     public void confirmCollections() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
-            for (ChainCollectionRecord record : repository.listCollectionsByStatus(
-                    profile.getChain(), "SENT", CONFIRM_LIMIT)) {
-                try {
-                    confirmCollection(profile, record);
-                } catch (Exception e) {
-                    log.warn("account-chain collection confirmation failed: chain={} collectionNo={} error={}",
-                            record.getChain(), record.getCollectionNo(), e.getMessage(), e);
+            confirmCollections(profile);
+        }
+    }
+
+    private void processSingleAccountChain(AccountChainProfile profile) {
+        scanDeposits(profile);
+        processWithdrawals(profile);
+        confirmWithdrawals(profile);
+        processCollections(profile);
+        confirmCollections(profile);
+    }
+
+    private void scanDeposits(AccountChainProfile profile) {
+        if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_SCAN)) {
+            return;
+        }
+        try {
+            switch (profile.getChain()) {
+                case "SOLANA" -> scanSolana();
+                case "APTOS" -> scanAptos();
+                case "SUI" -> scanSui();
+                case "TON" -> scanTon();
+                case "XRP" -> scanXrp();
+                case "ADA" -> scanCardano();
+                case "DOT" -> scanPolkadot();
+                case "NEAR" -> scanNear();
+                case "XMR" -> scanMonero(profile);
+                case "TRON" -> scanTron(profile);
+                default -> {
+                    if ("evm".equalsIgnoreCase(profile.getFamily())) {
+                        scanEvm(profile);
+                    }
                 }
+            }
+        } catch (Exception e) {
+            log.warn("account-chain deposit scan failed: chain={} error={}",
+                    profile.getChain(), e.getMessage(), e);
+        }
+    }
+
+    private void processWithdrawals(AccountChainProfile profile) {
+        if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_WITHDRAW)) {
+            return;
+        }
+        for (WithdrawalOrderRecord order : repository.listWithdrawalsForSigning(profile.getChain(), WITHDRAW_LIMIT)) {
+            try {
+                processWithdrawal(profile, order);
+            } catch (Exception e) {
+                log.warn("account-chain withdrawal failed: chain={} orderNo={} error={}",
+                        order.getChain(), order.getOrderNo(), e.getMessage(), e);
+            }
+        }
+    }
+
+    private void confirmWithdrawals(AccountChainProfile profile) {
+        for (WithdrawalOrderRecord order : repository.listWithdrawalsByStatus(
+                profile.getChain(), "SENT", CONFIRM_LIMIT)) {
+            try {
+                confirmWithdrawal(profile, order);
+            } catch (Exception e) {
+                log.warn("account-chain withdrawal confirmation failed: chain={} orderNo={} error={}",
+                        order.getChain(), order.getOrderNo(), e.getMessage(), e);
+            }
+        }
+    }
+
+    private void processCollections(AccountChainProfile profile) {
+        if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_COLLECTION)) {
+            return;
+        }
+        createCollectionCandidates(profile);
+        for (ChainCollectionRecord record : repository.listCollectionsForSigning(
+                profile.getChain(), COLLECTION_LIMIT)) {
+            try {
+                processCollection(profile, record);
+            } catch (Exception e) {
+                repository.updateCollectionStatus(record.getChain(), record.getCollectionNo(),
+                        "FAILED", null, e.getMessage(), null);
+                log.warn("account-chain collection failed: chain={} collectionNo={} error={}",
+                        record.getChain(), record.getCollectionNo(), e.getMessage(), e);
+            }
+        }
+    }
+
+    private void confirmCollections(AccountChainProfile profile) {
+        for (ChainCollectionRecord record : repository.listCollectionsByStatus(
+                profile.getChain(), "SENT", CONFIRM_LIMIT)) {
+            try {
+                confirmCollection(profile, record);
+            } catch (Exception e) {
+                log.warn("account-chain collection confirmation failed: chain={} collectionNo={} error={}",
+                        record.getChain(), record.getCollectionNo(), e.getMessage(), e);
             }
         }
     }
@@ -213,7 +273,7 @@ public class AccountChainWorkflowService {
                     from.getAddress(), txHash, null);
         } catch (Exception e) {
             repository.releaseLockedBalance(order.getChain(), order.getAssetSymbol(),
-                    debitAccountId(order, from), order.getAmount());
+                    debitAccountId(order, from), withdrawalDebitAmount(order));
             repository.updateWithdrawalStatus(order.getChain(), order.getOrderNo(), "FAILED",
                     from.getAddress(), null, e.getMessage());
             throw new IllegalStateException(e);
@@ -257,6 +317,36 @@ public class AccountChainWorkflowService {
                     ? xrpTransactionService.sendNative(from, order.getToAddress(), order.getAmount())
                     : xrpTransactionService.sendIssuedCurrency(
                     from, requireToken(chain, order.getAssetSymbol()), order.getToAddress(), order.getAmount());
+            case "ADA" -> {
+                if (isNative(profile, order.getAssetSymbol())) {
+                    yield cardanoTransactionService.sendNative(from, order.getToAddress(),
+                            toAtomicBigInteger(order.getAmount(), assetDecimals(order)));
+                }
+                yield cardanoTransactionService.sendToken(from, requireToken(chain, order.getAssetSymbol()),
+                        order.getToAddress(), order.getAmount());
+            }
+            case "DOT" -> {
+                if (isNative(profile, order.getAssetSymbol())) {
+                    yield polkadotTransactionService.sendNative(from, order.getToAddress(),
+                            toAtomicBigInteger(order.getAmount(), assetDecimals(order)));
+                }
+                yield polkadotTransactionService.sendAsset(from, requireToken(chain, order.getAssetSymbol()),
+                        order.getToAddress(), order.getAmount());
+            }
+            case "XMR" -> {
+                if (!isNative(profile, order.getAssetSymbol())) {
+                    throw new IllegalStateException("Monero tokens are not supported");
+                }
+                yield moneroTransactionService.sendNative(profile, from, order.getToAddress(), order.getAmount());
+            }
+            case "NEAR" -> {
+                if (isNative(profile, order.getAssetSymbol())) {
+                    yield nearTransactionService.sendNative(from, order.getToAddress(),
+                            toAtomicBigInteger(order.getAmount(), assetDecimals(order)));
+                }
+                yield nearTransactionService.sendToken(from, requireToken(chain, order.getAssetSymbol()),
+                        order.getToAddress(), order.getAmount());
+            }
             case "TRON" -> broadcastTron(profile, order, from);
             default -> throw new IllegalStateException("unsupported account-chain withdrawal: " + chain);
         };
@@ -266,19 +356,31 @@ public class AccountChainWorkflowService {
         ChainAddressRecord from = requireAddress(order.getChain(), order.getAssetSymbol(), order.getFromAddress());
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
             evmTransactionService.confirmWithdrawal(order.getChain(), order.getOrderNo(),
-                    order.getAssetSymbol(), debitAccountId(order, from), order.getAmount());
+                    order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
             return;
         }
         switch (profile.getChain()) {
             case "SOLANA" -> solanaTransactionService.confirmWithdrawal(
-                    order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), order.getAmount());
+                    order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
             case "APTOS" -> aptosTransactionService.confirmWithdrawal(
-                    order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), order.getAmount());
+                    order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
             case "SUI" -> suiTransactionService.confirmWithdrawal(
-                    order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), order.getAmount());
+                    order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
             case "TON" -> confirmTonWithdrawal(order, from);
             case "XRP" -> xrpTransactionService.confirmWithdrawal(
-                    profile, order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), order.getAmount());
+                    profile, order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
+            case "ADA" -> cardanoTransactionService.confirmWithdrawal(
+                    profile, order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
+                    debitAccountId(order, from), withdrawalDebitAmount(order));
+            case "DOT" -> polkadotTransactionService.confirmWithdrawal(
+                    profile, order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
+                    debitAccountId(order, from), withdrawalDebitAmount(order));
+            case "XMR" -> moneroTransactionService.confirmWithdrawal(
+                    profile, order.getOrderNo(), order.getTxHash(), debitAccountId(order, from),
+                    withdrawalDebitAmount(order), order.getToAddress(), order.getAmount());
+            case "NEAR" -> nearTransactionService.confirmWithdrawal(
+                    profile, order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
+                    debitAccountId(order, from), withdrawalDebitAmount(order));
             case "TRON" -> confirmTronWithdrawal(profile, order, from);
             default -> {
             }
@@ -366,6 +468,38 @@ public class AccountChainWorkflowService {
                             record.getToAddress(), record.getAmount());
                 }
             }
+            case "ADA" -> {
+                if (isNative(profile, record.getAssetSymbol())) {
+                    cardanoTransactionService.collectNative(record.getCollectionNo(), from,
+                            record.getToAddress(), toAtomicBigInteger(record.getAmount(), assetDecimals(record)));
+                } else {
+                    cardanoTransactionService.collectToken(record.getCollectionNo(), from,
+                            requireToken(record.getChain(), record.getAssetSymbol()),
+                            record.getToAddress(), record.getAmount());
+                }
+            }
+            case "DOT" -> {
+                if (isNative(profile, record.getAssetSymbol())) {
+                    polkadotTransactionService.collectNative(record.getCollectionNo(), from,
+                            record.getToAddress(), toAtomicBigInteger(record.getAmount(), assetDecimals(record)));
+                } else {
+                    polkadotTransactionService.collectAsset(record.getCollectionNo(), from,
+                            requireToken(record.getChain(), record.getAssetSymbol()),
+                            record.getToAddress(), record.getAmount());
+                }
+            }
+            case "XMR" -> moneroTransactionService.collectNative(profile, record.getCollectionNo(), from,
+                    record.getToAddress(), record.getAmount());
+            case "NEAR" -> {
+                if (isNative(profile, record.getAssetSymbol())) {
+                    nearTransactionService.collectNative(record.getCollectionNo(), from,
+                            record.getToAddress(), toAtomicBigInteger(record.getAmount(), assetDecimals(record)));
+                } else {
+                    nearTransactionService.collectToken(record.getCollectionNo(), from,
+                            requireToken(record.getChain(), record.getAssetSymbol()),
+                            record.getToAddress(), record.getAmount());
+                }
+            }
             case "TRON" -> processTronCollection(profile, record, from);
             default -> {
             }
@@ -383,6 +517,11 @@ public class AccountChainWorkflowService {
             case "SUI" -> suiTransactionService.confirmCollection(record.getCollectionNo());
             case "TON" -> tonTransactionService.confirmCollection(record.getCollectionNo());
             case "XRP" -> xrpTransactionService.confirmCollection(profile, record.getCollectionNo());
+            case "ADA" -> cardanoTransactionService.confirmCollection(profile, record.getCollectionNo());
+            case "DOT" -> polkadotTransactionService.confirmCollection(
+                    profile, record.getCollectionNo(), record.getAssetSymbol());
+            case "XMR" -> moneroTransactionService.confirmCollection(profile, record.getCollectionNo());
+            case "NEAR" -> nearTransactionService.confirmCollection(profile, record.getCollectionNo());
             case "TRON" -> confirmTronCollection(profile, record);
             default -> {
             }
@@ -418,6 +557,22 @@ public class AccountChainWorkflowService {
 
     private void scanXrp() {
         xrpDepositScanner.scanAndCredit();
+    }
+
+    private void scanCardano() {
+        cardanoDepositScanner.scanAndCredit();
+    }
+
+    private void scanPolkadot() {
+        polkadotDepositScanner.scanAndCredit();
+    }
+
+    private void scanNear() {
+        nearDepositScanner.scanAndCredit();
+    }
+
+    private void scanMonero(AccountChainProfile profile) {
+        moneroDepositScanner.scanAndCredit(profile);
     }
 
     private void scanTron(AccountChainProfile profile) throws Exception {
@@ -515,7 +670,7 @@ public class AccountChainWorkflowService {
         if (isTronConfirmed(profile, order.getTxHash())) {
             if (repository.markWithdrawalConfirmed(order.getChain(), order.getOrderNo(), order.getTxHash()) == 1) {
                 repository.settleLockedDebit(order.getChain(), order.getAssetSymbol(),
-                        debitAccountId(order, from), order.getAmount());
+                        debitAccountId(order, from), withdrawalDebitAmount(order));
             }
         }
     }
@@ -547,7 +702,7 @@ public class AccountChainWorkflowService {
         }
         if (repository.markWithdrawalConfirmed(order.getChain(), order.getOrderNo(), order.getTxHash()) == 1) {
             repository.settleLockedDebit(order.getChain(), order.getAssetSymbol(),
-                    debitAccountId(order, from), order.getAmount());
+                    debitAccountId(order, from), withdrawalDebitAmount(order));
         }
     }
 
@@ -579,6 +734,9 @@ public class AccountChainWorkflowService {
         if (!isNative(profile, candidate.getAssetSymbol())) {
             return amount;
         }
+        if ("XRP".equals(profile.getChain())) {
+            return xrpTransactionService.collectableNativeAmount(candidate.getAddress(), amount);
+        }
         BigDecimal reserve = nativeCollectionFeeReserve(profile, candidate);
         return amount.subtract(reserve).max(BigDecimal.ZERO);
     }
@@ -596,6 +754,10 @@ public class AccountChainWorkflowService {
                 case "SOLANA" -> configured.max(new BigDecimal("0.00002"));
                 case "TON" -> configured.max(new BigDecimal("0.02"));
                 case "XRP" -> configured.max(new BigDecimal("0.000012"));
+                case "ADA" -> configured.max(new BigDecimal("0.3"));
+                case "DOT" -> configured.max(new BigDecimal("0.02"));
+                case "XMR" -> configured.max(new BigDecimal("0.003"));
+                case "NEAR" -> configured.max(new BigDecimal("0.001"));
                 case "SUI" -> configured.max(new BigDecimal("0.02"));
                 case "APTOS" -> configured.max(new BigDecimal("0.05"));
                 case "TRON" -> configured.max(new BigDecimal("1"));
@@ -662,6 +824,12 @@ public class AccountChainWorkflowService {
     private String debitAccountId(WithdrawalOrderRecord order, ChainAddressRecord from) {
         String debitAccountId = order.getDebitAccountId();
         return debitAccountId == null || debitAccountId.isBlank() ? from.getAccountId() : debitAccountId;
+    }
+
+    private BigDecimal withdrawalDebitAmount(WithdrawalOrderRecord order) {
+        BigDecimal amount = order.getAmount() == null ? BigDecimal.ZERO : order.getAmount();
+        BigDecimal fee = order.getFee() == null ? BigDecimal.ZERO : order.getFee();
+        return amount.add(fee);
     }
 
     private List<AccountChainProfile> enabledAccountProfiles() {

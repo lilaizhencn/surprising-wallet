@@ -109,4 +109,9 @@ public class WalletAppController {
     public ResponseResult<Map<String, Object>> dogeRegtestFaucet(HttpServletRequest servletRequest) {
         return ResultUtils.success(appService.dogeRegtestFaucet(authService.requireUser(servletRequest)));
     }
+
+    @PostMapping("/app/test-faucet/xmr")
+    public ResponseResult<Map<String, Object>> xmrRegtestFaucet(HttpServletRequest servletRequest) {
+        return ResultUtils.success(appService.xmrRegtestFaucet(authService.requireUser(servletRequest)));
+    }
 }

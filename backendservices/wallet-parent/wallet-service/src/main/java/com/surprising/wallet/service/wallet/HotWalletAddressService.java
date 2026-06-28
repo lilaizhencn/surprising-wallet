@@ -10,6 +10,10 @@ import com.surprising.wallet.common.chain.WalletPublicKey;
 import com.surprising.wallet.common.key.Ed25519DerivedKey;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.service.chain.aptos.AptosKeyService;
+import com.surprising.wallet.service.chain.cardano.CardanoKeyService;
+import com.surprising.wallet.service.chain.monero.MoneroAddressService;
+import com.surprising.wallet.service.chain.near.NearKeyService;
+import com.surprising.wallet.service.chain.polkadot.PolkadotKeyService;
 import com.surprising.wallet.service.chain.solana.SolanaKeyService;
 import com.surprising.wallet.service.chain.sui.SuiKeyService;
 import com.surprising.wallet.service.chain.ton.TonKeyService;
@@ -53,6 +57,10 @@ public class HotWalletAddressService {
     private final AptosKeyService aptosKeyService;
     private final TonKeyService tonKeyService;
     private final XrpKeyService xrpKeyService;
+    private final CardanoKeyService cardanoKeyService;
+    private final NearKeyService nearKeyService;
+    private final PolkadotKeyService polkadotKeyService;
+    private final MoneroAddressService moneroAddressService;
 
     public Optional<ChainAddressRecord> findDefaultHotAddress(String chain, String assetSymbol) {
         return repository.findChainAddress(
@@ -151,6 +159,10 @@ public class HotWalletAddressService {
             case "aptos" -> deriveAptos(profile, userId, biz, addressIndex, walletRole);
             case "ton" -> deriveTon(profile, userId, biz, addressIndex, walletRole);
             case "xrp" -> deriveXrp(profile, userId, biz, addressIndex, walletRole);
+            case "cardano" -> deriveCardano(profile, userId, biz, addressIndex, walletRole);
+            case "near" -> deriveNear(profile, userId, biz, addressIndex, walletRole);
+            case "polkadot" -> derivePolkadot(profile, userId, biz, addressIndex, walletRole);
+            case "monero" -> deriveMonero(userId, biz, addressIndex, walletRole);
             default -> throw new IllegalStateException("unsupported hot wallet derivation family: "
                     + profile.getChain() + "/" + profile.getFamily());
         };
@@ -337,6 +349,31 @@ public class HotWalletAddressService {
                 derivationPath(profile, userId, biz, addressIndex), walletRole);
     }
 
+    private ChainAddressRecord deriveCardano(AccountChainProfile profile, long userId, int biz,
+                                             long addressIndex, String walletRole) {
+        Ed25519DerivedKey key = cardanoKeyService.derive(userId, biz, addressIndex);
+        String address = CardanoKeyService.enterpriseAddress(key.publicKey(), isMainnet(normalize(profile.getNetwork())));
+        return baseRecord(profile, userId, biz, addressIndex, address, address, key.derivationPath(), walletRole);
+    }
+
+    private ChainAddressRecord deriveNear(AccountChainProfile profile, long userId, int biz,
+                                          long addressIndex, String walletRole) {
+        Ed25519DerivedKey key = nearKeyService.derive(userId, biz, addressIndex);
+        String address = NearKeyService.address(key.publicKey());
+        return baseRecord(profile, userId, biz, addressIndex, address, address, key.derivationPath(), walletRole);
+    }
+
+    private ChainAddressRecord derivePolkadot(AccountChainProfile profile, long userId, int biz,
+                                              long addressIndex, String walletRole) {
+        Ed25519DerivedKey key = polkadotKeyService.derive(userId, biz, addressIndex);
+        String address = PolkadotKeyService.ss58Address(key.publicKey(), polkadotSs58Prefix(profile));
+        return baseRecord(profile, userId, biz, addressIndex, address, address, key.derivationPath(), walletRole);
+    }
+
+    private ChainAddressRecord deriveMonero(long userId, int biz, long addressIndex, String walletRole) {
+        return moneroAddressService.createNativeAddress(userId, biz, addressIndex, walletRole);
+    }
+
     private ChainAddressRecord baseRecord(AccountChainProfile profile, long userId, int biz,
                                           long addressIndex, String address, String ownerAddress,
                                           String derivationPath, String walletRole) {
@@ -417,6 +454,13 @@ public class HotWalletAddressService {
 
     private int derivationCoinType(AccountChainProfile profile) {
         return ChainType.derivationCoinType(profile.getChain(), profile.getBip44CoinType());
+    }
+
+    private int polkadotSs58Prefix(AccountChainProfile profile) {
+        if (profile.getChainId() != null && profile.getChainId() >= 0 && profile.getChainId() <= 16383) {
+            return Math.toIntExact(profile.getChainId());
+        }
+        return isMainnet(normalize(profile.getNetwork())) ? 0 : 42;
     }
 
     private String normalize(String value) {

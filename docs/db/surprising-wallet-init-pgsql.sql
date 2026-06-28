@@ -42,11 +42,16 @@ ALTER TABLE IF EXISTS ONLY "public"."tron_token_transfer" DROP CONSTRAINT IF EXI
 ALTER TABLE IF EXISTS ONLY "public"."tron_token_transfer" DROP CONSTRAINT IF EXISTS "tron_token_transfer_chain_tx_hash_log_index_key";
 ALTER TABLE IF EXISTS ONLY "public"."ton_transaction" DROP CONSTRAINT IF EXISTS "ton_transaction_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."ton_transaction" DROP CONSTRAINT IF EXISTS "ton_transaction_chain_tx_hash_key";
+ALTER TABLE IF EXISTS ONLY "public"."monero_transaction" DROP CONSTRAINT IF EXISTS "monero_transaction_pkey";
+ALTER TABLE IF EXISTS ONLY "public"."monero_transaction" DROP CONSTRAINT IF EXISTS "monero_transaction_chain_tx_hash_direction_subaddress_key";
 ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_chain_symbol_key";
 ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_chain_contract_address_key";
 ALTER TABLE IF EXISTS ONLY "public"."xrp_transaction" DROP CONSTRAINT IF EXISTS "xrp_transaction_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."xrp_transaction" DROP CONSTRAINT IF EXISTS "xrp_transaction_chain_tx_hash_key";
+ALTER TABLE IF EXISTS ONLY "public"."near_transaction" DROP CONSTRAINT IF EXISTS "near_transaction_pkey";
+ALTER TABLE IF EXISTS ONLY "public"."near_transaction" DROP CONSTRAINT IF EXISTS "near_transaction_chain_tx_hash_action_index_key";
+ALTER TABLE IF EXISTS ONLY "public"."near_transaction" DROP CONSTRAINT IF EXISTS "near_transaction_chain_tx_hash_key";
 ALTER TABLE IF EXISTS ONLY "public"."sui_transaction" DROP CONSTRAINT IF EXISTS "sui_transaction_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."sui_transaction" DROP CONSTRAINT IF EXISTS "sui_transaction_chain_tx_digest_key";
 ALTER TABLE IF EXISTS ONLY "public"."sol_transaction" DROP CONSTRAINT IF EXISTS "sol_transaction_pkey";
@@ -95,8 +100,10 @@ ALTER TABLE IF EXISTS "public"."tron_tx" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."tron_transaction" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."tron_token_transfer" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."ton_transaction" ALTER COLUMN "id" DROP DEFAULT;
+ALTER TABLE IF EXISTS "public"."monero_transaction" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."token_config" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."xrp_transaction" ALTER COLUMN "id" DROP DEFAULT;
+ALTER TABLE IF EXISTS "public"."near_transaction" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."sui_transaction" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."sol_transaction" ALTER COLUMN "id" DROP DEFAULT;
 ALTER TABLE IF EXISTS "public"."ledger_balance" ALTER COLUMN "id" DROP DEFAULT;
@@ -132,10 +139,14 @@ DROP SEQUENCE IF EXISTS "public"."tron_token_transfer_id_seq";
 DROP TABLE IF EXISTS "public"."tron_token_transfer";
 DROP SEQUENCE IF EXISTS "public"."ton_transaction_id_seq";
 DROP TABLE IF EXISTS "public"."ton_transaction";
+DROP SEQUENCE IF EXISTS "public"."monero_transaction_id_seq";
+DROP TABLE IF EXISTS "public"."monero_transaction";
 DROP SEQUENCE IF EXISTS "public"."token_config_id_seq";
 DROP TABLE IF EXISTS "public"."token_config";
 DROP SEQUENCE IF EXISTS "public"."xrp_transaction_id_seq";
 DROP TABLE IF EXISTS "public"."xrp_transaction";
+DROP SEQUENCE IF EXISTS "public"."near_transaction_id_seq";
+DROP TABLE IF EXISTS "public"."near_transaction";
 DROP SEQUENCE IF EXISTS "public"."sui_transaction_id_seq";
 DROP TABLE IF EXISTS "public"."sui_transaction";
 DROP SEQUENCE IF EXISTS "public"."sol_transaction_id_seq";
@@ -231,7 +242,7 @@ CREATE TABLE "public"."aptos_transaction" (
     "receiver" character varying(128) NOT NULL,
     "asset_symbol" character varying(32) NOT NULL,
     "coin_type" character varying(256),
-    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
     "gas_used" bigint DEFAULT 0 NOT NULL,
     "gas_unit_price" bigint DEFAULT 0 NOT NULL,
     "version" bigint,
@@ -317,8 +328,8 @@ CREATE TABLE "public"."chain_asset" (
     "decimals" integer DEFAULT 18 NOT NULL,
     "native_asset" boolean DEFAULT false NOT NULL,
     "active" boolean DEFAULT true NOT NULL,
-    "min_transfer" numeric(78,18),
-    "min_withdraw" numeric(78,18),
+    "min_transfer" numeric(78,24),
+    "min_withdraw" numeric(78,24),
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
 );
@@ -491,7 +502,7 @@ CREATE TABLE "public"."chain_signing_transaction" (
     "business_type" character varying(32) NOT NULL,
     "business_no" character varying(512) NOT NULL,
     "tx_id" character varying(128) DEFAULT ''::character varying NOT NULL,
-    "balance" numeric(78,18) DEFAULT 0 NOT NULL,
+    "balance" numeric(78,24) DEFAULT 0 NOT NULL,
     "signature" "text",
     "currency" integer NOT NULL,
     "status" smallint NOT NULL,
@@ -526,8 +537,8 @@ CREATE TABLE "public"."collection_record" (
     "asset_symbol" character varying(32) NOT NULL,
     "from_address" character varying(160) NOT NULL,
     "to_address" character varying(160) NOT NULL,
-    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
-    "fee" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
+    "fee" numeric(78,24) DEFAULT 0 NOT NULL,
     "tx_hash" character varying(128),
     "status" character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
     "error_message" "text",
@@ -569,7 +580,7 @@ CREATE TABLE "public"."deposit_record" (
     "from_address" character varying(160),
     "to_address" character varying(160) NOT NULL,
     "contract_address" character varying(128),
-    "amount" numeric(78,18) NOT NULL,
+    "amount" numeric(78,24) NOT NULL,
     "block_height" bigint NOT NULL,
     "confirmations" integer DEFAULT 0 NOT NULL,
     "status" character varying(32) DEFAULT 'DETECTED'::character varying NOT NULL,
@@ -648,7 +659,7 @@ CREATE TABLE "public"."evm_token_transfer" (
     "contract_address" character varying(128) NOT NULL,
     "from_address" character varying(128) NOT NULL,
     "to_address" character varying(128) NOT NULL,
-    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
     "block_height" bigint NOT NULL,
     "confirmations" integer DEFAULT 0 NOT NULL,
     "status" character varying(32) DEFAULT 'DETECTED'::character varying NOT NULL,
@@ -688,8 +699,8 @@ CREATE TABLE "public"."evm_transaction" (
     "to_address" character varying(128) NOT NULL,
     "asset_symbol" character varying(32) NOT NULL,
     "contract_address" character varying(128),
-    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
-    "fee" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
+    "fee" numeric(78,24) DEFAULT 0 NOT NULL,
     "nonce" bigint,
     "block_height" bigint,
     "confirmations" integer DEFAULT 0 NOT NULL,
@@ -731,8 +742,8 @@ CREATE TABLE "public"."evm_tx" (
     "to_address" character varying(128) NOT NULL,
     "asset_symbol" character varying(32) NOT NULL,
     "contract_address" character varying(128),
-    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
-    "fee" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
+    "fee" numeric(78,24) DEFAULT 0 NOT NULL,
     "nonce" bigint,
     "block_height" bigint,
     "confirmations" integer DEFAULT 0 NOT NULL,
@@ -772,7 +783,7 @@ CREATE TABLE "public"."gas_topup_task" (
     "chain" character varying(32) NOT NULL,
     "target_address" character varying(160) NOT NULL,
     "source_address" character varying(160),
-    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
     "tx_hash" character varying(128),
     "status" character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
     "reason" character varying(256),
@@ -848,9 +859,9 @@ CREATE TABLE "public"."ledger_balance" (
     "chain" character varying(32) NOT NULL,
     "asset_symbol" character varying(32) NOT NULL,
     "account_id" character varying(128) NOT NULL,
-    "available_balance" numeric(78,18) DEFAULT 0 NOT NULL,
-    "locked_balance" numeric(78,18) DEFAULT 0 NOT NULL,
-    "total_balance" numeric(78,18) DEFAULT 0 NOT NULL,
+    "available_balance" numeric(78,24) DEFAULT 0 NOT NULL,
+    "locked_balance" numeric(78,24) DEFAULT 0 NOT NULL,
+    "total_balance" numeric(78,24) DEFAULT 0 NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
 );
@@ -887,7 +898,7 @@ CREATE TABLE "public"."sol_transaction" (
     "to_address" character varying(128) NOT NULL,
     "asset_symbol" character varying(32) NOT NULL,
     "mint_address" character varying(128),
-    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
     "fee_lamports" bigint DEFAULT 0 NOT NULL,
     "slot" bigint,
     "confirmations" integer DEFAULT 0 NOT NULL,
@@ -929,7 +940,7 @@ CREATE TABLE "public"."sui_transaction" (
     "receiver" character varying(128) NOT NULL,
     "asset_symbol" character varying(32) NOT NULL,
     "coin_type" character varying(256),
-    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
     "gas_used" bigint DEFAULT 0 NOT NULL,
     "checkpoint" bigint,
     "status" character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
@@ -959,6 +970,47 @@ ALTER SEQUENCE "public"."sui_transaction_id_seq" OWNED BY "public"."sui_transact
 
 
 --
+-- Name: near_transaction; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE "public"."near_transaction" (
+    "id" bigint NOT NULL,
+    "chain" character varying(32) DEFAULT 'NEAR'::character varying NOT NULL,
+    "tx_hash" character varying(128) NOT NULL,
+    "action_index" bigint DEFAULT 0 NOT NULL,
+    "sender" character varying(128),
+    "receiver" character varying(128) NOT NULL,
+    "asset_symbol" character varying(32) DEFAULT 'NEAR'::character varying NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
+    "gas_burnt" bigint DEFAULT 0 NOT NULL,
+    "block_height" bigint,
+    "status" character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
+    "raw_payload" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+--
+-- Name: near_transaction_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE "public"."near_transaction_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: near_transaction_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE "public"."near_transaction_id_seq" OWNED BY "public"."near_transaction"."id";
+
+
+--
 -- Name: xrp_transaction; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -971,7 +1023,7 @@ CREATE TABLE "public"."xrp_transaction" (
     "asset_symbol" character varying(32) NOT NULL,
     "issuer_address" character varying(160),
     "currency_code" character varying(64),
-    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
     "fee_drops" bigint DEFAULT 0 NOT NULL,
     "ledger_index" bigint,
     "sequence_number" bigint,
@@ -1003,6 +1055,49 @@ ALTER SEQUENCE "public"."xrp_transaction_id_seq" OWNED BY "public"."xrp_transact
 
 
 --
+-- Name: monero_transaction; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE "public"."monero_transaction" (
+    "id" bigint NOT NULL,
+    "chain" character varying(32) DEFAULT 'XMR'::character varying NOT NULL,
+    "tx_hash" character varying(128) NOT NULL,
+    "direction" character varying(16) NOT NULL,
+    "account_index" integer DEFAULT 0 NOT NULL,
+    "subaddress_index" integer DEFAULT 0 NOT NULL,
+    "address" character varying(128) NOT NULL,
+    "asset_symbol" character varying(32) DEFAULT 'XMR'::character varying NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
+    "fee_atomic" bigint DEFAULT 0 NOT NULL,
+    "block_height" bigint,
+    "confirmations" integer DEFAULT 0 NOT NULL,
+    "status" character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
+    "raw_payload" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+--
+-- Name: monero_transaction_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE "public"."monero_transaction_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: monero_transaction_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE "public"."monero_transaction_id_seq" OWNED BY "public"."monero_transaction"."id";
+
+
+--
 -- Name: token_config; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1014,8 +1109,8 @@ CREATE TABLE "public"."token_config" (
     "contract_address" character varying(128) NOT NULL,
     "decimals" integer NOT NULL,
     "enabled" boolean DEFAULT true NOT NULL,
-    "min_deposit" numeric(78,18),
-    "min_withdraw" numeric(78,18),
+    "min_deposit" numeric(78,24),
+    "min_withdraw" numeric(78,24),
     "collect_enabled" boolean DEFAULT true NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
@@ -1023,9 +1118,9 @@ CREATE TABLE "public"."token_config" (
     "token_standard" character varying(32),
     "contract_address_base58" character varying(128),
     "contract_address_hex" character varying(128),
-    "min_deposit_amount" numeric(78,18),
-    "min_withdraw_amount" numeric(78,18),
-    "collect_threshold" numeric(78,18),
+    "min_deposit_amount" numeric(78,24),
+    "min_withdraw_amount" numeric(78,24),
+    "collect_threshold" numeric(78,24),
     "gas_strategy" character varying(64),
     "confirmation_required" integer
 );
@@ -1062,7 +1157,7 @@ CREATE TABLE "public"."ton_transaction" (
     "to_address" character varying(160) NOT NULL,
     "asset_symbol" character varying(32) NOT NULL,
     "jetton_master" character varying(160),
-    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
     "fee_nano" bigint DEFAULT 0 NOT NULL,
     "logical_time" numeric(78,0),
     "confirmations" integer DEFAULT 0 NOT NULL,
@@ -1105,7 +1200,7 @@ CREATE TABLE "public"."tron_token_transfer" (
     "contract_address" character varying(128) NOT NULL,
     "from_address" character varying(128) NOT NULL,
     "to_address" character varying(128) NOT NULL,
-    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
     "block_height" bigint NOT NULL,
     "confirmations" integer DEFAULT 0 NOT NULL,
     "status" character varying(32) DEFAULT 'DETECTED'::character varying NOT NULL,
@@ -1145,8 +1240,8 @@ CREATE TABLE "public"."tron_transaction" (
     "to_address" character varying(128) NOT NULL,
     "asset_symbol" character varying(32) NOT NULL,
     "contract_address" character varying(128),
-    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
-    "fee" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
+    "fee" numeric(78,24) DEFAULT 0 NOT NULL,
     "block_height" bigint,
     "confirmations" integer DEFAULT 0 NOT NULL,
     "status" character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
@@ -1187,8 +1282,8 @@ CREATE TABLE "public"."tron_tx" (
     "to_address" character varying(128) NOT NULL,
     "asset_symbol" character varying(32) NOT NULL,
     "contract_address" character varying(128),
-    "amount" numeric(78,18) DEFAULT 0 NOT NULL,
-    "fee" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
+    "fee" numeric(78,24) DEFAULT 0 NOT NULL,
     "block_height" bigint,
     "confirmations" integer DEFAULT 0 NOT NULL,
     "status" character varying(32) DEFAULT 'NEW'::character varying NOT NULL,
@@ -1228,7 +1323,7 @@ CREATE TABLE "public"."utxo_record" (
     "tx_hash" character varying(128) NOT NULL,
     "vout" integer NOT NULL,
     "address" character varying(160) NOT NULL,
-    "amount" numeric(78,18) NOT NULL,
+    "amount" numeric(78,24) NOT NULL,
     "block_height" bigint NOT NULL,
     "confirmations" integer DEFAULT 0 NOT NULL,
     "state" character varying(32) DEFAULT 'AVAILABLE'::character varying NOT NULL,
@@ -1341,7 +1436,7 @@ CREATE TABLE "public"."wallet_transfer_order" (
     "to_user_id" bigint NOT NULL,
     "chain" character varying(32) NOT NULL,
     "asset_symbol" character varying(32) NOT NULL,
-    "amount" numeric(78,18) NOT NULL,
+    "amount" numeric(78,24) NOT NULL,
     "from_account_id" character varying(160) NOT NULL,
     "to_account_id" character varying(160) NOT NULL,
     "status" character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
@@ -1367,8 +1462,8 @@ CREATE TABLE "public"."withdrawal_order" (
     "from_address" character varying(160),
     "debit_account_id" character varying(160),
     "to_address" character varying(160) NOT NULL,
-    "amount" numeric(78,18) NOT NULL,
-    "fee" numeric(78,18) DEFAULT 0 NOT NULL,
+    "amount" numeric(78,24) NOT NULL,
+    "fee" numeric(78,24) DEFAULT 0 NOT NULL,
     "tx_hash" character varying(128),
     "status" character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
     "error_message" "text",
@@ -1523,10 +1618,24 @@ ALTER TABLE ONLY "public"."sui_transaction" ALTER COLUMN "id" SET DEFAULT "nextv
 
 
 --
+-- Name: near_transaction id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."near_transaction" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."near_transaction_id_seq"'::"regclass");
+
+
+--
 -- Name: xrp_transaction id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY "public"."xrp_transaction" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."xrp_transaction_id_seq"'::"regclass");
+
+
+--
+-- Name: monero_transaction id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."monero_transaction" ALTER COLUMN "id" SET DEFAULT "nextval"('"public"."monero_transaction_id_seq"'::"regclass");
 
 
 --
@@ -1915,6 +2024,22 @@ ALTER TABLE ONLY "public"."sui_transaction"
 
 
 --
+-- Name: near_transaction near_transaction_chain_tx_hash_action_index_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."near_transaction"
+    ADD CONSTRAINT "near_transaction_chain_tx_hash_action_index_key" UNIQUE ("chain", "tx_hash", "action_index");
+
+
+--
+-- Name: near_transaction near_transaction_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."near_transaction"
+    ADD CONSTRAINT "near_transaction_pkey" PRIMARY KEY ("id");
+
+
+--
 -- Name: xrp_transaction xrp_transaction_chain_tx_hash_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1928,6 +2053,22 @@ ALTER TABLE ONLY "public"."xrp_transaction"
 
 ALTER TABLE ONLY "public"."xrp_transaction"
     ADD CONSTRAINT "xrp_transaction_pkey" PRIMARY KEY ("id");
+
+
+--
+-- Name: monero_transaction monero_transaction_chain_tx_hash_direction_subaddress_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."monero_transaction"
+    ADD CONSTRAINT "monero_transaction_chain_tx_hash_direction_subaddress_key" UNIQUE ("chain", "tx_hash", "direction", "subaddress_index");
+
+
+--
+-- Name: monero_transaction monero_transaction_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY "public"."monero_transaction"
+    ADD CONSTRAINT "monero_transaction_pkey" PRIMARY KEY ("id");
 
 
 --
@@ -2344,6 +2485,9 @@ INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", 
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (222, 'BTC', 'testnet3', 'test2', 'nownodes-btc-testnet', 'rpc', 'HTTP_JSON_RPC', 'https://btc-testnet.nownodes.io/CHANGE_ME_NOWNODES_API_KEY', 'NONE', NULL, NULL, NULL, NULL, 6, 1000, true, NULL, 'test2 NOWNodes Bitcoin testnet RPC backup. Replace CHANGE_ME_NOWNODES_API_KEY in DB before use.', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (223, 'LTC', 'testnet', 'test2', 'nownodes-ltc-testnet', 'rpc', 'HTTP_JSON_RPC', 'https://ltc-testnet.nownodes.io/CHANGE_ME_NOWNODES_API_KEY', 'NONE', NULL, NULL, NULL, NULL, 5, 1000, true, NULL, 'test2 NOWNodes Litecoin testnet JSON-RPC. Replace CHANGE_ME_NOWNODES_API_KEY in DB before use.', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (224, 'DOGE', 'testnet', 'test2', 'nownodes-doge-testnet', 'rpc', 'HTTP_JSON_RPC', 'https://doge-testnet.nownodes.io/CHANGE_ME_NOWNODES_API_KEY', 'NONE', NULL, NULL, NULL, NULL, 5, 1000, true, NULL, 'test2 NOWNodes Dogecoin testnet RPC. Replace CHANGE_ME_NOWNODES_API_KEY in DB before use. BCH testnet endpoint was unavailable, so BCH is not added to test2.', '2026-06-25 00:12:12.264406+08', '2026-06-25 00:12:12.264406+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (225, 'NEAR', 'testnet', 'dev', 'near-testnet-official', 'rpc', 'HTTP_JSON_RPC', 'https://rpc.testnet.near.org', 'NONE', NULL, NULL, NULL, NULL, 10, 500, true, NULL, 'NEAR official testnet JSON-RPC. Enable the matching profile only when native and NEP-141 test funds are ready.', '2026-06-28 10:45:00+08', '2026-06-28 10:45:00+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (226, 'NEAR', 'testnet', 'test2', 'near-testnet-official', 'rpc', 'HTTP_JSON_RPC', 'https://rpc.testnet.near.org', 'NONE', NULL, NULL, NULL, NULL, 10, 500, true, NULL, 'test2 NEAR official testnet JSON-RPC. Enable the matching profile only when native and NEP-141 test funds are ready.', '2026-06-28 10:45:00+08', '2026-06-28 10:45:00+08', NULL, NULL, NULL);
+INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (227, 'NEAR', 'mainnet', 'prod', 'near-mainnet-official', 'rpc', 'HTTP_JSON_RPC', 'https://rpc.mainnet.near.org', 'NONE', NULL, NULL, NULL, NULL, 10, 500, true, NULL, 'NEAR official mainnet JSON-RPC. Enable the matching profile only after production risk review and monitoring are ready.', '2026-06-28 10:45:00+08', '2026-06-28 10:45:00+08', NULL, NULL, NULL);
 
 
 --
@@ -2394,6 +2538,7 @@ INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "valu
 INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.withdraw.enabled', 'true', 'boolean', true, 'Global withdrawal switch', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
 INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.collection.enabled', 'true', 'boolean', true, 'Global collection switch', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
 INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.transfer.enabled', 'true', 'boolean', true, 'Global internal transfer switch', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
+INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('near.token.account.activation.yocto', '50000000000000000000000', 'bigint', true, 'NEAR native amount sent from the default NEAR hot wallet before preparing a NEP-141 token deposit address. Default is 0.05 NEAR.', '2026-06-28 13:20:00+08', '2026-06-28 13:20:00+08');
 
 
 --
@@ -2414,7 +2559,21 @@ SELECT pg_catalog.setval('"public"."chain_profile_id_seq"', 154, true);
 -- Name: chain_rpc_node_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('"public"."chain_rpc_node_id_seq"', 224, true);
+SELECT pg_catalog.setval('"public"."chain_rpc_node_id_seq"', 227, true);
+
+
+--
+-- Name: monero_transaction_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('"public"."monero_transaction_id_seq"', 1, false);
+
+
+--
+-- Name: near_transaction_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+--
+
+SELECT pg_catalog.setval('"public"."near_transaction_id_seq"', 1, false);
 
 
 --
@@ -2538,6 +2697,352 @@ UPDATE "public"."chain_asset"
 UPDATE "public"."chain_asset"
    SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
  WHERE "chain" = 'XRP' AND "symbol" = 'USDC';
+
+--
+-- New-chain placeholders: keep disabled until each chain adapter supports
+-- deterministic address, deposit scan, withdrawal confirmation and collection.
+--
+
+INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
+                                    "native_asset", "active", "min_transfer", "min_withdraw",
+                                    "created_at", "updated_at")
+VALUES
+    ('ADA', 'ADA', 'NATIVE', NULL, 6, true, false, 0.001, 0.001, now(), now()),
+    ('DOT', 'DOT', 'NATIVE', NULL, 10, true, false, 0.01, 0.01, now(), now()),
+    ('NEAR', 'NEAR', 'NATIVE', NULL, 24, true, false, 0.001, 0.001, now(), now()),
+    ('XMR', 'XMR', 'NATIVE', NULL, 12, true, false, 0.0001, 0.0001, now(), now())
+ON CONFLICT ("chain", "symbol") DO UPDATE SET
+    "asset_kind" = EXCLUDED."asset_kind",
+    "contract_address" = EXCLUDED."contract_address",
+    "decimals" = EXCLUDED."decimals",
+    "native_asset" = EXCLUDED."native_asset",
+    "active" = EXCLUDED."active",
+    "min_transfer" = EXCLUDED."min_transfer",
+    "min_withdraw" = EXCLUDED."min_withdraw",
+    "updated_at" = now();
+
+WITH new_chain_token_assets(chain, symbol, asset_kind, contract_address, decimals,
+                            min_transfer, min_withdraw) AS (
+    VALUES
+        ('ADA', 'USDC', 'CARDANO_NATIVE_ASSET', 'CHANGE_ME_CARDANO_USDC_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', 6, 1, 1),
+        ('ADA', 'USDT', 'CARDANO_NATIVE_ASSET', 'CHANGE_ME_CARDANO_USDT_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', 6, 1, 1),
+        ('DOT', 'USDC', 'ASSET_HUB_ASSET', 'CHANGE_ME_WESTEND_USDC_ASSET_ID', 6, 1, 1),
+        ('DOT', 'USDT', 'ASSET_HUB_ASSET', 'CHANGE_ME_WESTEND_USDT_ASSET_ID', 6, 1, 1),
+        ('NEAR', 'USDC', 'NEP141', 'CHANGE_ME_USDC_CONTRACT.testnet', 6, 1, 1),
+        ('NEAR', 'USDT', 'NEP141', 'CHANGE_ME_USDT_CONTRACT.testnet', 6, 1, 1)
+)
+INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
+                                    "native_asset", "active", "min_transfer", "min_withdraw",
+                                    "created_at", "updated_at")
+SELECT chain, symbol, asset_kind, contract_address, decimals, false, false,
+       min_transfer, min_withdraw, now(), now()
+  FROM new_chain_token_assets
+ON CONFLICT ("chain", "symbol") DO UPDATE SET
+    "asset_kind" = EXCLUDED."asset_kind",
+    "contract_address" = EXCLUDED."contract_address",
+    "decimals" = EXCLUDED."decimals",
+    "native_asset" = EXCLUDED."native_asset",
+    "active" = EXCLUDED."active",
+    "min_transfer" = EXCLUDED."min_transfer",
+    "min_withdraw" = EXCLUDED."min_withdraw",
+    "updated_at" = now();
+
+WITH new_chain_tokens(chain, symbol, standard, network, token_standard, contract_address, decimals,
+                      min_deposit, min_withdraw, collect_threshold, gas_strategy, confirmation_required) AS (
+    VALUES
+        ('ADA', 'USDC', 'CARDANO_NATIVE_ASSET', 'preprod', 'CARDANO_NATIVE_ASSET',
+         'CHANGE_ME_CARDANO_USDC_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', 6, 1, 1, 1, 'CARDANO_MIN_ADA', 15),
+        ('ADA', 'USDT', 'CARDANO_NATIVE_ASSET', 'preprod', 'CARDANO_NATIVE_ASSET',
+         'CHANGE_ME_CARDANO_USDT_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', 6, 1, 1, 1, 'CARDANO_MIN_ADA', 15),
+        ('DOT', 'USDC', 'ASSET_HUB_ASSET', 'westend', 'ASSET_HUB_ASSET',
+         'CHANGE_ME_WESTEND_USDC_ASSET_ID', 6, 1, 1, 1, 'ASSET_HUB_NATIVE_GAS', 12),
+        ('DOT', 'USDT', 'ASSET_HUB_ASSET', 'westend', 'ASSET_HUB_ASSET',
+         'CHANGE_ME_WESTEND_USDT_ASSET_ID', 6, 1, 1, 1, 'ASSET_HUB_NATIVE_GAS', 12),
+        ('NEAR', 'USDC', 'NEP141', 'testnet', 'NEP141',
+         'CHANGE_ME_USDC_CONTRACT.testnet', 6, 1, 1, 1, 'NEAR_STORAGE_DEPOSIT', 1),
+        ('NEAR', 'USDT', 'NEP141', 'testnet', 'NEP141',
+         'CHANGE_ME_USDT_CONTRACT.testnet', 6, 1, 1, 1, 'NEAR_STORAGE_DEPOSIT', 1)
+)
+INSERT INTO "public"."token_config" ("chain", "symbol", "standard", "contract_address", "decimals", "enabled",
+                                     "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at",
+                                     "network", "token_standard", "min_deposit_amount", "min_withdraw_amount",
+                                     "collect_threshold", "gas_strategy", "confirmation_required")
+SELECT chain, symbol, standard, contract_address, decimals, false,
+       min_deposit, min_withdraw, false, now(), now(), network, token_standard,
+       min_deposit, min_withdraw, collect_threshold, gas_strategy, confirmation_required
+  FROM new_chain_tokens
+ON CONFLICT ("chain", "symbol") DO UPDATE SET
+    "standard" = EXCLUDED."standard",
+    "contract_address" = EXCLUDED."contract_address",
+    "decimals" = EXCLUDED."decimals",
+    "enabled" = EXCLUDED."enabled",
+    "min_deposit" = EXCLUDED."min_deposit",
+    "min_withdraw" = EXCLUDED."min_withdraw",
+    "collect_enabled" = EXCLUDED."collect_enabled",
+    "network" = EXCLUDED."network",
+    "token_standard" = EXCLUDED."token_standard",
+    "min_deposit_amount" = EXCLUDED."min_deposit_amount",
+    "min_withdraw_amount" = EXCLUDED."min_withdraw_amount",
+    "collect_threshold" = EXCLUDED."collect_threshold",
+    "gas_strategy" = EXCLUDED."gas_strategy",
+    "confirmation_required" = EXCLUDED."confirmation_required",
+    "updated_at" = now();
+
+INSERT INTO "public"."chain_profile" ("chain", "network", "family", "runtime_currency_id", "bip44_coin_type",
+                                      "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations",
+                                      "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled",
+                                      "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size",
+                                      "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled",
+                                      "scan_start_height", "scan_max_blocks_per_run")
+VALUES
+    ('ADA', 'preprod', 'cardano', 1815, 1815, 'ADA', NULL, 'https://preprod.cardanoscan.io/transaction/',
+     15, 15, NULL, 1000, false, now(), now(), NULL, 'cardano-utxo', 100,
+     false, false, false, false, 0, 0),
+    ('ADA', 'mainnet', 'cardano', 1815, 1815, 'ADA', NULL, 'https://cardanoscan.io/transaction/',
+     30, 30, NULL, 1000, false, now(), now(), NULL, 'cardano-utxo', 100,
+     false, false, false, false, 0, 0),
+    ('DOT', 'westend', 'polkadot', 354, 354, 'DOT', NULL, 'https://westend.subscan.io/extrinsic/',
+     12, 12, NULL, 100000000, false, now(), now(), 42, 'substrate-balances', 100,
+     false, false, false, false, 0, 0),
+    ('DOT', 'mainnet', 'polkadot', 354, 354, 'DOT', NULL, 'https://polkadot.subscan.io/extrinsic/',
+     12, 12, NULL, 100000000, false, now(), now(), 0, 'substrate-balances', 100,
+     false, false, false, false, 0, 0),
+    ('NEAR', 'testnet', 'near', 397, 397, 'NEAR', 'https://rpc.testnet.near.org', 'https://testnet.nearblocks.io/txns/',
+     1, 1, NULL, 1000000000000000000, false, now(), now(), NULL, 'near-implicit-account', 100,
+     false, false, false, false, 0, 0),
+    ('NEAR', 'mainnet', 'near', 397, 397, 'NEAR', 'https://rpc.mainnet.near.org', 'https://nearblocks.io/txns/',
+     1, 1, NULL, 1000000000000000000, false, now(), now(), NULL, 'near-implicit-account', 100,
+     false, false, false, false, 0, 0),
+    ('XMR', 'regtest', 'monero', 128, 128, 'XMR', 'http://127.0.0.1:18088', NULL,
+     10, 10, 3000000000, 100000000, false, now(), now(), NULL, 'monero-wallet-rpc', 100,
+     false, false, false, false, 0, 0),
+    ('XMR', 'stagenet', 'monero', 128, 128, 'XMR', NULL, 'https://stagenet.xmrchain.net/tx/',
+     10, 10, 3000000000, 100000000, false, now(), now(), NULL, 'monero-wallet-rpc', 100,
+     false, false, false, false, 0, 0),
+    ('XMR', 'mainnet', 'monero', 128, 128, 'XMR', NULL, 'https://xmrchain.net/tx/',
+     10, 10, 3000000000, 100000000, false, now(), now(), NULL, 'monero-wallet-rpc', 100,
+     false, false, false, false, 0, 0)
+ON CONFLICT ("chain", "network") DO UPDATE SET
+    "family" = EXCLUDED."family",
+    "runtime_currency_id" = EXCLUDED."runtime_currency_id",
+    "bip44_coin_type" = EXCLUDED."bip44_coin_type",
+    "native_symbol" = EXCLUDED."native_symbol",
+    "rpc_url" = EXCLUDED."rpc_url",
+    "explorer_url" = EXCLUDED."explorer_url",
+    "deposit_confirmations" = EXCLUDED."deposit_confirmations",
+    "withdraw_confirmations" = EXCLUDED."withdraw_confirmations",
+    "default_fee_rate" = EXCLUDED."default_fee_rate",
+    "dust_threshold" = EXCLUDED."dust_threshold",
+    "enabled" = EXCLUDED."enabled",
+    "updated_at" = now(),
+    "chain_id" = EXCLUDED."chain_id",
+    "gas_policy" = EXCLUDED."gas_policy",
+    "scan_batch_size" = EXCLUDED."scan_batch_size",
+    "scan_enabled" = EXCLUDED."scan_enabled",
+    "withdraw_enabled" = EXCLUDED."withdraw_enabled",
+    "collection_enabled" = EXCLUDED."collection_enabled",
+    "transfer_enabled" = EXCLUDED."transfer_enabled",
+    "scan_start_height" = EXCLUDED."scan_start_height",
+    "scan_max_blocks_per_run" = EXCLUDED."scan_max_blocks_per_run";
+
+INSERT INTO "public"."chain_rpc_node" ("chain", "network", "environment", "node_label", "purpose",
+                                       "connection_type", "rpc_url", "auth_type", "auth_header_name",
+                                       "priority", "min_request_interval_ms", "enabled", "remark",
+                                       "created_at", "updated_at", "username", "password")
+VALUES
+    ('XMR', 'regtest', 'dev', 'local-monero-wallet-rpc-regtest', 'rpc', 'WALLET_RPC',
+     'http://127.0.0.1:18088', 'NONE', NULL, 5, 250, true,
+     'Local monero-wallet-rpc connected to monerod --regtest for deterministic integration tests.',
+     now(), now(), NULL, NULL),
+    ('XMR', 'regtest', 'dev', 'local-monero-wallet-rpc-funder-regtest', 'faucet', 'WALLET_RPC',
+     'http://127.0.0.1:18090', 'NONE', NULL, 6, 250, true,
+     'Local funder monero-wallet-rpc used only by the non-production XMR regtest faucet.',
+     now(), now(), NULL, NULL),
+    ('XMR', 'regtest', 'dev', 'local-monerod-regtest', 'daemon', 'HTTP_JSON_RPC',
+     'http://127.0.0.1:18081', 'NONE', NULL, 7, 250, true,
+     'Local monerod --regtest daemon RPC used by the XMR regtest faucet to mine confirmations.',
+     now(), now(), NULL, NULL),
+    ('XMR', 'regtest', 'test2', 'local-monero-wallet-rpc-regtest', 'rpc', 'WALLET_RPC',
+     'http://127.0.0.1:18088', 'DIGEST', NULL, 5, 250, true,
+     'test2 monero-wallet-rpc placeholder. Bind to the private host IP and replace username/password in DB before enabling XMR.',
+     now(), now(), 'CHANGE_ME_MONERO_RPC_USER', 'CHANGE_ME_MONERO_RPC_PASSWORD'),
+    ('XMR', 'regtest', 'test2', 'local-monero-wallet-rpc-funder-regtest', 'faucet', 'WALLET_RPC',
+     'http://127.0.0.1:18090', 'DIGEST', NULL, 6, 250, true,
+     'test2 funder monero-wallet-rpc placeholder. Bind to the private host IP and replace username/password in DB before enabling the faucet.',
+     now(), now(), 'CHANGE_ME_MONERO_RPC_USER', 'CHANGE_ME_MONERO_RPC_PASSWORD'),
+    ('XMR', 'regtest', 'test2', 'local-monerod-regtest', 'daemon', 'HTTP_JSON_RPC',
+     'http://127.0.0.1:18081', 'NONE', NULL, 7, 250, true,
+     'test2 monerod --regtest daemon RPC placeholder. Bind to the private host IP before enabling the faucet.',
+     now(), now(), NULL, NULL),
+    ('XMR', 'stagenet', 'test2', 'local-monero-wallet-rpc-stagenet', 'rpc', 'WALLET_RPC',
+     'http://127.0.0.1:38088', 'DIGEST', NULL, 10, 500, true,
+     'Local monero-wallet-rpc connected to a stagenet wallet. Bind to localhost or private network only; replace username/password in DB.',
+     now(), now(), 'CHANGE_ME_MONERO_RPC_USER', 'CHANGE_ME_MONERO_RPC_PASSWORD'),
+    ('XMR', 'mainnet', 'prod', 'local-monero-wallet-rpc-mainnet', 'rpc', 'WALLET_RPC',
+     'http://127.0.0.1:18088', 'DIGEST', NULL, 10, 500, false,
+     'Production monero-wallet-rpc endpoint placeholder; keep disabled until wallet-rpc is hardened, backed up and funded.',
+     now(), now(), 'CHANGE_ME_MONERO_RPC_USER', 'CHANGE_ME_MONERO_RPC_PASSWORD')
+ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
+    "connection_type" = EXCLUDED."connection_type",
+    "rpc_url" = EXCLUDED."rpc_url",
+    "auth_type" = EXCLUDED."auth_type",
+    "auth_header_name" = EXCLUDED."auth_header_name",
+    "username" = EXCLUDED."username",
+    "password" = EXCLUDED."password",
+    "priority" = EXCLUDED."priority",
+    "min_request_interval_ms" = EXCLUDED."min_request_interval_ms",
+    "enabled" = EXCLUDED."enabled",
+    "remark" = EXCLUDED."remark",
+    "updated_at" = now();
+
+INSERT INTO "public"."chain_rpc_node" ("chain", "network", "environment", "node_label", "purpose",
+                                       "connection_type", "rpc_url", "auth_type", "auth_header_name",
+                                       "priority", "min_request_interval_ms", "enabled", "remark",
+                                       "created_at", "updated_at", "api_key")
+VALUES
+    ('ADA', 'preprod', 'dev', 'blockfrost-cardano-preprod', 'rpc', 'BLOCKFROST',
+     'https://cardano-preprod.blockfrost.io/api/v0', 'PROJECT_ID', NULL, 10, 500, false,
+     'Cardano preprod Blockfrost-compatible backend. Fill api_key and keep chain_profile disabled until e2e tests pass.',
+     now(), now(), 'CHANGE_ME_BLOCKFROST_PREPROD_PROJECT_ID'),
+    ('ADA', 'preprod', 'test2', 'blockfrost-cardano-preprod', 'rpc', 'BLOCKFROST',
+     'https://cardano-preprod.blockfrost.io/api/v0', 'PROJECT_ID', NULL, 10, 500, false,
+     'test2 Cardano preprod Blockfrost-compatible backend. Fill api_key and keep chain_profile disabled until e2e tests pass.',
+     now(), now(), 'CHANGE_ME_BLOCKFROST_PREPROD_PROJECT_ID'),
+    ('ADA', 'mainnet', 'prod', 'blockfrost-cardano-mainnet', 'rpc', 'BLOCKFROST',
+     'https://cardano-mainnet.blockfrost.io/api/v0', 'PROJECT_ID', NULL, 10, 1000, false,
+     'Production Cardano Blockfrost-compatible backend placeholder; enable only after production key, monitoring and e2e tests are ready.',
+     now(), now(), 'CHANGE_ME_BLOCKFROST_MAINNET_PROJECT_ID')
+ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
+    "connection_type" = EXCLUDED."connection_type",
+    "rpc_url" = EXCLUDED."rpc_url",
+    "auth_type" = EXCLUDED."auth_type",
+    "auth_header_name" = EXCLUDED."auth_header_name",
+    "api_key" = EXCLUDED."api_key",
+    "priority" = EXCLUDED."priority",
+    "min_request_interval_ms" = EXCLUDED."min_request_interval_ms",
+    "enabled" = EXCLUDED."enabled",
+    "remark" = EXCLUDED."remark",
+    "updated_at" = now();
+
+INSERT INTO "public"."chain_rpc_node" ("chain", "network", "environment", "node_label", "purpose",
+                                       "connection_type", "rpc_url", "auth_type", "auth_header_name",
+                                       "priority", "min_request_interval_ms", "enabled", "remark",
+                                       "created_at", "updated_at", "api_key")
+VALUES
+    ('DOT', 'westend', 'dev', 'polkadot-westend-ws', 'rpc', 'WS_RPC',
+     'wss://westend-rpc.polkadot.io', 'NONE', NULL, 10, 250, false,
+     'Westend substrate WebSocket node used by the metadata-aware Polkadot runtime service.',
+     now(), now(), NULL),
+    ('DOT', 'westend', 'dev', 'polkadot-westend-assethub-ws', 'asset_rpc', 'WS_RPC',
+     'wss://westend-asset-hub-rpc.polkadot.io', 'NONE', NULL, 10, 250, false,
+     'Official Westend Asset Hub WebSocket node used only for DOT token scan/sign/confirm.',
+     now(), now(), NULL),
+    ('DOT', 'westend', 'dev', 'dotters-westend-assethub-ws', 'asset_rpc', 'WS_RPC',
+     'wss://asset-hub-westend.dotters.network', 'NONE', NULL, 20, 250, false,
+     'Backup Westend Asset Hub WebSocket node used only for DOT token scan/sign/confirm.',
+     now(), now(), NULL),
+    ('DOT', 'westend', 'dev', 'local-polkadot-runtime-service', 'runtime', 'HTTP_JSON',
+     'http://127.0.0.1:8787', 'bearer', 'Authorization', 20, 100, false,
+     'Local Polkadot runtime service backed by @polkadot/api. Fill api_key and enable only with the DOT profile during e2e tests.',
+     now(), now(), 'CHANGE_ME_POLKADOT_RUNTIME_API_KEY'),
+    ('DOT', 'westend', 'test2', 'polkadot-westend-ws', 'rpc', 'WS_RPC',
+     'wss://westend-rpc.polkadot.io', 'NONE', NULL, 10, 250, false,
+     'test2 Westend substrate WebSocket node used by the metadata-aware Polkadot runtime service.',
+     now(), now(), NULL),
+    ('DOT', 'westend', 'test2', 'polkadot-westend-assethub-ws', 'asset_rpc', 'WS_RPC',
+     'wss://westend-asset-hub-rpc.polkadot.io', 'NONE', NULL, 10, 250, false,
+     'test2 official Westend Asset Hub WebSocket node used only for DOT token scan/sign/confirm.',
+     now(), now(), NULL),
+    ('DOT', 'westend', 'test2', 'dotters-westend-assethub-ws', 'asset_rpc', 'WS_RPC',
+     'wss://asset-hub-westend.dotters.network', 'NONE', NULL, 20, 250, false,
+     'test2 backup Westend Asset Hub WebSocket node used only for DOT token scan/sign/confirm.',
+     now(), now(), NULL),
+    ('DOT', 'westend', 'test2', 'local-polkadot-runtime-service', 'runtime', 'HTTP_JSON',
+     'http://127.0.0.1:8787', 'bearer', 'Authorization', 20, 100, false,
+     'test2 Polkadot runtime service backed by @polkadot/api. Fill api_key and enable only during e2e tests.',
+     now(), now(), 'CHANGE_ME_POLKADOT_RUNTIME_API_KEY'),
+    ('DOT', 'mainnet', 'prod', 'polkadot-mainnet-ws', 'rpc', 'WS_RPC',
+     'wss://rpc.polkadot.io', 'NONE', NULL, 10, 500, false,
+     'Production Polkadot WebSocket node placeholder; enable only after runtime service and monitoring are ready.',
+     now(), now(), NULL),
+    ('DOT', 'mainnet', 'prod', 'polkadot-assethub-ws', 'asset_rpc', 'WS_RPC',
+     'wss://polkadot-asset-hub-rpc.polkadot.io', 'NONE', NULL, 10, 500, false,
+     'Production official Polkadot Asset Hub WebSocket placeholder; enable only after token e2e tests and monitoring are ready.',
+     now(), now(), NULL),
+    ('DOT', 'mainnet', 'prod', 'dotters-polkadot-assethub-ws', 'asset_rpc', 'WS_RPC',
+     'wss://asset-hub-polkadot.dotters.network', 'NONE', NULL, 20, 500, false,
+     'Production backup Polkadot Asset Hub WebSocket placeholder.',
+     now(), now(), NULL),
+    ('DOT', 'mainnet', 'prod', 'private-polkadot-runtime-service', 'runtime', 'HTTP_JSON',
+     'http://127.0.0.1:8787', 'bearer', 'Authorization', 20, 100, false,
+     'Production Polkadot runtime service placeholder. Bind privately and use a strong API key.',
+     now(), now(), 'CHANGE_ME_POLKADOT_RUNTIME_API_KEY')
+ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
+    "connection_type" = EXCLUDED."connection_type",
+    "rpc_url" = EXCLUDED."rpc_url",
+    "auth_type" = EXCLUDED."auth_type",
+    "auth_header_name" = EXCLUDED."auth_header_name",
+    "api_key" = EXCLUDED."api_key",
+    "priority" = EXCLUDED."priority",
+    "min_request_interval_ms" = EXCLUDED."min_request_interval_ms",
+    "enabled" = EXCLUDED."enabled",
+    "remark" = EXCLUDED."remark",
+    "updated_at" = now();
+
+-- Safety guard: seeded RPC rows with placeholder URLs or credentials must stay disabled
+-- until the target environment stores real provider values in the database.
+UPDATE "public"."chain_rpc_node"
+   SET "enabled" = false,
+       "updated_at" = now()
+ WHERE "enabled" = true
+   AND (
+        upper(coalesce("rpc_url", '')) LIKE '%CHANGE_ME%'
+     OR upper(coalesce("api_key", '')) LIKE '%CHANGE_ME%'
+     OR upper(coalesce("username", '')) LIKE '%CHANGE_ME%'
+     OR upper(coalesce("password", '')) LIKE '%CHANGE_ME%'
+     OR upper(coalesce("rpc_url", '')) LIKE '%YOUR_%'
+     OR upper(coalesce("api_key", '')) LIKE '%YOUR_%'
+     OR upper(coalesce("username", '')) LIKE '%YOUR_%'
+     OR upper(coalesce("password", '')) LIKE '%YOUR_%'
+     OR upper(coalesce("rpc_url", '')) LIKE '%REPLACE_ME%'
+     OR upper(coalesce("api_key", '')) LIKE '%REPLACE_ME%'
+     OR upper(coalesce("username", '')) LIKE '%REPLACE_ME%'
+     OR upper(coalesce("password", '')) LIKE '%REPLACE_ME%'
+     OR upper(coalesce("rpc_url", '')) LIKE '%TODO_%'
+     OR upper(coalesce("api_key", '')) LIKE '%TODO_%'
+     OR upper(coalesce("username", '')) LIKE '%TODO_%'
+     OR upper(coalesce("password", '')) LIKE '%TODO_%'
+   );
+
+-- Safety guard: seeded token rows with placeholder or empty contract addresses
+-- must stay disabled until the exact testnet/mainnet token contract is configured.
+UPDATE "public"."token_config"
+   SET "enabled" = false,
+       "collect_enabled" = false,
+       "updated_at" = now()
+ WHERE "enabled" = true
+   AND (
+        coalesce("contract_address", "contract_address_base58", "contract_address_hex", '') = ''
+     OR upper(coalesce("contract_address", "contract_address_base58", "contract_address_hex", '')) LIKE '%CHANGE_ME%'
+     OR upper(coalesce("contract_address", "contract_address_base58", "contract_address_hex", '')) LIKE '%YOUR_%'
+     OR upper(coalesce("contract_address", "contract_address_base58", "contract_address_hex", '')) LIKE '%REPLACE_ME%'
+     OR upper(coalesce("contract_address", "contract_address_base58", "contract_address_hex", '')) LIKE '%TODO_%'
+   );
+
+-- Safety guard: normalized token assets with placeholder or empty contracts
+-- must stay inactive until they are mapped to a real token configuration.
+UPDATE "public"."chain_asset"
+   SET "active" = false,
+       "updated_at" = now()
+ WHERE "active" = true
+   AND "native_asset" = false
+   AND (
+        coalesce("contract_address", '') = ''
+     OR upper(coalesce("contract_address", '')) LIKE '%CHANGE_ME%'
+     OR upper(coalesce("contract_address", '')) LIKE '%YOUR_%'
+     OR upper(coalesce("contract_address", '')) LIKE '%REPLACE_ME%'
+     OR upper(coalesce("contract_address", '')) LIKE '%TODO_%'
+   );
 
 
 --

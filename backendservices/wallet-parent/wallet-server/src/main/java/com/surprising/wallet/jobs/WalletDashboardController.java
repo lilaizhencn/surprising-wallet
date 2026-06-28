@@ -207,7 +207,7 @@ public class WalletDashboardController {
             return ResultUtils.failure("没有可更新的字段");
         }
 
-        validateAdminUpdate(table, id, effectiveUpdates);
+        validateAdminUpdate(table, id, effectiveUpdates, spec, columnTypes);
 
         if (columnTypes.containsKey("updated_at") && !updates.containsKey("updated_at")) {
             assignments.add("\"updated_at\" = now()");
@@ -226,7 +226,20 @@ public class WalletDashboardController {
         return ResultUtils.success(payload);
     }
 
-    private void validateAdminUpdate(String table, String id, Map<String, Object> updates) {
+    private void validateAdminUpdate(String table, String id, Map<String, Object> updates,
+                                     TableSpec spec, Map<String, String> columnTypes) {
+        if (Objects.equals(table, "chain_rpc_node")) {
+            validateRpcNodeAdminUpdate(table, id, updates, spec, columnTypes);
+            return;
+        }
+        if (Objects.equals(table, "token_config")) {
+            validateTokenConfigAdminUpdate(table, id, updates, spec, columnTypes);
+            return;
+        }
+        if (Objects.equals(table, "chain_asset")) {
+            validateChainAssetAdminUpdate(table, id, updates, spec, columnTypes);
+            return;
+        }
         if (!Objects.equals(table, "wallet_public_key")
                 || (!updates.containsKey("public_key") && !updates.containsKey("enabled"))) {
             return;
@@ -237,6 +250,187 @@ public class WalletDashboardController {
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         }
+    }
+
+    private void validateRpcNodeAdminUpdate(String table, String id, Map<String, Object> updates,
+                                            TableSpec spec, Map<String, String> columnTypes) {
+        Map<String, Object> candidate = orderedMap();
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    "select * from " + quote(table) + " where " + quote(spec.idColumn()) + " = ?",
+                    coerce(id, columnTypes.get(spec.idColumn())));
+            if (!rows.isEmpty()) {
+                candidate.putAll(rows.get(0));
+            }
+        } catch (DataAccessException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "chain_rpc_node row cannot be validated: " + id, e);
+        }
+        candidate.putAll(updates);
+
+        if (!parseBooleanFlag(candidate.get("enabled"))) {
+            return;
+        }
+        String rpcUrl = nullableString(candidate.get("rpc_url"));
+        if (rpcUrl == null || rpcUrl.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "enabled chain_rpc_node requires rpc_url");
+        }
+        if (containsPlaceholder(rpcUrl)
+                || containsPlaceholder(candidate.get("api_key"))
+                || containsPlaceholder(candidate.get("username"))
+                || containsPlaceholder(candidate.get("password"))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "enabled chain_rpc_node still contains placeholder credentials or URL");
+        }
+        String authType = normalizedText(candidate.get("auth_type"));
+        String connectionType = normalizedText(candidate.get("connection_type"));
+        if (requiresApiKey(authType, connectionType) && !hasText(candidate.get("api_key"))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "enabled chain_rpc_node requires api_key");
+        }
+        if (requiresUsernamePassword(authType)
+                && (!hasText(candidate.get("username")) || !hasText(candidate.get("password")))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "enabled chain_rpc_node requires username/password");
+        }
+    }
+
+    private void validateTokenConfigAdminUpdate(String table, String id, Map<String, Object> updates,
+                                                TableSpec spec, Map<String, String> columnTypes) {
+        Map<String, Object> candidate = rowCandidate(table, id, updates, spec, columnTypes);
+        if (!parseBooleanFlag(candidate.get("enabled"))) {
+            return;
+        }
+        Object contract = firstTextValue(candidate, "contract_address", "contract_address_base58", "contract_address_hex");
+        if (!hasText(contract) || containsPlaceholder(contract)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "enabled token_config requires a real contract address");
+        }
+        validateTokenConfigNetworkMatchesProfile(candidate);
+        validateTokenConfigMatchesActiveAsset(candidate, contract);
+    }
+
+    private void validateChainAssetAdminUpdate(String table, String id, Map<String, Object> updates,
+                                               TableSpec spec, Map<String, String> columnTypes) {
+        Map<String, Object> candidate = rowCandidate(table, id, updates, spec, columnTypes);
+        if (!parseBooleanFlag(candidate.get("active")) || parseBooleanFlag(candidate.get("native_asset"))) {
+            return;
+        }
+        Object contract = candidate.get("contract_address");
+        if (!hasText(contract) || containsPlaceholder(contract)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "active token chain_asset requires a real contract address");
+        }
+        validateActiveAssetHasMatchingTokenConfig(candidate, contract);
+    }
+
+    private void validateTokenConfigMatchesActiveAsset(Map<String, Object> candidate, Object tokenContract) {
+        String chain = nullableString(candidate.get("chain"));
+        String symbol = nullableString(candidate.get("symbol"));
+        if (!hasText(chain) || !hasText(symbol)) {
+            return;
+        }
+        List<Map<String, Object>> rows;
+        try {
+            rows = jdbcTemplate.queryForList("""
+                    select contract_address
+                      from chain_asset
+                     where chain = ? and symbol = ?
+                       and active = true and native_asset = false
+                    """, chain, symbol);
+        } catch (DataAccessException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "active chain_asset row cannot be validated", e);
+        }
+        for (Map<String, Object> row : rows) {
+            Object assetContract = row.get("contract_address");
+            if (!sameContract(assetContract, tokenContract)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "enabled token_config contract must match active chain_asset");
+            }
+        }
+    }
+
+    private void validateTokenConfigNetworkMatchesProfile(Map<String, Object> candidate) {
+        String network = nullableString(candidate.get("network"));
+        if (!hasText(network)) {
+            return;
+        }
+        String chain = nullableString(candidate.get("chain"));
+        String symbol = nullableString(candidate.get("symbol"));
+        if (!hasText(chain) || !hasText(symbol)) {
+            return;
+        }
+        List<Map<String, Object>> rows;
+        try {
+            rows = jdbcTemplate.queryForList("""
+                    select network
+                      from chain_profile
+                     where chain = ? and enabled = true
+                    """, chain);
+        } catch (DataAccessException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "enabled chain_profile row cannot be validated", e);
+        }
+        if (rows.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "enabled token_config network requires enabled chain_profile");
+        }
+        String profileNetwork = nullableString(rows.get(0).get("network"));
+        if (!sameText(network, profileNetwork)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "enabled token_config network must match enabled chain_profile");
+        }
+    }
+
+    private void validateActiveAssetHasMatchingTokenConfig(Map<String, Object> candidate, Object assetContract) {
+        String chain = nullableString(candidate.get("chain"));
+        String symbol = nullableString(candidate.get("symbol"));
+        if (!hasText(chain) || !hasText(symbol)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "active token chain_asset requires chain and symbol");
+        }
+        List<Map<String, Object>> rows;
+        try {
+            rows = jdbcTemplate.queryForList("""
+                    select coalesce(contract_address, contract_address_base58, contract_address_hex) as contract_address
+                      from token_config
+                     where chain = ? and symbol = ? and enabled = true
+                    """, chain, symbol);
+        } catch (DataAccessException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "enabled token_config row cannot be validated", e);
+        }
+        if (rows.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "active token chain_asset requires enabled token_config");
+        }
+        boolean matched = rows.stream()
+                .map(row -> row.get("contract_address"))
+                .anyMatch(tokenContract -> sameContract(assetContract, tokenContract));
+        if (!matched) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "active token chain_asset contract must match enabled token_config");
+        }
+    }
+
+    private Map<String, Object> rowCandidate(String table, String id, Map<String, Object> updates,
+                                             TableSpec spec, Map<String, String> columnTypes) {
+        Map<String, Object> candidate = orderedMap();
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    "select * from " + quote(table) + " where " + quote(spec.idColumn()) + " = ?",
+                    coerce(id, columnTypes.get(spec.idColumn())));
+            if (!rows.isEmpty()) {
+                candidate.putAll(rows.get(0));
+            }
+        } catch (DataAccessException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    table + " row cannot be validated: " + id, e);
+        }
+        candidate.putAll(updates);
+        return candidate;
     }
 
     private List<WalletPublicKey> walletPublicKeyCandidates(String id, Map<String, Object> updates) {
@@ -294,6 +488,57 @@ public class WalletDashboardController {
 
     private String nullableString(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    private Object firstTextValue(Map<String, Object> row, String... keys) {
+        for (String key : keys) {
+            Object value = row.get(key);
+            if (hasText(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static boolean containsPlaceholder(Object value) {
+        if (value == null || String.valueOf(value).isBlank()) {
+            return false;
+        }
+        String normalized = String.valueOf(value).trim().toUpperCase(Locale.ROOT);
+        return normalized.contains("CHANGE_ME")
+                || normalized.contains("YOUR_")
+                || normalized.contains("<YOUR")
+                || normalized.contains("REPLACE_ME")
+                || normalized.contains("TODO_");
+    }
+
+    private static boolean hasText(Object value) {
+        return value != null && !String.valueOf(value).isBlank();
+    }
+
+    private static boolean sameContract(Object left, Object right) {
+        return hasText(left)
+                && hasText(right)
+                && String.valueOf(left).trim().equalsIgnoreCase(String.valueOf(right).trim());
+    }
+
+    private static boolean sameText(Object left, Object right) {
+        return hasText(left)
+                && hasText(right)
+                && String.valueOf(left).trim().equalsIgnoreCase(String.valueOf(right).trim());
+    }
+
+    private static String normalizedText(Object value) {
+        return value == null ? "" : String.valueOf(value).trim().toUpperCase(Locale.ROOT);
+    }
+
+    private static boolean requiresApiKey(String authType, String connectionType) {
+        return Set.of("BEARER", "API_KEY", "PROJECT_ID", "TOKEN").contains(authType)
+                || "BLOCKFROST".equals(connectionType);
+    }
+
+    private static boolean requiresUsernamePassword(String authType) {
+        return Set.of("BASIC", "DIGEST").contains(authType);
     }
 
     private Map<String, Object> normalizeAdminUpdates(String table, Map<String, Object> updates) {
@@ -465,7 +710,7 @@ public class WalletDashboardController {
     private List<Map<String, Object>> secretStatus() {
         return List.of(row(
                 "name", "SW_ED25519_SEED",
-                "scope", "SOLANA/TON/APTOS/SUI Ed25519 master seed",
+                "scope", "SOLANA/TON/APTOS/SUI/ADA/DOT/NEAR Ed25519 master seed",
                 "configured", ed25519MasterSeed != null && !ed25519MasterSeed.isBlank(),
                 "storage", "environment/property only",
                 "editable", false,
@@ -532,9 +777,10 @@ public class WalletDashboardController {
         project.put("supportedChains", List.of(
                 "BTC", "LTC", "DOGE", "BCH",
                 "ETH", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "BASE", "AVAX_C",
-                "TRON", "SOLANA", "TON", "APTOS", "SUI"
+                "TRON", "SOLANA", "TON", "APTOS", "SUI", "XRP",
+                "ADA", "DOT", "NEAR", "XMR"
         ));
-        project.put("supportedTokens", "EVM ERC20, TRON TRC20, SOL/SPL, TON Jetton, Aptos Fungible Asset, Sui Coin/Token profiles via token_config");
+        project.put("supportedTokens", "EVM ERC20, TRON TRC20, SOL/SPL, TON Jetton, Aptos Fungible Asset, Sui Coin/Token, XRPL issued currency, Cardano native asset, Polkadot Asset Hub asset and NEAR NEP-141 profiles via token_config");
         project.put("liveTestBoundary", "当前自动化覆盖本地 regtest、Hardhat fork、DB-only 和外部 testnet/devnet 连通性；带真实资金的广播确认必须配置签名私钥、Ed25519 seed、稳定 RPC 和测试币余额。");
         return project;
     }
@@ -564,7 +810,7 @@ public class WalletDashboardController {
                 row("name", "SW_DB_PASSWORD", "usage", "PostgreSQL password for wallet-server"),
                 row("name", "SW_SIG1_MASTER_KEY", "usage", "BIP32 tprv used by wallet-sig1"),
                 row("name", "SW_SIG2_MASTER_KEY", "usage", "BIP32 tprv used by wallet-sig2"),
-                row("name", "SW_ED25519_SEED", "usage", "32-byte Ed25519 seed for SOL/TON/APTOS/SUI; secret env/property, not stored in wallet_public_key"),
+                row("name", "SW_ED25519_SEED", "usage", "32-byte Ed25519 seed for SOL/TON/APTOS/SUI/ADA/DOT/NEAR; secret env/property, not stored in wallet_public_key"),
                 row("name", "sw.wallet.admin.username/password", "usage", "Basic-auth credentials for the admin configuration page"),
                 row("name", "wallet_public_key", "usage", "Three enabled BIP32 xpub/public-key slots for BTC-like/EVM/TRON address derivation"),
                 row("name", "chain_address default hot wallet", "usage", "One native row per enabled chain at user_id=0, biz=0, address_index=0, wallet_role=DEPOSIT")

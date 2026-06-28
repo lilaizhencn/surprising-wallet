@@ -14,6 +14,8 @@ import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.LedgerBalanceRecord;
+import com.surprising.wallet.common.chain.MoneroTransactionRecord;
+import com.surprising.wallet.common.chain.NearTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TronTransactionRecord;
 import com.surprising.wallet.common.chain.SolanaTransactionRecord;
@@ -256,6 +258,16 @@ public class ChainJdbcRepository {
                 tx.getIssuerAddress(), tx.getCurrencyCode(), tx.getAmount(), tx.getFeeDrops(), tx.getLedgerIndex(),
                 tx.getSequenceNumber(), tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(),
                 toTs(now()), toTs(now()));
+    }
+
+    public Optional<String> findXrpTransactionAssetSymbol(String chain, String txHash) {
+        List<String> results = jdbcTemplate.queryForList("""
+                        select asset_symbol
+                        from xrp_transaction
+                        where chain = ? and tx_hash = ?
+                        limit 1
+                        """, String.class, chain, txHash);
+        return results.stream().findFirst();
     }
 
     public int upsertLedgerBalance(LedgerBalanceRecord record) {
@@ -529,6 +541,28 @@ public class ChainJdbcRepository {
                 tx.getRawPayload(), toTs(now()), toTs(now()));
     }
 
+    public int recordMoneroTransaction(MoneroTransactionRecord tx) {
+        return jdbcTemplate.update("""
+                        insert into monero_transaction(
+                            chain, tx_hash, direction, account_index, subaddress_index, address, asset_symbol,
+                            amount, fee_atomic, block_height, confirmations, status, raw_payload,
+                            created_at, updated_at
+                        )
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        on conflict (chain, tx_hash, direction, subaddress_index) do update set
+                            amount = coalesce(excluded.amount, monero_transaction.amount),
+                            fee_atomic = coalesce(excluded.fee_atomic, monero_transaction.fee_atomic),
+                            block_height = coalesce(excluded.block_height, monero_transaction.block_height),
+                            confirmations = greatest(monero_transaction.confirmations, excluded.confirmations),
+                            status = excluded.status,
+                            raw_payload = coalesce(excluded.raw_payload, monero_transaction.raw_payload),
+                            updated_at = excluded.updated_at
+                        """,
+                tx.getChain(), tx.getTxHash(), tx.getDirection(), tx.getAccountIndex(), tx.getSubaddressIndex(),
+                tx.getAddress(), tx.getAssetSymbol(), tx.getAmount(), tx.getFeeAtomic(), tx.getBlockHeight(),
+                tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
+    }
+
     public int markSuiTransactionConfirmed(String chain, String txDigest, long checkpoint,
                                            long gasUsed, String rawPayload) {
         return jdbcTemplate.update("""
@@ -541,6 +575,54 @@ public class ChainJdbcRepository {
                         where chain = ? and tx_digest = ? and status <> 'CONFIRMED'
                         """,
                 checkpoint, gasUsed, rawPayload, toTs(now()), chain, txDigest);
+    }
+
+    public int recordNearTransaction(NearTransactionRecord tx) {
+        return jdbcTemplate.update("""
+                        insert into near_transaction(
+                            chain, tx_hash, action_index, sender, receiver, asset_symbol,
+                            amount, gas_burnt, block_height, status, raw_payload,
+                            created_at, updated_at
+                        )
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        on conflict (chain, tx_hash, action_index) do update set
+                            sender = excluded.sender,
+                            receiver = excluded.receiver,
+                            asset_symbol = excluded.asset_symbol,
+                            amount = excluded.amount,
+                            gas_burnt = greatest(near_transaction.gas_burnt, excluded.gas_burnt),
+                            block_height = greatest(coalesce(near_transaction.block_height, 0),
+                                                     coalesce(excluded.block_height, 0)),
+                            status = excluded.status,
+                            raw_payload = coalesce(excluded.raw_payload, near_transaction.raw_payload),
+                            updated_at = excluded.updated_at
+                        """,
+                tx.getChain(), tx.getTxHash(), tx.getActionIndex() == null ? 0L : tx.getActionIndex(),
+                tx.getSender(), tx.getReceiver(), tx.getAssetSymbol(),
+                tx.getAmount(), tx.getGasBurnt(), tx.getBlockHeight(), tx.getStatus(), tx.getRawPayload(),
+                toTs(now()), toTs(now()));
+    }
+
+    public int markNearTransactionConfirmed(String chain, String txHash, long blockHeight,
+                                            long gasBurnt, String rawPayload) {
+        return jdbcTemplate.update("""
+                        update near_transaction
+                        set status = 'CONFIRMED',
+                            block_height = greatest(coalesce(block_height, 0), ?),
+                            gas_burnt = greatest(gas_burnt, ?),
+                            raw_payload = coalesce(?, raw_payload),
+                            updated_at = ?
+                        where chain = ? and tx_hash = ?
+                        """,
+                blockHeight, gasBurnt, rawPayload, toTs(now()), chain, txHash);
+    }
+
+    public Optional<String> findNearTransactionSender(String chain, String txHash) {
+        List<String> results = jdbcTemplate.queryForList("""
+                        select sender from near_transaction
+                        where chain = ? and tx_hash = ?
+                        """, String.class, chain, txHash);
+        return results.stream().findFirst();
     }
 
     @Transactional(rollbackFor = Throwable.class)
@@ -1488,6 +1570,12 @@ public class ChainJdbcRepository {
                               and credited = true
                             group by chain, asset_symbol, lower(to_address)
                         ),
+                        pending as (
+                            select distinct chain, asset_symbol, lower(from_address) as from_address
+                            from collection_record
+                            where chain = ?
+                              and status in ('CREATED', 'RETRYING', 'SIGNING', 'SENT')
+                        ),
                         candidates as (
                             select ca.chain, ca.asset_symbol, ca.account_id, ca.address, ca.owner_address,
                                    ca.user_id, ca.biz, ca.address_index, ca.wallet_role,
@@ -1513,7 +1601,12 @@ public class ChainJdbcRepository {
                               on collected.chain = ca.chain
                              and collected.asset_symbol = ca.asset_symbol
                              and collected.from_address = lower(ca.address)
+                            left join pending
+                              on pending.chain = ca.chain
+                             and pending.asset_symbol = ca.asset_symbol
+                             and pending.from_address = lower(ca.address)
                             where deposited.chain = ?
+                              and pending.from_address is null
                         ),
                         positive_candidates as (
                             select chain, asset_symbol, account_id, address, owner_address,
@@ -1540,7 +1633,7 @@ public class ChainJdbcRepository {
                         .walletRole(rs.getString("wallet_role"))
                         .amount(rs.getBigDecimal("amount"))
                         .build(),
-                chain, chain, minimumAmount, HotWalletRules.DEFAULT_HOT_USER_ID, chain, limit);
+                chain, chain, chain, minimumAmount, HotWalletRules.DEFAULT_HOT_USER_ID, chain, limit);
     }
 
     public void updateScanHeight(String chain, String scannerName, long bestHeight, long safeHeight) {
