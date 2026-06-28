@@ -102,6 +102,42 @@ class NearDepositScannerTest {
         assertEquals(1, transfer.actionIndex());
     }
 
+    @Test
+    void extractsNep141TransferCallDeposits() throws Exception {
+        String args = Base64.getEncoder().encodeToString("""
+                {"receiver_id":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","amount":"7100000","msg":"deposit"}
+                """.getBytes(StandardCharsets.UTF_8));
+        JsonNode chunk = json("""
+                {
+                  "transactions": [
+                    {
+                      "hash": "near-token-call-tx-1",
+                      "signer_id": "alice.testnet",
+                      "receiver_id": "usdc.fakes.testnet",
+                      "actions": [
+                        {"FunctionCall": {"method_name": "ft_transfer_call", "args": "__ARGS__"}}
+                      ]
+                    }
+                  ]
+                }
+                """.replace("__ARGS__", args));
+        TokenDefinition token = TokenDefinition.builder()
+                .chain("NEAR")
+                .symbol("USDC")
+                .contractAddress("usdc.fakes.testnet")
+                .decimals(6)
+                .active(true)
+                .build();
+
+        List<NearDepositScanner.TokenTransfer> transfers = NearDepositScanner.tokenTransfers(
+                chunk, Map.of("usdc.fakes.testnet", token), 30, 32);
+
+        assertEquals(1, transfers.size());
+        NearDepositScanner.TokenTransfer transfer = transfers.getFirst();
+        assertEquals("near-token-call-tx-1", transfer.txHash());
+        assertEquals(new BigDecimal("7.1"), transfer.amount());
+    }
+
     private static JsonNode json(String value) {
         try {
             return MAPPER.readTree(value);

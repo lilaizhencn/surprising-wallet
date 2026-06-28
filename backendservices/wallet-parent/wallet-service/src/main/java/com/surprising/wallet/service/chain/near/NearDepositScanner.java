@@ -183,8 +183,9 @@ public class NearDepositScanner {
             JsonNode actions = transaction.path("actions");
             for (int actionIndex = 0; actionIndex < actions.size(); actionIndex++) {
                 JsonNode functionCall = actions.get(actionIndex).path("FunctionCall");
+                String methodName = functionCall.path("method_name").asText();
                 if (functionCall.isMissingNode()
-                        || !"ft_transfer".equals(functionCall.path("method_name").asText())) {
+                        || (!"ft_transfer".equals(methodName) && !"ft_transfer_call".equals(methodName))) {
                     continue;
                 }
                 JsonNode args = decodeFunctionArgs(functionCall.path("args").asText());

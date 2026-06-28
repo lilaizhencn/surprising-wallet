@@ -46,6 +46,55 @@ app.post('/v1/polkadot/latest-finalized', handler(async (req) => {
   return { hash: hash.toHex(), height: header.number.toNumber() };
 }));
 
+app.post('/v1/polkadot/native-balance', handler(async (req) => {
+  const api = await apiFor(requireString(req.body.rpcUrl, 'rpcUrl'));
+  const account = await api.query.system.account(requireString(req.body.address, 'address'));
+  return {
+    free: account.data.free.toString(),
+    reserved: account.data.reserved.toString(),
+    frozen: account.data.frozen ? account.data.frozen.toString() : '0'
+  };
+}));
+
+app.post('/v1/polkadot/asset-info', handler(async (req) => {
+  const api = await apiFor(requireString(req.body.rpcUrl, 'rpcUrl'));
+  if (!api.query.assets) {
+    throw new Error('assets pallet is not available on this runtime');
+  }
+  const assetId = requireString(req.body.assetId, 'assetId');
+  const asset = await api.query.assets.asset(assetId);
+  const metadata = await api.query.assets.metadata(assetId);
+  const exists = asset && asset.isSome;
+  return {
+    assetId,
+    exists,
+    supply: exists ? asset.unwrap().supply.toString() : '0',
+    minBalance: exists ? asset.unwrap().minBalance.toString() : '0',
+    isSufficient: exists ? asset.unwrap().isSufficient.toString() === 'true' : false,
+    name: metadata.name.toUtf8 ? metadata.name.toUtf8() : metadata.name.toString(),
+    symbol: metadata.symbol.toUtf8 ? metadata.symbol.toUtf8() : metadata.symbol.toString(),
+    decimals: metadata.decimals.toNumber ? metadata.decimals.toNumber() : Number(metadata.decimals.toString() || 0)
+  };
+}));
+
+app.post('/v1/polkadot/asset-balance', handler(async (req) => {
+  const api = await apiFor(requireString(req.body.rpcUrl, 'rpcUrl'));
+  if (!api.query.assets) {
+    throw new Error('assets pallet is not available on this runtime');
+  }
+  const assetId = requireString(req.body.assetId, 'assetId');
+  const account = await api.query.assets.account(assetId, requireString(req.body.address, 'address'));
+  if (!account || account.isNone) {
+    return { assetId, balance: '0', status: 'NONE' };
+  }
+  const data = account.unwrap();
+  return {
+    assetId,
+    balance: data.balance.toString(),
+    status: data.status ? data.status.toString() : 'UNKNOWN'
+  };
+}));
+
 app.post('/v1/polkadot/scan-transfers', handler(async (req) => {
   const api = await apiFor(requireString(req.body.rpcUrl, 'rpcUrl'));
   const ss58Prefix = Number(req.body.ss58Prefix ?? 42);
@@ -153,9 +202,8 @@ app.post('/v1/polkadot/asset-transfer', handler(async (req) => {
   const assetId = requireString(req.body.assetId, 'assetId');
   const to = requireString(req.body.to, 'to');
   const amount = requireString(req.body.amount, 'amount');
-  const tx = api.tx.assets.transferKeepAlive
-    ? api.tx.assets.transferKeepAlive(assetId, to, amount)
-    : api.tx.assets.transfer(assetId, to, amount);
+  const keepAlive = req.body.keepAlive !== false;
+  const tx = assetTransfer(api, assetId, to, amount, keepAlive);
   return submitAndWait(api, tx, pair, req.body.waitFinalized !== false);
 }));
 
@@ -255,6 +303,19 @@ function transferAllowDeath(api, to, amountPlanck) {
     return api.tx.balances.transfer(to, amountPlanck);
   }
   throw new Error('balances transferAllowDeath is not available on this runtime');
+}
+
+function assetTransfer(api, assetId, to, amount, keepAlive) {
+  if (keepAlive && api.tx.assets.transferKeepAlive) {
+    return api.tx.assets.transferKeepAlive(assetId, to, amount);
+  }
+  if (api.tx.assets.transfer) {
+    return api.tx.assets.transfer(assetId, to, amount);
+  }
+  if (api.tx.assets.transferKeepAlive) {
+    return api.tx.assets.transferKeepAlive(assetId, to, amount);
+  }
+  throw new Error('assets transfer is not available on this runtime');
 }
 
 async function submitAndWait(api, tx, pair, waitFinalized) {

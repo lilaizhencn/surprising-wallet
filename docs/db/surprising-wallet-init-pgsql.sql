@@ -2539,6 +2539,8 @@ INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "valu
 INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.collection.enabled', 'true', 'boolean', true, 'Global collection switch', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
 INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('global.transfer.enabled', 'true', 'boolean', true, 'Global internal transfer switch', '2026-06-25 00:10:43.487527+08', '2026-06-25 00:10:43.487527+08');
 INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('near.token.account.activation.yocto', '50000000000000000000000', 'bigint', true, 'NEAR native amount sent from the default NEAR hot wallet before preparing a NEP-141 token deposit address. Default is 0.05 NEAR.', '2026-06-28 13:20:00+08', '2026-06-28 13:20:00+08');
+INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('dot.asset_hub.min_sender_gas.planck', '20000000000', 'bigint', true, 'Minimum Asset Hub native free balance required before signing DOT Asset Hub token transfers. Default is 0.02 WND on Westend units.', '2026-06-28 23:00:00+08', '2026-06-28 23:00:00+08');
+INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "value_type", "enabled", "remark", "created_at", "updated_at") VALUES ('dot.asset_hub.token.gas_topup.planck', '100000000000', 'bigint', true, 'Asset Hub native top-up sent from the default DOT hot wallet when a DOT token sender lacks gas. Default is 0.1 WND on Westend units.', '2026-06-28 23:00:00+08', '2026-06-28 23:00:00+08');
 
 
 --
@@ -2726,9 +2728,9 @@ WITH new_chain_token_assets(chain, symbol, asset_kind, contract_address, decimal
     VALUES
         ('ADA', 'USDC', 'CARDANO_NATIVE_ASSET', 'CHANGE_ME_CARDANO_USDC_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', 6, 1, 1),
         ('ADA', 'USDT', 'CARDANO_NATIVE_ASSET', 'CHANGE_ME_CARDANO_USDT_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', 6, 1, 1),
-        ('DOT', 'USDC', 'ASSET_HUB_ASSET', 'CHANGE_ME_WESTEND_USDC_ASSET_ID', 6, 1, 1),
-        ('DOT', 'USDT', 'ASSET_HUB_ASSET', 'CHANGE_ME_WESTEND_USDT_ASSET_ID', 6, 1, 1),
-        ('NEAR', 'USDC', 'NEP141', 'CHANGE_ME_USDC_CONTRACT.testnet', 6, 1, 1),
+        ('DOT', 'USDC', 'ASSET_HUB_ASSET', '31337', 6, 1, 1),
+        ('DOT', 'USDT', 'ASSET_HUB_ASSET', '1984', 6, 1, 1),
+        ('NEAR', 'USDC', 'NEP141', '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af', 6, 1, 1),
         ('NEAR', 'USDT', 'NEP141', 'CHANGE_ME_USDT_CONTRACT.testnet', 6, 1, 1)
 )
 INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
@@ -2755,11 +2757,11 @@ WITH new_chain_tokens(chain, symbol, standard, network, token_standard, contract
         ('ADA', 'USDT', 'CARDANO_NATIVE_ASSET', 'preprod', 'CARDANO_NATIVE_ASSET',
          'CHANGE_ME_CARDANO_USDT_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', 6, 1, 1, 1, 'CARDANO_MIN_ADA', 15),
         ('DOT', 'USDC', 'ASSET_HUB_ASSET', 'westend', 'ASSET_HUB_ASSET',
-         'CHANGE_ME_WESTEND_USDC_ASSET_ID', 6, 1, 1, 1, 'ASSET_HUB_NATIVE_GAS', 12),
+         '31337', 6, 1, 1, 1, 'ASSET_HUB_NATIVE_GAS', 12),
         ('DOT', 'USDT', 'ASSET_HUB_ASSET', 'westend', 'ASSET_HUB_ASSET',
-         'CHANGE_ME_WESTEND_USDT_ASSET_ID', 6, 1, 1, 1, 'ASSET_HUB_NATIVE_GAS', 12),
+         '1984', 6, 1, 1, 1, 'ASSET_HUB_NATIVE_GAS', 12),
         ('NEAR', 'USDC', 'NEP141', 'testnet', 'NEP141',
-         'CHANGE_ME_USDC_CONTRACT.testnet', 6, 1, 1, 1, 'NEAR_STORAGE_DEPOSIT', 1),
+         '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af', 6, 1, 1, 1, 'NEAR_STORAGE_DEPOSIT', 1),
         ('NEAR', 'USDT', 'NEP141', 'testnet', 'NEP141',
          'CHANGE_ME_USDT_CONTRACT.testnet', 6, 1, 1, 1, 'NEAR_STORAGE_DEPOSIT', 1)
 )

@@ -49,6 +49,37 @@ public class PolkadotRuntimeClient {
         return latestFinalizedHeight(PURPOSE_ASSET_RPC);
     }
 
+    public BigInteger nativeBalance(String address) {
+        return nativeBalance(address, PURPOSE_NATIVE_RPC);
+    }
+
+    public BigInteger assetHubNativeBalance(String address) {
+        return nativeBalance(address, PURPOSE_ASSET_RPC);
+    }
+
+    public BigInteger assetBalance(String assetId, String address) {
+        ObjectNode body = baseBody();
+        body.put("ss58Prefix", ss58Prefix(profile()));
+        body.put("assetId", normalizeAssetId(assetId));
+        body.put("address", address);
+        return amountPlanck(callRuntime("/v1/polkadot/asset-balance", PURPOSE_ASSET_RPC, body)
+                .path("balance"));
+    }
+
+    public AssetInfo assetInfo(String assetId) {
+        ObjectNode body = baseBody();
+        body.put("assetId", normalizeAssetId(assetId));
+        JsonNode result = callRuntime("/v1/polkadot/asset-info", PURPOSE_ASSET_RPC, body);
+        return new AssetInfo(result.path("assetId").asText(),
+                result.path("exists").asBoolean(false),
+                amountPlanck(result.path("supply")),
+                amountPlanck(result.path("minBalance")),
+                result.path("isSufficient").asBoolean(false),
+                result.path("name").asText(""),
+                result.path("symbol").asText(""),
+                result.path("decimals").asInt(0));
+    }
+
     public List<TransferEvent> scanNativeTransfers(long fromBlock, long toBlock,
                                                    Collection<String> addresses) {
         return scanTransfers(PURPOSE_NATIVE_RPC, fromBlock, toBlock, addresses, List.of(), true, false);
@@ -63,6 +94,14 @@ public class PolkadotRuntimeClient {
 
     private long latestFinalizedHeight(String rpcPurpose) {
         return callRuntime("/v1/polkadot/latest-finalized", rpcPurpose, baseBody()).path("height").asLong();
+    }
+
+    private BigInteger nativeBalance(String address, String rpcPurpose) {
+        ObjectNode body = baseBody();
+        body.put("ss58Prefix", ss58Prefix(profile()));
+        body.put("address", address);
+        return amountPlanck(callRuntime("/v1/polkadot/native-balance", rpcPurpose, body)
+                .path("free"));
     }
 
     private List<TransferEvent> scanTransfers(String rpcPurpose, long fromBlock, long toBlock,
@@ -106,6 +145,18 @@ public class PolkadotRuntimeClient {
     public SubmittedTransaction sendNative(String secretSeedHex, String expectedFrom,
                                            String toAddress, BigInteger amountPlanck,
                                            boolean keepAlive) {
+        return sendNative(secretSeedHex, expectedFrom, toAddress, amountPlanck, keepAlive, PURPOSE_NATIVE_RPC);
+    }
+
+    public SubmittedTransaction sendAssetHubNative(String secretSeedHex, String expectedFrom,
+                                                   String toAddress, BigInteger amountPlanck,
+                                                   boolean keepAlive) {
+        return sendNative(secretSeedHex, expectedFrom, toAddress, amountPlanck, keepAlive, PURPOSE_ASSET_RPC);
+    }
+
+    private SubmittedTransaction sendNative(String secretSeedHex, String expectedFrom,
+                                            String toAddress, BigInteger amountPlanck,
+                                            boolean keepAlive, String rpcPurpose) {
         ObjectNode body = baseBody();
         body.put("ss58Prefix", ss58Prefix(profile()));
         body.put("secretSeedHex", secretSeedHex);
@@ -114,12 +165,18 @@ public class PolkadotRuntimeClient {
         body.put("amountPlanck", amountPlanck.toString());
         body.put("keepAlive", keepAlive);
         body.put("waitFinalized", true);
-        JsonNode result = callRuntime("/v1/polkadot/transfer", PURPOSE_NATIVE_RPC, body);
+        JsonNode result = callRuntime("/v1/polkadot/transfer", rpcPurpose, body);
         return submitted(result);
     }
 
     public SubmittedTransaction sendAsset(String secretSeedHex, String expectedFrom,
                                           String assetId, String toAddress, BigInteger amountAtomic) {
+        return sendAsset(secretSeedHex, expectedFrom, assetId, toAddress, amountAtomic, true);
+    }
+
+    public SubmittedTransaction sendAsset(String secretSeedHex, String expectedFrom,
+                                          String assetId, String toAddress, BigInteger amountAtomic,
+                                          boolean keepAlive) {
         ObjectNode body = baseBody();
         body.put("ss58Prefix", ss58Prefix(profile()));
         body.put("secretSeedHex", secretSeedHex);
@@ -127,6 +184,7 @@ public class PolkadotRuntimeClient {
         body.put("assetId", assetId);
         body.put("to", toAddress);
         body.put("amount", amountAtomic.toString());
+        body.put("keepAlive", keepAlive);
         body.put("waitFinalized", true);
         JsonNode result = callRuntime("/v1/polkadot/asset-transfer", PURPOSE_ASSET_RPC, body);
         return submitted(result);
@@ -267,5 +325,9 @@ public class PolkadotRuntimeClient {
     }
 
     public record SubmittedTransaction(String txHash, long blockHeight, String status, String rawPayload) {
+    }
+
+    public record AssetInfo(String assetId, boolean exists, BigInteger supply, BigInteger minBalance,
+                            boolean sufficient, String name, String symbol, int decimals) {
     }
 }

@@ -72,7 +72,9 @@ NEAR and Monero to `surprising-wallet`.
 
 ### Polkadot DOT
 
-- Native coin: DOT, 10 decimals.
+- Native coin: DOT/WND. Polkadot mainnet DOT uses 10 decimals; Westend WND
+  uses 12 decimals, so testnet configuration must keep the seeded 12-decimal
+  display value.
 - Token model: relay-chain DOT is separate from Asset Hub assets. Token support
   should be implemented against Asset Hub only after the target asset and test
   network are selected.
@@ -90,13 +92,19 @@ NEAR and Monero to `surprising-wallet`.
     ledger balances idempotently by transaction hash and event index.
   - Native DOT withdrawal and collection are wired into the account-chain
     workflow through the runtime service.
-  - Basic Asset Hub `assets.Transferred` scanning and `assets.transfer` /
+  - Asset Hub `assets.Transferred` scanning and `assets.transfer` /
     `assets.transferKeepAlive` submission support are implemented behind
     `token_config.contract_address = <assetId>`. This uses a separate
     `chain_rpc_node` purpose named `asset_rpc`, because relay-chain DOT and
     Asset Hub tokens are different runtimes with different block heights. The
     scanner stores native progress in `polkadot-runtime-scanner` and Asset Hub
     progress in `polkadot-assethub-scanner`.
+  - Asset Hub token withdrawal and collection now check the sender's native
+    Asset Hub balance first. If it is below
+    `dot.asset_hub.min_sender_gas.planck`, the default DOT hot wallet sends a
+    native Asset Hub top-up using `dot.asset_hub.token.gas_topup.planck`, then
+    the token transaction is signed. Collection uses non-keep-alive asset
+    transfer so a drained token account can be cleaned up.
   - Wallet-app DOT token deposit addresses mirror the native DOT SS58 account
     row. A token asset still needs its own `chain_address` row for the token
     symbol, but the visible address and derivation index stay the same as the
@@ -113,20 +121,25 @@ NEAR and Monero to `surprising-wallet`.
     deployment model.
   - Westend relay-chain tests use `wss://westend-rpc.polkadot.io`. Westend
     Asset Hub token tests use `wss://westend-asset-hub-rpc.polkadot.io`.
-  - Keep token configs disabled until a target Asset Hub test asset is selected
-    and verified.
-- Remaining adapter work:
+  - The seed includes verified Westend Asset Hub test assets for USDC
+    (`assetId=31337`) and a Test-Tether asset mapped to USDT (`assetId=1984`),
+    but they stay disabled by default until the target environment has live
+    test funds and has passed end-to-end verification. Placeholder values for
+    any additional assets are intentionally disabled by the seed safety guard.
+- Remaining configuration work:
   - Run the runtime service in `services/polkadot-runtime-service`, configure
     `purpose=rpc`, `purpose=asset_rpc` and `purpose=runtime` nodes for the
-    target environment, then perform Westend end-to-end deposit, withdrawal and
-    collection tests.
-  - Select an Asset Hub test asset before enabling DOT token assets.
+    target environment, then enable only the exact Asset Hub test assets that
+    have passed end-to-end deposit, withdrawal and collection tests.
+  - The default DOT hot wallet must hold native balance on both Westend relay
+    chain and Westend Asset Hub. Relay-chain balance pays native DOT/WND
+    operations; Asset Hub balance pays token sender gas top-ups.
 - Important implementation boundary: the legacy Java PolkaJ library is not a
   safe production dependency for modern Polkadot runtimes because it does not
   support current metadata versions. This project uses a metadata-aware runtime
   service instead of hard-coding SCALE call indexes in Java.
-- Token support: implement through Asset Hub after the target test asset is
-  selected. Relay-chain DOT must not pretend to support tokens by itself.
+- Token support: implemented through Asset Hub. Relay-chain DOT must not
+  pretend to support tokens by itself.
 - Suggested test network: Westend for relay-chain behavior; Asset Hub testnet
   for token behavior.
 
@@ -141,8 +154,9 @@ NEAR and Monero to `surprising-wallet`.
   - Native NEAR deposit scanning is implemented through official JSON-RPC
     finalized `block` and `chunk` reads.
   - NEP-141 token deposit scanning is implemented for successful `ft_transfer`
-    function-call actions into project deposit addresses. Token contracts are
-    configured through `token_config.contract_address`.
+    and `ft_transfer_call` function-call actions into project deposit
+    addresses. Token contracts are configured through
+    `token_config.contract_address`.
   - Native and NEP-141 scans record action-level `near_transaction` rows, write
     idempotent `deposit_record` rows, and credit `ledger_balance`.
   - Native NEAR Borsh transaction serialization, Ed25519 signing,
@@ -162,14 +176,22 @@ NEAR and Monero to `surprising-wallet`.
     disabled by default through `chain_profile.enabled=false` and
     `chain_asset.active=false` until real testnet end-to-end verification is
     complete.
-- Remaining adapter work:
-  - Real testnet token contract configuration and end-to-end verification for
-    deposit, withdrawal and collection.
+  - NEP-141 token collection verifies the default hot wallet is registered in
+    the token contract before receiving collected tokens. If storage is
+    missing, the default NEAR hot wallet submits `storage_deposit` first and
+    only then sends the token transfer.
+- Remaining configuration work:
+  - The seed includes the verified NEAR Testnet USDC NEP-141 contract
+    `3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af`,
+    but it stays disabled by default until the target environment has live test
+    funds and has passed end-to-end verification. Other testnet token contracts
+    such as USDT must be configured before enabling their templates.
 - Token support: required for NEP-141 tokens. Deposits need event/indexer
   coverage; scanning only native account balance changes is not enough.
-  Current chunk scanning handles direct `ft_transfer` calls. If a token relies
-  on cross-contract minting or custom transfer wrappers, add NEAR Lake/Indexer
-  event ingestion before enabling that asset.
+  Current chunk scanning handles direct `ft_transfer` and `ft_transfer_call`
+  calls. If a token relies on cross-contract minting or custom transfer
+  wrappers that do not expose those function-call arguments directly, add NEAR
+  Lake/Indexer event ingestion before enabling that asset.
 - Important runtime rule: a token-only NEAR deposit address must still be a
   live NEAR account before it can later sign withdrawals. Do not disable the
   activation step unless all token addresses are pre-funded through another

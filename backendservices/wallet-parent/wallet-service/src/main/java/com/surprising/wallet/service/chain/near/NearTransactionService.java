@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.NearTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
@@ -171,12 +172,34 @@ public class NearTransactionService {
                     .orElseThrow(() -> new IllegalStateException("NEAR token collection is not retryable"));
         }
         try {
+            ensureTokenStorageRegistered(token, hotAddress);
             String txHash = sendToken(from, token, hotAddress, amount);
             repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", txHash, null, null);
             return txHash;
         } catch (RuntimeException e) {
             repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
             throw e;
+        }
+    }
+
+    private void ensureTokenStorageRegistered(TokenDefinition token, String accountId) {
+        if (tokenStorageRegistered(token, accountId)) {
+            return;
+        }
+        ChainAddressRecord payer = repository.findChainAddress(CHAIN, SYMBOL,
+                        HotWalletRules.DEFAULT_HOT_USER_ID,
+                        HotWalletRules.DEFAULT_HOT_BIZ,
+                        HotWalletRules.DEFAULT_HOT_ADDRESS_INDEX,
+                        HotWalletRules.DEFAULT_HOT_WALLET_ROLE)
+                .orElseThrow(() -> new IllegalStateException(
+                        "missing NEAR hot wallet for token storage registration"));
+        BigInteger minimum = tokenStorageMinimum(token);
+        if (minimum.signum() <= 0) {
+            throw new IllegalStateException("NEAR token storage minimum is not configured by contract");
+        }
+        storageDeposit(payer, token, accountId, minimum);
+        if (!tokenStorageRegistered(token, accountId)) {
+            throw new IllegalStateException("NEAR token storage registration did not complete");
         }
     }
 

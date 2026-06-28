@@ -6,6 +6,7 @@ import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.key.Ed25519DerivedKey;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
+import com.surprising.wallet.service.wallet.HotWalletAddressService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -22,10 +23,13 @@ public class PolkadotTransactionService {
     private static final String CHAIN = PolkadotRuntimeClient.CHAIN;
     private static final String SYMBOL = "DOT";
     private static final int DOT_DECIMALS = 10;
+    private static final BigInteger DEFAULT_ASSET_HUB_MIN_GAS_PLANCK = new BigInteger("20000000000");
+    private static final BigInteger DEFAULT_ASSET_HUB_GAS_TOPUP_PLANCK = new BigInteger("100000000000");
 
     private final PolkadotRuntimeClient runtimeClient;
     private final PolkadotKeyService keyService;
     private final ChainJdbcRepository repository;
+    private final HotWalletAddressService hotWalletAddressService;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
@@ -42,13 +46,19 @@ public class PolkadotTransactionService {
     }
 
     public String sendAsset(ChainAddressRecord from, TokenDefinition token, String toAddress, BigDecimal amount) {
+        return sendAsset(from, token, toAddress, amount, true);
+    }
+
+    private String sendAsset(ChainAddressRecord from, TokenDefinition token, String toAddress, BigDecimal amount,
+                             boolean keepAlive) {
         String assetId = PolkadotRuntimeClient.normalizeAssetId(token.getContractAddress());
         if (assetId.isBlank()) {
             throw new IllegalStateException("missing DOT Asset Hub asset id for " + token.getSymbol());
         }
+        ensureAssetHubGas(from);
         PolkadotRuntimeClient.SubmittedTransaction tx = runtimeClient.sendAsset(
                 secretSeedHex(from), from.getAddress(), assetId, toAddress,
-                toAtomic(amount, token.getDecimals()));
+                toAtomic(amount, token.getDecimals()), keepAlive);
         return tx.txHash();
     }
 
@@ -75,7 +85,7 @@ public class PolkadotTransactionService {
     public String collectAsset(String collectionNo, ChainAddressRecord from,
                                TokenDefinition token, String hotAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "polkadot collectAsset");
-        return collect(collectionNo, () -> sendAsset(from, token, hotAddress, amount));
+        return collect(collectionNo, () -> sendAsset(from, token, hotAddress, amount, false));
     }
 
     public boolean confirmCollection(AccountChainProfile profile, String collectionNo, String assetSymbol) {
@@ -117,6 +127,42 @@ public class PolkadotTransactionService {
     private String secretSeedHex(ChainAddressRecord from) {
         Ed25519DerivedKey key = keyService.derive(from.getUserId(), from.getBiz(), from.getAddressIndex());
         return HexFormat.of().formatHex(key.privateSeed());
+    }
+
+    private void ensureAssetHubGas(ChainAddressRecord sender) {
+        BigInteger minimum = systemPlanck("dot.asset_hub.min_sender_gas.planck",
+                DEFAULT_ASSET_HUB_MIN_GAS_PLANCK);
+        BigInteger balance = runtimeClient.assetHubNativeBalance(sender.getAddress());
+        if (balance.compareTo(minimum) >= 0) {
+            return;
+        }
+        ChainAddressRecord hot = hotWalletAddressService.findDefaultHotAddress(CHAIN, SYMBOL)
+                .orElseThrow(() -> new IllegalStateException("missing DOT hot wallet for Asset Hub gas top-up"));
+        if (sameAddress(hot.getAddress(), sender.getAddress())) {
+            throw new IllegalStateException("DOT Asset Hub hot wallet balance below token gas reserve");
+        }
+        BigInteger topUp = systemPlanck("dot.asset_hub.token.gas_topup.planck",
+                DEFAULT_ASSET_HUB_GAS_TOPUP_PLANCK);
+        BigInteger shortfall = minimum.subtract(balance);
+        BigInteger amount = topUp.max(shortfall);
+        runtimeClient.sendAssetHubNative(secretSeedHex(hot), hot.getAddress(), sender.getAddress(), amount, true);
+        BigInteger after = runtimeClient.assetHubNativeBalance(sender.getAddress());
+        if (after.compareTo(minimum) < 0) {
+            throw new IllegalStateException("DOT Asset Hub gas top-up did not reach minimum reserve");
+        }
+    }
+
+    private BigInteger systemPlanck(String key, BigInteger fallback) {
+        return repository.systemValue(key)
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .map(BigInteger::new)
+                .filter(value -> value.signum() > 0)
+                .orElse(fallback);
+    }
+
+    private static boolean sameAddress(String left, String right) {
+        return left != null && right != null && left.equalsIgnoreCase(right);
     }
 
     private static int confirmationLookback(AccountChainProfile profile) {
