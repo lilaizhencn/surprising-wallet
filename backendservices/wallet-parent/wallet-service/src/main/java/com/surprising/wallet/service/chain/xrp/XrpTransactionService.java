@@ -25,7 +25,12 @@ import org.xrpl.xrpl4j.model.transactions.XrpCurrencyAmount;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -139,15 +144,48 @@ public class XrpTransactionService {
             return BigDecimal.ZERO;
         }
         XrpRpcClient.ReserveInfo reserve = rpc.reserveInfo();
+        int ownerSlots = account.get().ownerCount() + missingIssuedCurrencyTrustLines(address);
         BigDecimal balance = fromDrops(account.get().balanceDrops());
         BigDecimal requiredReserve = reserve.baseXrp()
-                .add(reserve.ownerXrp().multiply(BigDecimal.valueOf(account.get().ownerCount())));
+                .add(reserve.ownerXrp().multiply(BigDecimal.valueOf(ownerSlots)));
         BigDecimal feeReserve = fromDrops(BigDecimal.valueOf(feeDrops()));
         BigDecimal spendable = balance.subtract(requiredReserve).subtract(feeReserve);
         if (spendable.signum() <= 0) {
             return BigDecimal.ZERO;
         }
         return candidate.min(spendable).stripTrailingZeros();
+    }
+
+    private int missingIssuedCurrencyTrustLines(String address) {
+        Map<String, TokenDefinition> tokens = new HashMap<>();
+        for (TokenDefinition token : repository.listTokens(CHAIN)) {
+            tokens.put(token.getSymbol().toUpperCase(Locale.ROOT), token);
+        }
+        Set<String> checkedSymbols = new HashSet<>();
+        int missing = 0;
+        for (ChainAddressRecord record : repository.listChainAddresses(CHAIN)) {
+            if (NATIVE_SYMBOL.equalsIgnoreCase(record.getAssetSymbol())
+                    || !address.equals(record.getAddress())) {
+                continue;
+            }
+            String symbol = record.getAssetSymbol().toUpperCase(Locale.ROOT);
+            if (!checkedSymbols.add(symbol)) {
+                continue;
+            }
+            TokenDefinition token = tokens.get(symbol);
+            if (token == null) {
+                continue;
+            }
+            try {
+                XrpIssuedCurrency issued = XrpIssuedCurrency.fromToken(token);
+                if (!hasTrustLine(address, issued)) {
+                    missing++;
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Bad token rows should not stop XRP native collection.
+            }
+        }
+        return missing;
     }
 
     public String collectIssuedCurrency(String collectionNo, ChainAddressRecord from,
@@ -157,6 +195,7 @@ public class XrpTransactionService {
         if (previous.isPresent()) {
             return previous.get();
         }
+        ensureCollectionDestinationTrustLine(token, hotAddress);
         repository.createCollectionRecord(collectionNo, CHAIN, token.getSymbol(), from.getAddress(), hotAddress,
                 amount, feeAsXrp(), null);
         if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
@@ -171,6 +210,21 @@ public class XrpTransactionService {
             repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
             throw e;
         }
+    }
+
+    private void ensureCollectionDestinationTrustLine(TokenDefinition token, String hotAddress) {
+        XrpIssuedCurrency issued = XrpIssuedCurrency.fromToken(token);
+        if (hotAddress.equals(issued.issuer()) || hasTrustLine(hotAddress, issued)) {
+            return;
+        }
+        ChainAddressRecord hot = repository.findChainAddressByAddress(CHAIN, NATIVE_SYMBOL, hotAddress)
+                .or(() -> repository.findChainAddressByAddress(CHAIN, hotAddress))
+                .orElseThrow(() -> new IllegalStateException(
+                        "missing XRP hot wallet address for issued-currency collection: " + hotAddress));
+        String trustSetTxHash = createTrustLine(hot, issued);
+        Confirmation confirmation = waitForValidated(trustSetTxHash, "XRPL hot wallet trustline creation");
+        updateSystemTransaction(trustSetTxHash, token.getSymbol(), issued.issuer(),
+                issued.currencyCode(), confirmation);
     }
 
     public boolean confirmCollection(AccountChainProfile profile, String collectionNo) {
