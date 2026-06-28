@@ -1,7 +1,10 @@
 package com.surprising.wallet.service.chain.polkadot;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+
+import java.math.BigInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -25,5 +28,11 @@ class PolkadotRuntimeClientTest {
                 .build();
 
         assertEquals(42, PolkadotRuntimeClient.ss58Prefix(profile));
+    }
+
+    @Test
+    void amountPlanckParsesStringJsonValues() throws Exception {
+        assertEquals(new BigInteger("9997224699029"),
+                PolkadotRuntimeClient.amountPlanck(new ObjectMapper().readTree("\"9997224699029\"")));
     }
 }

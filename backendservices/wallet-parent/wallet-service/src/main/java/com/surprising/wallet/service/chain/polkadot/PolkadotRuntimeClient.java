@@ -89,7 +89,7 @@ public class PolkadotRuntimeClient {
                     item.path("txHash").asText(),
                     item.path("from").asText(),
                     item.path("to").asText(),
-                    item.path("amountPlanck").bigIntegerValue(),
+                    amountPlanck(item.path("amountPlanck")),
                     item.path("blockHeight").asLong(),
                     item.path("eventIndex").asLong(),
                     trim(item.path("assetId").asText(null)),
@@ -100,12 +100,19 @@ public class PolkadotRuntimeClient {
 
     public SubmittedTransaction sendNative(String secretSeedHex, String expectedFrom,
                                            String toAddress, BigInteger amountPlanck) {
+        return sendNative(secretSeedHex, expectedFrom, toAddress, amountPlanck, true);
+    }
+
+    public SubmittedTransaction sendNative(String secretSeedHex, String expectedFrom,
+                                           String toAddress, BigInteger amountPlanck,
+                                           boolean keepAlive) {
         ObjectNode body = baseBody();
         body.put("ss58Prefix", ss58Prefix(profile()));
         body.put("secretSeedHex", secretSeedHex);
         body.put("expectedFrom", expectedFrom);
         body.put("to", toAddress);
         body.put("amountPlanck", amountPlanck.toString());
+        body.put("keepAlive", keepAlive);
         body.put("waitFinalized", true);
         JsonNode result = callRuntime("/v1/polkadot/transfer", PURPOSE_NATIVE_RPC, body);
         return submitted(result);
@@ -229,6 +236,11 @@ public class PolkadotRuntimeClient {
     static String normalizeAssetId(String value) {
         String assetId = trim(value);
         return assetId.isBlank() ? "" : assetId;
+    }
+
+    static BigInteger amountPlanck(JsonNode node) {
+        String value = node == null || node.isMissingNode() || node.isNull() ? "0" : node.asText("0");
+        return new BigInteger(value);
     }
 
     private static SubmittedTransaction submitted(JsonNode result) {

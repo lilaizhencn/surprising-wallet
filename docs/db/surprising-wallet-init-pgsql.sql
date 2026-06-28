@@ -2708,7 +2708,7 @@ INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_a
                                     "created_at", "updated_at")
 VALUES
     ('ADA', 'ADA', 'NATIVE', NULL, 6, true, false, 0.001, 0.001, now(), now()),
-    ('DOT', 'DOT', 'NATIVE', NULL, 10, true, false, 0.01, 0.01, now(), now()),
+    ('DOT', 'DOT', 'NATIVE', NULL, 12, true, false, 0.01, 0.01, now(), now()),
     ('NEAR', 'NEAR', 'NATIVE', NULL, 24, true, false, 0.001, 0.001, now(), now()),
     ('XMR', 'XMR', 'NATIVE', NULL, 12, true, false, 0.0001, 0.0001, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
@@ -2802,7 +2802,7 @@ VALUES
      30, 30, NULL, 1000, false, now(), now(), NULL, 'cardano-utxo', 100,
      false, false, false, false, 0, 0),
     ('DOT', 'westend', 'polkadot', 354, 354, 'DOT', NULL, 'https://westend.subscan.io/extrinsic/',
-     12, 12, NULL, 100000000, false, now(), now(), 42, 'substrate-balances', 100,
+     12, 12, 200000000000, 100000000, false, now(), now(), 42, 'substrate-balances', 100,
      false, false, false, false, 0, 0),
     ('DOT', 'mainnet', 'polkadot', 354, 354, 'DOT', NULL, 'https://polkadot.subscan.io/extrinsic/',
      12, 12, NULL, 100000000, false, now(), now(), 0, 'substrate-balances', 100,

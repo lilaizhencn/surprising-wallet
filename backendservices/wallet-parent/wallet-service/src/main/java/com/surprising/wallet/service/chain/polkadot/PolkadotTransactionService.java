@@ -31,8 +31,13 @@ public class PolkadotTransactionService {
     private WalletRuntimeConfigService runtimeConfigService;
 
     public String sendNative(ChainAddressRecord from, String toAddress, BigInteger amountPlanck) {
+        return sendNative(from, toAddress, amountPlanck, true);
+    }
+
+    private String sendNative(ChainAddressRecord from, String toAddress, BigInteger amountPlanck,
+                              boolean keepAlive) {
         PolkadotRuntimeClient.SubmittedTransaction tx = runtimeClient.sendNative(
-                secretSeedHex(from), from.getAddress(), toAddress, amountPlanck);
+                secretSeedHex(from), from.getAddress(), toAddress, amountPlanck, keepAlive);
         return tx.txHash();
     }
 
@@ -64,7 +69,7 @@ public class PolkadotTransactionService {
     public String collectNative(String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigInteger amountPlanck) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "polkadot collectNative");
-        return collect(collectionNo, () -> sendNative(from, hotAddress, amountPlanck));
+        return collect(collectionNo, () -> sendNative(from, hotAddress, amountPlanck, false));
     }
 
     public String collectAsset(String collectionNo, ChainAddressRecord from,

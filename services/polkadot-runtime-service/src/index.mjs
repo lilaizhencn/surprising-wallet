@@ -87,6 +87,24 @@ app.post('/v1/polkadot/scan-transfers', handler(async (req) => {
           assetId: null
         });
       }
+      if (includeNative && event.section === 'balances' && event.method === 'Deposit') {
+        const [to, amount] = event.data;
+        const toKey = accountKey(to.toString());
+        const trackedTo = addressBook.get(toKey);
+        const extrinsicIndex = applyExtrinsicIndex(phase);
+        if (!trackedTo || !extrinsicSucceeded(events, extrinsicIndex)) {
+          continue;
+        }
+        transfers.push({
+          txHash: txHashFor(extrinsics, extrinsicIndex, hash, eventIndex),
+          from: '',
+          to: trackedTo,
+          amountPlanck: amount.toString(),
+          blockHeight: height,
+          eventIndex,
+          assetId: null
+        });
+      }
       if (includeAssets && event.section === 'assets' && event.method === 'Transferred') {
         const [assetId, from, to, amount] = event.data;
         const normalizedAssetId = assetId.toString();
@@ -118,9 +136,10 @@ app.post('/v1/polkadot/transfer', handler(async (req) => {
   const api = await apiFor(requireString(req.body.rpcUrl, 'rpcUrl'));
   const pair = pairFromSeed(req.body.secretSeedHex, Number(req.body.ss58Prefix ?? 42));
   assertExpectedAddress(pair.address, req.body.expectedFrom);
-  const tx = api.tx.balances.transferKeepAlive
+  const keepAlive = req.body.keepAlive !== false;
+  const tx = keepAlive && api.tx.balances.transferKeepAlive
     ? api.tx.balances.transferKeepAlive(requireString(req.body.to, 'to'), requireString(req.body.amountPlanck, 'amountPlanck'))
-    : api.tx.balances.transferAllowDeath(requireString(req.body.to, 'to'), requireString(req.body.amountPlanck, 'amountPlanck'));
+    : transferAllowDeath(api, requireString(req.body.to, 'to'), requireString(req.body.amountPlanck, 'amountPlanck'));
   return submitAndWait(api, tx, pair, req.body.waitFinalized !== false);
 }));
 
@@ -226,6 +245,16 @@ function assertExpectedAddress(address, expected) {
   if (expected && accountKey(address) !== accountKey(expected)) {
     throw new Error('derived Polkadot address does not match expectedFrom');
   }
+}
+
+function transferAllowDeath(api, to, amountPlanck) {
+  if (api.tx.balances.transferAllowDeath) {
+    return api.tx.balances.transferAllowDeath(to, amountPlanck);
+  }
+  if (api.tx.balances.transfer) {
+    return api.tx.balances.transfer(to, amountPlanck);
+  }
+  throw new Error('balances transferAllowDeath is not available on this runtime');
 }
 
 async function submitAndWait(api, tx, pair, waitFinalized) {

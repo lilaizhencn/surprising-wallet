@@ -1,6 +1,7 @@
 package com.surprising.wallet.service.chain.polkadot;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.ChainAsset;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
@@ -8,6 +9,7 @@ import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -21,12 +23,13 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PolkadotDepositScanner {
     private static final String CHAIN = PolkadotRuntimeClient.CHAIN;
     private static final String SYMBOL = "DOT";
     private static final String NATIVE_SCANNER = "polkadot-runtime-scanner";
     private static final String ASSET_HUB_SCANNER = "polkadot-assethub-scanner";
-    private static final int DOT_DECIMALS = 10;
+    private static final int DEFAULT_DOT_DECIMALS = 10;
 
     private final PolkadotRuntimeClient runtimeClient;
     private final ChainJdbcRepository repository;
@@ -57,11 +60,21 @@ public class PolkadotDepositScanner {
         }
         long end = Math.min(safeHeight, start + scanBatch(profile) - 1L);
         Map<String, ChainAddressRecord> addresses = trackedDepositAddresses(SYMBOL);
+        List<String> originalAddresses = addresses.values().stream()
+                .map(ChainAddressRecord::getAddress)
+                .distinct()
+                .toList();
         List<DepositEvent> events = new ArrayList<>();
-        for (PolkadotRuntimeClient.TransferEvent transfer : runtimeClient.scanNativeTransfers(
-                start, end, addresses.keySet())) {
+        List<PolkadotRuntimeClient.TransferEvent> transfers = runtimeClient.scanNativeTransfers(
+                start, end, originalAddresses);
+        if (!transfers.isEmpty()) {
+            log.info("polkadot native scan found transfers count={} range={}-{}", transfers.size(), start, end);
+        }
+        for (PolkadotRuntimeClient.TransferEvent transfer : transfers) {
             DepositEvent event = toNativeDepositEvent(transfer, addresses, latest);
             if (event == null) {
+                log.warn("polkadot native scan ignored transfer txHash={} to={} amountPlanck={}",
+                        transfer.txHash(), transfer.toAddress(), transfer.amountPlanck());
                 continue;
             }
             ChainAddressRecord tracked = addresses.get(normalize(event.toAddress()));
@@ -85,7 +98,8 @@ public class PolkadotDepositScanner {
         long end = Math.min(safeHeight, start + scanBatch(profile) - 1L);
         Map<String, Map<String, ChainAddressRecord>> addressesBySymbol = trackedTokenDepositAddresses(tokens);
         List<String> addresses = addressesBySymbol.values().stream()
-                .flatMap(addressBook -> addressBook.keySet().stream())
+                .flatMap(addressBook -> addressBook.values().stream())
+                .map(ChainAddressRecord::getAddress)
                 .distinct()
                 .toList();
         List<DepositEvent> events = new ArrayList<>();
@@ -117,7 +131,7 @@ public class PolkadotDepositScanner {
             return null;
         }
         int confirmations = confirmations(latest, transfer.blockHeight());
-        BigDecimal amount = fromAtomic(transfer.amountPlanck(), DOT_DECIMALS);
+        BigDecimal amount = fromAtomic(transfer.amountPlanck(), nativeDecimals());
         return new DepositEvent(ChainType.DOT, SYMBOL, transfer.txHash(),
                 transfer.fromAddress(), tracked.getAddress(), amount, transfer.blockHeight(),
                 confirmations, null, transfer.rawPayload());
@@ -201,6 +215,13 @@ public class PolkadotDepositScanner {
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
+    }
+
+    private int nativeDecimals() {
+        return repository.findAsset(CHAIN, SYMBOL)
+                .map(ChainAsset::getDecimals)
+                .filter(decimals -> decimals != null && decimals > 0)
+                .orElse(DEFAULT_DOT_DECIMALS);
     }
 
     private static int confirmations(long latest, long blockHeight) {

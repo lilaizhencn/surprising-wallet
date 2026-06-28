@@ -1,6 +1,7 @@
 package com.surprising.wallet.service.chain.polkadot;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.ChainAsset;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TokenDefinition;
@@ -8,6 +9,7 @@ import com.surprising.wallet.service.config.ChainRpcNodeService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -18,6 +20,26 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class PolkadotDepositScannerTest {
+    @Test
+    void nativeDepositUsesConfiguredAssetDecimals() {
+        FakeRuntimeClient runtimeClient = new FakeRuntimeClient();
+        runtimeClient.expectedNativeAddresses = List.of("AddrMixed");
+        runtimeClient.expectedAssetAddresses = List.of("AddrMixed");
+        runtimeClient.nativeTransfers = List.of(new PolkadotRuntimeClient.TransferEvent(
+                "native-tx-1", "", "AddrMixed", new BigInteger("9997224699029"),
+                95, 3, null, "{}"));
+        FakeRepository repository = new FakeRepository();
+        repository.address = "AddrMixed";
+        PolkadotDepositScanner scanner = new PolkadotDepositScanner(runtimeClient, repository);
+
+        List<DepositEvent> events = scanner.scanAndCredit();
+
+        assertEquals(2, events.size());
+        assertEquals("DOT", events.getFirst().assetSymbol());
+        assertEquals(new BigDecimal("9.997224699029"), events.getFirst().amount());
+        assertEquals(List.of("dot-account", "usdc-account"), repository.creditedAccounts);
+    }
+
     @Test
     void assetHubDepositCreditsTokenAccountWhenAddressMatchesNativeAccount() {
         FakeRuntimeClient runtimeClient = new FakeRuntimeClient();
@@ -32,6 +54,10 @@ class PolkadotDepositScannerTest {
     }
 
     private static final class FakeRuntimeClient extends PolkadotRuntimeClient {
+        private List<TransferEvent> nativeTransfers = List.of();
+        private List<String> expectedNativeAddresses = List.of("addr");
+        private List<String> expectedAssetAddresses = List.of("addr");
+
         FakeRuntimeClient() {
             super(null, null);
         }
@@ -49,21 +75,23 @@ class PolkadotDepositScannerTest {
         @Override
         public List<TransferEvent> scanNativeTransfers(long fromBlock, long toBlock,
                                                        Collection<String> addresses) {
-            return List.of();
+            assertEquals(expectedNativeAddresses, addresses);
+            return nativeTransfers;
         }
 
         @Override
         public List<TransferEvent> scanAssetTransfers(long fromBlock, long toBlock,
                                                       Collection<String> addresses,
                                                       Map<String, TokenDefinition> tokensByAssetId) {
-            assertEquals(List.of("addr"), addresses);
-            return List.of(new TransferEvent("asset-tx-1", "sender", "addr",
+            assertEquals(expectedAssetAddresses, addresses);
+            return List.of(new TransferEvent("asset-tx-1", "sender", expectedAssetAddresses.getFirst(),
                     new BigInteger("2500000"), 195, 7, "1984", "{}"));
         }
     }
 
     private static final class FakeRepository extends ChainJdbcRepository {
         private final List<String> creditedAccounts = new ArrayList<>();
+        private String address = "addr";
 
         FakeRepository() {
             super(null);
@@ -100,13 +128,23 @@ class PolkadotDepositScannerTest {
         }
 
         @Override
+        public Optional<ChainAsset> findAsset(String chain, String symbol) {
+            return Optional.of(ChainAsset.builder()
+                    .chain("DOT")
+                    .symbol("DOT")
+                    .decimals(12)
+                    .active(true)
+                    .build());
+        }
+
+        @Override
         public List<ChainAddressRecord> listChainAddresses(String chain, String assetSymbol) {
             String accountId = "DOT".equals(assetSymbol) ? "dot-account" : "usdc-account";
             return List.of(ChainAddressRecord.builder()
                     .chain("DOT")
                     .assetSymbol(assetSymbol)
                     .accountId(accountId)
-                    .address("addr")
+                    .address(address)
                     .walletRole("DEPOSIT")
                     .enabled(true)
                     .build());
