@@ -6,6 +6,7 @@
 - `chain_asset` 负责链原生资产
 - `token_config` 负责 token 运行时配置
 - `ledger_balance` 负责用户与系统余额
+- `contract_deployment_order` 负责 EVM 合约部署订单、手续费、交易和回执状态
 
 中文文档位于 [`docs/zh`](docs/zh)，英文文档位于 [`docs/en`](docs/en)。
 
@@ -18,7 +19,7 @@
 | 链族 | 链 | 运行模型 |
 |---|---|---|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH | UTXO、本地 regtest、2-of-3 签名 |
-| EVM | Ethereum, BNB, Polygon, Arbitrum, Optimism, Base, Avalanche | 账户模型、ERC20、Hardhat fork 测试 |
+| EVM | Ethereum, BNB, Polygon, Arbitrum, Optimism, Base, Avalanche, HyperEVM, Mantle, Linea, Scroll, Unichain | 账户模型、ERC20、ERC20/ERC721 合约部署、Hardhat fork 测试 |
 | TRON | TRON Nile/mainnet profile | 账户模型、TRC20 |
 | Ed25519 账户链 | SOL, TON, APTOS, SUI | 账户/token 服务、DB 测试、外部 devnet/testnet live 测试 |
 
@@ -79,6 +80,24 @@ export SW_WALLET_ADMIN_PASSWORD='<钱包后台配置密码>'
 生产环境中第三个 BIP32 私钥根应离线保存，wallet-server 只配置三组公钥。
 wallet-server 三组公钥配置在 `wallet_public_key`，不是 YAML/env。
 
+## EVM 合约部署
+
+钱包用户可以在已启用的 EVM 系列链上部署合约。后端不接收任意 Solidity
+源码，只开放固定的安全模板和参数：
+
+- `TokDouERC20`：基于 OpenZeppelin 风格的 ERC20，支持 owner、cap、pause、
+  burn、permit、decimals、initial supply、max supply 和可选 owner mint。
+- `TokDouERC721`：基于 OpenZeppelin 风格的 ERC721，支持 owner、enumerable、
+  URI storage、pause、burn、owner mint、base URI 和 max supply。
+
+合约部署地址和普通充值地址隔离。用户选择链后，wallet-server 使用原有确定性
+派生规则生成地址，但写入 `wallet_role=CONTRACT_DEPLOYER`。用户自行给这个地址
+充值原生 gas 币，扫描任务可以给它入账；普通提现、普通资产列表和归集继续只处理
+`DEPOSIT` 地址。预览接口会校验参数、估算 gas，并同时检查账本余额和链上余额。
+部署成功后，交易、回执、手续费和状态写入 `contract_deployment_order`。
+
+部署出的合约不会自动写入 `token_config`，也不会自动进入钱包 token 列表。
+
 ## TokDou 前端接入
 
 `~/Desktop/surprising/tokdou` 的钱包页面已接入本项目接口：
@@ -98,6 +117,11 @@ wallet-server 三组公钥配置在 `wallet_public_key`，不是 YAML/env。
 | `POST /wallet/v1/admin/login` | 钱包后台配置登录，HTTP Basic Auth |
 | `GET /wallet/v1/admin/config` | 查询可管理配置表 |
 | `PATCH /wallet/v1/admin/config/{table}/{id}` | 白名单字段更新配置 |
+| `GET /wallet/v1/app/contracts/templates` | 查询支持部署的 EVM 链和 ERC20/ERC721 模板 |
+| `POST /wallet/v1/app/contracts/deployer-address` | 获取或生成用户合约部署地址 |
+| `POST /wallet/v1/app/contracts/preview` | 校验合约参数并估算部署 gas |
+| `POST /wallet/v1/app/contracts/deploy` | 签名并广播合约创建交易 |
+| `GET /wallet/v1/app/contracts/orders` | 查询用户合约部署记录 |
 
 后台配置账号密码来自 `SW_WALLET_ADMIN_USERNAME`、`SW_WALLET_ADMIN_PASSWORD`，生产环境必须覆盖默认值。
 
@@ -166,4 +190,5 @@ docs/db/                         数据库初始化脚本与历史备份
 evm-fork/                        Hardhat fork 运行环境，因脚本/测试引用保留在根目录
 infra/                           Docker 与 mock coin 基础设施
 scripts/                         Regtest 与测试辅助脚本，因测试引用保留在根目录
+tools/contract-compiler/          Solidity 固定模板编译工作区
 ```

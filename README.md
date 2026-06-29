@@ -11,6 +11,9 @@ configuration.
 
 - Wallet app APIs for registration, login, portfolio, deposit address, withdrawal,
   internal transfer, and non-production faucet flows.
+- EVM contract deployment APIs for wallet users, with fixed OpenZeppelin-style
+  ERC20/ERC721 templates, deployer-only derived addresses, gas balance checks,
+  preview, broadcast, and deployment-order tracking.
 - DB Asset Model: runtime behavior comes from `chain_profile`, `chain_rpc_node`,
   `chain_asset`, `token_config`, `wallet_system_config`, and `wallet_public_key`.
 - Multi-chain scanners normalize deposits into `deposit_record` and credit
@@ -76,7 +79,7 @@ target database.
 | Family | Chains | Asset/token model | Runtime notes |
 |---|---|---|---|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH | Native UTXO assets | 2-of-3 signing, local regtest support, external RPC by DB configuration |
-| EVM | ETH, BNB, POLYGON, ARBITRUM, OPTIMISM, BASE, AVAX_C, HYPEREVM, MANTLE, LINEA, SCROLL, UNICHAIN | Native gas asset plus ERC20 | Shared EVM scanner, signer, withdrawal, collection, and Hardhat fork tests |
+| EVM | ETH, BNB, POLYGON, ARBITRUM, OPTIMISM, BASE, AVAX_C, HYPEREVM, MANTLE, LINEA, SCROLL, UNICHAIN | Native gas asset plus ERC20, ERC20/ERC721 deployment templates | Shared EVM scanner, signer, withdrawal, collection, contract deployment, and Hardhat fork tests |
 | TRON | TRON | TRX plus TRC20 | Nile/testnet and mainnet profiles are DB-configured |
 | Solana | SOLANA | SOL plus SPL tokens | Uses Ed25519 derivation and SPL token account handling |
 | TON | TON | TON plus Jetton | Uses Ed25519 derivation and Jetton wallet resolution |
@@ -110,6 +113,7 @@ docs/db/surprising-wallet-init-pgsql.sql
 evm-fork/                          Hardhat fork runtime for EVM regression tests
 infra/                             local chain and service infrastructure
 scripts/                           regtest and integration-test helpers
+tools/contract-compiler/            Solidity template compiler workspace
 ```
 
 ## Runtime Model
@@ -127,11 +131,40 @@ selection is based on chain and asset metadata:
 | `wallet_system_config` | Global runtime switches and chain-specific operational settings |
 | `chain_scan_height` | Scanner checkpoints per chain/profile |
 | `ledger_balance` | User and system balances scoped by chain and asset symbol |
+| `contract_deployment_order` | EVM ERC20/ERC721 deployment preview, fee, tx, receipt, and status tracking |
 
 Before a new deployment scans deposits, set `chain_scan_height` deliberately. A
 fresh environment should usually start near the latest safe block. Move the
 checkpoint backward only for a known replay window; scanning from genesis can be
 slow and can exhaust public RPC quotas.
+
+## EVM Contract Deployment
+
+Wallet users can deploy contracts on enabled EVM-family chains without giving the
+backend arbitrary Solidity source code. The server exposes fixed, compiled
+templates under `backendservices/wallet-parent/wallet-server/src/main/resources/contracts/evm`:
+
+- `TokDouERC20`: OpenZeppelin-style ERC20 with owner, cap, pause, burn, permit,
+  configurable decimals, initial supply, max supply, and optional owner mint.
+- `TokDouERC721`: OpenZeppelin-style ERC721 with owner, enumerable tokens, URI
+  storage, pause, burn, owner mint, base URI, and max supply.
+
+The deployment flow is intentionally separated from normal wallet deposits:
+
+1. The user selects an EVM chain and requests a contract deployment address.
+2. wallet-server derives that address with the existing deterministic key path,
+   but stores it with `wallet_role=CONTRACT_DEPLOYER`.
+3. The user funds that address with the chain's native gas asset.
+4. Scanners can credit the address balance, while collection and normal
+   withdrawal flows continue to use only ordinary `DEPOSIT` addresses.
+5. The preview endpoint validates parameters, estimates gas, checks both ledger
+   and on-chain balance, and returns constructor arguments and source preview.
+6. The deploy endpoint signs and broadcasts the contract creation transaction,
+   then stores tx, receipt, fee, and status in `contract_deployment_order`.
+
+Contract deployment does not automatically add the deployed token to
+`token_config` or to the wallet asset list. Token-list onboarding should remain
+an explicit operational decision.
 
 ## Quick Start
 
@@ -199,6 +232,11 @@ online private roots.
 | `POST /wallet/v1/app/transfer` | Transfer inside the wallet system |
 | `POST /wallet/v1/app/test-faucet/doge` | Non-production DOGE regtest faucet |
 | `POST /wallet/v1/app/test-faucet/xmr` | Non-production XMR regtest faucet |
+| `GET /wallet/v1/app/contracts/templates` | List supported EVM deployment chains and ERC20/ERC721 templates |
+| `POST /wallet/v1/app/contracts/deployer-address` | Get or create a user contract-deployer address |
+| `POST /wallet/v1/app/contracts/preview` | Validate parameters and estimate deployment gas |
+| `POST /wallet/v1/app/contracts/deploy` | Sign and broadcast a contract creation transaction |
+| `GET /wallet/v1/app/contracts/orders` | List the user's contract deployment orders |
 | `GET /wallet/v1/dashboard` | Dashboard overview, docs, config snapshots, balances and records |
 | `GET /wallet/v1/admin/config` | Admin config table summary |
 | `PATCH /wallet/v1/admin/config/{table}/{id}` | Update allowlisted config fields |
