@@ -127,7 +127,7 @@ class WalletAppServiceTest {
 
     private static WalletAppService service(ChainJdbcRepository repository) {
         return new WalletAppService(null, repository, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     private static ChainAddressRecord nativeAddress(String chain, String symbol, String address) {

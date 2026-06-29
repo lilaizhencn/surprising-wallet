@@ -11,11 +11,9 @@ import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.chain.BlockchainRuntimeService;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import com.surprising.wallet.service.wallet.IWallet;
-import com.surprising.wallet.service.wallet.WalletContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -40,12 +38,10 @@ public class TransactionService {
     AddressService addressService;
 
     @Autowired
-    WalletContext walletContext;
+    BlockchainRuntimeService blockchainRuntimeService;
 
     @Autowired
     ChainJdbcRepository chainJdbcRepository;
-    @Autowired
-    AssetRoutingService assetRoutingService;
     @Autowired
     WalletRuntimeConfigService runtimeConfigService;
 
@@ -61,7 +57,7 @@ public class TransactionService {
     @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_COMMITTED)
     public void saveTransaction(TransactionDTO dto) {
         log.info("saveTransaction dto: {} begin", dto.getTxId());
-        RuntimeAsset currency = assetRoutingService.runtimeAsset(dto.getCurrency());
+        RuntimeAsset currency = blockchainRuntimeService.runtimeAsset(dto.getCurrency());
         // Wallet app deposit addresses currently use biz=0; only hot/internal addresses are skipped.
         if (BizEnum.INTERNAL.getIndex() == dto.getBiz()
                 && isInternalAddress(dto, currency)) {
@@ -70,8 +66,7 @@ public class TransactionService {
         }
         runtimeConfigService.requireTaskEnabled(chainName(currency), WalletRuntimeConfigService.TASK_SCAN,
                 "legacy saveTransaction");
-        long requiredConfirmations =
-                walletContext.getWallet(currency).getDepositConfirmationThreshold();
+        long requiredConfirmations = blockchainRuntimeService.depositConfirmationThreshold(currency);
         if (dto.getConfirmNum() != null && dto.getConfirmNum() >= requiredConfirmations) {
             creditDepositIfNeeded(dto, currency, requiredConfirmations);
         }
@@ -90,7 +85,7 @@ public class TransactionService {
     public boolean withdraw(WithdrawRecord record) {
         log.info("提现操作 开始 提现id:{}", record.getWithdrawId());
 
-        RuntimeAsset currency = assetRoutingService.runtimeAsset(record.getCurrency());
+        RuntimeAsset currency = blockchainRuntimeService.runtimeAsset(record.getCurrency());
         runtimeConfigService.requireTaskEnabled(chainName(currency), WalletRuntimeConfigService.TASK_WITHDRAW,
                 "legacy withdraw");
         if (isUnifiedBitcoinLike(currency)) {
@@ -164,9 +159,7 @@ public class TransactionService {
                     currency.getName(), transaction.getId(), persisted.get().getTxId());
             return true;
         }
-        IWallet wallet = walletContext.getWallet(currency);
-
-        String txId = wallet.sendRawTransaction(transaction);
+        String txId = blockchainRuntimeService.broadcastSignedTransaction(currency, transaction);
 
         if (!StringUtils.hasText(txId)) {
             log.error("广播签名后的交易 广播失败 币种id:{} 提现信息:{}", currency.getName(), transaction);
@@ -319,11 +312,11 @@ public class TransactionService {
     }
 
     private boolean isUnifiedBitcoinLike(RuntimeAsset currency) {
-        return assetRoutingService.isBitcoinLikeRuntimeCurrency(currency);
+        return blockchainRuntimeService.isBitcoinLikeRuntime(currency);
     }
 
     private String chainName(RuntimeAsset currency) {
-        return assetRoutingService.requireChainForRuntimeCurrencyId(currency.getIndex());
+        return blockchainRuntimeService.chainName(currency);
     }
 
     private RuntimeAsset transactionAsset(WithdrawTransaction transaction) {
@@ -333,7 +326,7 @@ public class TransactionService {
                 && transaction.getBip44CoinType() != null) {
             return RuntimeAsset.fromTransaction(transaction);
         }
-        return assetRoutingService.runtimeAsset(transaction.getCurrency());
+        return blockchainRuntimeService.runtimeAsset(transaction.getCurrency());
     }
 
     private static class UtxoKey {

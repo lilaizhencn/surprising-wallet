@@ -3,11 +3,10 @@ package com.surprising.wallet.jobs.deposit;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.BestBlockHeight;
-import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.chain.BlockchainRuntimeService;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.TransactionService;
-import com.surprising.wallet.service.wallet.AbstractWallet;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.ObjectUtils;
@@ -22,30 +21,30 @@ import java.util.Optional;
  */
 @Slf4j
 abstract public class AbstractScanBlockJob {
-    protected AbstractWallet wallet;
+    protected RuntimeAsset currency;
     @Autowired
     protected TransactionService txService;
     @Autowired
     ChainJdbcRepository chainJdbcRepository;
     @Autowired
-    AssetRoutingService assetRoutingService;
+    BlockchainRuntimeService blockchainRuntimeService;
     @Autowired
     WalletRuntimeConfigService runtimeConfigService;
 
     public void execute() {
 
-        if (!isScanEnabled(wallet.getCurrency())) {
-            log.warn("{} scan skipped: DB scan switch disabled", wallet.getCurrency().getName());
+        if (!isScanEnabled(requireCurrency())) {
+            log.warn("{} scan skipped: DB scan switch disabled", requireCurrency().getName());
             return;
         }
-        log.info("扫描 {} 交易 开始", wallet.getCurrency().getName());
+        log.info("扫描 {} 交易 开始", requireCurrency().getName());
         Long bestHeight = null;
         try {
             //先更新数据库中已有的交易的确认数
-            wallet.updateTXConfirmation(wallet.getCurrency());
+            blockchainRuntimeService.updateTransactionConfirmations(requireCurrency());
 
             //查询链上的最新区块高度
-            bestHeight = wallet.getBestHeight();
+            bestHeight = blockchainRuntimeService.bestHeight(requireCurrency());
 
             //查询数据库中已经同步的区块高度
             BestBlockHeight storedHeight = getDbBestBlockHeight();
@@ -58,31 +57,31 @@ abstract public class AbstractScanBlockJob {
                     return;
                 }
             }
-            long configuredStartHeight = runtimeConfigService.scanStartHeight(wallet.getCurrency());
+            long configuredStartHeight = runtimeConfigService.scanStartHeight(requireCurrency());
             if (storedHeight.getHeight() <= 0 && configuredStartHeight <= 0) {
                 log.info("{} scan start-height is 0, initializing DB height to current best height {}",
-                        wallet.getCurrency().getName(), bestHeight);
+                        requireCurrency().getName(), bestHeight);
                 updateStoreHeight(bestHeight, storedHeight);
                 return;
             }
 
             if (storedHeight.getHeight() > bestHeight) {
                 log.warn("{} 数据库高度 {} 高于链上高度 {},跳过本次扫描",
-                        wallet.getCurrency().getName(), storedHeight.getHeight(), bestHeight);
+                        requireCurrency().getName(), storedHeight.getHeight(), bestHeight);
                 return;
             }
             if (storedHeight.getHeight().equals(bestHeight)) {
-                log.info("{} 已同步到链上最新高度 {}", wallet.getCurrency().getName(), bestHeight);
+                log.info("{} 已同步到链上最新高度 {}", requireCurrency().getName(), bestHeight);
                 return;
             }
 
             //循环扫描某个阶段的区块
-            long scanBegin = isDatabaseDrivenUtxo(wallet.getCurrency())
+            long scanBegin = isDatabaseDrivenUtxo(requireCurrency())
                     ? Math.max(0L, storedHeight.getHeight() + 1L)
                     : Math.max(0L, storedHeight.getHeight()
-                            - wallet.getDepositConfirmationThreshold());
+                            - blockchainRuntimeService.depositConfirmationThreshold(requireCurrency()));
             long scanEnd = bestHeight;
-            long maxBlocksPerRun = runtimeConfigService.scanMaxBlocksPerRun(wallet.getCurrency());
+            long maxBlocksPerRun = runtimeConfigService.scanMaxBlocksPerRun(requireCurrency());
             if (maxBlocksPerRun > 0) {
                 scanEnd = Math.min(scanEnd, scanBegin + maxBlocksPerRun - 1L);
             }
@@ -90,7 +89,8 @@ abstract public class AbstractScanBlockJob {
             for (long begin = scanBegin; begin <= scanEnd; begin++) {
 
                 //具体扫描区块处理逻辑
-                List<TransactionDTO> transactions = wallet.findRelatedTxs(begin);
+                List<TransactionDTO> transactions =
+                        blockchainRuntimeService.findRelatedTransactions(requireCurrency(), begin);
 
                 //当前区块没有交易数据 进入下一区块
                 if (transactions == null) {
@@ -110,16 +110,23 @@ abstract public class AbstractScanBlockJob {
             bestHeight = lastScannedHeight;
 
             //更新币种余额
-            wallet.updateTotalCurrencyBalance();
+            blockchainRuntimeService.updateTotalBalance(requireCurrency());
 
         } catch (Throwable e) {
-            log.info("扫描 {} 交易高度异常 当前高度:{} error", wallet.getCurrency().getName(), bestHeight, e);
+            log.info("扫描 {} 交易高度异常 当前高度:{} error", requireCurrency().getName(), bestHeight, e);
         }
-        log.info("扫描 {} 交易高度结束 当前高度:{}", wallet.getCurrency().getName(), bestHeight);
+        log.info("扫描 {} 交易高度结束 当前高度:{}", requireCurrency().getName(), bestHeight);
     }
 
     private boolean isScanEnabled(RuntimeAsset currency) {
         return runtimeConfigService.isTaskEnabled(currency, WalletRuntimeConfigService.TASK_SCAN);
+    }
+
+    protected RuntimeAsset requireCurrency() {
+        if (currency == null) {
+            throw new IllegalStateException("scan job runtime currency is not configured");
+        }
+        return currency;
     }
 
     /**
@@ -131,24 +138,24 @@ abstract public class AbstractScanBlockJob {
     protected void updateStoreHeight(Long bestHeight, BestBlockHeight storedHeight) {
         storedHeight.setHeight(bestHeight);
         storedHeight.setUpdateDate(Date.from(Instant.now()));
-        if (isDatabaseDrivenUtxo(wallet.getCurrency())) {
-            String chain = chainName(wallet.getCurrency());
+        if (isDatabaseDrivenUtxo(requireCurrency())) {
+            String chain = chainName(requireCurrency());
             // UTXO confirmations are refreshed from stored transactions; this checkpoint is the last scanned block.
             long safeHeight = Math.max(0L, bestHeight);
             chainJdbcRepository.updateScanHeight(
-                    chain, scannerName(wallet.getCurrency()), bestHeight, safeHeight);
+                    chain, scannerName(requireCurrency()), bestHeight, safeHeight);
             return;
         }
         throw new IllegalStateException(
-                "legacy scan-height runtime is disabled for " + wallet.getCurrency().getName());
+                "legacy scan-height runtime is disabled for " + requireCurrency().getName());
     }
 
     /**
      * 查询数据库中已经扫描到的高度
      */
     protected BestBlockHeight getDbBestBlockHeight() {
-        if (isDatabaseDrivenUtxo(wallet.getCurrency())) {
-            RuntimeAsset currency = wallet.getCurrency();
+        if (isDatabaseDrivenUtxo(requireCurrency())) {
+            RuntimeAsset currency = requireCurrency();
             String chain = chainName(currency);
             Optional<Long> scanHeight =
                     chainJdbcRepository.findScanSafeHeight(chain, scannerName(currency));
@@ -158,7 +165,7 @@ abstract public class AbstractScanBlockJob {
             return null;
         }
         throw new IllegalStateException(
-                "legacy scan-height runtime is disabled for " + wallet.getCurrency().getName());
+                "legacy scan-height runtime is disabled for " + requireCurrency().getName());
     }
 
     /**
@@ -166,32 +173,32 @@ abstract public class AbstractScanBlockJob {
      */
     protected boolean initCurrencyBestHeight(BestBlockHeight storedHeight, Long bestHeight) {
         long initialHeight = bestHeight;
-        long configuredStartHeight = runtimeConfigService.scanStartHeight(wallet.getCurrency());
+        long configuredStartHeight = runtimeConfigService.scanStartHeight(requireCurrency());
         if (configuredStartHeight > 0) {
             initialHeight = Math.min(configuredStartHeight, bestHeight);
         }
         storedHeight.setHeight(initialHeight);
-        storedHeight.setCurrency(wallet.getCurrency().getIndex());
-        if (isDatabaseDrivenUtxo(wallet.getCurrency())) {
+        storedHeight.setCurrency(requireCurrency().getIndex());
+        if (isDatabaseDrivenUtxo(requireCurrency())) {
             chainJdbcRepository.updateScanHeight(
-                    chainName(wallet.getCurrency()), scannerName(wallet.getCurrency()),
+                    chainName(requireCurrency()), scannerName(requireCurrency()),
                     initialHeight, initialHeight);
             return true;
         }
         throw new IllegalStateException(
-                "legacy scan-height runtime is disabled for " + wallet.getCurrency().getName());
+                "legacy scan-height runtime is disabled for " + requireCurrency().getName());
     }
 
     private boolean isDatabaseDrivenUtxo(RuntimeAsset currency) {
-        return assetRoutingService.isBitcoinLikeRuntimeCurrency(currency);
+        return blockchainRuntimeService.isBitcoinLikeRuntime(currency);
     }
 
     private String chainName(RuntimeAsset currency) {
-        return assetRoutingService.requireChainForRuntimeCurrencyId(currency.getIndex());
+        return blockchainRuntimeService.chainName(currency);
     }
 
     private String scannerName(RuntimeAsset currency) {
-        return assetRoutingService.scannerName(currency.getIndex());
+        return blockchainRuntimeService.scannerName(currency);
     }
 
     private BestBlockHeight checkpoint(RuntimeAsset currency, Long height) {

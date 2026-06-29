@@ -8,14 +8,12 @@ import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.WalletPublicKey;
 import com.surprising.wallet.common.currency.BizEnum;
-import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.dto.AddressDto;
 import com.surprising.wallet.common.pojo.*;
-import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.chain.BlockchainRuntimeService;
+import com.surprising.wallet.service.chain.BlockchainRuntimeService.RuntimeChain;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import com.surprising.wallet.service.wallet.IWallet;
-import com.surprising.wallet.service.wallet.WalletContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,18 +33,15 @@ import java.util.stream.Collectors;
 )
 public class WalletController {
 
-    private final WalletContext context;
+    private final BlockchainRuntimeService blockchainRuntimeService;
     private final ChainJdbcRepository chainJdbcRepository;
-    private final AssetRoutingService assetRoutingService;
     private final WalletRuntimeConfigService runtimeConfigService;
 
-    public WalletController(WalletContext context,
+    public WalletController(BlockchainRuntimeService blockchainRuntimeService,
                             ChainJdbcRepository chainJdbcRepository,
-                            AssetRoutingService assetRoutingService,
                             WalletRuntimeConfigService runtimeConfigService) {
-        this.context = context;
+        this.blockchainRuntimeService = blockchainRuntimeService;
         this.chainJdbcRepository = chainJdbcRepository;
-        this.assetRoutingService = assetRoutingService;
         this.runtimeConfigService = runtimeConfigService;
     }
 
@@ -62,11 +57,9 @@ public class WalletController {
             if (!runtimeConfigService.isGlobalEnabled()) {
                 return ResultUtils.failure("项目总开关 global.all.enabled 已关闭，不能创建新的充值地址");
             }
-            RuntimeAsset coin = assetRoutingService.runtimeAssetByChain(chain);
             BizEnum.parseBiz(biz);
-            IWallet wallet = context.getWallet(coin);
 
-            Address address = wallet.genNewAddress(userId, biz);
+            Address address = blockchainRuntimeService.generateDepositAddress(chain, userId, biz);
             addressDto.setUserId(userId);
             addressDto.setBiz(biz);
             addressDto.setAddress(address.getAddress());
@@ -90,9 +83,7 @@ public class WalletController {
                                             @RequestParam(value = "address") String address) {
         JSONObject json = new JSONObject();
         try {
-            RuntimeAsset coin = assetRoutingService.runtimeAssetByChain(chain);
-            IWallet wallet = context.getWallet(coin);
-            boolean valid = wallet.checkAddress(address);
+            boolean valid = blockchainRuntimeService.checkAddress(chain, address);
             json.put("address", address);
             json.put("valid", valid);
         } catch (Throwable e) {
@@ -108,8 +99,8 @@ public class WalletController {
 
         JSONObject json = new JSONObject();
         try {
-            RuntimeAsset coin = assetRoutingService.runtimeAssetByChain(chain);
-            json.put("balance", chainJdbcRepository.sumLedgerTotalBalance(coin.chain(), coin.assetSymbol()));
+            RuntimeChain runtime = blockchainRuntimeService.requireRuntime(chain);
+            json.put("balance", chainJdbcRepository.sumLedgerTotalBalance(runtime.chain(), runtime.nativeSymbol()));
 
         } catch (Throwable e) {
             log.error("查询币种余额异常", e);
@@ -182,12 +173,11 @@ public class WalletController {
             @RequestParam(value = "chain", defaultValue = "BTC") String chainParam) {
         Map<String, Object> result = new HashMap<>();
         try {
-            RuntimeAsset coin = assetRoutingService.runtimeAssetByChain(chainParam);
+            RuntimeChain runtime = blockchainRuntimeService.requireRuntime(chainParam);
 
             // Default hot wallet address is fixed at userId=0, biz=0, index=0.
-            String chain = coin.chain();
-            String symbol = coin.assetSymbol();
-            RuntimeAsset finalCoin = coin;
+            String chain = runtime.chain();
+            String symbol = runtime.nativeSymbol();
             chainJdbcRepository.findChainAddress(
                             chain,
                             symbol,
@@ -202,14 +192,14 @@ public class WalletController {
                         result.put("scriptType", "P2WSH");
                         result.put("witnessScript", "");
                         result.put("publicKeys", "");
-                        result.put("currency", finalCoin.getName());
+                        result.put("currency", runtime.chain());
                     });
 
             // Balance
             result.put("balance", chainJdbcRepository.sumLedgerTotalBalance(chain, symbol));
 
             // Computed: derivation chain, witness script from 3 xpubs
-            result.put("network", "Bitcoin TestNet3");
+            result.put("network", runtime.network());
             result.put("scriptType", "P2WSH 2-of-3 Multisig");
         } catch (Exception e) {
             log.error("getHotWalletInfo error chain={}", chainParam, e);
@@ -225,9 +215,9 @@ public class WalletController {
             @RequestParam(value = "userId", required = false) Long userId,
             @RequestParam(value = "biz", required = false) Integer biz) {
         try {
-            RuntimeAsset coin = assetRoutingService.runtimeAssetByChain(chainParam);
-            String chain = coin.chain();
-            String symbol = coin.assetSymbol();
+            RuntimeChain runtime = blockchainRuntimeService.requireRuntime(chainParam);
+            String chain = runtime.chain();
+            String symbol = runtime.nativeSymbol();
             List<AddressDto> dtos = chainJdbcRepository.listChainAddresses(chain, symbol).stream()
                     .filter(record -> record.getUserId() != null && record.getUserId() > 0)
                     .filter(record -> userId == null || Objects.equals(record.getUserId(), userId))
@@ -249,19 +239,15 @@ public class WalletController {
             @RequestParam(value = "address") String address,
             @RequestParam(value = "chain") String chainParam) {
         try {
-            RuntimeAsset coin = assetRoutingService.runtimeAssetByChain(chainParam);
-            if (isUnifiedBitcoinLike(coin)) {
-                return ResultUtils.success(chainJdbcRepository.listUtxosByAddress(coin.chain(), address, 50));
+            RuntimeChain runtime = blockchainRuntimeService.requireRuntime(chainParam);
+            if (blockchainRuntimeService.isBitcoinLikeRuntime(runtime.chain())) {
+                return ResultUtils.success(chainJdbcRepository.listUtxosByAddress(runtime.chain(), address, 50));
             }
             return ResultUtils.failure("仅支持BTC/LTC/DOGE/BCH UTXO交易查询");
         } catch (Exception e) {
             log.error("getAddressTransactions error address={}", address, e);
             return ResultUtils.failure("获取交易列表失败");
         }
-    }
-
-    private boolean isUnifiedBitcoinLike(RuntimeAsset currency) {
-        return assetRoutingService.isBitcoinLikeRuntimeCurrency(currency);
     }
 
     private AddressDto toAddressDto(ChainAddressRecord record) {

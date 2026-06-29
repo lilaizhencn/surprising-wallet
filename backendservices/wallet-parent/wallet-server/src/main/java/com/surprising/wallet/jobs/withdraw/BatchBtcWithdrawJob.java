@@ -16,7 +16,7 @@ public class BatchBtcWithdrawJob extends AbstractBatchWithdrawJob {
 
     @PostConstruct
     public void init() {
-        currency = assetRoutingService.runtimeAssetByChain("BTC");
+        currency = blockchainRuntimeService.runtimeAsset("BTC");
     }
 
     //    @Scheduled(cron = "1 1/2 * * * ?")

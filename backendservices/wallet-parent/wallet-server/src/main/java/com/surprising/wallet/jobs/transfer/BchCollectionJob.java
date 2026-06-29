@@ -12,7 +12,7 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashFeePolicy;
 import com.surprising.wallet.sdk.bitcoinj.core.P2shMultisigFeeCalculator;
-import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.chain.BlockchainRuntimeService;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
@@ -33,17 +33,17 @@ public class BchCollectionJob {
 
     private final AddressService addressService;
     private final ChainJdbcRepository repository;
-    private final AssetRoutingService assetRoutingService;
+    private final BlockchainRuntimeService blockchainRuntimeService;
     private final WalletRuntimeConfigService runtimeConfigService;
 
     public BchCollectionJob(
             AddressService addressService,
             ChainJdbcRepository repository,
-            AssetRoutingService assetRoutingService,
+            BlockchainRuntimeService blockchainRuntimeService,
             WalletRuntimeConfigService runtimeConfigService) {
         this.addressService = addressService;
         this.repository = repository;
-        this.assetRoutingService = assetRoutingService;
+        this.blockchainRuntimeService = blockchainRuntimeService;
         this.runtimeConfigService = runtimeConfigService;
     }
 
@@ -53,7 +53,7 @@ public class BchCollectionJob {
         if (!isEnabled()) {
             return;
         }
-        RuntimeAsset currency = assetRoutingService.runtimeAssetByChain(CHAIN);
+        RuntimeAsset currency = blockchainRuntimeService.runtimeAsset(CHAIN);
         BitcoinLikeChainProfile profile = profile();
         Address hotAddress = getHotAddress(currency);
         if (hotAddress == null) {

@@ -1,9 +1,8 @@
 package com.surprising.wallet.jobs.deposit;
-import com.surprising.wallet.service.wallet.impl.BchWallet;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.annotation.PostConstruct;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 @Component public class ScanBchBlockJob extends AbstractScanUtxoBlockJob{
-    @Autowired public ScanBchBlockJob(BchWallet wallet){this.wallet=wallet;}
+    @PostConstruct public void init(){currency=blockchainRuntimeService.runtimeAsset("BCH");}
     @Scheduled(cron="9/59 * * * * ?") @Override public void execute(){super.execute();}
 }

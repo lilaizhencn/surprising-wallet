@@ -6,7 +6,6 @@ import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,20 +23,20 @@ import java.util.List;
 @Service
 public class BitcoinLikeSettlementService {
     private final ChainJdbcRepository chainRepository;
-    private final AssetRoutingService assetRoutingService;
+    private final BlockchainRuntimeService blockchainRuntimeService;
 
     public BitcoinLikeSettlementService(ChainJdbcRepository chainRepository,
-                                        AssetRoutingService assetRoutingService) {
+                                        BlockchainRuntimeService blockchainRuntimeService) {
         this.chainRepository = chainRepository;
-        this.assetRoutingService = assetRoutingService;
+        this.blockchainRuntimeService = blockchainRuntimeService;
     }
 
     @Transactional(rollbackFor = Throwable.class)
     public void settleConfirmed(WithdrawTransaction transaction, String txId, RuntimeAsset currency) {
-        if (!assetRoutingService.isBitcoinLikeRuntimeCurrency(currency)) {
+        if (!blockchainRuntimeService.isBitcoinLikeRuntime(currency)) {
             throw new IllegalArgumentException("unsupported unified UTXO currency " + currency);
         }
-        String chain = assetRoutingService.requireChainForRuntimeCurrencyId(currency.getIndex());
+        String chain = blockchainRuntimeService.chainName(currency);
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
 
         transaction.setStatus(Constants.CONFIRM);

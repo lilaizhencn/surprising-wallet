@@ -1,7 +1,9 @@
 package com.surprising.wallet.service.wallet;
 
 import com.alibaba.fastjson.JSONObject;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.ChainAsset;
 import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.client.command.EthLikeCommand;
 import com.surprising.wallet.common.chain.RuntimeAsset;
@@ -12,7 +14,6 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.pojo.rpc.EthLikeBlock;
 import com.surprising.wallet.common.pojo.rpc.EthRawTransaction;
 import com.surprising.wallet.common.utils.EthereumUtil;
-import com.surprising.wallet.service.asset.AssetRoutingService;
 import com.surprising.wallet.service.config.PubKeyConfig;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
@@ -48,8 +49,6 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
     @Autowired
     protected AddressService addressService;
     @Autowired
-    protected AssetRoutingService assetRoutingService;
-    @Autowired
     protected ChainJdbcRepository chainJdbcRepository;
     private String withdrawAddress;
 
@@ -82,7 +81,29 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
     }
 
     protected RuntimeAsset loadRuntimeAssetByChain(String chain) {
-        return assetRoutingService.runtimeAssetByChain(chain);
+        AccountChainProfile profile = chainJdbcRepository.findProfileByChain(chain)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for chain " + chain));
+        ChainAsset asset = chainJdbcRepository.findAsset(profile.getChain(), profile.getNativeSymbol()).orElse(null);
+        return RuntimeAsset.fromProfile(profile, asset);
+    }
+
+    protected RuntimeAsset loadRuntimeAsset(Integer runtimeCurrencyId) {
+        if (runtimeCurrencyId == null) {
+            throw new IllegalStateException("missing runtime currency id");
+        }
+        AccountChainProfile profile = chainJdbcRepository.findProfileByRuntimeCurrencyId(runtimeCurrencyId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "missing enabled chain_profile for runtime_currency_id " + runtimeCurrencyId));
+        ChainAsset asset = chainJdbcRepository.findAsset(profile.getChain(), profile.getNativeSymbol()).orElse(null);
+        return RuntimeAsset.fromProfile(profile, asset);
+    }
+
+    protected List<RuntimeAsset> loadRuntimeTokenAssets(String chain) {
+        AccountChainProfile profile = chainJdbcRepository.findProfileByChain(chain)
+                .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for chain " + chain));
+        return chainJdbcRepository.listTokens(profile.getChain()).stream()
+                .map(token -> RuntimeAsset.fromToken(profile, token))
+                .toList();
     }
 
     /**
@@ -268,7 +289,7 @@ abstract public class AbstractEthLikeWallet extends com.surprising.wallet.servic
     }
 
     protected RuntimeAsset resolveRuntimeAsset(WithdrawRecord record) {
-        return assetRoutingService.runtimeAsset(record.getCurrency());
+        return loadRuntimeAsset(record.getCurrency());
     }
 
     protected WithdrawTransaction buildTransaction(WithdrawRecord record, String from, String type) {

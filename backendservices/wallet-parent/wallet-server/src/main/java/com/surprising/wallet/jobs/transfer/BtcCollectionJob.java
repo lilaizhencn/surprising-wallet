@@ -10,7 +10,7 @@ import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
-import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.chain.BlockchainRuntimeService;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.AddressService;
@@ -35,16 +35,16 @@ public class BtcCollectionJob {
 
     private final AddressService addressService;
     private final ChainJdbcRepository chainJdbcRepository;
-    private final AssetRoutingService assetRoutingService;
+    private final BlockchainRuntimeService blockchainRuntimeService;
     private final WalletRuntimeConfigService runtimeConfigService;
 
     public BtcCollectionJob(AddressService addressService,
                             ChainJdbcRepository chainJdbcRepository,
-                            AssetRoutingService assetRoutingService,
+                            BlockchainRuntimeService blockchainRuntimeService,
                             WalletRuntimeConfigService runtimeConfigService) {
         this.addressService = addressService;
         this.chainJdbcRepository = chainJdbcRepository;
-        this.assetRoutingService = assetRoutingService;
+        this.blockchainRuntimeService = blockchainRuntimeService;
         this.runtimeConfigService = runtimeConfigService;
     }
 
@@ -54,7 +54,7 @@ public class BtcCollectionJob {
         if (!isEnabled()) {
             return;
         }
-        RuntimeAsset currency = assetRoutingService.runtimeAssetByChain(CHAIN);
+        RuntimeAsset currency = blockchainRuntimeService.runtimeAsset(CHAIN);
         Address hotAddress = getHotAddress(currency);
         if (hotAddress == null) {
             log.warn("BTC归集跳过: 未找到热提地址 userId={} biz={} index={}",

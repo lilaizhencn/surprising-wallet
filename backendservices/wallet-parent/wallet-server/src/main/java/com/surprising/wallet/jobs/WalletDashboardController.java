@@ -848,8 +848,7 @@ public class WalletDashboardController {
                 "WalletDashboardController exposes dashboard/admin APIs for TokDou.",
                 "ChainJdbcRepository centralizes DB asset/config/ledger operations.",
                 "HotWalletAddressService derives and validates each chain's default hot wallet at startup.",
-                "AssetRoutingService maps chain/native/token metadata into internal runtime assets.",
-                "WalletContext selects the chain wallet implementation.",
+                "BlockchainRuntimeService selects the chain adapter and keeps legacy wallet access behind a bridge.",
                 "Signing transactions are created by wallet-server and signed by wallet-sig1/wallet-sig2."
         ));
         docs.put("regtestAndForkPrinciple", List.of(

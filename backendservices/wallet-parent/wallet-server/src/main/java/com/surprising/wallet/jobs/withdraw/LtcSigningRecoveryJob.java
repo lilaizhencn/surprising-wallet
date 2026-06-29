@@ -5,7 +5,7 @@ import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.chain.BlockchainRuntimeService;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -20,16 +20,16 @@ import org.springframework.stereotype.Component;
 @Component
 public class LtcSigningRecoveryJob {
     private final ChainJdbcRepository repository;
-    private final AssetRoutingService assetRoutingService;
+    private final BlockchainRuntimeService blockchainRuntimeService;
     private final WalletRuntimeConfigService runtimeConfigService;
 
     private static final long STALE_SECONDS = 60;
 
     public LtcSigningRecoveryJob(ChainJdbcRepository repository,
-                                 AssetRoutingService assetRoutingService,
+                                 BlockchainRuntimeService blockchainRuntimeService,
                                  WalletRuntimeConfigService runtimeConfigService) {
         this.repository = repository;
-        this.assetRoutingService = assetRoutingService;
+        this.blockchainRuntimeService = blockchainRuntimeService;
         this.runtimeConfigService = runtimeConfigService;
     }
 
@@ -38,7 +38,7 @@ public class LtcSigningRecoveryJob {
         if (!isEnabled()) {
             return;
         }
-        RuntimeAsset currency = assetRoutingService.runtimeAssetByChain("LTC");
+        RuntimeAsset currency = blockchainRuntimeService.runtimeAsset("LTC");
         for (WithdrawTransaction transaction : repository.findStaleBitcoinLikeSigningTransactions(
                 currency, STALE_SECONDS)) {
             if (!repository.claimBitcoinLikeSigningRecovery(

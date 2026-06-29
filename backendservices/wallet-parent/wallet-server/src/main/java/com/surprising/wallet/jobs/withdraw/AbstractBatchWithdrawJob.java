@@ -13,11 +13,9 @@ import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
-import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.chain.BlockchainRuntimeService;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import com.surprising.wallet.service.wallet.IWallet;
-import com.surprising.wallet.service.wallet.WalletContext;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,11 +33,9 @@ abstract public class AbstractBatchWithdrawJob {
     private final int COUNT = 10;
     public RuntimeAsset currency;
     @Autowired
-    WalletContext walletContext;
+    BlockchainRuntimeService blockchainRuntimeService;
     @Autowired
     ChainJdbcRepository chainJdbcRepository;
-    @Autowired
-    protected AssetRoutingService assetRoutingService;
     @Autowired
     protected WalletRuntimeConfigService runtimeConfigService;
 
@@ -108,8 +104,7 @@ abstract public class AbstractBatchWithdrawJob {
         }
         Integer redisFeeRate = REDIS.getInt(Constants.WALLET_FEE + currency.getIndex());
         int feeRate = redisFeeRate == null || redisFeeRate <= 0 ? defaultFeeRate() : redisFeeRate;
-        IWallet wallet = walletContext.getWallet(currency);
-        long depositConfirmationThreshold = wallet.getDepositConfirmationThreshold();
+        long depositConfirmationThreshold = blockchainRuntimeService.depositConfirmationThreshold(currency);
         int offset = 0;
 
         //选取utxo
@@ -161,8 +156,9 @@ abstract public class AbstractBatchWithdrawJob {
         signature.put("changeAddress", changeAddress.getAddress());
         signature.put("feeRate", feeRate);
         signature.put("totalAmount", totalAmount.toPlainString());
-        if (wallet.getDustThresholdAtomic() > 0) {
-            signature.put("dustThreshold", wallet.getDustThresholdAtomic());
+        long dustThreshold = blockchainRuntimeService.dustThresholdAtomic(currency);
+        if (dustThreshold > 0) {
+            signature.put("dustThreshold", dustThreshold);
         }
 
         transaction = WithdrawTransaction.builder()

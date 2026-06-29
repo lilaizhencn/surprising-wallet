@@ -13,7 +13,7 @@ import jakarta.annotation.PostConstruct;
 public class BatchLtcWithdrawJob extends AbstractBatchWithdrawJob {
     @PostConstruct
     public void init() {
-        currency = assetRoutingService.runtimeAssetByChain("LTC");
+        currency = blockchainRuntimeService.runtimeAsset("LTC");
     }
 
     @Scheduled(cron = "10/30 * * * * ?")

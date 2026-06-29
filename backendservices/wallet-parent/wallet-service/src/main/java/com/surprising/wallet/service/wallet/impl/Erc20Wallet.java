@@ -56,7 +56,7 @@ public class Erc20Wallet extends AbstractEthLikeWallet implements IWallet {
     super.setCommand(command);
     super.setWithdrawAddress("");
     mainCurrency = loadRuntimeAssetByChain("ETH");
-    trackedTokens = assetRoutingService.runtimeTokenAssets("ETH");
+    trackedTokens = loadRuntimeTokenAssets("ETH");
     currency = trackedTokens.stream()
             .filter(token -> token.sameAsset(RuntimeAsset.USDT))
             .findFirst()

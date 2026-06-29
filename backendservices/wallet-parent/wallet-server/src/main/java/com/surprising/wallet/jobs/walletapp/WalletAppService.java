@@ -4,13 +4,12 @@ import com.googlecode.jsonrpc4j.JsonRpcHttpClient;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.key.Ed25519DerivedKey;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.common.QrCodeUtil;
 import com.surprising.wallet.jobs.walletapp.WalletAuthService.WalletUser;
-import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.chain.BlockchainRuntimeService;
 import com.surprising.wallet.service.chain.aptos.AptosAddressService;
 import com.surprising.wallet.service.chain.cardano.CardanoKeyService;
 import com.surprising.wallet.service.chain.monero.MoneroAddressValidator;
@@ -27,9 +26,7 @@ import com.surprising.wallet.service.chain.xrp.XrpTransactionService;
 import com.surprising.wallet.service.config.ChainRpcNodeService;
 import com.surprising.wallet.service.config.PubKeyConfig;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import com.surprising.wallet.service.wallet.IWallet;
 import com.surprising.wallet.service.wallet.HotWalletAddressService;
-import com.surprising.wallet.service.wallet.WalletContext;
 import org.bitcoinj.crypto.ECKey;
 import org.ethereum.crypto.EthECKey;
 import org.spongycastle.util.encoders.Hex;
@@ -70,8 +67,7 @@ public class WalletAppService {
 
     private final JdbcTemplate jdbcTemplate;
     private final ChainJdbcRepository repository;
-    private final AssetRoutingService assetRoutingService;
-    private final WalletContext walletContext;
+    private final BlockchainRuntimeService blockchainRuntimeService;
     private final ChainRpcNodeService rpcNodeService;
     private final PubKeyConfig pubKeyConfig;
     private final SolanaAddressService solanaAddressService;
@@ -93,8 +89,7 @@ public class WalletAppService {
 
     public WalletAppService(JdbcTemplate jdbcTemplate,
                             ChainJdbcRepository repository,
-                            AssetRoutingService assetRoutingService,
-                            WalletContext walletContext,
+                            BlockchainRuntimeService blockchainRuntimeService,
                             ChainRpcNodeService rpcNodeService,
                             PubKeyConfig pubKeyConfig,
                             SolanaAddressService solanaAddressService,
@@ -112,8 +107,7 @@ public class WalletAppService {
                             HotWalletAddressService hotWalletAddressService) {
         this.jdbcTemplate = jdbcTemplate;
         this.repository = repository;
-        this.assetRoutingService = assetRoutingService;
-        this.walletContext = walletContext;
+        this.blockchainRuntimeService = blockchainRuntimeService;
         this.rpcNodeService = rpcNodeService;
         this.pubKeyConfig = pubKeyConfig;
         this.solanaAddressService = solanaAddressService;
@@ -476,13 +470,7 @@ public class WalletAppService {
             return createCardanoAddress(userId, biz, index, asset);
         }
         if (chainType.isUtxo()) {
-            RuntimeAsset runtimeAsset = assetRoutingService.runtimeAssetByChain(asset.chain());
-            IWallet wallet = walletContext.getWallet(runtimeAsset);
-            if (wallet == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "wallet runtime is not available for " + asset.chain());
-            }
-            Address address = wallet.genNewAddress(userId, biz);
+            Address address = blockchainRuntimeService.generateDepositAddress(asset.chain(), userId, biz);
             return repository.findChainAddress(asset.chain(), asset.symbol(), userId, biz,
                     address.getIndex(), WALLET_ROLE_DEPOSIT).orElseThrow();
         }

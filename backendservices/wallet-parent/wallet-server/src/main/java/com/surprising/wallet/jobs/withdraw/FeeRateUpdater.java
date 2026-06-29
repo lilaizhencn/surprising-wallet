@@ -3,7 +3,7 @@ package com.surprising.wallet.jobs.withdraw;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.service.asset.AssetRoutingService;
+import com.surprising.wallet.service.chain.BlockchainRuntimeService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -49,7 +49,7 @@ public class FeeRateUpdater {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
     @Autowired
-    private AssetRoutingService assetRoutingService;
+    private BlockchainRuntimeService blockchainRuntimeService;
 
     /**
      * 每 2 分钟更新一次费率
@@ -118,6 +118,6 @@ public class FeeRateUpdater {
     }
 
     private RuntimeAsset btc() {
-        return assetRoutingService.runtimeAssetByChain("BTC");
+        return blockchainRuntimeService.runtimeAsset("BTC");
     }
 }

@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class BatchDogeWithdrawJob extends AbstractBatchWithdrawJob {
     @PostConstruct
     public void init() {
-        currency = assetRoutingService.runtimeAssetByChain("DOGE");
+        currency = blockchainRuntimeService.runtimeAsset("DOGE");
     }
 
     @Scheduled(cron = "12/30 * * * * ?")

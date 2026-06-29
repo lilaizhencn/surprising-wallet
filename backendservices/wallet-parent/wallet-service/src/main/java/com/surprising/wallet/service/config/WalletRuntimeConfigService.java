@@ -50,14 +50,22 @@ public class WalletRuntimeConfigService {
     }
 
     public long scanStartHeight(RuntimeAsset asset) {
-        return repository.findProfileByChain(asset.chain())
+        return scanStartHeight(asset.chain());
+    }
+
+    public long scanStartHeight(String chain) {
+        return repository.findProfileByChain(chain)
                 .map(AccountChainProfile::getScanStartHeight)
                 .filter(value -> value > 0)
                 .orElse(0L);
     }
 
     public long scanMaxBlocksPerRun(RuntimeAsset asset) {
-        return repository.findProfileByChain(asset.chain())
+        return scanMaxBlocksPerRun(asset.chain());
+    }
+
+    public long scanMaxBlocksPerRun(String chain) {
+        return repository.findProfileByChain(chain)
                 .map(AccountChainProfile::getScanMaxBlocksPerRun)
                 .filter(value -> value > 0)
                 .orElse(0L);

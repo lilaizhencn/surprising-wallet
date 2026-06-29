@@ -42,7 +42,7 @@ public class EthWallet extends AbstractEthLikeWallet implements IWallet {
     @Override
     public void updateTXConfirmation(RuntimeAsset currency) {
         super.updateTXConfirmation(getCurrency());
-        assetRoutingService.runtimeTokenAssets("ETH").parallelStream().forEach(super::updateTXConfirmation);
+        loadRuntimeTokenAssets("ETH").parallelStream().forEach(super::updateTXConfirmation);
     }
 
     @Override
