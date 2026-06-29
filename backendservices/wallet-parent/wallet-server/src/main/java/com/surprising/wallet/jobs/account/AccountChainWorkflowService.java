@@ -78,6 +78,7 @@ public class AccountChainWorkflowService {
             "XMR",
             "HYPERCORE",
             "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C", "HYPEREVM",
+            "MANTLE", "LINEA", "SCROLL",
             "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
 
     private final ChainJdbcRepository repository;

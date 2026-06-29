@@ -424,7 +424,7 @@ public class WalletAppService {
             return existing;
         }
         if (asset.nativeAsset()) {
-            return createNativeAddress(userId, biz, asset, existing == null ? null : existing.getAddressIndex());
+            return createNativeAddress(userId, biz, asset, preferredNativeAddressIndex(existing, forceNew));
         }
         if (usesMirroredNativeTokenAddress(asset.chain())) {
             AssetMeta nativeAsset = requireAsset(asset.chain(), asset.nativeSymbol());
@@ -461,6 +461,10 @@ public class WalletAppService {
 
     private ChainAddressRecord createNativeAddress(long userId, int biz, AssetMeta asset) {
         return createNativeAddress(userId, biz, asset, null);
+    }
+
+    static Long preferredNativeAddressIndex(ChainAddressRecord existing, boolean forceNew) {
+        return forceNew || existing == null ? null : existing.getAddressIndex();
     }
 
     private ChainAddressRecord createNativeAddress(long userId, int biz, AssetMeta asset, Long preferredIndex) {

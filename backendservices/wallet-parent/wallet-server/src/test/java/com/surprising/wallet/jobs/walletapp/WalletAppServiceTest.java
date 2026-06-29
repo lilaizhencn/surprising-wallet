@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -63,6 +64,15 @@ class WalletAppServiceTest {
         assertEquals("PREPARED_NATIVE_ACCOUNT", WalletAppService.tokenAddressStrategy("XRP", false));
         assertEquals("PREPARED_TOKEN_ACCOUNT", WalletAppService.tokenAddressStrategy("SOLANA", false));
         assertEquals("MIRROR_NATIVE_ACCOUNT", WalletAppService.tokenAddressStrategy("HYPERCORE", false));
+    }
+
+    @Test
+    void forcedNativeDepositAddressDoesNotReuseExistingIndex() {
+        ChainAddressRecord existing = nativeAddress("MANTLE", "MNT", "0xExisting");
+
+        assertEquals(existing.getAddressIndex(), WalletAppService.preferredNativeAddressIndex(existing, false));
+        assertNull(WalletAppService.preferredNativeAddressIndex(existing, true));
+        assertNull(WalletAppService.preferredNativeAddressIndex(null, false));
     }
 
     @Test

@@ -41,7 +41,7 @@
 | 链族 | 链 | 本地测试支持 | live/testnet 支持 |
 |---|---|---|---|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH | Docker regtest 节点 | 外部 RPC 配置 |
-| EVM | ETH, BNB, Polygon, Arbitrum, Optimism, Base, Avalanche, HyperEVM | Hardhat fork | Sepolia、HyperEVM testnet 和其他配置测试网 |
+| EVM | ETH, BNB, Polygon, Arbitrum, Optimism, Base, Avalanche, HyperEVM, Mantle, Linea, Scroll | Hardhat fork | Sepolia、HyperEVM testnet、Mantle Sepolia、Linea Sepolia、Scroll Sepolia 和其他配置测试网 |
 | TRON | TRON | DB 测试 | Nile live flow |
 | Solana | SOL, SPL token | DB 测试 | Devnet live flow |
 | TON | TON, Jetton | DB 测试 | Testnet 连通性和 funded live flow |
