@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 @RequiredArgsConstructor
@@ -34,11 +35,23 @@ public class NearDepositScanner {
 
     private final NearRpcClient rpc;
     private final ChainJdbcRepository repository;
+    private final AtomicBoolean scanning = new AtomicBoolean(false);
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
 
     public List<DepositEvent> scanAndCredit() {
+        if (!scanning.compareAndSet(false, true)) {
+            return List.of();
+        }
+        try {
+            return doScanAndCredit();
+        } finally {
+            scanning.set(false);
+        }
+    }
+
+    private List<DepositEvent> doScanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "near scanAndCredit");
         AccountChainProfile profile = profile();
         int requiredConfirmations = requiredConfirmations(profile);
@@ -58,6 +71,7 @@ public class NearDepositScanner {
             for (long height = start; height <= end; height++) {
                 scanBlock(height, latest, requiredConfirmations,
                         nativeAddresses, tokensByContract, tokenAddresses, events);
+                repository.updateScanHeight(CHAIN, SCANNER, latest, height);
             }
         }
         repository.updateScanHeight(CHAIN, SCANNER, latest, end);
@@ -69,7 +83,15 @@ public class NearDepositScanner {
                            Map<String, TokenDefinition> tokensByContract,
                            Map<String, Map<String, ChainAddressRecord>> tokenAddresses,
                            List<DepositEvent> events) {
-        JsonNode block = rpc.block(height);
+        JsonNode block;
+        try {
+            block = rpc.block(height);
+        } catch (IllegalStateException e) {
+            if (NearRpcClient.isUnknownBlockError(e.getMessage())) {
+                return;
+            }
+            throw e;
+        }
         for (JsonNode chunkHeader : block.path("chunks")) {
             if (EMPTY_MERKLE_ROOT.equals(chunkHeader.path("tx_root").asText())) {
                 continue;

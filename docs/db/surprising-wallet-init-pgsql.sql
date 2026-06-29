@@ -2700,6 +2700,90 @@ UPDATE "public"."chain_asset"
    SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
  WHERE "chain" = 'XRP' AND "symbol" = 'USDC';
 
+-- HyperEVM is an EVM-compatible chain; HyperCore exchange-account flows are intentionally
+-- not modeled here.
+INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
+                                    "native_asset", "active", "min_transfer", "min_withdraw",
+                                    "created_at", "updated_at")
+VALUES
+    ('HYPEREVM', 'HYPE', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now())
+ON CONFLICT ("chain", "symbol") DO UPDATE SET
+    "asset_kind" = EXCLUDED."asset_kind",
+    "contract_address" = EXCLUDED."contract_address",
+    "decimals" = EXCLUDED."decimals",
+    "native_asset" = EXCLUDED."native_asset",
+    "active" = EXCLUDED."active",
+    "min_transfer" = EXCLUDED."min_transfer",
+    "min_withdraw" = EXCLUDED."min_withdraw",
+    "updated_at" = now();
+
+INSERT INTO "public"."chain_profile" ("chain", "network", "family", "runtime_currency_id", "bip44_coin_type",
+                                      "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations",
+                                      "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled",
+                                      "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size",
+                                      "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled",
+                                      "scan_start_height", "scan_max_blocks_per_run")
+VALUES
+    ('HYPEREVM', 'testnet', 'evm', 9004, 60, 'HYPE',
+     'https://rpc.hyperliquid-testnet.xyz/evm', 'https://app.hyperliquid-testnet.xyz/explorer/tx/',
+     2, 2, 1, 0, true, now(), now(), 998, 'legacy-gas-price', 40,
+     true, true, true, true, 0, 40),
+    ('HYPEREVM', 'mainnet', 'evm', 9004, 60, 'HYPE',
+     'https://rpc.hyperliquid.xyz/evm', 'https://app.hyperliquid.xyz/explorer/tx/',
+     6, 6, 1, 0, false, now(), now(), 999, 'legacy-gas-price', 40,
+     false, false, false, false, 0, 40)
+ON CONFLICT ("chain", "network") DO UPDATE SET
+    "family" = EXCLUDED."family",
+    "runtime_currency_id" = EXCLUDED."runtime_currency_id",
+    "bip44_coin_type" = EXCLUDED."bip44_coin_type",
+    "native_symbol" = EXCLUDED."native_symbol",
+    "rpc_url" = EXCLUDED."rpc_url",
+    "explorer_url" = EXCLUDED."explorer_url",
+    "deposit_confirmations" = EXCLUDED."deposit_confirmations",
+    "withdraw_confirmations" = EXCLUDED."withdraw_confirmations",
+    "default_fee_rate" = EXCLUDED."default_fee_rate",
+    "dust_threshold" = EXCLUDED."dust_threshold",
+    "enabled" = EXCLUDED."enabled",
+    "updated_at" = now(),
+    "chain_id" = EXCLUDED."chain_id",
+    "gas_policy" = EXCLUDED."gas_policy",
+    "scan_batch_size" = EXCLUDED."scan_batch_size",
+    "scan_enabled" = EXCLUDED."scan_enabled",
+    "withdraw_enabled" = EXCLUDED."withdraw_enabled",
+    "collection_enabled" = EXCLUDED."collection_enabled",
+    "transfer_enabled" = EXCLUDED."transfer_enabled",
+    "scan_start_height" = EXCLUDED."scan_start_height",
+    "scan_max_blocks_per_run" = EXCLUDED."scan_max_blocks_per_run";
+
+INSERT INTO "public"."chain_rpc_node" ("chain", "network", "environment", "node_label", "purpose",
+                                       "connection_type", "rpc_url", "auth_type", "auth_header_name",
+                                       "priority", "min_request_interval_ms", "enabled", "remark",
+                                       "created_at", "updated_at", "api_key")
+VALUES
+    ('HYPEREVM', 'testnet', 'dev', 'official-hyperevm-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.hyperliquid-testnet.xyz/evm', 'NONE', NULL, 10, 500, true,
+     'Official HyperEVM testnet JSON-RPC endpoint.',
+     now(), now(), NULL),
+    ('HYPEREVM', 'testnet', 'test2', 'official-hyperevm-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.hyperliquid-testnet.xyz/evm', 'NONE', NULL, 10, 500, true,
+     'test2 official HyperEVM testnet JSON-RPC endpoint.',
+     now(), now(), NULL),
+    ('HYPEREVM', 'mainnet', 'prod', 'official-hyperevm-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.hyperliquid.xyz/evm', 'NONE', NULL, 10, 1000, false,
+     'Production HyperEVM mainnet JSON-RPC endpoint. Keep disabled until mainnet launch checks, monitoring and funding are ready.',
+     now(), now(), NULL)
+ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
+    "connection_type" = EXCLUDED."connection_type",
+    "rpc_url" = EXCLUDED."rpc_url",
+    "auth_type" = EXCLUDED."auth_type",
+    "auth_header_name" = EXCLUDED."auth_header_name",
+    "api_key" = EXCLUDED."api_key",
+    "priority" = EXCLUDED."priority",
+    "min_request_interval_ms" = EXCLUDED."min_request_interval_ms",
+    "enabled" = EXCLUDED."enabled",
+    "remark" = EXCLUDED."remark",
+    "updated_at" = now();
+
 --
 -- New-chain placeholders: keep disabled until each chain adapter supports
 -- deterministic address, deposit scan, withdrawal confirmation and collection.

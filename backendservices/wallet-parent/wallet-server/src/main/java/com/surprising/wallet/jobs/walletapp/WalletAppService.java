@@ -46,6 +46,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URL;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -906,7 +907,8 @@ public class WalletAppService {
             }
             storageTxHash = nearTransactionService.storageDeposit(payer, token, record.getAddress(), minimum);
         }
-        boolean registeredAfter = nearTransactionService.tokenStorageRegistered(token, record.getAddress());
+        boolean registeredAfter = nearTransactionService.waitForTokenStorageRegistered(
+                token, record.getAddress(), Duration.ofSeconds(30));
         return new NearTokenPreparation(activatedAfter, registeredAfter, activatedBefore, registeredBefore,
                 activationAmount, activationTxHash, minimum, storageTxHash);
     }

@@ -28,6 +28,7 @@ public class NearTransactionService {
     private static final String SYMBOL = "NEAR";
     private static final int DECIMALS = 24;
     private static final long DEFAULT_FUNCTION_CALL_GAS = 30_000_000_000_000L;
+    private static final long TOKEN_TRANSFER_GAS = 15_000_000_000_000L;
     private static final BigInteger ONE_YOCTO = BigInteger.ONE;
 
     private final NearRpcClient rpc;
@@ -84,7 +85,7 @@ public class NearTransactionService {
         args.put("receiver_id", toAccountId);
         args.put("amount", atomicAmount.toString());
         JsonNode result = sendFunctionCall(from, token.getContractAddress(), "ft_transfer",
-                jsonBytes(args), DEFAULT_FUNCTION_CALL_GAS, ONE_YOCTO);
+                jsonBytes(args), TOKEN_TRANSFER_GAS, ONE_YOCTO);
         String txHash = result.path("transaction").path("hash").asText();
         record(txHash, 0L, from.getAddress(), toAccountId, token.getSymbol(), amount,
                 gasBurnt(result), blockHeight(result), txSucceeded(result) ? "CONFIRMED" : "SENT",
@@ -197,10 +198,22 @@ public class NearTransactionService {
         if (minimum.signum() <= 0) {
             throw new IllegalStateException("NEAR token storage minimum is not configured by contract");
         }
-        storageDeposit(payer, token, accountId, minimum);
-        if (!tokenStorageRegistered(token, accountId)) {
+        String txHash = storageDeposit(payer, token, accountId, minimum);
+        requireSuccessfulConfirmation(txHash, payer.getAddress(), Duration.ofMinutes(2));
+        if (!waitForTokenStorageRegistered(token, accountId, Duration.ofSeconds(30))) {
             throw new IllegalStateException("NEAR token storage registration did not complete");
         }
+    }
+
+    public boolean waitForTokenStorageRegistered(TokenDefinition token, String accountId, Duration timeout) {
+        Instant deadline = Instant.now().plus(timeout);
+        while (Instant.now().isBefore(deadline)) {
+            if (tokenStorageRegistered(token, accountId)) {
+                return true;
+            }
+            sleep(750L);
+        }
+        return tokenStorageRegistered(token, accountId);
     }
 
     public boolean confirmCollection(AccountChainProfile profile, String collectionNo) {

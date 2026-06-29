@@ -2,7 +2,7 @@
 
 [English version](../en/evm-fork-testing.md)
 
-`evm-fork/` 目录包含 ETH、BNB、Polygon、Arbitrum、Optimism、Base 和 Avalanche C-Chain 回归测试使用的 Hardhat fork 环境。
+`evm-fork/` 目录包含 ETH、BNB、Polygon、Arbitrum、Optimism、Base、Avalanche C-Chain 和 HyperEVM 回归测试使用的 Hardhat fork 环境。
 
 该目录保留在仓库根目录，因为 `scripts/regtest/all-chain-regtest.sh` 和 `evm-fork/scripts/run-fork-regression.sh` 按固定路径解析它。
 
@@ -52,6 +52,7 @@ ARBITRUM
 OPTIMISM
 BASE
 AVAX_C
+HYPEREVM
 ```
 
 ## RPC 环境变量
@@ -60,6 +61,7 @@ AVAX_C
 export ETH_RPC_URL='https://...'
 export BNB_RPC_URL='https://...'
 export POLYGON_RPC_URL='https://...'
+export HYPEREVM_RPC_URL='https://...'
 export BNB_FORK_BLOCK='12345678'
 export POLYGON_FORK_BLOCK='12345678'
 ```

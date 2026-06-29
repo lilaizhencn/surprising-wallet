@@ -74,7 +74,7 @@ public class AccountChainWorkflowService {
     private static final BigDecimal TRX_SUN = new BigDecimal("1000000");
     private static final List<String> ACCOUNT_CHAIN_PRIORITY = List.of(
             "XMR",
-            "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C",
+            "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C", "HYPEREVM",
             "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
 
     private final ChainJdbcRepository repository;
@@ -757,7 +757,7 @@ public class AccountChainWorkflowService {
                 case "ADA" -> configured.max(new BigDecimal("0.3"));
                 case "DOT" -> configured.max(new BigDecimal("0.02"));
                 case "XMR" -> configured.max(new BigDecimal("0.003"));
-                case "NEAR" -> configured.max(new BigDecimal("0.001"));
+                case "NEAR" -> configured.max(new BigDecimal("3"));
                 case "SUI" -> configured.max(new BigDecimal("0.02"));
                 case "APTOS" -> configured.max(new BigDecimal("0.05"));
                 case "TRON" -> configured.max(new BigDecimal("1"));

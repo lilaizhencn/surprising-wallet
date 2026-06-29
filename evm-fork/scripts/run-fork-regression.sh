@@ -217,6 +217,10 @@ run_chain BASE ETH_BASE 84532 \
 run_chain AVAX_C AVAX_C 43113 \
   https://api.avax-test.network/ext/bc/C/rpc
 
+run_chain HYPEREVM HYPE 998 \
+  ${HYPEREVM_RPC_URL:+"${HYPEREVM_RPC_URL}"} \
+  https://rpc.hyperliquid-testnet.xyz/evm
+
 if [[ "${#BLOCKED_CHAINS[@]}" -gt 0 ]]; then
   echo "BLOCKED_CHAINS=${BLOCKED_CHAINS[*]}"
   if [[ "${REQUIRE_ALL_EVM_FORKS:-false}" == "true" ]]; then

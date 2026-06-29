@@ -2,7 +2,7 @@
 
 [中文版本](../zh/evm-fork-testing.md)
 
-The `evm-fork/` directory contains the Hardhat fork environment used for ETH, BNB, Polygon, Arbitrum, Optimism, Base, and Avalanche C-Chain regression tests.
+The `evm-fork/` directory contains the Hardhat fork environment used for ETH, BNB, Polygon, Arbitrum, Optimism, Base, Avalanche C-Chain, and HyperEVM regression tests.
 
 The directory stays at the repository root because `scripts/regtest/all-chain-regtest.sh` and `evm-fork/scripts/run-fork-regression.sh` resolve it by path.
 
@@ -52,6 +52,7 @@ ARBITRUM
 OPTIMISM
 BASE
 AVAX_C
+HYPEREVM
 ```
 
 ## RPC Environment Variables
@@ -60,6 +61,7 @@ AVAX_C
 export ETH_RPC_URL='https://...'
 export BNB_RPC_URL='https://...'
 export POLYGON_RPC_URL='https://...'
+export HYPEREVM_RPC_URL='https://...'
 export BNB_FORK_BLOCK='12345678'
 export POLYGON_FORK_BLOCK='12345678'
 ```

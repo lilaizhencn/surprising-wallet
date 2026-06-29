@@ -17,6 +17,7 @@ public enum ChainType {
     OPTIMISM("evm", "account"),
     BASE("evm", "account"),
     AVAX_C("evm", "account"),
+    HYPEREVM("evm", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),
     SOLANA("solana", "account"),

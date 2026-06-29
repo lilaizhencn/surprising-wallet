@@ -41,7 +41,7 @@ The application should resolve assets by `chain + symbol` or `chain + contract`,
 | Family | Chains | Local test support | Live/testnet support |
 |---|---|---|---|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH | Docker regtest nodes | External RPC by configuration |
-| EVM | ETH, BNB, Polygon, Arbitrum, Optimism, Base, Avalanche | Hardhat fork | Sepolia and other configured testnets |
+| EVM | ETH, BNB, Polygon, Arbitrum, Optimism, Base, Avalanche, HyperEVM | Hardhat fork | Sepolia, HyperEVM testnet, and other configured testnets |
 | TRON | TRON | DB tests | Nile live flow |
 | Solana | SOL, SPL tokens | DB tests | Devnet live flow |
 | TON | TON, Jetton | DB tests | Testnet connectivity and funded live flow |

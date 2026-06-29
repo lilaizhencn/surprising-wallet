@@ -21,4 +21,13 @@ class NearRpcClientTest {
         assertFalse(NearRpcClient.isMissingAccountError("NEAR HTTP 429: rate limited"));
         assertFalse(NearRpcClient.isMissingAccountError("Invalid nonce"));
     }
+
+    @Test
+    void recognizesMissingBlockHeights() {
+        assertTrue(NearRpcClient.isUnknownBlockError(
+                "NEAR HTTP 422: {\"name\":\"UNKNOWN_BLOCK\"}"));
+        assertTrue(NearRpcClient.isUnknownBlockError(
+                "DB Not Found Error: BLOCK HEIGHT: 256859526 Cause: Unknown"));
+        assertFalse(NearRpcClient.isUnknownBlockError("NEAR HTTP 429: rate limited"));
+    }
 }

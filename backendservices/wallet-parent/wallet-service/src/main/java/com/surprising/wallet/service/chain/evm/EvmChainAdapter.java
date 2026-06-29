@@ -129,6 +129,7 @@ public class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.OPTIMISM, "ETH_OP", 11155420L, 1L);
         registerProfile(ChainType.BASE, "ETH_BASE", 84532L, 1L);
         registerProfile(ChainType.AVAX_C, "AVAX_C", 43113L, 1L);
+        registerProfile(ChainType.HYPEREVM, "HYPE", 998L, 1L);
     }
 
     private void registerDbProfiles() {

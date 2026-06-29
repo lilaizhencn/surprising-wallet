@@ -217,4 +217,13 @@ public class NearRpcClient {
                 || message.contains("AccountDoesNotExist")
                 || message.contains("does not exist while viewing");
     }
+
+    static boolean isUnknownBlockError(String message) {
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+        return message.contains("UNKNOWN_BLOCK")
+                || message.contains("DB Not Found Error: BLOCK HEIGHT")
+                || message.contains("Cause: Unknown");
+    }
 }
