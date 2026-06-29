@@ -2701,12 +2701,14 @@ UPDATE "public"."chain_asset"
  WHERE "chain" = 'XRP' AND "symbol" = 'USDC';
 
 -- HyperEVM is an EVM-compatible chain; HyperCore exchange-account flows are intentionally
--- not modeled here.
+-- not modeled here. The seeded USDC row is Circle Native USDC on HyperEVM testnet.
+-- Prod databases must replace it with the HyperEVM mainnet USDC contract before enabling prod.
 INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
                                     "native_asset", "active", "min_transfer", "min_withdraw",
                                     "created_at", "updated_at")
 VALUES
-    ('HYPEREVM', 'HYPE', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now())
+    ('HYPEREVM', 'HYPE', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('HYPEREVM', 'USDC', 'ERC20', '0x2B3370eE501B4a559b57D449569354196457D8Ab', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -2715,6 +2717,30 @@ ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "active" = EXCLUDED."active",
     "min_transfer" = EXCLUDED."min_transfer",
     "min_withdraw" = EXCLUDED."min_withdraw",
+    "updated_at" = now();
+
+INSERT INTO "public"."token_config" ("chain", "symbol", "standard", "contract_address", "decimals", "enabled",
+                                     "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at",
+                                     "network", "token_standard", "min_deposit_amount", "min_withdraw_amount",
+                                     "collect_threshold", "gas_strategy", "confirmation_required")
+VALUES
+    ('HYPEREVM', 'USDC', 'ERC20', '0x2B3370eE501B4a559b57D449569354196457D8Ab', 6, true,
+     1, 1, true, now(), now(), 'testnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
+ON CONFLICT ("chain", "symbol") DO UPDATE SET
+    "standard" = EXCLUDED."standard",
+    "contract_address" = EXCLUDED."contract_address",
+    "decimals" = EXCLUDED."decimals",
+    "enabled" = EXCLUDED."enabled",
+    "min_deposit" = EXCLUDED."min_deposit",
+    "min_withdraw" = EXCLUDED."min_withdraw",
+    "collect_enabled" = EXCLUDED."collect_enabled",
+    "network" = EXCLUDED."network",
+    "token_standard" = EXCLUDED."token_standard",
+    "min_deposit_amount" = EXCLUDED."min_deposit_amount",
+    "min_withdraw_amount" = EXCLUDED."min_withdraw_amount",
+    "collect_threshold" = EXCLUDED."collect_threshold",
+    "gas_strategy" = EXCLUDED."gas_strategy",
+    "confirmation_required" = EXCLUDED."confirmation_required",
     "updated_at" = now();
 
 INSERT INTO "public"."chain_profile" ("chain", "network", "family", "runtime_currency_id", "bip44_coin_type",

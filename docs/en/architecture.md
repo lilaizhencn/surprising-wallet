@@ -48,6 +48,10 @@ The application should resolve assets by `chain + symbol` or `chain + contract`,
 | Aptos | APT, coin resources | DB tests | Testnet live flow |
 | Sui | SUI, coin resources | DB tests | Testnet live flow |
 
+HyperEVM uses the shared EVM path for HYPE and ERC20 tokens. HyperCore is kept
+outside this chain-family table because it is the Hyperliquid core account layer,
+not an EVM JSON-RPC chain. See [HyperEVM and HyperCore Integration](hyperevm-hypercore.md).
+
 ## Signing Model
 
 Bitcoin-like chains use three BIP32 roots:

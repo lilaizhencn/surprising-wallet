@@ -48,6 +48,8 @@
 | Aptos | APT, coin resource | DB 测试 | Testnet live flow |
 | Sui | SUI, coin resource | DB 测试 | Testnet live flow |
 
+HyperEVM 复用 EVM 通用路径处理 HYPE 和 ERC20 token。HyperCore 不放进这张链族表里，因为它是 Hyperliquid 的核心账户层，不是 EVM JSON-RPC 链。参见 [HyperEVM 与 HyperCore 接入说明](hyperevm-hypercore.md)。
+
 ## 签名模型
 
 Bitcoin-like 链使用三组 BIP32 root：
