@@ -2892,9 +2892,11 @@ ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDA
     "remark" = EXCLUDED."remark",
     "updated_at" = now();
 
--- Mantle, Linea and Scroll reuse the shared EVM adapter. Testnet profiles are enabled.
+-- Mantle, Linea, Scroll and Unichain reuse the shared EVM adapter. Testnet profiles are enabled.
 -- Token rows only use verified official/token-list contracts. Mantle testnet USDC/USDT is not
 -- present in the official Mantle token list, so Mantle token rows are kept disabled until prod.
+-- Unichain USDC uses Circle's official Sepolia contract here; prod databases must replace it
+-- with the Unichain mainnet USDC contract 0x078D782b760474a361dDA0AF3839290b0EF57AD6 before enabling prod.
 INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
                                     "native_asset", "active", "min_transfer", "min_withdraw",
                                     "created_at", "updated_at")
@@ -2907,7 +2909,9 @@ VALUES
     ('LINEA', 'USDT', 'ERC20', '0xA219439258ca9da29E9Cc4cE5596924745e12B93', 6, false, false, 1, 1, now(), now()),
     ('SCROLL', 'ETH_SCROLL', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('SCROLL', 'USDC', 'ERC20', '0x7878290DB8C4f02bd06E0E249617871c19508bE6', 6, false, true, 1, 1, now(), now()),
-    ('SCROLL', 'USDT', 'ERC20', '0xf55BEC9cafDbE8730f096Aa55dad6D22d44099Df', 6, false, false, 1, 1, now(), now())
+    ('SCROLL', 'USDT', 'ERC20', '0xf55BEC9cafDbE8730f096Aa55dad6D22d44099Df', 6, false, false, 1, 1, now(), now()),
+    ('UNICHAIN', 'ETH_UNICHAIN', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('UNICHAIN', 'USDC', 'ERC20', '0x31d0220469e10c4E71834a79b1f276d740d3768F', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -2934,7 +2938,9 @@ VALUES
     ('SCROLL', 'USDC', 'ERC20', '0x7878290DB8C4f02bd06E0E249617871c19508bE6', 6, true,
      1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('SCROLL', 'USDT', 'ERC20', '0xf55BEC9cafDbE8730f096Aa55dad6D22d44099Df', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('UNICHAIN', 'USDC', 'ERC20', '0x31d0220469e10c4E71834a79b1f276d740d3768F', 6, true,
+     1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
     "contract_address" = EXCLUDED."contract_address",
@@ -2982,6 +2988,14 @@ VALUES
     ('SCROLL', 'mainnet', 'evm', 9008, 60, 'ETH_SCROLL',
      'https://rpc.scroll.io', 'https://scrollscan.com/tx/',
      40, 40, 1, 0, false, now(), now(), 534352, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('UNICHAIN', 'sepolia', 'evm', 9009, 60, 'ETH_UNICHAIN',
+     'https://sepolia.unichain.org', 'https://sepolia.uniscan.xyz/tx/',
+     40, 40, 1, 0, true, now(), now(), 1301, 'eip1559-l2', 200,
+     true, true, true, true, 0, 200),
+    ('UNICHAIN', 'mainnet', 'evm', 9009, 60, 'ETH_UNICHAIN',
+     'https://mainnet.unichain.org', 'https://uniscan.xyz/tx/',
+     40, 40, 1, 0, false, now(), now(), 130, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -3054,6 +3068,22 @@ VALUES
     ('SCROLL', 'mainnet', 'prod', 'official-scroll-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://rpc.scroll.io', 'NONE', NULL, 10, 1000, false,
      'Production Scroll mainnet JSON-RPC endpoint. Enable only after funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('UNICHAIN', 'sepolia', 'dev', 'official-unichain-sepolia', 'rpc', 'HTTP_JSON_RPC',
+     'https://sepolia.unichain.org', 'NONE', NULL, 10, 500, true,
+     'Official Unichain Sepolia JSON-RPC endpoint. Public endpoint is rate-limited; use private RPC before heavy scanning.',
+     now(), now(), NULL),
+    ('UNICHAIN', 'sepolia', 'test2', 'official-unichain-sepolia', 'rpc', 'HTTP_JSON_RPC',
+     'https://sepolia.unichain.org', 'NONE', NULL, 10, 500, true,
+     'test2 official Unichain Sepolia JSON-RPC endpoint. Public endpoint is rate-limited; use private RPC before heavy scanning.',
+     now(), now(), NULL),
+    ('UNICHAIN', 'sepolia', 'test2', 'publicnode-unichain-sepolia', 'rpc', 'HTTP_JSON_RPC',
+     'https://unichain-sepolia-rpc.publicnode.com', 'NONE', NULL, 50, 500, true,
+     'test2 PublicNode Unichain Sepolia backup RPC.',
+     now(), now(), NULL),
+    ('UNICHAIN', 'mainnet', 'prod', 'official-unichain-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://mainnet.unichain.org', 'NONE', NULL, 10, 1000, false,
+     'Production Unichain mainnet JSON-RPC endpoint. Public endpoint is rate-limited; enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",

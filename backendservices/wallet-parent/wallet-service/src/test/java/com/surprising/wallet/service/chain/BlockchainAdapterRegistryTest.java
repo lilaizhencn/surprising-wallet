@@ -35,6 +35,15 @@ class BlockchainAdapterRegistryTest {
                 .nativeAsset(false)
                 .active(true)
                 .build());
+        tokenRegistry.register(TokenDefinition.builder()
+                .chain("UNICHAIN")
+                .symbol("USDC")
+                .contractAddress("0x31d0220469e10c4E71834a79b1f276d740d3768F")
+                .decimals(6)
+                .standard("ERC20")
+                .nativeAsset(false)
+                .active(true)
+                .build());
 
         EvmChainAdapter evmAdapter = new EvmChainAdapter(new EvmNonceManager(), tokenRegistry,
                 new EvmGasEstimator(), new EvmTransactionBuilder(), new EvmLogScanner());
@@ -49,6 +58,7 @@ class BlockchainAdapterRegistryTest {
         assertEquals(ChainType.LTC, registry.require(ChainType.LTC).chainType());
         assertTrue(registry.require(ChainType.BNB).supports(ChainType.BNB));
         assertEquals("evm", registry.require(ChainType.BASE).family());
+        assertTrue(registry.require(ChainType.UNICHAIN).supports(ChainType.UNICHAIN));
         assertEquals(ChainType.TRON, registry.require(ChainType.TRON).chainType());
 
         TransferQuote erc20Quote = registry.require(ChainType.POLYGON).quoteTokenTransfer(
@@ -57,6 +67,18 @@ class BlockchainAdapterRegistryTest {
         assertTrue(erc20Quote.supported());
         assertEquals("USDT", erc20Quote.assetSymbol());
         assertTrue(erc20Quote.payload() != null && !erc20Quote.payload().isBlank());
+        TransferQuote unichainNativeQuote = registry.require(ChainType.UNICHAIN).quoteNativeTransfer(
+                new TransferRequest(ChainType.UNICHAIN, "ETH_UNICHAIN", "0x1111111111111111111111111111111111111111",
+                        "0x2222222222222222222222222222222222222222", BigDecimal.valueOf(0.01), 1, 2L, null));
+        assertTrue(unichainNativeQuote.supported());
+        assertEquals(ChainType.UNICHAIN, unichainNativeQuote.chainType());
+
+        TransferQuote unichainTokenQuote = registry.require(ChainType.UNICHAIN).quoteTokenTransfer(
+                new TransferRequest(ChainType.UNICHAIN, "USDC", "0x1111111111111111111111111111111111111111",
+                        "0x2222222222222222222222222222222222222222", BigDecimal.valueOf(1), 1, 3L, null));
+        assertTrue(unichainTokenQuote.supported());
+        assertEquals("USDC", unichainTokenQuote.assetSymbol());
+        assertTrue(unichainTokenQuote.payload() != null && !unichainTokenQuote.payload().isBlank());
         assertThrows(UnsupportedOperationException.class, () -> registry.require(ChainType.POLYGON).scanDeposits(1L));
     }
 }

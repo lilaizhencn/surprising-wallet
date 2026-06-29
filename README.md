@@ -58,6 +58,7 @@ target database.
   <img alt="MNT Mantle" src="https://img.shields.io/badge/MNT-Mantle-000000?style=flat-square&logo=mantle&logoColor=white">
   <img alt="ETH Linea" src="https://img.shields.io/badge/ETH_LINEA-Linea-121212?style=flat-square&logo=ethereum&logoColor=white">
   <img alt="ETH Scroll" src="https://img.shields.io/badge/ETH_SCROLL-Scroll-EBC28E?style=flat-square&logo=scroll&logoColor=111111">
+  <img alt="ETH Unichain" src="https://img.shields.io/badge/ETH_UNICHAIN-Unichain-FF007A?style=flat-square&logo=uniswap&logoColor=white">
 </p>
 
 **Token and exchange-account assets**
@@ -75,7 +76,7 @@ target database.
 | Family | Chains | Asset/token model | Runtime notes |
 |---|---|---|---|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH | Native UTXO assets | 2-of-3 signing, local regtest support, external RPC by DB configuration |
-| EVM | ETH, BNB, POLYGON, ARBITRUM, OPTIMISM, BASE, AVAX_C, HYPEREVM, MANTLE, LINEA, SCROLL | Native gas asset plus ERC20 | Shared EVM scanner, signer, withdrawal, collection, and Hardhat fork tests |
+| EVM | ETH, BNB, POLYGON, ARBITRUM, OPTIMISM, BASE, AVAX_C, HYPEREVM, MANTLE, LINEA, SCROLL, UNICHAIN | Native gas asset plus ERC20 | Shared EVM scanner, signer, withdrawal, collection, and Hardhat fork tests |
 | TRON | TRON | TRX plus TRC20 | Nile/testnet and mainnet profiles are DB-configured |
 | Solana | SOLANA | SOL plus SPL tokens | Uses Ed25519 derivation and SPL token account handling |
 | TON | TON | TON plus Jetton | Uses Ed25519 derivation and Jetton wallet resolution |

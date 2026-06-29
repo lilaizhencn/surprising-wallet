@@ -21,6 +21,7 @@ public enum ChainType {
     MANTLE("evm", "account"),
     LINEA("evm", "account"),
     SCROLL("evm", "account"),
+    UNICHAIN("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

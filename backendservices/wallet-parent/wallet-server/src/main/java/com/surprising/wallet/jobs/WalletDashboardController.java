@@ -777,7 +777,7 @@ public class WalletDashboardController {
         project.put("supportedChains", List.of(
                 "BTC", "LTC", "DOGE", "BCH",
                 "ETH", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "BASE", "AVAX_C", "HYPEREVM",
-                "MANTLE", "LINEA", "SCROLL",
+                "MANTLE", "LINEA", "SCROLL", "UNICHAIN",
                 "TRON", "SOLANA", "TON", "APTOS", "SUI", "XRP",
                 "ADA", "DOT", "NEAR", "XMR"
         ));
@@ -865,7 +865,7 @@ public class WalletDashboardController {
         return List.of(
                 row("family", "Bitcoin-like UTXO", "chains", "BTC/LTC/DOGE/BCH", "flow",
                         "create address -> scan blocks/UTXO -> credit ledger -> pick spendable UTXOs -> build unsigned tx -> sig1 -> sig2 -> broadcast -> confirm -> reconcile"),
-                row("family", "EVM", "chains", "ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C/HYPEREVM/MANTLE/LINEA/SCROLL", "flow",
+                row("family", "EVM", "chains", "ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C/HYPEREVM/MANTLE/LINEA/SCROLL/UNICHAIN", "flow",
                         "create address -> scan native/ERC20 logs -> credit ledger -> reserve nonce/gas -> build transaction -> sig1/sig2 policy -> broadcast -> receipt confirmations -> reconcile"),
                 row("family", "TRON", "chains", "TRON", "flow",
                         "create address -> scan TRX/TRC20 -> credit ledger -> estimate bandwidth/energy -> sign -> broadcast -> confirm -> reconcile"),
@@ -905,7 +905,7 @@ public class WalletDashboardController {
                 "DB-only account-chain tests passed.",
                 "BTC/LTC/DOGE/BCH local regtest passed deposit, withdrawal, collection, UTXO locking and bulk broadcast flows.",
                 "ETH/ARBITRUM/OPTIMISM/BASE/AVAX_C Hardhat fork tests passed with stable public endpoints.",
-                "MANTLE/LINEA/SCROLL reuse the shared EVM path and are configured through chain_profile, chain_rpc_node and token_config.",
+                "MANTLE/LINEA/SCROLL/UNICHAIN reuse the shared EVM path and are configured through chain_profile, chain_rpc_node and token_config.",
                 "HYPEREVM is wired into the shared EVM path and can be checked with CHAIN_FILTER=HYPEREVM once a fork RPC is available.",
                 "BNB and POLYGON public fork RPCs were not promoted as stable defaults; use private/archive-capable RPCs for required fork coverage.",
                 "Funded live spending was blocked by missing signing secrets and funded test accounts; connectivity tests passed with JDK 21."

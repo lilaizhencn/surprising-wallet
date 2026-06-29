@@ -324,7 +324,7 @@ TRON/SOLANA/TON/APTOS/SUI 使用测试网时：
 
 ### 第二阶段：EVM 本地沙盒
 
-- 为 ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C 启动本地 RPC。
+- 为核心 EVM 链启动本地 RPC；HyperEVM、Mantle、Linea、Scroll、Unichain 等新增 EVM 链复用共享 EVM 路径，可按需补 fork RPC。
 - 部署 mock USDT/USDC。
 - 配置 token 地址。
 - 跑通原生币和 ERC20 的领取、扫链、提现、归集。

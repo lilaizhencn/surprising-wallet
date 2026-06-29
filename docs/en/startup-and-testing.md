@@ -205,7 +205,7 @@ Expected coverage:
 | `test-db` | DB-only scanner/ledger/flow tests for SOL/TON/APTOS/SUI/DOGE and UTXO runtime state |
 | `test-utxo` | Local BTC/LTC/DOGE/BCH regtest flow, concurrency, and broadcast tests |
 | `test-xmr` | Local XMR wallet-rpc regtest deposit, withdrawal, collection, and idempotency test |
-| `test-evm` | EVM fork tests for ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C |
+| `test-evm` | EVM fork tests for core EVM chains; newer EVM chains such as HyperEVM, Mantle, Linea, Scroll, and Unichain reuse the shared EVM path by DB profile |
 | `test-live` | External testnet connectivity and optional spending tests |
 | `test-all` | UTXO, EVM, DB tests, and optional live tests |
 

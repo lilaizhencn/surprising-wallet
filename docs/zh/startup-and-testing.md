@@ -205,7 +205,7 @@ scripts/regtest/all-chain-regtest.sh matrix
 | `test-db` | SOL/TON/APTOS/SUI/DOGE 和 UTXO 运行状态的 DB-only scanner/ledger/flow 测试 |
 | `test-utxo` | BTC/LTC/DOGE/BCH 本地 regtest、并发、广播测试 |
 | `test-xmr` | XMR 本地 wallet-rpc regtest 充值、提现、归集和幂等测试 |
-| `test-evm` | ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C 的 EVM fork 测试 |
+| `test-evm` | 核心 EVM 链的 fork 测试；HyperEVM、Mantle、Linea、Scroll、Unichain 等新增 EVM 链通过 DB profile 复用共享 EVM 路径 |
 | `test-live` | 外部 testnet 连通性测试，以及可选花费测试 |
 | `test-all` | UTXO、EVM、DB 测试，以及可选 live 测试 |
 

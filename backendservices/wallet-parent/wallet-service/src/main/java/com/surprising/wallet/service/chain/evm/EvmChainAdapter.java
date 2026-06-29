@@ -133,6 +133,7 @@ public class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.MANTLE, "MNT", 5003L, 1L);
         registerProfile(ChainType.LINEA, "ETH_LINEA", 59141L, 1L);
         registerProfile(ChainType.SCROLL, "ETH_SCROLL", 534351L, 1L);
+        registerProfile(ChainType.UNICHAIN, "ETH_UNICHAIN", 1301L, 1L);
     }
 
     private void registerDbProfiles() {
