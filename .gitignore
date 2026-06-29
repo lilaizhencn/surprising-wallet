@@ -16,5 +16,8 @@ log/
 runlogs/
 *.log
 
+# Node tooling
+node_modules/
+
 # Local database backups
 db-backups/

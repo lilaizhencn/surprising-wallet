@@ -721,12 +721,13 @@ public class WalletAppService {
                            and ca.enabled = true
                          where ca.user_id = ?
                            and ca.biz = ?
+                           and ca.wallet_role = ?
                            and lb.chain = ?
                            and lb.asset_symbol = ?
                            and lb.available_balance >= ?
                          order by lb.available_balance desc, ca.address_index desc
                          limit 1
-                        """, userId, biz, chain, symbol, amount);
+                        """, userId, biz, WALLET_ROLE_DEPOSIT, chain, symbol, amount);
         if (rows.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "insufficient available balance");
         }
@@ -809,22 +810,24 @@ public class WalletAppService {
                           and lower(ca.account_id) = lower(lb.account_id)
                           and ca.user_id = ?
                           and ca.biz = ?
+                          and ca.wallet_role = ?
                           and ca.enabled = true
                  )
                  group by lb.chain, lb.asset_symbol
                  order by lb.asset_symbol, lb.chain
-                """, userId, biz);
+                """, userId, biz, WALLET_ROLE_DEPOSIT);
     }
 
     private List<Map<String, Object>> userAddresses(long userId, int biz, String chain, String symbol, int limit) {
         return jdbcTemplate.queryForList("""
                 select chain, asset_symbol as symbol, account_id, address, owner_address as "ownerAddress",
                        address_index as "addressIndex", derivation_path as "derivationPath", created_at
-                  from chain_address
-                 where user_id = ? and biz = ? and chain = ? and asset_symbol = ? and enabled = true
+                 from chain_address
+                 where user_id = ? and biz = ? and chain = ? and asset_symbol = ?
+                   and wallet_role = ? and enabled = true
                  order by address_index desc, id desc
                  limit ?
-                """, userId, biz, chain, symbol, limit);
+                """, userId, biz, chain, symbol, WALLET_ROLE_DEPOSIT, limit);
     }
 
     private AssetMeta requireAsset(String chain, String symbol) {
