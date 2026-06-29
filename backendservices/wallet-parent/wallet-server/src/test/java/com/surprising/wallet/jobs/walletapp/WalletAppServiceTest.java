@@ -34,6 +34,7 @@ class WalletAppServiceTest {
         assertTrue(WalletAppService.usesMirroredNativeTokenAddress("ADA"));
         assertTrue(WalletAppService.usesMirroredNativeTokenAddress("XRP"));
         assertTrue(WalletAppService.usesMirroredNativeTokenAddress("NEAR"));
+        assertTrue(WalletAppService.usesMirroredNativeTokenAddress("HYPERCORE"));
         assertFalse(WalletAppService.usesMirroredNativeTokenAddress("SOLANA"));
         assertFalse(WalletAppService.usesMirroredNativeTokenAddress("TON"));
         assertFalse(WalletAppService.usesMirroredNativeTokenAddress("XMR"));
@@ -51,6 +52,7 @@ class WalletAppServiceTest {
         assertFalse(WalletAppService.requiresPreparedTokenAddress("TRON"));
         assertFalse(WalletAppService.requiresPreparedTokenAddress("ADA"));
         assertFalse(WalletAppService.requiresPreparedTokenAddress("DOT"));
+        assertFalse(WalletAppService.requiresPreparedTokenAddress("HYPERCORE"));
     }
 
     @Test
@@ -60,6 +62,7 @@ class WalletAppServiceTest {
         assertEquals("PREPARED_NATIVE_ACCOUNT", WalletAppService.tokenAddressStrategy("NEAR", false));
         assertEquals("PREPARED_NATIVE_ACCOUNT", WalletAppService.tokenAddressStrategy("XRP", false));
         assertEquals("PREPARED_TOKEN_ACCOUNT", WalletAppService.tokenAddressStrategy("SOLANA", false));
+        assertEquals("MIRROR_NATIVE_ACCOUNT", WalletAppService.tokenAddressStrategy("HYPERCORE", false));
     }
 
     @Test

@@ -1833,6 +1833,23 @@ public class ChainJdbcRepository {
         return listEnabledRpcNodes(chain, network, environment, "rpc");
     }
 
+    public List<ChainRpcNode> listAllEnabledRpcNodes(String chain, String network, String environment) {
+        String env = environment == null ? "" : environment;
+        return jdbcTemplate.query("""
+                        select id, chain, network, environment, node_label, purpose, connection_type, rpc_url,
+                               auth_type, auth_header_name, api_key, api_key_ref, username, username_ref,
+                               password, password_ref,
+                               priority, min_request_interval_ms, enabled, renewal_due_at, remark
+                        from chain_rpc_node
+                        where upper(chain) = upper(?)
+                          and lower(network) = lower(?)
+                          and enabled = true
+                          and lower(environment) = lower(?)
+                        order by purpose asc, priority asc, id asc
+                        """,
+                (rs, rowNum) -> mapRpcNode(rs), chain, network, env);
+    }
+
     private static Timestamp toTs(Instant instant) {
         return instant == null ? null : Timestamp.from(instant);
     }

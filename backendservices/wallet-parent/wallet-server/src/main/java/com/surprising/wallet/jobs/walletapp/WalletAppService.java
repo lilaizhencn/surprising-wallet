@@ -482,7 +482,7 @@ public class WalletAppService {
             return repository.findChainAddress(asset.chain(), asset.symbol(), userId, biz,
                     address.getIndex(), WALLET_ROLE_DEPOSIT).orElseThrow();
         }
-        if (isEvm(asset.chain()) || "TRON".equals(asset.chain())) {
+        if (isSecp256k1AccountAddress(asset.chain())) {
             long index = preferredIndex == null
                     ? nextAddressIndex(asset.chain(), asset.symbol(), userId, biz)
                     : preferredIndex;
@@ -659,7 +659,7 @@ public class WalletAppService {
     }
 
     private boolean staleEvmAddress(ChainAddressRecord record, AssetMeta asset) {
-        if (record == null || !isEvm(asset.chain()) || record.getAddressIndex() == null) {
+        if (record == null || !isSecp256k1AccountAddress(asset.chain()) || record.getAddressIndex() == null) {
             return false;
         }
         ChainAddressRecord expected = buildAccountAddressRecord(
@@ -978,9 +978,15 @@ public class WalletAppService {
     private static List<String> depositWarnings(AssetMeta asset) {
         List<String> warnings = new ArrayList<>();
         warnings.add("Only deposit " + asset.symbol() + " on " + asset.chain() + " to this address.");
+        if ("HYPERCORE".equals(asset.chain())) {
+            warnings.add("HyperCore deposits must be sent through Hyperliquid Core account transfers.");
+            warnings.add("Do not send HyperEVM ERC20 transactions to this HyperCore deposit entry; switch to HYPEREVM for ERC20 deposits.");
+        }
         if (!asset.nativeAsset()) {
             warnings.add(asset.symbol() + " deposits on other chains require switching to that chain first.");
-            warnings.add("This token transfer needs " + asset.nativeSymbol() + " as gas on " + asset.chain() + ".");
+            if (!"HYPERCORE".equals(asset.chain())) {
+                warnings.add("This token transfer needs " + asset.nativeSymbol() + " as gas on " + asset.chain() + ".");
+            }
             if ("XRP".equals(asset.chain())) {
                 warnings.add("XRPL issued-currency deposits require an activated address and matching trustline; this wallet prepares them automatically.");
             }
@@ -992,6 +998,9 @@ public class WalletAppService {
     }
 
     private static String withdrawWarning(AssetMeta asset) {
+        if ("HYPERCORE".equals(asset.chain())) {
+            return "HyperCore withdrawals use Hyperliquid Core account transfers and are limited to addresses registered in this wallet project.";
+        }
         if (asset.nativeAsset()) {
             return "Network withdrawals are irreversible after broadcast. Check the address carefully.";
         }
@@ -1004,7 +1013,7 @@ public class WalletAppService {
         if (value.isBlank() || value.length() > 160) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "valid withdrawal address is required");
         }
-        if (isEvm(chain) && !value.matches("^0x[0-9a-fA-F]{40}$")) {
+        if ((isEvm(chain) || "HYPERCORE".equals(chain)) && !value.matches("^0x[0-9a-fA-F]{40}$")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid EVM address");
         }
         if ("TRON".equals(chain) && !value.matches("^T[1-9A-HJ-NP-Za-km-z]{33}$")) {
@@ -1146,8 +1155,15 @@ public class WalletAppService {
         }
     }
 
+    private static boolean isSecp256k1AccountAddress(String chain) {
+        return isEvm(chain)
+                || "HYPERCORE".equals(chain)
+                || "TRON".equals(chain);
+    }
+
     static boolean usesMirroredNativeTokenAddress(String chain) {
         return isEvm(chain)
+                || "HYPERCORE".equals(chain)
                 || "TRON".equals(chain)
                 || "ADA".equals(chain)
                 || "DOT".equals(chain)

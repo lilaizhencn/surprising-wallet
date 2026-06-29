@@ -60,6 +60,34 @@ class WalletStartupValidatorTest {
     }
 
     @Test
+    void hyperCoreProfilesRequireInfoAndExchangeNodes() throws Exception {
+        WalletStartupValidator validator = validator(new FakeRepository(
+                List.of(profile("HYPERCORE", "testnet")),
+                List.of(node("HYPERCORE", "info", "hyperliquid-testnet-info", "HYPERLIQUID_INFO",
+                        "NONE", "https://api.hyperliquid-testnet.xyz", null, null, null)),
+                List.of()));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, validator::validateProfiles);
+
+        assertTrue(error.getMessage().contains("purpose=exchange"));
+        assertTrue(error.getMessage().contains("HYPERCORE/testnet"));
+    }
+
+    @Test
+    void hyperCoreProfilesAcceptInfoAndExchangeNodes() throws Exception {
+        WalletStartupValidator validator = validator(new FakeRepository(
+                List.of(profile("HYPERCORE", "testnet")),
+                List.of(
+                        node("HYPERCORE", "info", "hyperliquid-testnet-info", "HYPERLIQUID_INFO",
+                                "NONE", "https://api.hyperliquid-testnet.xyz", null, null, null),
+                        node("HYPERCORE", "exchange", "hyperliquid-testnet-exchange", "HYPERLIQUID_EXCHANGE",
+                                "NONE", "https://api.hyperliquid-testnet.xyz", null, null, null)),
+                List.of()));
+
+        assertDoesNotThrow(validator::validateProfiles);
+    }
+
+    @Test
     void cardanoBlockfrostNodesRequireProjectId() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
                 List.of(profile("ADA", "preprod")),
@@ -322,6 +350,7 @@ class WalletStartupValidatorTest {
             case "DOT" -> "westend";
             case "NEAR" -> "testnet";
             case "XMR" -> "regtest";
+            case "HYPERCORE" -> "testnet";
             case "BTC" -> "testnet3";
             default -> "preprod";
         };

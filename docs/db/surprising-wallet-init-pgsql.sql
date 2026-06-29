@@ -153,6 +153,10 @@ DROP SEQUENCE IF EXISTS "public"."sol_transaction_id_seq";
 DROP TABLE IF EXISTS "public"."sol_transaction";
 DROP SEQUENCE IF EXISTS "public"."ledger_balance_id_seq";
 DROP TABLE IF EXISTS "public"."ledger_balance";
+DROP TABLE IF EXISTS "public"."hypercore_action_record";
+DROP TABLE IF EXISTS "public"."hypercore_balance_snapshot";
+DROP TABLE IF EXISTS "public"."hypercore_spot_asset";
+DROP TABLE IF EXISTS "public"."hypercore_token_metadata";
 DROP SEQUENCE IF EXISTS "public"."hot_wallet_address_id_seq";
 DROP TABLE IF EXISTS "public"."hot_wallet_address";
 DROP SEQUENCE IF EXISTS "public"."gas_topup_task_id_seq";
@@ -848,6 +852,84 @@ CREATE SEQUENCE "public"."hot_wallet_address_id_seq"
 --
 
 ALTER SEQUENCE "public"."hot_wallet_address_id_seq" OWNED BY "public"."hot_wallet_address"."id";
+
+
+--
+-- Name: hypercore_action_record; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE "public"."hypercore_action_record" (
+    "action_id" character varying(128) NOT NULL,
+    "action_type" character varying(32) NOT NULL,
+    "chain" character varying(32) DEFAULT 'HYPERCORE'::character varying NOT NULL,
+    "asset_symbol" character varying(32) NOT NULL,
+    "from_address" character varying(160) NOT NULL,
+    "to_address" character varying(160) NOT NULL,
+    "amount" numeric(78,24) DEFAULT 0 NOT NULL,
+    "nonce" bigint NOT NULL,
+    "request_payload" "text",
+    "response_payload" "text",
+    "status" character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
+    "error_message" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "hypercore_action_record_pkey" PRIMARY KEY ("action_id")
+);
+
+
+--
+-- Name: hypercore_balance_snapshot; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE "public"."hypercore_balance_snapshot" (
+    "chain" character varying(32) DEFAULT 'HYPERCORE'::character varying NOT NULL,
+    "asset_symbol" character varying(32) NOT NULL,
+    "account_id" character varying(160) NOT NULL,
+    "address" character varying(160) NOT NULL,
+    "observed_balance" numeric(78,24) DEFAULT 0 NOT NULL,
+    "raw_payload" "text",
+    "observed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "hypercore_balance_snapshot_pkey" PRIMARY KEY ("chain", "asset_symbol", "account_id")
+);
+
+
+--
+-- Name: hypercore_token_metadata; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE "public"."hypercore_token_metadata" (
+    "network" character varying(32) NOT NULL,
+    "token_index" integer NOT NULL,
+    "token_id" character varying(128) NOT NULL,
+    "name" character varying(64) NOT NULL,
+    "sz_decimals" integer,
+    "wei_decimals" integer,
+    "is_canonical" boolean DEFAULT false NOT NULL,
+    "evm_contract" character varying(160),
+    "full_name" character varying(256),
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "hypercore_token_metadata_pkey" PRIMARY KEY ("network", "token_index")
+);
+
+
+--
+-- Name: hypercore_spot_asset; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE "public"."hypercore_spot_asset" (
+    "network" character varying(32) NOT NULL,
+    "spot_index" integer NOT NULL,
+    "name" character varying(96) NOT NULL,
+    "base_token_index" integer,
+    "quote_token_index" integer,
+    "is_canonical" boolean DEFAULT false NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "hypercore_spot_asset_pkey" PRIMARY KEY ("network", "spot_index")
+);
 
 
 --
@@ -2808,6 +2890,148 @@ ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDA
     "min_request_interval_ms" = EXCLUDED."min_request_interval_ms",
     "enabled" = EXCLUDED."enabled",
     "remark" = EXCLUDED."remark",
+    "updated_at" = now();
+
+-- HyperCore is the Hyperliquid core account layer. USDC uses usdSend; HYPE/HIP-1 tokens use spotSend.
+INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
+                                    "native_asset", "active", "min_transfer", "min_withdraw",
+                                    "created_at", "updated_at")
+VALUES
+    ('HYPERCORE', 'USDC', 'CORE_USDC', NULL, 6, true, true, 1, 1, now(), now()),
+    ('HYPERCORE', 'HYPE', 'HIP1', '0x7317beb7cceed72ef0b346074cc8e7ab', 8, false, true, 0.000001, 0.000001, now(), now())
+ON CONFLICT ("chain", "symbol") DO UPDATE SET
+    "asset_kind" = EXCLUDED."asset_kind",
+    "contract_address" = EXCLUDED."contract_address",
+    "decimals" = EXCLUDED."decimals",
+    "native_asset" = EXCLUDED."native_asset",
+    "active" = EXCLUDED."active",
+    "min_transfer" = EXCLUDED."min_transfer",
+    "min_withdraw" = EXCLUDED."min_withdraw",
+    "updated_at" = now();
+
+INSERT INTO "public"."token_config" ("chain", "symbol", "standard", "contract_address", "decimals", "enabled",
+                                     "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at",
+                                     "network", "token_standard", "min_deposit_amount", "min_withdraw_amount",
+                                     "collect_threshold", "gas_strategy", "confirmation_required")
+VALUES
+    ('HYPERCORE', 'HYPE', 'HIP1', '0x7317beb7cceed72ef0b346074cc8e7ab', 8, true,
+     0.000001, 0.000001, true, now(), now(), 'testnet', 'HIP1', 0.000001, 0.000001, 0.000001, 'hypercore-no-gas', 1)
+ON CONFLICT ("chain", "symbol") DO UPDATE SET
+    "standard" = EXCLUDED."standard",
+    "contract_address" = EXCLUDED."contract_address",
+    "decimals" = EXCLUDED."decimals",
+    "enabled" = EXCLUDED."enabled",
+    "min_deposit" = EXCLUDED."min_deposit",
+    "min_withdraw" = EXCLUDED."min_withdraw",
+    "collect_enabled" = EXCLUDED."collect_enabled",
+    "network" = EXCLUDED."network",
+    "token_standard" = EXCLUDED."token_standard",
+    "min_deposit_amount" = EXCLUDED."min_deposit_amount",
+    "min_withdraw_amount" = EXCLUDED."min_withdraw_amount",
+    "collect_threshold" = EXCLUDED."collect_threshold",
+    "gas_strategy" = EXCLUDED."gas_strategy",
+    "confirmation_required" = EXCLUDED."confirmation_required",
+    "updated_at" = now();
+
+INSERT INTO "public"."chain_profile" ("chain", "network", "family", "runtime_currency_id", "bip44_coin_type",
+                                      "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations",
+                                      "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled",
+                                      "created_at", "updated_at", "chain_id", "gas_policy", "scan_batch_size",
+                                      "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled",
+                                      "scan_start_height", "scan_max_blocks_per_run")
+VALUES
+    ('HYPERCORE', 'testnet', 'hypercore', 9005, 60, 'USDC',
+     'https://api.hyperliquid-testnet.xyz', 'https://app.hyperliquid-testnet.xyz/explorer/',
+     1, 1, 0, 0, true, now(), now(), 421614, 'hypercore-action', 100,
+     true, true, true, true, 0, 100),
+    ('HYPERCORE', 'mainnet', 'hypercore', 9005, 60, 'USDC',
+     'https://api.hyperliquid.xyz', 'https://app.hyperliquid.xyz/explorer/',
+     1, 1, 0, 0, false, now(), now(), 421614, 'hypercore-action', 100,
+     false, false, false, false, 0, 100)
+ON CONFLICT ("chain", "network") DO UPDATE SET
+    "family" = EXCLUDED."family",
+    "runtime_currency_id" = EXCLUDED."runtime_currency_id",
+    "bip44_coin_type" = EXCLUDED."bip44_coin_type",
+    "native_symbol" = EXCLUDED."native_symbol",
+    "rpc_url" = EXCLUDED."rpc_url",
+    "explorer_url" = EXCLUDED."explorer_url",
+    "deposit_confirmations" = EXCLUDED."deposit_confirmations",
+    "withdraw_confirmations" = EXCLUDED."withdraw_confirmations",
+    "default_fee_rate" = EXCLUDED."default_fee_rate",
+    "dust_threshold" = EXCLUDED."dust_threshold",
+    "enabled" = EXCLUDED."enabled",
+    "updated_at" = now(),
+    "chain_id" = EXCLUDED."chain_id",
+    "gas_policy" = EXCLUDED."gas_policy",
+    "scan_batch_size" = EXCLUDED."scan_batch_size",
+    "scan_enabled" = EXCLUDED."scan_enabled",
+    "withdraw_enabled" = EXCLUDED."withdraw_enabled",
+    "collection_enabled" = EXCLUDED."collection_enabled",
+    "transfer_enabled" = EXCLUDED."transfer_enabled",
+    "scan_start_height" = EXCLUDED."scan_start_height",
+    "scan_max_blocks_per_run" = EXCLUDED."scan_max_blocks_per_run";
+
+INSERT INTO "public"."chain_rpc_node" ("chain", "network", "environment", "node_label", "purpose",
+                                       "connection_type", "rpc_url", "auth_type", "auth_header_name",
+                                       "priority", "min_request_interval_ms", "enabled", "remark",
+                                       "created_at", "updated_at", "api_key")
+VALUES
+    ('HYPERCORE', 'testnet', 'dev', 'official-hypercore-testnet-info', 'info', 'HTTP_JSON',
+     'https://api.hyperliquid-testnet.xyz', 'NONE', NULL, 10, 500, true,
+     'Official Hyperliquid testnet info API.',
+     now(), now(), NULL),
+    ('HYPERCORE', 'testnet', 'dev', 'official-hypercore-testnet-exchange', 'exchange', 'HTTP_JSON',
+     'https://api.hyperliquid-testnet.xyz', 'NONE', NULL, 10, 500, true,
+     'Official Hyperliquid testnet exchange API.',
+     now(), now(), NULL),
+    ('HYPERCORE', 'testnet', 'test2', 'official-hypercore-testnet-info', 'info', 'HTTP_JSON',
+     'https://api.hyperliquid-testnet.xyz', 'NONE', NULL, 10, 500, true,
+     'test2 official Hyperliquid testnet info API.',
+     now(), now(), NULL),
+    ('HYPERCORE', 'testnet', 'test2', 'official-hypercore-testnet-exchange', 'exchange', 'HTTP_JSON',
+     'https://api.hyperliquid-testnet.xyz', 'NONE', NULL, 10, 500, true,
+     'test2 official Hyperliquid testnet exchange API.',
+     now(), now(), NULL),
+    ('HYPERCORE', 'mainnet', 'prod', 'official-hypercore-mainnet-info', 'info', 'HTTP_JSON',
+     'https://api.hyperliquid.xyz', 'NONE', NULL, 10, 500, false,
+     'Production Hyperliquid info API. Enable only after custody checks and funding are ready.',
+     now(), now(), NULL),
+    ('HYPERCORE', 'mainnet', 'prod', 'official-hypercore-mainnet-exchange', 'exchange', 'HTTP_JSON',
+     'https://api.hyperliquid.xyz', 'NONE', NULL, 10, 500, false,
+     'Production Hyperliquid exchange API. Enable only after custody checks and funding are ready.',
+     now(), now(), NULL)
+ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
+    "connection_type" = EXCLUDED."connection_type",
+    "rpc_url" = EXCLUDED."rpc_url",
+    "auth_type" = EXCLUDED."auth_type",
+    "auth_header_name" = EXCLUDED."auth_header_name",
+    "api_key" = EXCLUDED."api_key",
+    "priority" = EXCLUDED."priority",
+    "min_request_interval_ms" = EXCLUDED."min_request_interval_ms",
+    "enabled" = EXCLUDED."enabled",
+    "remark" = EXCLUDED."remark",
+    "updated_at" = now();
+
+INSERT INTO "public"."hypercore_token_metadata" ("network", "token_index", "token_id", "name", "sz_decimals",
+                                                 "wei_decimals", "is_canonical", "evm_contract", "full_name",
+                                                 "created_at", "updated_at")
+VALUES
+    ('testnet', 0, '0xeb62eee3685fc4c43992febcd9e75443', 'USDC', 8, 8, true,
+     '0x0b80659a4076e9e93c7dbe0f10675a16a3e5c206', NULL, now(), now()),
+    ('testnet', 1105, '0x7317beb7cceed72ef0b346074cc8e7ab', 'HYPE', 2, 8, false,
+     '0x0000000000000000000000000000000000000000', 'Hyperliquid', now(), now()),
+    ('mainnet', 0, '0x6d1e7cde53ba9467b783cb7c530ce054', 'USDC', 8, 8, true,
+     '0x6b9e773128f453f5c2c60935ee2de2cbc5390a24', NULL, now(), now()),
+    ('mainnet', 150, '0x0d01dc56dcaaca66ad901c959b4011ec', 'HYPE', 2, 8, false,
+     NULL, 'Hyperliquid', now(), now())
+ON CONFLICT ("network", "token_index") DO UPDATE SET
+    "token_id" = EXCLUDED."token_id",
+    "name" = EXCLUDED."name",
+    "sz_decimals" = EXCLUDED."sz_decimals",
+    "wei_decimals" = EXCLUDED."wei_decimals",
+    "is_canonical" = EXCLUDED."is_canonical",
+    "evm_contract" = EXCLUDED."evm_contract",
+    "full_name" = EXCLUDED."full_name",
     "updated_at" = now();
 
 --

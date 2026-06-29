@@ -34,23 +34,28 @@ store the contract for its own active environment. Keep testnet contracts in
 `dev`/`test2` databases. Replace them with mainnet contracts only in the prod
 database before enabling prod.
 
-## HyperCore Boundary
+## HyperCore Scope
 
-HyperCore should not be modeled as a normal EVM token chain. It is the
-Hyperliquid core account/order-book layer, while HyperEVM is the EVM execution
-layer. HyperCore support needs a dedicated adapter instead of another
-`token_config` row.
+`HYPERCORE` is integrated as a separate `hypercore` chain family. It is not an
+EVM JSON-RPC chain and it must not be configured as another ERC20 chain under
+`HYPEREVM`.
 
-Recommended phases:
+Current wallet scope:
 
-1. Add a `hypercore` chain family and adapter that reads HyperCore account state
-   from the official API.
-2. Model HyperEVM <-> HyperCore transfers as explicit bridge/internal-transfer
-   records, not ERC20 deposits.
-3. Add signer support for Hyperliquid API actions only after the custody and
-   withdrawal rules are finalized.
-4. Keep trading/order functions out of the wallet path unless the product
-   explicitly needs them.
+- Address model: secp256k1/BIP44 account address, mirrored from the same owner
+  account style used by EVM-compatible chains.
+- Deposit scan: `spotClearinghouseState` snapshots from the official
+  Hyperliquid `/info` API. The scanner records positive balance deltas as wallet
+  deposit credits.
+- Metadata sync: `spotMeta` from `/info` is stored in
+  `hypercore_token_metadata` and `hypercore_spot_asset`.
+- Withdraw and collection: signed Hyperliquid user actions sent to `/exchange`.
+  Core USDC uses `usdSend`; HIP-1 tokens such as HYPE use `spotSend`.
+- RPC config: enabled profiles require both `info` and `exchange` RPC node
+  purposes. Test environments use `https://api.hyperliquid-testnet.xyz`.
 
-This keeps the existing wallet flows stable: HyperEVM handles HYPE and ERC20
-assets, while HyperCore can later be added as a separate account-layer feature.
+Trading/order functions are intentionally excluded from the wallet path. The
+wallet integration only handles custody-style address display, balance
+observation, withdrawals and collection. HyperEVM <-> HyperCore transfers should
+remain explicit bridge/internal-transfer features if they are added later; they
+should not be treated as ERC20 deposit events.

@@ -47,10 +47,12 @@ The application should resolve assets by `chain + symbol` or `chain + contract`,
 | TON | TON, Jetton | DB tests | Testnet connectivity and funded live flow |
 | Aptos | APT, coin resources | DB tests | Testnet live flow |
 | Sui | SUI, coin resources | DB tests | Testnet live flow |
+| HyperCore | USDC, HYPE, HIP-1 tokens | DB/API tests | Hyperliquid testnet API |
 
-HyperEVM uses the shared EVM path for HYPE and ERC20 tokens. HyperCore is kept
-outside this chain-family table because it is the Hyperliquid core account layer,
-not an EVM JSON-RPC chain. See [HyperEVM and HyperCore Integration](hyperevm-hypercore.md).
+HyperEVM uses the shared EVM path for HYPE and ERC20 tokens. HyperCore uses its
+own account-layer adapter backed by the official Hyperliquid `/info` and
+`/exchange` APIs, not EVM JSON-RPC. See
+[HyperEVM and HyperCore Integration](hyperevm-hypercore.md).
 
 ## Signing Model
 

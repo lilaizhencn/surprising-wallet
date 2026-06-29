@@ -153,6 +153,7 @@ public class HotWalletAddressService {
         return switch (family) {
             case "bitcoin-like" -> deriveBitcoinLike(profile, userId, biz, addressIndex, walletRole);
             case "evm" -> deriveSecp256k1(profile, userId, biz, addressIndex, walletRole, AddressFormat.EVM);
+            case "hypercore" -> deriveSecp256k1(profile, userId, biz, addressIndex, walletRole, AddressFormat.EVM);
             case "tron" -> deriveSecp256k1(profile, userId, biz, addressIndex, walletRole, AddressFormat.TRON);
             case "solana" -> deriveSolana(profile, userId, biz, addressIndex, walletRole);
             case "sui" -> deriveSui(profile, userId, biz, addressIndex, walletRole);
@@ -187,6 +188,8 @@ public class HotWalletAddressService {
             case "bitcoin-like" -> deriveBitcoinLikeWithCandidateBip32Nodes(profile, userId, biz, addressIndex,
                     walletRole, nodes);
             case "evm" -> deriveSecp256k1WithCandidateBip32Node(profile, userId, biz, addressIndex,
+                    walletRole, nodes.get(2), AddressFormat.EVM);
+            case "hypercore" -> deriveSecp256k1WithCandidateBip32Node(profile, userId, biz, addressIndex,
                     walletRole, nodes.get(2), AddressFormat.EVM);
             case "tron" -> deriveSecp256k1WithCandidateBip32Node(profile, userId, biz, addressIndex,
                     walletRole, nodes.get(2), AddressFormat.TRON);
@@ -396,7 +399,8 @@ public class HotWalletAddressService {
         if (left == null || right == null) {
             return false;
         }
-        if ("evm".equals(normalize(profile.getFamily()))) {
+        String family = normalize(profile.getFamily());
+        if ("evm".equals(family) || "hypercore".equals(family)) {
             return left.equalsIgnoreCase(right);
         }
         return left.equals(right);
@@ -437,6 +441,7 @@ public class HotWalletAddressService {
         String family = normalize(profile.getFamily());
         return "bitcoin-like".equals(family)
                 || "evm".equals(family)
+                || "hypercore".equals(family)
                 || "tron".equals(family)
                 || "xrp".equals(family);
     }

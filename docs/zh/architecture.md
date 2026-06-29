@@ -47,8 +47,9 @@
 | TON | TON, Jetton | DB 测试 | Testnet 连通性和 funded live flow |
 | Aptos | APT, coin resource | DB 测试 | Testnet live flow |
 | Sui | SUI, coin resource | DB 测试 | Testnet live flow |
+| HyperCore | USDC, HYPE, HIP-1 token | DB/API 测试 | Hyperliquid testnet API |
 
-HyperEVM 复用 EVM 通用路径处理 HYPE 和 ERC20 token。HyperCore 不放进这张链族表里，因为它是 Hyperliquid 的核心账户层，不是 EVM JSON-RPC 链。参见 [HyperEVM 与 HyperCore 接入说明](hyperevm-hypercore.md)。
+HyperEVM 复用 EVM 通用路径处理 HYPE 和 ERC20 token。HyperCore 使用独立的账户层适配器，通过官方 Hyperliquid `/info` 和 `/exchange` API 工作，不是 EVM JSON-RPC 链。参见 [HyperEVM 与 HyperCore 接入说明](hyperevm-hypercore.md)。
 
 ## 签名模型
 

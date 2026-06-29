@@ -264,6 +264,9 @@ public class WalletStartupValidator implements ApplicationRunner {
                 && "regtest".equalsIgnoreCase(profile.getNetwork())) {
             return List.of("rpc", "faucet", "daemon");
         }
+        if ("HYPERCORE".equalsIgnoreCase(profile.getChain())) {
+            return List.of("info", "exchange");
+        }
         return List.of("rpc");
     }
 
@@ -316,7 +319,7 @@ public class WalletStartupValidator implements ApplicationRunner {
 
         for (AccountChainProfile profile : repository.listAllChainProfiles()) {
             List<ChainRpcNode> nodes = Boolean.TRUE.equals(profile.getEnabled())
-                    ? repository.listEnabledRpcNodes(profile.getChain(), profile.getNetwork(), environmentName)
+                    ? repository.listAllEnabledRpcNodes(profile.getChain(), profile.getNetwork(), environmentName)
                     : List.of();
             if (!Boolean.TRUE.equals(profile.getEnabled())) {
                 log.warn("chain disabled: {}/{}", profile.getChain(), profile.getNetwork());

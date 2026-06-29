@@ -15,6 +15,8 @@ import com.surprising.wallet.service.chain.cardano.CardanoDepositScanner;
 import com.surprising.wallet.service.chain.cardano.CardanoTransactionService;
 import com.surprising.wallet.service.chain.evm.EvmAccountTransactionService;
 import com.surprising.wallet.service.chain.evm.EvmDepositScanner;
+import com.surprising.wallet.service.chain.hypercore.HyperCoreDepositScanner;
+import com.surprising.wallet.service.chain.hypercore.HyperCoreTransactionService;
 import com.surprising.wallet.service.chain.monero.MoneroDepositScanner;
 import com.surprising.wallet.service.chain.monero.MoneroTransactionService;
 import com.surprising.wallet.service.chain.near.NearDepositScanner;
@@ -74,6 +76,7 @@ public class AccountChainWorkflowService {
     private static final BigDecimal TRX_SUN = new BigDecimal("1000000");
     private static final List<String> ACCOUNT_CHAIN_PRIORITY = List.of(
             "XMR",
+            "HYPERCORE",
             "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C", "HYPEREVM",
             "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
 
@@ -84,6 +87,8 @@ public class AccountChainWorkflowService {
 
     private final EvmDepositScanner evmDepositScanner;
     private final EvmAccountTransactionService evmTransactionService;
+    private final HyperCoreDepositScanner hyperCoreDepositScanner;
+    private final HyperCoreTransactionService hyperCoreTransactionService;
     private final SolanaDepositScanner solanaDepositScanner;
     private final SolanaTransactionService solanaTransactionService;
     private final AptosDepositScanner aptosDepositScanner;
@@ -193,6 +198,7 @@ public class AccountChainWorkflowService {
                 case "DOT" -> scanPolkadot();
                 case "NEAR" -> scanNear();
                 case "XMR" -> scanMonero(profile);
+                case "HYPERCORE" -> scanHyperCore(profile);
                 case "TRON" -> scanTron(profile);
                 default -> {
                     if ("evm".equalsIgnoreCase(profile.getFamily())) {
@@ -347,6 +353,13 @@ public class AccountChainWorkflowService {
                 yield nearTransactionService.sendToken(from, requireToken(chain, order.getAssetSymbol()),
                         order.getToAddress(), order.getAmount());
             }
+            case "HYPERCORE" -> {
+                if (isNative(profile, order.getAssetSymbol())) {
+                    yield hyperCoreTransactionService.sendUsd(profile, from, order.getToAddress(), order.getAmount());
+                }
+                yield hyperCoreTransactionService.sendSpot(profile, from, requireToken(chain, order.getAssetSymbol()),
+                        order.getToAddress(), order.getAmount());
+            }
             case "TRON" -> broadcastTron(profile, order, from);
             default -> throw new IllegalStateException("unsupported account-chain withdrawal: " + chain);
         };
@@ -380,6 +393,9 @@ public class AccountChainWorkflowService {
                     withdrawalDebitAmount(order), order.getToAddress(), order.getAmount());
             case "NEAR" -> nearTransactionService.confirmWithdrawal(
                     profile, order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
+                    debitAccountId(order, from), withdrawalDebitAmount(order));
+            case "HYPERCORE" -> hyperCoreTransactionService.confirmWithdrawal(
+                    order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
                     debitAccountId(order, from), withdrawalDebitAmount(order));
             case "TRON" -> confirmTronWithdrawal(profile, order, from);
             default -> {
@@ -500,6 +516,18 @@ public class AccountChainWorkflowService {
                             record.getToAddress(), record.getAmount());
                 }
             }
+            case "HYPERCORE" -> {
+                if (repository.claimCollectionSigning(record.getChain(), record.getCollectionNo(), null) != 1) {
+                    return;
+                }
+                String actionId = isNative(profile, record.getAssetSymbol())
+                        ? hyperCoreTransactionService.sendUsd(profile, from, record.getToAddress(), record.getAmount())
+                        : hyperCoreTransactionService.sendSpot(profile, from,
+                        requireToken(record.getChain(), record.getAssetSymbol()),
+                        record.getToAddress(), record.getAmount());
+                repository.updateCollectionStatus(record.getChain(), record.getCollectionNo(),
+                        "SENT", actionId, null, null);
+            }
             case "TRON" -> processTronCollection(profile, record, from);
             default -> {
             }
@@ -522,6 +550,8 @@ public class AccountChainWorkflowService {
                     profile, record.getCollectionNo(), record.getAssetSymbol());
             case "XMR" -> moneroTransactionService.confirmCollection(profile, record.getCollectionNo());
             case "NEAR" -> nearTransactionService.confirmCollection(profile, record.getCollectionNo());
+            case "HYPERCORE" -> hyperCoreTransactionService.confirmCollection(
+                    record.getCollectionNo(), record.getTxHash());
             case "TRON" -> confirmTronCollection(profile, record);
             default -> {
             }
@@ -569,6 +599,10 @@ public class AccountChainWorkflowService {
 
     private void scanNear() {
         nearDepositScanner.scanAndCredit();
+    }
+
+    private void scanHyperCore(AccountChainProfile profile) {
+        hyperCoreDepositScanner.scanAndCredit(profile);
     }
 
     private void scanMonero(AccountChainProfile profile) {
@@ -758,6 +792,7 @@ public class AccountChainWorkflowService {
                 case "DOT" -> configured.max(new BigDecimal("0.02"));
                 case "XMR" -> configured.max(new BigDecimal("0.003"));
                 case "NEAR" -> configured.max(new BigDecimal("3"));
+                case "HYPERCORE" -> BigDecimal.ZERO;
                 case "SUI" -> configured.max(new BigDecimal("0.02"));
                 case "APTOS" -> configured.max(new BigDecimal("0.05"));
                 case "TRON" -> configured.max(new BigDecimal("1"));

@@ -29,19 +29,20 @@ HyperEVM mainnet 的 USDC 合约不同：
 0xb88339CB7199b77E23DB6E890353E22632Ba630f
 ```
 
-因为当前 `token_config` 按 `chain + symbol` 唯一，每套部署数据库只能保存本环境正在使用的合约地址。
-`dev`/`test2` 数据库保留 testnet 合约；未来启用 prod 前，只在 prod 数据库中替换为 mainnet 合约。
+因为当前 `token_config` 按 `chain + symbol` 唯一，每套部署数据库只保存本环境正在使用的合约地址。
+`dev`/`test2` 数据库保留 testnet 合约；启用 prod 前，只在 prod 数据库中替换为 mainnet 合约。
 
-## HyperCore 边界
+## HyperCore 范围
 
-HyperCore 不应该按普通 EVM token 链建模。它是 Hyperliquid 的核心账户/订单簿层，HyperEVM 才是 EVM 执行层。
-所以 HyperCore 不能只靠新增一条 `token_config` 配置完成，需要单独的适配器。
+`HYPERCORE` 已按单独的 `hypercore` 链族接入。它不是 EVM JSON-RPC 链，不能当作 `HYPEREVM` 下的另一条 ERC20 链来配置。
 
-推荐分阶段做：
+当前钱包范围：
 
-1. 新增 `hypercore` 链族和适配器，通过官方 API 读取 HyperCore 账户状态。
-2. 把 HyperEVM <-> HyperCore 转移建成明确的桥接/内部转移记录，不按 ERC20 充值事件处理。
-3. 等托管、提现风控规则确定后，再接入 Hyperliquid API action 的签名能力。
-4. 除非产品明确需要交易功能，否则钱包路径里先不做下单/交易能力。
+- 地址模型：secp256k1/BIP44 账户地址，和 EVM 兼容链使用同一类 owner account 派生方式。
+- 充值扫描：通过官方 Hyperliquid `/info` API 的 `spotClearinghouseState` 读取账户余额快照，扫描器把正向余额增量记为钱包充值入账。
+- 元数据同步：通过 `/info` 的 `spotMeta` 同步到 `hypercore_token_metadata` 和 `hypercore_spot_asset`。
+- 提现与归集：通过 `/exchange` 发送已签名的 Hyperliquid user action。Core USDC 使用 `usdSend`，HYPE 等 HIP-1 token 使用 `spotSend`。
+- RPC 配置：启用的 `HYPERCORE` profile 必须同时配置 `info` 和 `exchange` 两类 RPC 节点。测试环境使用 `https://api.hyperliquid-testnet.xyz`。
 
-这样可以保持现有钱包流程稳定：HyperEVM 负责 HYPE 和 ERC20 资产，HyperCore 后续作为独立账户层能力接入。
+交易和下单能力刻意不放进钱包路径。当前接入只覆盖托管钱包需要的地址展示、余额观测、提现和归集。
+如果后续要做 HyperEVM <-> HyperCore 转移，应作为明确的桥接/内部转移功能处理，不应当伪装成 ERC20 充值事件。
