@@ -117,6 +117,19 @@ public class TonTransactionService {
                                                 BigInteger amountNano, StateInit stateInit,
                                                 Cell body, boolean bounce) {
         WalletV4R2 wallet = keyService.wallet(derivationIndex);
+        return prepareContractCall(wallet, destination, amountNano, stateInit, body, bounce);
+    }
+
+    public PreparedTransfer prepareContractCall(ChainAddressRecord from, String destination,
+                                                BigInteger amountNano, StateInit stateInit,
+                                                Cell body, boolean bounce) {
+        WalletV4R2 wallet = keyService.wallet(from.getUserId(), from.getBiz(), from.getAddressIndex());
+        return prepareContractCall(wallet, destination, amountNano, stateInit, body, bounce);
+    }
+
+    private PreparedTransfer prepareContractCall(WalletV4R2 wallet, String destination,
+                                                 BigInteger amountNano, StateInit stateInit,
+                                                 Cell body, boolean bounce) {
         String from = friendly(wallet.getAddress(), false);
         long chainSeqno = rpc.seqno(from);
         long seqno = repository.reserveAccountSequence(CHAIN, from, chainSeqno);

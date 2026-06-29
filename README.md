@@ -11,8 +11,9 @@ configuration.
 
 - Wallet app APIs for registration, login, portfolio, deposit address, withdrawal,
   internal transfer, and non-production faucet flows.
-- EVM contract deployment APIs for wallet users, with fixed OpenZeppelin-style
-  ERC20/ERC721 templates, deployer-only derived addresses, gas balance checks,
+- EVM, TRON, NEAR, Solana, Aptos, Sui, Polkadot Asset Hub, and TON deployment APIs for wallet users,
+  with fixed OpenZeppelin-style ERC20/ERC721, TRC20/TRC721, NEP-141/NEP-171,
+  SPL Token/NFT mint, Aptos Coin/single-asset, Sui Move Coin/NFT, Asset Hub asset, and TON Jetton/NFT Collection templates, deployer-only derived addresses, gas balance checks,
   preview, broadcast, and deployment-order tracking.
 - DB Asset Model: runtime behavior comes from `chain_profile`, `chain_rpc_node`,
   `chain_asset`, `token_config`, `wallet_system_config`, and `wallet_public_key`.
@@ -80,15 +81,15 @@ target database.
 |---|---|---|---|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH | Native UTXO assets | 2-of-3 signing, local regtest support, external RPC by DB configuration |
 | EVM | ETH, BNB, POLYGON, ARBITRUM, OPTIMISM, BASE, AVAX_C, HYPEREVM, MANTLE, LINEA, SCROLL, UNICHAIN | Native gas asset plus ERC20, ERC20/ERC721 deployment templates | Shared EVM scanner, signer, withdrawal, collection, contract deployment, and Hardhat fork tests |
-| TRON | TRON | TRX plus TRC20 | Nile/testnet and mainnet profiles are DB-configured |
-| Solana | SOLANA | SOL plus SPL tokens | Uses Ed25519 derivation and SPL token account handling |
-| TON | TON | TON plus Jetton | Uses Ed25519 derivation and Jetton wallet resolution |
-| Aptos | APTOS | APT plus Aptos coin/FA resources | Uses Ed25519 derivation and account-resource token lookup |
-| Sui | SUI | SUI plus Sui coin objects | Uses Sui RPC/gRPC-compatible runtime path and coin-object handling |
+| TRON | TRON | TRX plus TRC20, TRC20/TRC721 deployment templates | Nile/testnet and mainnet profiles are DB-configured; contract deployment uses TRON fee_limit accounting |
+| Solana | SOLANA | SOL plus SPL tokens, SPL Token/NFT mint deployment templates | Uses Ed25519 derivation, SPL token account handling, and standard SPL mint creation |
+| TON | TON | TON plus Jetton, Jetton/NFT Collection deployment templates | Uses Ed25519 derivation, Jetton wallet resolution, deployer-gas scanning, and ton4j StateInit messages |
+| Aptos | APTOS | APT plus Aptos coin/FA resources, Aptos Coin/single-asset deployment templates | Uses Ed25519 derivation, account-resource token lookup, and runtime Move package publish through the configured Aptos CLI |
+| Sui | SUI | SUI plus Sui coin objects, Sui Coin/NFT deployment templates | Uses Sui RPC/gRPC-compatible runtime path, coin-object handling, and runtime Move compilation through the configured Sui CLI |
 | XRP Ledger | XRP | XRP plus issued currencies such as USDC | Supports trustline-aware token handling |
 | Cardano | ADA | ADA plus native-asset templates | Seeded as disabled templates until exact token/RPC settings are enabled |
-| Polkadot | DOT | DOT plus Asset Hub assets | Westend/Asset Hub paths and runtime helper integration |
-| NEAR | NEAR | NEAR plus NEP-141 tokens | Uses implicit account derivation and storage-deposit handling |
+| Polkadot | DOT | DOT plus Asset Hub assets, Asset Hub token/single-asset deployment templates | Westend/Asset Hub paths, runtime helper integration, native deployer-gas scanning, and pallet-assets creation |
+| NEAR | NEAR | NEAR plus NEP-141 tokens, NEP-141/NEP-171 deployment templates | Uses implicit account derivation, storage-deposit handling, and precompiled Wasm deployment templates |
 | Monero | XMR | XMR | Regtest/stagenet/mainnet profiles, wallet-rpc integration, disabled until explicitly configured |
 | HyperCore | HYPERCORE | Core USDC, HYPE, HIP-1 spot assets | Uses Hyperliquid `/info` and `/exchange`, not EVM JSON-RPC |
 
@@ -131,40 +132,108 @@ selection is based on chain and asset metadata:
 | `wallet_system_config` | Global runtime switches and chain-specific operational settings |
 | `chain_scan_height` | Scanner checkpoints per chain/profile |
 | `ledger_balance` | User and system balances scoped by chain and asset symbol |
-| `contract_deployment_order` | EVM ERC20/ERC721 deployment preview, fee, tx, receipt, and status tracking |
+| `contract_deployment_order` | EVM ERC20/ERC721, TRON TRC20/TRC721, NEAR NEP-141/NEP-171, Solana SPL Token/NFT mint, Aptos Coin/single-asset, Sui Coin/NFT, Polkadot Asset Hub, and TON Jetton/NFT Collection deployment preview, fee, tx, receipt, and status tracking |
 
 Before a new deployment scans deposits, set `chain_scan_height` deliberately. A
 fresh environment should usually start near the latest safe block. Move the
 checkpoint backward only for a known replay window; scanning from genesis can be
 slow and can exhaust public RPC quotas.
 
-## EVM Contract Deployment
+## Contract Deployment
 
-Wallet users can deploy contracts on enabled EVM-family chains without giving the
-backend arbitrary Solidity source code. The server exposes fixed, compiled
-templates under `backendservices/wallet-parent/wallet-server/src/main/resources/contracts/evm`:
+Wallet users can deploy contracts or runtime assets on enabled EVM-family chains, TRON, NEAR, Solana, Aptos, Sui, Polkadot, and TON
+without giving the backend arbitrary source code. The server exposes fixed,
+compiled templates under `backendservices/wallet-parent/wallet-server/src/main/resources/contracts`:
 
 - `TokDouERC20`: OpenZeppelin-style ERC20 with owner, cap, pause, burn, permit,
   configurable decimals, initial supply, max supply, and optional owner mint.
 - `TokDouERC721`: OpenZeppelin-style ERC721 with owner, enumerable tokens, URI
   storage, pause, burn, owner mint, base URI, and max supply.
+- `TokDouTRC20`: OpenZeppelin-style TRC20 compiled for TRON-compatible
+  Solidity, with owner, cap, pause, burn, permit, configurable decimals, initial
+  supply, max supply, and optional owner mint.
+- `TokDouTRC721`: OpenZeppelin-style TRC721 compiled for TRON-compatible
+  Solidity, with owner, enumerable tokens, URI storage, pause, burn, owner mint,
+  base URI, and max supply.
+- `TokDouNep141`: near-sdk-js NEP-141 fungible token Wasm template with FT core
+  methods, storage management, metadata, and owner initial supply.
+- `TokDouNep171`: near-sdk-js NEP-171 NFT Wasm template with NFT core methods,
+  metadata, enumeration, approval, and owner mint.
+- `TokDouSplToken`: standard Solana SPL Token mint creation flow with mint
+  rent, owner ATA creation, initial supply, optional owner mint authority, and
+  revoked freeze authority.
+- `TokDouSplNft`: single-supply Solana SPL mint flow with decimals 0, owner ATA
+  delivery, revoked authorities, and no Metaplex metadata in this version.
+- `TokDouAptosCoin`: Aptos Move Coin<T> package using `managed_coin`, owner
+  initial supply, optional owner mint, and module-level max-supply checks.
+- `TokDouAptosNft`: single-supply Aptos Move Coin<T> asset with decimals 0.
+  Aptos Digital Asset metadata is not attached in this version.
+- `TokDouSuiCoin`: Sui Move Coin template using Coin Registry, owner initial
+  supply, optional owner mint through `MintAuthority`, and max-supply checks.
+- `TokDouSuiNft`: Sui Move NFT template with a Collection object, owner mint,
+  base URI, emitted mint events, and max-supply checks.
+- `TokDouAssetHubToken`: Polkadot Asset Hub `pallet-assets` fungible asset
+  creation flow with deterministic asset id, metadata, optional initial supply,
+  and owner-controlled issuer role.
+- `TokDouAssetHubAsset`: Polkadot Asset Hub single-supply asset flow with
+  decimals 0, supply 1, and no NFT metadata in this version.
+- `TokDouJetton`: TON TEP-74 Jetton minter deployment using ton4j, off-chain
+  metadata URI, optional owner initial mint, and owner admin.
+- `TokDouNftCollection`: TON TEP-62 NFT Collection deployment using ton4j,
+  collection metadata URI, base item URI, and owner admin.
 
 The deployment flow is intentionally separated from normal wallet deposits:
 
-1. The user selects an EVM chain and requests a contract deployment address.
+1. The user selects an EVM, TRON, NEAR, Solana, Aptos, Sui, Polkadot, or TON chain and requests a contract deployment
+   address.
 2. wallet-server derives that address with the existing deterministic key path,
    but stores it with `wallet_role=CONTRACT_DEPLOYER`.
 3. The user funds that address with the chain's native gas asset.
 4. Scanners can credit the address balance, while collection and normal
    withdrawal flows continue to use only ordinary `DEPOSIT` addresses.
-5. The preview endpoint validates parameters, estimates gas, checks both ledger
-   and on-chain balance, and returns constructor arguments and source preview.
+5. The preview endpoint validates parameters, estimates EVM gas, applies a TRON
+   `fee_limit`, reserves NEAR gas plus Wasm storage staking, or compiles the
+   Sui Move template and reserves a fixed Sui publish gas budget. It checks both
+   ledger and on-chain balance and returns constructor/init arguments and source
+   preview. Solana reserves rent-exempt mint and owner associated-token-account
+   balances plus estimated signature fees. Aptos compiles a fixed Move package
+   and reserves max gas in APT. Polkadot checks Asset Hub asset-id availability
+   and reserves the configured DOT runtime fee/deposit budget. TON checks
+   deterministic contract-address availability and reserves the TON deployment
+   balance used by the StateInit message.
 6. The deploy endpoint signs and broadcasts the contract creation transaction,
    then stores tx, receipt, fee, and status in `contract_deployment_order`.
 
 Contract deployment does not automatically add the deployed token to
 `token_config` or to the wallet asset list. Token-list onboarding should remain
 an explicit operational decision.
+
+Sui deployment requires the Sui CLI to be available to wallet-server. Configure
+`sw.wallet.contract.sui.cli` when the executable is not named `sui`; the default
+compile timeout is controlled by `sw.wallet.contract.sui.timeout-seconds`.
+
+Solana deployment uses the existing wallet Solana RPC and `solanaj` SPL
+instructions. It creates standard token mints rather than arbitrary Solana
+programs, so no extra compiler toolchain is required.
+
+Aptos deployment requires the Aptos CLI to be available to wallet-server.
+Configure `sw.wallet.contract.aptos.cli` when the executable is not named
+`aptos`; the compile timeout is controlled by
+`sw.wallet.contract.aptos.timeout-seconds`.
+
+Polkadot deployment uses the local `services/polkadot-runtime-service` helper
+and Asset Hub WebSocket RPC nodes from `chain_rpc_node` with purpose
+`asset_rpc`. It creates standard `pallet-assets` assets rather than uploading
+Wasm smart contracts, so no compiler toolchain is required. The deployer
+address must hold native DOT/WND on Asset Hub, and DOT native scanning includes
+`wallet_role=CONTRACT_DEPLOYER` addresses so user-funded deployment gas can be
+credited before preview/deploy.
+
+TON deployment uses ton4j Jetton and NFT Collection builders to create
+deterministic StateInit messages. The deployer address must hold TON for the
+initial deployment balance, and TON native scanning includes
+`wallet_role=CONTRACT_DEPLOYER` addresses. Jetton deposit scanning remains scoped
+to normal `DEPOSIT` addresses.
 
 ## Quick Start
 
@@ -175,7 +244,9 @@ Prerequisites:
 - PostgreSQL 14+
 - Redis 6+
 - Docker for local BTC/LTC/DOGE/BCH/XMR regtest flows
-- Node.js 18+ for EVM fork tests
+- Node.js 18+ for EVM fork tests and the Polkadot runtime helper
+- Aptos CLI for Aptos Coin/single-asset Move package compilation and publish previews
+- Sui CLI for Sui Coin/NFT Move template compilation and publish previews
 
 Create and initialize a local database:
 
@@ -232,7 +303,7 @@ online private roots.
 | `POST /wallet/v1/app/transfer` | Transfer inside the wallet system |
 | `POST /wallet/v1/app/test-faucet/doge` | Non-production DOGE regtest faucet |
 | `POST /wallet/v1/app/test-faucet/xmr` | Non-production XMR regtest faucet |
-| `GET /wallet/v1/app/contracts/templates` | List supported EVM deployment chains and ERC20/ERC721 templates |
+| `GET /wallet/v1/app/contracts/templates` | List supported EVM/TRON/NEAR/Solana/Aptos/Sui/Polkadot/TON deployment chains and ERC20/ERC721/TRC20/TRC721/NEP-141/NEP-171/SPL Token/SPL NFT/Aptos Coin/Aptos Asset/Sui Coin/Sui NFT/Asset Hub/Jetton/NFT Collection templates |
 | `POST /wallet/v1/app/contracts/deployer-address` | Get or create a user contract-deployer address |
 | `POST /wallet/v1/app/contracts/preview` | Validate parameters and estimate deployment gas |
 | `POST /wallet/v1/app/contracts/deploy` | Sign and broadcast a contract creation transaction |

@@ -71,6 +71,13 @@ public class SolanaRpcClient {
         return call("requestAirdrop", List.of(address, lamports, commitment())).asText();
     }
 
+    public long minimumBalanceForRentExemption(long dataLength) {
+        if (dataLength < 0) {
+            throw new IllegalArgumentException("Solana rent data length must be non-negative");
+        }
+        return call("getMinimumBalanceForRentExemption", List.of(dataLength)).asLong();
+    }
+
     public String sendTransaction(byte[] serializedTransaction) {
         ObjectNode config = objectMapper.createObjectNode();
         config.put("encoding", "base64");

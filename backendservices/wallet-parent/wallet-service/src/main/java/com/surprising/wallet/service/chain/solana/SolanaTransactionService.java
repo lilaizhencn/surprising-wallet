@@ -13,6 +13,7 @@ import org.p2p.solanaj.core.Account;
 import org.p2p.solanaj.core.PublicKey;
 import org.p2p.solanaj.core.Transaction;
 import org.p2p.solanaj.programs.AssociatedTokenProgram;
+import org.p2p.solanaj.programs.MemoProgram;
 import org.p2p.solanaj.programs.SystemProgram;
 import org.p2p.solanaj.programs.TokenProgram;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class SolanaTransactionService {
     private static final String CHAIN = "SOLANA";
+    private static final int SPL_MINT_ACCOUNT_LENGTH = 82;
 
     private final SolanaRpcClient rpc;
     private final SolanaKeyService keyService;
@@ -86,6 +88,54 @@ public class SolanaTransactionService {
     private String sendToken(Account sender, String mintAddress, String toOwnerAddress,
                              long atomicAmount, int decimals) {
         return sendTokenWithFeePayer(sender, sender, mintAddress, toOwnerAddress, atomicAmount, decimals);
+    }
+
+    public DeploySplMintResult deploySplMint(ChainAddressRecord payerRecord,
+                                             String ownerAddress,
+                                             int decimals,
+                                             long initialAtomicAmount,
+                                             boolean retainMintAuthority,
+                                             String memo) {
+        if (decimals < 0 || decimals > 9) {
+            throw new IllegalArgumentException("Solana SPL decimals must be between 0 and 9");
+        }
+        if (initialAtomicAmount < 0) {
+            throw new IllegalArgumentException("Solana initial supply must be non-negative");
+        }
+        Account payer = keyService.account(payerRecord.getUserId(), payerRecord.getBiz(), payerRecord.getAddressIndex());
+        Account mint = new Account();
+        PublicKey owner = new PublicKey(ownerAddress);
+        PublicKey ownerAta = new PublicKey(addressService.associatedTokenAddress(ownerAddress, mint.getPublicKeyBase58()));
+        long rent = rpc.minimumBalanceForRentExemption(SPL_MINT_ACCOUNT_LENGTH);
+
+        Transaction transaction = new Transaction()
+                .addInstruction(SystemProgram.createAccount(
+                        payer.getPublicKey(), mint.getPublicKey(), rent, SPL_MINT_ACCOUNT_LENGTH, TokenProgram.PROGRAM_ID))
+                .addInstruction(TokenProgram.initializeMint(
+                        mint.getPublicKey(), decimals, payer.getPublicKey(), payer.getPublicKey()))
+                .addInstruction(AssociatedTokenProgram.createIdempotent(
+                        payer.getPublicKey(), owner, mint.getPublicKey()));
+        if (initialAtomicAmount > 0) {
+            transaction.addInstruction(TokenProgram.mintTo(
+                    mint.getPublicKey(), ownerAta, payer.getPublicKey(), initialAtomicAmount));
+        }
+        transaction.addInstruction(TokenProgram.setAuthority(
+                mint.getPublicKey(),
+                payer.getPublicKey(),
+                retainMintAuthority ? owner : null,
+                TokenProgram.AuthorityType.MINT_TOKENS));
+        transaction.addInstruction(TokenProgram.setAuthority(
+                mint.getPublicKey(),
+                payer.getPublicKey(),
+                null,
+                TokenProgram.AuthorityType.FREEZE_ACCOUNT));
+        if (memo != null && !memo.isBlank()) {
+            transaction.addInstruction(MemoProgram.writeUtf8(payer.getPublicKey(), memo));
+        }
+        String signature = signAndSend(transaction, List.of(payer, mint));
+        recordTransaction(signature, payer.getPublicKeyBase58(), mint.getPublicKeyBase58(),
+                "SOL_CONTRACT", mint.getPublicKeyBase58(), BigDecimal.ZERO, profile().getDefaultFee(), "SENT");
+        return new DeploySplMintResult(signature, mint.getPublicKeyBase58(), ownerAta.toBase58());
     }
 
     private String sendTokenWithFeePayer(Account sourceOwner, Account feePayer, String mintAddress,
@@ -335,5 +385,8 @@ public class SolanaTransactionService {
                 .status("CONFIRMED")
                 .rawPayload(transaction.toString())
                 .build());
+    }
+
+    public record DeploySplMintResult(String signature, String mintAddress, String ownerTokenAccount) {
     }
 }

@@ -96,6 +96,38 @@ public class AptosTransactionService {
         return rpc.submitTransaction(tx.json());
     }
 
+    public DeployPackageResult publishPackage(ChainAddressRecord publisher,
+                                              byte[] metadata,
+                                              List<byte[]> modules,
+                                              long maxGasAmount,
+                                              long gasUnitPrice) {
+        if (metadata == null || metadata.length == 0) {
+            throw new IllegalArgumentException("Aptos package metadata is required");
+        }
+        if (modules == null || modules.isEmpty()) {
+            throw new IllegalArgumentException("Aptos package modules are required");
+        }
+        long chainSequence = rpc.sequenceNumber(publisher.getAddress());
+        long sequence = repository.reserveAccountSequence(
+                CHAIN, AptosHex.normalizeAddress(publisher.getAddress()), chainSequence);
+        AptosTransactionSigner.SignedTransaction tx = signer.publishPackage(
+                publisher.getUserId(),
+                publisher.getBiz(),
+                publisher.getAddressIndex(),
+                publisher.getAddress(),
+                sequence,
+                metadata,
+                modules,
+                maxGasAmount,
+                gasUnitPrice,
+                rpc.chainId());
+        String hash = rpc.submitTransaction(tx.json());
+        record(hash, publisher.getAddress(), publisher.getAddress(), "APT_CONTRACT",
+                AptosRpcClient.aptCoinType(), BigDecimal.ZERO,
+                Math.multiplyExact(maxGasAmount, gasUnitPrice), sequence, "SENT", tx.json().toString());
+        return new DeployPackageResult(hash, sequence);
+    }
+
     public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amountOctas) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "aptos withdrawNative");
@@ -324,5 +356,8 @@ public class AptosTransactionService {
     }
 
     private record GasPlan(long maxGasAmount, long gasUnitPrice) {
+    }
+
+    public record DeployPackageResult(String txHash, long sequenceNumber) {
     }
 }

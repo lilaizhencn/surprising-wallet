@@ -36,6 +36,18 @@ final class AptosBcs {
         return out.toByteArray();
     }
 
+    static byte[] u8VectorArg(byte[] value) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writeBytesVector(out, value);
+        return out.toByteArray();
+    }
+
+    static byte[] u8VectorVectorArg(List<byte[]> values) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writeVector(out, values, AptosBcs::writeBytesVector);
+        return out.toByteArray();
+    }
+
     private static void writeEntryFunction(ByteArrayOutputStream out, EntryFunctionPayload payload) {
         String[] moduleParts = payload.module().split("::");
         if (moduleParts.length != 2) {

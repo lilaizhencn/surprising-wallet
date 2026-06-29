@@ -2,11 +2,15 @@ package com.surprising.wallet.service.chain.tron;
 
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.service.config.ChainRpcNodeService;
+import org.tron.trident.abi.datatypes.Type;
 import org.tron.trident.core.ApiWrapper;
 import org.tron.trident.core.NodeType;
+import org.tron.trident.core.key.KeyPair;
 import org.tron.trident.proto.Response.Account;
 import org.tron.trident.proto.Chain;
 import org.tron.trident.proto.Response;
+
+import java.util.List;
 
 /**
  * Thin lifecycle wrapper around Trident ApiWrapper.
@@ -18,9 +22,11 @@ public class TronTridentClient implements AutoCloseable {
     private final ChainRpcNode fullNode;
     private final ChainRpcNode solidityNode;
     private final ChainRpcNodeService rpcNodeService;
+    private final String apiKey;
 
     public TronTridentClient(String fullNode, String solidityNode, String apiKey) {
-        this.apiWrapper = new ApiWrapper(fullNode, solidityNode, "", apiKey == null ? "" : apiKey);
+        this.apiKey = apiKey == null ? "" : apiKey;
+        this.apiWrapper = new ApiWrapper(fullNode, solidityNode, "", this.apiKey);
         this.fullNode = ChainRpcNode.builder()
                 .nodeLabel("tron-full-node")
                 .rpcUrl(fullNode)
@@ -36,9 +42,9 @@ public class TronTridentClient implements AutoCloseable {
             ChainRpcNode fullNode,
             ChainRpcNode solidityNode,
             ChainRpcNodeService rpcNodeService) {
-        String apiKey = firstNonBlank(fullNode.getApiKey(), solidityNode.getApiKey());
+        this.apiKey = firstNonBlank(fullNode.getApiKey(), solidityNode.getApiKey());
         this.apiWrapper = new ApiWrapper(fullNode.getRpcUrl(), solidityNode.getRpcUrl(),
-                "", apiKey == null ? "" : apiKey);
+                "", this.apiKey == null ? "" : this.apiKey);
         this.fullNode = fullNode;
         this.solidityNode = solidityNode;
         this.rpcNodeService = rpcNodeService;
@@ -90,6 +96,27 @@ public class TronTridentClient implements AutoCloseable {
 
     public String broadcast(Chain.Transaction signedTransaction) {
         return callUnchecked(fullNode, () -> apiWrapper.broadcastTransaction(signedTransaction));
+    }
+
+    public Response.TransactionExtention deployContract(KeyPair keyPair,
+                                                        String contractName,
+                                                        String abiJson,
+                                                        String bytecodeHex,
+                                                        List<Type<?>> constructorArgs,
+                                                        long feeLimitSun,
+                                                        long consumeUserResourcePercent,
+                                                        long originEnergyLimit,
+                                                        long callValueSun) {
+        return callUnchecked(fullNode, () -> {
+            ApiWrapper deployWrapper = new ApiWrapper(fullNode.getRpcUrl(), solidityNode.getRpcUrl(),
+                    keyPair.toPrivateKey(), apiKey == null ? "" : apiKey);
+            try {
+                return deployWrapper.deployContract(contractName, abiJson, bytecodeHex, constructorArgs,
+                        feeLimitSun, consumeUserResourcePercent, originEnergyLimit, callValueSun, "", 0L);
+            } finally {
+                deployWrapper.close();
+            }
+        });
     }
 
     @Override

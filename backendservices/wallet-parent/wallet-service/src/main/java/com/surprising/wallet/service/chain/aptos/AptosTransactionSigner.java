@@ -11,6 +11,7 @@ import java.io.ByteArrayOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 
@@ -19,6 +20,7 @@ import java.util.Objects;
 public class AptosTransactionSigner {
     private static final byte[] RAW_TRANSACTION_PREFIX = sha3("APTOS::RawTransaction".getBytes());
     private static final String APTOS_ACCOUNT_MODULE = "0x1::aptos_account";
+    private static final HexFormat HEX = HexFormat.of();
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final AptosKeyService keyService;
@@ -90,6 +92,19 @@ public class AptosTransactionSigner {
                 arguments, maxGasAmount, gasUnitPrice, chainId);
     }
 
+    public SignedTransaction publishPackage(long userId, int biz, long derivationIndex,
+                                            String sender, long sequenceNumber,
+                                            byte[] metadata,
+                                            List<byte[]> modules,
+                                            long maxGasAmount,
+                                            long gasUnitPrice,
+                                            int chainId) {
+        return sign(userId, biz, derivationIndex, sender, sequenceNumber,
+                "0x1::code", "publish_package_txn", List.of(),
+                List.of(FunctionArgument.u8Vector(metadata), FunctionArgument.u8VectorVector(modules)),
+                maxGasAmount, gasUnitPrice, chainId);
+    }
+
     private SignedTransaction sign(long userId, int biz, long derivationIndex,
                                    String sender, long sequenceNumber,
                                    String module, String function, List<String> typeArguments,
@@ -128,7 +143,7 @@ public class AptosTransactionSigner {
         typeArguments.forEach(typeArgs::add);
         payload.set("type_arguments", typeArgs);
         ArrayNode args = objectMapper.createArrayNode();
-        arguments.forEach(argument -> args.add(argument.jsonValue()));
+        arguments.forEach(argument -> args.add(objectMapper.valueToTree(argument.jsonValue())));
         payload.set("arguments", args);
         return payload;
     }
@@ -153,7 +168,7 @@ public class AptosTransactionSigner {
                                     ObjectNode json) {
     }
 
-    public record FunctionArgument(byte[] bcs, String jsonValue) {
+    public record FunctionArgument(byte[] bcs, Object jsonValue) {
         public FunctionArgument {
             Objects.requireNonNull(bcs, "bcs");
             Objects.requireNonNull(jsonValue, "jsonValue");
@@ -165,6 +180,17 @@ public class AptosTransactionSigner {
 
         public static FunctionArgument u64(long value) {
             return new FunctionArgument(AptosBcs.u64Arg(value), Long.toUnsignedString(value));
+        }
+
+        public static FunctionArgument u8Vector(byte[] value) {
+            return new FunctionArgument(AptosBcs.u8VectorArg(value), "0x" + HEX.formatHex(value));
+        }
+
+        public static FunctionArgument u8VectorVector(List<byte[]> values) {
+            List<String> json = values.stream()
+                    .map(bytes -> "0x" + HEX.formatHex(bytes))
+                    .toList();
+            return new FunctionArgument(AptosBcs.u8VectorVectorArg(values), json);
         }
     }
 }

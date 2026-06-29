@@ -6,7 +6,7 @@
 - `chain_asset` 负责链原生资产
 - `token_config` 负责 token 运行时配置
 - `ledger_balance` 负责用户与系统余额
-- `contract_deployment_order` 负责 EVM 合约部署订单、手续费、交易和回执状态
+- `contract_deployment_order` 负责 EVM/TRON/NEAR/Solana/Aptos/Sui/Polkadot Asset Hub/TON Jetton/NFT Collection 合约/资产部署订单、手续费、交易和回执状态
 
 中文文档位于 [`docs/zh`](docs/zh)，英文文档位于 [`docs/en`](docs/en)。
 
@@ -20,8 +20,13 @@
 |---|---|---|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH | UTXO、本地 regtest、2-of-3 签名 |
 | EVM | Ethereum, BNB, Polygon, Arbitrum, Optimism, Base, Avalanche, HyperEVM, Mantle, Linea, Scroll, Unichain | 账户模型、ERC20、ERC20/ERC721 合约部署、Hardhat fork 测试 |
-| TRON | TRON Nile/mainnet profile | 账户模型、TRC20 |
-| Ed25519 账户链 | SOL, TON, APTOS, SUI | 账户/token 服务、DB 测试、外部 devnet/testnet live 测试 |
+| TRON | TRON Nile/mainnet profile | 账户模型、TRC20、TRC20/TRC721 合约部署 |
+| NEAR | NEAR testnet/mainnet profile | 隐式账户、NEP-141、NEP-141/NEP-171 合约部署 |
+| Solana | SOLANA devnet/mainnet profile | SOL、SPL token、SPL Token/NFT mint 模板部署 |
+| Aptos | APTOS testnet/mainnet profile | APT、Coin/FA 资源、Aptos Coin/单供应量资产 Move 模板部署 |
+| Sui | SUI testnet/mainnet profile | Sui Coin 对象、Coin/NFT Move 模板部署、运行时 Sui CLI 编译 |
+| Polkadot | DOT Westend/mainnet profile | DOT、Asset Hub assets、Asset Hub Token/Single Asset 部署 |
+| TON | TON testnet/mainnet profile | TON、Jetton、Jetton/NFT Collection 部署、ton4j StateInit 消息 |
 
 ## 快速启动
 
@@ -32,7 +37,9 @@
 - PostgreSQL 14+
 - Redis 6+
 - Docker，用于 BTC/LTC/DOGE/BCH 本地 regtest
-- Node.js 18+，用于 EVM fork 测试
+- Node.js 18+，用于 EVM fork 测试和 Polkadot runtime helper
+- Aptos CLI，用于 Aptos Coin/单供应量资产 Move 模板编译和发布预览
+- Sui CLI，用于 Sui Coin/NFT Move 模板编译和发布预览
 
 创建数据库：
 
@@ -80,23 +87,55 @@ export SW_WALLET_ADMIN_PASSWORD='<钱包后台配置密码>'
 生产环境中第三个 BIP32 私钥根应离线保存，wallet-server 只配置三组公钥。
 wallet-server 三组公钥配置在 `wallet_public_key`，不是 YAML/env。
 
-## EVM 合约部署
+## 合约部署
 
-钱包用户可以在已启用的 EVM 系列链上部署合约。后端不接收任意 Solidity
+钱包用户可以在已启用的 EVM 系列链、TRON、NEAR、Solana、Aptos、Sui、Polkadot 和 TON 上部署合约或运行时资产。后端不接收任意 Solidity/Move/JS
 源码，只开放固定的安全模板和参数：
 
 - `TokDouERC20`：基于 OpenZeppelin 风格的 ERC20，支持 owner、cap、pause、
   burn、permit、decimals、initial supply、max supply 和可选 owner mint。
 - `TokDouERC721`：基于 OpenZeppelin 风格的 ERC721，支持 owner、enumerable、
   URI storage、pause、burn、owner mint、base URI 和 max supply。
+- `TokDouTRC20`：基于 OpenZeppelin 风格、面向 TRON 编译的 TRC20，支持
+  owner、cap、pause、burn、permit、decimals、initial supply、max supply 和可选 owner mint。
+- `TokDouTRC721`：基于 OpenZeppelin 风格、面向 TRON 编译的 TRC721，支持
+  owner、enumerable、URI storage、pause、burn、owner mint、base URI 和 max supply。
+- `TokDouNep141`：基于 near-sdk-js 的 NEP-141 Wasm 模板，支持 FT core、
+  storage management、metadata 和 owner 初始供应量。
+- `TokDouNep171`：基于 near-sdk-js 的 NEP-171 Wasm 模板，支持 NFT core、
+  metadata、enumeration、approval 和 owner mint。
+- `TokDouSplToken`：Solana 标准 SPL Token mint 创建流程，支持 mint 租金预留、
+  owner ATA 创建、初始供应量、可选 owner mint authority，以及撤销 freeze authority。
+- `TokDouSplNft`：Solana 单供应量 SPL mint 创建流程，decimals 固定为 0，
+  token 发给 owner ATA，并撤销 mint/freeze authority；当前版本不写入 Metaplex metadata。
+- `TokDouAptosCoin`：Aptos Move Coin<T> package，使用 `managed_coin`，支持 owner 初始供应量、
+  可选 owner mint 和模块内 max supply 检查。
+- `TokDouAptosNft`：Aptos 单供应量 Coin<T> 资产，decimals 固定为 0；当前版本不写入 Aptos Digital Asset metadata。
+- `TokDouSuiCoin`：Sui Move Coin 模板，使用 Coin Registry，支持 owner 初始供应量、
+  通过 `MintAuthority` 可选 owner mint，并在模块内约束 max supply。
+- `TokDouSuiNft`：Sui Move NFT 模板，支持 Collection 对象、owner mint、base URI、
+  mint 事件和 max supply。
+- `TokDouAssetHubToken`：Polkadot Asset Hub `pallet-assets` fungible asset 创建流程，支持确定性 asset id、metadata、初始供应量和 issuer role。
+- `TokDouAssetHubAsset`：Polkadot Asset Hub 单供应量资产，decimals 为 0、supply 为 1，当前版本不写入 NFT metadata。
+- `TokDouJetton`：TON TEP-74 Jetton minter 部署流程，使用 ton4j，支持 off-chain metadata URI、owner 初始发行和 owner admin。
+- `TokDouNftCollection`：TON TEP-62 NFT Collection 部署流程，使用 ton4j，支持 collection metadata URI、base item URI 和 owner admin。
 
 合约部署地址和普通充值地址隔离。用户选择链后，wallet-server 使用原有确定性
 派生规则生成地址，但写入 `wallet_role=CONTRACT_DEPLOYER`。用户自行给这个地址
 充值原生 gas 币，扫描任务可以给它入账；普通提现、普通资产列表和归集继续只处理
-`DEPOSIT` 地址。预览接口会校验参数、估算 gas，并同时检查账本余额和链上余额。
-部署成功后，交易、回执、手续费和状态写入 `contract_deployment_order`。
+`DEPOSIT` 地址。预览接口会校验参数、估算 EVM gas、应用 TRON `fee_limit`、为 NEAR 预留 gas 与 Wasm 存储质押、为 Solana 预留 mint/ATA 租金与签名费、编译 Aptos Move package 并预留 max gas，或编译 Sui Move 模板并预留固定 Sui publish gas budget；Polkadot 会检查 Asset Hub asset id 可用性并预留 DOT 运行时费用，TON 会检查确定性合约地址状态并预留 StateInit 部署余额，同时检查账本余额和链上余额。
+Polkadot 部署使用 `services/polkadot-runtime-service` 和 `chain_rpc_node` 中 purpose=`asset_rpc` 的 Asset Hub WebSocket RPC，创建标准 `pallet-assets` 资产，不上传 Wasm 合约。部署成功后，交易、回执、手续费和状态写入 `contract_deployment_order`。
+TON 部署使用 ton4j 的 Jetton 与 NFT Collection builder 创建确定性 StateInit 消息，不需要额外编译器。TON 原生币扫描会包含 `wallet_role=CONTRACT_DEPLOYER` 地址，方便用户先给部署地址充值 gas；Jetton 入账扫描仍然只处理普通 `DEPOSIT` 地址。
 
 部署出的合约不会自动写入 `token_config`，也不会自动进入钱包 token 列表。
+
+Sui 部署要求 wallet-server 所在机器可以执行 Sui CLI。默认命令为 `sui`；如果可执行文件不在 PATH，
+用 `sw.wallet.contract.sui.cli` 指定路径，编译超时时间由 `sw.wallet.contract.sui.timeout-seconds` 控制。
+
+Solana 部署复用现有 Solana RPC 和 `solanaj` SPL 指令，只创建标准 token mint，不接收任意 Solana program 源码，因此不需要额外编译工具链。
+
+Aptos 部署要求 wallet-server 所在机器可以执行 Aptos CLI。默认命令为 `aptos`；如果可执行文件不在 PATH，
+用 `sw.wallet.contract.aptos.cli` 指定路径，编译超时时间由 `sw.wallet.contract.aptos.timeout-seconds` 控制。
 
 ## TokDou 前端接入
 
@@ -117,7 +156,7 @@ wallet-server 三组公钥配置在 `wallet_public_key`，不是 YAML/env。
 | `POST /wallet/v1/admin/login` | 钱包后台配置登录，HTTP Basic Auth |
 | `GET /wallet/v1/admin/config` | 查询可管理配置表 |
 | `PATCH /wallet/v1/admin/config/{table}/{id}` | 白名单字段更新配置 |
-| `GET /wallet/v1/app/contracts/templates` | 查询支持部署的 EVM 链和 ERC20/ERC721 模板 |
+| `GET /wallet/v1/app/contracts/templates` | 查询支持部署的 EVM/TRON/NEAR/Solana/Aptos/Sui/Polkadot/TON 链和 ERC20/ERC721/TRC20/TRC721/NEP-141/NEP-171/SPL Token/SPL NFT/Aptos Coin/Aptos Asset/Sui Coin/Sui NFT/Asset Hub/Jetton/NFT Collection 模板 |
 | `POST /wallet/v1/app/contracts/deployer-address` | 获取或生成用户合约部署地址 |
 | `POST /wallet/v1/app/contracts/preview` | 校验合约参数并估算部署 gas |
 | `POST /wallet/v1/app/contracts/deploy` | 签名并广播合约创建交易 |

@@ -125,6 +125,10 @@ public class NearRpcClient {
         return finalBlock().path("header").path("height").asLong(0L);
     }
 
+    public BigInteger gasPriceYocto() {
+        return new BigInteger(finalBlock().path("header").path("gas_price").asText("0"));
+    }
+
     public JsonNode chunk(String chunkHash) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("chunk_id", chunkHash);

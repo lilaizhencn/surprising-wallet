@@ -73,6 +73,39 @@ class NearTransactionSignerTest {
     }
 
     @Test
+    void serializesDeployContractAndInitWithBorshLayout() {
+        byte[] publicKey = new byte[32];
+        Arrays.fill(publicKey, (byte) 5);
+        byte[] blockHash = new byte[32];
+        Arrays.fill(blockHash, (byte) 6);
+        byte[] wasm = new byte[]{0, 97, 115, 109};
+        byte[] args = "{\"owner_id\":\"alice.testnet\"}".getBytes();
+
+        byte[] tx = NearTransactionSigner.deployContractAndFunctionCallTransactionBytes(
+                "alice.testnet",
+                publicKey,
+                9L,
+                "alice.testnet",
+                blockHash,
+                wasm,
+                "init",
+                args,
+                200_000_000_000_000L,
+                BigInteger.ZERO);
+
+        int publicKeyOffset = 4 + "alice.testnet".length();
+        int nonceOffset = publicKeyOffset + 1 + 32;
+        int actionsOffset = nonceOffset + 8 + 4 + "alice.testnet".length() + 32;
+        assertEquals(2, littleEndianU32(tx, actionsOffset));
+        assertEquals(1, tx[actionsOffset + 4]);
+        int wasmLengthOffset = actionsOffset + 5;
+        assertEquals(wasm.length, littleEndianU32(tx, wasmLengthOffset));
+        int functionActionOffset = wasmLengthOffset + 4 + wasm.length;
+        assertEquals(2, tx[functionActionOffset]);
+        assertEquals("init".length(), littleEndianU32(tx, functionActionOffset + 1));
+    }
+
+    @Test
     void signsAndEncodesSignedTransaction() {
         NearKeyService keyService = new NearKeyService("000102030405060708090a0b0c0d0e0f");
         NearTransactionSigner signer = new NearTransactionSigner(keyService);

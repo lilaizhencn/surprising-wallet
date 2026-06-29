@@ -207,6 +207,49 @@ app.post('/v1/polkadot/asset-transfer', handler(async (req) => {
   return submitAndWait(api, tx, pair, req.body.waitFinalized !== false);
 }));
 
+app.post('/v1/polkadot/asset-create', handler(async (req) => {
+  const api = await apiFor(requireString(req.body.rpcUrl, 'rpcUrl'));
+  if (!api.tx.assets) {
+    throw new Error('assets pallet is not available on this runtime');
+  }
+  if (!api.tx.utility || !api.tx.utility.batchAll) {
+    throw new Error('utility.batchAll is required for atomic asset deployment');
+  }
+  const ss58Prefix = Number(req.body.ss58Prefix ?? 42);
+  const pair = pairFromSeed(req.body.secretSeedHex, ss58Prefix);
+  assertExpectedAddress(pair.address, req.body.expectedFrom);
+  const assetId = requireString(req.body.assetId, 'assetId');
+  const name = requireString(req.body.name, 'name');
+  const symbol = requireString(req.body.symbol, 'symbol');
+  const decimals = Number(req.body.decimals ?? 0);
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 18) {
+    throw new Error('decimals must be between 0 and 18');
+  }
+  const minBalance = requireString(req.body.minBalance, 'minBalance');
+  const initialSupply = String(req.body.initialSupply ?? '0');
+  const mintable = req.body.mintable !== false;
+  const existing = await api.query.assets.asset(assetId);
+  if (existing && existing.isSome) {
+    throw new Error(`Asset Hub asset already exists: ${assetId}`);
+  }
+  const calls = [
+    api.tx.assets.create(assetId, pair.address, minBalance),
+    api.tx.assets.setMetadata(assetId, name, symbol, decimals)
+  ];
+  if (BigInt(initialSupply) > 0n) {
+    calls.push(api.tx.assets.mint(assetId, pair.address, initialSupply));
+  }
+  if (!mintable && !api.tx.assets.setTeam) {
+    throw new Error('assets.setTeam is required when mintable is false');
+  }
+  if (!mintable) {
+    calls.push(api.tx.assets.setTeam(assetId, deadAddress(ss58Prefix), pair.address, pair.address));
+  }
+  const tx = api.tx.utility.batchAll(calls);
+  const submitted = await submitAndWait(api, tx, pair, req.body.waitFinalized !== false);
+  return { ...submitted, assetId, owner: pair.address, name, symbol, decimals, minBalance, initialSupply };
+}));
+
 app.post('/v1/polkadot/transaction-status', handler(async (req) => {
   const api = await apiFor(requireString(req.body.rpcUrl, 'rpcUrl'));
   const txHash = requireString(req.body.txHash, 'txHash').toLowerCase();
@@ -316,6 +359,10 @@ function assetTransfer(api, assetId, to, amount, keepAlive) {
     return api.tx.assets.transferKeepAlive(assetId, to, amount);
   }
   throw new Error('assets transfer is not available on this runtime');
+}
+
+function deadAddress(ss58Prefix) {
+  return encodeAddress(new Uint8Array(32), ss58Prefix);
 }
 
 async function submitAndWait(api, tx, pair, waitFinalized) {

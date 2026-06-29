@@ -11,11 +11,20 @@ importers:
       '@openzeppelin/contracts':
         specifier: 5.0.2
         version: 5.0.2
+      '@openzeppelin/contracts4':
+        specifier: npm:@openzeppelin/contracts@4.9.6
+        version: '@openzeppelin/contracts@4.9.6'
       solc:
         specifier: 0.8.24
         version: 0.8.24
+      solc-0-8-19:
+        specifier: npm:solc@0.8.19
+        version: solc@0.8.19
 
 packages:
+
+  '@openzeppelin/contracts@4.9.6':
+    resolution: {integrity: sha512-xSmezSupL+y9VkHZJGDoCBpmnB2ogM13ccaYDWqJTfS3dbuHkgjuwDFUmaFauBCboQMGB/S5UqUl2y54X99BmA==}
 
   '@openzeppelin/contracts@5.0.2':
     resolution: {integrity: sha512-ytPc6eLGcHHnapAZ9S+5qsdomhjo6QBHTDRRBFfTxXIpsicMhVPouPgmUPebZZZGX7vt9USA+Z+0M0dSVtSUEA==}
@@ -51,6 +60,11 @@ packages:
     resolution: {integrity: sha512-cBznnQ9KjJqU67B52RMC65CMarK2600WFnbkcaiwWq3xy/5haFJlshgnpjovMVJ+Hff49d8GEn0b87C5pDQ10g==}
     hasBin: true
 
+  solc@0.8.19:
+    resolution: {integrity: sha512-yqurS3wzC4LdEvmMobODXqprV4MYJcVtinuxgrp61ac8K2zz40vXA0eSAskSHPgv8dQo7Nux39i3QBsHx4pqyA==}
+    engines: {node: '>=10.0.0'}
+    hasBin: true
+
   solc@0.8.24:
     resolution: {integrity: sha512-G5yUqjTUPc8Np74sCFwfsevhBPlUifUOfhYrgyu6CmYlC6feSw0YS6eZW47XDT23k3JYdKx5nJ+Q7whCEmNcoA==}
     engines: {node: '>=10.0.0'}
@@ -61,6 +75,8 @@ packages:
     engines: {node: '>=0.6.0'}
 
 snapshots:
+
+  '@openzeppelin/contracts@4.9.6': {}
 
   '@openzeppelin/contracts@5.0.2': {}
 
@@ -77,6 +93,18 @@ snapshots:
   os-tmpdir@1.0.2: {}
 
   semver@5.7.2: {}
+
+  solc@0.8.19:
+    dependencies:
+      command-exists: 1.2.9
+      commander: 8.3.0
+      follow-redirects: 1.16.0
+      js-sha3: 0.8.0
+      memorystream: 0.3.1
+      semver: 5.7.2
+      tmp: 0.0.33
+    transitivePeerDependencies:
+      - debug
 
   solc@0.8.24:
     dependencies:

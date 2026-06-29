@@ -107,6 +107,24 @@ public class NearTransactionService {
         return txHash;
     }
 
+    public DeployResult deployContractAndInit(ChainAddressRecord from, byte[] contractCode,
+                                              String initMethod, byte[] initArgs,
+                                              long gas, BigInteger depositYocto) {
+        JsonNode accessKey = rpc.accessKey(from.getAddress(), publicKeyBase58(from));
+        long nonce = accessKey.path("nonce").asLong(0L) + 1L;
+        NearTransactionSigner.SignedTransaction signed = signer.deployContractAndFunctionCall(
+                from.getUserId(), from.getBiz(), from.getAddressIndex(),
+                from.getAddress(), nonce, from.getAddress(),
+                accessKey.path("block_hash").asText(), contractCode, initMethod,
+                initArgs, gas, depositYocto);
+        JsonNode result = rpc.broadcastTxCommit(signed.signedTransactionBase64());
+        String txHash = result.path("transaction").path("hash").asText(signed.transactionHash());
+        record(txHash, 0L, from.getAddress(), from.getAddress(), "NEAR_CONTRACT", BigDecimal.ZERO,
+                gasBurnt(result), blockHeight(result), txSucceeded(result) ? "CONFIRMED" : "SENT",
+                result.toString());
+        return new DeployResult(txHash, nonce, result);
+    }
+
     public boolean tokenStorageRegistered(TokenDefinition token, String accountId) {
         ObjectNode args = objectMapper.createObjectNode();
         args.put("account_id", accountId);
@@ -335,5 +353,8 @@ public class NearTransactionService {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("NEAR wait interrupted", e);
         }
+    }
+
+    public record DeployResult(String txHash, long nonce, JsonNode result) {
     }
 }

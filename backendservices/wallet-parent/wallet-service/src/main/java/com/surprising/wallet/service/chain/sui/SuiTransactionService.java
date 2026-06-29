@@ -86,6 +86,27 @@ public class SuiTransactionService {
         return rpc.executeSignedTransaction(txBytes, signature).path("digest").asText();
     }
 
+    public PublishResult publishPackage(ChainAddressRecord from, List<String> compiledModules,
+                                        List<String> dependencies, long gasBudget) {
+        if (gasBudget <= 0) {
+            throw new IllegalArgumentException("Sui publish gas budget must be positive");
+        }
+        JsonNode unsigned = rpc.publishTransaction(from.getAddress(), compiledModules, dependencies, gasBudget);
+        String txBytes = unsigned.path("txBytes").asText("");
+        if (txBytes.isBlank()) {
+            throw new IllegalStateException("Sui publish builder returned empty txBytes");
+        }
+        String signature = signer.signTransactionBytes(from.getUserId(), from.getBiz(), from.getAddressIndex(), txBytes);
+        JsonNode result = rpc.executeSignedTransaction(txBytes, signature);
+        String digest = result.path("digest").asText("");
+        if (digest.isBlank()) {
+            throw new IllegalStateException("Sui publish execution returned empty digest");
+        }
+        record(digest, from.getAddress(), from.getAddress(), "SUI_CONTRACT", "PACKAGE",
+                BigDecimal.ZERO, gasBudget, "SENT", result.toString());
+        return new PublishResult(digest, result);
+    }
+
     public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amountMist) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "sui withdrawNative");
@@ -307,5 +328,8 @@ public class SuiTransactionService {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Sui wait interrupted", e);
         }
+    }
+
+    public record PublishResult(String digest, JsonNode result) {
     }
 }

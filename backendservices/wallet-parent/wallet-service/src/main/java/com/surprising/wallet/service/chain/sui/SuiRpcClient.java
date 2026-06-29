@@ -28,7 +28,7 @@ import java.util.List;
 @Component
 public class SuiRpcClient {
     private static final String CHAIN = "SUI";
-    static final String SUI_COIN_TYPE = "0x2::sui::SUI";
+    public static final String SUI_COIN_TYPE = "0x2::sui::SUI";
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
@@ -142,6 +142,27 @@ public class SuiRpcClient {
         params.add(transactionOptions());
         params.add("WaitForLocalExecution");
         return call("sui_executeTransactionBlock", params);
+    }
+
+    public JsonNode publishTransaction(String sender, List<String> compiledModules,
+                                       List<String> dependencies, long gasBudget) {
+        if (compiledModules == null || compiledModules.isEmpty()) {
+            throw new IllegalArgumentException("Sui publish requires compiled modules");
+        }
+        if (dependencies == null || dependencies.isEmpty()) {
+            throw new IllegalArgumentException("Sui publish requires package dependencies");
+        }
+        ArrayNode params = objectMapper.createArrayNode();
+        params.add(SuiHex.normalizeAddress(sender));
+        ArrayNode modules = objectMapper.createArrayNode();
+        compiledModules.forEach(modules::add);
+        params.add(modules);
+        ArrayNode deps = objectMapper.createArrayNode();
+        dependencies.forEach(deps::add);
+        params.add(deps);
+        params.addNull();
+        params.add(String.valueOf(gasBudget));
+        return call("unsafe_publish", params);
     }
 
     private ObjectNode transactionOptions() {

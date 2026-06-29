@@ -26,6 +26,8 @@ public class TonDepositScanner {
     private static final String CHAIN = "TON";
     private static final String SCANNER = "ton-account-message-scanner";
     private static final int TON_DECIMALS = 9;
+    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";
+    private static final String WALLET_ROLE_CONTRACT_DEPLOYER = "CONTRACT_DEPLOYER";
     private static final long JETTON_TRANSFER_NOTIFICATION = 0x7362d09cL;
     private static final long JETTON_INTERNAL_TRANSFER = 0x178d4519L;
     private static final long JETTON_EXCESSES = 0xd53276dbL;
@@ -43,13 +45,13 @@ public class TonDepositScanner {
         AccountChainProfile profile = profile();
         List<DepositEvent> events = new ArrayList<>();
         for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, "TON")) {
-            if ("DEPOSIT".equals(address.getWalletRole())) {
+            if (isNativeScanRole(address)) {
                 scanNative(address, profile, events);
             }
         }
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
             for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, token.getSymbol())) {
-                if ("DEPOSIT".equals(address.getWalletRole())) {
+                if (WALLET_ROLE_DEPOSIT.equals(address.getWalletRole())) {
                     scanJetton(address, token, profile, events);
                 }
             }
@@ -195,6 +197,14 @@ public class TonDepositScanner {
         } catch (RuntimeException ignored) {
             return false;
         }
+    }
+
+    private static boolean isNativeScanRole(ChainAddressRecord address) {
+        if (address == null) {
+            return false;
+        }
+        return WALLET_ROLE_DEPOSIT.equals(address.getWalletRole())
+                || WALLET_ROLE_CONTRACT_DEPLOYER.equals(address.getWalletRole());
     }
 
     private static BigDecimal decimal(String value) {

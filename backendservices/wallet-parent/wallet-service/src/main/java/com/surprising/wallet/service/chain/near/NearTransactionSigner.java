@@ -15,6 +15,7 @@ import java.util.Base64;
 @Component
 public class NearTransactionSigner {
     private static final int ED25519_KEY_TYPE = 0;
+    private static final int DEPLOY_CONTRACT_ACTION = 1;
     private static final int FUNCTION_CALL_ACTION = 2;
     private static final int TRANSFER_ACTION = 3;
 
@@ -47,6 +48,24 @@ public class NearTransactionSigner {
         byte[] transaction = functionCallTransactionBytes(
                 signerId, publicKey, nonce, receiverId, Base58.decode(blockHashBase58),
                 methodName, args, gas, depositYocto);
+        byte[] hash = sha256(transaction);
+        byte[] signature = keyService.sign(userId, biz, addressIndex, hash);
+        byte[] signedTransaction = signedTransactionBytes(transaction, signature);
+        return new SignedTransaction(
+                Base58.encode(hash),
+                Base64.getEncoder().encodeToString(signedTransaction),
+                Base58.encode(publicKey));
+    }
+
+    public SignedTransaction deployContractAndFunctionCall(long userId, int biz, long addressIndex,
+                                                           String signerId, long nonce, String receiverId,
+                                                           String blockHashBase58, byte[] contractCode,
+                                                           String methodName, byte[] args,
+                                                           long gas, BigInteger depositYocto) {
+        byte[] publicKey = keyService.derive(userId, biz, addressIndex).publicKey();
+        byte[] transaction = deployContractAndFunctionCallTransactionBytes(
+                signerId, publicKey, nonce, receiverId, Base58.decode(blockHashBase58),
+                contractCode, methodName, args, gas, depositYocto);
         byte[] hash = sha256(transaction);
         byte[] signature = keyService.sign(userId, biz, addressIndex, hash);
         byte[] signedTransaction = signedTransactionBytes(transaction, signature);
@@ -95,6 +114,40 @@ public class NearTransactionSigner {
         writer.string(receiverId);
         writer.bytes(blockHash);
         writer.u32(1);
+        writer.u8(FUNCTION_CALL_ACTION);
+        writer.string(methodName);
+        writer.byteArray(args == null ? new byte[0] : args);
+        writer.u64(gas);
+        writer.u128(depositYocto);
+        return writer.toByteArray();
+    }
+
+    static byte[] deployContractAndFunctionCallTransactionBytes(String signerId, byte[] publicKey, long nonce,
+                                                                String receiverId, byte[] blockHash,
+                                                                byte[] contractCode, String methodName,
+                                                                byte[] args, long gas,
+                                                                BigInteger depositYocto) {
+        if (publicKey == null || publicKey.length != 32) {
+            throw new IllegalArgumentException("NEAR Ed25519 public key must be 32 bytes");
+        }
+        if (blockHash == null || blockHash.length != 32) {
+            throw new IllegalArgumentException("NEAR block hash must be 32 bytes");
+        }
+        if (contractCode == null || contractCode.length == 0) {
+            throw new IllegalArgumentException("NEAR contract code must not be empty");
+        }
+        if (gas < 0) {
+            throw new IllegalArgumentException("NEAR gas must be unsigned");
+        }
+        BorshWriter writer = new BorshWriter();
+        writer.string(signerId);
+        writer.publicKey(publicKey);
+        writer.u64(nonce);
+        writer.string(receiverId);
+        writer.bytes(blockHash);
+        writer.u32(2);
+        writer.u8(DEPLOY_CONTRACT_ACTION);
+        writer.byteArray(contractCode);
         writer.u8(FUNCTION_CALL_ACTION);
         writer.string(methodName);
         writer.byteArray(args == null ? new byte[0] : args);

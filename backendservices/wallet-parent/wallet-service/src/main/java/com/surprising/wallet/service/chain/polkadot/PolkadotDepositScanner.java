@@ -29,6 +29,8 @@ public class PolkadotDepositScanner {
     private static final String SYMBOL = "DOT";
     private static final String NATIVE_SCANNER = "polkadot-runtime-scanner";
     private static final String ASSET_HUB_SCANNER = "polkadot-assethub-scanner";
+    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";
+    private static final String WALLET_ROLE_CONTRACT_DEPLOYER = "CONTRACT_DEPLOYER";
     private static final int DEFAULT_DOT_DECIMALS = 10;
 
     private final PolkadotRuntimeClient runtimeClient;
@@ -159,11 +161,23 @@ public class PolkadotDepositScanner {
     private Map<String, ChainAddressRecord> trackedDepositAddresses(String assetSymbol) {
         Map<String, ChainAddressRecord> addresses = new HashMap<>();
         for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, assetSymbol)) {
-            if ("DEPOSIT".equals(address.getWalletRole())) {
+            if (isTrackedRole(address)) {
                 addresses.put(normalize(address.getAddress()), address);
             }
         }
         return addresses;
+    }
+
+    private boolean isTrackedRole(ChainAddressRecord address) {
+        if (address == null) {
+            return false;
+        }
+        String role = address.getWalletRole();
+        if (WALLET_ROLE_DEPOSIT.equals(role)) {
+            return true;
+        }
+        return SYMBOL.equalsIgnoreCase(address.getAssetSymbol())
+                && WALLET_ROLE_CONTRACT_DEPLOYER.equals(role);
     }
 
     private Map<String, Map<String, ChainAddressRecord>> trackedTokenDepositAddresses(

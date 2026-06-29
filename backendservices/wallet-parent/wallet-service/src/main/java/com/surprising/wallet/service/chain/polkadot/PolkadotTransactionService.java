@@ -49,6 +49,27 @@ public class PolkadotTransactionService {
         return sendAsset(from, token, toAddress, amount, true);
     }
 
+    public DeployAssetResult deployAsset(ChainAddressRecord deployer,
+                                         String assetId,
+                                         String name,
+                                         String symbol,
+                                         int decimals,
+                                         BigInteger minBalance,
+                                         BigInteger initialSupply,
+                                         boolean mintable) {
+        PolkadotRuntimeClient.AssetCreateResult result = runtimeClient.createAsset(
+                secretSeedHex(deployer),
+                deployer.getAddress(),
+                assetId,
+                name,
+                symbol,
+                decimals,
+                minBalance,
+                initialSupply,
+                mintable);
+        return new DeployAssetResult(result.txHash(), result.assetId(), result.blockHeight());
+    }
+
     private String sendAsset(ChainAddressRecord from, TokenDefinition token, String toAddress, BigDecimal amount,
                              boolean keepAlive) {
         String assetId = PolkadotRuntimeClient.normalizeAssetId(token.getContractAddress());
@@ -191,5 +212,8 @@ public class PolkadotTransactionService {
     @FunctionalInterface
     private interface TxSubmitter {
         String submit();
+    }
+
+    public record DeployAssetResult(String txHash, String assetId, long blockHeight) {
     }
 }

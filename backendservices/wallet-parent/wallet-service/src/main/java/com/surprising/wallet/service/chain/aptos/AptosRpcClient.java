@@ -243,7 +243,7 @@ public class AptosRpcClient {
         }
     }
 
-    static String aptCoinType() {
+    public static String aptCoinType() {
         return APT_COIN;
     }
 

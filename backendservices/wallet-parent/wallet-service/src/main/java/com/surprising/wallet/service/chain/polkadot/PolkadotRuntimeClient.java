@@ -80,6 +80,31 @@ public class PolkadotRuntimeClient {
                 result.path("decimals").asInt(0));
     }
 
+    public AssetCreateResult createAsset(String secretSeedHex, String expectedFrom,
+                                         String assetId, String name, String symbol,
+                                         int decimals, BigInteger minBalance,
+                                         BigInteger initialSupply, boolean mintable) {
+        ObjectNode body = baseBody();
+        body.put("ss58Prefix", ss58Prefix(profile()));
+        body.put("secretSeedHex", secretSeedHex);
+        body.put("expectedFrom", expectedFrom);
+        body.put("assetId", normalizeAssetId(assetId));
+        body.put("name", name);
+        body.put("symbol", symbol);
+        body.put("decimals", decimals);
+        body.put("minBalance", minBalance.toString());
+        body.put("initialSupply", initialSupply.toString());
+        body.put("mintable", mintable);
+        body.put("waitFinalized", true);
+        JsonNode result = callRuntime("/v1/polkadot/asset-create", PURPOSE_ASSET_RPC, body);
+        SubmittedTransaction submitted = submitted(result);
+        return new AssetCreateResult(submitted.txHash(),
+                submitted.blockHeight(),
+                submitted.status(),
+                result.path("assetId").asText(assetId),
+                result.toString());
+    }
+
     public List<TransferEvent> scanNativeTransfers(long fromBlock, long toBlock,
                                                    Collection<String> addresses) {
         return scanTransfers(PURPOSE_NATIVE_RPC, fromBlock, toBlock, addresses, List.of(), true, false);
@@ -329,5 +354,9 @@ public class PolkadotRuntimeClient {
 
     public record AssetInfo(String assetId, boolean exists, BigInteger supply, BigInteger minBalance,
                             boolean sufficient, String name, String symbol, int decimals) {
+    }
+
+    public record AssetCreateResult(String txHash, long blockHeight, String status, String assetId,
+                                    String rawPayload) {
     }
 }
