@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -17,26 +17,19 @@
     <name>Surprising Parent</name>
     <description>Parent POM for all Surprising modules, inherits Spring Boot</description>
 
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
     <properties>
-        <surprising.version>1.0.0-SNAPSHOT</surprising.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <dependency-check.version>12.1.0</dependency-check.version>
-        <!-- Protobuf 4.34.x remains compatible with system protoc 34.x generated sources. -->
-        <protobuf.version>4.34.1</protobuf.version>
     </properties>
-
-    <dependencyManagement>
-        <dependencies>
-            <!-- Protobuf — version must match system protoc 34.0 -->
-            <dependency>
-                <groupId>com.google.protobuf</groupId>
-                <artifactId>protobuf-java</artifactId>
-                <version>${protobuf.version}</version>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
     <build>
         <plugins>
             <plugin>

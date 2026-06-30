@@ -7,6 +7,13 @@ configuration.
 
 [Chinese README](README_CN.md) | [Architecture](docs/en/architecture.md) | [Database](docs/en/database.md) | [Startup and testing](docs/en/startup-and-testing.md)
 
+## Support
+
+If you run into trouble or need technical support, contact the maintainer:
+
+[![Email](https://img.shields.io/badge/Email-business%40tokdou.com-4285F4?style=flat-square&logo=google&logoColor=white)](mailto:business@tokdou.com)
+[![Telegram](https://img.shields.io/badge/Telegram-%40SurprisingApp-26A5E4?style=flat-square&logo=telegram&logoColor=white)](https://t.me/SurprisingApp)
+
 ## Highlights
 
 - Wallet app APIs for registration, login, portfolio, deposit address, withdrawal,
@@ -145,6 +152,24 @@ Wallet users can deploy contracts or runtime assets on enabled EVM-family chains
 without giving the backend arbitrary source code. The server exposes fixed,
 compiled templates under `backendservices/wallet-parent/wallet-server/src/main/resources/contracts`:
 
+The product flow is designed for a custodial wallet page: a logged-in user
+chooses a chain and template, receives a dedicated deployment address, funds
+that address with the native gas asset, previews the generated template and fee
+quote, confirms the deployment, and tracks the resulting order. The backend
+never accepts arbitrary user-supplied contract source code; it only accepts
+validated parameters for audited project templates.
+
+| Chain family | User-facing templates | Deployment result | Extra runtime requirement |
+|---|---|---|---|
+| EVM | ERC20, ERC721 | OpenZeppelin-style Solidity contracts | Enabled EVM JSON-RPC node for the selected chain |
+| TRON | TRC20, TRC721 | TRON-compatible Solidity contracts | Enabled Nile/mainnet RPC, fee limit configuration |
+| NEAR | NEP-141, NEP-171 | Wasm contract deployed to the user's implicit account | Enabled NEAR RPC; precompiled Wasm templates are bundled |
+| Solana | SPL Token, SPL NFT mint | SPL mint and owner ATA | Enabled Solana RPC |
+| Aptos | Coin, single-supply asset | Move package published from the deployer account | Aptos CLI available to wallet-server |
+| Sui | Coin, NFT collection | Move package published from the deployer account | Sui CLI available to wallet-server |
+| Polkadot Asset Hub | Fungible asset, single-supply asset | `pallet-assets` asset id and metadata | Local Polkadot runtime helper plus Asset Hub WebSocket RPC |
+| TON | Jetton, NFT Collection | Deterministic StateInit contract | Enabled TON RPC/API key |
+
 - `TokDouERC20`: OpenZeppelin-style ERC20 with owner, cap, pause, burn, permit,
   configurable decimals, initial supply, max supply, and optional owner mint.
 - `TokDouERC721`: OpenZeppelin-style ERC721 with owner, enumerable tokens, URI
@@ -204,9 +229,71 @@ The deployment flow is intentionally separated from normal wallet deposits:
 6. The deploy endpoint signs and broadcasts the contract creation transaction,
    then stores tx, receipt, fee, and status in `contract_deployment_order`.
 
+The app API sequence is:
+
+| Step | Endpoint | Notes |
+|---|---|---|
+| Load choices | `GET /wallet/v1/app/contracts/templates` | Returns supported chains, template metadata, bytecode hash, features, and warnings |
+| Create/fetch gas address | `POST /wallet/v1/app/contracts/deployer-address` | Body: `{ "chain": "BASE", "forceNew": false }`; returns address, QR code, derivation path, and role |
+| Preview | `POST /wallet/v1/app/contracts/preview` | Validates fields, renders source/constructor args, checks ledger and chain balance, and returns `readyToDeploy` |
+| Confirm deploy | `POST /wallet/v1/app/contracts/deploy` | Same body as preview plus `"confirmed": true`; freezes native gas balance before broadcast |
+| Track orders | `GET /wallet/v1/app/contracts/orders?limit=20` | Refreshes pending orders and returns tx hash, contract address, fees, status, and errors |
+
+Example preview/deploy payload:
+
+```json
+{
+  "chain": "BASE",
+  "templateType": "ERC20",
+  "name": "TokDou Test USD",
+  "symbol": "TUSDC",
+  "decimals": 6,
+  "initialSupply": "1000000",
+  "maxSupply": "100000000",
+  "mintable": true,
+  "ownerAddress": "0x...",
+  "confirmed": true
+}
+```
+
+For ERC721-like templates, use `templateType: "ERC721"`, set `maxSupply`, and
+provide `baseUri` when the target family supports metadata URIs. If
+`ownerAddress` is omitted, the deployment address is used as the owner. Aptos,
+Polkadot, and TON currently require the owner to be the deployment address so
+that the published package, asset owner, or StateInit admin is controlled by the
+same derived key.
+
+Order statuses are intentionally simple:
+
+| Status | Meaning |
+|---|---|
+| `PREVIEW` | Returned by preview only; no order row is persisted |
+| `WAITING_FOR_FUNDS` | The deploy request could not freeze enough native gas balance |
+| `SIGNING` | Order row was created and signing/broadcast is in progress |
+| `SENT` | Transaction was broadcast; confirmation is still being refreshed |
+| `CONFIRMED` | Deployment was confirmed and actual fee/contract address were recorded |
+| `FAILED` | Validation, broadcast, or chain execution failed; unused locked balance is released when the failure is known before confirmation |
+
 Contract deployment does not automatically add the deployed token to
 `token_config` or to the wallet asset list. Token-list onboarding should remain
 an explicit operational decision.
+
+Operational boundaries:
+
+- Deployment gas is paid by the user-funded `CONTRACT_DEPLOYER` address. Hot
+  wallets do not top up gas for deployment.
+- Deployment addresses start from a separate deterministic index range and are
+  stored with `wallet_role=CONTRACT_DEPLOYER`, so normal deposits, withdrawals,
+  and collection jobs can distinguish them from `DEPOSIT` addresses.
+- Preview should be shown to the user before deploy. It includes generated
+  source code, ABI where applicable, constructor/init arguments, gas quote,
+  security notes, and warnings.
+- The fixed templates include owner controls such as pause, mint, burn, cap, and
+  max supply where the standard supports them. The UI should make those choices
+  explicit because they affect token trust assumptions.
+- On production databases, only enable chains whose RPC nodes, native gas
+  balance scanning, confirmation rules, and CLI/helper dependencies are known to
+  work in that environment.
 
 Sui deployment requires the Sui CLI to be available to wallet-server. Configure
 `sw.wallet.contract.sui.cli` when the executable is not named `sui`; the default

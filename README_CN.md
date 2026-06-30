@@ -12,6 +12,13 @@
 
 [English README](README.md)
 
+## 技术支持
+
+如果遇到麻烦或需要技术支持，可以通过以下方式联系：
+
+[![Email](https://img.shields.io/badge/Email-business%40tokdou.com-4285F4?style=flat-square&logo=google&logoColor=white)](mailto:business@tokdou.com)
+[![Telegram](https://img.shields.io/badge/Telegram-%40SurprisingApp-26A5E4?style=flat-square&logo=telegram&logoColor=white)](https://t.me/SurprisingApp)
+
 ## 当前范围
 
 支持的链族：
@@ -92,6 +99,19 @@ wallet-server 三组公钥配置在 `wallet_public_key`，不是 YAML/env。
 钱包用户可以在已启用的 EVM 系列链、TRON、NEAR、Solana、Aptos、Sui、Polkadot 和 TON 上部署合约或运行时资产。后端不接收任意 Solidity/Move/JS
 源码，只开放固定的安全模板和参数：
 
+面向用户的流程是：登录钱包后选择链和模板，获取独立的合约部署地址，用户自行向该地址充值原生 gas 币，预览后端生成的模板源码、构造参数和费用估算，二次确认后广播部署交易，最后在部署记录里查看状态、交易哈希、实际费用和合约地址。后端不接收用户提交的任意合约源码，只接收项目内固定模板允许的参数。
+
+| 链族 | 页面模板 | 部署结果 | 额外运行要求 |
+|---|---|---|---|
+| EVM | ERC20、ERC721 | OpenZeppelin 风格 Solidity 合约 | 对应链已启用 EVM JSON-RPC |
+| TRON | TRC20、TRC721 | TRON 兼容 Solidity 合约 | 已启用 Nile/mainnet RPC 和 fee limit |
+| NEAR | NEP-141、NEP-171 | 部署到用户隐式账户的 Wasm 合约 | 已启用 NEAR RPC，Wasm 模板随项目打包 |
+| Solana | SPL Token、SPL NFT mint | SPL mint 和 owner ATA | 已启用 Solana RPC |
+| Aptos | Coin、单供应量资产 | 从部署地址发布 Move package | wallet-server 可执行 Aptos CLI |
+| Sui | Coin、NFT Collection | 从部署地址发布 Move package | wallet-server 可执行 Sui CLI |
+| Polkadot Asset Hub | Fungible asset、单供应量资产 | `pallet-assets` asset id 和 metadata | 本地 Polkadot runtime helper 加 Asset Hub WebSocket RPC |
+| TON | Jetton、NFT Collection | 确定性的 StateInit 合约 | 已启用 TON RPC/API key |
+
 - `TokDouERC20`：基于 OpenZeppelin 风格的 ERC20，支持 owner、cap、pause、
   burn、permit、decimals、initial supply、max supply 和可选 owner mint。
 - `TokDouERC721`：基于 OpenZeppelin 风格的 ERC721，支持 owner、enumerable、
@@ -127,7 +147,55 @@ wallet-server 三组公钥配置在 `wallet_public_key`，不是 YAML/env。
 Polkadot 部署使用 `services/polkadot-runtime-service` 和 `chain_rpc_node` 中 purpose=`asset_rpc` 的 Asset Hub WebSocket RPC，创建标准 `pallet-assets` 资产，不上传 Wasm 合约。部署成功后，交易、回执、手续费和状态写入 `contract_deployment_order`。
 TON 部署使用 ton4j 的 Jetton 与 NFT Collection builder 创建确定性 StateInit 消息，不需要额外编译器。TON 原生币扫描会包含 `wallet_role=CONTRACT_DEPLOYER` 地址，方便用户先给部署地址充值 gas；Jetton 入账扫描仍然只处理普通 `DEPOSIT` 地址。
 
+页面和接口建议按下面顺序调用：
+
+| 步骤 | 接口 | 说明 |
+|---|---|---|
+| 加载可选项 | `GET /wallet/v1/app/contracts/templates` | 返回支持的链、模板、bytecode hash、功能点和风险提示 |
+| 获取部署 gas 地址 | `POST /wallet/v1/app/contracts/deployer-address` | 请求体 `{ "chain": "BASE", "forceNew": false }`，返回地址、二维码、派生路径和角色 |
+| 预览 | `POST /wallet/v1/app/contracts/preview` | 校验参数、渲染源码/构造参数、检查账本和链上余额，返回 `readyToDeploy` |
+| 确认部署 | `POST /wallet/v1/app/contracts/deploy` | 请求体和预览一致，但必须带 `"confirmed": true`，广播前会冻结原生 gas 余额 |
+| 查看记录 | `GET /wallet/v1/app/contracts/orders?limit=20` | 刷新待确认订单，返回 tx、合约地址、费用、状态和错误信息 |
+
+ERC20 类请求示例：
+
+```json
+{
+  "chain": "BASE",
+  "templateType": "ERC20",
+  "name": "TokDou Test USD",
+  "symbol": "TUSDC",
+  "decimals": 6,
+  "initialSupply": "1000000",
+  "maxSupply": "100000000",
+  "mintable": true,
+  "ownerAddress": "0x...",
+  "confirmed": true
+}
+```
+
+ERC721 类模板使用 `templateType: "ERC721"`，设置 `maxSupply`，在支持 metadata URI 的链上填写 `baseUri`。如果不传 `ownerAddress`，默认使用合约部署地址作为 owner。Aptos、Polkadot 和 TON 当前要求 owner 必须等于部署地址，这样发布包、资产 owner 或 StateInit admin 都由同一个派生密钥控制。
+
+订单状态说明：
+
+| 状态 | 含义 |
+|---|---|
+| `PREVIEW` | 仅预览接口返回，不写入订单表 |
+| `WAITING_FOR_FUNDS` | 部署时无法冻结足够的原生 gas 余额 |
+| `SIGNING` | 订单已创建，正在签名或广播 |
+| `SENT` | 交易已广播，等待刷新确认 |
+| `CONFIRMED` | 链上确认成功，已记录实际费用和合约地址 |
+| `FAILED` | 校验、广播或链上执行失败；若失败发生在确认前，会释放未使用的锁定余额 |
+
 部署出的合约不会自动写入 `token_config`，也不会自动进入钱包 token 列表。
+
+运行边界：
+
+- 部署 gas 由用户自行充值到 `CONTRACT_DEPLOYER` 地址，系统热钱包不会自动给部署地址补 gas。
+- 合约部署地址使用单独的确定性 index 区间，并写入 `wallet_role=CONTRACT_DEPLOYER`，普通充值、提现和归集可以和 `DEPOSIT` 地址区分。
+- 前端应先展示预览，再让用户二次确认。预览会返回生成源码、ABI、构造/初始化参数、费用估算、安全提示和警告。
+- 固定模板包含 pause、mint、burn、cap、max supply 等 owner 能力时，页面需要明确展示，因为这些能力会影响用户对 token 的信任判断。
+- 生产库只应启用已经确认 RPC、原生 gas 扫描、确认规则、CLI/helper 依赖都可用的链。
 
 Sui 部署要求 wallet-server 所在机器可以执行 Sui CLI。默认命令为 `sui`；如果可执行文件不在 PATH，
 用 `sw.wallet.contract.sui.cli` 指定路径，编译超时时间由 `sw.wallet.contract.sui.timeout-seconds` 控制。

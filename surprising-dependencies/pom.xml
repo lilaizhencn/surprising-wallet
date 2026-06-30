@@ -19,32 +19,87 @@
     <description>Centralized version management for all Surprising modules</description>
 
     <properties>
+        <surprising.version>1.0.0-SNAPSHOT</surprising.version>
         <java.version>21</java.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <rpc.version>1.0.0-SNAPSHOT</rpc.version>
-        <!-- Spring Boot -->
-        <spring-boot.version>4.1.0</spring-boot.version>
-        <tomcat.version>11.0.21</tomcat.version>
-        <log4j2.version>2.26.0</log4j2.version>
-        <hibernate-validator.version>9.1.0.Final</hibernate-validator.version>
-        <commons-fileupload.version>1.6.0</commons-fileupload.version>
-        <postgresql.version>42.7.11</postgresql.version>
         <spring-cloud.version>2025.1.2</spring-cloud.version>
         <spring.alibaba-cloud.version>2025.1.0.0</spring.alibaba-cloud.version>
         <!-- Protobuf — must match system protoc 34.0 -->
         <protobuf.version>4.34.1</protobuf.version>
+        <trident.protobuf.version>3.25.8</trident.protobuf.version>
         <grpc.version>1.80.0</grpc.version>
-        <firebase-admin.version>9.8.0</firebase-admin.version>
-        <threetenbp.version>1.7.0</threetenbp.version>
-        <dom4j.version>2.1.4</dom4j.version>
-        <jose4j.version>0.9.6</jose4j.version>
+        <fastjson.version>1.2.75</fastjson.version>
+        <guava.version>32.0.1-android</guava.version>
+        <spongycastle.version>1.58.0.0</spongycastle.version>
+        <bcprov-jdk15on.version>1.61</bcprov-jdk15on.version>
+        <bcprov-jdk16.version>1.46</bcprov-jdk16.version>
         <bouncycastle.version>1.82</bouncycastle.version>
+        <scrypt.version>1.4.0</scrypt.version>
+        <bitcoinj.version>0.17.1</bitcoinj.version>
+        <config.version>1.3.3</config.version>
+        <okhttp.version>4.0.1</okhttp.version>
+        <retrofit.version>2.6.1</retrofit.version>
+        <jsonrpc4j.version>1.5.3</jsonrpc4j.version>
+        <commons-text.version>1.7</commons-text.version>
+        <commons-io.version>2.6</commons-io.version>
+        <commons-collections4.version>4.4</commons-collections4.version>
+        <disruptor.version>3.4.2</disruptor.version>
+        <vjkit.version>1.0.8</vjkit.version>
+        <libphonenumber.version>8.12.8</libphonenumber.version>
+        <zxing.version>3.4.0</zxing.version>
+        <web3j.version>6.0.0</web3j.version>
+        <legacy-janino.version>2.5.10</legacy-janino.version>
+        <trident.version>0.11.0</trident.version>
+        <solanaj.version>1.28.0</solanaj.version>
+        <ton4j.version>2.1.0</ton4j.version>
+        <xrpl4j.version>5.1.0</xrpl4j.version>
+        <cardano-client.version>0.7.2</cardano-client.version>
+        <net-i2p-crypto-eddsa.version>0.3.1</net-i2p-crypto-eddsa.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <!-- Internal modules -->
+            <dependency>
+                <groupId>com.surprising</groupId>
+                <artifactId>bitcoin-sdk</artifactId>
+                <version>${surprising.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.surprising</groupId>
+                <artifactId>tron-sdk</artifactId>
+                <version>${surprising.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.surprising</groupId>
+                <artifactId>wallet-common</artifactId>
+                <version>${surprising.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.surprising</groupId>
+                <artifactId>wallet-client</artifactId>
+                <version>${surprising.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.surprising</groupId>
+                <artifactId>common</artifactId>
+                <version>${surprising.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.surprising</groupId>
+                <artifactId>wallet-sig-api</artifactId>
+                <version>${surprising.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.surprising</groupId>
+                <artifactId>wallet-service</artifactId>
+                <version>${surprising.version}</version>
+            </dependency>
+
+            <!-- Imported BOMs not covered by Spring Boot -->
             <dependency>
                 <groupId>com.alibaba.cloud</groupId>
                 <artifactId>spring-cloud-alibaba-dependencies</artifactId>
@@ -60,48 +115,58 @@
                 <scope>import</scope>
             </dependency>
             <dependency>
-                <groupId>org.apache.logging.log4j</groupId>
-                <artifactId>log4j-bom</artifactId>
-                <version>${log4j2.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <dependency>
                 <groupId>io.grpc</groupId>
                 <artifactId>grpc-bom</artifactId>
                 <version>${grpc.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
+            <!-- Wallet and chain SDK libraries -->
             <dependency>
-                <groupId>org.apache.logging.log4j</groupId>
-                <artifactId>log4j-api</artifactId>
-                <version>${log4j2.version}</version>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>${guava.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.apache.logging.log4j</groupId>
-                <artifactId>log4j-core</artifactId>
-                <version>${log4j2.version}</version>
+                <groupId>com.alibaba</groupId>
+                <artifactId>fastjson</artifactId>
+                <version>${fastjson.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.apache.logging.log4j</groupId>
-                <artifactId>log4j-slf4j2-impl</artifactId>
-                <version>${log4j2.version}</version>
+                <groupId>com.madgag.spongycastle</groupId>
+                <artifactId>core</artifactId>
+                <version>${spongycastle.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.apache.logging.log4j</groupId>
-                <artifactId>log4j-to-slf4j</artifactId>
-                <version>${log4j2.version}</version>
+                <groupId>com.madgag.spongycastle</groupId>
+                <artifactId>prov</artifactId>
+                <version>${spongycastle.version}</version>
             </dependency>
             <dependency>
-                <groupId>commons-fileupload</groupId>
-                <artifactId>commons-fileupload</artifactId>
-                <version>${commons-fileupload.version}</version>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk15on</artifactId>
+                <version>${bcprov-jdk15on.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.postgresql</groupId>
-                <artifactId>postgresql</artifactId>
-                <version>${postgresql.version}</version>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk16</artifactId>
+                <version>${bcprov-jdk16.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.lambdaworks</groupId>
+                <artifactId>scrypt</artifactId>
+                <version>${scrypt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bitcoinj</groupId>
+                <artifactId>bitcoinj-core</artifactId>
+                <version>${bitcoinj.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.protobuf</groupId>
@@ -114,27 +179,115 @@
                 <version>${protobuf.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.threeten</groupId>
-                <artifactId>threetenbp</artifactId>
-                <version>${threetenbp.version}</version>
+                <groupId>com.typesafe</groupId>
+                <artifactId>config</artifactId>
+                <version>${config.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.dom4j</groupId>
-                <artifactId>dom4j</artifactId>
-                <version>${dom4j.version}</version>
+                <groupId>com.squareup.okhttp3</groupId>
+                <artifactId>okhttp</artifactId>
+                <version>${okhttp.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.bitbucket.b_c</groupId>
-                <artifactId>jose4j</artifactId>
-                <version>${jose4j.version}</version>
+                <groupId>com.squareup.retrofit2</groupId>
+                <artifactId>retrofit</artifactId>
+                <version>${retrofit.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.bouncycastle</groupId>
-                <artifactId>bcprov-jdk18on</artifactId>
-                <version>${bouncycastle.version}</version>
+                <groupId>com.github.briandilley.jsonrpc4j</groupId>
+                <artifactId>jsonrpc4j</artifactId>
+                <version>${jsonrpc4j.version}</version>
             </dependency>
-
-
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-text</artifactId>
+                <version>${commons-text.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>${commons-io.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-collections4</artifactId>
+                <version>${commons-collections4.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.lmax</groupId>
+                <artifactId>disruptor</artifactId>
+                <version>${disruptor.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.vip.vjtools</groupId>
+                <artifactId>vjkit</artifactId>
+                <version>${vjkit.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.googlecode.libphonenumber</groupId>
+                <artifactId>libphonenumber</artifactId>
+                <version>${libphonenumber.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.zxing</groupId>
+                <artifactId>javase</artifactId>
+                <version>${zxing.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.web3j</groupId>
+                <artifactId>core</artifactId>
+                <version>${web3j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.web3j</groupId>
+                <artifactId>abi</artifactId>
+                <version>${web3j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.web3j</groupId>
+                <artifactId>crypto</artifactId>
+                <version>${web3j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>janino</groupId>
+                <artifactId>janino</artifactId>
+                <version>${legacy-janino.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.tronprotocol</groupId>
+                <artifactId>trident</artifactId>
+                <version>${trident.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.mmorrell</groupId>
+                <artifactId>solanaj</artifactId>
+                <version>${solanaj.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.ton.ton4j</groupId>
+                <artifactId>smartcontract</artifactId>
+                <version>${ton4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.xrpl</groupId>
+                <artifactId>xrpl4j-client</artifactId>
+                <version>${xrpl4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bloxbean.cardano</groupId>
+                <artifactId>cardano-client-lib</artifactId>
+                <version>${cardano-client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bloxbean.cardano</groupId>
+                <artifactId>cardano-client-backend-blockfrost</artifactId>
+                <version>${cardano-client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bloxbean.cardano</groupId>
+                <artifactId>net-i2p-crypto-eddsa</artifactId>
+                <version>${net-i2p-crypto-eddsa.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

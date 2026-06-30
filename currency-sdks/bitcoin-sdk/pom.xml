@@ -26,7 +26,6 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
-            <version>32.0.1-android</version>
         </dependency>
         <dependency>
             <groupId>org.bitcoinj</groupId>
@@ -39,7 +38,6 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>5.11.4</version>
             <scope>test</scope>
         </dependency>
 
