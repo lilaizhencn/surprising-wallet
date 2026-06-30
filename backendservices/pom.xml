@@ -41,7 +41,7 @@
         <okhttp.version>4.0.1</okhttp.version>
         <retrofit.version>2.6.1</retrofit.version>
         <jsonrpc4j.version>1.5.3</jsonrpc4j.version>
-        <web3j.version>5.0.0</web3j.version>
+        <web3j.version>6.0.0</web3j.version>
         <httpclient.version>4.5.7</httpclient.version>
         <mysql.version>8.0.22</mysql.version>
         <hibernate-validator.version>6.0.16.Final</hibernate-validator.version>
