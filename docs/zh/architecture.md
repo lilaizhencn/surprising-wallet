@@ -34,7 +34,6 @@
 | `currency-sdks/bitcoin-sdk` | Bitcoin-like 交易、地址、脚本支持 |
 | `currency-sdks/tron-sdk` | TRON SDK 集成 |
 | `currency-sdks/wallet-common` | 链/key/runtime 公共工具 |
-| `currency-sdks/wallet-client` | 客户端接口 |
 
 ## 链族
 

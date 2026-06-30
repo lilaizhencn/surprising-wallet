@@ -119,7 +119,6 @@ currency-sdks/
   bitcoin-sdk                      Bitcoin-like transaction/address/script support
   tron-sdk                         TRON SDK integration
   wallet-common                    shared key, chain, and runtime utilities
-  wallet-client                    client interfaces
 
 docs/                              English/Chinese docs, diagrams, DB init SQL
 docs/db/surprising-wallet-init-pgsql.sql
@@ -377,6 +376,28 @@ export SW_WALLET_ADMIN_PASSWORD='<wallet admin password>'
 For production, keep the third BIP32 private root offline. wallet-server only
 needs the three public roots in `wallet_public_key`; signer services own the
 online private roots.
+
+### Key Material By Chain
+
+The wallet intentionally keeps chain support on a small set of root materials:
+
+| Material | Where it lives | Used for |
+|---|---|---|
+| `wallet_public_key` slots 1/2/3 | PostgreSQL | Public BIP32 roots required by wallet-server startup and deterministic address validation |
+| `SW_SIG1_MASTER_KEY` | secret env/KMS | BIP32 private root for the first online signer |
+| `SW_SIG2_MASTER_KEY` | secret env/KMS | BIP32 private root for the second signer and single-signer account-chain spending |
+| `SW_ED25519_SEED` | secret env/KMS | Unified Ed25519 seed for Ed25519-based chains |
+| XMR wallet-rpc wallet | monero-wallet-rpc host | Independent Monero wallet seed/cache/password managed outside BIP32/Ed25519 |
+
+| Chains | Address derivation | Spending/signing source | Notes |
+|---|---|---|---|
+| BTC, LTC, DOGE, BCH | `wallet_public_key` slots 1/2/3 | `SW_SIG1_MASTER_KEY` + `SW_SIG2_MASTER_KEY` | 2-of-3 Bitcoin-like flow; slot 3 private root stays offline for recovery |
+| ETH, BNB, POLYGON, ARBITRUM, OPTIMISM, BASE, AVAX_C, HYPEREVM, MANTLE, LINEA, SCROLL, UNICHAIN | `wallet_public_key` slot 2 | `SW_SIG2_MASTER_KEY` | EVM secp256k1 addresses; shared BIP44 coin type 60 |
+| TRON | `wallet_public_key` slot 2 | `SW_SIG2_MASTER_KEY` | secp256k1 key material converted to TRON address/signing format |
+| XRP | `wallet_public_key` slot 2 | `SW_SIG2_MASTER_KEY` | XRP Ledger secp256k1 classic address, BIP44 coin type 144 |
+| HYPERCORE | `wallet_public_key` slot 2 | `SW_SIG2_MASTER_KEY` | Hyperliquid API signing uses the same secp256k1 account root as EVM-style addresses |
+| SOLANA, TON, APTOS, SUI, ADA, DOT, NEAR | `SW_ED25519_SEED` | `SW_ED25519_SEED` | One Ed25519 root with chain-specific SLIP-0010 paths; not stored in `wallet_public_key` |
+| XMR | monero-wallet-rpc subaddresses | monero-wallet-rpc wallet | Back up the Monero wallet seed, cache files, and password together |
 
 ## Main APIs
 

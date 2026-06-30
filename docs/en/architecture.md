@@ -34,7 +34,6 @@ The application should resolve assets by `chain + symbol` or `chain + contract`,
 | `currency-sdks/bitcoin-sdk` | Bitcoin-like transaction, address, and script support |
 | `currency-sdks/tron-sdk` | TRON SDK integration |
 | `currency-sdks/wallet-common` | Shared chain/key/runtime utilities |
-| `currency-sdks/wallet-client` | Client interfaces |
 
 ## Chain Families
 

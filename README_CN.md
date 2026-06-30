@@ -96,6 +96,28 @@ export SW_WALLET_ADMIN_PASSWORD='<钱包后台配置密码>'
 生产环境中第三个 BIP32 私钥根应离线保存，wallet-server 只配置三组公钥。
 wallet-server 三组公钥配置在 `wallet_public_key`，不是 YAML/env。
 
+### 各链密钥材料使用
+
+项目有意把各链收敛到少量根密钥材料：
+
+| 密钥材料 | 存放位置 | 用途 |
+|---|---|---|
+| `wallet_public_key` slots 1/2/3 | PostgreSQL | wallet-server 启动必需的 BIP32 公钥根，用于确定性地址校验 |
+| `SW_SIG1_MASTER_KEY` | 环境变量/KMS | 第一签在线服务使用的 BIP32 私钥根 |
+| `SW_SIG2_MASTER_KEY` | 环境变量/KMS | 第二签，以及单签 account-chain 花费使用的 BIP32 私钥根 |
+| `SW_ED25519_SEED` | 环境变量/KMS | Ed25519 类链统一使用的 master seed |
+| XMR wallet-rpc 钱包 | monero-wallet-rpc 所在机器 | 独立的 Monero 钱包 seed/cache/password，不走 BIP32/Ed25519 |
+
+| 链 | 地址生成来源 | 花费/签名来源 | 说明 |
+|---|---|---|---|
+| BTC、LTC、DOGE、BCH | `wallet_public_key` slots 1/2/3 | `SW_SIG1_MASTER_KEY` + `SW_SIG2_MASTER_KEY` | Bitcoin-like 2-of-3 流程；第 3 组私钥根离线保存用于恢复 |
+| ETH、BNB、POLYGON、ARBITRUM、OPTIMISM、BASE、AVAX_C、HYPEREVM、MANTLE、LINEA、SCROLL、UNICHAIN | `wallet_public_key` slot 2 | `SW_SIG2_MASTER_KEY` | EVM secp256k1 地址；统一使用 BIP44 coin type 60 |
+| TRON | `wallet_public_key` slot 2 | `SW_SIG2_MASTER_KEY` | secp256k1 key 转换为 TRON 地址和签名格式 |
+| XRP | `wallet_public_key` slot 2 | `SW_SIG2_MASTER_KEY` | XRP Ledger secp256k1 classic address，BIP44 coin type 144 |
+| HYPERCORE | `wallet_public_key` slot 2 | `SW_SIG2_MASTER_KEY` | Hyperliquid API 签名复用 EVM 风格 secp256k1 account root |
+| SOLANA、TON、APTOS、SUI、ADA、DOT、NEAR | `SW_ED25519_SEED` | `SW_ED25519_SEED` | 同一个 Ed25519 root，按链使用独立 SLIP-0010 path；不存入 `wallet_public_key` |
+| XMR | monero-wallet-rpc subaddress | monero-wallet-rpc 钱包 | 需要一起备份 Monero wallet seed、cache 文件和密码 |
+
 ## 合约部署
 
 钱包用户可以在已启用的 EVM 系列链、TRON、NEAR、Solana、Aptos、Sui、Polkadot 和 TON 上部署合约或运行时资产。后端不接收任意 Solidity/Move/JS
