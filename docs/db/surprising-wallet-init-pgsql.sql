@@ -20,7 +20,25 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 DROP INDEX IF EXISTS "public"."idx_utxo_record_spendable";
+DROP INDEX IF EXISTS "public"."idx_utxo_record_lock_ref";
 DROP INDEX IF EXISTS "public"."idx_utxo_record_address";
+DROP INDEX IF EXISTS "public"."idx_hypercore_token_metadata_name";
+DROP INDEX IF EXISTS "public"."idx_contract_deployment_order_user_recent";
+DROP INDEX IF EXISTS "public"."idx_withdrawal_order_stale_signing";
+DROP INDEX IF EXISTS "public"."idx_withdrawal_order_asset_status_queue";
+DROP INDEX IF EXISTS "public"."idx_withdrawal_order_status_queue";
+DROP INDEX IF EXISTS "public"."idx_withdrawal_order_user_recent";
+DROP INDEX IF EXISTS "public"."idx_collection_record_from_lower";
+DROP INDEX IF EXISTS "public"."idx_collection_record_status_queue";
+DROP INDEX IF EXISTS "public"."idx_wallet_transfer_order_to_recent";
+DROP INDEX IF EXISTS "public"."idx_wallet_transfer_order_from_recent";
+DROP INDEX IF EXISTS "public"."idx_deposit_record_to_recent";
+DROP INDEX IF EXISTS "public"."idx_deposit_record_from_recent";
+DROP INDEX IF EXISTS "public"."idx_deposit_record_to_collection";
+DROP INDEX IF EXISTS "public"."idx_ledger_balance_account_lower";
+DROP INDEX IF EXISTS "public"."idx_chain_address_account_lower";
+DROP INDEX IF EXISTS "public"."idx_chain_address_chain_address_enabled";
+DROP INDEX IF EXISTS "public"."idx_chain_address_user_latest";
 DROP INDEX IF EXISTS "public"."idx_chain_signing_transaction_tx_id";
 DROP INDEX IF EXISTS "public"."idx_chain_signing_transaction_status";
 DROP INDEX IF EXISTS "public"."idx_chain_address_scan";
@@ -2354,10 +2372,38 @@ CREATE INDEX "idx_chain_address_scan" ON "public"."chain_address" USING "btree" 
 
 
 --
+-- Name: idx_chain_address_user_latest; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_chain_address_user_latest" ON "public"."chain_address" USING "btree" ("user_id", "biz", "chain", "asset_symbol", "wallet_role", "enabled", "address_index" DESC, "id" DESC);
+
+
+--
+-- Name: idx_chain_address_chain_address_enabled; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_chain_address_chain_address_enabled" ON "public"."chain_address" USING "btree" ("chain", lower(("address")::text), "enabled");
+
+
+--
+-- Name: idx_chain_address_account_lower; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_chain_address_account_lower" ON "public"."chain_address" USING "btree" ("chain", "asset_symbol", lower(("account_id")::text), "user_id", "biz", "wallet_role", "enabled");
+
+
+--
 -- Name: idx_contract_deployment_order_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX "idx_contract_deployment_order_user" ON "public"."contract_deployment_order" USING "btree" ("user_id", "status", "updated_at");
+
+
+--
+-- Name: idx_contract_deployment_order_user_recent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_contract_deployment_order_user_recent" ON "public"."contract_deployment_order" USING "btree" ("user_id", "id" DESC);
 
 
 --
@@ -2368,10 +2414,101 @@ CREATE INDEX "idx_wallet_transfer_order_user" ON "public"."wallet_transfer_order
 
 
 --
+-- Name: idx_wallet_transfer_order_from_recent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_wallet_transfer_order_from_recent" ON "public"."wallet_transfer_order" USING "btree" ("from_user_id", "id" DESC);
+
+
+--
+-- Name: idx_wallet_transfer_order_to_recent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_wallet_transfer_order_to_recent" ON "public"."wallet_transfer_order" USING "btree" ("to_user_id", "id" DESC);
+
+
+--
 -- Name: idx_wallet_user_session_user; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX "idx_wallet_user_session_user" ON "public"."wallet_user_session" USING "btree" ("user_id", "expires_at");
+
+
+--
+-- Name: idx_ledger_balance_account_lower; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_ledger_balance_account_lower" ON "public"."ledger_balance" USING "btree" ("chain", "asset_symbol", lower(("account_id")::text));
+
+
+--
+-- Name: idx_deposit_record_to_collection; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_deposit_record_to_collection" ON "public"."deposit_record" USING "btree" ("chain", "credited", "asset_symbol", lower(("to_address")::text));
+
+
+--
+-- Name: idx_deposit_record_from_recent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_deposit_record_from_recent" ON "public"."deposit_record" USING "btree" ("chain", lower(("from_address")::text), "updated_at" DESC);
+
+
+--
+-- Name: idx_deposit_record_to_recent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_deposit_record_to_recent" ON "public"."deposit_record" USING "btree" ("chain", lower(("to_address")::text), "updated_at" DESC);
+
+
+--
+-- Name: idx_withdrawal_order_user_recent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_withdrawal_order_user_recent" ON "public"."withdrawal_order" USING "btree" ("user_id", "id" DESC);
+
+
+--
+-- Name: idx_withdrawal_order_status_queue; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_withdrawal_order_status_queue" ON "public"."withdrawal_order" USING "btree" ("chain", "status", "id");
+
+
+--
+-- Name: idx_withdrawal_order_asset_status_queue; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_withdrawal_order_asset_status_queue" ON "public"."withdrawal_order" USING "btree" ("chain", "asset_symbol", "status", "id");
+
+
+--
+-- Name: idx_withdrawal_order_stale_signing; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_withdrawal_order_stale_signing" ON "public"."withdrawal_order" USING "btree" ("chain", "status", "updated_at") WHERE ("tx_hash" IS NULL);
+
+
+--
+-- Name: idx_collection_record_status_queue; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_collection_record_status_queue" ON "public"."collection_record" USING "btree" ("chain", "status", "id");
+
+
+--
+-- Name: idx_collection_record_from_lower; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_collection_record_from_lower" ON "public"."collection_record" USING "btree" ("chain", "asset_symbol", lower(("from_address")::text));
+
+
+--
+-- Name: idx_hypercore_token_metadata_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_hypercore_token_metadata_name" ON "public"."hypercore_token_metadata" USING "btree" ("network", upper(("name")::text), "is_canonical" DESC, "token_index");
 
 
 --
@@ -2400,6 +2537,13 @@ CREATE INDEX "idx_utxo_record_address" ON "public"."utxo_record" USING "btree" (
 --
 
 CREATE INDEX "idx_utxo_record_spendable" ON "public"."utxo_record" USING "btree" ("chain", "asset_symbol", "state", "confirmations");
+
+
+--
+-- Name: idx_utxo_record_lock_ref; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX "idx_utxo_record_lock_ref" ON "public"."utxo_record" USING "btree" ("chain", "lock_ref", "state");
 
 
 --
