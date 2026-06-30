@@ -2,6 +2,7 @@ package com.surprising.wallet.service.chain;
 
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
+import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
@@ -23,20 +24,18 @@ import java.util.List;
 @Service
 public class BitcoinLikeSettlementService {
     private final ChainJdbcRepository chainRepository;
-    private final BlockchainRuntimeService blockchainRuntimeService;
 
-    public BitcoinLikeSettlementService(ChainJdbcRepository chainRepository,
-                                        BlockchainRuntimeService blockchainRuntimeService) {
+    public BitcoinLikeSettlementService(ChainJdbcRepository chainRepository) {
         this.chainRepository = chainRepository;
-        this.blockchainRuntimeService = blockchainRuntimeService;
     }
 
     @Transactional(rollbackFor = Throwable.class)
     public void settleConfirmed(WithdrawTransaction transaction, String txId, AssetRuntimeMetadata currency) {
-        if (!blockchainRuntimeService.isBitcoinLikeRuntime(currency)) {
+        ChainType chainType = ChainType.valueOf(currency.chain());
+        if (!chainType.isUtxo()) {
             throw new IllegalArgumentException("unsupported unified UTXO currency " + currency);
         }
-        String chain = blockchainRuntimeService.chainName(currency);
+        String chain = currency.chain();
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
 
         transaction.setStatus(Constants.CONFIRM);
