@@ -35,6 +35,8 @@
 | Polkadot | DOT Westend/mainnet profile | DOT、Asset Hub assets、Asset Hub Token/Single Asset 部署 |
 | TON | TON testnet/mainnet profile | TON、Jetton、Jetton/NFT Collection 部署、ton4j StateInit 消息 |
 
+如果希望项目支持新的链，请提交 [GitHub Issue](https://github.com/lilaizhencn/surprising-wallet/issues)，并说明链名称、目标网络、原生资产、token 模型、可用 RPC/indexer，以及需要支持的充值、提现、归集、划转或合约部署流程。
+
 ## 快速启动
 
 依赖环境：

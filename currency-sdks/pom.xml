@@ -60,6 +60,5 @@
         <module>bitcoin-sdk</module>
         <module>tron-sdk</module>
         <module>wallet-common</module>
-        <module>wallet-client</module>
     </modules>
 </project>

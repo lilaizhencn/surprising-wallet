@@ -6,9 +6,18 @@ target/
 # IDE
 .idea/
 *.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
 
 # OS
 .DS_Store
+Thumbs.db
+desktop.ini
 
 # Logs
 logs/

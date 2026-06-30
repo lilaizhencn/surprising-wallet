@@ -82,6 +82,11 @@ target database.
   <img alt="HIP-1" src="https://img.shields.io/badge/HIP--1-HyperCore%20Spot-00C6B3?style=flat-square">
 </p>
 
+Need support for another chain? Please open a
+[GitHub issue](https://github.com/lilaizhencn/surprising-wallet/issues) with the
+chain name, target network, native asset, token model, available RPC/indexer
+options, and the wallet flows you need.
+
 ## Chain Matrix
 
 | Family | Chains | Asset/token model | Runtime notes |

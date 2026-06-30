@@ -1,4 +1,4 @@
-package com.surprising.wallet.client.command;
+package com.surprising.wallet.service.chain.rpc;
 
 public interface BchCommand extends BtcLikeCommand {
 }

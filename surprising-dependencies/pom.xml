@@ -40,7 +40,6 @@
         <commons-io.version>2.22.0</commons-io.version>
         <commons-collections4.version>4.5.0</commons-collections4.version>
         <disruptor.version>3.4.2</disruptor.version>
-        <vjkit.version>1.0.8</vjkit.version>
         <zxing.version>3.5.4</zxing.version>
         <web3j.version>6.0.0</web3j.version>
         <legacy-janino.version>2.5.10</legacy-janino.version>
@@ -68,11 +67,6 @@
             <dependency>
                 <groupId>com.surprising</groupId>
                 <artifactId>wallet-common</artifactId>
-                <version>${surprising.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.surprising</groupId>
-                <artifactId>wallet-client</artifactId>
                 <version>${surprising.version}</version>
             </dependency>
             <dependency>
@@ -185,11 +179,6 @@
                 <groupId>com.lmax</groupId>
                 <artifactId>disruptor</artifactId>
                 <version>${disruptor.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.vip.vjtools</groupId>
-                <artifactId>vjkit</artifactId>
-                <version>${vjkit.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.zxing</groupId>

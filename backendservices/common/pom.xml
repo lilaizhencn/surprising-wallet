@@ -22,10 +22,6 @@
             <artifactId>commons-pool2</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.vip.vjtools</groupId>
-            <artifactId>vjkit</artifactId>
-        </dependency>
-        <dependency>
             <groupId>com.google.zxing</groupId>
             <artifactId>javase</artifactId>
         </dependency>

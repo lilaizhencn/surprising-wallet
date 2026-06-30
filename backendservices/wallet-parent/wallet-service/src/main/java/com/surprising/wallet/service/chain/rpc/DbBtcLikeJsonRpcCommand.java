@@ -1,7 +1,6 @@
 package com.surprising.wallet.service.chain.rpc;
 
 import com.googlecode.jsonrpc4j.JsonRpcHttpClient;
-import com.surprising.wallet.client.command.BtcLikeCommand;
 import com.surprising.wallet.common.pojo.rpc.BtcLikeBlock;
 import com.surprising.wallet.common.pojo.rpc.BtcLikeRawTransaction;
 import com.surprising.wallet.service.config.ChainRpcNodeService;
