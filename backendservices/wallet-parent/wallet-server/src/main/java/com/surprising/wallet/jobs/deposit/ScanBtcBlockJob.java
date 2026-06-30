@@ -16,7 +16,7 @@ public class ScanBtcBlockJob extends AbstractScanUtxoBlockJob {
 
     @PostConstruct
     public void init() {
-        currency = blockchainRuntimeService.runtimeAsset("BTC");
+        currency = blockchainRuntimeService.assetMetadata("BTC");
     }
 
     @Scheduled(cron = "0/59 * * * * ?")

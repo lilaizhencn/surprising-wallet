@@ -1,7 +1,7 @@
 package com.surprising.wallet.service.service.impl;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
@@ -28,7 +28,7 @@ public class AddressServiceImpl implements AddressService {
     @Autowired
     private ChainJdbcRepository chainJdbcRepository;
 
-    private Address toAddress(ChainAddressRecord record, RuntimeAsset currency) {
+    private Address toAddress(ChainAddressRecord record, AssetRuntimeMetadata currency) {
         return Address.builder()
                 .userId(record.getUserId())
                 .address(record.getAddress())
@@ -47,7 +47,7 @@ public class AddressServiceImpl implements AddressService {
                 .build();
     }
 
-    private Optional<Address> findCaseFoldedChainAddress(RuntimeAsset currency, String addressStr) {
+    private Optional<Address> findCaseFoldedChainAddress(AssetRuntimeMetadata currency, String addressStr) {
         if (!"ETH".equalsIgnoreCase(currency.chain())) {
             return Optional.empty();
         }
@@ -60,14 +60,14 @@ public class AddressServiceImpl implements AddressService {
     }
 
     @Override
-    public Address getAddress(String addressStr, RuntimeAsset currency) {
+    public Address getAddress(String addressStr, AssetRuntimeMetadata currency) {
         if (!StringUtils.hasText(addressStr) || currency == null) {
             return null;
         }
         return findChainAddress(currency, addressStr).orElse(null);
     }
 
-    private Optional<Address> findChainAddress(RuntimeAsset currency, String addressStr) {
+    private Optional<Address> findChainAddress(AssetRuntimeMetadata currency, String addressStr) {
         return chainJdbcRepository.findChainAddressByAddress(currency.chain(), currency.assetSymbol(), addressStr)
                 .map(record -> toAddress(record, currency))
                 .or(() -> findCaseFoldedChainAddress(currency, addressStr));

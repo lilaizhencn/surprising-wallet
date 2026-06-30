@@ -1,7 +1,7 @@
 package com.surprising.wallet.service.config;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,7 +16,7 @@ public class WalletRuntimeConfigService {
 
     private final ChainJdbcRepository repository;
 
-    public boolean isTaskEnabled(RuntimeAsset asset, String task) {
+    public boolean isTaskEnabled(AssetRuntimeMetadata asset, String task) {
         return asset != null && isTaskEnabled(asset.chain(), task);
     }
 
@@ -49,7 +49,7 @@ public class WalletRuntimeConfigService {
                 + chain + " task=" + task + " operation=" + operation);
     }
 
-    public long scanStartHeight(RuntimeAsset asset) {
+    public long scanStartHeight(AssetRuntimeMetadata asset) {
         return scanStartHeight(asset.chain());
     }
 
@@ -60,7 +60,7 @@ public class WalletRuntimeConfigService {
                 .orElse(0L);
     }
 
-    public long scanMaxBlocksPerRun(RuntimeAsset asset) {
+    public long scanMaxBlocksPerRun(AssetRuntimeMetadata asset) {
         return scanMaxBlocksPerRun(asset.chain());
     }
 

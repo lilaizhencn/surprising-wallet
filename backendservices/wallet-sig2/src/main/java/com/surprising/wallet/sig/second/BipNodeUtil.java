@@ -1,6 +1,6 @@
 package com.surprising.wallet.sig.second;
 
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.signature.KeyConfig;
@@ -13,7 +13,7 @@ import org.springframework.util.ObjectUtils;
 public class BipNodeUtil {
     private static Bip32Node NODE;
 
-    public static Bip32Node getBipNODE(Address address, RuntimeAsset currency) {
+    public static Bip32Node getBipNODE(Address address, AssetRuntimeMetadata currency) {
         if (ObjectUtils.isEmpty(BipNodeUtil.NODE)) {
             String mk = KeyConfig.getValue("masterNode");
             //final String dk = SecretConfig.decryptKey(mk);

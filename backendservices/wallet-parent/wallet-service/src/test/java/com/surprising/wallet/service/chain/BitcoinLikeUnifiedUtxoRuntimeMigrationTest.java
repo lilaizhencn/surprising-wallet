@@ -19,7 +19,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * PostgreSQL-backed verification for the RuntimeAsset-to-DB asset migration:
+ * PostgreSQL-backed verification for the AssetRuntimeMetadata-to-DB asset migration:
  * BTC/LTC/DOGE/BCH runtime UTXO operations must use utxo_record as the source
  * of truth and must not require legacy *_utxo_transaction rows.
  */

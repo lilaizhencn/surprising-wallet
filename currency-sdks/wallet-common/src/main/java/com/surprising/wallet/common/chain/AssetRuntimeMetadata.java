@@ -15,16 +15,7 @@ import java.util.Objects;
  * ({@code chain_profile.runtime_currency_id}) or from persisted transaction
  * payloads. This class intentionally does not hard-code any currency id.</p>
  */
-public final class RuntimeAsset {
-    public static final RuntimeAsset BTC = nativeAsset("BTC", 7, 1, 6, 0);
-    public static final RuntimeAsset LTC = nativeAsset("LTC", 7, 1, 6, 2);
-    public static final RuntimeAsset DOGE = nativeAsset("DOGE", 13, 6, 12, 3);
-    public static final RuntimeAsset BCH = nativeAsset("BCH", 7, 1, 6, 145);
-    public static final RuntimeAsset ETH = nativeAsset("ETH", 121, 12, 120, 60);
-    public static final RuntimeAsset TRX = nativeAsset("TRON", "TRX", 121, 12, 120, 195);
-    public static final RuntimeAsset XRP = nativeAsset("XRP", 4, 1, 3, 144);
-    public static final RuntimeAsset USDT = tokenAsset("ETH", "USDT", 121, 12, 120, 60);
-
+public final class AssetRuntimeMetadata {
     private final Integer runtimeCurrencyId;
     private final String chain;
     private final String assetSymbol;
@@ -35,7 +26,7 @@ public final class RuntimeAsset {
     private final String contractAddress;
     private final int bip44CoinType;
 
-    private RuntimeAsset(Integer runtimeCurrencyId, String chain, String assetSymbol, long confirmNum,
+    private AssetRuntimeMetadata(Integer runtimeCurrencyId, String chain, String assetSymbol, long confirmNum,
                          long depositConfirmNum, long withdrawConfirmNum, Integer decimals,
                          String contractAddress, int bip44CoinType) {
         this.runtimeCurrencyId = runtimeCurrencyId;
@@ -49,25 +40,7 @@ public final class RuntimeAsset {
         this.bip44CoinType = bip44CoinType;
     }
 
-    private static RuntimeAsset nativeAsset(String chain, long confirmNum, long depositConfirmNum,
-                                            long withdrawConfirmNum, int bip44CoinType) {
-        return nativeAsset(chain, chain, confirmNum, depositConfirmNum, withdrawConfirmNum,
-                bip44CoinType);
-    }
-
-    private static RuntimeAsset nativeAsset(String chain, String assetSymbol, long confirmNum,
-                                            long depositConfirmNum, long withdrawConfirmNum, int bip44CoinType) {
-        return new RuntimeAsset(null, chain, assetSymbol, confirmNum, depositConfirmNum, withdrawConfirmNum,
-                null, "", bip44CoinType);
-    }
-
-    private static RuntimeAsset tokenAsset(String chain, String assetSymbol, long confirmNum,
-                                           long depositConfirmNum, long withdrawConfirmNum, int bip44CoinType) {
-        return new RuntimeAsset(null, chain, assetSymbol, confirmNum, depositConfirmNum, withdrawConfirmNum,
-                null, "", bip44CoinType);
-    }
-
-    public static RuntimeAsset fromProfile(AccountChainProfile profile, ChainAsset asset) {
+    public static AssetRuntimeMetadata fromProfile(AccountChainProfile profile, ChainAsset asset) {
         return fromProfile(
                 profile.getRuntimeCurrencyId(),
                 profile.getChain(),
@@ -78,7 +51,7 @@ public final class RuntimeAsset {
                 asset);
     }
 
-    public static RuntimeAsset fromProfile(BitcoinLikeChainProfile profile, ChainAsset asset) {
+    public static AssetRuntimeMetadata fromProfile(BitcoinLikeChainProfile profile, ChainAsset asset) {
         return fromProfile(
                 profile.getRuntimeCurrencyId(),
                 profile.getChain(),
@@ -89,12 +62,12 @@ public final class RuntimeAsset {
                 asset);
     }
 
-    private static RuntimeAsset fromProfile(Integer runtimeCurrencyId, String chain, String nativeSymbol,
+    private static AssetRuntimeMetadata fromProfile(Integer runtimeCurrencyId, String chain, String nativeSymbol,
                                             Integer depositConfirmations, Integer withdrawConfirmations,
                                             Integer bip44CoinType, ChainAsset asset) {
         int decimals = requireDecimals(chain, nativeSymbol, asset);
         String contractAddress = asset == null ? "" : asset.getContractAddress();
-        return new RuntimeAsset(
+        return new AssetRuntimeMetadata(
                 runtimeCurrencyId,
                 chain,
                 nativeSymbol,
@@ -106,11 +79,11 @@ public final class RuntimeAsset {
                 bip44CoinType);
     }
 
-    public static RuntimeAsset fromToken(AccountChainProfile profile, TokenDefinition token) {
+    public static AssetRuntimeMetadata fromToken(AccountChainProfile profile, TokenDefinition token) {
         Integer runtimeCurrencyId = token.getId() == null ? null : Math.toIntExact(token.getId());
         int decimals = requireDecimals(token.getChain(), token.getSymbol(), token.getDecimals());
         String contractAddress = requireContractAddress(token);
-        return new RuntimeAsset(
+        return new AssetRuntimeMetadata(
                 runtimeCurrencyId,
                 profile.getChain(),
                 token.getSymbol(),
@@ -122,14 +95,14 @@ public final class RuntimeAsset {
                 profile.getBip44CoinType());
     }
 
-    public static RuntimeAsset fromTransaction(WithdrawTransaction transaction) {
+    public static AssetRuntimeMetadata fromTransaction(WithdrawTransaction transaction) {
         if (!StringUtils.hasText(transaction.getChain())
                 || !StringUtils.hasText(transaction.getAssetSymbol())
                 || transaction.getAssetDecimals() == null
                 || transaction.getBip44CoinType() == null) {
             throw new UnsupportedCurrency(String.valueOf(transaction.getCurrency()));
         }
-        return new RuntimeAsset(
+        return new AssetRuntimeMetadata(
                 transaction.getCurrency(),
                 transaction.getChain(),
                 transaction.getAssetSymbol(),
@@ -164,19 +137,6 @@ public final class RuntimeAsset {
         return token.getContractAddress();
     }
 
-    public static boolean isErc20(RuntimeAsset asset) {
-        return asset != null && StringUtils.hasText(asset.getContractAddress()) && "ETH".equals(asset.chain());
-    }
-
-    public static RuntimeAsset toMainCurrency(RuntimeAsset asset) {
-        return isErc20(asset) ? ETH.withRuntimeCurrencyId(null) : asset;
-    }
-
-    public RuntimeAsset withRuntimeCurrencyId(Integer runtimeCurrencyId) {
-        return new RuntimeAsset(runtimeCurrencyId, chain, assetSymbol, confirmNum, depositConfirmNum,
-                withdrawConfirmNum, decimals, contractAddress, bip44CoinType);
-    }
-
     public void applyTo(WithdrawTransaction transaction) {
         transaction.setCurrency(getIndex());
         transaction.setChain(chain);
@@ -184,12 +144,6 @@ public final class RuntimeAsset {
         transaction.setAssetDecimals(getDecimals());
         transaction.setBip44CoinType(bip44CoinType);
         transaction.setContractAddress(contractAddress);
-    }
-
-    public boolean sameAsset(RuntimeAsset other) {
-        return other != null
-                && chain.equalsIgnoreCase(other.chain)
-                && assetSymbol.equalsIgnoreCase(other.assetSymbol);
     }
 
     public boolean isChain(String expectedChain) {
@@ -259,7 +213,7 @@ public final class RuntimeAsset {
         if (this == o) {
             return true;
         }
-        if (!(o instanceof RuntimeAsset that)) {
+        if (!(o instanceof AssetRuntimeMetadata that)) {
             return false;
         }
         return chain.equals(that.chain) && assetSymbol.equals(that.assetSymbol);

@@ -3,7 +3,7 @@ package com.surprising.wallet.jobs.transfer;
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.HotWalletRules;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -55,7 +55,7 @@ public class DogeCollectionJob {
         if (!isEnabled()) {
             return;
         }
-        RuntimeAsset currency = blockchainRuntimeService.runtimeAsset(CHAIN);
+        AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata(CHAIN);
         Address hotAddress = getHotAddress(currency);
         if (hotAddress == null) {
             return;
@@ -147,7 +147,7 @@ public class DogeCollectionJob {
         REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, JSONObject.toJSONString(transaction));
     }
 
-    private List<UtxoTransaction> findCollectableUtxos(RuntimeAsset currency) {
+    private List<UtxoTransaction> findCollectableUtxos(AssetRuntimeMetadata currency) {
         List<UtxoTransaction> candidates = chainRepository.listSpendableUtxos(
                 CHAIN, CHAIN, currency.getDepositConfirmNum(), PAGE_SIZE, 0);
         if (CollectionUtils.isEmpty(candidates)) {
@@ -161,7 +161,7 @@ public class DogeCollectionJob {
                 .toList();
     }
 
-    private Address getHotAddress(RuntimeAsset currency) {
+    private Address getHotAddress(AssetRuntimeMetadata currency) {
         return chainRepository.findChainAddress(
                         CHAIN,
                         CHAIN,
@@ -179,7 +179,7 @@ public class DogeCollectionJob {
                 .orElse(null);
     }
 
-    private int getFeeRate(RuntimeAsset currency) {
+    private int getFeeRate(AssetRuntimeMetadata currency) {
         Integer configured = REDIS.getInt(Constants.WALLET_FEE + currency.getIndex());
         long feeRate = configured == null || configured <= 0
                 ? DogecoinFeePolicy.DEFAULT_FEE_RATE_KOINU_PER_BYTE : configured;

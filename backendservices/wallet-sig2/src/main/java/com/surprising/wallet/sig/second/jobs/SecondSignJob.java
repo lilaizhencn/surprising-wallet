@@ -3,7 +3,7 @@ package com.surprising.wallet.sig.second.jobs;
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.annotation.StartThread;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sig.second.ISignService;
@@ -40,7 +40,7 @@ public class SecondSignJob implements Runnable {
                 String txStr = REDIS.rPoplPush(key, tmp);
                 if (!ObjectUtils.isEmpty(txStr)) {
                     WithdrawTransaction transaction = JSONObject.parseObject(txStr, WithdrawTransaction.class);
-                    RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
+                    AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
                     ISignService signService = SignContent.getSignService(currency);
                     JSONObject signature = JSONObject.parseObject(transaction.getSignature());
                     if (signService == null) {

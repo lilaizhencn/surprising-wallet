@@ -4,7 +4,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.BitcoinLikeChainProfile;
 import com.surprising.wallet.common.chain.HotWalletRules;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -53,7 +53,7 @@ public class BchCollectionJob {
         if (!isEnabled()) {
             return;
         }
-        RuntimeAsset currency = blockchainRuntimeService.runtimeAsset(CHAIN);
+        AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata(CHAIN);
         BitcoinLikeChainProfile profile = profile();
         Address hotAddress = getHotAddress(currency);
         if (hotAddress == null) {
@@ -163,7 +163,7 @@ public class BchCollectionJob {
     }
 
     private List<UtxoTransaction> findCollectableUtxos(
-            RuntimeAsset currency, int requiredConfirmations) {
+            AssetRuntimeMetadata currency, int requiredConfirmations) {
         return repository.listSpendableUtxos(CHAIN, CHAIN, requiredConfirmations, PAGE_SIZE, 0).stream()
                 .filter(utxo -> {
                     Address address = addressService.getAddress(utxo.getAddress(), currency);
@@ -174,7 +174,7 @@ public class BchCollectionJob {
                 .toList();
     }
 
-    private Address getHotAddress(RuntimeAsset currency) {
+    private Address getHotAddress(AssetRuntimeMetadata currency) {
         return repository.findChainAddress(
                         CHAIN,
                         CHAIN,

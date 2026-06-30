@@ -1,7 +1,7 @@
 package com.surprising.wallet.jobs.withdraw;
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.chain.BlockchainRuntimeService;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
     public BchSigningRecoveryJob(ChainJdbcRepository repo,BlockchainRuntimeService blockchainRuntimeService,WalletRuntimeConfigService runtimeConfigService){this.repo=repo;this.blockchainRuntimeService=blockchainRuntimeService;this.runtimeConfigService=runtimeConfigService;}
     @Scheduled(cron="19/30 * * * * ?") public void execute(){
         if(!runtimeConfigService.isTaskEnabled("BCH",WalletRuntimeConfigService.TASK_WITHDRAW))return;
-        RuntimeAsset currency=blockchainRuntimeService.runtimeAsset("BCH");
+        AssetRuntimeMetadata currency=blockchainRuntimeService.assetMetadata("BCH");
         for(var tx:repo.findStaleBitcoinLikeSigningTransactions(currency,STALE_SECONDS))
             if(repo.claimBitcoinLikeSigningRecovery(currency,tx.getId(),STALE_SECONDS)){
                 currency.applyTo(tx);

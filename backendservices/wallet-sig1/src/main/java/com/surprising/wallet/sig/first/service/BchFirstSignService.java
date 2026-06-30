@@ -2,7 +2,7 @@ package com.surprising.wallet.sig.first.service;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -48,7 +48,7 @@ public class BchFirstSignService implements ISignService {
 
     @Override
     public void signTransaction(WithdrawTransaction transaction) {
-        RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
+        AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
         try {
             List<UtxoTransaction> utxos =
@@ -129,7 +129,7 @@ public class BchFirstSignService implements ISignService {
         transaction.setSignature(signature.toJSONString());
     }
 
-    private Bip32Node derive(Address address, RuntimeAsset currency) {
+    private Bip32Node derive(Address address, AssetRuntimeMetadata currency) {
         return root.getChild(44)
                 .getChild(currency.getBip44CoinType())
                 .getChild(address.getBiz())

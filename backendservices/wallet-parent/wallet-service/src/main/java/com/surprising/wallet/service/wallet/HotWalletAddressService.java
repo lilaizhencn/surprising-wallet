@@ -2,13 +2,10 @@ package com.surprising.wallet.service.wallet;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.ChainAsset;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.HotWalletRules;
-import com.surprising.wallet.common.chain.RuntimeAsset;
 import com.surprising.wallet.common.chain.WalletPublicKey;
 import com.surprising.wallet.common.key.Ed25519DerivedKey;
-import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.service.chain.aptos.AptosKeyService;
 import com.surprising.wallet.service.chain.cardano.CardanoKeyService;
 import com.surprising.wallet.service.chain.monero.MoneroAddressService;
@@ -51,7 +48,6 @@ import java.util.Optional;
 public class HotWalletAddressService {
     private final ChainJdbcRepository repository;
     private final PubKeyConfig pubKeyConfig;
-    private final List<IWallet> wallets;
     private final SolanaKeyService solanaKeyService;
     private final SuiKeyService suiKeyService;
     private final AptosKeyService aptosKeyService;
@@ -171,10 +167,27 @@ public class HotWalletAddressService {
 
     private ChainAddressRecord deriveBitcoinLike(AccountChainProfile profile, long userId, int biz,
                                                  long addressIndex, String walletRole) {
-        IWallet wallet = bitcoinLikeWallet(profile);
-        Address address = wallet.deriveAddress(userId, biz, Math.toIntExact(addressIndex));
-        return baseRecord(profile, userId, biz, addressIndex, address.getAddress(),
-                null, address.getDerivationPath(), walletRole);
+        NetworkParameters params = bitcoinLikeNetworkParameters(profile);
+        int index = Math.toIntExact(addressIndex);
+        int user = Math.toIntExact(userId);
+        PubKeyConfig.AddressMetadata metadata;
+        String address;
+        String chain = normalize(profile.getChain());
+        if ("doge".equals(chain) || "bch".equals(chain)) {
+            metadata = pubKeyConfig.genLegacyThreeTwoAddressMetadata(
+                    params, profile.getBip44CoinType(), user, biz, index);
+            address = metadata.getAddress();
+            if ("bch".equals(chain)) {
+                BitcoinCashNetworkParameters bchParams = (BitcoinCashNetworkParameters) params;
+                address = BitcoinCashAddressCodec.fromLegacy(
+                        LegacyAddress.fromBase58(bchParams, metadata.getAddress()), bchParams.cashPrefix());
+            }
+        } else {
+            metadata = pubKeyConfig.genThreeTwoAddressMetadata(
+                    params, profile.getBip44CoinType(), user, biz, index);
+            address = metadata.getAddress();
+        }
+        return baseRecord(profile, userId, biz, addressIndex, address, null, metadata.getPath(), walletRole);
     }
 
     private ChainAddressRecord deriveAddressWithCandidateBip32Nodes(
@@ -203,7 +216,6 @@ public class HotWalletAddressService {
     private ChainAddressRecord deriveBitcoinLikeWithCandidateBip32Nodes(
             AccountChainProfile profile, long userId, int biz, long addressIndex, String walletRole,
             Map<Integer, Bip32Node> nodes) {
-        bitcoinLikeWallet(profile);
         NetworkParameters params = bitcoinLikeNetworkParameters(profile);
         int index = Math.toIntExact(addressIndex);
         int user = Math.toIntExact(userId);
@@ -284,18 +296,6 @@ public class HotWalletAddressService {
         };
         return baseRecord(profile, userId, biz, addressIndex, address, address,
                 derivationPath(profile, userId, biz, addressIndex), walletRole);
-    }
-
-    private IWallet bitcoinLikeWallet(AccountChainProfile profile) {
-        ChainAsset asset = repository.findAsset(profile.getChain(), profile.getNativeSymbol())
-                .orElseThrow(() -> new IllegalStateException("missing chain_asset for "
-                        + profile.getChain() + "/" + profile.getNativeSymbol()));
-        RuntimeAsset runtimeAsset = RuntimeAsset.fromProfile(profile, asset);
-        return wallets.stream()
-                .filter(candidate -> candidate.getCurrency().sameAsset(runtimeAsset))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("missing wallet implementation for "
-                        + profile.getChain() + "/" + profile.getNativeSymbol()));
     }
 
     private ChainAddressRecord deriveSecp256k1(AccountChainProfile profile, long userId, int biz,

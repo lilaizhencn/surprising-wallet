@@ -1,7 +1,7 @@
 package com.surprising.wallet.service.chain;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
@@ -32,7 +32,7 @@ public class BitcoinLikeSettlementService {
     }
 
     @Transactional(rollbackFor = Throwable.class)
-    public void settleConfirmed(WithdrawTransaction transaction, String txId, RuntimeAsset currency) {
+    public void settleConfirmed(WithdrawTransaction transaction, String txId, AssetRuntimeMetadata currency) {
         if (!blockchainRuntimeService.isBitcoinLikeRuntime(currency)) {
             throw new IllegalArgumentException("unsupported unified UTXO currency " + currency);
         }

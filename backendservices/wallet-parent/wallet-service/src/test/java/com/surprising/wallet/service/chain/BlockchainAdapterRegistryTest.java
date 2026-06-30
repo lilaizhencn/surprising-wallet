@@ -48,8 +48,8 @@ class BlockchainAdapterRegistryTest {
         EvmChainAdapter evmAdapter = new EvmChainAdapter(new EvmNonceManager(), tokenRegistry,
                 new EvmGasEstimator(), new EvmTransactionBuilder(), new EvmLogScanner());
         BlockchainAdapterRegistry registry = new BlockchainAdapterRegistry(List.of(
-                new BtcChainAdapter(),
-                new LitecoinChainAdapter(),
+                new BtcChainAdapter(null),
+                new LitecoinChainAdapter(null),
                 evmAdapter,
                 new TronChainAdapter()
         ));

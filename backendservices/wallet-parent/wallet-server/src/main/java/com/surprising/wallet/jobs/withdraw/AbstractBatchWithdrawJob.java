@@ -6,7 +6,7 @@ import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -31,7 +31,7 @@ import java.util.*;
 abstract public class AbstractBatchWithdrawJob {
     //一次处理10笔交易
     private final int COUNT = 10;
-    public RuntimeAsset currency;
+    public AssetRuntimeMetadata currency;
     @Autowired
     BlockchainRuntimeService blockchainRuntimeService;
     @Autowired
@@ -39,7 +39,7 @@ abstract public class AbstractBatchWithdrawJob {
     @Autowired
     protected WalletRuntimeConfigService runtimeConfigService;
 
-    private static final Set<RuntimeAsset> SINGLE_SIG_CURRENCY = Collections.emptySet();
+    private static final Set<AssetRuntimeMetadata> SINGLE_SIG_CURRENCY = Collections.emptySet();
     private static final int DEFAULT_FEE_RATE = 10;
 
     public void execute() {
@@ -233,7 +233,7 @@ abstract public class AbstractBatchWithdrawJob {
                 chain, chain, depositConfirmationThreshold, limit, offset);
     }
 
-    private Address defaultHotChangeAddress(RuntimeAsset currency) {
+    private Address defaultHotChangeAddress(AssetRuntimeMetadata currency) {
         return chainJdbcRepository.findChainAddress(
                         currency.chain(),
                         currency.assetSymbol(),
@@ -247,7 +247,7 @@ abstract public class AbstractBatchWithdrawJob {
                                 + currency.chain() + "/" + currency.assetSymbol()));
     }
 
-    private WithdrawRecord toWithdrawRecord(WithdrawalOrderRecord order, RuntimeAsset currency) {
+    private WithdrawRecord toWithdrawRecord(WithdrawalOrderRecord order, AssetRuntimeMetadata currency) {
         return WithdrawRecord.builder()
                 .withdrawId(order.getOrderNo())
                 .userId(order.getUserId())
@@ -261,7 +261,7 @@ abstract public class AbstractBatchWithdrawJob {
                 .build();
     }
 
-    private Address toAddress(ChainAddressRecord record, RuntimeAsset currency) {
+    private Address toAddress(ChainAddressRecord record, AssetRuntimeMetadata currency) {
         return Address.builder()
                 .userId(record.getUserId())
                 .address(record.getAddress())

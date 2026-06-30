@@ -1,7 +1,7 @@
 package com.surprising.wallet.sig.second.impl;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
@@ -30,7 +30,7 @@ public class BchSecondSignService implements ISignService {
 
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
-        RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
+        AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
         try {
             if (!"bch-p2sh".equals(signature.getString("scriptType"))) {

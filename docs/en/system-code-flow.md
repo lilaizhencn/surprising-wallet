@@ -13,10 +13,10 @@ request chain/symbol/contract
   -> chain_profile
   -> chain_asset
   -> token_config when token asset
-  -> RuntimeAsset/runtime chain service input
+  -> BlockchainRuntimeService/BlockchainAdapter input
 ```
 
-Business routing should use `chain + asset` lookup. Legacy enums and numeric currency ids should only exist as compatibility mapping when unavoidable.
+Business routing should use `chain + asset` lookup. Numeric runtime currency ids should remain an internal DB compatibility mapping, not a public API input.
 
 ## Deposit Flow
 

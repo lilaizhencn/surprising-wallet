@@ -20,7 +20,7 @@ class BlockchainRuntimeServiceTest {
         BlockchainRuntimeService service = new BlockchainRuntimeService(
                 new BlockchainAdapterRegistry(List.of(new EvmStubAdapter())),
                 new StubRepository(profile("ETH", "sepolia", "evm", "ETH", 121)),
-                List.of());
+                null);
 
         BlockchainRuntimeService.RuntimeChain runtime = service.requireRuntime("eth");
 
@@ -36,7 +36,7 @@ class BlockchainRuntimeServiceTest {
         BlockchainRuntimeService service = new BlockchainRuntimeService(
                 new BlockchainAdapterRegistry(List.of(new EvmStubAdapter())),
                 new StubRepository(null),
-                List.of());
+                null);
 
         assertThrows(IllegalStateException.class, () -> service.requireRuntime("ETH"));
     }

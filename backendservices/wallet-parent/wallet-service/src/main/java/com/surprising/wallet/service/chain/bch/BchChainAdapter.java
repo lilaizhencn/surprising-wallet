@@ -1,4 +1,4 @@
-package com.surprising.wallet.service.chain.btc;
+package com.surprising.wallet.service.chain.bch;
 
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.TransferQuote;
@@ -6,6 +6,7 @@ import com.surprising.wallet.common.chain.TransferRequest;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashFeePolicy;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.service.chain.BlockchainAdapter;
 import com.surprising.wallet.service.chain.utxo.BitcoinLikeChainRuntime;
@@ -16,81 +17,80 @@ import java.math.RoundingMode;
 import java.util.List;
 
 @Component
-public class BtcChainAdapter implements BlockchainAdapter {
+public class BchChainAdapter implements BlockchainAdapter {
     private final BitcoinLikeChainRuntime runtime;
 
-    public BtcChainAdapter(BitcoinLikeChainRuntime runtime) {
+    public BchChainAdapter(BitcoinLikeChainRuntime runtime) {
         this.runtime = runtime;
     }
 
     @Override
     public ChainType chainType() {
-        return ChainType.BTC;
+        return ChainType.BCH;
     }
 
     @Override
     public String family() {
-        return "bitcoin";
+        return "bitcoin-cash";
     }
 
     @Override
     public String describe() {
-        return "Isolated BTC UTXO adapter with SegWit fee estimation and multisig-safe planning.";
+        return "Bitcoin Cash UTXO adapter with CashAddr normalization and RPC-backed scanning.";
     }
 
     @Override
     public TransferQuote quoteNativeTransfer(TransferRequest request) {
-        long feeRate = request.feeRateSatPerVByte() == null ? 10L : request.feeRateSatPerVByte();
-        long amountSat = request.amount().movePointRight(8).setScale(0, RoundingMode.DOWN).longValueExact();
-        long feeSat = P2wshFeeCalculator.calculateFeeSat(1, 2, feeRate);
-        long feeBtcSat = feeSat;
-        BigDecimal fee = BigDecimal.valueOf(feeBtcSat).movePointLeft(8);
+        long feeRate = request.feeRateSatPerVByte() == null ? 1L : request.feeRateSatPerVByte();
+        long feeSat = Math.max(BitcoinCashFeePolicy.DUST_THRESHOLD_SAT,
+                P2wshFeeCalculator.calculateFeeSat(1, 2, feeRate));
+        BigDecimal fee = BigDecimal.valueOf(feeSat).movePointLeft(8).setScale(8, RoundingMode.DOWN);
         return new TransferQuote(request.chainType(), request.assetSymbol(), request.fromAddress(), request.toAddress(),
-                request.amount(), fee, 0L, 1L, feeBtcSat, 0L, null, true, "btc utxo fee estimate");
+                request.amount(), fee, 0L, 1L, feeSat, 0L, null, true, "bch p2sh fee estimate");
     }
 
     @Override
     public Address generateDepositAddress(ChainType chainType, long userId, int biz) {
-        return runtime.generateDepositAddress(ChainType.BTC, userId, biz);
+        return runtime.generateDepositAddress(ChainType.BCH, userId, biz);
     }
 
     @Override
     public boolean checkAddress(ChainType chainType, String address) {
-        return runtime.checkAddress(ChainType.BTC, address);
+        return runtime.checkAddress(ChainType.BCH, address);
     }
 
     @Override
     public long depositConfirmationThreshold(ChainType chainType) {
-        return runtime.depositConfirmationThreshold(ChainType.BTC);
+        return runtime.depositConfirmationThreshold(ChainType.BCH);
     }
 
     @Override
     public long dustThresholdAtomic(ChainType chainType) {
-        return runtime.dustThresholdAtomic(ChainType.BTC);
+        return runtime.dustThresholdAtomic(ChainType.BCH);
     }
 
     @Override
     public long bestHeight(ChainType chainType) {
-        return runtime.bestHeight(ChainType.BTC);
+        return runtime.bestHeight(ChainType.BCH);
     }
 
     @Override
     public List<TransactionDTO> findRelatedTransactions(ChainType chainType, long height) {
-        return runtime.findRelatedTransactions(ChainType.BTC, height);
+        return runtime.findRelatedTransactions(ChainType.BCH, height);
     }
 
     @Override
     public void updateTransactionConfirmations(ChainType chainType) {
-        runtime.updateTransactionConfirmations(ChainType.BTC);
+        runtime.updateTransactionConfirmations(ChainType.BCH);
     }
 
     @Override
     public void updateTotalBalance(ChainType chainType) {
-        runtime.updateTotalBalance(ChainType.BTC);
+        runtime.updateTotalBalance(ChainType.BCH);
     }
 
     @Override
     public String broadcastSignedTransaction(ChainType chainType, WithdrawTransaction transaction) {
-        return runtime.broadcastSignedTransaction(ChainType.BTC, transaction);
+        return runtime.broadcastSignedTransaction(ChainType.BCH, transaction);
     }
 }

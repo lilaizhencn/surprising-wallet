@@ -1,7 +1,7 @@
 package com.surprising.wallet.sig.second.impl;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
@@ -48,7 +48,7 @@ abstract public class AbstractEthLikeSecondSign implements ISignService {
     public String signTransaction(WithdrawTransaction transaction) {
         String sigStr = transaction.getSignature();
         JSONObject sigJson = JSONObject.parseObject(sigStr);
-        RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
+        AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
         BigDecimal feeDecimal = feeDecimal(sigJson, currency);
         Address address = sigJson.getJSONObject("address").toJavaObject(Address.class);
         Bip32Node node = BipNodeUtil.getBipNODE(address, currency);
@@ -64,7 +64,7 @@ abstract public class AbstractEthLikeSecondSign implements ISignService {
         return signResult;
     }
 
-    protected BigDecimal feeDecimal(JSONObject sigJson, RuntimeAsset currency) {
+    protected BigDecimal feeDecimal(JSONObject sigJson, AssetRuntimeMetadata currency) {
         Integer decimals = sigJson.getObject("feeAssetDecimals", Integer.class);
         return BigDecimal.TEN.pow(decimals == null ? currency.getDecimals() : decimals);
     }

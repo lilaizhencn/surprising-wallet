@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 public class ScanLtcBlockJob extends AbstractScanUtxoBlockJob {
     @PostConstruct
     public void init() {
-        currency = blockchainRuntimeService.runtimeAsset("LTC");
+        currency = blockchainRuntimeService.assetMetadata("LTC");
     }
 
     @Scheduled(cron = "5/59 * * * * ?")

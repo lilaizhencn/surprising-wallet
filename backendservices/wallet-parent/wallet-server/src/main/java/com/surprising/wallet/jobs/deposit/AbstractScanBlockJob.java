@@ -1,6 +1,6 @@
 package com.surprising.wallet.jobs.deposit;
 
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.BestBlockHeight;
 import com.surprising.wallet.service.chain.BlockchainRuntimeService;
@@ -21,7 +21,7 @@ import java.util.Optional;
  */
 @Slf4j
 abstract public class AbstractScanBlockJob {
-    protected RuntimeAsset currency;
+    protected AssetRuntimeMetadata currency;
     @Autowired
     protected TransactionService txService;
     @Autowired
@@ -118,11 +118,11 @@ abstract public class AbstractScanBlockJob {
         log.info("扫描 {} 交易高度结束 当前高度:{}", requireCurrency().getName(), bestHeight);
     }
 
-    private boolean isScanEnabled(RuntimeAsset currency) {
+    private boolean isScanEnabled(AssetRuntimeMetadata currency) {
         return runtimeConfigService.isTaskEnabled(currency, WalletRuntimeConfigService.TASK_SCAN);
     }
 
-    protected RuntimeAsset requireCurrency() {
+    protected AssetRuntimeMetadata requireCurrency() {
         if (currency == null) {
             throw new IllegalStateException("scan job runtime currency is not configured");
         }
@@ -155,7 +155,7 @@ abstract public class AbstractScanBlockJob {
      */
     protected BestBlockHeight getDbBestBlockHeight() {
         if (isDatabaseDrivenUtxo(requireCurrency())) {
-            RuntimeAsset currency = requireCurrency();
+            AssetRuntimeMetadata currency = requireCurrency();
             String chain = chainName(currency);
             Optional<Long> scanHeight =
                     chainJdbcRepository.findScanSafeHeight(chain, scannerName(currency));
@@ -189,19 +189,19 @@ abstract public class AbstractScanBlockJob {
                 "legacy scan-height runtime is disabled for " + requireCurrency().getName());
     }
 
-    private boolean isDatabaseDrivenUtxo(RuntimeAsset currency) {
+    private boolean isDatabaseDrivenUtxo(AssetRuntimeMetadata currency) {
         return blockchainRuntimeService.isBitcoinLikeRuntime(currency);
     }
 
-    private String chainName(RuntimeAsset currency) {
+    private String chainName(AssetRuntimeMetadata currency) {
         return blockchainRuntimeService.chainName(currency);
     }
 
-    private String scannerName(RuntimeAsset currency) {
+    private String scannerName(AssetRuntimeMetadata currency) {
         return blockchainRuntimeService.scannerName(currency);
     }
 
-    private BestBlockHeight checkpoint(RuntimeAsset currency, Long height) {
+    private BestBlockHeight checkpoint(AssetRuntimeMetadata currency, Long height) {
         BestBlockHeight checkpoint = new BestBlockHeight();
         checkpoint.setCurrency(currency.getIndex());
         checkpoint.setHeight(height);

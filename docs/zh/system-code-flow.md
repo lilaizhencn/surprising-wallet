@@ -13,7 +13,7 @@ request chain/symbol/contract
   -> chain_profile
   -> chain_asset
   -> token_config when token asset
-  -> RuntimeAsset/runtime chain service input
+  -> BlockchainRuntimeService/BlockchainAdapter input
 ```
 
 业务路由应使用 `chain + asset` lookup。legacy enum 和数字 currency id 只应在不可避免时作为兼容映射存在。

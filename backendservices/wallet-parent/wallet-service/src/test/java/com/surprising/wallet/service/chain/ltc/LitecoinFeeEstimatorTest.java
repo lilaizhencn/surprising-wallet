@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LitecoinFeeEstimatorTest {
     @Test
     void quoteShouldUseLitecoinFeePolicy() {
-        LitecoinChainAdapter adapter = new LitecoinChainAdapter();
+        LitecoinChainAdapter adapter = new LitecoinChainAdapter(null);
         TransferQuote quote = adapter.quoteNativeTransfer(new TransferRequest(
                 ChainType.LTC, "LTC", "from", "to", new BigDecimal("0.1"), 1, null, null));
 
@@ -28,7 +28,7 @@ class LitecoinFeeEstimatorTest {
 
     @Test
     void highFeeRateShouldBeClamped() {
-        LitecoinChainAdapter adapter = new LitecoinChainAdapter();
+        LitecoinChainAdapter adapter = new LitecoinChainAdapter(null);
         TransferQuote quote = adapter.quoteNativeTransfer(new TransferRequest(
                 ChainType.LTC, "LTC", "from", "to", new BigDecimal("0.1"), 1, 10_000L, null));
 

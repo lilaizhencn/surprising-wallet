@@ -1,6 +1,6 @@
 package com.surprising.wallet.sig.second.impl;
 import com.alibaba.fastjson.JSONArray;import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;import com.surprising.wallet.sdk.bitcoinj.core.WitnessSigner;
 import com.surprising.wallet.sig.second.BipNodeUtil;import com.surprising.wallet.sig.second.ISignService;
@@ -13,7 +13,7 @@ abstract public class AbstractBtcLikeSecondSign implements ISignService {
     private static final HexFormat HEX=HexFormat.of(); private final WitnessSigner ws=new WitnessSigner();
     protected NetworkParameters getNetworkParameters(){return Constants.NET_PARAMS;}
     @Override public String signTransaction(WithdrawTransaction tx){
-        RuntimeAsset currency=RuntimeAsset.fromTransaction(tx);
+        AssetRuntimeMetadata currency=AssetRuntimeMetadata.fromTransaction(tx);
         JSONObject sj=JSONObject.parseObject(tx.getSignature());
         String fst=sj.getString("firstSignTx"); if(fst==null||fst.isEmpty()){sj.put("valid",false);sj.put("error","no firstSignTx");tx.setSignature(sj.toJSONString());return"";}
         if(!"p2wsh".equals(sj.getString("scriptType"))){sj.put("valid",false);sj.put("error","not p2wsh");tx.setSignature(sj.toJSONString());return"";}

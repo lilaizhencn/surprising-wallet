@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 public class ScanDogeBlockJob extends AbstractScanUtxoBlockJob {
     @PostConstruct
     public void init() {
-        currency = blockchainRuntimeService.runtimeAsset("DOGE");
+        currency = blockchainRuntimeService.assetMetadata("DOGE");
     }
 
     @Scheduled(cron = "7/59 * * * * ?")

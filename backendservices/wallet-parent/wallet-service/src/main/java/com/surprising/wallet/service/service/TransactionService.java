@@ -5,7 +5,7 @@ import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.currency.BizEnum;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -57,7 +57,7 @@ public class TransactionService {
     @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_COMMITTED)
     public void saveTransaction(TransactionDTO dto) {
         log.info("saveTransaction dto: {} begin", dto.getTxId());
-        RuntimeAsset currency = blockchainRuntimeService.runtimeAsset(dto.getCurrency());
+        AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata(dto.getCurrency());
         // Wallet app deposit addresses currently use biz=0; only hot/internal addresses are skipped.
         if (BizEnum.INTERNAL.getIndex() == dto.getBiz()
                 && isInternalAddress(dto, currency)) {
@@ -85,7 +85,7 @@ public class TransactionService {
     public boolean withdraw(WithdrawRecord record) {
         log.info("提现操作 开始 提现id:{}", record.getWithdrawId());
 
-        RuntimeAsset currency = blockchainRuntimeService.runtimeAsset(record.getCurrency());
+        AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata(record.getCurrency());
         runtimeConfigService.requireTaskEnabled(chainName(currency), WalletRuntimeConfigService.TASK_WITHDRAW,
                 "legacy withdraw");
         if (isUnifiedBitcoinLike(currency)) {
@@ -135,7 +135,7 @@ public class TransactionService {
     public boolean sendWithdrawTransaction(WithdrawTransaction transaction) {
         log.info("广播签名后的交易 开始 币种id:{} 交易id:{}", transaction.getCurrency(), transaction.getId());
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
-        RuntimeAsset currency = transactionAsset(transaction);
+        AssetRuntimeMetadata currency = transactionAsset(transaction);
 
         //签名是否成功
         if (!signature.containsKey("valid") || !signature.getBoolean("valid")) {
@@ -209,7 +209,7 @@ public class TransactionService {
         return true;
     }
 
-    private void markBitcoinLikeRetrying(WithdrawTransaction transaction, RuntimeAsset currency,
+    private void markBitcoinLikeRetrying(WithdrawTransaction transaction, AssetRuntimeMetadata currency,
                                          JSONObject signature, String error) {
         String chain = chainName(currency);
         chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
@@ -224,7 +224,7 @@ public class TransactionService {
                 chain, record.getWithdrawId(), "RETRYING", null, null, error));
     }
 
-    private void failBitcoinLikeTransaction(WithdrawTransaction transaction, RuntimeAsset currency, String error) {
+    private void failBitcoinLikeTransaction(WithdrawTransaction transaction, AssetRuntimeMetadata currency, String error) {
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
         String lockRef = transaction.getId().toString();
         String chain = chainName(currency);
@@ -254,7 +254,7 @@ public class TransactionService {
     }
 
     private void creditDepositIfNeeded(
-            TransactionDTO dto, RuntimeAsset currency, long requiredConfirmations) {
+            TransactionDTO dto, AssetRuntimeMetadata currency, long requiredConfirmations) {
         UtxoKey utxoKey = UtxoKey.parse(dto.getTxId());
         if (utxoKey == null) {
             return;
@@ -299,7 +299,7 @@ public class TransactionService {
         return record.getBalance().add(fee);
     }
 
-    private boolean isInternalAddress(TransactionDTO dto, RuntimeAsset currency) {
+    private boolean isInternalAddress(TransactionDTO dto, AssetRuntimeMetadata currency) {
         Address address = addressService.getAddress(dto.getAddress(), currency);
         return address == null || address.getUserId() == null || address.getUserId() <= 0;
     }
@@ -311,22 +311,22 @@ public class TransactionService {
                 .orElse(record.getUserId().toString());
     }
 
-    private boolean isUnifiedBitcoinLike(RuntimeAsset currency) {
+    private boolean isUnifiedBitcoinLike(AssetRuntimeMetadata currency) {
         return blockchainRuntimeService.isBitcoinLikeRuntime(currency);
     }
 
-    private String chainName(RuntimeAsset currency) {
+    private String chainName(AssetRuntimeMetadata currency) {
         return blockchainRuntimeService.chainName(currency);
     }
 
-    private RuntimeAsset transactionAsset(WithdrawTransaction transaction) {
+    private AssetRuntimeMetadata transactionAsset(WithdrawTransaction transaction) {
         if (StringUtils.hasText(transaction.getChain())
                 && StringUtils.hasText(transaction.getAssetSymbol())
                 && transaction.getAssetDecimals() != null
                 && transaction.getBip44CoinType() != null) {
-            return RuntimeAsset.fromTransaction(transaction);
+            return AssetRuntimeMetadata.fromTransaction(transaction);
         }
-        return blockchainRuntimeService.runtimeAsset(transaction.getCurrency());
+        return blockchainRuntimeService.assetMetadata(transaction.getCurrency());
     }
 
     private static class UtxoKey {

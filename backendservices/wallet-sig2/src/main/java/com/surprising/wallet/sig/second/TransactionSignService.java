@@ -1,6 +1,6 @@
 package com.surprising.wallet.sig.second;
 
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,7 +21,7 @@ public class TransactionSignService {
         String sig;
         try {
             transaction.setBalance(new BigDecimal(transaction.getBalanceStr()));
-            RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
+            AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
             ISignService signService = SignContent.getSignService(currency);
             sig = signService.signTransaction(transaction);
             log.info("签名服务 结束 币种:{}", currency.getName());

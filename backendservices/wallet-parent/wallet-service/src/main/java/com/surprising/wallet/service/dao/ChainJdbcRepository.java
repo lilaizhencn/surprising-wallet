@@ -26,7 +26,7 @@ import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.common.chain.XrpTransactionRecord;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.utils.Constants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
@@ -1181,7 +1181,7 @@ public class ChainJdbcRepository {
     }
 
     public WithdrawTransaction createBitcoinLikeSigningTransaction(
-            RuntimeAsset currency,
+            AssetRuntimeMetadata currency,
             String businessType,
             String businessNo,
             WithdrawTransaction transaction) {
@@ -1241,7 +1241,7 @@ public class ChainJdbcRepository {
     }
 
     public Optional<WithdrawTransaction> findBitcoinLikeSigningTransaction(
-            RuntimeAsset currency, String businessType, String businessNo) {
+            AssetRuntimeMetadata currency, String businessType, String businessNo) {
         return findBitcoinLikeSigningTransaction(
                 currency.getName().toUpperCase(java.util.Locale.ROOT), businessType, businessNo);
     }
@@ -1259,7 +1259,7 @@ public class ChainJdbcRepository {
     }
 
     public Optional<WithdrawTransaction> findBitcoinLikeSigningTransactionById(
-            RuntimeAsset currency, int transactionId) {
+            AssetRuntimeMetadata currency, int transactionId) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         List<WithdrawTransaction> results = jdbcTemplate.query("""
                         select id, tx_id, balance, signature, currency, status, create_date, update_date
@@ -1272,7 +1272,7 @@ public class ChainJdbcRepository {
     }
 
     public Optional<WithdrawTransaction> findBitcoinLikeSigningTransactionByTxId(
-            RuntimeAsset currency, String txId) {
+            AssetRuntimeMetadata currency, String txId) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         List<WithdrawTransaction> results = jdbcTemplate.query("""
                         select id, tx_id, balance, signature, currency, status, create_date, update_date
@@ -1286,7 +1286,7 @@ public class ChainJdbcRepository {
         return results.stream().findFirst();
     }
 
-    public boolean bitcoinLikeSigningTransactionExists(RuntimeAsset currency, String txId) {
+    public boolean bitcoinLikeSigningTransactionExists(AssetRuntimeMetadata currency, String txId) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         Boolean exists = jdbcTemplate.queryForObject("""
                         select exists(
@@ -1297,7 +1297,7 @@ public class ChainJdbcRepository {
         return Boolean.TRUE.equals(exists);
     }
 
-    public int updateBitcoinLikeSigningTransaction(RuntimeAsset currency, WithdrawTransaction transaction) {
+    public int updateBitcoinLikeSigningTransaction(AssetRuntimeMetadata currency, WithdrawTransaction transaction) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         return jdbcTemplate.update("""
                         update chain_signing_transaction
@@ -1320,7 +1320,7 @@ public class ChainJdbcRepository {
                 transaction.getId());
     }
 
-    public int markBitcoinLikeSigningError(RuntimeAsset currency, int transactionId, String errorMessage) {
+    public int markBitcoinLikeSigningError(AssetRuntimeMetadata currency, int transactionId, String errorMessage) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         return jdbcTemplate.update("""
                         update chain_signing_transaction
@@ -1331,7 +1331,7 @@ public class ChainJdbcRepository {
                 errorMessage, toTs(now()), chain, transactionId);
     }
 
-    public List<WithdrawTransaction> findSentBitcoinLikeSigningTransactions(RuntimeAsset currency) {
+    public List<WithdrawTransaction> findSentBitcoinLikeSigningTransactions(AssetRuntimeMetadata currency) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         return jdbcTemplate.query("""
                         select id, tx_id, balance, signature, currency, status, create_date, update_date
@@ -1405,7 +1405,7 @@ public class ChainJdbcRepository {
     }
 
     public List<WithdrawTransaction> findStaleBitcoinLikeSigningTransactions(
-            RuntimeAsset currency, long staleSeconds) {
+            AssetRuntimeMetadata currency, long staleSeconds) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         return jdbcTemplate.query("""
                         select id, tx_id, balance, signature, currency, status, create_date, update_date
@@ -1421,7 +1421,7 @@ public class ChainJdbcRepository {
     }
 
     public boolean claimBitcoinLikeSigningRecovery(
-            RuntimeAsset currency, int transactionId, long staleSeconds) {
+            AssetRuntimeMetadata currency, int transactionId, long staleSeconds) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         return jdbcTemplate.update("""
                         update chain_signing_transaction

@@ -1,7 +1,7 @@
 package com.surprising.wallet.sig.second.impl;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
@@ -30,7 +30,7 @@ public class Erc20SecondSignService extends AbstractEthLikeSecondSign implements
     }
 
     @Override
-    public boolean supports(RuntimeAsset asset) {
+    public boolean supports(AssetRuntimeMetadata asset) {
         return asset != null
                 && chain().equalsIgnoreCase(asset.chain())
                 && !chain().equalsIgnoreCase(asset.assetSymbol())
@@ -39,7 +39,7 @@ public class Erc20SecondSignService extends AbstractEthLikeSecondSign implements
 
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
-        RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
+        AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
         String sigStr = transaction.getSignature();
         JSONObject sigJson = JSONObject.parseObject(sigStr);
         BigDecimal feeDecimal = feeDecimal(sigJson, currency);

@@ -1,7 +1,7 @@
 package com.surprising.wallet.jobs.withdraw;
 
 import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.chain.BlockchainRuntimeService;
 import lombok.extern.slf4j.Slf4j;
@@ -56,7 +56,7 @@ public class FeeRateUpdater {
      */
     @Scheduled(cron = "0 */2 * * * ?")
     public void updateFeeRate() {
-        for (RuntimeAsset currency : new RuntimeAsset[]{btc()}) {
+        for (AssetRuntimeMetadata currency : new AssetRuntimeMetadata[]{btc()}) {
             try {
                 int feeRate = fetchFeeRate();
                 String key = Constants.WALLET_FEE + currency.getIndex();
@@ -117,7 +117,7 @@ public class FeeRateUpdater {
         log.warn("手动强制费率: {} = {} sat/vB", key, feeRate);
     }
 
-    private RuntimeAsset btc() {
-        return blockchainRuntimeService.runtimeAsset("BTC");
+    private AssetRuntimeMetadata btc() {
+        return blockchainRuntimeService.assetMetadata("BTC");
     }
 }

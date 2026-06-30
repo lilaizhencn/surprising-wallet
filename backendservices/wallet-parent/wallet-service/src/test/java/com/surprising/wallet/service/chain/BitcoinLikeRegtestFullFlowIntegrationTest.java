@@ -7,7 +7,7 @@ import com.surprising.wallet.common.chain.ChainAsset;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.LedgerBalanceRecord;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
@@ -240,7 +240,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 "freeze must reject over-spend and keep ledger non-negative");
         assertEquals(1, repository.updateWithdrawalStatus(
                 chainName, withdrawalOrder, "FROZEN", depositAddress, null, null));
-        RuntimeAsset currency = runtimeAsset(repository, chainName);
+        AssetRuntimeMetadata currency = assetMetadata(repository, chainName);
         WithdrawTransaction signing = repository.createBitcoinLikeSigningTransaction(
                 currency,
                 "WITHDRAW",
@@ -808,13 +808,13 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         return values.stream().mapToLong(Integer::longValue).sum();
     }
 
-    private static RuntimeAsset runtimeAsset(ChainJdbcRepository repository, String chain) {
+    private static AssetRuntimeMetadata assetMetadata(ChainJdbcRepository repository, String chain) {
         AccountChainProfile profile = repository.findProfileByChain(chain)
                 .orElseThrow(() -> new IllegalStateException("missing chain_profile for " + chain));
         ChainAsset asset = repository.findAsset(profile.getChain(), profile.getNativeSymbol())
                 .orElseThrow(() -> new IllegalStateException(
                         "missing chain_asset for " + profile.getChain() + "/" + profile.getNativeSymbol()));
-        return RuntimeAsset.fromProfile(profile, asset);
+        return AssetRuntimeMetadata.fromProfile(profile, asset);
     }
 
     private static void ensureBitcoinLikeProfiles(JdbcTemplate jdbc) {

@@ -6,8 +6,6 @@ import com.surprising.wallet.service.config.PubKeyConfig;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -20,7 +18,7 @@ class HotWalletAddressServiceTest {
         PubKeyConfig pubKeyConfig = new PubKeyConfig(null);
         pubKeyConfig.NODE2 = Bip32Node.decode(XPUB_2);
         HotWalletAddressService service = new HotWalletAddressService(
-                null, pubKeyConfig, List.of(), null, null, null, null, null, null, null, null, null);
+                null, pubKeyConfig, null, null, null, null, null, null, null, null, null);
         AccountChainProfile profile = AccountChainProfile.builder()
                 .chain("HYPERCORE")
                 .network("testnet")

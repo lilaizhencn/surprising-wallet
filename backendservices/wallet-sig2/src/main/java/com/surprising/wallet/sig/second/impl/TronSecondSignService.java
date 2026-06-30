@@ -1,7 +1,7 @@
 package com.surprising.wallet.sig.second.impl;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sig.second.BipNodeUtil;
@@ -35,7 +35,7 @@ public class TronSecondSignService implements ISignService {
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
         JSONObject sigJson = JSONObject.parseObject(transaction.getSignature());
-        RuntimeAsset currency = RuntimeAsset.fromTransaction(transaction);
+        AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
         Address address = sigJson.getJSONObject("address").toJavaObject(Address.class);
         String from = sigJson.getString("from");
         String toAddr = sigJson.getString("to");
@@ -56,7 +56,7 @@ public class TronSecondSignService implements ISignService {
         }
     }
 
-    private byte[] getKeyByAddress(Address address, RuntimeAsset currency) {
+    private byte[] getKeyByAddress(Address address, AssetRuntimeMetadata currency) {
         /*
          * Keep TRON on the same root-key model as BTC/EVM:
          * wallet-server derives the public key from wallet.pubKey2 at

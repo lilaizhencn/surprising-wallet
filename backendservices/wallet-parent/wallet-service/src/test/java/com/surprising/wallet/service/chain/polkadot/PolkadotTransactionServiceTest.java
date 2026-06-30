@@ -168,7 +168,7 @@ class PolkadotTransactionServiceTest {
         private final ChainAddressRecord hot;
 
         FakeHotWalletAddressService(ChainAddressRecord hot) {
-            super(null, null, List.of(), null, null, null, null, null, null, null, null, null);
+            super(null, null, null, null, null, null, null, null, null, null, null);
             this.hot = hot;
         }
 

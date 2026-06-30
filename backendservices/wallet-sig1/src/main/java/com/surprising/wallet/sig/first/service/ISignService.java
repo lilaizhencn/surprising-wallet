@@ -1,6 +1,6 @@
 package com.surprising.wallet.sig.first.service;
 
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 
 /**
@@ -28,7 +28,7 @@ public interface ISignService {
         return chain();
     }
 
-    default boolean supports(RuntimeAsset asset) {
+    default boolean supports(AssetRuntimeMetadata asset) {
         if (asset == null || !chain().equalsIgnoreCase(asset.chain())) {
             return false;
         }

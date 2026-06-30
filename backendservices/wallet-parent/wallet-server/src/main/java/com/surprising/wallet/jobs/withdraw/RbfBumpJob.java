@@ -2,7 +2,7 @@ package com.surprising.wallet.jobs.withdraw;
 
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.chain.RuntimeAsset;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
@@ -87,7 +87,7 @@ public class RbfBumpJob {
 
     private void bumpFee(int txId) {
         // 1. 找到原始交易
-        RuntimeAsset currency = blockchainRuntimeService.runtimeAsset("BTC");
+        AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata("BTC");
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         java.util.Optional<WithdrawTransaction> txOpt =
                 chainJdbcRepository.findBitcoinLikeSigningTransactionById(currency, txId);
