@@ -13,6 +13,7 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>4.1.0</version>
+        <relativePath/>
     </parent>
 
     <name>Surprising Dependencies</name>
@@ -21,35 +22,26 @@
     <properties>
         <surprising.version>1.0.0-SNAPSHOT</surprising.version>
         <java.version>21</java.version>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <rpc.version>1.0.0-SNAPSHOT</rpc.version>
-        <spring-cloud.version>2025.1.2</spring-cloud.version>
-        <spring.alibaba-cloud.version>2025.1.0.0</spring.alibaba-cloud.version>
         <!-- Protobuf — must match system protoc 34.0 -->
         <protobuf.version>4.34.1</protobuf.version>
         <trident.protobuf.version>3.25.8</trident.protobuf.version>
-        <grpc.version>1.80.0</grpc.version>
+        <grpc.version>1.82.1</grpc.version>
         <fastjson.version>1.2.75</fastjson.version>
         <guava.version>32.0.1-android</guava.version>
         <spongycastle.version>1.58.0.0</spongycastle.version>
-        <bcprov-jdk15on.version>1.61</bcprov-jdk15on.version>
-        <bcprov-jdk16.version>1.46</bcprov-jdk16.version>
-        <bouncycastle.version>1.82</bouncycastle.version>
+        <bouncycastle.version>1.84</bouncycastle.version>
         <scrypt.version>1.4.0</scrypt.version>
         <bitcoinj.version>0.17.1</bitcoinj.version>
-        <config.version>1.3.3</config.version>
+        <config.version>1.4.9</config.version>
         <okhttp.version>4.0.1</okhttp.version>
         <retrofit.version>2.6.1</retrofit.version>
-        <jsonrpc4j.version>1.5.3</jsonrpc4j.version>
-        <commons-text.version>1.7</commons-text.version>
-        <commons-io.version>2.6</commons-io.version>
-        <commons-collections4.version>4.4</commons-collections4.version>
+        <jsonrpc4j.version>1.7</jsonrpc4j.version>
+        <commons-text.version>1.15.0</commons-text.version>
+        <commons-io.version>2.22.0</commons-io.version>
+        <commons-collections4.version>4.5.0</commons-collections4.version>
         <disruptor.version>3.4.2</disruptor.version>
         <vjkit.version>1.0.8</vjkit.version>
-        <libphonenumber.version>8.12.8</libphonenumber.version>
-        <zxing.version>3.4.0</zxing.version>
+        <zxing.version>3.5.4</zxing.version>
         <web3j.version>6.0.0</web3j.version>
         <legacy-janino.version>2.5.10</legacy-janino.version>
         <trident.version>0.11.0</trident.version>
@@ -99,21 +91,7 @@
                 <version>${surprising.version}</version>
             </dependency>
 
-            <!-- Imported BOMs not covered by Spring Boot -->
-            <dependency>
-                <groupId>com.alibaba.cloud</groupId>
-                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
-                <version>${spring.alibaba-cloud.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.cloud</groupId>
-                <artifactId>spring-cloud-dependencies</artifactId>
-                <version>${spring-cloud.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
+            <!-- gRPC version alignment for generated TRON clients and Trident -->
             <dependency>
                 <groupId>io.grpc</groupId>
                 <artifactId>grpc-bom</artifactId>
@@ -142,16 +120,6 @@
                 <groupId>com.madgag.spongycastle</groupId>
                 <artifactId>prov</artifactId>
                 <version>${spongycastle.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.bouncycastle</groupId>
-                <artifactId>bcprov-jdk15on</artifactId>
-                <version>${bcprov-jdk15on.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.bouncycastle</groupId>
-                <artifactId>bcprov-jdk16</artifactId>
-                <version>${bcprov-jdk16.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.bouncycastle</groupId>
@@ -222,11 +190,6 @@
                 <groupId>com.vip.vjtools</groupId>
                 <artifactId>vjkit</artifactId>
                 <version>${vjkit.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.googlecode.libphonenumber</groupId>
-                <artifactId>libphonenumber</artifactId>
-                <version>${libphonenumber.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.zxing</groupId>

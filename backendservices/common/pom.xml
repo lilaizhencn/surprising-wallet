@@ -26,10 +26,6 @@
             <artifactId>vjkit</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.googlecode.libphonenumber</groupId>
-            <artifactId>libphonenumber</artifactId>
-        </dependency>
-        <dependency>
             <groupId>com.google.zxing</groupId>
             <artifactId>javase</artifactId>
         </dependency>

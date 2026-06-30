@@ -69,6 +69,10 @@
             <artifactId>abi</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.surprising</groupId>
             <artifactId>tron-sdk</artifactId>
         </dependency>
