@@ -430,9 +430,7 @@ backend does not require that frontend to run. In a real integration, teams are
 expected to build their own Web, iOS, Android, or desktop application against
 these APIs. The current `tokdou.com/wallet` page is intended to make the wallet
 flows easier to understand visually, and it should be treated as a regtest/test
-network demonstration rather than a mainnet-RPC production wallet. Local
-development defaults to `http://localhost:8002`; deployed demo builds use
-`https://api.tokdou.com` unless overridden by `VITE_WALLET_API_BASE`.
+network demonstration rather than a mainnet-RPC production wallet.
 
 ## Operational Rules
 
