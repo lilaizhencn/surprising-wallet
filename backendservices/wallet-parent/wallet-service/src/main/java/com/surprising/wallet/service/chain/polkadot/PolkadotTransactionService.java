@@ -88,13 +88,8 @@ public class PolkadotTransactionService {
         if (!transactionFinalized(assetSymbol, txHash, confirmationLookback(profile))) {
             return false;
         }
-        if (repository.markWithdrawalConfirmed(CHAIN, orderNo, txHash) == 1) {
-            if (!repository.settleLockedDebit(CHAIN, assetSymbol, debitAccountId, debitAmount)) {
-                throw new IllegalStateException("unable to settle DOT locked balance");
-            }
-            return true;
-        }
-        return false;
+        return repository.confirmWithdrawalAndSettle(CHAIN, orderNo, txHash,
+                assetSymbol, debitAccountId, debitAmount);
     }
 
     public String collectNative(String collectionNo, ChainAddressRecord from,

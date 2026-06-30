@@ -46,8 +46,7 @@ public class MoneroTransactionService {
                                   String toAddress, BigDecimal amount) {
         MoneroWalletRpcClient.Transfer transfer = confirmedTransfer(profile, txHash, profile.getWithdrawConfirmations());
         if (transfer != null) {
-            if (repository.markWithdrawalConfirmed(CHAIN, orderNo, txHash) == 1) {
-                repository.settleLockedDebit(CHAIN, SYMBOL, debitAccountId, debitAmount);
+            if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, txHash, SYMBOL, debitAccountId, debitAmount)) {
                 creditInternalRecipient(profile, transfer, toAddress, amount);
             }
         }

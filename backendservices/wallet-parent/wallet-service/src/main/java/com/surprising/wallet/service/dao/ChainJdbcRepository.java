@@ -996,6 +996,45 @@ public class ChainJdbcRepository {
                 fromAddress, toTs(now()), chain, orderNo);
     }
 
+    public int markStaleSigningWithdrawalsUnknown(String chain, Instant before) {
+        return jdbcTemplate.update("""
+                        update withdrawal_order
+                        set status = 'BROADCAST_UNKNOWN',
+                            error_message = 'signing state expired before a tx hash was recorded; manual chain audit required',
+                            updated_at = ?
+                        where chain = ? and status = 'SIGNING' and tx_hash is null and updated_at < ?
+                        """,
+                toTs(now()), chain, toTs(before));
+    }
+
+    public int markWithdrawalSent(String chain, String orderNo, String fromAddress, String txHash) {
+        if (txHash == null || txHash.isBlank()) {
+            throw new IllegalArgumentException("withdrawal tx hash must not be blank");
+        }
+        return jdbcTemplate.update("""
+                        update withdrawal_order
+                        set status = 'SENT',
+                            from_address = coalesce(?, from_address),
+                            tx_hash = ?,
+                            error_message = null,
+                            updated_at = ?
+                        where chain = ? and order_no = ? and status = 'SIGNING' and tx_hash is null
+                        """,
+                fromAddress, txHash, toTs(now()), chain, orderNo);
+    }
+
+    public int markWithdrawalBroadcastUnknown(String chain, String orderNo, String fromAddress, String errorMessage) {
+        return jdbcTemplate.update("""
+                        update withdrawal_order
+                        set status = 'BROADCAST_UNKNOWN',
+                            from_address = coalesce(?, from_address),
+                            error_message = ?,
+                            updated_at = ?
+                        where chain = ? and order_no = ? and status = 'SIGNING' and tx_hash is null
+                        """,
+                fromAddress, errorMessage, toTs(now()), chain, orderNo);
+    }
+
     public int updateWithdrawalStatus(String chain, String orderNo, String status, String fromAddress,
                                       String txHash, String errorMessage) {
         return jdbcTemplate.update("""
@@ -1014,9 +1053,41 @@ public class ChainJdbcRepository {
         return jdbcTemplate.update("""
                         update withdrawal_order
                         set status = 'CONFIRMED', tx_hash = ?, error_message = null, updated_at = ?
-                        where chain = ? and order_no = ? and status <> 'CONFIRMED'
+                        where chain = ? and order_no = ? and status in ('SENT', 'CONFIRMING')
+                          and tx_hash = ?
                         """,
-                txHash, toTs(now()), chain, orderNo);
+                txHash, toTs(now()), chain, orderNo, txHash);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public boolean confirmWithdrawalAndSettle(String chain, String orderNo, String txHash,
+                                              String assetSymbol, String accountId, BigDecimal amount) {
+        if (txHash == null || txHash.isBlank()) {
+            throw new IllegalArgumentException("withdrawal tx hash must not be blank");
+        }
+        Optional<WithdrawalOrderRecord> order = findWithdrawalOrder(chain, orderNo);
+        if (order.isEmpty()) {
+            throw new IllegalStateException("missing withdrawal order " + chain + ":" + orderNo);
+        }
+        WithdrawalOrderRecord record = order.get();
+        if ("CONFIRMED".equals(record.getStatus())) {
+            return false;
+        }
+        if (!Set.of("SENT", "CONFIRMING").contains(record.getStatus())) {
+            throw new IllegalStateException("withdrawal " + orderNo + " is not confirmable from status "
+                    + record.getStatus());
+        }
+        if (record.getTxHash() == null || !record.getTxHash().equals(txHash)) {
+            throw new IllegalStateException("withdrawal " + orderNo + " tx hash mismatch");
+        }
+        if (!settleLockedDebit(chain, assetSymbol, accountId, amount)) {
+            throw new IllegalStateException("unable to settle locked " + assetSymbol + " balance");
+        }
+        int confirmed = markWithdrawalConfirmed(chain, orderNo, txHash);
+        if (confirmed != 1) {
+            throw new IllegalStateException("unable to mark withdrawal " + orderNo + " confirmed");
+        }
+        return true;
     }
 
     public Optional<String> findWithdrawalStatus(String chain, String orderNo) {

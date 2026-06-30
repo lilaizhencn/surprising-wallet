@@ -150,16 +150,19 @@ public class AptosTransactionService {
         }
         repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
+            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
+                throw new IllegalStateException("Aptos withdrawal is not signable: " + orderNo);
+            }
             long sequenceBefore = rpc.sequenceNumber(from.getAddress());
             String hash = sendNative(from, toAddress, amount);
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), hash, null);
+            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), hash) != 1) {
+                throw new IllegalStateException("Aptos withdrawal state changed before SENT: " + orderNo);
+            }
             record(hash, from.getAddress(), toAddress, "APT", AptosRpcClient.aptCoinType(), amountOctas,
                     feeReserve, sequenceBefore, "SENT", null);
             return hash;
         } catch (RuntimeException e) {
-            repository.releaseLockedBalance(CHAIN, "APT", from.getAccountId(), debit);
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null, e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
             throw e;
         }
     }
@@ -185,16 +188,19 @@ public class AptosTransactionService {
         }
         repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
+            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
+                throw new IllegalStateException("Aptos coin withdrawal is not signable: " + orderNo);
+            }
             long sequenceBefore = rpc.sequenceNumber(from.getAddress());
             String hash = sendCoin(from, coinType, toAddress, atomicAmount.longValueExact());
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), hash, null);
+            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), hash) != 1) {
+                throw new IllegalStateException("Aptos coin withdrawal state changed before SENT: " + orderNo);
+            }
             record(hash, from.getAddress(), toAddress, token.getSymbol(), coinType, atomicAmount,
                     profile().getDefaultFee(), sequenceBefore, "SENT", null);
             return hash;
         } catch (RuntimeException e) {
-            repository.releaseLockedBalance(CHAIN, token.getSymbol(), from.getAccountId(), atomicAmount);
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null, e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
             throw e;
         }
     }
@@ -257,10 +263,7 @@ public class AptosTransactionService {
     public boolean confirmWithdrawal(String orderNo, String assetSymbol, String accountId, BigDecimal debitAmount) {
         String hash = repository.findWithdrawalTxHash(CHAIN, orderNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(hash, Duration.ofMinutes(2));
-        if (repository.markWithdrawalConfirmed(CHAIN, orderNo, hash) == 1) {
-            if (!repository.settleLockedDebit(CHAIN, assetSymbol, accountId, debitAmount)) {
-                throw new IllegalStateException("unable to settle Aptos locked balance");
-            }
+        if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, hash, assetSymbol, accountId, debitAmount)) {
             markConfirmed(hash, transaction);
             return true;
         }

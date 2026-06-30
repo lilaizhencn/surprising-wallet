@@ -53,21 +53,14 @@ public class BitcoinLikeSettlementService {
                 ? List.of()
                 : signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
         for (WithdrawRecord record : records) {
-            int confirmed = chainRepository.markWithdrawalConfirmed(
-                    chain, record.getWithdrawId(), txId);
-            if (confirmed == 1) {
-                BigDecimal fee = record.getFee() == null ? BigDecimal.ZERO : record.getFee();
-                BigDecimal settled = record.getBalance().add(fee);
-                String debitAccountId = chainRepository.findWithdrawalOrder(chain, record.getWithdrawId())
-                        .map(WithdrawalOrderRecord::getDebitAccountId)
-                        .filter(value -> value != null && !value.isBlank())
-                        .orElse(record.getUserId().toString());
-                if (!chainRepository.settleLockedDebit(
-                        chain, chain, debitAccountId, settled)) {
-                    throw new IllegalStateException(
-                            "failed to settle " + chain + " ledger for " + record.getWithdrawId());
-                }
-            }
+            BigDecimal fee = record.getFee() == null ? BigDecimal.ZERO : record.getFee();
+            BigDecimal settled = record.getBalance().add(fee);
+            String debitAccountId = chainRepository.findWithdrawalOrder(chain, record.getWithdrawId())
+                    .map(WithdrawalOrderRecord::getDebitAccountId)
+                    .filter(value -> value != null && !value.isBlank())
+                    .orElse(record.getUserId().toString());
+            chainRepository.confirmWithdrawalAndSettle(
+                    chain, record.getWithdrawId(), txId, chain, debitAccountId, settled);
             record.setStatus((byte) Constants.CONFIRM);
             record.setUpdateDate(Date.from(Instant.now()));
         }

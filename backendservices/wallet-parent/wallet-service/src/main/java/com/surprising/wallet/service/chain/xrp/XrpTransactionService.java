@@ -101,10 +101,7 @@ public class XrpTransactionService {
         if (!confirmation.confirmed()) {
             return false;
         }
-        if (repository.markWithdrawalConfirmed(CHAIN, orderNo, txHash) == 1) {
-            if (!repository.settleLockedDebit(CHAIN, assetSymbol, accountId, debitAmount)) {
-                throw new IllegalStateException("unable to settle locked " + assetSymbol + " balance");
-            }
+        if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, txHash, assetSymbol, accountId, debitAmount)) {
             updateConfirmedTransaction(txHash, confirmation);
             return true;
         }

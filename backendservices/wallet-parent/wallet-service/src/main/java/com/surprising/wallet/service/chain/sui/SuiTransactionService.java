@@ -128,15 +128,18 @@ public class SuiTransactionService {
         }
         repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
+            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
+                throw new IllegalStateException("Sui withdrawal is not signable: " + orderNo);
+            }
             String digest = sendNative(from, toAddress, amountMist.longValueExact());
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), digest, null);
+            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), digest) != 1) {
+                throw new IllegalStateException("Sui withdrawal state changed before SENT: " + orderNo);
+            }
             record(digest, from.getAddress(), toAddress, "SUI", SuiRpcClient.SUI_COIN_TYPE, amountMist,
                     feeReserve, "SENT", null);
             return digest;
         } catch (RuntimeException e) {
-            repository.releaseLockedBalance(CHAIN, "SUI", from.getAccountId(), debit);
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null, e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
             throw e;
         }
     }
@@ -162,15 +165,18 @@ public class SuiTransactionService {
         }
         repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
+            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
+                throw new IllegalStateException("Sui coin withdrawal is not signable: " + orderNo);
+            }
             String digest = sendCoin(from, coinType, toAddress, amountAtomic.longValueExact());
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), digest, null);
+            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), digest) != 1) {
+                throw new IllegalStateException("Sui coin withdrawal state changed before SENT: " + orderNo);
+            }
             record(digest, from.getAddress(), toAddress, token.getSymbol(), coinType, amountAtomic,
                     profile().getDefaultFee(), "SENT", null);
             return digest;
         } catch (RuntimeException e) {
-            repository.releaseLockedBalance(CHAIN, token.getSymbol(), from.getAccountId(), amountAtomic);
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null, e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
             throw e;
         }
     }
@@ -231,10 +237,7 @@ public class SuiTransactionService {
     public boolean confirmWithdrawal(String orderNo, String assetSymbol, String accountId, BigDecimal debitAmount) {
         String digest = repository.findWithdrawalTxHash(CHAIN, orderNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(digest, Duration.ofMinutes(2));
-        if (repository.markWithdrawalConfirmed(CHAIN, orderNo, digest) == 1) {
-            if (!repository.settleLockedDebit(CHAIN, assetSymbol, accountId, debitAmount)) {
-                throw new IllegalStateException("unable to settle Sui locked balance");
-            }
+        if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, digest, assetSymbol, accountId, debitAmount)) {
             markConfirmed(digest, transaction);
             return true;
         }

@@ -59,11 +59,8 @@ public class HyperCoreTransactionService {
         if (!hyperCoreRepository.actionAccepted(actionId)) {
             return false;
         }
-        if (chainRepository.markWithdrawalConfirmed(CHAIN, orderNo, actionId) == 1) {
-            chainRepository.settleLockedDebit(CHAIN, assetSymbol, debitAccountId, debitAmount);
-            return true;
-        }
-        return false;
+        return chainRepository.confirmWithdrawalAndSettle(CHAIN, orderNo, actionId,
+                assetSymbol, debitAccountId, debitAmount);
     }
 
     public boolean confirmCollection(String collectionNo, String actionId) {

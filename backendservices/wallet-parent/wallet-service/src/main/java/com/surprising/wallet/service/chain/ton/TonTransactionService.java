@@ -171,16 +171,19 @@ public class TonTransactionService {
         }
         repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
+            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
+                throw new IllegalStateException("TON withdrawal is not signable: " + orderNo);
+            }
             PreparedTransfer prepared = prepareNative(from, toAddress, amountNano.toBigIntegerExact(), memo);
             String hash = broadcast(prepared);
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), hash, null);
+            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), hash) != 1) {
+                throw new IllegalStateException("TON withdrawal state changed before SENT: " + orderNo);
+            }
             record(hash, from.getAddress(), toAddress, "TON", null, amountNano, fee,
                     null, "SENT", prepared.bocBase64());
             return hash;
         } catch (RuntimeException e) {
-            repository.releaseLockedBalance(CHAIN, "TON", from.getAccountId(), debit);
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null, e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
             throw e;
         }
     }
@@ -205,18 +208,23 @@ public class TonTransactionService {
                     "insufficient Jetton ledger balance");
             throw new IllegalStateException("insufficient Jetton ledger balance");
         }
+        repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getOwnerAddress(), null, null);
         try {
+            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getOwnerAddress()) != 1) {
+                throw new IllegalStateException("Jetton withdrawal is not signable: " + orderNo);
+            }
             PreparedTransfer prepared = prepareJetton(from, from.getAddress(),
                     destinationOwner, atomicAmount.toBigIntegerExact(), from.getOwnerAddress(), memo);
             String hash = broadcast(prepared);
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getOwnerAddress(), hash, null);
+            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getOwnerAddress(), hash) != 1) {
+                throw new IllegalStateException("Jetton withdrawal state changed before SENT: " + orderNo);
+            }
             record(hash, from.getAddress(), destinationOwner, token.getSymbol(), jettonMaster,
                     atomicAmount, JETTON_GAS_TON.longValue(), null,
                     "SENT", prepared.bocBase64());
             return hash;
         } catch (RuntimeException e) {
-            repository.releaseLockedBalance(CHAIN, token.getSymbol(), from.getAccountId(), atomicAmount);
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getOwnerAddress(), null, e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getOwnerAddress(), e.getMessage());
             throw e;
         }
     }
@@ -228,10 +236,7 @@ public class TonTransactionService {
         if (chainSeqno <= reservedSeqno) {
             return false;
         }
-        if (repository.markWithdrawalConfirmed(CHAIN, orderNo, hash) == 1) {
-            if (!repository.settleLockedDebit(CHAIN, symbol, accountId, debitAmount)) {
-                throw new IllegalStateException("unable to settle TON locked balance");
-            }
+        if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, hash, symbol, accountId, debitAmount)) {
             repository.markTonTransactionConfirmed(CHAIN, hash);
             return true;
         }

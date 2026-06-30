@@ -83,10 +83,7 @@ public class EvmAccountTransactionService {
         if (!receipt.isStatusOK()) {
             throw new IllegalStateException("EVM transaction failed: " + txHash);
         }
-        if (repository.markWithdrawalConfirmed(chain, orderNo, txHash) == 1) {
-            if (!repository.settleLockedDebit(chain, symbol, accountId, debitAmount)) {
-                throw new IllegalStateException("unable to settle locked " + symbol + " balance");
-            }
+        if (repository.confirmWithdrawalAndSettle(chain, orderNo, txHash, symbol, accountId, debitAmount)) {
             markConfirmed(chain, txHash, receipt);
             return true;
         }

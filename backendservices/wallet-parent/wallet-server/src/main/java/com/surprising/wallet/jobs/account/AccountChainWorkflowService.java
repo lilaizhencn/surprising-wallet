@@ -59,6 +59,8 @@ import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -73,6 +75,7 @@ public class AccountChainWorkflowService {
     private static final int WITHDRAW_LIMIT = 20;
     private static final int CONFIRM_LIMIT = 50;
     private static final int COLLECTION_LIMIT = 20;
+    private static final Duration SIGNING_STALE_TIMEOUT = Duration.ofMinutes(10);
     private static final BigDecimal TRX_SUN = new BigDecimal("1000000");
     private static final List<String> ACCOUNT_CHAIN_PRIORITY = List.of(
             "XMR",
@@ -217,6 +220,12 @@ public class AccountChainWorkflowService {
         if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_WITHDRAW)) {
             return;
         }
+        int stale = repository.markStaleSigningWithdrawalsUnknown(
+                profile.getChain(), Instant.now().minus(SIGNING_STALE_TIMEOUT));
+        if (stale > 0) {
+            log.warn("marked stale signing withdrawals as broadcast-unknown: chain={} count={}",
+                    profile.getChain(), stale);
+        }
         for (WithdrawalOrderRecord order : repository.listWithdrawalsForSigning(profile.getChain(), WITHDRAW_LIMIT)) {
             try {
                 processWithdrawal(profile, order);
@@ -276,13 +285,15 @@ public class AccountChainWorkflowService {
         }
         try {
             String txHash = dispatchWithdrawal(profile, order, from);
-            repository.updateWithdrawalStatus(order.getChain(), order.getOrderNo(), "SENT",
-                    from.getAddress(), txHash, null);
+            if (txHash == null || txHash.isBlank()) {
+                throw new IllegalStateException("withdrawal broadcast returned empty tx hash");
+            }
+            if (repository.markWithdrawalSent(order.getChain(), order.getOrderNo(), from.getAddress(), txHash) != 1) {
+                throw new IllegalStateException("withdrawal state changed before SENT: " + order.getOrderNo());
+            }
         } catch (Exception e) {
-            repository.releaseLockedBalance(order.getChain(), order.getAssetSymbol(),
-                    debitAccountId(order, from), withdrawalDebitAmount(order));
-            repository.updateWithdrawalStatus(order.getChain(), order.getOrderNo(), "FAILED",
-                    from.getAddress(), null, e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(order.getChain(), order.getOrderNo(),
+                    from.getAddress(), e.getMessage());
             throw new IllegalStateException(e);
         }
     }
@@ -703,10 +714,8 @@ public class AccountChainWorkflowService {
     private void confirmTronWithdrawal(AccountChainProfile profile, WithdrawalOrderRecord order,
                                        ChainAddressRecord from) throws Exception {
         if (isTronConfirmed(profile, order.getTxHash())) {
-            if (repository.markWithdrawalConfirmed(order.getChain(), order.getOrderNo(), order.getTxHash()) == 1) {
-                repository.settleLockedDebit(order.getChain(), order.getAssetSymbol(),
-                        debitAccountId(order, from), withdrawalDebitAmount(order));
-            }
+            repository.confirmWithdrawalAndSettle(order.getChain(), order.getOrderNo(), order.getTxHash(),
+                    order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
         }
     }
 
@@ -735,10 +744,8 @@ public class AccountChainWorkflowService {
         if (order.getTxHash() == null || order.getTxHash().isBlank()) {
             return;
         }
-        if (repository.markWithdrawalConfirmed(order.getChain(), order.getOrderNo(), order.getTxHash()) == 1) {
-            repository.settleLockedDebit(order.getChain(), order.getAssetSymbol(),
-                    debitAccountId(order, from), withdrawalDebitAmount(order));
-        }
+        repository.confirmWithdrawalAndSettle(order.getChain(), order.getOrderNo(), order.getTxHash(),
+                order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
     }
 
     private void recordTronSent(String chain, String txHash, String from, String to,

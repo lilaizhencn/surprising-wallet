@@ -142,10 +142,7 @@ public class NearTransactionService {
     public boolean confirmWithdrawal(AccountChainProfile profile, String orderNo, String txHash,
                                      String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
         JsonNode status = requireSuccessfulConfirmation(txHash, debitAccountId, Duration.ofMinutes(2));
-        if (repository.markWithdrawalConfirmed(CHAIN, orderNo, txHash) == 1) {
-            if (!repository.settleLockedDebit(CHAIN, assetSymbol, debitAccountId, debitAmount)) {
-                throw new IllegalStateException("unable to settle NEAR locked balance");
-            }
+        if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, txHash, assetSymbol, debitAccountId, debitAmount)) {
             repository.markNearTransactionConfirmed(CHAIN, txHash, blockHeight(status), gasBurnt(status),
                     status.toString());
             return true;

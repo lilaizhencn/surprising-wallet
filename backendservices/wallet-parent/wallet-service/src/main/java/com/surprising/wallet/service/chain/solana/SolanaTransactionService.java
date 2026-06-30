@@ -182,14 +182,17 @@ public class SolanaTransactionService {
         }
         repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getAddress(), null, null);
+            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
+                throw new IllegalStateException("Solana withdrawal is not signable: " + orderNo);
+            }
             String signature = sendNative(from, toAddress, amount);
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getAddress(), signature, null);
+            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), signature) != 1) {
+                throw new IllegalStateException("Solana withdrawal state changed before SENT: " + orderNo);
+            }
             recordTransaction(signature, from.getAddress(), toAddress, "SOL", null, amountLamports, fee, "SENT");
             return signature;
         } catch (RuntimeException e) {
-            repository.releaseLockedBalance(CHAIN, "SOL", from.getAccountId(), totalDebit);
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null, e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
             throw e;
         }
     }
@@ -216,15 +219,18 @@ public class SolanaTransactionService {
         }
         repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getOwnerAddress(), null, null);
         try {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SIGNING", from.getOwnerAddress(), null, null);
+            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getOwnerAddress()) != 1) {
+                throw new IllegalStateException("Solana token withdrawal is not signable: " + orderNo);
+            }
             String signature = sendTokenAmount(from, mintAddress, toOwnerAddress, amount, token.getDecimals());
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", from.getOwnerAddress(), signature, null);
+            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getOwnerAddress(), signature) != 1) {
+                throw new IllegalStateException("Solana token withdrawal state changed before SENT: " + orderNo);
+            }
             recordTransaction(signature, from.getAddress(), toOwnerAddress, token.getSymbol(), mintAddress,
                     amount, profile().getDefaultFee(), "SENT");
             return signature;
         } catch (RuntimeException e) {
-            repository.releaseLockedBalance(CHAIN, token.getSymbol(), from.getAccountId(), amount);
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getOwnerAddress(), null, e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getOwnerAddress(), e.getMessage());
             throw e;
         }
     }
@@ -291,10 +297,7 @@ public class SolanaTransactionService {
     public boolean confirmWithdrawal(String orderNo, String assetSymbol, String accountId, BigDecimal debitAmount) {
         String signature = repository.findWithdrawalTxHash(CHAIN, orderNo).orElseThrow();
         JsonNode status = requireSuccessfulConfirmation(signature, Duration.ofMinutes(2));
-        if (repository.markWithdrawalConfirmed(CHAIN, orderNo, signature) == 1) {
-            if (!repository.settleLockedDebit(CHAIN, assetSymbol, accountId, debitAmount)) {
-                throw new IllegalStateException("unable to settle locked " + assetSymbol + " balance");
-            }
+        if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, signature, assetSymbol, accountId, debitAmount)) {
             updateConfirmedTransaction(signature, status);
             return true;
         }

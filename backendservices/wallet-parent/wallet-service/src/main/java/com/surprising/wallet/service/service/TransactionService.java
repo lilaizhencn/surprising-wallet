@@ -164,7 +164,7 @@ public class TransactionService {
         if (!StringUtils.hasText(txId)) {
             log.error("广播签名后的交易 广播失败 币种id:{} 提现信息:{}", currency.getName(), transaction);
             if (isUnifiedBitcoinLike(currency)) {
-                markBitcoinLikeRetrying(transaction, currency, signature, "broadcast failed");
+                markBitcoinLikeBroadcastUnknown(transaction, currency, signature, "broadcast failed");
             }
             return false;
         }
@@ -209,8 +209,8 @@ public class TransactionService {
         return true;
     }
 
-    private void markBitcoinLikeRetrying(WithdrawTransaction transaction, AssetRuntimeMetadata currency,
-                                         JSONObject signature, String error) {
+    private void markBitcoinLikeBroadcastUnknown(WithdrawTransaction transaction, AssetRuntimeMetadata currency,
+                                                 JSONObject signature, String error) {
         String chain = chainName(currency);
         chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
         if ("collection".equals(signature.getString("type"))) {
@@ -221,7 +221,7 @@ public class TransactionService {
         }
         List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
         records.forEach(record -> chainJdbcRepository.updateWithdrawalStatus(
-                chain, record.getWithdrawId(), "RETRYING", null, null, error));
+                chain, record.getWithdrawId(), "BROADCAST_UNKNOWN", null, null, error));
     }
 
     private void failBitcoinLikeTransaction(WithdrawTransaction transaction, AssetRuntimeMetadata currency, String error) {
