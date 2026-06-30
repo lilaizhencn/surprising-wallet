@@ -425,8 +425,13 @@ The wallet intentionally keeps chain support on a small set of root materials:
 | `GET /wallet/v1/admin/config` | Admin config table summary |
 | `PATCH /wallet/v1/admin/config/{table}/{id}` | Update allowlisted config fields |
 
-The TokDou frontend wallet page is the current application caller. Local
-development defaults to `http://localhost:8002`; deployed builds use
+The TokDou wallet page is only a demo/reference UI for this project. The wallet
+backend does not require that frontend to run. In a real integration, teams are
+expected to build their own Web, iOS, Android, or desktop application against
+these APIs. The current `tokdou.com/wallet` page is intended to make the wallet
+flows easier to understand visually, and it should be treated as a regtest/test
+network demonstration rather than a mainnet-RPC production wallet. Local
+development defaults to `http://localhost:8002`; deployed demo builds use
 `https://api.tokdou.com` unless overridden by `VITE_WALLET_API_BASE`.
 
 ## Operational Rules
