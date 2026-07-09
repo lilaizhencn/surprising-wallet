@@ -15,6 +15,7 @@ This directory contains project documentation, database schema files, and docume
 | Scripts and regtest | [en/scripts-and-regtest.md](en/scripts-and-regtest.md) | [zh/scripts-and-regtest.md](zh/scripts-and-regtest.md) |
 | EVM fork testing | [en/evm-fork-testing.md](en/evm-fork-testing.md) | [zh/evm-fork-testing.md](zh/evm-fork-testing.md) |
 | Infrastructure | [en/infra.md](en/infra.md) | [zh/infra.md](zh/infra.md) |
+| Wallet V2 roadmap | [en/wallet-v2-roadmap.md](en/wallet-v2-roadmap.md) | [zh/wallet-v2-roadmap.md](zh/wallet-v2-roadmap.md) |
 
 ## Directory Layout
 

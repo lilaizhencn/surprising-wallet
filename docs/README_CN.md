@@ -15,6 +15,7 @@
 | 脚本与 regtest | [en/scripts-and-regtest.md](en/scripts-and-regtest.md) | [zh/scripts-and-regtest.md](zh/scripts-and-regtest.md) |
 | EVM fork 测试 | [en/evm-fork-testing.md](en/evm-fork-testing.md) | [zh/evm-fork-testing.md](zh/evm-fork-testing.md) |
 | 基础设施 | [en/infra.md](en/infra.md) | [zh/infra.md](zh/infra.md) |
+| Wallet V2 开发规划 | [en/wallet-v2-roadmap.md](en/wallet-v2-roadmap.md) | [zh/wallet-v2-roadmap.md](zh/wallet-v2-roadmap.md) |
 
 ## 目录结构
 
