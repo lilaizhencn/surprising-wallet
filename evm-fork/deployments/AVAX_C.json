@@ -1,0 +1,18 @@
+{
+  "chain": "AVAX_C",
+  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "tokens": {
+    "USDT": {
+      "symbol": "USDT",
+      "name": "Tether USD",
+      "decimals": 6,
+      "address": "0xa5CabC37F02a5315d64418C5E14af4DdE5A8F124"
+    },
+    "USDC": {
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6,
+      "address": "0xCd5BC6dacda22b971eF86Cd8F145d0B8cd4E54a2"
+    }
+  }
+}

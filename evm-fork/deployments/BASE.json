@@ -1,0 +1,18 @@
+{
+  "chain": "BASE",
+  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "tokens": {
+    "USDT": {
+      "symbol": "USDT",
+      "name": "Tether USD",
+      "decimals": 6,
+      "address": "0x210BBd033630e5e611B7922D70b0Caabe64636d9"
+    },
+    "USDC": {
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6,
+      "address": "0xeba5CEc9257045Df0B44eA784F9a7Fa07DeeF6d4"
+    }
+  }
+}

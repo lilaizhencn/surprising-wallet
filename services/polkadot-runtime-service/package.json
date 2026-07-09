@@ -1,0 +1,19 @@
+{
+  "name": "surprising-wallet-polkadot-runtime-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.mjs"
+  },
+  "dependencies": {
+    "@polkadot/api": "16.5.6",
+    "@polkadot/keyring": "14.0.3",
+    "@polkadot/util": "14.0.3",
+    "@polkadot/util-crypto": "14.0.3",
+    "express": "5.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

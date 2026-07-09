@@ -1,0 +1,62 @@
+package com.surprising.wallet.common.pojo;
+
+import lombok.*;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.util.Date;
+
+/**
+ * @author lilaizhen
+ * @date 2018-04-01
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+public class WithdrawTransaction implements Serializable {
+    /**
+     *
+     */
+    private Integer id;
+    /**
+     *
+     */
+    private String txId;
+    /**
+     * 此笔交易的金额
+     */
+    private BigDecimal balance;
+
+    //hessian 在传输过程中BigDecimal精度会丢失，转化成 String
+    private String balanceStr;
+    /**
+     *
+     */
+    private String signature;
+    /**
+     *
+     */
+    private Integer currency;
+    /**
+     * DB Asset Model routing metadata. Signer modules consume these fields
+     * instead of resolving static runtime currency ids.
+     */
+    private String chain;
+    private String assetSymbol;
+    private Integer assetDecimals;
+    private Integer bip44CoinType;
+    private String contractAddress;
+    /**
+     * 0:正在签名;1:已发送;2:已确认
+     */
+    private Short status;
+    /**
+     *
+     */
+    private Date createDate;
+    /**
+     *
+     */
+    private Date updateDate;
+}

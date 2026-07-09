@@ -1,0 +1,57 @@
+# ============================================================
+# wallet-server configuration
+# ============================================================
+
+server:
+  port: 8002
+
+logging:
+  file:
+    path: ./logs
+
+spring:
+  application:
+    name: wallet-server
+  task:
+    scheduling:
+      pool:
+        size: 8
+      thread-name-prefix: wallet-scheduler-
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://127.0.0.1:5432/wallet
+    username: wallet
+    password: ${SW_DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 20
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password:
+  web:
+    error:
+      whitelabel:
+        enabled: false
+
+# ============================================================
+# Application specific config
+# ============================================================
+sw:
+  app:
+    env:
+      name: dev
+  rpc:
+    provider:
+      max-concurrent-requests: 1
+  warning:
+    contacts: "13261645368"
+  wallet:
+    admin:
+      username: ${SW_WALLET_ADMIN_USERNAME:admin}
+      password: ${SW_WALLET_ADMIN_PASSWORD:}
+    network: test
+    account-chain:
+      signer-master-key: ${SW_SIG2_MASTER_KEY:}
+    ed25519:
+      master-seed: ${SW_ED25519_SEED:}

@@ -1,0 +1,11 @@
+services:
+  polkadot-runtime-service:
+    build: .
+    container_name: surprising-wallet-polkadot-runtime
+    restart: unless-stopped
+    environment:
+      POLKADOT_RUNTIME_API_KEY: ${POLKADOT_RUNTIME_API_KEY:?set POLKADOT_RUNTIME_API_KEY}
+      POLKADOT_RUNTIME_HOST: 0.0.0.0
+      POLKADOT_RUNTIME_PORT: 8787
+    ports:
+      - "${POLKADOT_RUNTIME_BIND_HOST:-127.0.0.1}:${POLKADOT_RUNTIME_PORT:-8787}:8787"

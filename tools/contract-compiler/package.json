@@ -1,0 +1,15 @@
+{
+  "name": "surprising-wallet-contract-compiler",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openzeppelin/contracts": "5.0.2",
+    "@openzeppelin/contracts4": "npm:@openzeppelin/contracts@4.9.6",
+    "solc": "0.8.24",
+    "solc-0-8-19": "npm:solc@0.8.19"
+  },
+  "scripts": {
+    "compile": "node ../../scripts/compile-contract-templates.mjs"
+  }
+}

@@ -1,0 +1,32 @@
+# Maven
+target/
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+logs/
+log/
+runlogs/
+*.log
+
+# Node tooling
+node_modules/
+
+# Local database backups
+db-backups/
