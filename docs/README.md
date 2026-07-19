@@ -8,6 +8,8 @@ This directory contains project documentation, database schema files, and docume
 
 | Topic | English | Chinese |
 |---|---|---|
+| Multi-tenant custody | [en/multi-tenant-custody.md](en/multi-tenant-custody.md) | [zh/multi-tenant-custody.md](zh/multi-tenant-custody.md) |
+| Custody API | [openapi/custody-v1.yaml](openapi/custody-v1.yaml) | [openapi/custody-v1.yaml](openapi/custody-v1.yaml) |
 | Startup and testing | [en/startup-and-testing.md](en/startup-and-testing.md) | [zh/startup-and-testing.md](zh/startup-and-testing.md) |
 | Database | [en/database.md](en/database.md) | [zh/database.md](zh/database.md) |
 | Architecture | [en/architecture.md](en/architecture.md) | [zh/architecture.md](zh/architecture.md) |
@@ -15,7 +17,6 @@ This directory contains project documentation, database schema files, and docume
 | Scripts and regtest | [en/scripts-and-regtest.md](en/scripts-and-regtest.md) | [zh/scripts-and-regtest.md](zh/scripts-and-regtest.md) |
 | EVM fork testing | [en/evm-fork-testing.md](en/evm-fork-testing.md) | [zh/evm-fork-testing.md](zh/evm-fork-testing.md) |
 | Infrastructure | [en/infra.md](en/infra.md) | [zh/infra.md](zh/infra.md) |
-| Wallet V2 roadmap | [en/wallet-v2-roadmap.md](en/wallet-v2-roadmap.md) | [zh/wallet-v2-roadmap.md](zh/wallet-v2-roadmap.md) |
 
 ## Directory Layout
 
@@ -24,6 +25,7 @@ docs/
   assets/       Diagrams and documentation images
   db/           SQL schema/init files and historical DB backups
   en/           English guides
+  openapi/      Machine-readable custody API contract
   zh/           Chinese guides
 ```
 

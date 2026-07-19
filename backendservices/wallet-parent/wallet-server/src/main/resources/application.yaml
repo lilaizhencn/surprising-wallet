@@ -3,7 +3,7 @@
 # ============================================================
 
 server:
-  port: 8002
+  port: ${SW_HTTP_PORT:8002}
 
 logging:
   file:
@@ -19,16 +19,20 @@ spring:
       thread-name-prefix: wallet-scheduler-
   datasource:
     driver-class-name: org.postgresql.Driver
-    url: jdbc:postgresql://127.0.0.1:5432/wallet
-    username: wallet
+    url: ${SW_DB_URL:jdbc:postgresql://127.0.0.1:5432/wallet}
+    username: ${SW_DB_USERNAME:wallet}
     password: ${SW_DB_PASSWORD:}
     hikari:
       maximum-pool-size: 20
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/custody-schema.sql
   data:
     redis:
-      host: 127.0.0.1
-      port: 6379
-      password:
+      host: ${SW_REDIS_HOST:127.0.0.1}
+      port: ${SW_REDIS_PORT:6379}
+      password: ${SW_REDIS_PASSWORD:}
   web:
     error:
       whitelabel:
@@ -40,7 +44,7 @@ spring:
 sw:
   app:
     env:
-      name: dev
+      name: ${SW_APP_ENV:dev}
   rpc:
     provider:
       max-concurrent-requests: 1
@@ -55,3 +59,10 @@ sw:
       signer-master-key: ${SW_SIG2_MASTER_KEY:}
     ed25519:
       master-seed: ${SW_ED25519_SEED:}
+    custody:
+      secret-master-key: ${SW_CUSTODY_SECRET_MASTER_KEY:}
+      session-ttl: ${SW_CUSTODY_SESSION_TTL:PT12H}
+      api-clock-skew: ${SW_CUSTODY_API_CLOCK_SKEW:PT5M}
+      platform-admin:
+        email: ${SW_CUSTODY_PLATFORM_ADMIN_EMAIL:}
+        password: ${SW_CUSTODY_PLATFORM_ADMIN_PASSWORD:}

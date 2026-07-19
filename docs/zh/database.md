@@ -8,7 +8,8 @@
 
 | 文件 | 用途 |
 |---|---|
-| `docs/db/surprising-wallet-init-pgsql.sql` | 唯一的全新本地初始化快照，从当前 DB Asset Model schema 导出，包含表结构和静态链/token 配置种子数据。 |
+| `docs/db/surprising-wallet-init-pgsql.sql` | 受保护的全新数据库链 schema 和测试配置 seed。 |
+| `wallet-server/src/main/resources/db/custody-schema.sql` | wallet-server 启动时自动应用的幂等、增量多租户 Custody schema。 |
 
 ## 初始化顺序
 
@@ -19,6 +20,9 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 ```
 
 `surprising-wallet-init-pgsql.sql` 只用于可丢弃或全新的数据库。它包含 `pg_dump --clean` 生成的重置语句，不用于生产库原地升级。
+
+wallet-server 启动时由 Spring 应用 `custody-schema.sql`，重复执行安全。基础 seed 文件保持不变，
+保证已有测试网、测试币、公开派生材料和测试夹具稳定。
 
 ## 种子数据范围
 
@@ -43,6 +47,19 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 | `deposit_record` | 归一化充值事件 |
 | `ledger_balance` | 按链隔离的账户余额 |
 | `utxo_record` | Bitcoin-like UTXO 运行时状态 |
+
+## Custody 表
+
+| 表 | 作用 |
+|---|---|
+| `custody_tenant`、`custody_tenant_user`、`custody_session` | 租户和 Console 身份 |
+| `custody_api_key`、`custody_api_nonce`、`custody_ip_rule` | 签名 API 认证和网络策略 |
+| `custody_address` | 租户到链地址的分配关系；一个链地址只能归属一个租户 |
+| `custody_deposit`、`custody_withdrawal` | 租户范围的充提投影 |
+| `custody_ledger_entry` | 用于对账的不可变 Custody 事件账本 |
+| `custody_event`、`custody_webhook_delivery`、`custody_webhook_endpoint` | 持久化 Webhook 扇出和投递状态 |
+| `custody_idempotency_key` | 地址和永久提现请求幂等 |
+| `custody_audit_log` | 租户操作和安全审计 |
 
 ## Ledger 语义
 

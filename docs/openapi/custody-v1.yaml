@@ -1,0 +1,790 @@
+openapi: 3.1.0
+info:
+  title: Surprising Wallet Custody API
+  version: 1.0.0
+  description: |
+    Multi-tenant custody, Console, and platform control-plane API.
+    Tenant identity is derived from the authenticated credential and is never
+    accepted as a trusted request field.
+servers:
+  - url: https://wallet.example.com
+tags:
+  - name: Public API
+  - name: Console authentication
+  - name: Console addresses
+  - name: Console transfers
+  - name: Console security
+  - name: Console Webhooks
+  - name: Platform
+paths:
+  /custody/api/v1/addresses:
+    get:
+      tags: [Public API]
+      summary: List tenant addresses
+      security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Chain'
+        - $ref: '#/components/parameters/Status'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Tenant-scoped addresses
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Address' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Public API]
+      summary: Get or create a tenant address
+      description: |
+        With externalReference, tenant + chain + externalReference is a
+        permanent get-or-create allocation key. Without it, a fresh address is
+        allocated. Address creation does not emit a Webhook.
+      security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAddress' }
+      responses:
+        '201':
+          description: Address allocation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Address' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/api/v1/assets:
+    get:
+      tags: [Public API]
+      summary: List aggregate tenant assets
+      security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
+      responses:
+        '200':
+          description: Balances aggregated by chain and asset
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AssetBalance' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/api/v1/deposits:
+    get:
+      tags: [Public API]
+      summary: List confirmed tenant deposits
+      security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Status'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Deposit records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Deposit' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/api/v1/withdrawals:
+    get:
+      tags: [Public API]
+      summary: List tenant withdrawals
+      security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Status'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Withdrawal records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Withdrawal' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Public API]
+      summary: Create a withdrawal
+      description: Idempotency-Key is permanent for withdrawal creation.
+      security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWithdrawal' }
+      responses:
+        '201':
+          description: Accepted withdrawal
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Withdrawal' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/auth/login:
+    post:
+      tags: [Console authentication]
+      summary: Sign in to a tenant Console
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantSlug, email, password]
+              properties:
+                tenantSlug: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Console session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResult' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/auth/me:
+    get:
+      tags: [Console authentication]
+      summary: Read the tenant Console principal
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Current principal }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/auth/logout:
+    post:
+      tags: [Console authentication]
+      summary: Revoke the current Console session
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/addresses:
+    get:
+      tags: [Console addresses]
+      summary: List tenant addresses
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Chain'
+        - name: source
+          in: query
+          schema: { type: string, enum: [API, CONSOLE] }
+        - $ref: '#/components/parameters/Status'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Addresses
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Address' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Console addresses]
+      summary: Create a tenant address from Console
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAddress' }
+      responses:
+        '200':
+          description: Created address
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Address' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/addresses/{addressId}:
+    patch:
+      tags: [Console addresses]
+      summary: Change address label, metadata, or lifecycle status
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/AddressId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string, maxLength: 160 }
+                metadata: { type: object, additionalProperties: true }
+                status: { type: string, enum: [ACTIVE, DISABLED] }
+      responses:
+        '200':
+          description: Updated address
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Address' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/assets:
+    get:
+      tags: [Console addresses]
+      summary: List aggregate tenant assets
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Asset balances
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AssetBalance' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/deposits:
+    get:
+      tags: [Console transfers]
+      summary: List deposits
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Status'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Deposits
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Deposit' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/withdrawals:
+    get:
+      tags: [Console transfers]
+      summary: List withdrawals
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Status'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Withdrawals
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Withdrawal' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Console transfers]
+      summary: Create a withdrawal from Console
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWithdrawal' }
+      responses:
+        '200':
+          description: Created withdrawal
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Withdrawal' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/api-keys:
+    get:
+      tags: [Console security]
+      summary: List API keys
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: API keys }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Console security]
+      summary: Create an API key
+      description: The plaintext secret is returned only once.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, scopes]
+              properties:
+                name: { type: string, maxLength: 120 }
+                scopes:
+                  type: array
+                  uniqueItems: true
+                  items:
+                    type: string
+                    enum:
+                      - addresses:read
+                      - addresses:write
+                      - assets:read
+                      - deposits:read
+                      - withdrawals:read
+                      - withdrawals:write
+      responses:
+        '200': { description: One-time key ID and secret }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/api-keys/{apiKeyId}:
+    delete:
+      tags: [Console security]
+      summary: Revoke an API key
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: apiKeyId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/ip-allowlist:
+    get:
+      tags: [Console security]
+      summary: Read IP allowlist state and rules
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Enforcement state and CIDR rules }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/ip-allowlist/enforcement:
+    put:
+      tags: [Console security]
+      summary: Enable or disable API IP enforcement
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '200': { description: Updated enforcement state and rules }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/ip-allowlist/rules:
+    post:
+      tags: [Console security]
+      summary: Add an IPv4 or IPv6 CIDR rule
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label, cidr]
+              properties:
+                label: { type: string, maxLength: 120 }
+                cidr: { type: string, maxLength: 64 }
+      responses:
+        '200': { description: Created CIDR rule }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/ip-allowlist/rules/{ruleId}:
+    delete:
+      tags: [Console security]
+      summary: Delete a CIDR rule
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/audit-log:
+    get:
+      tags: [Console security]
+      summary: List tenant audit entries
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200': { description: Audit entries }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/webhooks:
+    get:
+      tags: [Console Webhooks]
+      summary: List tenant Webhook endpoints
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Endpoints and 24-hour health }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Console Webhooks]
+      summary: Create a Webhook endpoint
+      description: The signing secret is returned only once.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWebhook' }
+      responses:
+        '200': { description: Pending endpoint and one-time signing secret }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/webhooks/{endpointId}/verify:
+    post:
+      tags: [Console Webhooks]
+      summary: Send a challenge and activate an endpoint
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/EndpointId'
+      responses:
+        '200': { description: Verified endpoint }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/webhooks/{endpointId}/status:
+    patch:
+      tags: [Console Webhooks]
+      summary: Enable or disable a verified endpoint
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/EndpointId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/webhook-deliveries:
+    get:
+      tags: [Console Webhooks]
+      summary: List Webhook deliveries
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: endpointId
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200': { description: Delivery history }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/webhook-deliveries/{deliveryId}/retry:
+    post:
+      tags: [Console Webhooks]
+      summary: Retry a failed or retryable delivery
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: deliveryId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/auth/login:
+    post:
+      tags: [Platform]
+      summary: Sign in as platform administrator
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Platform session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResult' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/auth/me:
+    get:
+      tags: [Platform]
+      summary: Read the platform principal
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Current principal }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/auth/logout:
+    post:
+      tags: [Platform]
+      summary: Revoke the platform session
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Ok' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/tenants:
+    get:
+      tags: [Platform]
+      summary: List tenants and activity counts
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200': { description: Tenant records }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Platform]
+      summary: Create a tenant and initial tenant administrator
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug, name, adminEmail, adminDisplayName, adminPassword]
+              properties:
+                slug:
+                  type: string
+                  pattern: '^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$'
+                name: { type: string, maxLength: 160 }
+                adminEmail: { type: string, format: email }
+                adminDisplayName: { type: string, maxLength: 120 }
+                adminPassword: { type: string, minLength: 12, maxLength: 256 }
+      responses:
+        '200': { description: Created tenant }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/tenants/{tenantId}:
+    get:
+      tags: [Platform]
+      summary: Read a tenant
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      responses:
+        '200': { description: Tenant record }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/tenants/{tenantId}/status:
+    patch:
+      tags: [Platform]
+      summary: Suspend or reactivate a tenant
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [ACTIVE, SUSPENDED] }
+      responses:
+        '200': { description: Updated tenant }
+        default: { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: ConsoleSession
+    custodyKey:
+      type: apiKey
+      in: header
+      name: X-Custody-Key
+    custodyTimestamp:
+      type: apiKey
+      in: header
+      name: X-Custody-Timestamp
+    custodyNonce:
+      type: apiKey
+      in: header
+      name: X-Custody-Nonce
+    custodySignature:
+      type: apiKey
+      in: header
+      name: X-Custody-Signature
+  parameters:
+    AddressId:
+      name: addressId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TenantId:
+      name: tenantId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EndpointId:
+      name: endpointId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 160
+        pattern: '^[A-Za-z0-9._:-]+$'
+    Chain:
+      name: chain
+      in: query
+      schema: { type: string }
+    Status:
+      name: status
+      in: query
+      schema: { type: string }
+    Search:
+      name: search
+      in: query
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+  responses:
+    Ok:
+      description: Operation completed
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ok]
+            properties:
+              ok: { type: boolean, const: true }
+    Error:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+    LoginResult:
+      type: object
+      required: [token, expiresAt, userId, email, displayName, role]
+      properties:
+        token: { type: string }
+        expiresAt: { type: string, format: date-time }
+        userId: { type: string, format: uuid }
+        tenantId: { type: [string, 'null'], format: uuid }
+        tenantSlug: { type: [string, 'null'] }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        role: { type: string }
+    CreateAddress:
+      type: object
+      required: [chain]
+      properties:
+        chain: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,31}$' }
+        externalReference: { type: string, maxLength: 160 }
+        label: { type: string, maxLength: 160 }
+        metadata: { type: object, additionalProperties: true }
+    Address:
+      type: object
+      required: [id, chain, network, address, metadata, source, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        chain: { type: string }
+        network: { type: string }
+        address: { type: string }
+        memo: { type: [string, 'null'] }
+        externalReference: { type: [string, 'null'] }
+        label: { type: [string, 'null'] }
+        metadata: { type: object, additionalProperties: true }
+        source: { type: string, enum: [API, CONSOLE] }
+        status: { type: string, enum: [ACTIVE, DISABLED] }
+        createdAt: { type: string, format: date-time }
+    AssetBalance:
+      type: object
+      required: [chain, assetSymbol, availableBalance, lockedBalance, totalBalance, addressCount]
+      properties:
+        chain: { type: string }
+        assetSymbol: { type: string }
+        availableBalance: { type: number }
+        lockedBalance: { type: number }
+        totalBalance: { type: number }
+        addressCount: { type: integer, format: int64 }
+    Deposit:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        custodyAddressId: { type: string, format: uuid }
+        externalReference: { type: [string, 'null'] }
+        chain: { type: string }
+        assetSymbol: { type: string }
+        txHash: { type: string }
+        logIndex: { type: integer, format: int64 }
+        amount: { type: number }
+        status: { type: string }
+        creditedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CreateWithdrawal:
+      type: object
+      required: [custodyAddressId, chain, assetSymbol, toAddress, amount]
+      properties:
+        custodyAddressId: { type: string, format: uuid }
+        chain: { type: string }
+        assetSymbol: { type: string }
+        toAddress: { type: string, maxLength: 160 }
+        amount: { type: string }
+        externalReference: { type: string, maxLength: 160 }
+    Withdrawal:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        custodyAddressId: { type: string, format: uuid }
+        orderNo: { type: string }
+        externalReference: { type: [string, 'null'] }
+        chain: { type: string }
+        assetSymbol: { type: string }
+        toAddress: { type: string }
+        amount: { type: number }
+        fee: { type: number }
+        status: { type: string }
+        txHash: { type: [string, 'null'] }
+        errorMessage: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+    CreateWebhook:
+      type: object
+      required: [name, url, events]
+      properties:
+        name: { type: string, maxLength: 120 }
+        url: { type: string, format: uri, maxLength: 2048 }
+        events:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - DEPOSIT.CONFIRMED
+              - WITHDRAWAL.CREATED
+              - WITHDRAWAL.BROADCAST
+              - WITHDRAWAL.BROADCAST_UNKNOWN
+              - WITHDRAWAL.CONFIRMED
+              - WITHDRAWAL.FAILED

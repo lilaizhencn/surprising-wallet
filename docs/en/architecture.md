@@ -6,6 +6,27 @@ The wallet is organized as a set of Spring Boot services and SDK modules. Runtim
 
 ![Architecture diagram](../assets/architecture-diagram.svg)
 
+## Custody control plane
+
+The custody layer sits above the existing chain engine:
+
+```text
+Platform Console -> tenant lifecycle
+Tenant Console/API -> tenant-scoped addresses, assets, deposits, withdrawals
+                         |
+                         v
+              existing wallet ledger and chain engine
+                         |
+                         v
+             scanners / signers / RPC providers
+```
+
+Tenant identity always comes from a Console session or API credential. The
+tenant's own customer ID is stored only as an opaque `externalReference`.
+Confirmed scanner credits are observed in the same database transaction and
+mapped to a custody deposit, tenant balance, and durable Webhook event. See
+[Multi-tenant Custody](multi-tenant-custody.md).
+
 ## Runtime Model
 
 The runtime asset source is:
@@ -19,6 +40,7 @@ The runtime asset source is:
 | `chain_asset` | Native assets and chain-scoped asset definitions |
 | `token_config` | Token contract/configuration, decimals, collect/withdraw policy |
 | `ledger_balance` | Chain-scoped user/system balance state |
+| `custody_*` | Tenant, credential, address allocation, transfer projection, Webhook, idempotency, and audit control-plane state |
 
 The application should resolve assets by `chain + symbol` or `chain + contract`, then pass a runtime asset into scanner, withdraw, collection, and signing flows.
 

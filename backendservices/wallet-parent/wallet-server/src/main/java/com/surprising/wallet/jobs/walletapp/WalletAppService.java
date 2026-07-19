@@ -226,6 +226,22 @@ public class WalletAppService {
 
     @Transactional(rollbackFor = Throwable.class)
     public Map<String, Object> withdraw(WalletUser user, WithdrawRequest request) {
+        return withdrawForAccount(user.id(), DEFAULT_BIZ, request, "WD-" + user.id());
+    }
+
+    /**
+     * Creates a withdrawal for an address derivation subject/business namespace.
+     *
+     * <p>This is the shared chain-aware withdrawal path used by both the legacy
+     * wallet UI and multi-tenant custody. Authentication and tenant ownership must
+     * be established by the caller before invoking it.</p>
+     */
+    @Transactional(rollbackFor = Throwable.class)
+    public Map<String, Object> withdrawForAccount(long userId, int biz, WithdrawRequest request,
+                                                  String orderPrefix) {
+        if (userId <= 0 || biz < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid withdrawal account");
+        }
         String chain = requireChain(request.chain());
         String symbol = requireSymbol(request.symbol());
         BigDecimal amount = positiveAmount(request.amount());
@@ -237,10 +253,16 @@ public class WalletAppService {
         WithdrawalTarget target = withdrawalTarget(asset, request.toAddress());
         BigDecimal feeReserve = withdrawalFeeReserve(asset);
         BigDecimal frozenAmount = amount.add(feeReserve);
-        SpendAccount spend = spendAccount(user.id(), DEFAULT_BIZ, chain, symbol, frozenAmount);
+        SpendAccount spend = spendAccount(userId, biz, chain, symbol, frozenAmount);
         String sourceAddress = withdrawalSourceAddress(asset, spend);
-        String orderNo = "WD-" + user.id() + "-" + System.currentTimeMillis() + "-" + randomSuffix();
-        int created = repository.createWithdrawalOrder(orderNo, user.id(), chain, symbol,
+        String normalizedPrefix = orderPrefix == null
+                ? "WD-" + userId
+                : orderPrefix.replaceAll("[^A-Za-z0-9_-]", "");
+        if (normalizedPrefix.isBlank() || normalizedPrefix.length() > 56) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid withdrawal order prefix");
+        }
+        String orderNo = normalizedPrefix + "-" + System.currentTimeMillis() + "-" + randomSuffix();
+        int created = repository.createWithdrawalOrder(orderNo, userId, chain, symbol,
                 sourceAddress, spend.accountId(), target.broadcastAddress(), amount, feeReserve);
         if (created == 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "duplicate withdrawal order");

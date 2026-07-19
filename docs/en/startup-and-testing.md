@@ -13,7 +13,7 @@ Install:
 - PostgreSQL 14+
 - Redis 6+
 - Docker for BTC/LTC/DOGE/BCH regtest nodes
-- Node.js 18+ and npm for EVM fork tests
+- Node.js 20.19+ for the Console and EVM fork tooling
 
 Check versions:
 
@@ -95,11 +95,27 @@ For local tests, `application-test.yaml` contains a fallback Ed25519 seed. Produ
 Common wallet-server environment variables:
 
 ```bash
+export SW_HTTP_PORT='8002'
+export SW_DB_URL='jdbc:postgresql://127.0.0.1:5432/wallet'
+export SW_DB_USERNAME='wallet'
 export SW_DB_PASSWORD='<PostgreSQL password>'
+export SW_REDIS_HOST='127.0.0.1'
+export SW_REDIS_PORT='6379'
+export SW_REDIS_PASSWORD='<Redis password>'
+export SW_APP_ENV='dev'
 export SW_ED25519_SEED='<32-byte Ed25519 seed in hex or base64>'
 export SW_WALLET_ADMIN_USERNAME='<wallet admin username>'
 export SW_WALLET_ADMIN_PASSWORD='<wallet admin password>'
+export SW_CUSTODY_SECRET_MASTER_KEY='<32-byte Base64 or 64-character hex key>'
+export SW_CUSTODY_PLATFORM_ADMIN_EMAIL='<initial platform administrator email>'
+export SW_CUSTODY_PLATFORM_ADMIN_PASSWORD='<initial platform administrator password>'
+export SW_CUSTODY_CORS_ORIGINS='https://console.example.com'
 ```
+
+`SW_CUSTODY_SECRET_MASTER_KEY` is mandatory and encrypts API/Webhook secrets at
+rest. The platform administrator is bootstrapped only when no platform
+administrator exists. Changing the environment password later does not overwrite
+an existing account.
 
 Common signer-service environment variables:
 
@@ -224,6 +240,23 @@ scripts/regtest/all-chain-regtest.sh test-db
 ```
 
 These tests do not need local chain nodes. They do need the local PostgreSQL database.
+
+To verify the custody deposit projection and rollback boundary against an isolated
+PostgreSQL database:
+
+```bash
+SW_TEST_CUSTODY_DB_URL=jdbc:postgresql://127.0.0.1:5432/wallet_test \
+SW_TEST_CUSTODY_DB_USERNAME=wallet \
+SW_TEST_CUSTODY_DB_PASSWORD=wallet \
+mvn -pl backendservices/wallet-parent/wallet-server -am \
+  -Dtest=CustodyDepositProjectionIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+The test creates and rolls back its own tenant/address fixtures. It proves that
+confirmed deposits for disabled custody addresses still update the tenant
+deposit projection, custody ledger, and durable event in the same transaction,
+and that an observer failure rolls the original deposit and balance back.
 
 ## 10. Run Local UTXO And XMR Regtest
 

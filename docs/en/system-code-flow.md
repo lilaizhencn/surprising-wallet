@@ -4,6 +4,29 @@
 
 ![System code flow](../assets/system-code-flow-diagram.svg)
 
+## Multi-Tenant Custody Flow
+
+The custody control plane keeps a tenant exchange's user model outside this repository. The exchange sends an opaque `externalReference`; the permanent key `(tenantId, chain, externalReference)` always resolves to the same address.
+
+```text
+tenant backend
+  -> HMAC-authenticated POST /custody/api/v1/addresses
+  -> custody_address get-or-create
+  -> chain_address allocation
+  -> return address + externalReference
+
+chain scanner
+  -> deposit_record + ledger_balance credit in one transaction
+  -> custody_deposit projection
+  -> durable custody_event
+  -> per-endpoint webhook_delivery
+  -> signed DEPOSIT.CONFIRMED webhook with externalReference
+```
+
+Console-created addresses may omit `externalReference`; they remain visible in the tenant asset total but are not coupled to a tenant-internal user. Address creation itself does not produce a webhook. Tenant isolation is applied to every Console/API query and mutation.
+
+Withdrawal requests use a permanent idempotency key, pass through the existing ledger lock/broadcast/confirmation workflow, and produce signed lifecycle Webhooks from durable delivery rows.
+
 ## Asset Resolution
 
 Runtime code should resolve assets through DB metadata:

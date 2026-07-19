@@ -1,0 +1,1256 @@
+package com.surprising.wallet.jobs.custody;
+
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.sql.Array;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Repository
+public class CustodyRepository {
+    private final JdbcTemplate jdbc;
+
+    public CustodyRepository(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public TenantRecord createTenant(UUID tenantId, String slug, String name, UUID adminId,
+                                     String adminEmail, String adminDisplayName, String passwordHash) {
+        jdbc.update("""
+                        insert into custody_tenant(id, slug, name)
+                        values (?, ?, ?)
+                        """, tenantId, slug, name);
+        jdbc.update("""
+                        insert into custody_tenant_user(
+                            id, tenant_id, email, display_name, password_hash, role, status)
+                        values (?, ?, ?, ?, ?, 'TENANT_ADMIN', 'ACTIVE')
+                        """, adminId, tenantId, adminEmail, adminDisplayName, passwordHash);
+        return requireTenant(tenantId);
+    }
+
+    public Optional<TenantRecord> findTenantBySlug(String slug) {
+        return jdbc.query("""
+                        select id, slug, name, status, derivation_namespace, ip_allowlist_enabled,
+                               display_currency, created_at, updated_at
+                          from custody_tenant
+                         where slug = ?
+                        """, (rs, rowNum) -> new TenantRecord(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("slug"),
+                        rs.getString("name"),
+                        rs.getString("status"),
+                        rs.getInt("derivation_namespace"),
+                        rs.getBoolean("ip_allowlist_enabled"),
+                        rs.getString("display_currency"),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("updated_at").toInstant()),
+                slug).stream().findFirst();
+    }
+
+    public TenantRecord requireTenant(UUID tenantId) {
+        return jdbc.query("""
+                        select id, slug, name, status, derivation_namespace, ip_allowlist_enabled,
+                               display_currency, created_at, updated_at
+                          from custody_tenant
+                         where id = ?
+                        """, (rs, rowNum) -> new TenantRecord(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("slug"),
+                        rs.getString("name"),
+                        rs.getString("status"),
+                        rs.getInt("derivation_namespace"),
+                        rs.getBoolean("ip_allowlist_enabled"),
+                        rs.getString("display_currency"),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("updated_at").toInstant()),
+                tenantId).stream().findFirst().orElseThrow(() ->
+                new IllegalArgumentException("tenant not found"));
+    }
+
+    public List<Map<String, Object>> listTenants(int limit, int offset) {
+        return jdbc.query("""
+                        select t.id, t.slug, t.name, t.status, t.derivation_namespace,
+                               t.ip_allowlist_enabled, t.display_currency, t.created_at, t.updated_at,
+                               coalesce(a.address_count, 0) as address_count,
+                               coalesce(d.deposit_count, 0) as deposit_count,
+                               coalesce(w.withdrawal_count, 0) as withdrawal_count,
+                               coalesce(e.active_webhook_count, 0) as active_webhook_count
+                          from custody_tenant t
+                          left join (
+                              select tenant_id, count(*) as address_count
+                                from custody_address group by tenant_id
+                          ) a on a.tenant_id = t.id
+                          left join (
+                              select tenant_id, count(*) as deposit_count
+                                from custody_deposit group by tenant_id
+                          ) d on d.tenant_id = t.id
+                          left join (
+                              select tenant_id, count(*) as withdrawal_count
+                                from custody_withdrawal group by tenant_id
+                          ) w on w.tenant_id = t.id
+                          left join (
+                              select tenant_id, count(*) as active_webhook_count
+                                from custody_webhook_endpoint
+                               where status = 'ACTIVE'
+                               group by tenant_id
+                          ) e on e.tenant_id = t.id
+                         order by t.created_at desc, t.id
+                         limit ? offset ?
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getObject("id", UUID.class));
+                    row.put("slug", rs.getString("slug"));
+                    row.put("name", rs.getString("name"));
+                    row.put("status", rs.getString("status"));
+                    row.put("derivationNamespace", rs.getInt("derivation_namespace"));
+                    row.put("ipAllowlistEnabled", rs.getBoolean("ip_allowlist_enabled"));
+                    row.put("displayCurrency", rs.getString("display_currency"));
+                    row.put("addressCount", rs.getLong("address_count"));
+                    row.put("depositCount", rs.getLong("deposit_count"));
+                    row.put("withdrawalCount", rs.getLong("withdrawal_count"));
+                    row.put("activeWebhookCount", rs.getLong("active_webhook_count"));
+                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
+                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
+                    return row;
+                }, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    }
+
+    public void updateTenantStatus(UUID tenantId, String status) {
+        if (jdbc.update("""
+                        update custody_tenant
+                           set status = ?, updated_at = now()
+                         where id = ?
+                        """, status, tenantId) != 1) {
+            throw new IllegalArgumentException("tenant not found");
+        }
+    }
+
+    public Optional<AuthUser> findTenantUser(String tenantSlug, String email) {
+        return jdbc.query("""
+                        select u.id, u.tenant_id, t.slug as tenant_slug, t.status as tenant_status,
+                               u.email, u.display_name, u.password_hash, u.role, u.status,
+                               u.failed_login_count, u.locked_until
+                          from custody_tenant_user u
+                          join custody_tenant t on t.id = u.tenant_id
+                         where t.slug = ? and lower(u.email) = lower(?)
+                        """, (rs, rowNum) -> mapAuthUser(rs), tenantSlug, email).stream().findFirst();
+    }
+
+    public Optional<AuthUser> findPlatformUser(String email) {
+        return jdbc.query("""
+                        select u.id, u.tenant_id, null::varchar as tenant_slug,
+                               'ACTIVE'::varchar as tenant_status, u.email, u.display_name,
+                               u.password_hash, u.role, u.status, u.failed_login_count, u.locked_until
+                          from custody_tenant_user u
+                         where u.tenant_id is null
+                           and u.role = 'PLATFORM_ADMIN'
+                           and lower(u.email) = lower(?)
+                        """, (rs, rowNum) -> mapAuthUser(rs), email).stream().findFirst();
+    }
+
+    public boolean platformAdminExists() {
+        Long count = jdbc.queryForObject("""
+                select count(*) from custody_tenant_user
+                 where tenant_id is null and role = 'PLATFORM_ADMIN'
+                """, Long.class);
+        return count != null && count > 0;
+    }
+
+    public void insertPlatformAdmin(UUID userId, String email, String passwordHash) {
+        jdbc.update("""
+                insert into custody_tenant_user(
+                    id, tenant_id, email, display_name, password_hash, role, status)
+                values (?, null, ?, 'Platform administrator', ?, 'PLATFORM_ADMIN', 'ACTIVE')
+                on conflict do nothing
+                """, userId, email.toLowerCase(Locale.ROOT), passwordHash);
+    }
+
+    public void recordLoginFailure(UUID userId, Instant lockedUntil) {
+        jdbc.update("""
+                        update custody_tenant_user
+                           set failed_login_count = failed_login_count + 1,
+                               locked_until = ?,
+                               updated_at = now()
+                         where id = ?
+                        """, timestampOrNull(lockedUntil), userId);
+    }
+
+    public void recordLoginSuccess(UUID userId) {
+        jdbc.update("""
+                        update custody_tenant_user
+                           set failed_login_count = 0, locked_until = null,
+                               last_login_at = now(), updated_at = now()
+                         where id = ?
+                        """, userId);
+    }
+
+    public void insertSession(UUID sessionId, UUID userId, UUID tenantId, String tokenHash,
+                              String sourceIp, String userAgent, Instant expiresAt) {
+        jdbc.update("""
+                        insert into custody_session(
+                            id, tenant_user_id, tenant_id, token_hash, source_ip, user_agent, expires_at)
+                        values (?, ?, ?, ?, cast(nullif(?, '') as inet), ?, ?)
+                        """, sessionId, userId, tenantId, tokenHash, sourceIp, truncate(userAgent, 512),
+                Timestamp.from(expiresAt));
+    }
+
+    public Optional<SessionRecord> findActiveSession(String tokenHash) {
+        return jdbc.query("""
+                        select s.id as session_id, s.tenant_user_id, s.tenant_id, t.slug as tenant_slug,
+                               u.email, u.display_name, u.role, u.status as user_status,
+                               coalesce(t.status, 'ACTIVE') as tenant_status, s.expires_at
+                          from custody_session s
+                          join custody_tenant_user u on u.id = s.tenant_user_id
+                          left join custody_tenant t on t.id = s.tenant_id
+                         where s.token_hash = ?
+                           and s.revoked_at is null
+                           and s.expires_at > now()
+                        """, (rs, rowNum) -> new SessionRecord(
+                        rs.getObject("session_id", UUID.class),
+                        rs.getObject("tenant_user_id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getString("tenant_slug"),
+                        rs.getString("email"),
+                        rs.getString("display_name"),
+                        rs.getString("role"),
+                        rs.getString("user_status"),
+                        rs.getString("tenant_status"),
+                        rs.getTimestamp("expires_at").toInstant()),
+                tokenHash).stream().findFirst();
+    }
+
+    public void touchSession(UUID sessionId) {
+        jdbc.update("""
+                        update custody_session
+                           set last_seen_at = now()
+                         where id = ?
+                           and last_seen_at < now() - interval '5 minutes'
+                        """, sessionId);
+    }
+
+    public void revokeSession(String tokenHash) {
+        jdbc.update("""
+                update custody_session set revoked_at = now()
+                 where token_hash = ? and revoked_at is null
+                """, tokenHash);
+    }
+
+    public ApiKeyRecord insertApiKey(UUID id, UUID tenantId, String keyId, String name,
+                                     String encryptedSecret, Set<String> scopes, UUID createdBy) {
+        String scopeList = normalizedScopes(scopes).stream().sorted().collect(Collectors.joining(","));
+        jdbc.update("""
+                        insert into custody_api_key(
+                            id, tenant_id, key_id, name, secret_ciphertext, scopes, created_by)
+                        values (?, ?, ?, ?, ?, string_to_array(?, ','), ?)
+                        """, id, tenantId, keyId, name, encryptedSecret, scopeList, createdBy);
+        return requireApiKey(keyId);
+    }
+
+    public Optional<ApiKeyRecord> findActiveApiKey(String keyId) {
+        return jdbc.query("""
+                        select k.id, k.tenant_id, t.slug as tenant_slug, t.status as tenant_status,
+                               t.ip_allowlist_enabled, k.key_id, k.name, k.secret_ciphertext,
+                               k.scopes, k.status, k.expires_at, k.created_at
+                          from custody_api_key k
+                          join custody_tenant t on t.id = k.tenant_id
+                         where k.key_id = ?
+                           and k.status = 'ACTIVE'
+                           and (k.expires_at is null or k.expires_at > now())
+                        """, (rs, rowNum) -> mapApiKey(rs), keyId).stream().findFirst();
+    }
+
+    public ApiKeyRecord requireApiKey(String keyId) {
+        return jdbc.query("""
+                        select k.id, k.tenant_id, t.slug as tenant_slug, t.status as tenant_status,
+                               t.ip_allowlist_enabled, k.key_id, k.name, k.secret_ciphertext,
+                               k.scopes, k.status, k.expires_at, k.created_at
+                          from custody_api_key k
+                          join custody_tenant t on t.id = k.tenant_id
+                         where k.key_id = ?
+                        """, (rs, rowNum) -> mapApiKey(rs), keyId).stream().findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("API key not found"));
+    }
+
+    public List<Map<String, Object>> listApiKeys(UUID tenantId) {
+        return jdbc.query("""
+                        select id, key_id, name, scopes, status, last_used_at, last_used_ip,
+                               expires_at, created_at, revoked_at
+                          from custody_api_key
+                         where tenant_id = ?
+                         order by created_at desc
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getObject("id", UUID.class));
+                    row.put("keyId", rs.getString("key_id"));
+                    row.put("name", rs.getString("name"));
+                    row.put("scopes", sqlArray(rs.getArray("scopes")));
+                    row.put("status", rs.getString("status"));
+                    row.put("lastUsedAt", instantOrNull(rs.getTimestamp("last_used_at")));
+                    row.put("lastUsedIp", rs.getString("last_used_ip"));
+                    row.put("expiresAt", instantOrNull(rs.getTimestamp("expires_at")));
+                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
+                    row.put("revokedAt", instantOrNull(rs.getTimestamp("revoked_at")));
+                    return row;
+                }, tenantId);
+    }
+
+    public void revokeApiKey(UUID tenantId, UUID keyId) {
+        if (jdbc.update("""
+                        update custody_api_key
+                           set status = 'REVOKED', revoked_at = now()
+                         where tenant_id = ? and id = ? and status = 'ACTIVE'
+                        """, tenantId, keyId) != 1) {
+            throw new IllegalArgumentException("active API key not found");
+        }
+    }
+
+    public void touchApiKey(UUID keyId, String sourceIp) {
+        jdbc.update("""
+                        update custody_api_key
+                           set last_used_at = now(), last_used_ip = cast(nullif(?, '') as inet)
+                         where id = ?
+                           and (
+                               last_used_at is null
+                               or last_used_at < now() - interval '1 minute'
+                               or last_used_ip is distinct from cast(nullif(?, '') as inet)
+                           )
+                        """, sourceIp, keyId, sourceIp);
+    }
+
+    public boolean reserveNonce(String keyId, String nonce, Instant expiresAt) {
+        try {
+            return jdbc.update("""
+                    insert into custody_api_nonce(key_id, nonce, expires_at)
+                    values (?, ?, ?)
+                    """, keyId, nonce, Timestamp.from(expiresAt)) == 1;
+        } catch (DuplicateKeyException e) {
+            return false;
+        }
+    }
+
+    public List<String> activeIpRules(UUID tenantId) {
+        return jdbc.query("""
+                select cidr::text from custody_ip_rule
+                 where tenant_id = ? and enabled = true
+                 order by cidr
+                """, (rs, rowNum) -> rs.getString(1), tenantId);
+    }
+
+    public List<Map<String, Object>> listIpRules(UUID tenantId) {
+        return jdbc.query("""
+                        select id, label, cidr::text as cidr, enabled, created_at, updated_at
+                          from custody_ip_rule
+                         where tenant_id = ?
+                         order by created_at desc
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getObject("id", UUID.class));
+                    row.put("label", rs.getString("label"));
+                    row.put("cidr", rs.getString("cidr"));
+                    row.put("enabled", rs.getBoolean("enabled"));
+                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
+                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
+                    return row;
+                }, tenantId);
+    }
+
+    public Map<String, Object> insertIpRule(UUID tenantId, UUID ruleId, String label, String cidr, UUID createdBy) {
+        return jdbc.queryForMap("""
+                        insert into custody_ip_rule(id, tenant_id, label, cidr, created_by)
+                        values (?, ?, ?, cast(? as inet), ?)
+                        returning id, label, cidr::text as cidr, enabled, created_at, updated_at
+                        """, ruleId, tenantId, label, cidr, createdBy);
+    }
+
+    public void deleteIpRule(UUID tenantId, UUID ruleId) {
+        if (jdbc.update("delete from custody_ip_rule where tenant_id = ? and id = ?", tenantId, ruleId) != 1) {
+            throw new IllegalArgumentException("IP rule not found");
+        }
+    }
+
+    public void setIpAllowlistEnabled(UUID tenantId, boolean enabled) {
+        if (enabled && activeIpRules(tenantId).isEmpty()) {
+            throw new IllegalStateException("add at least one enabled IP rule before enforcing the allowlist");
+        }
+        if (jdbc.update("""
+                update custody_tenant
+                   set ip_allowlist_enabled = ?, updated_at = now()
+                 where id = ?
+                """, enabled, tenantId) != 1) {
+            throw new IllegalArgumentException("tenant not found");
+        }
+    }
+
+    public int nextDerivationSubject() {
+        Integer value = jdbc.queryForObject(
+                "select nextval('custody_derivation_subject_seq')::integer", Integer.class);
+        if (value == null || value <= 0) {
+            throw new IllegalStateException("failed to allocate custody derivation subject");
+        }
+        return value;
+    }
+
+    public void lockAddressAllocation(UUID tenantId, String chain, String externalReference) {
+        String allocationKey = tenantId + "\n" + chain + "\n" + externalReference;
+        jdbc.query(
+                "select pg_advisory_xact_lock(hashtextextended(?, 0))",
+                rs -> null,
+                allocationKey);
+    }
+
+    public Optional<AddressRecord> findAddressByExternalReference(
+            UUID tenantId, String chain, String externalReference) {
+        return jdbc.query("""
+                        select id, tenant_id, chain_address_id, chain, network, address, memo,
+                               external_reference, label, metadata::text as metadata, source,
+                               status, derivation_subject, created_at, updated_at
+                          from custody_address
+                         where tenant_id = ? and chain = ? and external_reference = ?
+                        """, (rs, rowNum) -> mapAddress(rs),
+                tenantId, chain, externalReference).stream().findFirst();
+    }
+
+    public AddressRecord insertAddress(UUID id, UUID tenantId, long chainAddressId, String chain,
+                                       String network, String address, String memo,
+                                       String externalReference, String label, String metadataJson,
+                                       String source, int derivationSubject, UUID createdBy) {
+        jdbc.update("""
+                        insert into custody_address(
+                            id, tenant_id, chain_address_id, chain, network, address, memo,
+                            external_reference, label, metadata, source, derivation_subject, created_by)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?)
+                        """, id, tenantId, chainAddressId, chain, network, address, memo,
+                externalReference, label, metadataJson, source, derivationSubject, createdBy);
+        return requireAddress(tenantId, id);
+    }
+
+    public AddressRecord requireAddress(UUID tenantId, UUID addressId) {
+        return jdbc.query("""
+                        select id, tenant_id, chain_address_id, chain, network, address, memo,
+                               external_reference, label, metadata::text as metadata, source,
+                               status, derivation_subject, created_at, updated_at
+                          from custody_address
+                         where tenant_id = ? and id = ?
+                        """, (rs, rowNum) -> mapAddress(rs), tenantId, addressId)
+                .stream().findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("custody address not found"));
+    }
+
+    public AddressRecord updateAddress(UUID tenantId, UUID addressId, String label,
+                                       String metadataJson, String status) {
+        if (jdbc.update("""
+                        update custody_address
+                           set label = ?,
+                               metadata = cast(? as jsonb),
+                               status = ?,
+                               updated_at = now()
+                         where tenant_id = ? and id = ?
+                        """, label, metadataJson, status, tenantId, addressId) != 1) {
+            throw new IllegalArgumentException("custody address not found");
+        }
+        return requireAddress(tenantId, addressId);
+    }
+
+    public List<AddressRecord> listAddresses(UUID tenantId, String chain, String source,
+                                             String status, String search, int limit, int offset) {
+        String normalizedSearch = search == null ? "" : search.trim();
+        return jdbc.query("""
+                        select id, tenant_id, chain_address_id, chain, network, address, memo,
+                               external_reference, label, metadata::text as metadata, source,
+                               status, derivation_subject, created_at, updated_at
+                          from custody_address
+                         where tenant_id = ?
+                           and (? = '' or chain = ?)
+                           and (? = '' or source = ?)
+                           and (? = '' or status = ?)
+                           and (? = '' or address ilike '%' || ? || '%'
+                                or coalesce(external_reference, '') ilike '%' || ? || '%'
+                                or coalesce(label, '') ilike '%' || ? || '%')
+                         order by created_at desc, id
+                         limit ? offset ?
+                        """, (rs, rowNum) -> mapAddress(rs),
+                tenantId,
+                blankToEmpty(chain), blankToEmpty(chain),
+                blankToEmpty(source), blankToEmpty(source),
+                blankToEmpty(status), blankToEmpty(status),
+                normalizedSearch, normalizedSearch, normalizedSearch, normalizedSearch,
+                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    }
+
+    public List<Map<String, Object>> tenantAssetOverview(UUID tenantId) {
+        return jdbc.query("""
+                        with tenant_accounts as (
+                            select distinct c.id as custody_address_id, c.tenant_id,
+                                   related.chain, related.account_id
+                              from custody_address c
+                              join chain_address base on base.id = c.chain_address_id
+                              join chain_address related
+                                on related.chain = base.chain
+                               and related.user_id = base.user_id
+                               and related.biz = base.biz
+                               and related.address_index = base.address_index
+                               and related.wallet_role = base.wallet_role
+                               and related.enabled = true
+                             where c.tenant_id = ?
+                            union
+                            select distinct c.id, c.tenant_id, base.chain, base.account_id
+                              from custody_address c
+                              join chain_address base on base.id = c.chain_address_id
+                             where c.tenant_id = ?
+                        )
+                        select lb.chain, lb.asset_symbol,
+                               coalesce(sum(lb.available_balance), 0) as available_balance,
+                               coalesce(sum(lb.locked_balance), 0) as locked_balance,
+                               coalesce(sum(lb.total_balance), 0) as total_balance,
+                               count(distinct ta.custody_address_id) as address_count
+                          from tenant_accounts ta
+                          join ledger_balance lb
+                            on lb.chain = ta.chain
+                           and lower(lb.account_id) = lower(ta.account_id)
+                         group by lb.chain, lb.asset_symbol
+                         order by lb.asset_symbol, lb.chain
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("chain", rs.getString("chain"));
+                    row.put("assetSymbol", rs.getString("asset_symbol"));
+                    row.put("availableBalance", rs.getBigDecimal("available_balance"));
+                    row.put("lockedBalance", rs.getBigDecimal("locked_balance"));
+                    row.put("totalBalance", rs.getBigDecimal("total_balance"));
+                    row.put("addressCount", rs.getLong("address_count"));
+                    return row;
+                }, tenantId, tenantId);
+    }
+
+    public Optional<IdempotencyRecord> findIdempotency(UUID tenantId, String key, String operation) {
+        return jdbc.query("""
+                        select request_hash, response_status, response_body::text as response_body, expires_at
+                         from custody_idempotency_key
+                         where tenant_id = ? and idempotency_key = ? and operation = ?
+                           and (expires_at is null or expires_at > now())
+                        """, (rs, rowNum) -> new IdempotencyRecord(
+                        rs.getString("request_hash"),
+                        (Integer) rs.getObject("response_status"),
+                        rs.getString("response_body"),
+                        instantOrNull(rs.getTimestamp("expires_at"))),
+                tenantId, key, operation).stream().findFirst();
+    }
+
+    public boolean beginIdempotency(UUID tenantId, String key, String operation,
+                                    String requestHash, Instant expiresAt) {
+        return jdbc.query("""
+                        insert into custody_idempotency_key(
+                            tenant_id, idempotency_key, operation, request_hash, expires_at)
+                        values (?, ?, ?, ?, ?)
+                        on conflict (tenant_id, idempotency_key, operation) do update
+                           set request_hash = excluded.request_hash,
+                               response_status = null,
+                               response_body = null,
+                               expires_at = excluded.expires_at,
+                               created_at = now()
+                         where custody_idempotency_key.expires_at <= now()
+                        returning true
+                        """, (rs, rowNum) -> rs.getBoolean(1),
+                tenantId, key, operation, requestHash, timestampOrNull(expiresAt))
+                .stream().findFirst().orElse(false);
+    }
+
+    public void completeIdempotency(UUID tenantId, String key, String operation,
+                                    int responseStatus, String responseJson) {
+        if (jdbc.update("""
+                        update custody_idempotency_key
+                           set response_status = ?, response_body = cast(? as jsonb)
+                         where tenant_id = ? and idempotency_key = ? and operation = ?
+                           and response_status is null
+                        """, responseStatus, responseJson, tenantId, key, operation) != 1) {
+            throw new IllegalStateException("idempotency reservation is missing or already completed");
+        }
+    }
+
+    public WebhookEndpointRecord insertWebhookEndpoint(
+            UUID id, UUID tenantId, String name, String url, String encryptedSecret,
+            Set<String> events, String verificationTokenHash, UUID createdBy) {
+        String eventList = events.stream().sorted().collect(Collectors.joining(","));
+        jdbc.update("""
+                        insert into custody_webhook_endpoint(
+                            id, tenant_id, name, url, secret_ciphertext, subscribed_events,
+                            verification_token_hash, created_by)
+                        values (?, ?, ?, ?, ?, string_to_array(?, ','), ?, ?)
+                        """, id, tenantId, name, url, encryptedSecret, eventList,
+                verificationTokenHash, createdBy);
+        return requireWebhookEndpoint(tenantId, id);
+    }
+
+    public WebhookEndpointRecord requireWebhookEndpoint(UUID tenantId, UUID endpointId) {
+        return jdbc.query("""
+                        select id, tenant_id, name, url, secret_ciphertext, subscribed_events,
+                               status, verification_token_hash, verified_at, last_delivery_at,
+                               created_at, updated_at
+                          from custody_webhook_endpoint
+                         where tenant_id = ? and id = ?
+                        """, (rs, rowNum) -> mapWebhookEndpoint(rs), tenantId, endpointId)
+                .stream().findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("webhook endpoint not found"));
+    }
+
+    public List<Map<String, Object>> listWebhookEndpoints(UUID tenantId) {
+        return jdbc.query("""
+                        select e.id, e.name, e.url, e.subscribed_events, e.status,
+                               e.verified_at, e.last_delivery_at, e.created_at, e.updated_at,
+                               count(d.id) filter (
+                                   where d.created_at >= now() - interval '24 hours') as delivery_count_24h,
+                               count(d.id) filter (
+                                   where d.status = 'DELIVERED'
+                                     and d.created_at >= now() - interval '24 hours') as delivered_count_24h
+                          from custody_webhook_endpoint e
+                          left join custody_webhook_delivery d on d.endpoint_id = e.id
+                         where e.tenant_id = ?
+                         group by e.id
+                         order by e.created_at desc
+                        """, (rs, rowNum) -> {
+                    long attempts = rs.getLong("delivery_count_24h");
+                    long delivered = rs.getLong("delivered_count_24h");
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getObject("id", UUID.class));
+                    row.put("name", rs.getString("name"));
+                    row.put("url", rs.getString("url"));
+                    row.put("events", sqlArray(rs.getArray("subscribed_events")));
+                    row.put("status", rs.getString("status"));
+                    row.put("verifiedAt", instantOrNull(rs.getTimestamp("verified_at")));
+                    row.put("lastDeliveryAt", instantOrNull(rs.getTimestamp("last_delivery_at")));
+                    row.put("deliveryCount24h", attempts);
+                    row.put("successRate24h", attempts == 0 ? null : delivered * 100.0d / attempts);
+                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
+                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
+                    return row;
+                }, tenantId);
+    }
+
+    public void markWebhookVerified(UUID tenantId, UUID endpointId) {
+        if (jdbc.update("""
+                        update custody_webhook_endpoint
+                           set status = 'ACTIVE', verified_at = now(),
+                               verification_token_hash = null, updated_at = now()
+                         where tenant_id = ? and id = ?
+                           and status = 'PENDING_VERIFICATION'
+                        """, tenantId, endpointId) != 1) {
+            throw new IllegalStateException("webhook endpoint is not pending verification");
+        }
+    }
+
+    public void setWebhookStatus(UUID tenantId, UUID endpointId, String status) {
+        if (jdbc.update("""
+                        update custody_webhook_endpoint
+                           set status = ?, updated_at = now()
+                         where tenant_id = ? and id = ?
+                        """, status, tenantId, endpointId) != 1) {
+            throw new IllegalArgumentException("webhook endpoint not found");
+        }
+    }
+
+    public List<Map<String, Object>> listWebhookDeliveries(UUID tenantId, UUID endpointId,
+                                                            int limit, int offset) {
+        return jdbc.query("""
+                        select d.id, d.endpoint_id, d.event_id, e.event_type,
+                               e.aggregate_type, e.aggregate_id, d.status, d.attempt_count,
+                               d.next_attempt_at, d.last_http_status, d.last_error,
+                               d.delivered_at, d.created_at, d.updated_at
+                          from custody_webhook_delivery d
+                          join custody_event e on e.id = d.event_id
+                         where d.tenant_id = ?
+                           and (? is null or d.endpoint_id = ?)
+                         order by d.created_at desc, d.id
+                         limit ? offset ?
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getObject("id", UUID.class));
+                    row.put("endpointId", rs.getObject("endpoint_id", UUID.class));
+                    row.put("eventId", rs.getObject("event_id", UUID.class));
+                    row.put("eventType", rs.getString("event_type"));
+                    row.put("aggregateType", rs.getString("aggregate_type"));
+                    row.put("aggregateId", rs.getString("aggregate_id"));
+                    row.put("status", rs.getString("status"));
+                    row.put("attemptCount", rs.getInt("attempt_count"));
+                    row.put("nextAttemptAt", instantOrNull(rs.getTimestamp("next_attempt_at")));
+                    row.put("lastHttpStatus", rs.getObject("last_http_status"));
+                    row.put("lastError", rs.getString("last_error"));
+                    row.put("deliveredAt", instantOrNull(rs.getTimestamp("delivered_at")));
+                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
+                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
+                    return row;
+                }, tenantId, endpointId, endpointId,
+                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public List<WebhookDeliveryTask> claimWebhookDeliveries(String workerId, int limit) {
+        return jdbc.query("""
+                        with candidates as (
+                            select d.id
+                              from custody_webhook_delivery d
+                              join custody_webhook_endpoint ep
+                                on ep.id = d.endpoint_id and ep.status = 'ACTIVE'
+                             where (
+                                   d.status in ('PENDING', 'RETRY')
+                                   and d.next_attempt_at <= now()
+                               ) or (
+                                   d.status = 'DELIVERING'
+                                   and d.locked_at < now() - interval '5 minutes'
+                               )
+                             order by d.next_attempt_at, d.created_at
+                             for update skip locked
+                             limit ?
+                        ),
+                        claimed as (
+                            update custody_webhook_delivery d
+                               set status = 'DELIVERING', locked_by = ?, locked_at = now(),
+                                   attempt_count = attempt_count + 1, updated_at = now()
+                              from candidates c
+                             where d.id = c.id
+                            returning d.id, d.tenant_id, d.endpoint_id, d.event_id, d.attempt_count
+                        )
+                        select c.id, c.tenant_id, c.endpoint_id, c.event_id, c.attempt_count,
+                               ep.url, ep.secret_ciphertext, ev.event_type,
+                               ev.payload::text as payload
+                          from claimed c
+                          join custody_webhook_endpoint ep on ep.id = c.endpoint_id
+                          join custody_event ev on ev.id = c.event_id
+                         where ep.status = 'ACTIVE'
+                        """, (rs, rowNum) -> new WebhookDeliveryTask(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getObject("endpoint_id", UUID.class),
+                        rs.getObject("event_id", UUID.class),
+                        rs.getInt("attempt_count"),
+                        rs.getString("url"),
+                        rs.getString("secret_ciphertext"),
+                        rs.getString("event_type"),
+                        rs.getString("payload")),
+                Math.min(Math.max(limit, 1), 100), workerId);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public void markWebhookDelivered(WebhookDeliveryTask task, int httpStatus, String response) {
+        jdbc.update("""
+                        update custody_webhook_delivery
+                           set status = 'DELIVERED', last_http_status = ?, last_response = ?,
+                               last_error = null, delivered_at = now(), locked_by = null,
+                               locked_at = null, updated_at = now()
+                         where id = ?
+                        """, httpStatus, truncate(response, 4096), task.id());
+        jdbc.update("""
+                update custody_webhook_endpoint
+                   set last_delivery_at = now(), updated_at = now()
+                 where id = ?
+                """, task.endpointId());
+    }
+
+    public void markWebhookFailed(WebhookDeliveryTask task, Integer httpStatus, String error,
+                                  String response, Instant nextAttempt, boolean terminal) {
+        jdbc.update("""
+                        update custody_webhook_delivery
+                           set status = ?, last_http_status = ?, last_error = ?,
+                               last_response = ?, next_attempt_at = ?, locked_by = null,
+                               locked_at = null, updated_at = now()
+                         where id = ?
+                        """, terminal ? "FAILED" : "RETRY", httpStatus, truncate(error, 4096),
+                truncate(response, 4096), Timestamp.from(nextAttempt), task.id());
+    }
+
+    public void retryWebhookDelivery(UUID tenantId, UUID deliveryId) {
+        if (jdbc.update("""
+                        update custody_webhook_delivery
+                           set status = 'RETRY', attempt_count = 0,
+                               next_attempt_at = now(), locked_by = null,
+                               locked_at = null, last_error = null, updated_at = now()
+                         where tenant_id = ? and id = ? and status in ('FAILED', 'RETRY')
+                        """, tenantId, deliveryId) != 1) {
+            throw new IllegalStateException("failed or retryable webhook delivery not found");
+        }
+    }
+
+    public void insertCustodyWithdrawal(
+            UUID id, UUID tenantId, UUID custodyAddressId, String orderNo,
+            String externalReference, String idempotencyKey, String chain,
+            String assetSymbol, String toAddress, java.math.BigDecimal amount,
+            java.math.BigDecimal fee, String status, String createdByType, String createdById) {
+        jdbc.update("""
+                        insert into custody_withdrawal(
+                            id, tenant_id, custody_address_id, order_no, external_reference,
+                            idempotency_key, chain, asset_symbol, to_address, amount, fee,
+                            status, created_by_type, created_by_id)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, id, tenantId, custodyAddressId, orderNo, externalReference,
+                idempotencyKey, chain, assetSymbol, toAddress, amount, fee, status,
+                createdByType, createdById);
+    }
+
+    public List<Map<String, Object>> listCustodyWithdrawals(
+            UUID tenantId, String status, int limit, int offset) {
+        return jdbc.query("""
+                        select w.id, w.custody_address_id, w.order_no, w.external_reference,
+                               w.chain, w.asset_symbol, w.to_address, w.amount, w.fee,
+                               wo.tx_hash, wo.status, wo.error_message, w.created_by_type,
+                               w.created_at, greatest(w.updated_at, wo.updated_at) as updated_at
+                          from custody_withdrawal w
+                          join withdrawal_order wo
+                            on wo.chain = w.chain and wo.order_no = w.order_no
+                         where w.tenant_id = ?
+                           and (? = '' or wo.status = ?)
+                         order by w.created_at desc, w.id
+                         limit ? offset ?
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getObject("id", UUID.class));
+                    row.put("custodyAddressId", rs.getObject("custody_address_id", UUID.class));
+                    row.put("orderNo", rs.getString("order_no"));
+                    row.put("externalReference", rs.getString("external_reference"));
+                    row.put("chain", rs.getString("chain"));
+                    row.put("assetSymbol", rs.getString("asset_symbol"));
+                    row.put("toAddress", rs.getString("to_address"));
+                    row.put("amount", rs.getBigDecimal("amount"));
+                    row.put("fee", rs.getBigDecimal("fee"));
+                    row.put("txHash", rs.getString("tx_hash"));
+                    row.put("status", rs.getString("status"));
+                    row.put("errorMessage", rs.getString("error_message"));
+                    row.put("createdByType", rs.getString("created_by_type"));
+                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
+                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
+                    return row;
+                }, tenantId, blankToEmpty(status), blankToEmpty(status),
+                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    }
+
+    public List<Map<String, Object>> listCustodyDeposits(
+            UUID tenantId, String status, int limit, int offset) {
+        return jdbc.query("""
+                        select d.id, d.custody_address_id, a.external_reference,
+                               d.chain, d.asset_symbol, d.tx_hash, d.log_index, d.amount,
+                               d.status, d.credited_at, d.created_at, d.updated_at
+                          from custody_deposit d
+                          join custody_address a on a.id = d.custody_address_id
+                         where d.tenant_id = ?
+                           and (? = '' or d.status = ?)
+                         order by d.created_at desc, d.id
+                         limit ? offset ?
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getObject("id", UUID.class));
+                    row.put("custodyAddressId", rs.getObject("custody_address_id", UUID.class));
+                    row.put("externalReference", rs.getString("external_reference"));
+                    row.put("chain", rs.getString("chain"));
+                    row.put("assetSymbol", rs.getString("asset_symbol"));
+                    row.put("txHash", rs.getString("tx_hash"));
+                    row.put("logIndex", rs.getLong("log_index"));
+                    row.put("amount", rs.getBigDecimal("amount"));
+                    row.put("status", rs.getString("status"));
+                    row.put("creditedAt", instantOrNull(rs.getTimestamp("credited_at")));
+                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
+                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
+                    return row;
+                }, tenantId, blankToEmpty(status), blankToEmpty(status),
+                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    }
+
+    public List<WithdrawalStatusChange> findWithdrawalStatusChanges(int limit) {
+        return jdbc.query("""
+                        select w.id, w.tenant_id, w.custody_address_id, w.order_no,
+                               w.external_reference, w.chain, w.asset_symbol, w.to_address,
+                               w.amount, w.fee, w.status as previous_status,
+                               wo.status as next_status, wo.tx_hash, wo.error_message,
+                               wo.debit_account_id
+                          from custody_withdrawal w
+                          join withdrawal_order wo
+                            on wo.chain = w.chain and wo.order_no = w.order_no
+                         where w.status <> wo.status
+                         order by wo.updated_at, w.id
+                         limit ?
+                        """, (rs, rowNum) -> new WithdrawalStatusChange(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getObject("custody_address_id", UUID.class),
+                        rs.getString("order_no"),
+                        rs.getString("external_reference"),
+                        rs.getString("chain"),
+                        rs.getString("asset_symbol"),
+                        rs.getString("to_address"),
+                        rs.getBigDecimal("amount"),
+                        rs.getBigDecimal("fee"),
+                        rs.getString("previous_status"),
+                        rs.getString("next_status"),
+                        rs.getString("tx_hash"),
+                        rs.getString("error_message"),
+                        rs.getString("debit_account_id")),
+                Math.min(Math.max(limit, 1), 200));
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public boolean applyWithdrawalStatusChange(WithdrawalStatusChange change,
+                                               UUID eventId, String eventType, String payloadJson) {
+        int updated = jdbc.update("""
+                        update custody_withdrawal
+                           set status = ?, updated_at = now()
+                         where id = ? and status = ?
+                        """, change.nextStatus(), change.id(), change.previousStatus());
+        if (updated != 1) {
+            return false;
+        }
+        if (eventType != null) {
+            insertEventWithDeliveries(
+                    eventId, change.tenantId(), eventType, "WITHDRAWAL", change.orderNo(), payloadJson);
+        }
+        if ("CONFIRMED".equals(change.nextStatus())) {
+            jdbc.update("""
+                            insert into custody_ledger_entry(
+                                id, tenant_id, custody_address_id, chain, asset_symbol,
+                                account_id, entry_type, direction, amount,
+                                reference_type, reference_id)
+                            values (?, ?, ?, ?, ?, ?, 'WITHDRAWAL', 'DEBIT', ?,
+                                    'WITHDRAWAL', ?)
+                            on conflict (tenant_id, entry_type, reference_type, reference_id)
+                            do nothing
+                            """, UUID.randomUUID(), change.tenantId(), change.custodyAddressId(),
+                    change.chain(), change.assetSymbol(), change.debitAccountId(),
+                    change.amount().add(change.fee()), change.orderNo());
+        }
+        return true;
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public UUID insertEventWithDeliveries(UUID eventId, UUID tenantId, String eventType,
+                                          String aggregateType, String aggregateId,
+                                          String payloadJson) {
+        UUID persisted = jdbc.query("""
+                        insert into custody_event(
+                            id, tenant_id, event_type, aggregate_type, aggregate_id, payload)
+                        values (?, ?, ?, ?, ?, cast(? as jsonb))
+                        on conflict (tenant_id, event_type, aggregate_type, aggregate_id)
+                        do nothing
+                        returning id
+                        """, (rs, rowNum) -> rs.getObject("id", UUID.class),
+                eventId, tenantId, eventType, aggregateType, aggregateId, payloadJson)
+                .stream().findFirst().orElse(null);
+        if (persisted == null) {
+            persisted = jdbc.queryForObject("""
+                            select id
+                              from custody_event
+                             where tenant_id = ? and event_type = ?
+                               and aggregate_type = ? and aggregate_id = ?
+                            """, UUID.class, tenantId, eventType, aggregateType, aggregateId);
+        }
+        if (persisted == null) {
+            throw new IllegalStateException("failed to persist custody event");
+        }
+        jdbc.update("""
+                        insert into custody_webhook_delivery(id, tenant_id, endpoint_id, event_id)
+                        select gen_random_uuid(), e.tenant_id, e.id, ?
+                          from custody_webhook_endpoint e
+                         where e.tenant_id = ? and e.status = 'ACTIVE'
+                           and ? = any(e.subscribed_events)
+                        on conflict (endpoint_id, event_id) do nothing
+                        """, persisted, tenantId, eventType);
+        jdbc.update("""
+                        update custody_event
+                           set status = 'PUBLISHED',
+                               published_at = coalesce(published_at, now())
+                         where id = ?
+                        """, persisted);
+        return persisted;
+    }
+
+    public void audit(UUID tenantId, String actorType, String actorId, String action,
+                      String resourceType, String resourceId, String sourceIp, String detailsJson) {
+        jdbc.update("""
+                        insert into custody_audit_log(
+                            id, tenant_id, actor_type, actor_id, action, resource_type,
+                            resource_id, source_ip, details)
+                        values (?, ?, ?, ?, ?, ?, ?, cast(nullif(?, '') as inet), cast(? as jsonb))
+                        """, UUID.randomUUID(), tenantId, actorType, actorId, action, resourceType,
+                resourceId, sourceIp, detailsJson == null ? "{}" : detailsJson);
+    }
+
+    public List<Map<String, Object>> listAudit(UUID tenantId, int limit, int offset) {
+        return jdbc.query("""
+                        select id, actor_type, actor_id, action, resource_type, resource_id,
+                               source_ip, details::text as details, created_at
+                          from custody_audit_log
+                         where tenant_id = ?
+                         order by created_at desc, id
+                         limit ? offset ?
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getObject("id", UUID.class));
+                    row.put("actorType", rs.getString("actor_type"));
+                    row.put("actorId", rs.getString("actor_id"));
+                    row.put("action", rs.getString("action"));
+                    row.put("resourceType", rs.getString("resource_type"));
+                    row.put("resourceId", rs.getString("resource_id"));
+                    row.put("sourceIp", rs.getString("source_ip"));
+                    row.put("details", rs.getString("details"));
+                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
+                    return row;
+                }, tenantId, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    }
+
+    public int cleanupExpiredSecurityRows() {
+        int nonces = jdbc.update("delete from custody_api_nonce where expires_at < now()");
+        int sessions = jdbc.update("""
+                delete from custody_session
+                 where expires_at < now() - interval '7 days'
+                    or revoked_at < now() - interval '7 days'
+                """);
+        int idempotency = jdbc.update("delete from custody_idempotency_key where expires_at < now()");
+        return nonces + sessions + idempotency;
+    }
+
+    private AuthUser mapAuthUser(java.sql.ResultSet rs) throws SQLException {
+        return new AuthUser(
+                rs.getObject("id", UUID.class),
+                rs.getObject("tenant_id", UUID.class),
+                rs.getString("tenant_slug"),
+                rs.getString("tenant_status"),
+                rs.getString("email"),
+                rs.getString("display_name"),
+                rs.getString("password_hash"),
+                rs.getString("role"),
+                rs.getString("status"),
+                rs.getInt("failed_login_count"),
+                instantOrNull(rs.getTimestamp("locked_until")));
+    }
+
+    private ApiKeyRecord mapApiKey(java.sql.ResultSet rs) throws SQLException {
+        return new ApiKeyRecord(
+                rs.getObject("id", UUID.class),
+                rs.getObject("tenant_id", UUID.class),
+                rs.getString("tenant_slug"),
+                rs.getString("tenant_status"),
+                rs.getBoolean("ip_allowlist_enabled"),
+                rs.getString("key_id"),
+                rs.getString("name"),
+                rs.getString("secret_ciphertext"),
+                sqlArray(rs.getArray("scopes")),
+                rs.getString("status"),
+                instantOrNull(rs.getTimestamp("expires_at")),
+                rs.getTimestamp("created_at").toInstant());
+    }
+
+    private AddressRecord mapAddress(java.sql.ResultSet rs) throws SQLException {
+        return new AddressRecord(
+                rs.getObject("id", UUID.class),
+                rs.getObject("tenant_id", UUID.class),
+                rs.getLong("chain_address_id"),
+                rs.getString("chain"),
+                rs.getString("network"),
+                rs.getString("address"),
+                rs.getString("memo"),
+                rs.getString("external_reference"),
+                rs.getString("label"),
+                rs.getString("metadata"),
+                rs.getString("source"),
+                rs.getString("status"),
+                rs.getInt("derivation_subject"),
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getTimestamp("updated_at").toInstant());
+    }
+
+    private WebhookEndpointRecord mapWebhookEndpoint(java.sql.ResultSet rs) throws SQLException {
+        return new WebhookEndpointRecord(
+                rs.getObject("id", UUID.class),
+                rs.getObject("tenant_id", UUID.class),
+                rs.getString("name"),
+                rs.getString("url"),
+                rs.getString("secret_ciphertext"),
+                sqlArray(rs.getArray("subscribed_events")),
+                rs.getString("status"),
+                rs.getString("verification_token_hash"),
+                instantOrNull(rs.getTimestamp("verified_at")),
+                instantOrNull(rs.getTimestamp("last_delivery_at")),
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getTimestamp("updated_at").toInstant());
+    }
+
+    private static Set<String> normalizedScopes(Set<String> scopes) {
+        if (scopes == null || scopes.isEmpty()) {
+            throw new IllegalArgumentException("at least one API scope is required");
+        }
+        return scopes.stream()
+                .map(scope -> scope == null ? "" : scope.trim().toLowerCase(Locale.ROOT))
+                .filter(scope -> !scope.isBlank())
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static Set<String> sqlArray(Array array) throws SQLException {
+        if (array == null) {
+            return Set.of();
+        }
+        Object value = array.getArray();
+        return value instanceof String[] strings
+                ? Arrays.stream(strings).collect(Collectors.toUnmodifiableSet())
+                : Set.of();
+    }
+
+    private static Instant instantOrNull(Timestamp timestamp) {
+        return timestamp == null ? null : timestamp.toInstant();
+    }
+
+    private static Timestamp timestampOrNull(Instant instant) {
+        return instant == null ? null : Timestamp.from(instant);
+    }
+
+    private static String truncate(String value, int maxLength) {
+        if (value == null) {
+            return "";
+        }
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
+    }
+
+    private static String blankToEmpty(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    public record TenantRecord(
+            UUID id,
+            String slug,
+            String name,
+            String status,
+            int derivationNamespace,
+            boolean ipAllowlistEnabled,
+            String displayCurrency,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+    }
+
+    public record AuthUser(
+            UUID id,
+            UUID tenantId,
+            String tenantSlug,
+            String tenantStatus,
+            String email,
+            String displayName,
+            String passwordHash,
+            String role,
+            String status,
+            int failedLoginCount,
+            Instant lockedUntil
+    ) {
+    }
+
+    public record SessionRecord(
+            UUID sessionId,
+            UUID userId,
+            UUID tenantId,
+            String tenantSlug,
+            String email,
+            String displayName,
+            String role,
+            String userStatus,
+            String tenantStatus,
+            Instant expiresAt
+    ) {
+    }
+
+    public record ApiKeyRecord(
+            UUID id,
+            UUID tenantId,
+            String tenantSlug,
+            String tenantStatus,
+            boolean ipAllowlistEnabled,
+            String keyId,
+            String name,
+            String secretCiphertext,
+            Set<String> scopes,
+            String status,
+            Instant expiresAt,
+            Instant createdAt
+    ) {
+    }
+
+    public record AddressRecord(
+            UUID id,
+            UUID tenantId,
+            long chainAddressId,
+            String chain,
+            String network,
+            String address,
+            String memo,
+            String externalReference,
+            String label,
+            String metadataJson,
+            String source,
+            String status,
+            int derivationSubject,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+    }
+
+    public record IdempotencyRecord(
+            String requestHash,
+            Integer responseStatus,
+            String responseJson,
+            Instant expiresAt
+    ) {
+    }
+
+    public record WebhookEndpointRecord(
+            UUID id,
+            UUID tenantId,
+            String name,
+            String url,
+            String secretCiphertext,
+            Set<String> events,
+            String status,
+            String verificationTokenHash,
+            Instant verifiedAt,
+            Instant lastDeliveryAt,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+    }
+
+    public record WebhookDeliveryTask(
+            UUID id,
+            UUID tenantId,
+            UUID endpointId,
+            UUID eventId,
+            int attemptCount,
+            String url,
+            String secretCiphertext,
+            String eventType,
+            String payload
+    ) {
+    }
+
+    public record WithdrawalStatusChange(
+            UUID id,
+            UUID tenantId,
+            UUID custodyAddressId,
+            String orderNo,
+            String externalReference,
+            String chain,
+            String assetSymbol,
+            String toAddress,
+            java.math.BigDecimal amount,
+            java.math.BigDecimal fee,
+            String previousStatus,
+            String nextStatus,
+            String txHash,
+            String errorMessage,
+            String debitAccountId
+    ) {
+    }
+}

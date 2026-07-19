@@ -4,6 +4,29 @@
 
 ![系统代码流程](../assets/system-code-flow-diagram.svg)
 
+## 多租户托管流程
+
+托管控制面不管理交易所内部的用户模型。交易所只传入不透明的 `externalReference`；永久键 `(tenantId, chain, externalReference)` 始终返回同一地址。
+
+```text
+交易所后端
+  -> 通过 HMAC 鉴权调用 POST /custody/api/v1/addresses
+  -> custody_address 幂等查询或创建
+  -> 分配 chain_address
+  -> 返回地址和 externalReference
+
+链上扫描器
+  -> 在同一事务中写 deposit_record 并增加 ledger_balance
+  -> 写 custody_deposit 投影
+  -> 写持久化 custody_event
+  -> 为每个端点生成 webhook_delivery
+  -> 签名回调 DEPOSIT.CONFIRMED，并带回 externalReference
+```
+
+Console 手动创建的地址可以不传 `externalReference`；这些地址仍计入租户资产总额，但不绑定租户内部用户。创建地址本身不产生 Webhook。所有 Console/API 查询和变更都强制应用租户隔离。
+
+提现请求使用永久幂等键，复用现有的资金锁定、广播和确认流程，并从持久化投递记录发送签名生命周期 Webhook。
+
 ## 资产解析
 
 运行时代码应通过数据库元数据解析资产：

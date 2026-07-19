@@ -8,7 +8,8 @@ Database files live under `docs/db/`.
 
 | File | Purpose |
 |---|---|
-| `docs/db/surprising-wallet-init-pgsql.sql` | Single fresh local initialization snapshot exported from the current DB Asset Model schema. Includes schema plus static chain/token configuration seed data. |
+| `docs/db/surprising-wallet-init-pgsql.sql` | Protected fresh-database chain schema and test configuration seed. |
+| `wallet-server/src/main/resources/db/custody-schema.sql` | Additive, idempotent multi-tenant custody schema applied by wallet-server at startup. |
 
 ## Initialization Order
 
@@ -19,6 +20,11 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 ```
 
 Use `surprising-wallet-init-pgsql.sql` only on a disposable or fresh database. It contains reset statements from `pg_dump --clean` and is not for in-place production upgrades.
+
+When wallet-server starts, Spring applies `custody-schema.sql`. Running it
+again is safe. The baseline seed file is intentionally unchanged so existing
+test networks, test coins, public derivation material, and test fixtures remain
+stable.
 
 ## Seed Data Scope
 
@@ -44,6 +50,19 @@ It does not include runtime rows from address, balance, scan-height, deposit, wi
 | `withdrawal_review_audit` | Admin approval/rejection audit trail for withdrawals |
 | `ledger_balance` | Chain-scoped account balance |
 | `utxo_record` | Bitcoin-like UTXO runtime state |
+
+## Custody tables
+
+| Table | Role |
+|---|---|
+| `custody_tenant`, `custody_tenant_user`, `custody_session` | Tenant and Console identity |
+| `custody_api_key`, `custody_api_nonce`, `custody_ip_rule` | Signed API authentication and network policy |
+| `custody_address` | Tenant-to-chain-address allocation; one chain address can belong to only one tenant |
+| `custody_deposit`, `custody_withdrawal` | Tenant-scoped transfer projections |
+| `custody_ledger_entry` | Immutable custody event ledger used for reconciliation |
+| `custody_event`, `custody_webhook_delivery`, `custody_webhook_endpoint` | Durable Webhook fan-out and delivery state |
+| `custody_idempotency_key` | Address and permanent withdrawal request idempotency |
+| `custody_audit_log` | Tenant operational/security audit trail |
 
 ## Ledger Semantics
 

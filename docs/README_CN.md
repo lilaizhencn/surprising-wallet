@@ -8,6 +8,8 @@
 
 | 主题 | 英文 | 中文 |
 |---|---|---|
+| 多租户托管钱包 | [en/multi-tenant-custody.md](en/multi-tenant-custody.md) | [zh/multi-tenant-custody.md](zh/multi-tenant-custody.md) |
+| Custody API | [openapi/custody-v1.yaml](openapi/custody-v1.yaml) | [openapi/custody-v1.yaml](openapi/custody-v1.yaml) |
 | 启动与测试 | [en/startup-and-testing.md](en/startup-and-testing.md) | [zh/startup-and-testing.md](zh/startup-and-testing.md) |
 | 数据库 | [en/database.md](en/database.md) | [zh/database.md](zh/database.md) |
 | 架构 | [en/architecture.md](en/architecture.md) | [zh/architecture.md](zh/architecture.md) |
@@ -15,7 +17,6 @@
 | 脚本与 regtest | [en/scripts-and-regtest.md](en/scripts-and-regtest.md) | [zh/scripts-and-regtest.md](zh/scripts-and-regtest.md) |
 | EVM fork 测试 | [en/evm-fork-testing.md](en/evm-fork-testing.md) | [zh/evm-fork-testing.md](zh/evm-fork-testing.md) |
 | 基础设施 | [en/infra.md](en/infra.md) | [zh/infra.md](zh/infra.md) |
-| Wallet V2 开发规划 | [en/wallet-v2-roadmap.md](en/wallet-v2-roadmap.md) | [zh/wallet-v2-roadmap.md](zh/wallet-v2-roadmap.md) |
 
 ## 目录结构
 
@@ -24,6 +25,7 @@ docs/
   assets/       架构图和文档图片
   db/           SQL schema/init 文件和历史 DB 备份
   en/           英文文档
+  openapi/      Custody API 机器可读契约
   zh/           中文文档
 ```
 

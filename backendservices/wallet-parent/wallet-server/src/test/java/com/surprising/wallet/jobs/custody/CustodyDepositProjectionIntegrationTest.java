@@ -1,0 +1,179 @@
+package com.surprising.wallet.jobs.custody;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.surprising.wallet.common.chain.ChainType;
+import com.surprising.wallet.common.chain.DepositEvent;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
+import com.surprising.wallet.service.dao.DepositCreditObserver;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.math.BigDecimal;
+import java.sql.Connection;
+import java.util.Map;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@EnabledIfEnvironmentVariable(named = "SW_TEST_CUSTODY_DB_URL", matches = ".+")
+class CustodyDepositProjectionIntegrationTest {
+    private DriverManagerDataSource dataSource;
+    private JdbcTemplate jdbc;
+    private TransactionTemplate transactions;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        dataSource = new DriverManagerDataSource();
+        dataSource.setDriverClassName("org.postgresql.Driver");
+        dataSource.setUrl(System.getenv("SW_TEST_CUSTODY_DB_URL"));
+        dataSource.setUsername(System.getenv().getOrDefault("SW_TEST_CUSTODY_DB_USERNAME", "postgres"));
+        dataSource.setPassword(System.getenv().getOrDefault("SW_TEST_CUSTODY_DB_PASSWORD", ""));
+        jdbc = new JdbcTemplate(dataSource);
+        transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+        try (Connection connection = dataSource.getConnection()) {
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/custody-schema.sql"));
+        }
+    }
+
+    @Test
+    void confirmedDepositProjectsDisabledAddressAndExternalReferenceAtomically() {
+        ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
+        CustodyRepository custodyRepository = new CustodyRepository(jdbc);
+        CustodyDepositCreditObserver observer =
+                new CustodyDepositCreditObserver(jdbc, objectMapper, custodyRepository);
+        StaticListableBeanFactory beans = new StaticListableBeanFactory(
+                Map.of("custodyDepositCreditObserver", observer));
+        ChainJdbcRepository chainRepository = new ChainJdbcRepository(
+                jdbc, beans.getBeanProvider(DepositCreditObserver.class));
+
+        transactions.executeWithoutResult(status -> {
+            DepositFixture fixture = createFixture("user_10086", "DISABLED");
+            DepositEvent event = event(fixture.address(), new BigDecimal("5.25"));
+            assertTrue(chainRepository.recordAndCreditDeposit(event, 0L, 12, fixture.accountId()));
+            assertEquals(0, jdbc.queryForObject("""
+                    select count(*) from custody_address
+                     where id = ? and status <> 'DISABLED'
+                    """, Integer.class, fixture.custodyAddressId()));
+            assertEquals(0, new BigDecimal("5.25").compareTo(jdbc.queryForObject("""
+                    select total_balance from ledger_balance
+                     where chain = 'ETH' and asset_symbol = 'ETH' and account_id = ?
+                    """, BigDecimal.class, fixture.accountId())));
+            assertEquals("user_10086", jdbc.queryForObject("""
+                    select c.external_reference
+                      from custody_deposit d
+                      join custody_address c on c.id = d.custody_address_id
+                     where d.tenant_id = ? and d.tx_hash = ?
+                    """, String.class, fixture.tenantId(), event.txId()));
+            assertEquals(1, jdbc.queryForObject("""
+                    select count(*) from custody_ledger_entry
+                     where tenant_id = ? and direction = 'CREDIT'
+                       and reference_id = ?
+                    """, Integer.class, fixture.tenantId(), "ETH:" + event.txId() + ":0"));
+            assertEquals("user_10086", jdbc.queryForObject("""
+                    select payload #>> '{data,externalReference}'
+                      from custody_event
+                     where tenant_id = ? and event_type = 'DEPOSIT.CONFIRMED'
+                       and aggregate_id = ?
+                    """, String.class, fixture.tenantId(), "ETH:" + event.txId() + ":0"));
+            assertEquals("PUBLISHED", jdbc.queryForObject("""
+                    select status from custody_event
+                     where tenant_id = ? and event_type = 'DEPOSIT.CONFIRMED'
+                       and aggregate_id = ?
+                    """, String.class, fixture.tenantId(), "ETH:" + event.txId() + ":0"));
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
+    void observerFailureRollsBackDepositAndBalance() {
+        DepositCreditObserver failingObserver = (ignoredEvent, ignoredIndex, ignoredAccount) -> {
+            throw new IllegalStateException("projection failure");
+        };
+        StaticListableBeanFactory beans = new StaticListableBeanFactory(
+                Map.of("failingObserver", failingObserver));
+        ChainJdbcRepository chainRepository = new ChainJdbcRepository(
+                jdbc, beans.getBeanProvider(DepositCreditObserver.class));
+        String[] transactionId = new String[1];
+        String[] accountId = new String[1];
+
+        assertThrows(IllegalStateException.class, () -> transactions.executeWithoutResult(
+                status -> {
+                    DepositFixture fixture = createFixture("rollback-user", "ACTIVE");
+                    DepositEvent event = event(fixture.address(), new BigDecimal("2.75"));
+                    transactionId[0] = event.txId();
+                    accountId[0] = fixture.accountId();
+                    chainRepository.recordAndCreditDeposit(event, 0L, 12, fixture.accountId());
+                }));
+
+        assertEquals(0, jdbc.queryForObject(
+                "select count(*) from deposit_record where chain = 'ETH' and tx_hash = ?",
+                Integer.class, transactionId[0]));
+        assertEquals(0, jdbc.queryForObject("""
+                select count(*) from ledger_balance
+                 where chain = 'ETH' and asset_symbol = 'ETH' and account_id = ?
+                """, Integer.class, accountId[0]));
+    }
+
+    private DepositFixture createFixture(String externalReference, String status) {
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        UUID tenantId = UUID.randomUUID();
+        UUID custodyAddressId = UUID.randomUUID();
+        int namespace = jdbc.queryForObject(
+                "select nextval('custody_derivation_namespace_seq')::integer", Integer.class);
+        int subject = jdbc.queryForObject(
+                "select nextval('custody_derivation_subject_seq')::integer", Integer.class);
+        String address = "0x" + suffix + suffix.substring(0, 8);
+        Long chainAddressId = jdbc.queryForObject("""
+                insert into chain_address(
+                    chain, asset_symbol, account_id, user_id, biz, address_index,
+                    address, derivation_path, wallet_role, enabled)
+                values ('ETH', 'ETH', ?, ?, ?, 0, ?, ?, 'DEPOSIT', true)
+                returning id
+                """, Long.class, address, Integer.toUnsignedLong(subject), namespace,
+                address, "m/44'/60'/" + namespace + "'/" + subject + "/0");
+        jdbc.update("""
+                insert into custody_tenant(id, slug, name, derivation_namespace)
+                values (?, ?, 'Custody deposit integration test', ?)
+                """, tenantId, "deposit-it-" + suffix.substring(0, 16), namespace);
+        jdbc.update("""
+                insert into custody_address(
+                    id, tenant_id, chain_address_id, chain, network, address,
+                    external_reference, source, status, derivation_subject)
+                values (?, ?, ?, 'ETH', 'integration', ?, ?, 'API', ?, ?)
+                """, custodyAddressId, tenantId, chainAddressId, address,
+                externalReference, status, subject);
+        return new DepositFixture(tenantId, custodyAddressId, address, address);
+    }
+
+    private static DepositEvent event(String address, BigDecimal amount) {
+        return new DepositEvent(
+                ChainType.ETH,
+                "ETH",
+                "0x" + UUID.randomUUID().toString().replace("-", ""),
+                "0x2222222222222222222222222222222222222222",
+                address,
+                amount,
+                123_456L,
+                12,
+                null,
+                "{\"integration\":true}");
+    }
+
+    private record DepositFixture(
+            UUID tenantId,
+            UUID custodyAddressId,
+            String address,
+            String accountId
+    ) {
+    }
+}

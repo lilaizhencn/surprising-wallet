@@ -6,6 +6,25 @@
 
 ![架构图](../assets/architecture-diagram.svg)
 
+## Custody 控制面
+
+多租户托管层位于现有链引擎之上：
+
+```text
+平台 Console -> 租户生命周期
+租户 Console/API -> 租户范围的地址、资产、充值、提现
+                         |
+                         v
+                 现有钱包账本和链引擎
+                         |
+                         v
+                 扫链 / 签名 / RPC 服务
+```
+
+租户身份始终来自 Console 会话或 API 凭证。租户自己的客户 ID 只作为不透明
+`externalReference` 保存。扫链确认入账后，会在同一数据库事务中映射 Custody 充值、
+租户资产和持久化 Webhook 事件。详见[多租户托管钱包](multi-tenant-custody.md)。
+
 ## 运行模型
 
 运行时资产来源：
@@ -19,6 +38,7 @@
 | `chain_asset` | 原生资产和链内资产定义 |
 | `token_config` | token 合约/配置、decimals、归集/提现策略 |
 | `ledger_balance` | 按链隔离的用户/系统余额状态 |
+| `custody_*` | 租户、凭证、地址分配、充提投影、Webhook、幂等和审计控制面状态 |
 
 应用应通过 `chain + symbol` 或 `chain + contract` 解析资产，然后把 runtime asset 传入 scanner、withdraw、collection 和 signing 流程。
 

@@ -28,7 +28,8 @@ import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.utils.Constants;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -46,9 +47,21 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Repository
-@RequiredArgsConstructor
 public class ChainJdbcRepository {
     private final JdbcTemplate jdbcTemplate;
+    private final List<DepositCreditObserver> depositCreditObservers;
+
+    public ChainJdbcRepository(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.depositCreditObservers = List.of();
+    }
+
+    @Autowired
+    public ChainJdbcRepository(JdbcTemplate jdbcTemplate,
+                               ObjectProvider<DepositCreditObserver> depositCreditObservers) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.depositCreditObservers = depositCreditObservers.orderedStream().toList();
+    }
 
     public int upsertChainAsset(ChainAsset asset) {
         return jdbcTemplate.update("""
@@ -677,6 +690,7 @@ public class ChainJdbcRepository {
         return recordAndCreditDeposit(event, 0L, requiredConfirmations);
     }
 
+    @Transactional(rollbackFor = Throwable.class)
     public boolean recordAndCreditDeposit(DepositEvent event, long logIndex, int requiredConfirmations) {
         return recordAndCreditDeposit(event, logIndex, requiredConfirmations, event.toAddress().toLowerCase());
     }
@@ -714,6 +728,9 @@ public class ChainJdbcRepository {
                 toTs(now()), toTs(now()), chain, event.txId(), logIndex);
         if (credited == 1) {
             incrementLedgerBalance(chain, event.assetSymbol(), accountId, event.amount());
+            for (DepositCreditObserver observer : depositCreditObservers) {
+                observer.onDepositCredited(event, logIndex, accountId);
+            }
             return true;
         }
         return false;

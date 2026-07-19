@@ -13,7 +13,7 @@
 - PostgreSQL 14+
 - Redis 6+
 - Docker，用于 BTC/LTC/DOGE/BCH 本地 regtest 节点
-- Node.js 18+ 和 npm，用于 EVM fork 测试
+- Node.js 20.19+，用于 Console 和 EVM fork 工具
 
 检查版本：
 
@@ -95,11 +95,25 @@ export SW_ED25519_SEED='<32 字节 hex 或 base64 seed>'
 wallet-server 常用环境变量：
 
 ```bash
+export SW_HTTP_PORT='8002'
+export SW_DB_URL='jdbc:postgresql://127.0.0.1:5432/wallet'
+export SW_DB_USERNAME='wallet'
 export SW_DB_PASSWORD='<PostgreSQL 密码>'
+export SW_REDIS_HOST='127.0.0.1'
+export SW_REDIS_PORT='6379'
+export SW_REDIS_PASSWORD='<Redis 密码>'
+export SW_APP_ENV='dev'
 export SW_ED25519_SEED='<32 字节 Ed25519 seed，hex 或 base64>'
 export SW_WALLET_ADMIN_USERNAME='<钱包后台配置账号>'
 export SW_WALLET_ADMIN_PASSWORD='<钱包后台配置密码>'
+export SW_CUSTODY_SECRET_MASTER_KEY='<32 字节 Base64 或 64 位十六进制密钥>'
+export SW_CUSTODY_PLATFORM_ADMIN_EMAIL='<初始平台管理员邮箱>'
+export SW_CUSTODY_PLATFORM_ADMIN_PASSWORD='<初始平台管理员密码>'
+export SW_CUSTODY_CORS_ORIGINS='https://console.example.com'
 ```
+
+`SW_CUSTODY_SECRET_MASTER_KEY` 为必填项，用于加密保存 API/Webhook Secret。只有数据库中
+不存在平台管理员时才会引导创建；以后修改环境变量密码不会覆盖已有账户。
 
 签名服务常用环境变量：
 
@@ -224,6 +238,21 @@ scripts/regtest/all-chain-regtest.sh test-db
 ```
 
 这些测试不需要本地区块链节点，但需要本地 PostgreSQL。
+
+使用隔离的 PostgreSQL 数据库验证托管充值投影和事务回滚边界：
+
+```bash
+SW_TEST_CUSTODY_DB_URL=jdbc:postgresql://127.0.0.1:5432/wallet_test \
+SW_TEST_CUSTODY_DB_USERNAME=wallet \
+SW_TEST_CUSTODY_DB_PASSWORD=wallet \
+mvn -pl backendservices/wallet-parent/wallet-server -am \
+  -Dtest=CustodyDepositProjectionIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+测试会创建并回滚自己的租户和地址数据。它会验证已禁用的托管地址收到
+确认充值后，租户充值投影、托管账本和持久化事件仍在同一事务中更新；
+任一观察器失败时，原始充值记录和余额也会一起回滚。
 
 ## 10. 运行本地 UTXO 和 XMR Regtest
 
