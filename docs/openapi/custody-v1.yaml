@@ -761,6 +761,36 @@ paths:
       responses:
         '200': { description: Unlocked tenant administrator }
         default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/wallet-config/summary:
+    get:
+      tags: [Platform]
+      summary: Read wallet configuration health and effective runtime state
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Global switches, enabled resource counts, chain states, and anomalies
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WalletConfigSummary' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/wallet-config/global-switches:
+    patch:
+      tags: [Platform]
+      summary: Atomically update all global wallet runtime switches
+      description: The new switch values take effect immediately after the database transaction commits.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WalletGlobalSwitches' }
+      responses:
+        '200':
+          description: Updated wallet configuration summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WalletConfigSummary' }
+        default: { $ref: '#/components/responses/Error' }
 components:
   securitySchemes:
     bearerAuth:
@@ -865,6 +895,75 @@ components:
           properties:
             code: { type: string }
             message: { type: string }
+    WalletGlobalSwitches:
+      type: object
+      required: [walletEnabled, scanEnabled, withdrawEnabled, collectionEnabled, transferEnabled]
+      properties:
+        walletEnabled: { type: boolean }
+        scanEnabled: { type: boolean }
+        withdrawEnabled: { type: boolean }
+        collectionEnabled: { type: boolean }
+        transferEnabled: { type: boolean }
+    WalletTaskSwitches:
+      type: object
+      required: [scanEnabled, withdrawEnabled, collectionEnabled, transferEnabled]
+      properties:
+        scanEnabled: { type: boolean }
+        withdrawEnabled: { type: boolean }
+        collectionEnabled: { type: boolean }
+        transferEnabled: { type: boolean }
+    WalletConfigStatistics:
+      type: object
+      required: [configuredChainProfileCount, enabledChainCount, enabledNetworkCount, enabledTokenCount, enabledRpcNodeCount, anomalyCount]
+      properties:
+        configuredChainProfileCount: { type: integer }
+        enabledChainCount: { type: integer }
+        enabledNetworkCount: { type: integer }
+        enabledTokenCount: { type: integer }
+        enabledRpcNodeCount: { type: integer }
+        anomalyCount: { type: integer }
+    WalletChainStatus:
+      type: object
+      required: [profileId, chain, network, family, configuredEnabled, configuredTasks, effectiveTasks, enabledTokenCount, enabledRpcNodeCount, status, blockers]
+      properties:
+        profileId: { type: integer, format: int64 }
+        chain: { type: string }
+        network: { type: string }
+        family: { type: string }
+        configuredEnabled: { type: boolean }
+        configuredTasks: { $ref: '#/components/schemas/WalletTaskSwitches' }
+        effectiveTasks: { $ref: '#/components/schemas/WalletTaskSwitches' }
+        enabledTokenCount: { type: integer }
+        enabledRpcNodeCount: { type: integer }
+        status: { type: string, enum: [ACTIVE, INACTIVE, BLOCKED, DISABLED] }
+        blockers:
+          type: array
+          items: { type: string }
+    WalletConfigAnomaly:
+      type: object
+      required: [code, severity, message]
+      properties:
+        code: { type: string }
+        severity: { type: string, enum: [ERROR, WARNING] }
+        chain: { type: [string, 'null'] }
+        network: { type: [string, 'null'] }
+        message: { type: string }
+    WalletConfigSummary:
+      type: object
+      required: [environment, production, keysetConfigured, globalSwitches, statistics, chains, anomalies, generatedAt]
+      properties:
+        environment: { type: string }
+        production: { type: boolean }
+        keysetConfigured: { type: boolean }
+        globalSwitches: { $ref: '#/components/schemas/WalletGlobalSwitches' }
+        statistics: { $ref: '#/components/schemas/WalletConfigStatistics' }
+        chains:
+          type: array
+          items: { $ref: '#/components/schemas/WalletChainStatus' }
+        anomalies:
+          type: array
+          items: { $ref: '#/components/schemas/WalletConfigAnomaly' }
+        generatedAt: { type: string, format: date-time }
     LoginResult:
       type: object
       required: [token, expiresAt, userId, email, displayName, role]

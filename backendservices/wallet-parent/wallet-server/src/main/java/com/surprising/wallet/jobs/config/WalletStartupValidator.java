@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class WalletStartupValidator implements ApplicationRunner {
-    private static final Set<String> MAIN_NETWORKS = Set.of("main", "mainnet", "mainnet-beta");
     private final ChainJdbcRepository repository;
     private final WalletRuntimeConfigService runtimeConfigService;
     private final HotWalletAddressService hotWalletAddressService;
@@ -70,15 +69,16 @@ public class WalletStartupValidator implements ApplicationRunner {
                   from token_config
                  where enabled = true
                 """);
-        Map<String, String> enabledProfileNetworks = jdbcTemplate.queryForList("""
+        Map<String, Set<String>> enabledProfileNetworks = jdbcTemplate.queryForList("""
                 select chain, network
                   from chain_profile
                  where enabled = true
                 """).stream()
-                .collect(Collectors.toMap(
+                .collect(Collectors.groupingBy(
                         row -> normalized(String.valueOf(row.get("chain"))),
-                        row -> stringValue(row.get("network")),
-                        (left, right) -> left));
+                        Collectors.mapping(
+                                row -> normalized(stringValue(row.get("network"))),
+                                Collectors.toSet())));
         Map<String, String> tokenContracts = tokenRows.stream()
                 .collect(Collectors.toMap(
                         row -> assetKey(String.valueOf(row.get("chain")), String.valueOf(row.get("symbol"))),
@@ -95,13 +95,13 @@ public class WalletStartupValidator implements ApplicationRunner {
             }
             String tokenNetwork = stringValue(row.get("network"));
             if (StringUtils.hasText(tokenNetwork)) {
-                String profileNetwork = enabledProfileNetworks.get(normalized(chain));
-                if (!StringUtils.hasText(profileNetwork) || !tokenNetwork.equalsIgnoreCase(profileNetwork.trim())) {
+                Set<String> profileNetworks = enabledProfileNetworks.get(normalized(chain));
+                if (profileNetworks == null || !profileNetworks.contains(normalized(tokenNetwork))) {
                     throw new IllegalStateException(
                             "enabled token_config network must match enabled chain_profile: "
                                     + chain + "/" + symbol
                                     + " tokenNetwork=" + tokenNetwork
-                                    + " enabledProfileNetwork=" + profileNetwork);
+                                    + " enabledProfileNetworks=" + profileNetworks);
                 }
             }
         }
@@ -152,10 +152,9 @@ public class WalletStartupValidator implements ApplicationRunner {
             }
         });
 
-        boolean prod = "prod".equalsIgnoreCase(environmentName)
-                || "production".equalsIgnoreCase(environmentName);
+        boolean prod = WalletEnvironmentPolicy.isProduction(environmentName);
         for (AccountChainProfile profile : enabledProfiles) {
-            if (prod && !MAIN_NETWORKS.contains(profile.getNetwork().toLowerCase(Locale.ROOT))) {
+            if (prod && !WalletEnvironmentPolicy.isProductionNetwork(profile.getNetwork())) {
                 throw new IllegalStateException(
                         "production environment cannot enable test network profile: "
                                 + profile.getChain() + "/" + profile.getNetwork());

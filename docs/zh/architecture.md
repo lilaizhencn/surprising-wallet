@@ -113,7 +113,7 @@ Collection：
 
 ## 启动配置校验
 
-wallet-server 启动时会检查 `chain_profile`、`chain_rpc_node`、`wallet_key_config`、默认热提钱包和 `wallet_system_config`。Keyset 尚未配置时，wallet-server 保持可启动，以便平台超级管理员完成首次配置；依赖密钥的运行路径不可用。Keyset 已配置时，默认热提钱包会通过代码推导后与 `chain_address` 比对，缺失或不一致会启动失败。同一链只能启用一个网络；生产环境禁止启用测试网络；启用链必须至少有一个匹配当前环境的 RPC 节点。校验结果会按链打印状态，缺失配置或关闭开关会输出 WARN。
+wallet-server 启动时会检查 `chain_profile`、`chain_rpc_node`、`wallet_key_config`、默认热提钱包和 `wallet_system_config`。Keyset 尚未配置时，wallet-server 保持可启动，以便平台超级管理员完成首次配置；依赖密钥的运行路径不可用。Keyset 已配置时，默认热提钱包会通过代码推导后与 `chain_address` 比对，缺失或不一致会启动失败。同一链同一时刻只能启用一个网络；非生产环境可以同时保存 devnet/testnet profile 并切换启用，生产环境只允许启用生产网络。启用 profile 必须至少有一个匹配当前环境的 RPC 节点。校验结果会按链打印状态，缺失配置或关闭开关会输出 WARN。
 
 ## 运行目录
 

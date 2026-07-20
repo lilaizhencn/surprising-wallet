@@ -117,7 +117,7 @@ Collection:
 
 ## Startup Configuration Validation
 
-wallet-server validates `chain_profile`, `chain_rpc_node`, `wallet_key_config`, the default hot wallet, and `wallet_system_config` at startup. When the keyset is not configured, wallet-server remains available for the platform administrator to complete initial configuration, while key-dependent runtime paths remain unavailable. Once configured, the default hot wallet is re-derived and compared with `chain_address`; missing or mismatched rows fail startup. A chain can have only one enabled network. Production cannot enable test networks. Every enabled chain must have at least one RPC node for the current environment. The validator logs each chain state and emits WARN logs for missing settings or disabled switches.
+wallet-server validates `chain_profile`, `chain_rpc_node`, `wallet_key_config`, the default hot wallet, and `wallet_system_config` at startup. When the keyset is not configured, wallet-server remains available for the platform administrator to complete initial configuration, while key-dependent runtime paths remain unavailable. Once configured, the default hot wallet is re-derived and compared with `chain_address`; missing or mismatched rows fail startup. Each chain may enable only one network at a time. Non-production environments may store devnet/testnet profiles together and switch the enabled profile, while production permits only production networks. Every enabled profile must have at least one RPC node for the current environment. The validator logs each chain state and emits WARN logs for missing settings or disabled switches.
 
 ## Operational Directories
 

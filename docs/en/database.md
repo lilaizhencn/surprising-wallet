@@ -77,14 +77,14 @@ Runtime state is stored in `ledger_balance`, `chain_address`, `token_config`,
 wallet-server validates at startup:
 
 - When `wallet_key_config` exists, all four values must be different Base64-encoded 32-byte seeds.
-- Each `chain` in `chain_profile` may have only one enabled network.
-- With `sw.app.env.name=prod`, enabled profiles may not use testnet/devnet/regtest.
+- Each chain may enable only one network at a time.
+- Non-production environments may store devnet and testnet profiles together and switch the enabled profile for each test scenario; `sw.app.env.name=prod` permits only production networks.
 - Every enabled profile must have its required `chain_rpc_node` purposes for the current environment. For example, DOT requires `rpc` and `runtime`, and also `asset_rpc` when DOT tokens are enabled.
 - XMR `regtest` additionally requires `rpc`, `faucet`, and `daemon` nodes so the non-production test coin flow is available immediately after startup.
 - wallet-server may start without a keyset so the platform administrator can configure it, but derivation and signing remain unavailable; sig1/sig2 must start after the keyset is configured.
 - Enabled `chain_rpc_node` rows must not contain placeholder URL or credential values such as `CHANGE_ME`, `YOUR_*`, or `REPLACE_ME`.
 - Enabled `token_config` rows and active non-native `chain_asset` rows must have real contract addresses or asset ids; empty or placeholder contracts are rejected.
-- When an enabled `token_config.network` is set, it must match the enabled `chain_profile.network` for the same chain. Leave legacy rows blank only when the token contract is intentionally tied to the currently enabled profile by deployment policy.
+- When an enabled `token_config.network` is set, it must match any enabled `chain_profile.network` for the same chain.
 - Every active non-native `chain_asset` must have a matching enabled `token_config` row for the same `chain` and `symbol`, and both rows must use the same contract address or asset id. This prevents the wallet page from exposing a token that scanners or withdrawal services cannot resolve.
 - Every enabled chain must have exactly one default hot wallet address: native-asset `chain_address`, `user_id=0`, `biz=0`, `address_index=0`, `wallet_role=DEPOSIT`. Startup re-derives the address/path and compares them with the database.
 - Task switches, scan start, batch size, and RPC node count are logged for every chain. Missing or disabled settings are logged as WARN.

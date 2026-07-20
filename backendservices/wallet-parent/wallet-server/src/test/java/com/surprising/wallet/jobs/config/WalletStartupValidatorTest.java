@@ -43,6 +43,47 @@ class WalletStartupValidatorTest {
     }
 
     @Test
+    void testEnvironmentRejectsMultipleEnabledNetworksForOneChain() throws Exception {
+        WalletStartupValidator validator = validator(new FakeRepository(
+                List.of(profile("ETH", "devnet"), profile("ETH", "testnet")),
+                List.of(
+                        node("ETH", "devnet", "rpc", "eth-devnet", "http://127.0.0.1:8545"),
+                        node("ETH", "testnet", "rpc", "eth-testnet", "https://rpc.testnet.example")),
+                List.of()));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, validator::validateProfiles);
+
+        assertTrue(error.getMessage().contains("multiple enabled networks"));
+    }
+
+    @Test
+    void productionRejectsMultipleEnabledNetworksForOneChain() throws Exception {
+        WalletStartupValidator validator = validator(new FakeRepository(
+                List.of(profile("ETH", "mainnet"), profile("ETH", "main")),
+                List.of(),
+                List.of()));
+        setField(validator, "environmentName", "prod");
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, validator::validateProfiles);
+
+        assertTrue(error.getMessage().contains("multiple enabled networks"));
+        assertTrue(error.getMessage().contains("ETH"));
+    }
+
+    @Test
+    void productionRejectsTestNetwork() throws Exception {
+        WalletStartupValidator validator = validator(new FakeRepository(
+                List.of(profile("ETH", "testnet")),
+                List.of(),
+                List.of()));
+        setField(validator, "environmentName", "production");
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, validator::validateProfiles);
+
+        assertTrue(error.getMessage().contains("cannot enable test network"));
+    }
+
+    @Test
     void dotProfilesRequireRuntimeServiceNode() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
                 List.of(profile("DOT", "westend")),
@@ -241,6 +282,21 @@ class WalletStartupValidatorTest {
     }
 
     @Test
+    void enabledTokenConfigMatchesAnyEnabledTestNetworkProfile() throws Exception {
+        WalletStartupValidator validator = validator(new FakeRepository(List.of(), List.of(), List.of()),
+                new FakeJdbcTemplate(
+                        List.of(Map.of("chain", "ETH", "symbol", "USDC",
+                                "network", "testnet", "contract_address", "0x1234")),
+                        List.of(Map.of("chain", "ETH", "symbol", "USDC",
+                                "contract_address", "0x1234")),
+                        List.of(
+                                Map.of("chain", "ETH", "network", "devnet"),
+                                Map.of("chain", "ETH", "network", "testnet"))));
+
+        assertDoesNotThrow(validator::validateEnabledAssetsAndTokens);
+    }
+
+    @Test
     void enabledTokenConfigAllowsBlankNetworkForLegacyRows() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(List.of(), List.of(), List.of()),
                 new FakeJdbcTemplate(
@@ -302,6 +358,21 @@ class WalletStartupValidatorTest {
                 .apiKey(apiKey)
                 .username(username)
                 .password(password)
+                .enabled(true)
+                .build();
+    }
+
+    private static ChainRpcNode node(String chain, String network, String purpose,
+                                     String label, String rpcUrl) {
+        return ChainRpcNode.builder()
+                .chain(chain)
+                .network(network)
+                .environment("test2")
+                .nodeLabel(label)
+                .purpose(purpose)
+                .connectionType("HTTP_JSON_RPC")
+                .rpcUrl(rpcUrl)
+                .authType("NONE")
                 .enabled(true)
                 .build();
     }
