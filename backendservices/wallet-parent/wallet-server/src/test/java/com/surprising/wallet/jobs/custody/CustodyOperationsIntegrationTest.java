@@ -48,6 +48,7 @@ class CustodyOperationsIntegrationTest {
     void webhookAttemptsKeepAutomaticAndManualHistory() {
         transactions.executeWithoutResult(status -> {
             CustodyRepository repository = new CustodyRepository(jdbc);
+            quiesceExistingWebhookQueue();
             UUID tenantId = createTenant();
             UUID endpointId = UUID.randomUUID();
             UUID eventId = UUID.randomUUID();
@@ -97,6 +98,7 @@ class CustodyOperationsIntegrationTest {
     void recoveredWebhookLeaseFencesTheStaleWorker() {
         transactions.executeWithoutResult(status -> {
             CustodyRepository repository = new CustodyRepository(jdbc);
+            quiesceExistingWebhookQueue();
             UUID tenantId = createTenant();
             UUID endpointId = UUID.randomUUID();
             UUID eventId = UUID.randomUUID();
@@ -380,6 +382,64 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    @Test
+    void platformTenantManagementSupportsSearchDetailUpdateUnlockAndSessionRevocation() {
+        transactions.executeWithoutResult(status -> {
+            CustodyRepository repository = new CustodyRepository(jdbc);
+            UUID tenantId = createTenant();
+            UUID administratorId = UUID.randomUUID();
+            String slug = jdbc.queryForObject(
+                    "select slug from custody_tenant where id = ?",
+                    String.class, tenantId);
+            jdbc.update("""
+                    insert into custody_tenant_user(
+                        id, tenant_id, email, display_name, password_hash, role,
+                        status, failed_login_count, locked_until)
+                    values (?, ?, ?, 'Operations administrator', 'test-only-hash',
+                            'TENANT_ADMIN', 'ACTIVE', 5, now() + interval '15 minutes')
+                    """, administratorId, tenantId, slug + "@example.test");
+            repository.insertSession(
+                    UUID.randomUUID(),
+                    administratorId,
+                    tenantId,
+                    "test-session-" + UUID.randomUUID(),
+                    "127.0.0.1",
+                    "integration-test",
+                    Instant.now().plusSeconds(3600));
+
+            assertEquals(1, repository.countTenants(slug, "ACTIVE"));
+            List<Map<String, Object>> tenants =
+                    repository.listTenants(slug, "ACTIVE", 20, 0);
+            assertEquals(1, tenants.size());
+            assertEquals(tenantId, tenants.getFirst().get("id"));
+
+            Map<String, Object> statistics =
+                    repository.tenantOperationsSummary(tenantId);
+            assertEquals(1L, statistics.get("userCount"));
+            assertEquals(1L, statistics.get("activeSessionCount"));
+            assertTrue(repository.listWebhookDeliveries(tenantId, null, 20, 0).isEmpty());
+
+            Map<String, Object> administrator =
+                    repository.listTenantUsers(tenantId).getFirst();
+            assertEquals(5, administrator.get("failedLoginCount"));
+            assertTrue(administrator.get("lockedUntil") instanceof Instant);
+            Map<String, Object> unlocked =
+                    repository.unlockTenantAdministrator(tenantId, administratorId);
+            assertEquals(0, unlocked.get("failedLoginCount"));
+            assertNull(unlocked.get("lockedUntil"));
+
+            repository.updateTenantProfile(tenantId, "Updated operations tenant", "SGD");
+            var updated = repository.requireTenant(tenantId);
+            assertEquals("Updated operations tenant", updated.name());
+            assertEquals("SGD", updated.displayCurrency());
+
+            assertEquals(1, repository.revokeTenantSessions(tenantId));
+            assertEquals(0L,
+                    repository.tenantOperationsSummary(tenantId).get("activeSessionCount"));
+            status.setRollbackOnly();
+        });
+    }
+
     private UUID createTenant() {
         UUID tenantId = UUID.randomUUID();
         int namespace = jdbc.queryForObject(
@@ -390,5 +450,16 @@ class CustodyOperationsIntegrationTest {
                 """, tenantId, "operations-it-"
                         + UUID.randomUUID().toString().replace("-", "").substring(0, 16), namespace);
         return tenantId;
+    }
+
+    private void quiesceExistingWebhookQueue() {
+        jdbc.update("""
+                update custody_webhook_delivery
+                   set status = 'DELIVERED',
+                       delivered_at = coalesce(delivered_at, now()),
+                       locked_by = null,
+                       locked_at = null
+                 where status in ('PENDING', 'RETRY', 'DELIVERING')
+                """);
     }
 }

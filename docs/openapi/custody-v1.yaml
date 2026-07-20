@@ -649,13 +649,21 @@ paths:
   /custody/platform/v1/tenants:
     get:
       tags: [Platform]
-      summary: List tenants and activity counts
+      summary: Search and page tenants with operational counts
       security: [{ bearerAuth: [] }]
       parameters:
+        - $ref: '#/components/parameters/Search'
+        - name: status
+          in: query
+          schema: { type: string, enum: [ACTIVE, SUSPENDED] }
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
       responses:
-        '200': { description: Tenant records }
+        '200':
+          description: Tenant page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TenantPage' }
         default: { $ref: '#/components/responses/Error' }
     post:
       tags: [Platform]
@@ -682,17 +690,47 @@ paths:
   /custody/platform/v1/tenants/{tenantId}:
     get:
       tags: [Platform]
-      summary: Read a tenant
+      summary: Read a complete tenant operations snapshot
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/TenantId'
       responses:
-        '200': { description: Tenant record }
+        '200':
+          description: Tenant settings, readiness, users, balances, integration health and activity
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TenantDetail' }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Platform]
+      summary: Update tenant reporting details
+      description: The stable tenant slug and derivation namespace cannot be changed.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+                displayCurrency:
+                  type: string
+                  pattern: '^[A-Z0-9]{3,12}$'
+      responses:
+        '200':
+          description: Updated tenant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tenant' }
         default: { $ref: '#/components/responses/Error' }
   /custody/platform/v1/tenants/{tenantId}/status:
     patch:
       tags: [Platform]
       summary: Suspend or reactivate a tenant
+      description: Suspending a tenant immediately blocks API access and revokes active Console sessions.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/TenantId'
@@ -707,6 +745,21 @@ paths:
                 status: { type: string, enum: [ACTIVE, SUSPENDED] }
       responses:
         '200': { description: Updated tenant }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/tenants/{tenantId}/administrators/{userId}/unlock:
+    post:
+      tags: [Platform]
+      summary: Clear a tenant administrator login lock
+      description: Clears only failed-login counters and the temporary lock. Password material is never exposed.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/TenantId'
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Unlocked tenant administrator }
         default: { $ref: '#/components/responses/Error' }
 components:
   securitySchemes:
@@ -991,6 +1044,169 @@ components:
         startedAt: { type: string, format: date-time }
         completedAt: { type: [string, 'null'], format: date-time }
         durationMs: { type: [integer, 'null'], format: int64 }
+    Tenant:
+      type: object
+      required:
+        - id
+        - slug
+        - name
+        - status
+        - derivationNamespace
+        - ipAllowlistEnabled
+        - displayCurrency
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [ACTIVE, SUSPENDED] }
+        derivationNamespace: { type: integer }
+        ipAllowlistEnabled: { type: boolean }
+        displayCurrency: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TenantSummary:
+      allOf:
+        - $ref: '#/components/schemas/Tenant'
+        - type: object
+          required:
+            - addressCount
+            - depositCount
+            - withdrawalCount
+            - activeWebhookCount
+            - activeApiKeyCount
+            - gasAccountCount
+            - failedWebhookDeliveryCount
+          properties:
+            addressCount: { type: integer, format: int64 }
+            depositCount: { type: integer, format: int64 }
+            withdrawalCount: { type: integer, format: int64 }
+            activeWebhookCount: { type: integer, format: int64 }
+            activeApiKeyCount: { type: integer, format: int64 }
+            gasAccountCount: { type: integer, format: int64 }
+            failedWebhookDeliveryCount: { type: integer, format: int64 }
+    TenantPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TenantSummary' }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
+    TenantDetail:
+      type: object
+      required:
+        - tenant
+        - statistics
+        - onboarding
+        - administrators
+        - assets
+        - recentAddresses
+        - gasAccounts
+        - apiKeys
+        - ipRules
+        - webhooks
+        - webhookDeliveries
+        - recentDeposits
+        - recentWithdrawals
+        - recentAudit
+      properties:
+        tenant: { $ref: '#/components/schemas/Tenant' }
+        statistics:
+          type: object
+          additionalProperties: { type: integer, format: int64 }
+        onboarding:
+          type: object
+          required: [completedSteps, totalSteps, ready]
+          properties:
+            apiKeyConfigured: { type: boolean }
+            webhookConfigured: { type: boolean }
+            ipAllowlistConfigured: { type: boolean }
+            addressCreated: { type: boolean }
+            gasAccountConfigured: { type: boolean }
+            gasAccountFunded: { type: boolean }
+            completedSteps: { type: integer }
+            totalSteps: { type: integer }
+            ready: { type: boolean }
+        administrators:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              email: { type: string, format: email }
+              displayName: { type: string }
+              role: { type: string }
+              status: { type: string }
+              failedLoginCount: { type: integer }
+              lockedUntil: { type: [string, 'null'], format: date-time }
+              lastLoginAt: { type: [string, 'null'], format: date-time }
+        assets:
+          type: array
+          items: { $ref: '#/components/schemas/AssetBalance' }
+        recentAddresses:
+          type: array
+          items: { $ref: '#/components/schemas/TenantAddress' }
+        gasAccounts:
+          type: array
+          items: { $ref: '#/components/schemas/GasAccount' }
+        apiKeys:
+          type: array
+          items: { type: object, additionalProperties: true }
+        ipRules:
+          type: array
+          items: { type: object, additionalProperties: true }
+        webhooks:
+          type: array
+          items: { type: object, additionalProperties: true }
+        webhookDeliveries:
+          type: array
+          items: { type: object, additionalProperties: true }
+        recentDeposits:
+          type: array
+          items: { $ref: '#/components/schemas/Deposit' }
+        recentWithdrawals:
+          type: array
+          items: { $ref: '#/components/schemas/Withdrawal' }
+        recentAudit:
+          type: array
+          items: { type: object, additionalProperties: true }
+    TenantAddress:
+      type: object
+      required:
+        - id
+        - tenantId
+        - chainAddressId
+        - chain
+        - network
+        - address
+        - metadataJson
+        - source
+        - status
+        - derivationSubject
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        chainAddressId: { type: integer, format: int64 }
+        chain: { type: string }
+        network: { type: string }
+        address: { type: string }
+        memo: { type: [string, 'null'] }
+        externalReference: { type: [string, 'null'] }
+        label: { type: [string, 'null'] }
+        metadataJson:
+          type: string
+          description: Address metadata encoded as JSON.
+        source: { type: string, enum: [API, CONSOLE] }
+        status: { type: string, enum: [ACTIVE, DISABLED] }
+        derivationSubject: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     CreateWebhook:
       type: object
       required: [name, url, events]

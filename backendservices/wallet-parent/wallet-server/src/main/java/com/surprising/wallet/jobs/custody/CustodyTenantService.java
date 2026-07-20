@@ -2,8 +2,11 @@ package com.surprising.wallet.jobs.custody;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.surprising.wallet.jobs.custody.CustodyRepository.AddressRecord;
+import com.surprising.wallet.jobs.custody.CustodyRepository.GasAccountRecord;
 import com.surprising.wallet.jobs.custody.CustodyRepository.TenantRecord;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -41,13 +44,59 @@ public class CustodyTenantService {
         return result;
     }
 
-    public List<Map<String, Object>> list(CustodyPrincipal actor, int limit, int offset) {
+    public TenantPage list(CustodyPrincipal actor, String search, String status,
+                           int limit, int offset) {
         requirePlatformAdmin(actor);
-        return repository.listTenants(limit, offset);
+        String normalizedSearch = optional(search, 160);
+        String normalizedStatus = optionalTenantStatus(status);
+        int normalizedLimit = Math.min(Math.max(limit, 1), 200);
+        int normalizedOffset = Math.max(offset, 0);
+        return new TenantPage(
+                repository.listTenants(
+                        normalizedSearch, normalizedStatus, normalizedLimit, normalizedOffset),
+                repository.countTenants(normalizedSearch, normalizedStatus),
+                normalizedLimit,
+                normalizedOffset);
     }
 
-    public TenantRecord detail(CustodyPrincipal actor, UUID tenantId) {
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public TenantDetail detail(CustodyPrincipal actor, UUID tenantId) {
         requirePlatformAdmin(actor);
+        TenantRecord tenant = repository.requireTenant(tenantId);
+        return new TenantDetail(
+                tenant,
+                repository.tenantOperationsSummary(tenantId),
+                repository.onboardingStatus(tenantId),
+                repository.listTenantUsers(tenantId),
+                repository.tenantAssetOverview(tenantId),
+                repository.listAddresses(tenantId, "", "", "", "", 20, 0),
+                repository.listGasAccounts(tenantId),
+                repository.listApiKeys(tenantId),
+                repository.listIpRules(tenantId),
+                repository.listWebhookEndpoints(tenantId),
+                repository.listWebhookDeliveries(tenantId, null, 20, 0),
+                repository.listCustodyDeposits(tenantId, "", 20, 0),
+                repository.listCustodyWithdrawals(tenantId, "", 20, 0),
+                repository.listAudit(tenantId, 50, 0));
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public TenantRecord update(CustodyPrincipal actor, UUID tenantId,
+                               UpdateTenantCommand command, String sourceIp) {
+        requirePlatformAdmin(actor);
+        TenantRecord current = repository.requireTenant(tenantId);
+        String name = command.name() == null
+                ? current.name()
+                : required(command.name(), "tenant name", 160);
+        String displayCurrency = command.displayCurrency() == null
+                ? current.displayCurrency()
+                : normalizeDisplayCurrency(command.displayCurrency());
+        repository.updateTenantProfile(tenantId, name, displayCurrency);
+        repository.audit(tenantId, "PLATFORM_USER", actor.actorId().toString(),
+                "TENANT.UPDATE", "TENANT", tenantId.toString(), sourceIp,
+                json(Map.of(
+                        "name", name,
+                        "displayCurrency", displayCurrency)));
         return repository.requireTenant(tenantId);
     }
 
@@ -59,9 +108,27 @@ public class CustodyTenantService {
             throw new IllegalArgumentException("tenant status must be ACTIVE or SUSPENDED");
         }
         repository.updateTenantStatus(tenantId, normalized);
+        int revokedSessions = "SUSPENDED".equals(normalized)
+                ? repository.revokeTenantSessions(tenantId)
+                : 0;
         repository.audit(tenantId, "PLATFORM_USER", actor.actorId().toString(), "TENANT.STATUS_CHANGE",
-                "TENANT", tenantId.toString(), sourceIp, json(Map.of("status", normalized)));
+                "TENANT", tenantId.toString(), sourceIp, json(Map.of(
+                        "status", normalized,
+                        "revokedSessions", revokedSessions)));
         return repository.requireTenant(tenantId);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public Map<String, Object> unlockAdministrator(
+            CustodyPrincipal actor, UUID tenantId, UUID userId, String sourceIp) {
+        requirePlatformAdmin(actor);
+        repository.requireTenant(tenantId);
+        Map<String, Object> administrator =
+                repository.unlockTenantAdministrator(tenantId, userId);
+        repository.audit(tenantId, "PLATFORM_USER", actor.actorId().toString(),
+                "TENANT_ADMIN.UNLOCK", "TENANT_USER", userId.toString(), sourceIp,
+                json(Map.of("email", administrator.get("email"))));
+        return administrator;
     }
 
     private void requirePlatformAdmin(CustodyPrincipal actor) {
@@ -103,6 +170,33 @@ public class CustodyTenantService {
         return normalized;
     }
 
+    private static String optional(String value, int maxLength) {
+        String normalized = value == null ? "" : value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(
+                    "search must not exceed " + maxLength + " characters");
+        }
+        return normalized;
+    }
+
+    private static String optionalTenantStatus(String value) {
+        String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+        if (!normalized.isEmpty() && !SetHolder.TENANT_STATUSES.contains(normalized)) {
+            throw new IllegalArgumentException(
+                    "tenant status must be ACTIVE or SUSPENDED");
+        }
+        return normalized;
+    }
+
+    private static String normalizeDisplayCurrency(String value) {
+        String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+        if (!normalized.matches("^[A-Z0-9]{3,12}$")) {
+            throw new IllegalArgumentException(
+                    "display currency must contain 3-12 uppercase letters or digits");
+        }
+        return normalized;
+    }
+
     private static final class SetHolder {
         private static final java.util.Set<String> TENANT_STATUSES = java.util.Set.of("ACTIVE", "SUSPENDED");
     }
@@ -113,6 +207,38 @@ public class CustodyTenantService {
             String adminEmail,
             String adminDisplayName,
             String adminPassword
+    ) {
+    }
+
+    public record UpdateTenantCommand(
+            String name,
+            String displayCurrency
+    ) {
+    }
+
+    public record TenantPage(
+            List<Map<String, Object>> items,
+            long total,
+            int limit,
+            int offset
+    ) {
+    }
+
+    public record TenantDetail(
+            TenantRecord tenant,
+            Map<String, Object> statistics,
+            Map<String, Object> onboarding,
+            List<Map<String, Object>> administrators,
+            List<Map<String, Object>> assets,
+            List<AddressRecord> recentAddresses,
+            List<GasAccountRecord> gasAccounts,
+            List<Map<String, Object>> apiKeys,
+            List<Map<String, Object>> ipRules,
+            List<Map<String, Object>> webhooks,
+            List<Map<String, Object>> webhookDeliveries,
+            List<Map<String, Object>> recentDeposits,
+            List<Map<String, Object>> recentWithdrawals,
+            List<Map<String, Object>> recentAudit
     ) {
     }
 }

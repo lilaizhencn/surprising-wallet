@@ -225,8 +225,17 @@ settles the overdue charge automatically and processing resumes.
 Platform administrators:
 
 - create isolated tenants and the first tenant administrator;
-- list tenant activity counts;
-- suspend/reactivate a tenant.
+- search and page tenants by name, slug, and status;
+- open a tenant operations view containing settings, onboarding readiness,
+  administrators, customer assets and addresses, Gas reserves, API keys, IP
+  rules, Webhooks, recent transfers, and audit activity;
+- update the tenant name and reporting currency while keeping the slug and
+  derivation namespace immutable;
+- clear a temporary tenant-administrator login lock without reading or
+  replacing password material;
+- suspend/reactivate a tenant. Suspension immediately blocks signed API access
+  and revokes all active tenant Console sessions; reactivation does not restore
+  those revoked sessions.
 
 Tenant administrators:
 

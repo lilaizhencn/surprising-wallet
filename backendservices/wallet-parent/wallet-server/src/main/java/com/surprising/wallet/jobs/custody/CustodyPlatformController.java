@@ -1,6 +1,9 @@
 package com.surprising.wallet.jobs.custody;
 
 import com.surprising.wallet.jobs.custody.CustodyTenantService.CreateTenantCommand;
+import com.surprising.wallet.jobs.custody.CustodyTenantService.TenantDetail;
+import com.surprising.wallet.jobs.custody.CustodyTenantService.TenantPage;
+import com.surprising.wallet.jobs.custody.CustodyTenantService.UpdateTenantCommand;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -11,7 +14,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -49,11 +51,15 @@ public class CustodyPlatformController {
     }
 
     @GetMapping("/tenants")
-    public List<Map<String, Object>> tenants(
+    public TenantPage tenants(
+            @RequestParam(defaultValue = "") String search,
+            @RequestParam(defaultValue = "") String status,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
-        return tenants.list(CustodyRequestSupport.requirePrincipal(request), limit, offset);
+        return tenants.list(
+                CustodyRequestSupport.requirePrincipal(request),
+                search, status, limit, offset);
     }
 
     @PostMapping("/tenants")
@@ -64,9 +70,21 @@ public class CustodyPlatformController {
     }
 
     @GetMapping("/tenants/{tenantId}")
-    public CustodyRepository.TenantRecord tenant(@PathVariable UUID tenantId,
-                                                 HttpServletRequest request) {
+    public TenantDetail tenant(@PathVariable UUID tenantId,
+                               HttpServletRequest request) {
         return tenants.detail(CustodyRequestSupport.requirePrincipal(request), tenantId);
+    }
+
+    @PatchMapping("/tenants/{tenantId}")
+    public CustodyRepository.TenantRecord updateTenant(
+            @PathVariable UUID tenantId,
+            @RequestBody UpdateTenantCommand body,
+            HttpServletRequest request) {
+        return tenants.update(
+                CustodyRequestSupport.requirePrincipal(request),
+                tenantId,
+                body,
+                CustodyRequestSupport.clientIp(request));
     }
 
     @PatchMapping("/tenants/{tenantId}/status")
@@ -75,6 +93,18 @@ public class CustodyPlatformController {
                                                  HttpServletRequest request) {
         return tenants.updateStatus(CustodyRequestSupport.requirePrincipal(request), tenantId,
                 body.status(), CustodyRequestSupport.clientIp(request));
+    }
+
+    @PostMapping("/tenants/{tenantId}/administrators/{userId}/unlock")
+    public Map<String, Object> unlockAdministrator(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID userId,
+            HttpServletRequest request) {
+        return tenants.unlockAdministrator(
+                CustodyRequestSupport.requirePrincipal(request),
+                tenantId,
+                userId,
+                CustodyRequestSupport.clientIp(request));
     }
 
     public record PlatformLoginRequest(String email, String password) {

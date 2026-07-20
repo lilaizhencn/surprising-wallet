@@ -81,7 +81,8 @@ public class CustodyRepository {
                 new IllegalArgumentException("tenant not found"));
     }
 
-    public List<Map<String, Object>> listTenants(int limit, int offset) {
+    public List<Map<String, Object>> listTenants(
+            String search, String status, int limit, int offset) {
         return jdbc.query("""
                         select t.id, t.slug, t.name, t.status, t.derivation_namespace,
                                t.ip_allowlist_enabled, t.display_currency, t.created_at, t.updated_at,
@@ -140,6 +141,15 @@ public class CustodyRepository {
                                where status = 'FAILED'
                                group by tenant_id
                           ) f on f.tenant_id = t.id
+                         cross join (
+                             select ?::varchar as search, ?::varchar as status
+                         ) filters
+                         where (
+                             filters.search = ''
+                             or t.slug ilike '%' || filters.search || '%'
+                             or t.name ilike '%' || filters.search || '%'
+                         )
+                           and (filters.status = '' or t.status = filters.status)
                          order by t.created_at desc, t.id
                          limit ? offset ?
                         """, (rs, rowNum) -> {
@@ -162,7 +172,89 @@ public class CustodyRepository {
                     row.put("createdAt", rs.getTimestamp("created_at").toInstant());
                     row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
                     return row;
-                }, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+                }, blankToEmpty(search), blankToEmpty(status),
+                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    }
+
+    public long countTenants(String search, String status) {
+        Long count = jdbc.queryForObject("""
+                select count(*)
+                  from custody_tenant t
+                 where (
+                     ? = ''
+                     or t.slug ilike '%' || ? || '%'
+                     or t.name ilike '%' || ? || '%'
+                 )
+                   and (? = '' or t.status = ?)
+                """, Long.class,
+                blankToEmpty(search), blankToEmpty(search), blankToEmpty(search),
+                blankToEmpty(status), blankToEmpty(status));
+        return count == null ? 0L : count;
+    }
+
+    public Map<String, Object> tenantOperationsSummary(UUID tenantId) {
+        return jdbc.query("""
+                        select
+                            (select count(*) from custody_address a
+                              where a.tenant_id = t.id
+                                and not exists (
+                                    select 1 from custody_gas_account g
+                                     where g.custody_address_id = a.id
+                                )) as address_count,
+                            (select count(*) from custody_deposit d
+                              where d.tenant_id = t.id
+                                and not exists (
+                                    select 1 from custody_gas_account g
+                                     where g.custody_address_id = d.custody_address_id
+                                )) as deposit_count,
+                            (select count(*) from custody_withdrawal w
+                              where w.tenant_id = t.id) as withdrawal_count,
+                            (select count(*) from custody_api_key k
+                              where k.tenant_id = t.id and k.status = 'ACTIVE')
+                                as active_api_key_count,
+                            (select count(*) from custody_webhook_endpoint e
+                              where e.tenant_id = t.id and e.status = 'ACTIVE')
+                                as active_webhook_count,
+                            (select count(*) from custody_gas_account g
+                              where g.tenant_id = t.id and g.status = 'ACTIVE')
+                                as gas_account_count,
+                            (select count(*) from custody_webhook_delivery d
+                              where d.tenant_id = t.id and d.status = 'FAILED')
+                                as failed_webhook_delivery_count,
+                            (select count(*) from custody_tenant_user u
+                              where u.tenant_id = t.id) as user_count,
+                            (select count(*) from custody_session s
+                              where s.tenant_id = t.id and s.revoked_at is null
+                                and s.expires_at > now()) as active_session_count
+                          from custody_tenant t
+                         where t.id = ?
+                        """, rs -> {
+                    if (!rs.next()) {
+                        throw new IllegalArgumentException("tenant not found");
+                    }
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("addressCount", rs.getLong("address_count"));
+                    row.put("depositCount", rs.getLong("deposit_count"));
+                    row.put("withdrawalCount", rs.getLong("withdrawal_count"));
+                    row.put("activeApiKeyCount", rs.getLong("active_api_key_count"));
+                    row.put("activeWebhookCount", rs.getLong("active_webhook_count"));
+                    row.put("gasAccountCount", rs.getLong("gas_account_count"));
+                    row.put("failedWebhookDeliveryCount",
+                            rs.getLong("failed_webhook_delivery_count"));
+                    row.put("userCount", rs.getLong("user_count"));
+                    row.put("activeSessionCount", rs.getLong("active_session_count"));
+                    return row;
+                }, tenantId);
+    }
+
+    public void updateTenantProfile(UUID tenantId, String name, String displayCurrency) {
+        if (jdbc.update("""
+                        update custody_tenant
+                           set name = ?, display_currency = ?, updated_at = now()
+                         where id = ?
+                        """, name, displayCurrency, tenantId) != 1) {
+            throw new IllegalArgumentException("tenant not found");
+        }
     }
 
     public void updateTenantStatus(UUID tenantId, String status) {
@@ -173,6 +265,14 @@ public class CustodyRepository {
                         """, status, tenantId) != 1) {
             throw new IllegalArgumentException("tenant not found");
         }
+    }
+
+    public int revokeTenantSessions(UUID tenantId) {
+        return jdbc.update("""
+                update custody_session
+                   set revoked_at = now()
+                 where tenant_id = ? and revoked_at is null
+                """, tenantId);
     }
 
     public Optional<AuthUser> findTenantUser(String tenantSlug, String email) {
@@ -267,6 +367,51 @@ public class CustodyRepository {
                         rs.getString("tenant_status"),
                         rs.getTimestamp("expires_at").toInstant()),
                 tokenHash).stream().findFirst();
+    }
+
+    public List<Map<String, Object>> listTenantUsers(UUID tenantId) {
+        return jdbc.query("""
+                        select id, email, display_name, role, status, failed_login_count,
+                               locked_until, last_login_at, created_at, updated_at
+                          from custody_tenant_user
+                         where tenant_id = ?
+                         order by case role
+                                      when 'TENANT_ADMIN' then 0
+                                      when 'OPERATOR' then 1
+                                      else 2
+                                  end,
+                                  created_at,
+                                  id
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getObject("id", UUID.class));
+                    row.put("email", rs.getString("email"));
+                    row.put("displayName", rs.getString("display_name"));
+                    row.put("role", rs.getString("role"));
+                    row.put("status", rs.getString("status"));
+                    row.put("failedLoginCount", rs.getInt("failed_login_count"));
+                    row.put("lockedUntil", instantOrNull(rs.getTimestamp("locked_until")));
+                    row.put("lastLoginAt", instantOrNull(rs.getTimestamp("last_login_at")));
+                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
+                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
+                    return row;
+                }, tenantId);
+    }
+
+    public Map<String, Object> unlockTenantAdministrator(UUID tenantId, UUID userId) {
+        if (jdbc.update("""
+                        update custody_tenant_user
+                           set failed_login_count = 0, locked_until = null, updated_at = now()
+                         where tenant_id = ? and id = ?
+                           and role = 'TENANT_ADMIN' and status = 'ACTIVE'
+                        """, tenantId, userId) != 1) {
+            throw new IllegalArgumentException("active tenant administrator not found");
+        }
+        return listTenantUsers(tenantId).stream()
+                .filter(user -> userId.equals(user.get("id")))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "tenant administrator not found"));
     }
 
     public void touchSession(UUID sessionId) {
@@ -1316,6 +1461,11 @@ public class CustodyRepository {
 
     public List<Map<String, Object>> listWebhookDeliveries(UUID tenantId, UUID endpointId,
                                                             int limit, int offset) {
+        String endpointPredicate = endpointId == null ? "" : "and d.endpoint_id = ?";
+        Object[] parameters = endpointId == null
+                ? new Object[]{tenantId, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0)}
+                : new Object[]{tenantId, endpointId,
+                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0)};
         return jdbc.query("""
                         select d.id, d.endpoint_id, d.event_id, e.event_type,
                                e.aggregate_type, e.aggregate_id, d.status, d.attempt_count,
@@ -1326,10 +1476,10 @@ public class CustodyRepository {
                           from custody_webhook_delivery d
                           join custody_event e on e.id = d.event_id
                          where d.tenant_id = ?
-                           and (? is null or d.endpoint_id = ?)
+                           %s
                          order by d.created_at desc, d.id
                          limit ? offset ?
-                        """, (rs, rowNum) -> {
+                        """.formatted(endpointPredicate), (rs, rowNum) -> {
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("id", rs.getObject("id", UUID.class));
                     row.put("endpointId", rs.getObject("endpoint_id", UUID.class));
@@ -1349,8 +1499,7 @@ public class CustodyRepository {
                     row.put("createdAt", rs.getTimestamp("created_at").toInstant());
                     row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
                     return row;
-                }, tenantId, endpointId, endpointId,
-                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+                }, parameters);
     }
 
     @Transactional(rollbackFor = Throwable.class)
