@@ -1930,6 +1930,29 @@ public class CustodyRepository {
                 }, tenantId, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
 
+    public List<Map<String, Object>> listPlatformAudit(int limit, int offset) {
+        return jdbc.query("""
+                        select id, actor_type, actor_id, action, resource_type, resource_id,
+                               source_ip, details::text as details, created_at
+                          from custody_audit_log
+                         where tenant_id is null
+                         order by created_at desc, id
+                         limit ? offset ?
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getObject("id", UUID.class));
+                    row.put("actorType", rs.getString("actor_type"));
+                    row.put("actorId", rs.getString("actor_id"));
+                    row.put("action", rs.getString("action"));
+                    row.put("resourceType", rs.getString("resource_type"));
+                    row.put("resourceId", rs.getString("resource_id"));
+                    row.put("sourceIp", rs.getString("source_ip"));
+                    row.put("details", rs.getString("details"));
+                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
+                    return row;
+                }, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    }
+
     public int cleanupExpiredSecurityRows() {
         int nonces = jdbc.update("delete from custody_api_nonce where expires_at < now()");
         int sessions = jdbc.update("""

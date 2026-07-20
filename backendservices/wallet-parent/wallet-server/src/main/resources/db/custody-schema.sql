@@ -14,6 +14,14 @@ CREATE TABLE IF NOT EXISTS wallet_key_config (
     CONSTRAINT wallet_key_config_singleton_check CHECK (id = 1)
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS chain_profile_one_enabled_network_idx
+    ON chain_profile (upper(chain)) WHERE enabled = true;
+
+ALTER TABLE chain_rpc_node ADD COLUMN IF NOT EXISTS last_checked_at timestamptz;
+ALTER TABLE chain_rpc_node ADD COLUMN IF NOT EXISTS last_latency_ms bigint;
+ALTER TABLE chain_rpc_node ADD COLUMN IF NOT EXISTS last_http_status integer;
+ALTER TABLE chain_rpc_node ADD COLUMN IF NOT EXISTS last_error text;
+
 CREATE SEQUENCE IF NOT EXISTS custody_derivation_namespace_seq
     AS integer START WITH 1000 INCREMENT BY 1 MINVALUE 1000 MAXVALUE 2147483646 CACHE 16;
 

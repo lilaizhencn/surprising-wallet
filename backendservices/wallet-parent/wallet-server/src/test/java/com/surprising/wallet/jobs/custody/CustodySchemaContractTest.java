@@ -44,6 +44,10 @@ class CustodySchemaContractTest {
         assertTrue(sql.contains("UNIQUE (delivery_id, attempt_number)"));
         assertTrue(sql.contains("UNIQUE (custody_withdrawal_id)"));
         assertTrue(sql.contains("status IN ('RESERVED', 'SETTLED', 'RELEASED', 'OVERDUE')"));
+        assertTrue(sql.contains("chain_profile_one_enabled_network_idx"));
+        assertTrue(sql.contains("ON chain_profile (upper(chain)) WHERE enabled = true"));
+        assertTrue(sql.contains("last_checked_at timestamptz"));
+        assertTrue(sql.contains("last_latency_ms bigint"));
         assertTrue(sql.matches(
                 "(?s).*CREATE TABLE IF NOT EXISTS custody_idempotency_key \\(.*"
                         + "expires_at timestamptz,\\R\\s+created_at timestamptz.*"));

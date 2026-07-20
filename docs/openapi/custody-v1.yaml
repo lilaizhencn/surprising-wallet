@@ -791,6 +791,179 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/WalletConfigSummary' }
         default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/wallet-config/chains:
+    get:
+      tags: [Platform]
+      summary: List wallet chain profiles
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Chain profiles
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/WalletChain' } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Platform]
+      summary: Create a disabled-first wallet chain profile
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/WalletChainCommand' } } }
+      responses:
+        '200': { description: Created chain detail }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/wallet-config/chains/{id}:
+    get:
+      tags: [Platform]
+      summary: Read a chain with its RPC nodes, tokens, and checks
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses:
+        '200': { description: Chain detail }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Platform]
+      summary: Update chain profile settings
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/WalletChainCommand' } } }
+      responses:
+        '200': { description: Updated chain detail }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/wallet-config/chains/{id}/switches:
+    patch:
+      tags: [Platform]
+      summary: Atomically update chain and task switches
+      description: Production accepts only production networks. Every environment permits only one enabled network per chain.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/WalletChainSwitches' } } }
+      responses:
+        '200': { description: Updated chain detail }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/wallet-config/chains/{id}/rpc-nodes:
+    get:
+      tags: [Platform]
+      summary: List RPC nodes owned by a chain profile
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses:
+        '200': { description: RPC nodes with credential-presence flags only }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Platform]
+      summary: Add an RPC node to a chain profile
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/WalletRpcCommand' } } }
+      responses:
+        '200': { description: Created RPC node }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/wallet-config/chains/{id}/rpc-nodes/{nodeId}:
+    patch:
+      tags: [Platform]
+      summary: Update an RPC node; omitted secrets retain stored values
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: nodeId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/WalletRpcCommand' } } }
+      responses:
+        '200': { description: Updated RPC node }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Platform]
+      summary: Delete a disabled RPC node
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: nodeId, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200': { description: RPC node deleted }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/wallet-config/chains/{id}/rpc-nodes/{nodeId}/test:
+    post:
+      tags: [Platform]
+      summary: Test an RPC node with stored authentication
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: nodeId, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200': { description: Health result, latency, and safe error text }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/wallet-config/tokens:
+    get:
+      tags: [Platform]
+      summary: Search wallet tokens
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Token configurations with effective state }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Platform]
+      summary: Atomically create token_config and chain_asset definitions
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/WalletTokenCommand' } } }
+      responses:
+        '200': { description: Created token }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/wallet-config/tokens/matrix:
+    get:
+      tags: [Platform]
+      summary: Read the cross-chain token activation matrix in one request
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Token matrix }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/wallet-config/tokens/{id}:
+    patch:
+      tags: [Platform]
+      summary: Atomically update token_config and chain_asset definitions
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/WalletTokenCommand' } } }
+      responses:
+        '200': { description: Updated token }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/wallet-config/tokens/{id}/status:
+    patch:
+      tags: [Platform]
+      summary: Atomically change token and ledger-asset activation state
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties: { enabled: { type: boolean } }
+      responses:
+        '200': { description: Updated token }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/platform/v1/wallet-config/audit-log:
+    get:
+      tags: [Platform]
+      summary: List platform wallet-configuration audit events
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Platform audit events }
+        default: { $ref: '#/components/responses/Error' }
 components:
   securitySchemes:
     bearerAuth:
@@ -904,6 +1077,87 @@ components:
         withdrawEnabled: { type: boolean }
         collectionEnabled: { type: boolean }
         transferEnabled: { type: boolean }
+    WalletChainSwitches:
+      type: object
+      required: [enabled, scanEnabled, withdrawEnabled, collectionEnabled, transferEnabled]
+      properties:
+        enabled: { type: boolean }
+        scanEnabled: { type: boolean }
+        withdrawEnabled: { type: boolean }
+        collectionEnabled: { type: boolean }
+        transferEnabled: { type: boolean }
+    WalletChainCommand:
+      type: object
+      properties:
+        chain: { type: string }
+        network: { type: string }
+        family: { type: string }
+        runtimeCurrencyId: { type: integer }
+        bip44CoinType: { type: integer }
+        nativeSymbol: { type: string }
+        explorerUrl: { type: [string, 'null'], format: uri }
+        depositConfirmations: { type: integer, minimum: 0 }
+        withdrawConfirmations: { type: integer, minimum: 0 }
+        defaultFeeRate: { type: [integer, 'null'], format: int64 }
+        dustThreshold: { type: [integer, 'null'], format: int64 }
+        enabled: { type: boolean }
+        chainId: { type: [integer, 'null'], format: int64 }
+        gasPolicy: { type: [string, 'null'] }
+        scanBatchSize: { type: integer, minimum: 1 }
+        scanEnabled: { type: boolean }
+        withdrawEnabled: { type: boolean }
+        collectionEnabled: { type: boolean }
+        transferEnabled: { type: boolean }
+        scanStartHeight: { type: integer, format: int64, minimum: 0 }
+        scanMaxBlocksPerRun: { type: integer, format: int64, minimum: 0 }
+    WalletChain:
+      allOf:
+        - $ref: '#/components/schemas/WalletChainCommand'
+        - type: object
+          required: [id, chain, network, family, runtimeCurrencyId, bip44CoinType, nativeSymbol, enabled]
+          properties:
+            id: { type: integer, format: int64 }
+            tokenCount: { type: integer }
+            rpcCount: { type: integer }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    WalletRpcCommand:
+      type: object
+      description: Credential values are write-only. Omit them during update to preserve stored values.
+      properties:
+        environment: { type: string }
+        nodeLabel: { type: string }
+        purpose: { type: string }
+        connectionType: { type: string }
+        rpcUrl: { type: string, format: uri }
+        authType: { type: string }
+        authHeaderName: { type: [string, 'null'] }
+        apiKey: { type: [string, 'null'], writeOnly: true }
+        username: { type: [string, 'null'], writeOnly: true }
+        password: { type: [string, 'null'], writeOnly: true }
+        priority: { type: integer, minimum: 0 }
+        minRequestIntervalMs: { type: integer, minimum: 0 }
+        enabled: { type: boolean }
+        renewalDueAt: { type: [string, 'null'], format: date-time }
+        remark: { type: [string, 'null'] }
+    WalletTokenCommand:
+      type: object
+      properties:
+        chain: { type: string }
+        network: { type: string }
+        symbol: { type: string }
+        standard: { type: string }
+        contractAddress: { type: string }
+        contractAddressBase58: { type: [string, 'null'] }
+        contractAddressHex: { type: [string, 'null'] }
+        decimals: { type: integer, minimum: 0, maximum: 38 }
+        enabled: { type: boolean }
+        collectEnabled: { type: boolean }
+        minDeposit: { type: [number, string, 'null'] }
+        minWithdraw: { type: [number, string, 'null'] }
+        collectThreshold: { type: [number, string, 'null'] }
+        gasStrategy: { type: [string, 'null'] }
+        confirmationRequired: { type: [integer, 'null'], minimum: 0 }
     WalletTaskSwitches:
       type: object
       required: [scanEnabled, withdrawEnabled, collectionEnabled, transferEnabled]

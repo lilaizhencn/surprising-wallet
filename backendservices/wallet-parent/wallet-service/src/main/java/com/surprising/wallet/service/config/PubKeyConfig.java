@@ -7,6 +7,7 @@ import com.surprising.wallet.sdk.bitcoinj.core.LegacyMultiSignAddressGenerator;
 import com.surprising.wallet.sdk.bitcoinj.core.SegwitMultiSignAddressGenerator;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.crypto.ECKey;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.HexFormat;
@@ -19,6 +20,7 @@ public class PubKeyConfig {
     private final WalletKeyMaterialProvider keyMaterial;
     private final Bip32Node[] testNodes;
 
+    @Autowired
     public PubKeyConfig(WalletKeyMaterialProvider keyMaterial) {
         this.keyMaterial = keyMaterial;
         this.testNodes = null;

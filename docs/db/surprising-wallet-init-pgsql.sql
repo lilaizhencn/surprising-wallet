@@ -474,7 +474,11 @@ CREATE TABLE "public"."chain_rpc_node" (
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "api_key" character varying(1024),
     "username" character varying(256),
-    "password" character varying(1024)
+    "password" character varying(1024),
+    "last_checked_at" timestamp with time zone,
+    "last_latency_ms" bigint,
+    "last_http_status" integer,
+    "last_error" "text"
 );
 
 
@@ -1963,6 +1967,9 @@ ALTER TABLE ONLY "public"."chain_profile"
 
 ALTER TABLE ONLY "public"."chain_profile"
     ADD CONSTRAINT "chain_profile_runtime_currency_id_network_key" UNIQUE ("runtime_currency_id", "network");
+
+CREATE UNIQUE INDEX "chain_profile_one_enabled_network_idx"
+    ON "public"."chain_profile" (upper("chain")) WHERE "enabled" = true;
 
 
 --

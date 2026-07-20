@@ -3,7 +3,6 @@ package com.surprising.wallet.jobs.config;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainRpcNode;
-import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
@@ -188,14 +187,14 @@ public class WalletStartupValidator implements ApplicationRunner {
     private void validateRpcNodeCredentials(AccountChainProfile profile, ChainRpcNode node) {
         String authType = normalized(node.getAuthType());
         String connectionType = normalized(node.getConnectionType());
-        if (requiresApiKey(authType, connectionType) && !StringUtils.hasText(node.getApiKey())) {
+        if (WalletRpcPolicy.requiresApiKey(authType, connectionType) && !StringUtils.hasText(node.getApiKey())) {
             throw new IllegalStateException(
                     "enabled chain_rpc_node requires api_key: "
                             + profile.getChain() + "/" + profile.getNetwork()
                             + " env=" + environmentName
                             + " label=" + node.getNodeLabel());
         }
-        if (requiresUsernamePassword(authType)
+        if (WalletRpcPolicy.requiresUsernamePassword(authType)
                 && (!StringUtils.hasText(node.getUsername()) || !StringUtils.hasText(node.getPassword()))) {
             throw new IllegalStateException(
                     "enabled chain_rpc_node requires username/password: "
@@ -205,17 +204,9 @@ public class WalletStartupValidator implements ApplicationRunner {
         }
     }
 
-    private static boolean requiresApiKey(String authType, String connectionType) {
-        return Set.of("BEARER", "API_KEY", "PROJECT_ID", "TOKEN").contains(authType)
-                || "BLOCKFROST".equals(connectionType);
-    }
-
-    private static boolean requiresUsernamePassword(String authType) {
-        return Set.of("BASIC", "DIGEST").contains(authType);
-    }
-
     private void validateRequiredRpcPurposes(AccountChainProfile profile) {
-        for (String purpose : requiredRpcPurposes(profile)) {
+        for (String purpose : WalletRpcPolicy.requiredPurposes(
+                profile.getChain(), profile.getNetwork(), !repository.listTokens(profile.getChain()).isEmpty())) {
             List<ChainRpcNode> purposeNodes = repository.listEnabledRpcNodes(
                     profile.getChain(), profile.getNetwork(), environmentName, purpose);
             if (purposeNodes.isEmpty()) {
@@ -229,35 +220,11 @@ public class WalletStartupValidator implements ApplicationRunner {
         }
     }
 
-    private List<String> requiredRpcPurposes(AccountChainProfile profile) {
-        if ("DOT".equalsIgnoreCase(profile.getChain())) {
-            List<String> purposes = new java.util.ArrayList<>(List.of("rpc", "runtime"));
-            List<TokenDefinition> tokens = repository.listTokens(profile.getChain());
-            if (!tokens.isEmpty()) {
-                purposes.add("asset_rpc");
-            }
-            return purposes;
-        }
-        if ("XMR".equalsIgnoreCase(profile.getChain())
-                && "regtest".equalsIgnoreCase(profile.getNetwork())) {
-            return List.of("rpc", "faucet", "daemon");
-        }
-        if ("HYPERCORE".equalsIgnoreCase(profile.getChain())) {
-            return List.of("info", "exchange");
-        }
-        return List.of("rpc");
-    }
-
     static boolean containsPlaceholder(String value) {
         if (!StringUtils.hasText(value)) {
             return false;
         }
-        String normalized = value.trim().toUpperCase(Locale.ROOT);
-        return normalized.contains("CHANGE_ME")
-                || normalized.contains("YOUR_")
-                || normalized.contains("<YOUR")
-                || normalized.contains("REPLACE_ME")
-                || normalized.contains("TODO_");
+        return WalletRpcPolicy.containsPlaceholder(value);
     }
 
     private static String normalized(String value) {

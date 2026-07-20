@@ -2,6 +2,7 @@ package com.surprising.wallet.jobs.custody;
 
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.jobs.config.WalletEnvironmentPolicy;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ public class WalletConfigOverviewService {
     private final BooleanSupplier keysetConfigured;
     private final String environment;
 
+    @Autowired
     public WalletConfigOverviewService(JdbcTemplate jdbc,
                                        CustodyRepository custodyRepository,
                                        WalletKeyMaterialProvider keyMaterial,
