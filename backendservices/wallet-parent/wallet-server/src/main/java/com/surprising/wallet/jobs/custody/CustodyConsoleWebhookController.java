@@ -69,6 +69,19 @@ public class CustodyConsoleWebhookController {
         return Map.of("ok", true);
     }
 
+    @GetMapping("/webhook-deliveries/{deliveryId}/attempts")
+    public List<Map<String, Object>> attempts(
+            @PathVariable UUID deliveryId,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int offset,
+            HttpServletRequest request) {
+        return webhooks.deliveryAttempts(
+                CustodyRequestSupport.requirePrincipal(request),
+                deliveryId,
+                limit,
+                offset);
+    }
+
     public record WebhookStatusRequest(boolean enabled) {
     }
 }

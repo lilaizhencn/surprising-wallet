@@ -23,15 +23,18 @@ public class CustodyWithdrawalService {
 
     private final CustodyRepository repository;
     private final WalletAppService walletAppService;
+    private final CustodyGasService gasService;
     private final CustodyCryptoService crypto;
     private final ObjectMapper objectMapper;
 
     public CustodyWithdrawalService(CustodyRepository repository,
                                     WalletAppService walletAppService,
+                                    CustodyGasService gasService,
                                     CustodyCryptoService crypto,
                                     ObjectMapper objectMapper) {
         this.repository = repository;
         this.walletAppService = walletAppService;
+        this.gasService = gasService;
         this.crypto = crypto;
         this.objectMapper = objectMapper;
     }
@@ -41,11 +44,19 @@ public class CustodyWithdrawalService {
                                  String source, String idempotencyKey, String sourceIp) {
         requireScope(principal, "withdrawals:write");
         String normalizedSource = normalizeSource(source);
+        if (!Boolean.TRUE.equals(command.confirmed())) {
+            throw new IllegalArgumentException(
+                    "withdrawal requires explicit confirmation");
+        }
         if (command.custodyAddressId() == null) {
             throw new IllegalArgumentException("custodyAddressId is required");
         }
         AddressRecord address = repository.requireAddress(
                 principal.tenantId(), command.custodyAddressId());
+        if (repository.isGasAddress(principal.tenantId(), command.custodyAddressId())) {
+            throw new IllegalArgumentException(
+                    "gas reserve addresses cannot be used as customer withdrawal sources");
+        }
         String chain = requireUpper(command.chain(), "chain", 32);
         String symbol = requireUpper(command.assetSymbol(), "assetSymbol", 32);
         if (!address.chain().equals(chain)) {
@@ -87,7 +98,8 @@ public class CustodyWithdrawalService {
                 tenant.derivationNamespace(),
                 new WalletAppService.WithdrawRequest(
                         chain, symbol, toAddress, amount, Boolean.TRUE),
-                orderPrefix);
+                orderPrefix,
+                true);
         UUID withdrawalId = UUID.randomUUID();
         String orderNo = String.valueOf(result.get("orderNo"));
         String status = String.valueOf(result.get("status"));
@@ -109,6 +121,8 @@ public class CustodyWithdrawalService {
                 status,
                 "API".equals(normalizedSource) ? "API_KEY" : "CONSOLE",
                 principal.actorId().toString());
+        gasService.reserveWithdrawal(
+                tenant.id(), withdrawalId, orderNo, chain, symbol);
 
         UUID eventId = UUID.randomUUID();
         WithdrawalView view = new WithdrawalView(
@@ -264,7 +278,8 @@ public class CustodyWithdrawalService {
             String assetSymbol,
             String toAddress,
             String amount,
-            String externalReference
+            String externalReference,
+            Boolean confirmed
     ) {
     }
 

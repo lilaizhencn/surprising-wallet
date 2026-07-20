@@ -83,8 +83,8 @@ public class EvmAccountTransactionService {
         if (!receipt.isStatusOK()) {
             throw new IllegalStateException("EVM transaction failed: " + txHash);
         }
+        markConfirmed(chain, txHash, receipt);
         if (repository.confirmWithdrawalAndSettle(chain, orderNo, txHash, symbol, accountId, debitAmount)) {
-            markConfirmed(chain, txHash, receipt);
             return true;
         }
         return false;
@@ -99,8 +99,8 @@ public class EvmAccountTransactionService {
         if (!receipt.isStatusOK()) {
             throw new IllegalStateException("EVM collection transaction failed: " + txHash);
         }
+        markConfirmed(chain, txHash, receipt);
         if (repository.markCollectionConfirmed(chain, collectionNo, txHash) == 1) {
-            markConfirmed(chain, txHash, receipt);
             return true;
         }
         return false;
@@ -124,6 +124,10 @@ public class EvmAccountTransactionService {
 
     private void markConfirmed(String chain, String txHash, TransactionReceipt receipt) {
         BigInteger gasUsed = receipt.getGasUsed() == null ? BigInteger.ZERO : receipt.getGasUsed();
+        BigInteger effectiveGasPrice = receipt.getEffectiveGasPrice() == null
+                || receipt.getEffectiveGasPrice().isBlank()
+                ? BigInteger.ZERO
+                : Numeric.decodeQuantity(receipt.getEffectiveGasPrice());
         repository.recordEvmTransaction(EvmTransactionRecord.builder()
                 .chain(chain)
                 .txHash(txHash)
@@ -131,7 +135,7 @@ public class EvmAccountTransactionService {
                 .toAddress(receipt.getTo())
                 .assetSymbol(nativeSymbol(profile(chain)))
                 .amount(BigDecimal.ZERO)
-                .fee(weiToNative(gasUsed))
+                .fee(fee(effectiveGasPrice, gasUsed))
                 .blockHeight(receipt.getBlockNumber() == null ? null : receipt.getBlockNumber().longValue())
                 .confirmations(profile(chain).getWithdrawConfirmations())
                 .status("CONFIRMED")

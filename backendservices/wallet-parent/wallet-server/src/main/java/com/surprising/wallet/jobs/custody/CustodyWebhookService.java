@@ -136,6 +136,16 @@ public class CustodyWebhookService {
         return repository.listWebhookDeliveries(principal.tenantId(), endpointId, limit, offset);
     }
 
+    public List<Map<String, Object>> deliveryAttempts(
+            CustodyPrincipal principal, UUID deliveryId, int limit, int offset) {
+        requireScope(principal, "webhooks:read");
+        if (deliveryId == null) {
+            throw new IllegalArgumentException("deliveryId is required");
+        }
+        return repository.listWebhookDeliveryAttempts(
+                principal.tenantId(), deliveryId, limit, offset);
+    }
+
     @Transactional(rollbackFor = Throwable.class)
     public void retry(CustodyPrincipal principal, UUID deliveryId, String sourceIp) {
         requireTenantAdmin(principal);
@@ -166,7 +176,10 @@ public class CustodyWebhookService {
                 byte[] bytes = stream.readNBytes(4097);
                 String responseBody = new String(
                         bytes, 0, Math.min(bytes.length, 4096), java.nio.charset.StandardCharsets.UTF_8);
-                return new WebhookHttpResult(response.statusCode(), responseBody);
+                return new WebhookHttpResult(
+                        response.statusCode(),
+                        responseBody,
+                        response.headers().firstValue("Retry-After").orElse(null));
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -264,6 +277,6 @@ public class CustodyWebhookService {
     ) {
     }
 
-    public record WebhookHttpResult(int statusCode, String body) {
+    public record WebhookHttpResult(int statusCode, String body, String retryAfter) {
     }
 }

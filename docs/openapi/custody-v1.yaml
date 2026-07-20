@@ -13,6 +13,7 @@ tags:
   - name: Console authentication
   - name: Console addresses
   - name: Console transfers
+  - name: Console Gas
   - name: Console security
   - name: Console Webhooks
   - name: Platform
@@ -112,7 +113,10 @@ paths:
     post:
       tags: [Public API]
       summary: Create a withdrawal
-      description: Idempotency-Key is permanent for withdrawal creation.
+      description: >-
+        Idempotency-Key is permanent for withdrawal creation. The destination
+        is a validated external chain address and does not need to be an address
+        previously allocated by this wallet service.
       security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -243,6 +247,102 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/AssetBalance' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/onboarding:
+    get:
+      tags: [Console Gas]
+      summary: Read the tenant onboarding checklist
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Six-step onboarding readiness }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/gas-accounts:
+    get:
+      tags: [Console Gas]
+      summary: List tenant network-fee reserves
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Gas accounts backed by confirmed native-coin balances
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/GasAccount' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Console Gas]
+      summary: Create a native-coin gas funding address
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chain, lowBalanceThreshold]
+              properties:
+                chain: { type: string }
+                lowBalanceThreshold: { type: string }
+      responses:
+        '201':
+          description: Created or existing gas account for the network
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GasAccount' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/gas-accounts/{gasAccountId}:
+    patch:
+      tags: [Console Gas]
+      summary: Change a gas warning threshold or lifecycle status
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/GasAccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lowBalanceThreshold: { type: string }
+                status: { type: string, enum: [ACTIVE, DISABLED] }
+      responses:
+        '200':
+          description: Updated gas account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GasAccount' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/gas-accounts/{gasAccountId}/topups:
+    get:
+      tags: [Console Gas]
+      summary: List confirmed native-coin funding deposits
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/GasAccountId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200': { description: Funding history }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/gas-accounts/{gasAccountId}/usage:
+    get:
+      tags: [Console Gas]
+      summary: List withdrawal fee reservations and settlements
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/GasAccountId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Auditable network-fee usage
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/GasUsage' }
         default: { $ref: '#/components/responses/Error' }
   /custody/console/v1/deposits:
     get:
@@ -490,6 +590,24 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/Ok' }
         default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/webhook-deliveries/{deliveryId}/attempts:
+    get:
+      tags: [Console Webhooks]
+      summary: List every automatic and manual delivery attempt
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/DeliveryId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Immutable attempt history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WebhookDeliveryAttempt' }
+        default: { $ref: '#/components/responses/Error' }
   /custody/platform/v1/auth/login:
     post:
       tags: [Platform]
@@ -628,6 +746,16 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    DeliveryId:
+      name: deliveryId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    GasAccountId:
+      name: gasAccountId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -668,7 +796,7 @@ components:
             properties:
               ok: { type: boolean, const: true }
     Error:
-      description: Error response
+      description: Actionable JSON error response without credential or signature material
       content:
         application/json:
           schema:
@@ -746,14 +874,21 @@ components:
         updatedAt: { type: string, format: date-time }
     CreateWithdrawal:
       type: object
-      required: [custodyAddressId, chain, assetSymbol, toAddress, amount]
+      required: [custodyAddressId, chain, assetSymbol, toAddress, amount, confirmed]
       properties:
         custodyAddressId: { type: string, format: uuid }
         chain: { type: string }
         assetSymbol: { type: string }
-        toAddress: { type: string, maxLength: 160 }
+        toAddress:
+          type: string
+          maxLength: 160
+          description: Validated external destination address for the selected chain.
         amount: { type: string }
         externalReference: { type: string, maxLength: 160 }
+        confirmed:
+          type: boolean
+          const: true
+          description: Explicit irreversible-action confirmation.
     Withdrawal:
       type: object
       properties:
@@ -770,6 +905,92 @@ components:
         txHash: { type: [string, 'null'] }
         errorMessage: { type: [string, 'null'] }
         createdAt: { type: string, format: date-time }
+    GasAccount:
+      type: object
+      required:
+        - id
+        - custodyAddressId
+        - chain
+        - network
+        - nativeSymbol
+        - address
+        - availableBalance
+        - lockedBalance
+        - totalBalance
+        - lowBalanceThreshold
+        - lowBalance
+        - status
+      properties:
+        id: { type: string, format: uuid }
+        custodyAddressId: { type: string, format: uuid }
+        chain: { type: string }
+        network: { type: string }
+        nativeSymbol: { type: string }
+        address: { type: string }
+        memo: { type: [string, 'null'] }
+        availableBalance: { type: number }
+        lockedBalance: { type: number }
+        totalBalance: { type: number }
+        lowBalanceThreshold: { type: number }
+        lowBalance: { type: boolean }
+        status: { type: string, enum: [ACTIVE, DISABLED] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    GasUsage:
+      type: object
+      required:
+        - id
+        - custodyWithdrawalId
+        - orderNo
+        - chain
+        - nativeSymbol
+        - reservedAmount
+        - status
+        - pricingSource
+        - createdAt
+      properties:
+        id: { type: string, format: uuid }
+        custodyWithdrawalId: { type: string, format: uuid }
+        orderNo: { type: string }
+        chain: { type: string }
+        nativeSymbol: { type: string }
+        reservedAmount: { type: number }
+        actualAmount: { type: [number, 'null'] }
+        status:
+          type: string
+          enum: [RESERVED, SETTLED, RELEASED, OVERDUE]
+        pricingSource:
+          type: string
+          enum: [CONFIGURED_RESERVE, CHAIN_RECORDED, CHAIN_CONFIRMED]
+        txHash: { type: [string, 'null'] }
+        errorMessage: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        settledAt: { type: [string, 'null'], format: date-time }
+    WebhookDeliveryAttempt:
+      type: object
+      required:
+        - id
+        - attemptNumber
+        - retryCycle
+        - trigger
+        - status
+        - startedAt
+      properties:
+        id: { type: string, format: uuid }
+        attemptNumber: { type: integer }
+        retryCycle: { type: integer }
+        trigger: { type: string, enum: [AUTOMATIC, MANUAL, RECOVERY] }
+        status:
+          type: string
+          enum: [RUNNING, DELIVERED, RETRY_SCHEDULED, FAILED]
+        httpStatus: { type: [integer, 'null'] }
+        errorMessage: { type: [string, 'null'] }
+        responseBody: { type: [string, 'null'] }
+        nextAttemptAt: { type: [string, 'null'], format: date-time }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        durationMs: { type: [integer, 'null'], format: int64 }
     CreateWebhook:
       type: object
       required: [name, url, events]

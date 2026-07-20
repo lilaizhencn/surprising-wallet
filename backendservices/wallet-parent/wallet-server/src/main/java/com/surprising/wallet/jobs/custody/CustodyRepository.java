@@ -88,15 +88,29 @@ public class CustodyRepository {
                                coalesce(a.address_count, 0) as address_count,
                                coalesce(d.deposit_count, 0) as deposit_count,
                                coalesce(w.withdrawal_count, 0) as withdrawal_count,
-                               coalesce(e.active_webhook_count, 0) as active_webhook_count
+                               coalesce(e.active_webhook_count, 0) as active_webhook_count,
+                               coalesce(k.active_api_key_count, 0) as active_api_key_count,
+                               coalesce(g.gas_account_count, 0) as gas_account_count,
+                               coalesce(f.failed_webhook_delivery_count, 0)
+                                   as failed_webhook_delivery_count
                           from custody_tenant t
                           left join (
-                              select tenant_id, count(*) as address_count
-                                from custody_address group by tenant_id
+                              select a.tenant_id, count(*) as address_count
+                                from custody_address a
+                               where not exists (
+                                   select 1 from custody_gas_account g
+                                    where g.custody_address_id = a.id
+                               )
+                               group by a.tenant_id
                           ) a on a.tenant_id = t.id
                           left join (
-                              select tenant_id, count(*) as deposit_count
-                                from custody_deposit group by tenant_id
+                              select d.tenant_id, count(*) as deposit_count
+                                from custody_deposit d
+                               where not exists (
+                                   select 1 from custody_gas_account g
+                                    where g.custody_address_id = d.custody_address_id
+                               )
+                               group by d.tenant_id
                           ) d on d.tenant_id = t.id
                           left join (
                               select tenant_id, count(*) as withdrawal_count
@@ -108,6 +122,24 @@ public class CustodyRepository {
                                where status = 'ACTIVE'
                                group by tenant_id
                           ) e on e.tenant_id = t.id
+                          left join (
+                              select tenant_id, count(*) as active_api_key_count
+                                from custody_api_key
+                               where status = 'ACTIVE'
+                               group by tenant_id
+                          ) k on k.tenant_id = t.id
+                          left join (
+                              select tenant_id, count(*) as gas_account_count
+                                from custody_gas_account
+                               where status = 'ACTIVE'
+                               group by tenant_id
+                          ) g on g.tenant_id = t.id
+                          left join (
+                              select tenant_id, count(*) as failed_webhook_delivery_count
+                                from custody_webhook_delivery
+                               where status = 'FAILED'
+                               group by tenant_id
+                          ) f on f.tenant_id = t.id
                          order by t.created_at desc, t.id
                          limit ? offset ?
                         """, (rs, rowNum) -> {
@@ -123,6 +155,10 @@ public class CustodyRepository {
                     row.put("depositCount", rs.getLong("deposit_count"));
                     row.put("withdrawalCount", rs.getLong("withdrawal_count"));
                     row.put("activeWebhookCount", rs.getLong("active_webhook_count"));
+                    row.put("activeApiKeyCount", rs.getLong("active_api_key_count"));
+                    row.put("gasAccountCount", rs.getLong("gas_account_count"));
+                    row.put("failedWebhookDeliveryCount",
+                            rs.getLong("failed_webhook_delivery_count"));
                     row.put("createdAt", rs.getTimestamp("created_at").toInstant());
                     row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
                     return row;
@@ -450,6 +486,16 @@ public class CustodyRepository {
                 .orElseThrow(() -> new IllegalArgumentException("custody address not found"));
     }
 
+    public boolean isGasAddress(UUID tenantId, UUID addressId) {
+        Boolean result = jdbc.queryForObject("""
+                        select exists (
+                            select 1 from custody_gas_account
+                             where tenant_id = ? and custody_address_id = ?
+                        )
+                        """, Boolean.class, tenantId, addressId);
+        return Boolean.TRUE.equals(result);
+    }
+
     public AddressRecord updateAddress(UUID tenantId, UUID addressId, String label,
                                        String metadataJson, String status) {
         if (jdbc.update("""
@@ -474,6 +520,10 @@ public class CustodyRepository {
                                status, derivation_subject, created_at, updated_at
                           from custody_address
                          where tenant_id = ?
+                           and not exists (
+                               select 1 from custody_gas_account g
+                                where g.custody_address_id = custody_address.id
+                           )
                            and (? = '' or chain = ?)
                            and (? = '' or source = ?)
                            and (? = '' or status = ?)
@@ -506,11 +556,19 @@ public class CustodyRepository {
                                and related.wallet_role = base.wallet_role
                                and related.enabled = true
                              where c.tenant_id = ?
+                               and not exists (
+                                   select 1 from custody_gas_account g
+                                    where g.custody_address_id = c.id
+                               )
                             union
                             select distinct c.id, c.tenant_id, base.chain, base.account_id
                               from custody_address c
                               join chain_address base on base.id = c.chain_address_id
                              where c.tenant_id = ?
+                               and not exists (
+                                   select 1 from custody_gas_account g
+                                    where g.custody_address_id = c.id
+                               )
                         )
                         select lb.chain, lb.asset_symbol,
                                coalesce(sum(lb.available_balance), 0) as available_balance,
@@ -533,6 +591,601 @@ public class CustodyRepository {
                     row.put("addressCount", rs.getLong("address_count"));
                     return row;
                 }, tenantId, tenantId);
+    }
+
+    public Optional<GasAccountRecord> findGasAccount(UUID tenantId, String chain) {
+        return gasAccounts(tenantId, chain).stream().findFirst();
+    }
+
+    public GasAccountRecord insertGasAccount(
+            UUID id, UUID tenantId, UUID custodyAddressId, String chain, String network,
+            String nativeSymbol, java.math.BigDecimal lowBalanceThreshold, UUID createdBy) {
+        jdbc.update("""
+                        insert into custody_gas_account(
+                            id, tenant_id, custody_address_id, chain, network, native_symbol,
+                            low_balance_threshold, created_by)
+                        values (?, ?, ?, ?, ?, ?, ?, ?)
+                        on conflict (tenant_id, chain) do nothing
+                        """, id, tenantId, custodyAddressId, chain, network, nativeSymbol,
+                lowBalanceThreshold, createdBy);
+        return findGasAccount(tenantId, chain)
+                .orElseThrow(() -> new IllegalStateException("failed to create gas account"));
+    }
+
+    public GasAccountRecord requireGasAccount(UUID tenantId, UUID gasAccountId) {
+        return gasAccounts(tenantId, "").stream()
+                .filter(account -> account.id().equals(gasAccountId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("gas account not found"));
+    }
+
+    public List<GasAccountRecord> listGasAccounts(UUID tenantId) {
+        return gasAccounts(tenantId, "");
+    }
+
+    public GasAccountRecord updateGasAccount(
+            UUID tenantId, UUID gasAccountId, java.math.BigDecimal lowBalanceThreshold,
+            String status) {
+        if (jdbc.update("""
+                        update custody_gas_account
+                           set low_balance_threshold = ?, status = ?, updated_at = now()
+                         where tenant_id = ? and id = ?
+                        """, lowBalanceThreshold, status, tenantId, gasAccountId) != 1) {
+            throw new IllegalArgumentException("gas account not found");
+        }
+        return requireGasAccount(tenantId, gasAccountId);
+    }
+
+    public List<Map<String, Object>> listGasTopups(
+            UUID tenantId, UUID gasAccountId, int limit, int offset) {
+        return jdbc.query("""
+                        select d.id, d.chain, d.asset_symbol, d.tx_hash, d.log_index,
+                               d.amount, d.status, d.credited_at, d.created_at
+                          from custody_deposit d
+                          join custody_gas_account g
+                            on g.custody_address_id = d.custody_address_id
+                           and g.tenant_id = d.tenant_id
+                         where d.tenant_id = ? and g.id = ?
+                         order by d.created_at desc, d.id
+                         limit ? offset ?
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getObject("id", UUID.class));
+                    row.put("chain", rs.getString("chain"));
+                    row.put("assetSymbol", rs.getString("asset_symbol"));
+                    row.put("txHash", rs.getString("tx_hash"));
+                    row.put("logIndex", rs.getLong("log_index"));
+                    row.put("amount", rs.getBigDecimal("amount"));
+                    row.put("status", rs.getString("status"));
+                    row.put("creditedAt", instantOrNull(rs.getTimestamp("credited_at")));
+                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
+                    return row;
+                }, tenantId, gasAccountId,
+                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    }
+
+    public GasPricingMetadata gasPricingMetadata(String chain, String assetSymbol) {
+        return jdbc.query("""
+                        select p.family, p.native_symbol, coalesce(p.default_fee_rate, 1) default_fee_rate,
+                               native_asset.decimals,
+                               coalesce(requested.native_asset, false) requested_native
+                          from chain_profile p
+                          join chain_asset native_asset
+                            on native_asset.chain = p.chain
+                           and native_asset.symbol = p.native_symbol
+                           and native_asset.native_asset = true
+                           and native_asset.active = true
+                          left join chain_asset requested
+                            on requested.chain = p.chain
+                           and requested.symbol = ?
+                           and requested.active = true
+                         where p.chain = ? and p.enabled = true
+                         order by p.id
+                         limit 1
+                        """, (rs, rowNum) -> new GasPricingMetadata(
+                        rs.getString("family"),
+                        rs.getString("native_symbol"),
+                        rs.getLong("default_fee_rate"),
+                        rs.getInt("decimals"),
+                        rs.getBoolean("requested_native")),
+                assetSymbol, chain).stream().findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "enabled chain gas pricing is unavailable for " + chain));
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public GasUsageRecord reserveGasUsage(
+            UUID tenantId, UUID custodyWithdrawalId, String orderNo, String chain,
+            java.math.BigDecimal reservedAmount) {
+        GasAccountRecord account = findGasAccount(tenantId, chain)
+                .filter(candidate -> "ACTIVE".equals(candidate.status()))
+                .orElseThrow(() -> new IllegalStateException(
+                        "set up an active " + chain + " gas account before creating withdrawals"));
+        if (jdbc.update("""
+                        update ledger_balance
+                           set available_balance = available_balance - ?,
+                               locked_balance = locked_balance + ?,
+                               updated_at = now()
+                         where chain = ? and asset_symbol = ? and lower(account_id) = lower(?)
+                           and available_balance >= ?
+                           and not exists (
+                               select 1 from custody_gas_usage u
+                                where u.gas_account_id = ? and u.status = 'OVERDUE'
+                           )
+                        """, reservedAmount, reservedAmount, chain, account.nativeSymbol(),
+                account.accountId(), reservedAmount, account.id()) != 1) {
+            throw new IllegalStateException(
+                    "insufficient " + account.nativeSymbol()
+                            + " gas balance; fund the gas account and wait for confirmations");
+        }
+        UUID usageId = UUID.randomUUID();
+        jdbc.update("""
+                        insert into custody_gas_usage(
+                            id, tenant_id, gas_account_id, custody_withdrawal_id,
+                            order_no, chain, native_symbol, reserved_amount)
+                        values (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, usageId, tenantId, account.id(), custodyWithdrawalId,
+                orderNo, chain, account.nativeSymbol(), reservedAmount);
+        return requireGasUsage(custodyWithdrawalId);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public GasUsageRecord releaseGasUsage(UUID custodyWithdrawalId, String reason) {
+        GasUsageRecord usage = requireGasUsageForUpdate(custodyWithdrawalId);
+        if (!"RESERVED".equals(usage.status())) {
+            return usage;
+        }
+        GasAccountRecord account = requireGasAccount(usage.tenantId(), usage.gasAccountId());
+        if (jdbc.update("""
+                        update ledger_balance
+                           set available_balance = available_balance + ?,
+                               locked_balance = locked_balance - ?,
+                               updated_at = now()
+                         where chain = ? and asset_symbol = ? and lower(account_id) = lower(?)
+                           and locked_balance >= ?
+                        """, usage.reservedAmount(), usage.reservedAmount(),
+                usage.chain(), usage.nativeSymbol(), account.accountId(),
+                usage.reservedAmount()) != 1) {
+            throw new IllegalStateException("gas reservation balance is inconsistent");
+        }
+        jdbc.update("""
+                        update custody_gas_usage
+                           set status = 'RELEASED', error_message = ?, updated_at = now(),
+                               settled_at = now()
+                         where id = ? and status = 'RESERVED'
+                        """, reason, usage.id());
+        return requireGasUsage(custodyWithdrawalId);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public GasUsageRecord settleGasUsage(
+            UUID custodyWithdrawalId, java.math.BigDecimal actualAmount,
+            String pricingSource, String txHash) {
+        GasUsageRecord usage = requireGasUsageForUpdate(custodyWithdrawalId);
+        if (!Set.of("RESERVED", "OVERDUE").contains(usage.status())) {
+            return usage;
+        }
+        java.math.BigDecimal actual = actualAmount == null || actualAmount.signum() <= 0
+                ? usage.reservedAmount()
+                : actualAmount.stripTrailingZeros();
+        GasAccountRecord account = requireGasAccount(usage.tenantId(), usage.gasAccountId());
+        java.math.BigDecimal difference = usage.reservedAmount().subtract(actual);
+        int settled;
+        if (difference.signum() >= 0) {
+            settled = jdbc.update("""
+                            update ledger_balance
+                               set available_balance = available_balance + ?,
+                                   locked_balance = locked_balance - ?,
+                                   total_balance = total_balance - ?,
+                                   updated_at = now()
+                             where chain = ? and asset_symbol = ? and lower(account_id) = lower(?)
+                               and locked_balance >= ? and total_balance >= ?
+                            """, difference, usage.reservedAmount(), actual,
+                    usage.chain(), usage.nativeSymbol(), account.accountId(),
+                    usage.reservedAmount(), actual);
+        } else {
+            java.math.BigDecimal extra = difference.negate();
+            settled = jdbc.update("""
+                            update ledger_balance
+                               set available_balance = available_balance - ?,
+                                   locked_balance = locked_balance - ?,
+                                   total_balance = total_balance - ?,
+                                   updated_at = now()
+                             where chain = ? and asset_symbol = ? and lower(account_id) = lower(?)
+                               and available_balance >= ? and locked_balance >= ?
+                               and total_balance >= ?
+                            """, extra, usage.reservedAmount(), actual,
+                    usage.chain(), usage.nativeSymbol(), account.accountId(),
+                    extra, usage.reservedAmount(), actual);
+        }
+        if (settled != 1) {
+            jdbc.update("""
+                            update custody_gas_usage
+                               set status = 'OVERDUE', actual_amount = ?,
+                                   pricing_source = ?, tx_hash = ?,
+                                   error_message = 'actual network fee exceeded funded gas balance',
+                                   updated_at = now(), settled_at = null
+                             where id = ? and status in ('RESERVED', 'OVERDUE')
+                            """, actual, pricingSource, txHash, usage.id());
+            return requireGasUsage(custodyWithdrawalId);
+        }
+        jdbc.update("""
+                        update custody_gas_usage
+                           set status = 'SETTLED', actual_amount = ?,
+                               pricing_source = ?, tx_hash = ?, error_message = null,
+                               updated_at = now(), settled_at = now()
+                         where id = ? and status in ('RESERVED', 'OVERDUE')
+                        """, actual, pricingSource, txHash, usage.id());
+        jdbc.update("""
+                        insert into custody_ledger_entry(
+                            id, tenant_id, custody_address_id, chain, asset_symbol,
+                            account_id, entry_type, direction, amount,
+                            reference_type, reference_id)
+                        values (?, ?, ?, ?, ?, ?, 'NETWORK_FEE', 'DEBIT', ?,
+                                'WITHDRAWAL', ?)
+                        on conflict (tenant_id, entry_type, reference_type, reference_id)
+                        do nothing
+                        """, UUID.randomUUID(), usage.tenantId(), account.custodyAddressId(),
+                usage.chain(), usage.nativeSymbol(), account.accountId(), actual, usage.orderNo());
+        return requireGasUsage(custodyWithdrawalId);
+    }
+
+    public List<Map<String, Object>> listGasUsage(
+            UUID tenantId, UUID gasAccountId, int limit, int offset) {
+        return jdbc.query("""
+                        select u.id, u.custody_withdrawal_id, u.order_no, u.chain,
+                               u.native_symbol, u.reserved_amount, u.actual_amount,
+                               u.status, u.pricing_source, u.tx_hash, u.error_message,
+                               u.created_at, u.updated_at, u.settled_at
+                          from custody_gas_usage u
+                         where u.tenant_id = ? and u.gas_account_id = ?
+                         order by u.created_at desc, u.id
+                         limit ? offset ?
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getObject("id", UUID.class));
+                    row.put("custodyWithdrawalId",
+                            rs.getObject("custody_withdrawal_id", UUID.class));
+                    row.put("orderNo", rs.getString("order_no"));
+                    row.put("chain", rs.getString("chain"));
+                    row.put("nativeSymbol", rs.getString("native_symbol"));
+                    row.put("reservedAmount", rs.getBigDecimal("reserved_amount"));
+                    row.put("actualAmount", rs.getBigDecimal("actual_amount"));
+                    row.put("status", rs.getString("status"));
+                    row.put("pricingSource", rs.getString("pricing_source"));
+                    row.put("txHash", rs.getString("tx_hash"));
+                    row.put("errorMessage", rs.getString("error_message"));
+                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
+                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
+                    row.put("settledAt", instantOrNull(rs.getTimestamp("settled_at")));
+                    return row;
+                }, tenantId, gasAccountId,
+                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    }
+
+    public List<GasUsageRecord> listOverdueGasUsage(int limit) {
+        return jdbc.query("""
+                        select id, tenant_id, gas_account_id, custody_withdrawal_id,
+                               order_no, chain, native_symbol, reserved_amount,
+                               actual_amount, status, pricing_source, tx_hash,
+                               error_message, created_at, updated_at, settled_at
+                          from custody_gas_usage
+                         where status = 'OVERDUE' and actual_amount is not null
+                         order by updated_at, id
+                         limit ?
+                        """, (rs, rowNum) -> new GasUsageRecord(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getObject("gas_account_id", UUID.class),
+                        rs.getObject("custody_withdrawal_id", UUID.class),
+                        rs.getString("order_no"),
+                        rs.getString("chain"),
+                        rs.getString("native_symbol"),
+                        rs.getBigDecimal("reserved_amount"),
+                        rs.getBigDecimal("actual_amount"),
+                        rs.getString("status"),
+                        rs.getString("pricing_source"),
+                        rs.getString("tx_hash"),
+                        rs.getString("error_message"),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("updated_at").toInstant(),
+                        instantOrNull(rs.getTimestamp("settled_at"))),
+                Math.min(Math.max(limit, 1), 200));
+    }
+
+    private GasUsageRecord requireGasUsage(UUID custodyWithdrawalId) {
+        return findGasUsage(custodyWithdrawalId)
+                .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
+    }
+
+    private GasUsageRecord requireGasUsageForUpdate(UUID custodyWithdrawalId) {
+        return jdbc.query("""
+                        select id, tenant_id, gas_account_id, custody_withdrawal_id,
+                               order_no, chain, native_symbol, reserved_amount,
+                               actual_amount, status, pricing_source, tx_hash,
+                               error_message, created_at, updated_at, settled_at
+                          from custody_gas_usage
+                         where custody_withdrawal_id = ?
+                           for update
+                        """, (rs, rowNum) -> new GasUsageRecord(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getObject("gas_account_id", UUID.class),
+                        rs.getObject("custody_withdrawal_id", UUID.class),
+                        rs.getString("order_no"),
+                        rs.getString("chain"),
+                        rs.getString("native_symbol"),
+                        rs.getBigDecimal("reserved_amount"),
+                        rs.getBigDecimal("actual_amount"),
+                        rs.getString("status"),
+                        rs.getString("pricing_source"),
+                        rs.getString("tx_hash"),
+                        rs.getString("error_message"),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("updated_at").toInstant(),
+                        instantOrNull(rs.getTimestamp("settled_at"))),
+                custodyWithdrawalId).stream().findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
+    }
+
+    public Optional<GasUsageRecord> findGasUsage(UUID custodyWithdrawalId) {
+        return jdbc.query("""
+                        select id, tenant_id, gas_account_id, custody_withdrawal_id,
+                               order_no, chain, native_symbol, reserved_amount,
+                               actual_amount, status, pricing_source, tx_hash,
+                               error_message, created_at, updated_at, settled_at
+                          from custody_gas_usage
+                         where custody_withdrawal_id = ?
+                        """, (rs, rowNum) -> new GasUsageRecord(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getObject("gas_account_id", UUID.class),
+                        rs.getObject("custody_withdrawal_id", UUID.class),
+                        rs.getString("order_no"),
+                        rs.getString("chain"),
+                        rs.getString("native_symbol"),
+                        rs.getBigDecimal("reserved_amount"),
+                        rs.getBigDecimal("actual_amount"),
+                        rs.getString("status"),
+                        rs.getString("pricing_source"),
+                        rs.getString("tx_hash"),
+                        rs.getString("error_message"),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("updated_at").toInstant(),
+                        instantOrNull(rs.getTimestamp("settled_at"))),
+                custodyWithdrawalId).stream().findFirst();
+    }
+
+    public Optional<NetworkFee> confirmedNetworkFee(
+            String chain, String orderNo, String txHash, int nativeDecimals) {
+        if (txHash == null || txHash.isBlank()) {
+            return Optional.empty();
+        }
+        Optional<java.math.BigDecimal> amount;
+        String source;
+        switch (chain) {
+            case "SOLANA" -> {
+                amount = atomicFee("""
+                        select fee_lamports from sol_transaction
+                         where chain = ? and signature = ? and status = 'CONFIRMED'
+                         limit 1
+                        """, chain, txHash, 9);
+                source = "CHAIN_CONFIRMED";
+            }
+            case "APTOS" -> {
+                amount = atomicFee("""
+                        select gas_used * gas_unit_price from aptos_transaction
+                         where chain = ? and tx_hash = ? and status = 'CONFIRMED'
+                         limit 1
+                        """, chain, txHash, 8);
+                source = "CHAIN_CONFIRMED";
+            }
+            case "SUI" -> {
+                amount = atomicFee("""
+                        select gas_used from sui_transaction
+                         where chain = ? and tx_digest = ? and status = 'CONFIRMED'
+                         limit 1
+                        """, chain, txHash, 9);
+                source = "CHAIN_CONFIRMED";
+            }
+            case "TON" -> {
+                amount = atomicFee("""
+                        select fee_nano from ton_transaction
+                         where chain = ? and tx_hash = ? and status = 'CONFIRMED'
+                         limit 1
+                        """, chain, txHash, 9);
+                source = "CHAIN_CONFIRMED";
+            }
+            case "XRP" -> {
+                amount = atomicFee("""
+                        select fee_drops from xrp_transaction
+                         where chain = ? and tx_hash = ? and status = 'CONFIRMED'
+                         limit 1
+                        """, chain, txHash, 6);
+                source = "CHAIN_CONFIRMED";
+            }
+            case "XMR" -> {
+                amount = atomicFee("""
+                        select fee_atomic from monero_transaction
+                         where chain = ? and tx_hash = ? and status = 'CONFIRMED'
+                         order by updated_at desc limit 1
+                        """, chain, txHash, nativeDecimals);
+                source = "CHAIN_CONFIRMED";
+            }
+            case "NEAR" -> {
+                amount = Optional.empty();
+                source = "CONFIGURED_RESERVE";
+            }
+            case "TRON" -> {
+                amount = decimalFee("""
+                        select fee from tron_tx
+                         where chain = ? and tx_hash = ? and status = 'CONFIRMED'
+                         limit 1
+                        """, chain, txHash);
+                source = "CHAIN_CONFIRMED";
+            }
+            default -> {
+                amount = decimalFee("""
+                        select fee from evm_tx
+                         where chain = ? and tx_hash = ? and status = 'CONFIRMED'
+                         limit 1
+                        """, chain, txHash);
+                source = amount.isPresent() ? "CHAIN_RECORDED" : "CONFIGURED_RESERVE";
+                if (amount.isEmpty()) {
+                    amount = decimalFee("""
+                            select fee from withdrawal_order
+                             where chain = ? and order_no = ? and status = 'CONFIRMED'
+                             limit 1
+                            """, chain, orderNo);
+                }
+            }
+        }
+        String pricingSource = source;
+        return amount.filter(value -> value.signum() > 0)
+                .map(value -> new NetworkFee(value.stripTrailingZeros(), pricingSource));
+    }
+
+    private Optional<java.math.BigDecimal> atomicFee(
+            String sql, String chain, String txHash, int decimals) {
+        return decimalFee(sql, chain, txHash)
+                .map(value -> value.movePointLeft(decimals));
+    }
+
+    private Optional<java.math.BigDecimal> decimalFee(
+            String sql, String first, String second) {
+        return jdbc.query(sql,
+                        (rs, rowNum) -> rs.getBigDecimal(1), first, second)
+                .stream().filter(java.util.Objects::nonNull).findFirst();
+    }
+
+    public Map<String, Object> onboardingStatus(UUID tenantId) {
+        return jdbc.queryForObject("""
+                        select
+                            exists (
+                                select 1 from custody_api_key
+                                 where tenant_id = t.id and status = 'ACTIVE'
+                            ) as has_api_key,
+                            exists (
+                                select 1 from custody_webhook_endpoint
+                                 where tenant_id = t.id and status = 'ACTIVE'
+                                   and verified_at is not null
+                            ) as has_verified_webhook,
+                            t.ip_allowlist_enabled and exists (
+                                select 1 from custody_ip_rule
+                                 where tenant_id = t.id and enabled = true
+                            ) as has_ip_allowlist,
+                            exists (
+                                select 1 from custody_address a
+                                 where a.tenant_id = t.id
+                                   and not exists (
+                                       select 1 from custody_gas_account g
+                                        where g.custody_address_id = a.id
+                                   )
+                            ) as has_customer_address,
+                            exists (
+                                select 1 from custody_gas_account
+                                 where tenant_id = t.id and status = 'ACTIVE'
+                            ) as has_gas_account,
+                            exists (
+                                select 1
+                                  from custody_gas_account g
+                                  join custody_address a on a.id = g.custody_address_id
+                                  join chain_address base on base.id = a.chain_address_id
+                                  join chain_address related
+                                    on related.chain = base.chain
+                                   and related.user_id = base.user_id
+                                   and related.biz = base.biz
+                                   and related.address_index = base.address_index
+                                   and related.wallet_role = base.wallet_role
+                                   and related.asset_symbol = g.native_symbol
+                                   and related.enabled = true
+                                  join ledger_balance lb
+                                    on lb.chain = g.chain
+                                   and lb.asset_symbol = g.native_symbol
+                                   and lower(lb.account_id) = lower(related.account_id)
+                                 where g.tenant_id = t.id
+                                   and g.status = 'ACTIVE'
+                                   and lb.available_balance > 0
+                            ) as has_funded_gas
+                          from custody_tenant t
+                         where t.id = ?
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    boolean apiKey = rs.getBoolean("has_api_key");
+                    boolean webhook = rs.getBoolean("has_verified_webhook");
+                    boolean allowlist = rs.getBoolean("has_ip_allowlist");
+                    boolean address = rs.getBoolean("has_customer_address");
+                    boolean gasAccount = rs.getBoolean("has_gas_account");
+                    boolean fundedGas = rs.getBoolean("has_funded_gas");
+                    result.put("apiKeyConfigured", apiKey);
+                    result.put("webhookConfigured", webhook);
+                    result.put("ipAllowlistConfigured", allowlist);
+                    result.put("addressCreated", address);
+                    result.put("gasAccountConfigured", gasAccount);
+                    result.put("gasAccountFunded", fundedGas);
+                    result.put("completedSteps", List.of(
+                            apiKey, webhook, allowlist, address, gasAccount, fundedGas)
+                            .stream().filter(Boolean::booleanValue).count());
+                    result.put("totalSteps", 6);
+                    result.put("ready", apiKey && webhook && allowlist && address
+                            && gasAccount && fundedGas);
+                    return result;
+                }, tenantId);
+    }
+
+    private List<GasAccountRecord> gasAccounts(UUID tenantId, String chain) {
+        return jdbc.query("""
+                        select g.id, g.tenant_id, g.custody_address_id, g.chain, g.network,
+                               g.native_symbol, g.low_balance_threshold, g.status,
+                               a.address, a.memo, base.account_id,
+                               coalesce(b.available_balance, 0) as available_balance,
+                               coalesce(b.locked_balance, 0) as locked_balance,
+                               coalesce(b.total_balance, 0) as total_balance,
+                               g.created_at, g.updated_at
+                          from custody_gas_account g
+                          join custody_address a on a.id = g.custody_address_id
+                          join chain_address base on base.id = a.chain_address_id
+                          left join lateral (
+                              select coalesce(sum(lb.available_balance), 0) as available_balance,
+                                     coalesce(sum(lb.locked_balance), 0) as locked_balance,
+                                     coalesce(sum(lb.total_balance), 0) as total_balance
+                                from (
+                                    select distinct related.account_id
+                                      from chain_address related
+                                     where related.chain = base.chain
+                                       and related.user_id = base.user_id
+                                       and related.biz = base.biz
+                                       and related.address_index = base.address_index
+                                       and related.wallet_role = base.wallet_role
+                                       and related.asset_symbol = g.native_symbol
+                                       and related.enabled = true
+                                ) account
+                                join ledger_balance lb
+                                  on lb.chain = g.chain
+                                 and lb.asset_symbol = g.native_symbol
+                                 and lower(lb.account_id) = lower(account.account_id)
+                          ) b on true
+                         where g.tenant_id = ?
+                           and (? = '' or g.chain = ?)
+                         order by g.chain, g.id
+                        """, (rs, rowNum) -> new GasAccountRecord(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getObject("custody_address_id", UUID.class),
+                        rs.getString("chain"),
+                        rs.getString("network"),
+                        rs.getString("native_symbol"),
+                        rs.getString("address"),
+                        rs.getString("memo"),
+                        rs.getString("account_id"),
+                        rs.getBigDecimal("available_balance"),
+                        rs.getBigDecimal("locked_balance"),
+                        rs.getBigDecimal("total_balance"),
+                        rs.getBigDecimal("low_balance_threshold"),
+                        rs.getString("status"),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("updated_at").toInstant()),
+                tenantId, blankToEmpty(chain), blankToEmpty(chain));
     }
 
     public Optional<IdempotencyRecord> findIdempotency(UUID tenantId, String key, String operation) {
@@ -666,7 +1319,9 @@ public class CustodyRepository {
         return jdbc.query("""
                         select d.id, d.endpoint_id, d.event_id, e.event_type,
                                e.aggregate_type, e.aggregate_id, d.status, d.attempt_count,
-                               d.next_attempt_at, d.last_http_status, d.last_error,
+                               d.total_attempt_count, d.manual_retry_count,
+                               d.next_attempt_at, d.next_attempt_trigger,
+                               d.last_http_status, d.last_error,
                                d.delivered_at, d.created_at, d.updated_at
                           from custody_webhook_delivery d
                           join custody_event e on e.id = d.event_id
@@ -684,7 +1339,10 @@ public class CustodyRepository {
                     row.put("aggregateId", rs.getString("aggregate_id"));
                     row.put("status", rs.getString("status"));
                     row.put("attemptCount", rs.getInt("attempt_count"));
+                    row.put("totalAttemptCount", rs.getInt("total_attempt_count"));
+                    row.put("manualRetryCount", rs.getInt("manual_retry_count"));
                     row.put("nextAttemptAt", instantOrNull(rs.getTimestamp("next_attempt_at")));
+                    row.put("nextAttemptTrigger", rs.getString("next_attempt_trigger"));
                     row.put("lastHttpStatus", rs.getObject("last_http_status"));
                     row.put("lastError", rs.getString("last_error"));
                     row.put("deliveredAt", instantOrNull(rs.getTimestamp("delivered_at")));
@@ -697,9 +1355,13 @@ public class CustodyRepository {
 
     @Transactional(rollbackFor = Throwable.class)
     public List<WebhookDeliveryTask> claimWebhookDeliveries(String workerId, int limit) {
-        return jdbc.query("""
+        List<WebhookDeliveryTask> tasks = jdbc.query("""
                         with candidates as (
-                            select d.id
+                            select d.id,
+                                   case when d.status = 'DELIVERING'
+                                       then 'RECOVERY'
+                                       else d.next_attempt_trigger
+                                   end as attempt_trigger
                               from custody_webhook_delivery d
                               join custody_webhook_endpoint ep
                                 on ep.id = d.endpoint_id and ep.status = 'ACTIVE'
@@ -717,12 +1379,19 @@ public class CustodyRepository {
                         claimed as (
                             update custody_webhook_delivery d
                                set status = 'DELIVERING', locked_by = ?, locked_at = now(),
-                                   attempt_count = attempt_count + 1, updated_at = now()
+                                   attempt_count = attempt_count + 1,
+                                   total_attempt_count = total_attempt_count + 1,
+                                   next_attempt_trigger = 'AUTOMATIC',
+                                   updated_at = now()
                               from candidates c
                              where d.id = c.id
-                            returning d.id, d.tenant_id, d.endpoint_id, d.event_id, d.attempt_count
+                            returning d.id, d.tenant_id, d.endpoint_id, d.event_id,
+                                      d.attempt_count, d.total_attempt_count,
+                                      d.manual_retry_count, c.attempt_trigger
                         )
-                        select c.id, c.tenant_id, c.endpoint_id, c.event_id, c.attempt_count,
+                        select c.id, c.tenant_id, c.endpoint_id, c.event_id,
+                               c.attempt_count, c.total_attempt_count, c.manual_retry_count,
+                               c.attempt_trigger, gen_random_uuid() as attempt_id,
                                ep.url, ep.secret_ciphertext, ev.event_type,
                                ev.payload::text as payload
                           from claimed c
@@ -735,51 +1404,139 @@ public class CustodyRepository {
                         rs.getObject("endpoint_id", UUID.class),
                         rs.getObject("event_id", UUID.class),
                         rs.getInt("attempt_count"),
+                        rs.getInt("total_attempt_count"),
+                        rs.getInt("manual_retry_count"),
+                        rs.getString("attempt_trigger"),
+                        rs.getObject("attempt_id", UUID.class),
+                        workerId,
                         rs.getString("url"),
                         rs.getString("secret_ciphertext"),
                         rs.getString("event_type"),
                         rs.getString("payload")),
                 Math.min(Math.max(limit, 1), 100), workerId);
+        for (WebhookDeliveryTask task : tasks) {
+            if ("RECOVERY".equals(task.attemptTrigger())) {
+                jdbc.update("""
+                                update custody_webhook_delivery_attempt
+                                   set status = 'FAILED',
+                                       error_message =
+                                           'worker lease expired; delivery was safely reclaimed',
+                                       completed_at = now(),
+                                       duration_ms = greatest(
+                                           0,
+                                           (extract(epoch from (now() - started_at)) * 1000)::bigint)
+                                 where delivery_id = ? and status = 'IN_PROGRESS'
+                                """, task.id());
+            }
+            jdbc.update("""
+                            insert into custody_webhook_delivery_attempt(
+                                id, tenant_id, delivery_id, attempt_number, retry_cycle,
+                                trigger, worker_id)
+                            values (?, ?, ?, ?, ?, ?, ?)
+                            """, task.attemptId(), task.tenantId(), task.id(),
+                    task.totalAttemptCount(), task.manualRetryCount(),
+                    task.attemptTrigger(), workerId);
+        }
+        return tasks;
     }
 
     @Transactional(rollbackFor = Throwable.class)
-    public void markWebhookDelivered(WebhookDeliveryTask task, int httpStatus, String response) {
-        jdbc.update("""
+    public void markWebhookDelivered(WebhookDeliveryTask task, int httpStatus, String response,
+                                     long durationMs) {
+        int accepted = jdbc.update("""
                         update custody_webhook_delivery
                            set status = 'DELIVERED', last_http_status = ?, last_response = ?,
                                last_error = null, delivered_at = now(), locked_by = null,
                                locked_at = null, updated_at = now()
-                         where id = ?
-                        """, httpStatus, truncate(response, 4096), task.id());
+                         where id = ? and status = 'DELIVERING' and locked_by = ?
+                           and total_attempt_count = ?
+                        """, httpStatus, truncate(response, 4096), task.id(),
+                task.workerId(), task.totalAttemptCount());
         jdbc.update("""
-                update custody_webhook_endpoint
-                   set last_delivery_at = now(), updated_at = now()
-                 where id = ?
-                """, task.endpointId());
+                        update custody_webhook_delivery_attempt
+                           set status = 'DELIVERED', http_status = ?, response_body = ?,
+                               completed_at = now(), duration_ms = ?
+                         where id = ? and status = 'IN_PROGRESS'
+                        """, httpStatus, truncate(response, 4096), Math.max(durationMs, 0L),
+                task.attemptId());
+        if (accepted == 1) {
+            jdbc.update("""
+                    update custody_webhook_endpoint
+                       set last_delivery_at = now(), updated_at = now()
+                     where id = ?
+                    """, task.endpointId());
+        }
     }
 
+    @Transactional(rollbackFor = Throwable.class)
     public void markWebhookFailed(WebhookDeliveryTask task, Integer httpStatus, String error,
-                                  String response, Instant nextAttempt, boolean terminal) {
+                                  String response, Instant nextAttempt, boolean terminal,
+                                  long durationMs) {
         jdbc.update("""
                         update custody_webhook_delivery
                            set status = ?, last_http_status = ?, last_error = ?,
                                last_response = ?, next_attempt_at = ?, locked_by = null,
                                locked_at = null, updated_at = now()
-                         where id = ?
+                         where id = ? and status = 'DELIVERING' and locked_by = ?
+                           and total_attempt_count = ?
                         """, terminal ? "FAILED" : "RETRY", httpStatus, truncate(error, 4096),
-                truncate(response, 4096), Timestamp.from(nextAttempt), task.id());
+                truncate(response, 4096), timestampOrNull(nextAttempt), task.id(),
+                task.workerId(), task.totalAttemptCount());
+        jdbc.update("""
+                        update custody_webhook_delivery_attempt
+                           set status = ?, http_status = ?, error_message = ?,
+                               response_body = ?, next_attempt_at = ?,
+                               completed_at = now(), duration_ms = ?
+                         where id = ? and status = 'IN_PROGRESS'
+                        """, terminal ? "FAILED" : "RETRY_SCHEDULED", httpStatus,
+                truncate(error, 4096), truncate(response, 4096),
+                terminal ? null : Timestamp.from(nextAttempt), Math.max(durationMs, 0L),
+                task.attemptId());
     }
 
     public void retryWebhookDelivery(UUID tenantId, UUID deliveryId) {
         if (jdbc.update("""
                         update custody_webhook_delivery
                            set status = 'RETRY', attempt_count = 0,
+                               manual_retry_count = manual_retry_count + 1,
+                               next_attempt_trigger = 'MANUAL',
                                next_attempt_at = now(), locked_by = null,
-                               locked_at = null, last_error = null, updated_at = now()
+                               locked_at = null, updated_at = now()
                          where tenant_id = ? and id = ? and status in ('FAILED', 'RETRY')
                         """, tenantId, deliveryId) != 1) {
             throw new IllegalStateException("failed or retryable webhook delivery not found");
         }
+    }
+
+    public List<Map<String, Object>> listWebhookDeliveryAttempts(
+            UUID tenantId, UUID deliveryId, int limit, int offset) {
+        return jdbc.query("""
+                        select a.id, a.attempt_number, a.retry_cycle, a.trigger, a.status,
+                               a.http_status, a.error_message, a.response_body,
+                               a.next_attempt_at, a.started_at, a.completed_at, a.duration_ms
+                          from custody_webhook_delivery_attempt a
+                          join custody_webhook_delivery d on d.id = a.delivery_id
+                         where a.tenant_id = ? and a.delivery_id = ?
+                           and d.tenant_id = ?
+                         order by a.attempt_number desc
+                         limit ? offset ?
+                        """, (rs, rowNum) -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", rs.getObject("id", UUID.class));
+                    row.put("attemptNumber", rs.getInt("attempt_number"));
+                    row.put("retryCycle", rs.getInt("retry_cycle"));
+                    row.put("trigger", rs.getString("trigger"));
+                    row.put("status", rs.getString("status"));
+                    row.put("httpStatus", rs.getObject("http_status"));
+                    row.put("errorMessage", rs.getString("error_message"));
+                    row.put("responseBody", rs.getString("response_body"));
+                    row.put("nextAttemptAt", instantOrNull(rs.getTimestamp("next_attempt_at")));
+                    row.put("startedAt", rs.getTimestamp("started_at").toInstant());
+                    row.put("completedAt", instantOrNull(rs.getTimestamp("completed_at")));
+                    row.put("durationMs", rs.getObject("duration_ms"));
+                    return row;
+                }, tenantId, deliveryId, tenantId,
+                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
 
     public void insertCustodyWithdrawal(
@@ -843,6 +1600,10 @@ public class CustodyRepository {
                           from custody_deposit d
                           join custody_address a on a.id = d.custody_address_id
                          where d.tenant_id = ?
+                           and not exists (
+                               select 1 from custody_gas_account g
+                                where g.custody_address_id = d.custody_address_id
+                           )
                            and (? = '' or d.status = ?)
                          order by d.created_at desc, d.id
                          limit ? offset ?
@@ -925,6 +1686,21 @@ public class CustodyRepository {
                             """, UUID.randomUUID(), change.tenantId(), change.custodyAddressId(),
                     change.chain(), change.assetSymbol(), change.debitAccountId(),
                     change.amount().add(change.fee()), change.orderNo());
+            findGasUsage(change.id()).ifPresent(usage -> {
+                GasPricingMetadata metadata = gasPricingMetadata(
+                        change.chain(), change.assetSymbol());
+                NetworkFee networkFee = confirmedNetworkFee(
+                        change.chain(), change.orderNo(), change.txHash(), metadata.decimals())
+                        .orElse(new NetworkFee(
+                                usage.reservedAmount(), "CONFIGURED_RESERVE"));
+                settleGasUsage(change.id(), networkFee.amount(),
+                        networkFee.pricingSource(), change.txHash());
+            });
+        } else if (Set.of("FAILED", "REJECTED", "CANCELLED")
+                .contains(change.nextStatus())) {
+            findGasUsage(change.id()).ifPresent(usage ->
+                    releaseGasUsage(change.id(),
+                            "withdrawal ended as " + change.nextStatus()));
         }
         return true;
     }
@@ -1198,6 +1974,30 @@ public class CustodyRepository {
     ) {
     }
 
+    public record GasAccountRecord(
+            UUID id,
+            UUID tenantId,
+            UUID custodyAddressId,
+            String chain,
+            String network,
+            String nativeSymbol,
+            String address,
+            String memo,
+            String accountId,
+            java.math.BigDecimal availableBalance,
+            java.math.BigDecimal lockedBalance,
+            java.math.BigDecimal totalBalance,
+            java.math.BigDecimal lowBalanceThreshold,
+            String status,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+        public boolean lowBalance() {
+            return "ACTIVE".equals(status)
+                    && availableBalance.compareTo(lowBalanceThreshold) < 0;
+        }
+    }
+
     public record IdempotencyRecord(
             String requestHash,
             Integer responseStatus,
@@ -1228,6 +2028,11 @@ public class CustodyRepository {
             UUID endpointId,
             UUID eventId,
             int attemptCount,
+            int totalAttemptCount,
+            int manualRetryCount,
+            String attemptTrigger,
+            UUID attemptId,
+            String workerId,
             String url,
             String secretCiphertext,
             String eventType,
@@ -1251,6 +2056,41 @@ public class CustodyRepository {
             String txHash,
             String errorMessage,
             String debitAccountId
+    ) {
+    }
+
+    public record GasPricingMetadata(
+            String family,
+            String nativeSymbol,
+            long defaultFeeRate,
+            int decimals,
+            boolean requestedNative
+    ) {
+    }
+
+    public record GasUsageRecord(
+            UUID id,
+            UUID tenantId,
+            UUID gasAccountId,
+            UUID custodyWithdrawalId,
+            String orderNo,
+            String chain,
+            String nativeSymbol,
+            java.math.BigDecimal reservedAmount,
+            java.math.BigDecimal actualAmount,
+            String status,
+            String pricingSource,
+            String txHash,
+            String errorMessage,
+            Instant createdAt,
+            Instant updatedAt,
+            Instant settledAt
+    ) {
+    }
+
+    public record NetworkFee(
+            java.math.BigDecimal amount,
+            String pricingSource
     ) {
     }
 }

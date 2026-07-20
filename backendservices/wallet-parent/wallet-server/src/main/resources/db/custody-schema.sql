@@ -169,6 +169,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS custody_address_allocation_key
 CREATE INDEX IF NOT EXISTS custody_address_lookup_idx
     ON custody_address (chain, lower(address), status);
 
+CREATE TABLE IF NOT EXISTS custody_gas_account (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES custody_tenant(id) ON DELETE RESTRICT,
+    custody_address_id uuid NOT NULL REFERENCES custody_address(id) ON DELETE RESTRICT,
+    chain varchar(32) NOT NULL,
+    network varchar(64) NOT NULL,
+    native_symbol varchar(32) NOT NULL,
+    low_balance_threshold numeric(78,24) NOT NULL DEFAULT 0,
+    status varchar(24) NOT NULL DEFAULT 'ACTIVE',
+    created_by uuid REFERENCES custody_tenant_user(id),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT custody_gas_account_tenant_chain_key UNIQUE (tenant_id, chain),
+    CONSTRAINT custody_gas_account_address_key UNIQUE (custody_address_id),
+    CONSTRAINT custody_gas_account_threshold_check CHECK (low_balance_threshold >= 0),
+    CONSTRAINT custody_gas_account_status_check CHECK (status IN ('ACTIVE', 'DISABLED'))
+);
+
+CREATE INDEX IF NOT EXISTS custody_gas_account_tenant_status_idx
+    ON custody_gas_account (tenant_id, status);
+
 CREATE TABLE IF NOT EXISTS custody_deposit (
     id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL REFERENCES custody_tenant(id) ON DELETE RESTRICT,
@@ -214,6 +235,36 @@ CREATE UNIQUE INDEX IF NOT EXISTS custody_withdrawal_idempotency_key
     ON custody_withdrawal (tenant_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS custody_withdrawal_tenant_time_idx
     ON custody_withdrawal (tenant_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS custody_gas_usage (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES custody_tenant(id) ON DELETE RESTRICT,
+    gas_account_id uuid NOT NULL REFERENCES custody_gas_account(id) ON DELETE RESTRICT,
+    custody_withdrawal_id uuid NOT NULL REFERENCES custody_withdrawal(id) ON DELETE RESTRICT,
+    order_no varchar(96) NOT NULL,
+    chain varchar(32) NOT NULL,
+    native_symbol varchar(32) NOT NULL,
+    reserved_amount numeric(78,24) NOT NULL,
+    actual_amount numeric(78,24),
+    status varchar(24) NOT NULL DEFAULT 'RESERVED',
+    pricing_source varchar(32) NOT NULL DEFAULT 'CONFIGURED_RESERVE',
+    tx_hash varchar(128),
+    error_message text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    settled_at timestamptz,
+    CONSTRAINT custody_gas_usage_withdrawal_key UNIQUE (custody_withdrawal_id),
+    CONSTRAINT custody_gas_usage_tenant_order_key UNIQUE (tenant_id, order_no),
+    CONSTRAINT custody_gas_usage_reserved_check CHECK (reserved_amount > 0),
+    CONSTRAINT custody_gas_usage_actual_check CHECK (actual_amount IS NULL OR actual_amount >= 0),
+    CONSTRAINT custody_gas_usage_status_check
+        CHECK (status IN ('RESERVED', 'SETTLED', 'RELEASED', 'OVERDUE'))
+);
+
+CREATE INDEX IF NOT EXISTS custody_gas_usage_account_time_idx
+    ON custody_gas_usage (gas_account_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS custody_gas_usage_pending_idx
+    ON custody_gas_usage (status, updated_at) WHERE status IN ('RESERVED', 'OVERDUE');
 
 CREATE TABLE IF NOT EXISTS custody_ledger_entry (
     id uuid PRIMARY KEY,
@@ -284,6 +335,41 @@ CREATE INDEX IF NOT EXISTS custody_webhook_delivery_due_idx
     WHERE status IN ('PENDING', 'RETRY');
 CREATE INDEX IF NOT EXISTS custody_webhook_delivery_tenant_time_idx
     ON custody_webhook_delivery (tenant_id, created_at DESC);
+
+ALTER TABLE custody_webhook_delivery
+    ADD COLUMN IF NOT EXISTS total_attempt_count integer NOT NULL DEFAULT 0;
+ALTER TABLE custody_webhook_delivery
+    ADD COLUMN IF NOT EXISTS manual_retry_count integer NOT NULL DEFAULT 0;
+ALTER TABLE custody_webhook_delivery
+    ADD COLUMN IF NOT EXISTS next_attempt_trigger varchar(24) NOT NULL DEFAULT 'AUTOMATIC';
+
+CREATE TABLE IF NOT EXISTS custody_webhook_delivery_attempt (
+    id uuid PRIMARY KEY,
+    tenant_id uuid NOT NULL REFERENCES custody_tenant(id) ON DELETE RESTRICT,
+    delivery_id uuid NOT NULL REFERENCES custody_webhook_delivery(id) ON DELETE CASCADE,
+    attempt_number integer NOT NULL,
+    retry_cycle integer NOT NULL DEFAULT 0,
+    trigger varchar(24) NOT NULL,
+    status varchar(32) NOT NULL DEFAULT 'IN_PROGRESS',
+    worker_id varchar(160),
+    http_status integer,
+    error_message text,
+    response_body text,
+    next_attempt_at timestamptz,
+    started_at timestamptz NOT NULL DEFAULT now(),
+    completed_at timestamptz,
+    duration_ms bigint,
+    CONSTRAINT custody_webhook_attempt_number_key UNIQUE (delivery_id, attempt_number),
+    CONSTRAINT custody_webhook_attempt_trigger_check
+        CHECK (trigger IN ('AUTOMATIC', 'MANUAL', 'RECOVERY')),
+    CONSTRAINT custody_webhook_attempt_status_check
+        CHECK (status IN ('IN_PROGRESS', 'DELIVERED', 'RETRY_SCHEDULED', 'FAILED'))
+);
+
+CREATE INDEX IF NOT EXISTS custody_webhook_attempt_delivery_time_idx
+    ON custody_webhook_delivery_attempt (delivery_id, attempt_number DESC);
+CREATE INDEX IF NOT EXISTS custody_webhook_attempt_tenant_time_idx
+    ON custody_webhook_delivery_attempt (tenant_id, started_at DESC);
 
 CREATE TABLE IF NOT EXISTS custody_idempotency_key (
     tenant_id uuid NOT NULL REFERENCES custody_tenant(id) ON DELETE CASCADE,

@@ -239,6 +239,13 @@ public class WalletAppService {
     @Transactional(rollbackFor = Throwable.class)
     public Map<String, Object> withdrawForAccount(long userId, int biz, WithdrawRequest request,
                                                   String orderPrefix) {
+        return withdrawForAccount(userId, biz, request, orderPrefix, false);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public Map<String, Object> withdrawForAccount(long userId, int biz, WithdrawRequest request,
+                                                  String orderPrefix,
+                                                  boolean tenantGasFunded) {
         if (userId <= 0 || biz < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid withdrawal account");
         }
@@ -251,7 +258,7 @@ public class WalletAppService {
         AssetMeta asset = requireAsset(chain, symbol);
         validateExternalAddress(chain, request.toAddress());
         WithdrawalTarget target = withdrawalTarget(asset, request.toAddress());
-        BigDecimal feeReserve = withdrawalFeeReserve(asset);
+        BigDecimal feeReserve = withdrawalFeeReserve(asset, tenantGasFunded);
         BigDecimal frozenAmount = amount.add(feeReserve);
         SpendAccount spend = spendAccount(userId, biz, chain, symbol, frozenAmount);
         String sourceAddress = withdrawalSourceAddress(asset, spend);
@@ -895,7 +902,10 @@ public class WalletAppService {
         return decimal(value).movePointLeft(decimals);
     }
 
-    private static BigDecimal withdrawalFeeReserve(AssetMeta asset) {
+    private static BigDecimal withdrawalFeeReserve(AssetMeta asset, boolean tenantGasFunded) {
+        if (tenantGasFunded) {
+            return BigDecimal.ZERO;
+        }
         return asset.networkFeeReserve() == null ? BigDecimal.ZERO : asset.networkFeeReserve();
     }
 
@@ -1063,21 +1073,14 @@ public class WalletAppService {
 
     private WithdrawalTarget withdrawalTarget(AssetMeta asset, String address) {
         String value = address == null ? "" : address.trim();
-        ChainAddressRecord record = asset.nativeAsset()
-                ? nativeWithdrawalRecipient(asset, value)
-                : tokenWithdrawalRecipient(asset, value);
-        String broadcastAddress = value;
-        if (!asset.nativeAsset() && ("SOLANA".equals(asset.chain()) || "TON".equals(asset.chain()))) {
-            broadcastAddress = tokenOwnerAddress(record);
+        if (asset.nativeAsset() || !requiresPreparedTokenAddress(asset.chain())) {
+            return new WithdrawalTarget(value, value);
         }
+        ChainAddressRecord record = tokenWithdrawalRecipient(asset, value);
+        String broadcastAddress = ("SOLANA".equals(asset.chain()) || "TON".equals(asset.chain()))
+                ? tokenOwnerAddress(record)
+                : value;
         return new WithdrawalTarget(value, broadcastAddress);
-    }
-
-    private ChainAddressRecord nativeWithdrawalRecipient(AssetMeta asset, String address) {
-        return repository.findChainAddressByAddress(asset.chain(), asset.symbol(), address)
-                .or(() -> repository.findChainAddressByAddress(asset.chain(), address))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "withdrawal address must belong to this wallet project"));
     }
 
     private ChainAddressRecord tokenWithdrawalRecipient(AssetMeta asset, String address) {

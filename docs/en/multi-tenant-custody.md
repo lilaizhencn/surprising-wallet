@@ -88,8 +88,10 @@ The tenant consumes the event and credits its own customer ledger.
 ## Asset truth
 
 `ledger_balance` is the balance source of truth. Tenant asset overview joins
-all account IDs derived for every custody address, including token accounts and
-disabled addresses, then aggregates by `chain + asset_symbol`.
+all account IDs derived for every customer custody address, including token
+accounts and disabled addresses, then aggregates by `chain + asset_symbol`.
+Dedicated Gas station addresses and balances are shown separately and are not
+included in customer assets.
 
 The overview returns:
 
@@ -101,7 +103,10 @@ The overview returns:
 Deposits are credited once using chain transaction uniqueness. Withdrawal
 creation freezes the selected address account atomically in the existing
 wallet ledger. The custody withdrawal record follows the underlying order
-through signing, broadcast, confirmation, or failure.
+through signing, broadcast, confirmation, or failure. A withdrawal destination
+is a validated external chain address; it does not need to be an address
+previously allocated by this wallet service. Chains that require prepared token
+accounts keep their adapter-specific preparation checks.
 
 ## API authentication
 
@@ -127,7 +132,11 @@ HMAC-SHA256(apiSecret, canonicalRequest)
 The server enforces the timestamp window and permanently rejects a repeated
 nonce during that window. Address and withdrawal creates additionally require
 an `Idempotency-Key`. Withdrawal idempotency is permanent; reusing its key with
-a different request is rejected.
+a different request is rejected. Withdrawal requests must also send
+`"confirmed": true`; the Console collects that confirmation in a separate
+review step. Validation and downstream business failures use the same JSON
+error envelope with an actionable message; request-signing failures never echo
+credentials or signature material.
 
 When a tenant enables the IP allowlist, every API request must originate from
 an enabled IPv4/IPv6 CIDR rule. The application intentionally uses the direct
@@ -174,6 +183,43 @@ transaction as the custody event. Workers claim rows with `SKIP LOCKED`,
 retry with exponential delay, cap response/error storage, and expose failed
 deliveries for manual retry.
 
+Automatic retries start after 30 seconds, use deterministic jittered
+exponential backoff, honor a valid `Retry-After`, and stop after 10 attempts.
+The maximum automatic delay is six hours. A manual retry starts a new cycle
+without deleting earlier attempts. Console delivery details show the trigger,
+HTTP result, duration, error, next attempt, retry cycle, and lifetime attempt
+number. Expired worker leases are recovered as explicit history entries, and
+attempt fencing prevents a late stale worker from overwriting the newer result.
+
+## Tenant activation and Gas station
+
+The Console onboarding checklist is complete only after the tenant has:
+
+1. created an API key and copied its one-time secret;
+2. enabled an IP allowlist with at least one CIDR;
+3. created and verified a Webhook endpoint;
+4. created a Gas station account for the required network;
+5. funded that account with confirmed native coin;
+6. allocated at least one customer address.
+
+A Gas station account is a dedicated tenant address for a network's native
+coin. Confirmed funding is collected through the normal chain workflow and
+becomes an auditable prepaid network-fee balance. It does not appear in
+customer addresses, customer deposits, or customer asset totals.
+
+When a custody withdrawal is accepted, the service atomically freezes both the
+requested customer amount and a conservative amount from the matching Gas
+station account. The customer address is not charged a second network-fee
+reserve. Failed, rejected, or cancelled withdrawals release the Gas reserve.
+Confirmed withdrawals settle it against the chain-recorded fee where the
+adapter exposes one; otherwise the configured conservative reserve is charged.
+Every reservation, release, settlement, and transaction hash remains visible
+in Gas station usage history.
+
+If an actual fee exceeds the funded amount, the usage becomes `OVERDUE` and new
+withdrawals for that network stop. After a confirmed top-up, reconciliation
+settles the overdue charge automatically and processing resumes.
+
 ## Console capabilities
 
 Platform administrators:
@@ -185,13 +231,14 @@ Platform administrators:
 Tenant administrators:
 
 - view aggregate assets;
+- follow the onboarding checklist and fund per-network Gas station accounts;
 - create, search, label, disable, and reactivate addresses;
 - query deposit and withdrawal records;
 - create a Console withdrawal;
 - create/revoke API keys and choose scopes;
 - enable/configure an IP allowlist;
 - create, verify, disable, and reactivate Webhook endpoints;
-- inspect and retry Webhook deliveries;
+- inspect complete Webhook attempt history and manually retry failed deliveries;
 - inspect the tenant audit log.
 
 ## Production requirements

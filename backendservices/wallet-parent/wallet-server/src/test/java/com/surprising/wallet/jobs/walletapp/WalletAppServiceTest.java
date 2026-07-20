@@ -18,7 +18,6 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -77,7 +76,7 @@ class WalletAppServiceTest {
     }
 
     @Test
-    void dotTokenWithdrawalMaterializesRecipientTokenAddressFromNativeAddress() throws Exception {
+    void nativeAndDirectTokenWithdrawalsAcceptValidatedExternalAddresses() throws Exception {
         String address = "5DOTRecipientAddress";
         FakeRepository repository = new FakeRepository(nativeAddress("DOT", "DOT", address));
         WalletAppService service = service(repository);
@@ -88,12 +87,14 @@ class WalletAppServiceTest {
 
         assertEquals(address, recordValue(target, "requestedAddress"));
         assertEquals(address, recordValue(target, "broadcastAddress"));
-        assertNotNull(repository.upserted);
-        assertEquals("DOT", repository.upserted.getChain());
-        assertEquals("USDC", repository.upserted.getAssetSymbol());
-        assertEquals(address, repository.upserted.getAddress());
-        assertEquals(repository.nativeAddress.getAccountId(), repository.upserted.getAccountId());
-        assertEquals(repository.nativeAddress.getAddressIndex(), repository.upserted.getAddressIndex());
+        assertNull(repository.upserted);
+
+        Object nativeAsset = assetMeta("ETH", "ETH", true, "ETH", "evm",
+                "sepolia", 18, null, null);
+        String externalEvmAddress = "0x2222222222222222222222222222222222222222";
+        Object nativeTarget = withdrawalTarget(service, nativeAsset, externalEvmAddress);
+        assertEquals(externalEvmAddress, recordValue(nativeTarget, "requestedAddress"));
+        assertEquals(externalEvmAddress, recordValue(nativeTarget, "broadcastAddress"));
     }
 
     @Test
@@ -124,6 +125,19 @@ class WalletAppServiceTest {
         String sourceAddress = withdrawalSourceAddress(service, asset, spend);
 
         assertEquals(hotAddress.getAddress(), sourceAddress);
+    }
+
+    @Test
+    void tenantGasFundingDoesNotChargeTheCustomerNetworkFeeReserve() throws Exception {
+        Object monero = assetMeta(
+                "XMR", "XMR", true, "XMR", "monero", "mainnet", 12,
+                null, null, new BigDecimal("0.0001"));
+
+        assertEquals(BigDecimal.ZERO, withdrawalFeeReserve(monero, true));
+        assertEquals(
+                0,
+                new BigDecimal("0.0001").compareTo(
+                        withdrawalFeeReserve(monero, false)));
     }
 
     private static WalletAppService service(ChainJdbcRepository repository) {
@@ -167,13 +181,30 @@ class WalletAppServiceTest {
     private static Object assetMeta(String chain, String symbol, boolean nativeAsset, String nativeSymbol,
                                     String family, String network, int decimals,
                                     String contractAddress, String standard) throws Exception {
+        return assetMeta(
+                chain, symbol, nativeAsset, nativeSymbol, family, network, decimals,
+                contractAddress, standard, BigDecimal.ZERO);
+    }
+
+    private static Object assetMeta(String chain, String symbol, boolean nativeAsset, String nativeSymbol,
+                                    String family, String network, int decimals,
+                                    String contractAddress, String standard,
+                                    BigDecimal networkFeeReserve) throws Exception {
         Class<?> type = nestedClass("AssetMeta");
         Constructor<?> constructor = type.getDeclaredConstructor(
                 String.class, String.class, boolean.class, String.class, String.class, String.class,
                 int.class, String.class, String.class, BigDecimal.class);
         constructor.setAccessible(true);
         return constructor.newInstance(chain, symbol, nativeAsset, nativeSymbol, family, network,
-                decimals, contractAddress, standard, BigDecimal.ZERO);
+                decimals, contractAddress, standard, networkFeeReserve);
+    }
+
+    private static BigDecimal withdrawalFeeReserve(Object asset, boolean tenantGasFunded)
+            throws Exception {
+        Method method = WalletAppService.class.getDeclaredMethod(
+                "withdrawalFeeReserve", asset.getClass(), boolean.class);
+        method.setAccessible(true);
+        return (BigDecimal) method.invoke(null, asset, tenantGasFunded);
     }
 
     private static Object withdrawalTarget(WalletAppService service, Object asset, String address) throws Exception {

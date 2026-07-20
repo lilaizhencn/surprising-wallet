@@ -12,8 +12,10 @@ Surprising Wallet owns:
 
 - tenant-isolated deterministic deposit addresses;
 - chain scanning, confirmed deposits, balances, withdrawals, and reconciliation;
+- tenant-prefunded native-coin Gas accounts with withdrawal fee reservation and settlement;
 - signed API requests, replay protection, IP allowlists, Console sessions, and audit logs;
-- signed deposit/withdrawal Webhooks with durable delivery records and retries.
+- signed deposit/withdrawal Webhooks with durable per-attempt history, automatic retries,
+  and manual replay.
 
 A tenant owns its customers, merchants, orders, and internal balance rules. It
 passes an opaque `externalReference` when allocating an address. The wallet does

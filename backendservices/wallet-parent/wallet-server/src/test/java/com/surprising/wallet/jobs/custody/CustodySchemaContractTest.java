@@ -33,8 +33,9 @@ class CustodySchemaContractTest {
         for (String table : new String[]{
                 "custody_tenant", "custody_tenant_user", "custody_session", "custody_api_key",
                 "custody_api_nonce", "custody_ip_rule", "custody_webhook_endpoint",
-                "custody_address", "custody_deposit", "custody_withdrawal",
-                "custody_ledger_entry", "custody_event", "custody_webhook_delivery",
+                "custody_address", "custody_gas_account", "custody_deposit", "custody_withdrawal",
+                "custody_gas_usage", "custody_ledger_entry", "custody_event", "custody_webhook_delivery",
+                "custody_webhook_delivery_attempt",
                 "custody_idempotency_key", "custody_audit_log"}) {
             assertTrue(sql.contains("CREATE TABLE IF NOT EXISTS " + table), table + " is required");
         }
@@ -44,6 +45,11 @@ class CustodySchemaContractTest {
         assertTrue(sql.contains("ON custody_address (tenant_id, chain, external_reference)"));
         assertTrue(sql.contains("CONSTRAINT custody_address_chain_address_key UNIQUE (chain_address_id)"));
         assertTrue(sql.contains("CONSTRAINT custody_address_derivation_subject_key UNIQUE (derivation_subject)"));
+        assertTrue(sql.contains("total_attempt_count integer NOT NULL DEFAULT 0"));
+        assertTrue(sql.contains("manual_retry_count integer NOT NULL DEFAULT 0"));
+        assertTrue(sql.contains("UNIQUE (delivery_id, attempt_number)"));
+        assertTrue(sql.contains("UNIQUE (custody_withdrawal_id)"));
+        assertTrue(sql.contains("status IN ('RESERVED', 'SETTLED', 'RELEASED', 'OVERDUE')"));
         assertTrue(sql.matches(
                 "(?s).*CREATE TABLE IF NOT EXISTS custody_idempotency_key \\(.*"
                         + "expires_at timestamptz,\\R\\s+created_at timestamptz.*"));

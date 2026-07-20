@@ -160,6 +160,10 @@ public class CustodyAddressService {
             throw new IllegalArgumentException("addressId is required");
         }
         AddressRecord current = custodyRepository.requireAddress(principal.tenantId(), addressId);
+        if (custodyRepository.isGasAddress(principal.tenantId(), addressId)) {
+            throw new IllegalArgumentException(
+                    "manage gas reserve addresses from Gas station");
+        }
         String status = optional(command.status(), 24, "status");
         String normalizedStatus = status == null
                 ? current.status()

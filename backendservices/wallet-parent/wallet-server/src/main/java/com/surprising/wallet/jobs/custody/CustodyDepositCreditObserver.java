@@ -33,7 +33,11 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
         String chain = event.chainType().name();
         List<AddressOwner> owners = jdbc.query("""
                         select c.id as custody_address_id, c.tenant_id, c.external_reference,
-                               c.address, c.memo
+                               c.address, c.memo,
+                               case when exists (
+                                   select 1 from custody_gas_account g
+                                    where g.custody_address_id = c.id
+                               ) then 'GAS_FUNDING' else 'CUSTOMER' end as purpose
                           from custody_address c
                           join chain_address base on base.id = c.chain_address_id
                          where c.chain = ?
@@ -55,7 +59,8 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
                         rs.getObject("tenant_id", UUID.class),
                         rs.getString("external_reference"),
                         rs.getString("address"),
-                        rs.getString("memo")),
+                        rs.getString("memo"),
+                        rs.getString("purpose")),
                 chain, accountId, event.toAddress());
         if (owners.isEmpty()) {
             return;
@@ -106,6 +111,7 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
         data.put("asset", event.assetSymbol());
         data.put("address", owner.address());
         data.put("memo", owner.memo());
+        data.put("purpose", owner.purpose());
         data.put("amount", event.amount());
         data.put("txHash", event.txId());
         data.put("logIndex", logIndex);
@@ -135,7 +141,8 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
             UUID tenantId,
             String externalReference,
             String address,
-            String memo
+            String memo,
+            String purpose
     ) {
     }
 }

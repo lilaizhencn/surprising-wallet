@@ -713,31 +713,57 @@ public class AccountChainWorkflowService {
 
     private void confirmTronWithdrawal(AccountChainProfile profile, WithdrawalOrderRecord order,
                                        ChainAddressRecord from) throws Exception {
-        if (isTronConfirmed(profile, order.getTxHash())) {
+        Response.TransactionInfo txInfo = confirmedTronInfo(profile, order.getTxHash());
+        if (txInfo != null) {
+            recordTronConfirmed(order.getChain(), order.getTxHash(), from.getAddress(),
+                    order.getToAddress(), order.getAssetSymbol(), order.getAmount(), txInfo);
             repository.confirmWithdrawalAndSettle(order.getChain(), order.getOrderNo(), order.getTxHash(),
                     order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
         }
     }
 
     private void confirmTronCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {
-        if (isTronConfirmed(profile, record.getTxHash())) {
+        Response.TransactionInfo txInfo = confirmedTronInfo(profile, record.getTxHash());
+        if (txInfo != null) {
+            recordTronConfirmed(record.getChain(), record.getTxHash(), record.getFromAddress(),
+                    record.getToAddress(), record.getAssetSymbol(), record.getAmount(), txInfo);
             repository.markCollectionConfirmed(record.getChain(), record.getCollectionNo(), record.getTxHash());
         }
     }
 
-    private boolean isTronConfirmed(AccountChainProfile profile, String txHash) throws Exception {
+    private Response.TransactionInfo confirmedTronInfo(
+            AccountChainProfile profile, String txHash) throws Exception {
         if (txHash == null || txHash.isBlank()) {
-            return false;
+            return null;
         }
         try (TronTridentClient client = tronClientFactory.create()) {
             Response.TransactionInfo txInfo = client.getTransactionInfo(txHash, NodeType.SOLIDITY_NODE);
             if (txInfo == null || txInfo.getBlockNumber() <= 0) {
-                return false;
+                return null;
             }
             long best = client.getNowBlock().getBlockHeader().getRawData().getNumber();
             long confirmations = Math.max(0, best - txInfo.getBlockNumber() + 1);
-            return confirmations >= Math.max(1, profile.getWithdrawConfirmations());
+            return confirmations >= Math.max(1, profile.getWithdrawConfirmations())
+                    ? txInfo : null;
         }
+    }
+
+    private void recordTronConfirmed(
+            String chain, String txHash, String from, String to, String symbol,
+            BigDecimal amount, Response.TransactionInfo txInfo) {
+        repository.recordTronTransaction(TronTransactionRecord.builder()
+                .chain(chain)
+                .txHash(txHash)
+                .fromAddress(from)
+                .toAddress(to)
+                .assetSymbol(symbol)
+                .amount(amount)
+                .fee(BigDecimal.valueOf(txInfo.getFee()).movePointLeft(6))
+                .blockHeight(txInfo.getBlockNumber())
+                .confirmations(1)
+                .status("CONFIRMED")
+                .rawPayload(txInfo.toString())
+                .build());
     }
 
     private void confirmTonWithdrawal(WithdrawalOrderRecord order, ChainAddressRecord from) {
