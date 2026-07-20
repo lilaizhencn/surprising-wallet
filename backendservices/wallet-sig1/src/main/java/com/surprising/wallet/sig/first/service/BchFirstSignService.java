@@ -3,6 +3,7 @@ package com.surprising.wallet.sig.first.service;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
+import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -12,7 +13,6 @@ import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashFeePolicy;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashMultisigTransactionBuilder;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParameters;
 import com.surprising.wallet.sig.first.config.PubKeyConfig;
-import jakarta.annotation.PostConstruct;
 import org.bitcoinj.base.Coin;
 import org.bitcoinj.crypto.ECKey;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,18 +28,11 @@ public class BchFirstSignService implements ISignService {
     @Autowired
     private PubKeyConfig pubKeyConfig;
 
-    @Value("${sw.wallet.masterKey}")
-    private String masterKey;
+    @Autowired
+    private WalletKeyMaterialProvider keyMaterial;
 
     @Value("${sw.bch.network:testnet}")
     private String network;
-
-    private Bip32Node root;
-
-    @PostConstruct
-    public void init() {
-        root = Bip32Node.decode(masterKey);
-    }
 
     @Override
     public String chain() {
@@ -130,7 +123,7 @@ public class BchFirstSignService implements ISignService {
     }
 
     private Bip32Node derive(Address address, AssetRuntimeMetadata currency) {
-        return root.getChild(44)
+        return keyMaterial.sig1Root().getChild(44)
                 .getChild(currency.getBip44CoinType())
                 .getChild(address.getBiz())
                 .getChild(address.getUserId().intValue())

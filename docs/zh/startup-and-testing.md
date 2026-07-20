@@ -75,22 +75,9 @@ mvn -pl backendservices/wallet-parent/wallet-service -am test -DskipTests
 
 ## 5. 密钥与运行配置
 
-Bitcoin-like 链、EVM 和 TRON 使用 BIP32/secp256k1 根密钥。
+四个根 Seed 统一保存在单行 `wallet_key_config`：sig1、sig2、recovery 三个 BIP32 Seed，以及一个 Ed25519 Seed。四个值必须互不相同，统一使用 Base64 编码的 32 字节数据，并通过平台超级管理员的 Wallet keys 页面原子保存。当前阶段数据库明文存储，页面允许查看原文。
 
-```bash
-export SW_SIG1_MASTER_KEY='<第一签 BIP32 tprv>'
-export SW_SIG2_MASTER_KEY='<第二签 BIP32 tprv>'
-```
-
-wallet-server 的三组 public key 从 `wallet_public_key` 表读取。初始化 SQL 已写入当前测试 public key；生产环境必须把 1/2/3 三个 slot 替换为生产 xpub，并保持 `enabled=true`。启动时缺任何一个 slot 都会失败。
-
-SOL/TON/APTOS/SUI 使用一个 Ed25519 master seed：
-
-```bash
-export SW_ED25519_SEED='<32 字节 hex 或 base64 seed>'
-```
-
-`application-test.yaml` 中有 Ed25519 fallback seed。生产环境必须使用环境变量或密钥系统注入。
+wallet-server 从 Keyset 派生三组 public root；sig1/sig2 分别使用各自需要的 private root。已有派生地址后，管理接口禁止变更整套 Keyset。
 
 wallet-server 常用环境变量：
 
@@ -103,7 +90,6 @@ export SW_REDIS_HOST='127.0.0.1'
 export SW_REDIS_PORT='6379'
 export SW_REDIS_PASSWORD='<Redis 密码>'
 export SW_APP_ENV='dev'
-export SW_ED25519_SEED='<32 字节 Ed25519 seed，hex 或 base64>'
 export SW_WALLET_ADMIN_USERNAME='<钱包后台配置账号>'
 export SW_WALLET_ADMIN_PASSWORD='<钱包后台配置密码>'
 export SW_CUSTODY_SECRET_MASTER_KEY='<32 字节 Base64 或 64 位十六进制密钥>'
@@ -115,13 +101,6 @@ export SW_CUSTODY_CORS_ORIGINS='https://console.example.com'
 `SW_CUSTODY_SECRET_MASTER_KEY` 为必填项，用于加密保存 API/Webhook Secret。只有数据库中
 不存在平台管理员时才会引导创建；以后修改环境变量密码不会覆盖已有账户。
 
-签名服务常用环境变量：
-
-```bash
-export SW_SIG1_MASTER_KEY='<第一签 BIP32 tprv>'
-export SW_SIG2_MASTER_KEY='<第二签 BIP32 tprv>'
-```
-
 链运行配置不再通过 YAML/env 配置：
 
 | 配置 | 数据库来源 |
@@ -132,7 +111,7 @@ export SW_SIG2_MASTER_KEY='<第二签 BIP32 tprv>'
 | 单链扫描批量 | `chain_profile.scan_batch_size` |
 | 链网络、确认数、链 ID、gas policy | `chain_profile` |
 | RPC/fullnode/indexer/faucet 节点 | `chain_rpc_node` |
-| wallet-server 三个 public key | `wallet_public_key` |
+| 四个钱包根 Seed | `wallet_key_config` |
 | 每链默认热提钱包 | `chain_address` 中原生资产 `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT` |
 
 部署前必须按环境提前确认 scanner checkpoint。全新系统通常把 `chain_scan_height.best_height/safe_height` 设置到当前最新安全块附近，让服务只扫描部署后的新区块；如果要补历史充值，再按业务窗口把高度往前调。不要从创世块或很早的历史高度开始扫，这会让服务长时间追块并消耗大量 RPC 配额。
@@ -166,13 +145,12 @@ TokDou 钱包页面读取 wallet-server：
 - `chain_profile` 中每条启用链只能启用一个 network
 - 启用链至少有一个匹配当前 `sw.app.env.name` 的 `chain_rpc_node`
 - 启用的 `chain_rpc_node` 必须配置真实 RPC URL 和认证信息；启动时会拒绝 `CHANGE_ME`、`YOUR_*`、`REPLACE_ME` 等占位符
-- `wallet_public_key` 中 slot 1/2/3 必须启用
+- 平台 Wallet keys 页面已原子配置 `wallet_key_config` 四个 Base64 32 字节 Seed
 - 每条启用链必须且只能有一条默认热提钱包地址：`chain_address` 原生资产、`user_id=0`、`biz=0`、`address_index=0`、`wallet_role=DEPOSIT`
-- 签名服务私钥
-- Ed25519 链使用的 `SW_ED25519_SEED`：SOLANA、TON、APTOS、SUI、ADA、DOT、NEAR
+- Keyset 配置完成后再启动 sig1 和 sig2
 - 钱包后台配置页使用的 `SW_WALLET_ADMIN_USERNAME`、`SW_WALLET_ADMIN_PASSWORD`
 
-启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量。wallet-server 会按 `wallet_public_key` 或 `SW_ED25519_SEED` 推导每条启用链的 `0/0/0` 默认热提地址，并和 `chain_address` 比对；缺失、重复或地址/path 不一致会直接启动失败。启用的 RPC 节点如果仍包含占位符 URL 或认证信息，也会直接启动失败。生产环境如果启用了 testnet/devnet/regtest profile 也会直接失败。
+启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量。Keyset 已配置时，wallet-server 会从它推导每条启用链的 `0/0/0` 默认热提地址并和 `chain_address` 比对；缺失、重复或地址/path 不一致会直接启动失败。Keyset 未配置时只开放管理能力，地址派生和签名不可用。启用的 RPC 节点如果仍包含占位符 URL 或认证信息，也会直接启动失败。
 
 ## 7. 启动服务
 

@@ -4,7 +4,6 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.HotWalletRules;
-import com.surprising.wallet.common.chain.WalletPublicKey;
 import com.surprising.wallet.common.key.Ed25519DerivedKey;
 import com.surprising.wallet.service.chain.aptos.AptosKeyService;
 import com.surprising.wallet.service.chain.cardano.CardanoKeyService;
@@ -17,7 +16,6 @@ import com.surprising.wallet.service.chain.ton.TonKeyService;
 import com.surprising.wallet.service.chain.xrp.XrpKeyService;
 import com.surprising.wallet.service.config.PubKeyConfig;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashAddressCodec;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParameters;
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinNetworkParameters;
@@ -36,11 +34,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.tron.TronWalletApi;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -71,26 +66,6 @@ public class HotWalletAddressService {
     public ChainAddressRecord requireVerifiedDefaultHotAddress(AccountChainProfile profile) {
         ChainAddressRecord expected = deriveDefaultHotAddress(profile);
         return requireDefaultHotAddressMatches(profile, expected);
-    }
-
-    public void requireCandidateWalletPublicKeysMatchDefaultHotAddresses(List<WalletPublicKey> publicKeys) {
-        Map<Integer, Bip32Node> candidateNodes = decodeRequiredBip32Nodes(publicKeys);
-        List<String> failures = new ArrayList<>();
-        for (AccountChainProfile profile : repository.listEnabledChainProfiles()) {
-            if (!candidatePublicKeysAffect(profile)) {
-                continue;
-            }
-            try {
-                ChainAddressRecord expected = deriveAddressWithCandidateBip32Nodes(profile, candidateNodes);
-                requireDefaultHotAddressMatches(profile, expected);
-            } catch (RuntimeException e) {
-                failures.add(e.getMessage());
-            }
-        }
-        if (!failures.isEmpty()) {
-            throw new IllegalStateException("wallet_public_key validation failed: "
-                    + String.join("; ", failures));
-        }
     }
 
     private ChainAddressRecord requireDefaultHotAddressMatches(AccountChainProfile profile, ChainAddressRecord expected) {
@@ -190,55 +165,6 @@ public class HotWalletAddressService {
         return baseRecord(profile, userId, biz, addressIndex, address, null, metadata.getPath(), walletRole);
     }
 
-    private ChainAddressRecord deriveAddressWithCandidateBip32Nodes(
-            AccountChainProfile profile, Map<Integer, Bip32Node> nodes) {
-        long userId = HotWalletRules.DEFAULT_HOT_USER_ID;
-        int biz = HotWalletRules.DEFAULT_HOT_BIZ;
-        long addressIndex = HotWalletRules.DEFAULT_HOT_ADDRESS_INDEX;
-        String walletRole = HotWalletRules.DEFAULT_HOT_WALLET_ROLE;
-        String family = normalize(profile.getFamily());
-        return switch (family) {
-            case "bitcoin-like" -> deriveBitcoinLikeWithCandidateBip32Nodes(profile, userId, biz, addressIndex,
-                    walletRole, nodes);
-            case "evm" -> deriveSecp256k1WithCandidateBip32Node(profile, userId, biz, addressIndex,
-                    walletRole, nodes.get(2), AddressFormat.EVM);
-            case "hypercore" -> deriveSecp256k1WithCandidateBip32Node(profile, userId, biz, addressIndex,
-                    walletRole, nodes.get(2), AddressFormat.EVM);
-            case "tron" -> deriveSecp256k1WithCandidateBip32Node(profile, userId, biz, addressIndex,
-                    walletRole, nodes.get(2), AddressFormat.TRON);
-            case "xrp" -> deriveSecp256k1WithCandidateBip32Node(profile, userId, biz, addressIndex,
-                    walletRole, nodes.get(2), AddressFormat.XRP);
-            default -> throw new IllegalStateException("wallet_public_key does not derive family: "
-                    + profile.getChain() + "/" + profile.getFamily());
-        };
-    }
-
-    private ChainAddressRecord deriveBitcoinLikeWithCandidateBip32Nodes(
-            AccountChainProfile profile, long userId, int biz, long addressIndex, String walletRole,
-            Map<Integer, Bip32Node> nodes) {
-        NetworkParameters params = bitcoinLikeNetworkParameters(profile);
-        int index = Math.toIntExact(addressIndex);
-        int user = Math.toIntExact(userId);
-        PubKeyConfig.AddressMetadata metadata;
-        String address;
-        String chain = normalize(profile.getChain());
-        if ("doge".equals(chain) || "bch".equals(chain)) {
-            metadata = PubKeyConfig.genLegacyThreeTwoAddressMetadata(params, profile.getBip44CoinType(),
-                    user, biz, index, nodes.get(1), nodes.get(2), nodes.get(3));
-            address = metadata.getAddress();
-            if ("bch".equals(chain)) {
-                BitcoinCashNetworkParameters bchParams = (BitcoinCashNetworkParameters) params;
-                address = BitcoinCashAddressCodec.fromLegacy(
-                        LegacyAddress.fromBase58(bchParams, metadata.getAddress()), bchParams.cashPrefix());
-            }
-        } else {
-            metadata = PubKeyConfig.genThreeTwoAddressMetadata(params, profile.getBip44CoinType(),
-                    user, biz, index, nodes.get(1), nodes.get(2), nodes.get(3));
-            address = metadata.getAddress();
-        }
-        return baseRecord(profile, userId, biz, addressIndex, address, null, metadata.getPath(), walletRole);
-    }
-
     private NetworkParameters bitcoinLikeNetworkParameters(AccountChainProfile profile) {
         String chain = normalize(profile.getChain());
         String network = normalize(profile.getNetwork());
@@ -280,27 +206,9 @@ public class HotWalletAddressService {
         return "main".equals(network) || "mainnet".equals(network);
     }
 
-    private ChainAddressRecord deriveSecp256k1WithCandidateBip32Node(
-            AccountChainProfile profile, long userId, int biz, long addressIndex, String walletRole,
-            Bip32Node node, AddressFormat format) {
-        ECKey ecKey = node.getChild(44)
-                .getChild(derivationCoinType(profile))
-                .getChild(biz)
-                .getChild(Math.toIntExact(userId))
-                .getChild(Math.toIntExact(addressIndex))
-                .getEcKey();
-        String address = switch (format) {
-            case EVM -> "0x" + Hex.toHexString(EthECKey.fromPublicOnly(ecKey.getPubKey()).getAddress());
-            case TRON -> TronWalletApi.getAddress(ecKey.getPubKey());
-            case XRP -> XrpKeyService.address(ecKey);
-        };
-        return baseRecord(profile, userId, biz, addressIndex, address, address,
-                derivationPath(profile, userId, biz, addressIndex), walletRole);
-    }
-
     private ChainAddressRecord deriveSecp256k1(AccountChainProfile profile, long userId, int biz,
                                                long addressIndex, String walletRole, AddressFormat format) {
-        ECKey ecKey = pubKeyConfig.NODE2.getChild(44)
+        ECKey ecKey = pubKeyConfig.node2().getChild(44)
                 .getChild(derivationCoinType(profile))
                 .getChild(biz)
                 .getChild(Math.toIntExact(userId))
@@ -404,46 +312,6 @@ public class HotWalletAddressService {
             return left.equalsIgnoreCase(right);
         }
         return left.equals(right);
-    }
-
-    private Map<Integer, Bip32Node> decodeRequiredBip32Nodes(List<WalletPublicKey> publicKeys) {
-        Map<Integer, WalletPublicKey> bySlot = new LinkedHashMap<>();
-        for (WalletPublicKey key : publicKeys) {
-            if (key.getKeySlot() != null) {
-                bySlot.put(key.getKeySlot(), key);
-            }
-        }
-        Map<Integer, Bip32Node> nodes = new LinkedHashMap<>();
-        for (int slot = 1; slot <= 3; slot++) {
-            WalletPublicKey key = bySlot.get(slot);
-            if (key == null || !Boolean.TRUE.equals(key.getEnabled())) {
-                throw new IllegalStateException("wallet_public_key slot " + slot + " must stay enabled");
-            }
-            if (!StringUtils.hasText(key.getPublicKey())) {
-                throw new IllegalStateException("wallet_public_key slot " + slot + " public_key is required");
-            }
-            if (StringUtils.hasText(key.getKeyType())
-                    && !"BIP32_XPUB".equalsIgnoreCase(key.getKeyType())) {
-                throw new IllegalStateException("wallet_public_key slot " + slot
-                        + " key_type must remain BIP32_XPUB");
-            }
-            try {
-                nodes.put(slot, Bip32Node.decode(key.getPublicKey()));
-            } catch (RuntimeException e) {
-                throw new IllegalStateException("wallet_public_key slot " + slot
-                        + " public_key is not a valid BIP32 xpub/tpub", e);
-            }
-        }
-        return nodes;
-    }
-
-    private boolean candidatePublicKeysAffect(AccountChainProfile profile) {
-        String family = normalize(profile.getFamily());
-        return "bitcoin-like".equals(family)
-                || "evm".equals(family)
-                || "hypercore".equals(family)
-                || "tron".equals(family)
-                || "xrp".equals(family);
     }
 
     private boolean isDefaultHotAddressRow(AccountChainProfile profile, ChainAddressRecord record) {

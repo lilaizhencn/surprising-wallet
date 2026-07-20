@@ -75,22 +75,9 @@ mvn -pl backendservices/wallet-parent/wallet-service -am test -DskipTests
 
 ## 5. Keys and Runtime Configuration
 
-Bitcoin-like chains, EVM, and TRON use BIP32/secp256k1 roots.
+The singleton `wallet_key_config` row stores four root seeds atomically: sig1, sig2, and recovery BIP32 seeds plus one Ed25519 seed. All four values must be different Base64-encoded 32-byte values and are saved together from the platform Wallet keys page. During this development phase they are plaintext and the page can reveal them.
 
-```bash
-export SW_SIG1_MASTER_KEY='<BIP32 tprv for signer 1>'
-export SW_SIG2_MASTER_KEY='<BIP32 tprv for signer 2>'
-```
-
-The wallet server reads the three public roots from `wallet_public_key`. The initialization SQL seeds the current test public keys. In production, replace slots 1/2/3 with production xpub values and keep them `enabled=true`. Startup fails when any required slot is missing.
-
-SOL/TON/APTOS/SUI use one Ed25519 master seed:
-
-```bash
-export SW_ED25519_SEED='<32-byte hex or base64 seed>'
-```
-
-For local tests, `application-test.yaml` contains a fallback Ed25519 seed. Production must use an environment secret instead.
+wallet-server derives the three public roots from the keyset; sig1 and sig2 use their required private roots. The management API rejects keyset changes after derived addresses exist.
 
 Common wallet-server environment variables:
 
@@ -103,7 +90,6 @@ export SW_REDIS_HOST='127.0.0.1'
 export SW_REDIS_PORT='6379'
 export SW_REDIS_PASSWORD='<Redis password>'
 export SW_APP_ENV='dev'
-export SW_ED25519_SEED='<32-byte Ed25519 seed in hex or base64>'
 export SW_WALLET_ADMIN_USERNAME='<wallet admin username>'
 export SW_WALLET_ADMIN_PASSWORD='<wallet admin password>'
 export SW_CUSTODY_SECRET_MASTER_KEY='<32-byte Base64 or 64-character hex key>'
@@ -117,13 +103,6 @@ rest. The platform administrator is bootstrapped only when no platform
 administrator exists. Changing the environment password later does not overwrite
 an existing account.
 
-Common signer-service environment variables:
-
-```bash
-export SW_SIG1_MASTER_KEY='<BIP32 tprv for signer 1>'
-export SW_SIG2_MASTER_KEY='<BIP32 tprv for signer 2>'
-```
-
 Chain runtime configuration no longer comes from YAML/env:
 
 | Setting | Database source |
@@ -134,7 +113,7 @@ Chain runtime configuration no longer comes from YAML/env:
 | Per-chain scan batch size | `chain_profile.scan_batch_size` |
 | Chain network, confirmations, chain ID, gas policy | `chain_profile` |
 | RPC/fullnode/indexer/faucet nodes | `chain_rpc_node` |
-| Three wallet-server public keys | `wallet_public_key` |
+| Four wallet root seeds | `wallet_key_config` |
 | Per-chain default hot wallet | Native-asset `chain_address` row with `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT` |
 
 Before deployment, set the scanner checkpoint for the target environment deliberately. A fresh system should normally set `chain_scan_height.best_height/safe_height` near the latest safe block so the service scans only new blocks after deployment. Move the checkpoint backward only when a known historical deposit window must be replayed. Do not scan from genesis or very old blocks because catch-up can take a long time and can exhaust public RPC quotas.
@@ -168,13 +147,12 @@ Required local settings:
 - Only one enabled network per chain in `chain_profile`
 - At least one enabled `chain_rpc_node` for every enabled chain and current `sw.app.env.name`
 - Enabled `chain_rpc_node` rows must have real RPC URLs and credentials; startup rejects `CHANGE_ME`, `YOUR_*`, `REPLACE_ME`, and similar placeholder values
-- Enabled `wallet_public_key` slots 1/2/3
+- Four different Base64 32-byte seeds atomically configured through the platform Wallet keys page
 - Exactly one default hot wallet address for every enabled chain: native-asset `chain_address`, `user_id=0`, `biz=0`, `address_index=0`, `wallet_role=DEPOSIT`
-- Signer private roots
-- `SW_ED25519_SEED` for Ed25519 chains: SOLANA, TON, APTOS, SUI, ADA, DOT, and NEAR
+- Start sig1 and sig2 only after the keyset is configured
 - `SW_WALLET_ADMIN_USERNAME` and `SW_WALLET_ADMIN_PASSWORD` for the wallet admin page
 
-Startup validation logs every chain network, task switch, scan start, batch size, and RPC node count. wallet-server derives every enabled chain's `0/0/0` default hot wallet from `wallet_public_key` or `SW_ED25519_SEED` and compares it with `chain_address`; startup fails on missing, duplicate, address mismatch or path mismatch. Startup also fails when an enabled RPC node still contains placeholder URL or credential values. Production startup also fails if any enabled profile uses testnet/devnet/regtest.
+Startup validation logs every chain network, task switch, scan start, batch size, and RPC node count. When the keyset is configured, wallet-server derives every enabled chain's `0/0/0` default hot wallet and compares it with `chain_address`; missing, duplicate, address, or path mismatches fail startup. Without a keyset only management remains available and derivation/signing fail closed.
 
 ## 7. Start Services
 

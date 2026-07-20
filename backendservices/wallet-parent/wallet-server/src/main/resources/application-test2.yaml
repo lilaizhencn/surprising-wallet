@@ -18,6 +18,4 @@ sw:
       username: ${SW_WALLET_ADMIN_USERNAME:admin}
       password: ${SW_WALLET_ADMIN_PASSWORD:}
     network: test
-    ed25519:
-      master-seed: ${SW_ED25519_SEED:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f}
     init-default-hot-wallets: ${SW_WALLET_INIT_DEFAULT_HOT_WALLETS:false}

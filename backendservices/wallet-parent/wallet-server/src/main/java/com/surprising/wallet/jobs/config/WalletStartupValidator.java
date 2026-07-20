@@ -4,8 +4,7 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.common.chain.WalletPublicKey;
-import com.surprising.wallet.common.key.Ed25519KeyProvider;
+import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.wallet.HotWalletAddressService;
@@ -18,12 +17,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -31,39 +28,38 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class WalletStartupValidator implements ApplicationRunner {
     private static final Set<String> MAIN_NETWORKS = Set.of("main", "mainnet", "mainnet-beta");
-    private static final Set<String> ED25519_SEED_CHAINS = Set.of(
-            "SOLANA", "TON", "APTOS", "SUI", "ADA", "DOT", "NEAR");
-
     private final ChainJdbcRepository repository;
     private final WalletRuntimeConfigService runtimeConfigService;
     private final HotWalletAddressService hotWalletAddressService;
     private final JdbcTemplate jdbcTemplate;
+    private final WalletKeyMaterialProvider keyMaterial;
 
     @Value("${sw.app.env.name:dev}")
     private String environmentName;
 
-    @Value("${sw.wallet.ed25519.master-seed:}")
-    private String ed25519MasterSeed;
-
     @Override
     public void run(ApplicationArguments args) {
-        validatePublicKeys();
+        boolean keysetConfigured = validateKeyset();
         validateEnabledAssetsAndTokens();
         List<AccountChainProfile> enabledProfiles = validateProfiles();
-        validateDefaultHotWallets(enabledProfiles);
+        if (keysetConfigured) {
+            validateDefaultHotWallets(enabledProfiles);
+        } else {
+            log.warn("wallet keyset is not configured; address derivation and signing are unavailable");
+        }
         logRuntimeMatrix();
     }
 
-    private void validatePublicKeys() {
-        Map<Integer, WalletPublicKey> keys = repository.listEnabledWalletPublicKeys().stream()
-                .collect(Collectors.toMap(WalletPublicKey::getKeySlot, Function.identity(), (left, right) -> left));
-        for (int slot = 1; slot <= 3; slot++) {
-            WalletPublicKey key = keys.get(slot);
-            if (key == null || !StringUtils.hasText(key.getPublicKey())) {
-                throw new IllegalStateException("wallet_public_key slot " + slot + " is required");
-            }
+    private boolean validateKeyset() {
+        if (!keyMaterial.isConfigured()) {
+            return false;
         }
-        log.info("wallet public key check passed: enabled slots={}", keys.keySet());
+        keyMaterial.sig1PublicRoot();
+        keyMaterial.sig2PublicRoot();
+        keyMaterial.recoveryPublicRoot();
+        keyMaterial.ed25519();
+        log.info("wallet keyset check passed: four seeds loaded from wallet_key_config");
+        return true;
     }
 
     void validateEnabledAssetsAndTokens() {
@@ -166,24 +162,7 @@ public class WalletStartupValidator implements ApplicationRunner {
             }
             validateRequiredRpcPurposes(profile);
         }
-        validateEd25519Seed(enabledProfiles);
         return enabledProfiles;
-    }
-
-    private void validateEd25519Seed(List<AccountChainProfile> enabledProfiles) {
-        boolean required = enabledProfiles.stream()
-                .map(AccountChainProfile::getChain)
-                .map(chain -> chain == null ? "" : chain.toUpperCase(Locale.ROOT))
-                .anyMatch(ED25519_SEED_CHAINS::contains);
-        if (!required) {
-            return;
-        }
-        byte[] seed = Ed25519KeyProvider.decodeMasterSeed(ed25519MasterSeed);
-        try {
-            new Ed25519KeyProvider(seed);
-        } finally {
-            Arrays.fill(seed, (byte) 0);
-        }
     }
 
     private void validateRpcNode(AccountChainProfile profile, ChainRpcNode node) {

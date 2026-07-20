@@ -4,7 +4,8 @@ import com.iwebpp.crypto.TweetNaclFast;
 import com.surprising.wallet.common.key.Ed25519Chain;
 import com.surprising.wallet.common.key.Ed25519DerivedKey;
 import com.surprising.wallet.common.key.Ed25519KeyProvider;
-import org.springframework.beans.factory.annotation.Value;
+import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.ton.ton4j.smartcontract.wallet.v4.WalletV4R2;
 import org.ton.ton4j.utils.Utils;
@@ -18,11 +19,18 @@ public class TonKeyService {
      */
     public static final long WALLET_V4R2_SUBWALLET_ID = 698_983_191L;
 
-    private final String encodedMasterSeed;
-    private volatile Ed25519KeyProvider provider;
+    private final WalletKeyMaterialProvider keyMaterial;
+    private final Ed25519KeyProvider testProvider;
 
-    public TonKeyService(@Value("${sw.wallet.ed25519.master-seed:}") String encodedMasterSeed) {
-        this.encodedMasterSeed = encodedMasterSeed;
+    @Autowired
+    public TonKeyService(WalletKeyMaterialProvider keyMaterial) {
+        this.keyMaterial = keyMaterial;
+        this.testProvider = null;
+    }
+
+    public TonKeyService(String encodedMasterSeed) {
+        this.keyMaterial = null;
+        this.testProvider = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(encodedMasterSeed));
     }
 
     public Ed25519DerivedKey derive(long derivationIndex) {
@@ -61,16 +69,6 @@ public class TonKeyService {
     }
 
     private Ed25519KeyProvider provider() {
-        Ed25519KeyProvider result = provider;
-        if (result == null) {
-            synchronized (this) {
-                result = provider;
-                if (result == null) {
-                    result = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(encodedMasterSeed));
-                    provider = result;
-                }
-            }
-        }
-        return result;
+        return testProvider != null ? testProvider : keyMaterial.ed25519();
     }
 }

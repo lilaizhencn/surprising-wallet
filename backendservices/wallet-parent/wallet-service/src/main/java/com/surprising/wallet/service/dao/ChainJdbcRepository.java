@@ -21,7 +21,6 @@ import com.surprising.wallet.common.chain.TronTransactionRecord;
 import com.surprising.wallet.common.chain.SolanaTransactionRecord;
 import com.surprising.wallet.common.chain.TonTransactionRecord;
 import com.surprising.wallet.common.chain.SuiTransactionRecord;
-import com.surprising.wallet.common.chain.WalletPublicKey;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.common.chain.XrpTransactionRecord;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
@@ -1884,24 +1883,6 @@ public class ChainJdbcRepository {
                         limit 1
                         """, String.class, configKey);
         return values.stream().findFirst();
-    }
-
-    public List<WalletPublicKey> listEnabledWalletPublicKeys() {
-        return jdbcTemplate.query("""
-                        select key_slot, key_role, key_type, network, public_key, enabled, remark
-                        from wallet_public_key
-                        where enabled = true
-                        order by key_slot
-                        """,
-                (rs, rowNum) -> WalletPublicKey.builder()
-                        .keySlot(rs.getInt("key_slot"))
-                        .keyRole(rs.getString("key_role"))
-                        .keyType(rs.getString("key_type"))
-                        .network(rs.getString("network"))
-                        .publicKey(rs.getString("public_key"))
-                        .enabled(rs.getBoolean("enabled"))
-                        .remark(rs.getString("remark"))
-                        .build());
     }
 
     public List<ChainRpcNode> listEnabledRpcNodes(String chain, String network, String environment, String purpose) {

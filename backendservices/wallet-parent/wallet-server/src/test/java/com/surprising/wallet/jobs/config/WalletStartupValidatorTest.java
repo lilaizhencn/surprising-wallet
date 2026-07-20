@@ -16,9 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WalletStartupValidatorTest {
-    private static final String TEST_ED25519_SEED =
-            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
-
     @Test
     void enabledProfilesRejectPlaceholderRpcNodes() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
@@ -99,35 +96,6 @@ class WalletStartupValidatorTest {
 
         assertTrue(error.getMessage().contains("api_key"));
         assertTrue(error.getMessage().contains("ADA/preprod"));
-    }
-
-    @Test
-    void ed25519ProfilesRequireConfiguredSeed() throws Exception {
-        WalletStartupValidator validator = validator(new FakeRepository(
-                        List.of(profile("ADA", "preprod")),
-                        List.of(node("ADA", "rpc", "blockfrost-cardano-preprod", "BLOCKFROST",
-                                "PROJECT_ID", "https://cardano-preprod.blockfrost.io/api/v0",
-                                "project-id", null, null)),
-                        List.of()),
-                null,
-                "");
-
-        IllegalStateException error = assertThrows(IllegalStateException.class, validator::validateProfiles);
-
-        assertTrue(error.getMessage().contains("SW_ED25519_SEED"));
-    }
-
-    @Test
-    void nonEd25519ProfilesDoNotRequireConfiguredSeed() throws Exception {
-        WalletStartupValidator validator = validator(new FakeRepository(
-                        List.of(profile("BTC", "testnet3")),
-                        List.of(node("BTC", "rpc", "bitcoin-testnet-rpc", "HTTP_JSON_RPC",
-                                "NONE", "https://btc-testnet.example.com", null, null, null)),
-                        List.of()),
-                null,
-                "");
-
-        assertDoesNotThrow(validator::validateProfiles);
     }
 
     @Test
@@ -290,15 +258,8 @@ class WalletStartupValidatorTest {
 
     private static WalletStartupValidator validator(ChainJdbcRepository repository,
                                                     JdbcTemplate jdbcTemplate) throws Exception {
-        return validator(repository, jdbcTemplate, TEST_ED25519_SEED);
-    }
-
-    private static WalletStartupValidator validator(ChainJdbcRepository repository,
-                                                    JdbcTemplate jdbcTemplate,
-                                                    String ed25519MasterSeed) throws Exception {
-        WalletStartupValidator validator = new WalletStartupValidator(repository, null, null, jdbcTemplate);
+        WalletStartupValidator validator = new WalletStartupValidator(repository, null, null, jdbcTemplate, null);
         setField(validator, "environmentName", "test2");
-        setField(validator, "ed25519MasterSeed", ed25519MasterSeed);
         return validator;
     }
 

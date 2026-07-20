@@ -6,8 +6,8 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.service.chain.evm.EvmDepositScanner;
 import com.surprising.wallet.service.chain.evm.EvmLogScanner;
-import com.surprising.wallet.service.config.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
+import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import org.bitcoinj.crypto.ECKey;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -210,8 +210,13 @@ class CodexLiveUserFundingTest {
     }
 
     private Credentials credentials(AccountChainProfile profile, ChainAddressRecord from) {
-        AccountSecp256k1KeyService keys = new AccountSecp256k1KeyService(env("SW_SIG2_MASTER_KEY", ""));
-        ECKey ecKey = keys.key(profile, from);
+        ECKey ecKey = Bip32Node.decode(env("SW_SIG2_MASTER_KEY", ""))
+                .getChild(44)
+                .getChild(ChainType.derivationCoinType(profile.getChain(), profile.getBip44CoinType()))
+                .getChild(from.getBiz())
+                .getChild(Math.toIntExact(from.getUserId()))
+                .getChild(Math.toIntExact(from.getAddressIndex()))
+                .getEcKey();
         return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(ecKey.getPrivKey(), 64));
     }
 

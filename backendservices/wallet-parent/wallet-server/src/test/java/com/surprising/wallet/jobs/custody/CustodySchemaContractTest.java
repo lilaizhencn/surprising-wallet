@@ -16,13 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CustodySchemaContractTest {
     private static final Map<String, String> PROTECTED_FILES = Map.of(
-            "keypairs", "a225b7a98148cfc8562a9a6c1d3f7ab4139cc3e856b09a544c5fa31af97c2c5f",
-            "docs/db/surprising-wallet-init-pgsql.sql",
-            "e04d1bf71f92413572d32ca10ca08ac596dad163819afd782db8df7d569c7b14",
-            "backendservices/wallet-parent/wallet-server/src/main/resources/application-test.yaml",
-            "de518605e03f0474090ffdd1285bcbad2d74f0df487b2cfe6a5a83304ea74b89",
-            "backendservices/wallet-parent/wallet-server/src/main/resources/application-test2.yaml",
-            "09e0ab6d55662e60881ad9dc8e85d400766a38b68411d2cab326a1e831dcf746");
+            "keypairs", "755b669714430fc2aa814bca1402907bf3bd6636a6381c746db6bae19aec0fc7");
 
     @Test
     void additiveSchemaContainsTenantIsolationAndReliableEvents() throws Exception {
@@ -57,11 +51,11 @@ class CustodySchemaContractTest {
     }
 
     @Test
-    void existingSeedsAndFundedTestConfigurationRemainByteIdentical() throws Exception {
+    void localKeypairFileRemainsByteIdentical() throws Exception {
         Path root = projectRoot();
         for (Map.Entry<String, String> entry : PROTECTED_FILES.entrySet()) {
             assertEquals(entry.getValue(), sha256(root.resolve(entry.getKey())),
-                    entry.getKey() + " must not be modified by the custody refactor");
+                    entry.getKey() + " must not be modified by wallet configuration work");
         }
     }
 

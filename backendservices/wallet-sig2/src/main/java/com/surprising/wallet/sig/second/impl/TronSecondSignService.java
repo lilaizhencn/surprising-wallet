@@ -58,10 +58,8 @@ public class TronSecondSignService implements ISignService {
 
     private byte[] getKeyByAddress(Address address, AssetRuntimeMetadata currency) {
         /*
-         * Keep TRON on the same root-key model as BTC/EVM:
-         * wallet-server derives the public key from wallet.pubKey2 at
-         * m/44/currency/biz/user/index, and sig2 derives the matching private key
-         * from sw.wallet.masterKey at the identical path.
+         * wallet-server and wallet-sig2 derive m/44/currency/biz/user/index
+         * from the same sig2 seed stored in wallet_key_config.
          */
         return BipNodeUtil.getBipNODE(address, currency).getEcKey().getPrivKeyBytes();
     }

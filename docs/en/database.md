@@ -21,14 +21,11 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 
 Use `surprising-wallet-init-pgsql.sql` only on a disposable or fresh database. It contains reset statements from `pg_dump --clean` and is not for in-place production upgrades.
 
-When wallet-server starts, Spring applies `custody-schema.sql`. Running it
-again is safe. The baseline seed file is intentionally unchanged so existing
-test networks, test coins, public derivation material, and test fixtures remain
-stable.
+When wallet-server starts, Spring applies `custody-schema.sql`. Running it again is safe.
 
 ## Seed Data Scope
 
-The initialization file includes static configuration rows for `chain_profile`, `chain_asset`, `token_config`, `wallet_system_config`, `wallet_public_key`, and `chain_rpc_node`.
+The initialization file includes static configuration rows for `chain_profile`, `chain_asset`, `token_config`, `wallet_system_config`, and `chain_rpc_node`. It creates `wallet_key_config` without inserting any seed.
 
 The initialization file may keep disabled RPC and token template rows. At the end of the script, any `chain_rpc_node`, `token_config`, or `chain_asset` row that still contains placeholder URLs, credentials, or token contracts is forced disabled/inactive. Store real values in the target environment database before enabling the node, token, or asset.
 
@@ -41,7 +38,7 @@ It does not include runtime rows from address, balance, scan-height, deposit, wi
 | `chain_profile` | Chain key, family, network, confirmations, scan/withdraw/collection/transfer switches, scan start height, BIP44 coin type |
 | `chain_rpc_node` | RPC/fullnode/indexer/faucet nodes per chain/network/environment/purpose, priority, auth, request pacing, remarks |
 | `wallet_system_config` | Global scan/withdraw/collection/transfer switches and optional withdrawal admin approval gate |
-| `wallet_public_key` | Three BIP32 public keys required by wallet-server startup |
+| `wallet_key_config` | Singleton atomic keyset containing the sig1/sig2/recovery BIP32 seeds and one Ed25519 seed; currently plaintext Base64 |
 | `chain_asset` | Chain-native and chain-scoped asset definitions |
 | `token_config` | Token contract, decimals, enabled flag, min deposit/withdraw, collection policy |
 | `chain_address` | Address registry for UTXO/account chains; each enabled chain's default hot wallet is fixed to the native-asset `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT` row |
@@ -79,12 +76,12 @@ Runtime state is stored in `ledger_balance`, `chain_address`, `token_config`,
 
 wallet-server validates at startup:
 
-- `wallet_public_key` slots 1, 2, and 3 must be enabled.
+- When `wallet_key_config` exists, all four values must be different Base64-encoded 32-byte seeds.
 - Each `chain` in `chain_profile` may have only one enabled network.
 - With `sw.app.env.name=prod`, enabled profiles may not use testnet/devnet/regtest.
 - Every enabled profile must have its required `chain_rpc_node` purposes for the current environment. For example, DOT requires `rpc` and `runtime`, and also `asset_rpc` when DOT tokens are enabled.
 - XMR `regtest` additionally requires `rpc`, `faucet`, and `daemon` nodes so the non-production test coin flow is available immediately after startup.
-- Enabled SOLANA, TON, APTOS, SUI, ADA, DOT, and NEAR profiles require a configured and decodable `SW_ED25519_SEED`.
+- wallet-server may start without a keyset so the platform administrator can configure it, but derivation and signing remain unavailable; sig1/sig2 must start after the keyset is configured.
 - Enabled `chain_rpc_node` rows must not contain placeholder URL or credential values such as `CHANGE_ME`, `YOUR_*`, or `REPLACE_ME`.
 - Enabled `token_config` rows and active non-native `chain_asset` rows must have real contract addresses or asset ids; empty or placeholder contracts are rejected.
 - When an enabled `token_config.network` is set, it must match the enabled `chain_profile.network` for the same chain. Leave legacy rows blank only when the token contract is intentionally tied to the currently enabled profile by deployment policy.

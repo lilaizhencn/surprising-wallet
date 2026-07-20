@@ -1,8 +1,7 @@
 package com.surprising.wallet.service.config;
 
-import com.surprising.wallet.common.chain.WalletPublicKey;
+import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sdk.bitcoinj.core.LegacyMultiSignAddressGenerator;
 import com.surprising.wallet.sdk.bitcoinj.core.SegwitMultiSignAddressGenerator;
@@ -10,39 +9,36 @@ import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.crypto.ECKey;
 import org.springframework.stereotype.Component;
 
-import jakarta.annotation.PostConstruct;
 import java.util.HexFormat;
-import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Component
 public class PubKeyConfig {
     private static final HexFormat HEX = HexFormat.of();
-    public Bip32Node NODE1, NODE2, NODE3;
+    private final WalletKeyMaterialProvider keyMaterial;
+    private final Bip32Node[] testNodes;
 
-    private final ChainJdbcRepository repository;
-
-    public PubKeyConfig(ChainJdbcRepository repository) {
-        this.repository = repository;
+    public PubKeyConfig(WalletKeyMaterialProvider keyMaterial) {
+        this.keyMaterial = keyMaterial;
+        this.testNodes = null;
     }
 
-    @PostConstruct
-    public void init() {
-        Map<Integer, WalletPublicKey> keys = repository.listEnabledWalletPublicKeys().stream()
-                .collect(Collectors.toMap(WalletPublicKey::getKeySlot, Function.identity(), (left, right) -> left));
-        NODE1 = Bip32Node.decode(requirePublicKey(keys, 1));
-        NODE2 = Bip32Node.decode(requirePublicKey(keys, 2));
-        NODE3 = Bip32Node.decode(requirePublicKey(keys, 3));
+    public PubKeyConfig(Bip32Node node1, Bip32Node node2, Bip32Node node3) {
+        this.keyMaterial = null;
+        this.testNodes = new Bip32Node[]{node1, node2, node3};
     }
 
-    private String requirePublicKey(Map<Integer, WalletPublicKey> keys, int slot) {
-        WalletPublicKey key = keys.get(slot);
-        if (key == null || key.getPublicKey() == null || key.getPublicKey().isBlank()) {
-            throw new IllegalStateException("missing enabled wallet_public_key slot " + slot);
-        }
-        return key.getPublicKey();
+    public Bip32Node node1() {
+        return testNodes == null ? keyMaterial.sig1PublicRoot() : testNodes[0];
+    }
+
+    public Bip32Node node2() {
+        return testNodes == null ? keyMaterial.sig2PublicRoot() : testNodes[1];
+    }
+
+    public Bip32Node node3() {
+        return testNodes == null ? keyMaterial.recoveryPublicRoot() : testNodes[2];
     }
 
     public String genThree_TwoAddress(int currency, int userId, int biz, int index) {
@@ -54,7 +50,7 @@ public class PubKeyConfig {
     }
 
     public AddressMetadata genThreeTwoAddressMetadata(NetworkParameters params, int currency, int userId, int biz, int index) {
-        return genThreeTwoAddressMetadata(params, currency, userId, biz, index, NODE1, NODE2, NODE3);
+        return genThreeTwoAddressMetadata(params, currency, userId, biz, index, node1(), node2(), node3());
     }
 
     public static AddressMetadata genThreeTwoAddressMetadata(NetworkParameters params, int currency, int userId,
@@ -77,7 +73,7 @@ public class PubKeyConfig {
 
     public AddressMetadata genLegacyThreeTwoAddressMetadata(
             NetworkParameters params, int coinType, int userId, int biz, int index) {
-        return genLegacyThreeTwoAddressMetadata(params, coinType, userId, biz, index, NODE1, NODE2, NODE3);
+        return genLegacyThreeTwoAddressMetadata(params, coinType, userId, biz, index, node1(), node2(), node3());
     }
 
     public static AddressMetadata genLegacyThreeTwoAddressMetadata(

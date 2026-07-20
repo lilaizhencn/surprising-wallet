@@ -48,7 +48,6 @@ DROP INDEX IF EXISTS "public"."idx_wallet_transfer_order_user";
 DROP INDEX IF EXISTS "public"."idx_wallet_user_session_user";
 ALTER TABLE IF EXISTS ONLY "public"."withdrawal_order" DROP CONSTRAINT IF EXISTS "withdrawal_order_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."wallet_system_config" DROP CONSTRAINT IF EXISTS "wallet_system_config_pkey";
-ALTER TABLE IF EXISTS ONLY "public"."wallet_public_key" DROP CONSTRAINT IF EXISTS "wallet_public_key_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."utxo_record" DROP CONSTRAINT IF EXISTS "utxo_record_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."utxo_record" DROP CONSTRAINT IF EXISTS "utxo_record_chain_tx_hash_vout_key";
 ALTER TABLE IF EXISTS ONLY "public"."withdrawal_order" DROP CONSTRAINT IF EXISTS "uq_withdrawal_order_chain_order_no";
@@ -148,7 +147,7 @@ DROP TABLE IF EXISTS "public"."wallet_transfer_order";
 DROP TABLE IF EXISTS "public"."wallet_user_session";
 DROP TABLE IF EXISTS "public"."wallet_user";
 DROP TABLE IF EXISTS "public"."wallet_system_config";
-DROP TABLE IF EXISTS "public"."wallet_public_key";
+DROP TABLE IF EXISTS "public"."wallet_key_config";
 DROP SEQUENCE IF EXISTS "public"."utxo_record_id_seq";
 DROP TABLE IF EXISTS "public"."utxo_record";
 DROP SEQUENCE IF EXISTS "public"."tron_tx_id_seq";
@@ -357,6 +356,23 @@ CREATE TABLE "public"."chain_asset" (
     "min_withdraw" numeric(78,24),
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+--
+-- Name: wallet_key_config; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE "public"."wallet_key_config" (
+    "id" smallint PRIMARY KEY,
+    "sig1_seed" text NOT NULL,
+    "sig2_seed" text NOT NULL,
+    "recovery_seed" text NOT NULL,
+    "ed25519_seed" text NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_by" character varying(128) NOT NULL,
+    CONSTRAINT "wallet_key_config_singleton_check" CHECK (("id" = 1))
 );
 
 
@@ -1498,23 +1514,6 @@ ALTER SEQUENCE "public"."utxo_record_id_seq" OWNED BY "public"."utxo_record"."id
 
 
 --
--- Name: wallet_public_key; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE "public"."wallet_public_key" (
-    "key_slot" integer NOT NULL,
-    "key_role" character varying(64) NOT NULL,
-    "key_type" character varying(32) DEFAULT 'BIP32_XPUB'::character varying NOT NULL,
-    "network" character varying(32) DEFAULT 'test'::character varying NOT NULL,
-    "public_key" "text" NOT NULL,
-    "enabled" boolean DEFAULT true NOT NULL,
-    "remark" "text",
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
-);
-
-
---
 -- Name: wallet_system_config; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2367,14 +2366,6 @@ ALTER TABLE ONLY "public"."utxo_record"
 
 
 --
--- Name: wallet_public_key wallet_public_key_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY "public"."wallet_public_key"
-    ADD CONSTRAINT "wallet_public_key_pkey" PRIMARY KEY ("key_slot");
-
-
---
 -- Name: wallet_system_config wallet_system_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2826,15 +2817,6 @@ INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contr
 INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (2, 'ETH', 'USDC', 'ERC20', '0x9478eC397A2F4Be6A84916dD8a353c91b78c6238', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:23:33.151844+08', '2026-06-24 17:27:12.473627+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
 UPDATE "public"."token_config" SET "enabled" = false, "collect_enabled" = false, "network" = 'testnet', "updated_at" = "now"() WHERE "id" = 94;
-
-
---
--- Data for Name: wallet_public_key; Type: TABLE DATA; Schema: public; Owner: -
---
-
-INSERT INTO "public"."wallet_public_key" ("key_slot", "key_role", "key_type", "network", "public_key", "enabled", "remark", "created_at", "updated_at") VALUES (1, 'sig1-hot', 'BIP32_XPUB', 'test', 'tpubD6NzVbkrYhZ4YeTnP6ae6en8YvKSvxvvCwh5X7gNpwqEeix6o7etGgsyGywcB9gS1bGTmC4WfLKAdK6vxDEzedd7PMRLcYk5yZLj5JkLAVB', true, 'online first signer public root', '2026-06-25 00:10:43.489237+08', '2026-06-25 00:10:43.489237+08');
-INSERT INTO "public"."wallet_public_key" ("key_slot", "key_role", "key_type", "network", "public_key", "enabled", "remark", "created_at", "updated_at") VALUES (2, 'sig2-cold', 'BIP32_XPUB', 'test', 'tpubD6NzVbkrYhZ4WuN2bmdffo5p894oRYGQVCfKe3TKT4QVw7qQT18jG1FYbYyB3ePESejLdfaEFMRpsYGVjb4Bh6HiiWaSU8iJRVE46EirNBT', true, 'online second signer public root', '2026-06-25 00:10:43.489237+08', '2026-06-25 00:10:43.489237+08');
-INSERT INTO "public"."wallet_public_key" ("key_slot", "key_role", "key_type", "network", "public_key", "enabled", "remark", "created_at", "updated_at") VALUES (3, 'offline-recovery', 'BIP32_XPUB', 'test', 'tpubD6NzVbkrYhZ4XKeuSHwv2p3snJxWjacFsu2rEEht2qMaM5FYV2RkbMaJEYNZGK7B3i8D46RTs83DJNPh2Jd5MzXivXCiHLbqAFKv8MKxrC4', true, 'offline recovery public root', '2026-06-25 00:10:43.489237+08', '2026-06-25 00:10:43.489237+08');
 
 
 --

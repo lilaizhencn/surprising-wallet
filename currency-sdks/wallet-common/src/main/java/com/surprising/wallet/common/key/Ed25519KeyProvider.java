@@ -112,7 +112,7 @@ public final class Ed25519KeyProvider {
 
     public static byte[] decodeMasterSeed(String encoded) {
         if (encoded == null || encoded.isBlank()) {
-            throw new IllegalStateException("SW_ED25519_SEED is required for Ed25519 chains");
+            throw new IllegalStateException("Ed25519 master seed is required for Ed25519 chains");
         }
         String value = encoded.trim();
         try {

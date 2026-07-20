@@ -2,8 +2,6 @@ package com.surprising.wallet.web.controller;
 
 import com.surprising.commons.support.model.ResponseResult;
 import com.surprising.commons.support.util.ResultUtils;
-import com.surprising.wallet.common.chain.WalletPublicKey;
-import com.surprising.wallet.service.wallet.HotWalletAddressService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
@@ -57,7 +55,6 @@ public class WalletDashboardController {
     private static final Map<String, TableSpec> ADMIN_TABLES = adminTables();
 
     private final JdbcTemplate jdbcTemplate;
-    private final HotWalletAddressService hotWalletAddressService;
 
     @Value("${SW_WALLET_ADMIN_USERNAME:${sw.wallet.admin.username:}}")
     private String adminUsername;
@@ -65,13 +62,8 @@ public class WalletDashboardController {
     @Value("${SW_WALLET_ADMIN_PASSWORD:${sw.wallet.admin.password:}}")
     private String adminPassword;
 
-    @Value("${sw.wallet.ed25519.master-seed:}")
-    private String ed25519MasterSeed;
-
-    public WalletDashboardController(JdbcTemplate jdbcTemplate,
-                                     HotWalletAddressService hotWalletAddressService) {
+    public WalletDashboardController(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
-        this.hotWalletAddressService = hotWalletAddressService;
     }
 
     @GetMapping("/dashboard")
@@ -239,16 +231,6 @@ public class WalletDashboardController {
         if (Objects.equals(table, "chain_asset")) {
             validateChainAssetAdminUpdate(table, id, updates, spec, columnTypes);
             return;
-        }
-        if (!Objects.equals(table, "wallet_public_key")
-                || (!updates.containsKey("public_key") && !updates.containsKey("enabled"))) {
-            return;
-        }
-        try {
-            hotWalletAddressService.requireCandidateWalletPublicKeysMatchDefaultHotAddresses(
-                    walletPublicKeyCandidates(id, updates));
-        } catch (IllegalStateException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         }
     }
 
@@ -433,59 +415,6 @@ public class WalletDashboardController {
         return candidate;
     }
 
-    private List<WalletPublicKey> walletPublicKeyCandidates(String id, Map<String, Object> updates) {
-        int targetSlot;
-        try {
-            targetSlot = Integer.parseInt(id);
-        } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "wallet_public_key id must be key_slot");
-        }
-        List<WalletPublicKey> rows = jdbcTemplate.query("""
-                        select key_slot, key_role, key_type, network, public_key, enabled, remark
-                          from wallet_public_key
-                         order by key_slot
-                        """,
-                (rs, rowNum) -> WalletPublicKey.builder()
-                        .keySlot(rs.getInt("key_slot"))
-                        .keyRole(rs.getString("key_role"))
-                        .keyType(rs.getString("key_type"))
-                        .network(rs.getString("network"))
-                        .publicKey(rs.getString("public_key"))
-                        .enabled(rs.getBoolean("enabled"))
-                        .remark(rs.getString("remark"))
-                        .build());
-
-        boolean found = false;
-        List<WalletPublicKey> candidates = new ArrayList<>();
-        for (WalletPublicKey row : rows) {
-            if (row.getKeySlot() == targetSlot) {
-                found = true;
-                candidates.add(WalletPublicKey.builder()
-                        .keySlot(row.getKeySlot())
-                        .keyRole(row.getKeyRole())
-                        .keyType(row.getKeyType())
-                        .network(row.getNetwork())
-                        .publicKey(updates.containsKey("public_key")
-                                ? nullableString(updates.get("public_key"))
-                                : row.getPublicKey())
-                        .enabled(updates.containsKey("enabled")
-                                ? parseBooleanFlag(updates.get("enabled"))
-                                : row.getEnabled())
-                        .remark(updates.containsKey("remark")
-                                ? nullableString(updates.get("remark"))
-                                : row.getRemark())
-                        .build());
-            } else {
-                candidates.add(row);
-            }
-        }
-        if (!found) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "wallet_public_key row not found for key_slot=" + id);
-        }
-        return candidates;
-    }
-
     private String nullableString(Object value) {
         return value == null ? null : String.valueOf(value);
     }
@@ -645,11 +574,6 @@ public class WalletDashboardController {
                   from chain_asset
                  order by chain, native_asset desc, symbol
                 """));
-        runtime.put("walletPublicKeys", queryRows("""
-                select key_slot, key_role, key_type, network, public_key, enabled, remark, updated_at
-                  from wallet_public_key
-                 order by key_slot
-                """));
         runtime.put("scanHeights", queryRows("""
                 select id, chain, scanner_name, best_height, safe_height, status, updated_at
                   from chain_scan_height
@@ -698,24 +622,12 @@ public class WalletDashboardController {
         Map<String, Object> payload = orderedMap();
         payload.put("generatedAt", Instant.now().toString());
         payload.put("tables", adminTableMetadata());
-        payload.put("secretStatus", secretStatus());
         Map<String, Object> rows = orderedMap();
         for (Map.Entry<String, TableSpec> entry : ADMIN_TABLES.entrySet()) {
             rows.put(entry.getKey(), tableRows(entry.getKey(), entry.getValue(), limit));
         }
         payload.put("rows", rows);
         return payload;
-    }
-
-    private List<Map<String, Object>> secretStatus() {
-        return List.of(row(
-                "name", "SW_ED25519_SEED",
-                "scope", "SOLANA/TON/APTOS/SUI/ADA/DOT/NEAR Ed25519 master seed",
-                "configured", ed25519MasterSeed != null && !ed25519MasterSeed.isBlank(),
-                "storage", "environment/property only",
-                "editable", false,
-                "remark", "Not stored in wallet_public_key or displayed in admin UI; used to derive Ed25519 default hot wallets and signing keys."
-        ));
     }
 
     private Map<String, Object> adminTableMetadata() {
@@ -803,17 +715,14 @@ public class WalletDashboardController {
                 "JDK 21, Maven 3.8+, PostgreSQL 14+, Redis 6+, Docker, Node.js 18+ are required for the full local matrix.",
                 "Initialize PostgreSQL with docs/db/surprising-wallet-init-pgsql.sql before starting wallet-server.",
                 "Before wallet-server startup, every enabled chain must have exactly one default hot wallet row in chain_address: native asset, user_id=0, biz=0, address_index=0, wallet_role=DEPOSIT.",
-                "Changing wallet_public_key through the admin API is validated before save: candidate BIP32 roots must still derive the default hot wallet rows already stored in chain_address.",
+                "Configure the four wallet seeds atomically from the platform wallet keyset page before deriving addresses.",
                 "Start wallet-sig1, wallet-sig2 and wallet-server from the repository root. wallet-server defaults to port 8002.",
-                "Configure SW_DB_PASSWORD, SW_SIG1_MASTER_KEY, SW_SIG2_MASTER_KEY and SW_ED25519_SEED before funded tests or real operation."
+                "Configure SW_DB_PASSWORD and the database-backed wallet keyset before funded tests or real operation."
         ));
         docs.put("startupRequiredConfig", List.of(
                 row("name", "SW_DB_PASSWORD", "usage", "PostgreSQL password for wallet-server"),
-                row("name", "SW_SIG1_MASTER_KEY", "usage", "BIP32 tprv used by wallet-sig1"),
-                row("name", "SW_SIG2_MASTER_KEY", "usage", "BIP32 tprv used by wallet-sig2"),
-                row("name", "SW_ED25519_SEED", "usage", "32-byte Ed25519 seed for SOL/TON/APTOS/SUI/ADA/DOT/NEAR; secret env/property, not stored in wallet_public_key"),
+                row("name", "wallet_key_config", "usage", "Singleton row containing four Base64 32-byte seeds"),
                 row("name", "sw.wallet.admin.username/password", "usage", "Basic-auth credentials for the admin configuration page"),
-                row("name", "wallet_public_key", "usage", "Three enabled BIP32 xpub/public-key slots for BTC-like/EVM/TRON address derivation"),
                 row("name", "chain_address default hot wallet", "usage", "One native row per enabled chain at user_id=0, biz=0, address_index=0, wallet_role=DEPOSIT")
         ));
         docs.put("architectureDiagram", """
@@ -880,7 +789,7 @@ public class WalletDashboardController {
                 row("table", "chain_rpc_node", "purpose", "RPC/fullnode/indexer/faucet endpoints by chain/network/environment/purpose."),
                 row("table", "chain_asset", "purpose", "Native and normalized asset definitions."),
                 row("table", "token_config", "purpose", "Token contracts, decimals, thresholds and collection policy."),
-                row("table", "wallet_public_key", "purpose", "Public keys used by wallet-server to validate multisig/address derivation."),
+                row("table", "wallet_key_config", "purpose", "Atomic four-seed keyset used for address derivation and signing."),
                 row("table", "chain_address", "purpose", "User addresses and the fixed default hot wallet row per chain."),
                 row("table", "ledger_balance", "purpose", "Available, locked and total balances per account/chain/asset."),
                 row("table", "deposit_record", "purpose", "Normalized deposit events and ledger credit state."),
@@ -897,7 +806,7 @@ public class WalletDashboardController {
         operations.put("importantWarnings", List.of(
                 "Disabling wallet_system_config switches stops a whole class of jobs.",
                 "Changing chain_profile network/chain_id/rpc policy can break scanning and transaction replay safety.",
-                "Changing wallet_public_key affects address derivation; the admin API rejects changes that no longer match existing default hot wallet rows.",
+                "The wallet keyset is locked against changes after derived addresses exist.",
                 "Runtime RPC keys are read from chain_rpc_node.api_key or the stored rpc_url; keep real keys out of Git init SQL."
         ));
         operations.put("testedOn2026_06_25", List.of(
@@ -1101,10 +1010,6 @@ public class WalletDashboardController {
                 "chain, symbol, network nulls first, id",
                 "Token contracts, thresholds, collection policy and gas strategy.",
                 "Only enable collection after gas top-up and withdrawal tests pass for this token."));
-        tables.put("wallet_public_key", new TableSpec("key_slot", set("public_key", "enabled", "remark"),
-                "key_slot",
-                "Public keys used by wallet-server for derivation and verification.",
-                "These keys must match signer private roots; mistakes can generate unusable addresses."));
         return Collections.unmodifiableMap(tables);
     }
 

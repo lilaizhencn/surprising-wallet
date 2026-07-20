@@ -565,7 +565,7 @@ public class WalletAppService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "chain profile is not enabled"));
         int coinType = ChainType.derivationCoinType(asset.chain(), profile.getBip44CoinType());
-        ECKey ecKey = pubKeyConfig.NODE2.getChild(44)
+        ECKey ecKey = pubKeyConfig.node2().getChild(44)
                 .getChild(coinType)
                 .getChild(biz)
                 .getChild(Math.toIntExact(userId))

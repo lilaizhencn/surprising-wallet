@@ -55,10 +55,6 @@ sw:
       username: ${SW_WALLET_ADMIN_USERNAME:admin}
       password: ${SW_WALLET_ADMIN_PASSWORD:}
     network: test
-    account-chain:
-      signer-master-key: ${SW_SIG2_MASTER_KEY:}
-    ed25519:
-      master-seed: ${SW_ED25519_SEED:}
     custody:
       secret-master-key: ${SW_CUSTODY_SECRET_MASTER_KEY:}
       session-ttl: ${SW_CUSTODY_SESSION_TTL:PT12H}

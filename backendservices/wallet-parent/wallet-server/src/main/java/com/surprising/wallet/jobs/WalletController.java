@@ -6,7 +6,7 @@ import com.surprising.commons.support.util.ResultUtils;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.LedgerBalanceRecord;
-import com.surprising.wallet.common.chain.WalletPublicKey;
+import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.common.currency.BizEnum;
 import com.surprising.wallet.common.dto.AddressDto;
 import com.surprising.wallet.common.pojo.*;
@@ -36,13 +36,16 @@ public class WalletController {
     private final BlockchainRuntimeService blockchainRuntimeService;
     private final ChainJdbcRepository chainJdbcRepository;
     private final WalletRuntimeConfigService runtimeConfigService;
+    private final WalletKeyMaterialProvider keyMaterial;
 
     public WalletController(BlockchainRuntimeService blockchainRuntimeService,
                             ChainJdbcRepository chainJdbcRepository,
-                            WalletRuntimeConfigService runtimeConfigService) {
+                            WalletRuntimeConfigService runtimeConfigService,
+                            WalletKeyMaterialProvider keyMaterial) {
         this.blockchainRuntimeService = blockchainRuntimeService;
         this.chainJdbcRepository = chainJdbcRepository;
         this.runtimeConfigService = runtimeConfigService;
+        this.keyMaterial = keyMaterial;
     }
 
     @PostMapping("/address")
@@ -143,10 +146,12 @@ public class WalletController {
         Map<String, Object> result = new HashMap<>();
         try {
             List<Map<String, String>> keys = new ArrayList<>();
-            for (WalletPublicKey key : chainJdbcRepository.listEnabledWalletPublicKeys()) {
-                addKeyInfo(keys, "KEY " + key.getKeySlot() + " (" + key.getKeyRole() + ")",
-                        key.getPublicKey(), key.getRemark(), "m/44/1/0/0/0");
-            }
+            addKeyInfo(keys, "KEY 1 (sig1)",
+                    keyMaterial.sig1PublicRoot().pubSerialize(0, false), "first signer", "m/44/1/0/0/0");
+            addKeyInfo(keys, "KEY 2 (sig2)",
+                    keyMaterial.sig2PublicRoot().pubSerialize(0, false), "second signer", "m/44/1/0/0/0");
+            addKeyInfo(keys, "KEY 3 (recovery)",
+                    keyMaterial.recoveryPublicRoot().pubSerialize(0, false), "recovery", "m/44/1/0/0/0");
             result.put("keys", keys);
             result.put("scriptType", "P2WSH 2-of-3 Multisig (Native SegWit)");
             result.put("network", "Bitcoin TestNet3");

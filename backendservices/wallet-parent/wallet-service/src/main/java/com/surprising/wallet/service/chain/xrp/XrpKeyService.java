@@ -26,7 +26,7 @@ public class XrpKeyService {
     }
 
     public String address(AccountChainProfile profile, long userId, int biz, long derivationIndex) {
-        ECKey ecKey = pubKeyConfig.NODE2.getChild(44)
+        ECKey ecKey = pubKeyConfig.node2().getChild(44)
                 .getChild(ChainType.derivationCoinType(profile.getChain(), profile.getBip44CoinType()))
                 .getChild(biz)
                 .getChild(Math.toIntExact(userId))

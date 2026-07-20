@@ -1,17 +1,17 @@
 package com.surprising.wallet.sig.first.service;
 import com.alibaba.fastjson.JSONArray;import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;import com.surprising.wallet.common.pojo.*;
+import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.common.utils.Constants;import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sdk.bitcoinj.core.WitnessTransactionBuilder;import com.surprising.wallet.sig.first.config.PubKeyConfig;
 import lombok.extern.slf4j.Slf4j;import org.bitcoinj.base.Coin;import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.crypto.ECKey;import org.springframework.beans.factory.annotation.Autowired;import org.springframework.beans.factory.annotation.Value;
-import jakarta.annotation.PostConstruct;import java.math.BigDecimal;import java.util.ArrayList;import java.util.List;
+import org.bitcoinj.crypto.ECKey;import org.springframework.beans.factory.annotation.Autowired;
+import java.math.BigDecimal;import java.util.ArrayList;import java.util.List;
 @Slf4j
 abstract public class AbstractBtcLikeFirstSign implements ISignService {
-    public Bip32Node NODE; @Autowired protected PubKeyConfig pubKeyConfig; @Value("${sw.wallet.masterKey}") String masterKey;
+    public Bip32Node NODE; @Autowired protected PubKeyConfig pubKeyConfig; @Autowired protected WalletKeyMaterialProvider keyMaterial;
     private static final long DEFAULT_FEE_RATE = 10L;
     private static final long DUST_THRESHOLD_SAT = 546L;
-    @PostConstruct public void init(){NODE=Bip32Node.decode(masterKey);}
     protected NetworkParameters getNetworkParameters(){return Constants.NET_PARAMS;}
     @Override public void signTransaction(WithdrawTransaction transaction){
         AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
@@ -54,7 +54,8 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
         transaction.setSignature(signature.toJSONString());
     }
     public Bip32Node getBipNODE(Address a,AssetRuntimeMetadata currency){
-        return NODE.getChild(44).getChild(currency.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex());}
+        Bip32Node root=NODE!=null?NODE:keyMaterial.sig1Root();
+        return root.getChild(44).getChild(currency.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex());}
     protected long defaultFeeRate(){return DEFAULT_FEE_RATE;}
     protected long dustThresholdSat(){return DUST_THRESHOLD_SAT;}
 }

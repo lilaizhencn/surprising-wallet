@@ -7,5 +7,3 @@ sw:
       username: ${SW_WALLET_ADMIN_USERNAME:}
       password: ${SW_WALLET_ADMIN_PASSWORD:}
     network: main
-    ed25519:
-      master-seed: ${SW_ED25519_SEED:}

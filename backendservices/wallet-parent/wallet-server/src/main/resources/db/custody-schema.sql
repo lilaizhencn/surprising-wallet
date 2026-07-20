@@ -2,6 +2,18 @@
 -- This script is intentionally additive and idempotent. Existing chain configuration,
 -- funded test addresses and seed material are not altered.
 
+CREATE TABLE IF NOT EXISTS wallet_key_config (
+    id smallint PRIMARY KEY,
+    sig1_seed text NOT NULL,
+    sig2_seed text NOT NULL,
+    recovery_seed text NOT NULL,
+    ed25519_seed text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    updated_by varchar(128) NOT NULL,
+    CONSTRAINT wallet_key_config_singleton_check CHECK (id = 1)
+);
+
 CREATE SEQUENCE IF NOT EXISTS custody_derivation_namespace_seq
     AS integer START WITH 1000 INCREMENT BY 1 MINVALUE 1000 MAXVALUE 2147483646 CACHE 16;
 

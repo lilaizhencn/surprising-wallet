@@ -13,7 +13,6 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Properties;
 
 public class FullSigningTest {
     private static final Bip32Node ROOT1 = testRoot((byte) 0x11);
@@ -26,15 +25,12 @@ public class FullSigningTest {
     static final String PK3 = ROOT3.pubSerialize(0, false);
 
     public static void main(String[] args) throws Exception {
-        System.setProperty("sw.wallet.masterKey", SIG1_MK);
         System.setProperty("sw.wallet.network", "test");
         Constants c0 = new Constants(); c0.NETWORK = "test"; c0.init();
 
-        // Init sig2's KeyConfig with a DIFFERENT master key
-        Properties props = new Properties();
-        props.setProperty("masterNode", SIG2_MK);
-        Class.forName("com.surprising.wallet.signature.KeyConfig")
-            .getMethod("init", Properties.class).invoke(null, props);
+        // Init sig2 with a different root.
+        Class.forName("com.surprising.wallet.sig.second.BipNodeUtil")
+            .getMethod("initialize", Bip32Node.class).invoke(null, ROOT2);
 
         UtxoTransaction utxo = UtxoTransaction.builder()
             .txId("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
@@ -55,10 +51,10 @@ public class FullSigningTest {
 
         // Phase 1: First Sign with SIG1_MK
         BtcFirstSignService firstSign = new BtcFirstSignService();
-        set(firstSign, "masterKey", SIG1_MK);
-        PubKeyConfig pk = new PubKeyConfig();
-        set(pk, "pub1", PK1); set(pk, "pub2", PK2); set(pk, "pub3", PK3);
-        pk.init(); set(firstSign, "pubKeyConfig", pk); firstSign.init();
+        firstSign.NODE = ROOT1;
+        PubKeyConfig pk = new PubKeyConfig(
+                Bip32Node.decode(PK1), Bip32Node.decode(PK2), Bip32Node.decode(PK3));
+        set(firstSign, "pubKeyConfig", pk);
 
         System.out.println("=============================================");
         System.out.println("  Phase 1: FirstSign (KEY 1 — hot wallet)");

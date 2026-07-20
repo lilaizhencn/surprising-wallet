@@ -15,8 +15,8 @@ class HotWalletAddressServiceTest {
 
     @Test
     void hyperCoreUsesSecp256k1AccountDerivation() {
-        PubKeyConfig pubKeyConfig = new PubKeyConfig(null);
-        pubKeyConfig.NODE2 = Bip32Node.decode(XPUB_2);
+        Bip32Node node = Bip32Node.decode(XPUB_2);
+        PubKeyConfig pubKeyConfig = new PubKeyConfig(node, node, node);
         HotWalletAddressService service = new HotWalletAddressService(
                 null, pubKeyConfig, null, null, null, null, null, null, null, null, null);
         AccountChainProfile profile = AccountChainProfile.builder()

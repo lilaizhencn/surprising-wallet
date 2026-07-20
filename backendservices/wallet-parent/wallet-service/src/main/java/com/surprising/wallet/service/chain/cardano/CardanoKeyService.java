@@ -3,9 +3,10 @@ package com.surprising.wallet.service.chain.cardano;
 import com.surprising.wallet.common.key.Ed25519Chain;
 import com.surprising.wallet.common.key.Ed25519DerivedKey;
 import com.surprising.wallet.common.key.Ed25519KeyProvider;
+import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import org.bitcoinj.base.Bech32;
 import org.bouncycastle.jcajce.provider.digest.Blake2b;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -15,15 +16,22 @@ public class CardanoKeyService {
     private static final int PAYMENT_KEY_HASH_LENGTH = 28;
     private static final int ENTERPRISE_KEY_ADDRESS_TYPE = 0x60;
 
-    private final String encodedMasterSeed;
-    private volatile Ed25519KeyProvider provider;
+    private final WalletKeyMaterialProvider keyMaterial;
+    private final Ed25519KeyProvider testProvider;
 
-    public CardanoKeyService(@Value("${sw.wallet.ed25519.master-seed:}") String encodedMasterSeed) {
-        this.encodedMasterSeed = encodedMasterSeed;
+    @Autowired
+    public CardanoKeyService(WalletKeyMaterialProvider keyMaterial) {
+        this.keyMaterial = keyMaterial;
+        this.testProvider = null;
+    }
+
+    public CardanoKeyService(String encodedMasterSeed) {
+        this.keyMaterial = null;
+        this.testProvider = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(encodedMasterSeed));
     }
 
     public boolean isConfigured() {
-        return encodedMasterSeed != null && !encodedMasterSeed.isBlank();
+        return testProvider != null || keyMaterial.isConfigured();
     }
 
     public Ed25519DerivedKey derive(long derivationIndex) {
@@ -79,16 +87,6 @@ public class CardanoKeyService {
     }
 
     private Ed25519KeyProvider provider() {
-        Ed25519KeyProvider result = provider;
-        if (result == null) {
-            synchronized (this) {
-                result = provider;
-                if (result == null) {
-                    result = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(encodedMasterSeed));
-                    provider = result;
-                }
-            }
-        }
-        return result;
+        return testProvider != null ? testProvider : keyMaterial.ed25519();
     }
 }
