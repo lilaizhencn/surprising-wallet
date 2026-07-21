@@ -6,21 +6,21 @@
 
 ## 多租户托管流程
 
-托管控制面不管理交易所内部的用户模型。租户只传 `chainId`，服务根据该链唯一启用的网络分配新地址；租户保存返回的地址并自行维护客户映射。
+托管控制面不管理交易所内部的用户模型。租户传 `chainId` 和自己的 `subject`，服务根据该链唯一启用的网络，在同一 subject 下顺序分配新地址。
 
 ```text
 交易所后端
   -> 通过 HMAC 鉴权调用 POST /custody/api/v1/addresses
-  -> 按 Idempotency-Key 幂等创建 custody_address
-  -> 分配 chain_address
-  -> 返回地址 ID、链、自动选择的网络和地址
+  -> 每次调用创建新的 custody_address
+  -> 为 subject 分配下一个 chain_address child
+  -> 返回地址 ID、链、自动选择的网络、subject、childIndex 和地址
 
 链上扫描器
   -> 在同一事务中写 deposit_record 并增加 ledger_balance
   -> 写 custody_deposit 投影
   -> 写持久化 custody_event
   -> 为每个端点生成 webhook_delivery
-  -> 签名回调 DEPOSIT.CONFIRMED，并带回充值地址
+  -> 签名回调 DEPOSIT.CONFIRMED，并带回 subject 和充值地址
 ```
 
 Console 可附带标签和元数据手动创建地址；公开 API 不接收这些管理字段。地址仍计入租户资产总额。创建地址本身不产生 Webhook。所有 Console/API 查询和变更都强制应用租户隔离。

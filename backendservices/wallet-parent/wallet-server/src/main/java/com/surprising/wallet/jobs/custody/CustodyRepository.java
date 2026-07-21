@@ -576,54 +576,60 @@ public class CustodyRepository {
         }
     }
 
-    public int nextDerivationSubject() {
-        Integer value = jdbc.queryForObject(
-                "select nextval('custody_derivation_subject_seq')::integer", Integer.class);
-        if (value == null || value <= 0) {
-            throw new IllegalStateException("failed to allocate custody derivation subject");
-        }
-        return value;
-    }
-
-    public void lockAddressAllocation(UUID tenantId, String chain, String externalReference) {
-        String allocationKey = tenantId + "\n" + chain + "\n" + externalReference;
+    public int resolveDerivationSubject(UUID tenantId, String subject) {
+        String mappingKey = tenantId + "\n" + subject;
         jdbc.query(
                 "select pg_advisory_xact_lock(hashtextextended(?, 0))",
+                rs -> null,
+                mappingKey);
+        Integer existing = jdbc.query("""
+                        select derivation_subject
+                          from custody_derivation_subject
+                         where tenant_id = ? and subject = ?
+                        """, rs -> rs.next() ? rs.getInt(1) : null, tenantId, subject);
+        if (existing != null) {
+            return existing;
+        }
+        Integer allocated = jdbc.queryForObject("""
+                        insert into custody_derivation_subject(tenant_id, subject)
+                        values (?, ?)
+                        returning derivation_subject
+                        """, Integer.class, tenantId, subject);
+        if (allocated == null || allocated <= 0) {
+            throw new IllegalStateException("failed to allocate custody derivation subject");
+        }
+        return allocated;
+    }
+
+    public void lockSubjectAddressAllocation(UUID tenantId, String chain, String subject) {
+        String allocationKey = tenantId + "\n" + chain + "\n" + subject;
+        jdbc.query(
+                "select pg_advisory_xact_lock(hashtextextended(?, 1))",
                 rs -> null,
                 allocationKey);
     }
 
-    public Optional<AddressRecord> findAddressByExternalReference(
-            UUID tenantId, String chain, String externalReference) {
-        return jdbc.query("""
-                        select id, tenant_id, chain_address_id, chain, network, address, memo,
-                               external_reference, label, metadata::text as metadata, source,
-                               status, derivation_subject, created_at, updated_at
-                          from custody_address
-                         where tenant_id = ? and chain = ? and external_reference = ?
-                        """, (rs, rowNum) -> mapAddress(rs),
-                tenantId, chain, externalReference).stream().findFirst();
-    }
-
     public AddressRecord insertAddress(UUID id, UUID tenantId, long chainAddressId, String chain,
                                        String network, String address, String memo,
-                                       String externalReference, String label, String metadataJson,
-                                       String source, int derivationSubject, UUID createdBy) {
+                                       String subject, String label, String metadataJson,
+                                       String source, int derivationSubject, long derivationChild,
+                                       UUID createdBy) {
         jdbc.update("""
                         insert into custody_address(
                             id, tenant_id, chain_address_id, chain, network, address, memo,
-                            external_reference, label, metadata, source, derivation_subject, created_by)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?)
+                            subject, label, metadata, source, derivation_subject,
+                            derivation_child, created_by)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?)
                         """, id, tenantId, chainAddressId, chain, network, address, memo,
-                externalReference, label, metadataJson, source, derivationSubject, createdBy);
+                subject, label, metadataJson, source, derivationSubject, derivationChild, createdBy);
         return requireAddress(tenantId, id);
     }
 
     public AddressRecord requireAddress(UUID tenantId, UUID addressId) {
         return jdbc.query("""
                         select id, tenant_id, chain_address_id, chain, network, address, memo,
-                               external_reference, label, metadata::text as metadata, source,
-                               status, derivation_subject, created_at, updated_at
+                               subject, label, metadata::text as metadata, source,
+                               status, derivation_subject, derivation_child, created_at, updated_at
                           from custody_address
                          where tenant_id = ? and id = ?
                         """, (rs, rowNum) -> mapAddress(rs), tenantId, addressId)
@@ -661,8 +667,8 @@ public class CustodyRepository {
         String normalizedSearch = search == null ? "" : search.trim();
         return jdbc.query("""
                         select id, tenant_id, chain_address_id, chain, network, address, memo,
-                               external_reference, label, metadata::text as metadata, source,
-                               status, derivation_subject, created_at, updated_at
+                               subject, label, metadata::text as metadata, source,
+                               status, derivation_subject, derivation_child, created_at, updated_at
                           from custody_address
                          where tenant_id = ?
                            and not exists (
@@ -673,7 +679,7 @@ public class CustodyRepository {
                            and (? = '' or source = ?)
                            and (? = '' or status = ?)
                            and (? = '' or address ilike '%' || ? || '%'
-                                or coalesce(external_reference, '') ilike '%' || ? || '%'
+                                or subject ilike '%' || ? || '%'
                                 or coalesce(label, '') ilike '%' || ? || '%')
                          order by created_at desc, id
                          limit ? offset ?
@@ -1743,7 +1749,7 @@ public class CustodyRepository {
     public List<Map<String, Object>> listCustodyDeposits(
             UUID tenantId, String status, int limit, int offset) {
         return jdbc.query("""
-                        select d.id, d.custody_address_id, a.external_reference,
+                        select d.id, d.custody_address_id, a.subject,
                                d.chain, d.asset_symbol, d.tx_hash, d.log_index, d.amount,
                                d.status, d.credited_at, d.created_at, d.updated_at
                           from custody_deposit d
@@ -1760,7 +1766,7 @@ public class CustodyRepository {
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("id", rs.getObject("id", UUID.class));
                     row.put("custodyAddressId", rs.getObject("custody_address_id", UUID.class));
-                    row.put("externalReference", rs.getString("external_reference"));
+                    row.put("subject", rs.getString("subject"));
                     row.put("chain", rs.getString("chain"));
                     row.put("assetSymbol", rs.getString("asset_symbol"));
                     row.put("txHash", rs.getString("tx_hash"));
@@ -2004,12 +2010,13 @@ public class CustodyRepository {
                 rs.getString("network"),
                 rs.getString("address"),
                 rs.getString("memo"),
-                rs.getString("external_reference"),
+                rs.getString("subject"),
                 rs.getString("label"),
                 rs.getString("metadata"),
                 rs.getString("source"),
                 rs.getString("status"),
                 rs.getInt("derivation_subject"),
+                rs.getLong("derivation_child"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant());
     }
@@ -2135,12 +2142,13 @@ public class CustodyRepository {
             String network,
             String address,
             String memo,
-            String externalReference,
+            String subject,
             String label,
             String metadataJson,
             String source,
             String status,
             int derivationSubject,
+            long derivationChild,
             Instant createdAt,
             Instant updatedAt
     ) {

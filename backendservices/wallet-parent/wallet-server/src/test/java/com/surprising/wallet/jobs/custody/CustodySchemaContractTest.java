@@ -27,7 +27,8 @@ class CustodySchemaContractTest {
         for (String table : new String[]{
                 "custody_tenant", "custody_tenant_user", "custody_session", "custody_api_key",
                 "custody_api_nonce", "custody_ip_rule", "custody_webhook_endpoint",
-                "custody_address", "custody_gas_account", "custody_deposit", "custody_withdrawal",
+                "custody_derivation_subject", "custody_address", "custody_gas_account",
+                "custody_deposit", "custody_withdrawal",
                 "custody_gas_usage", "custody_ledger_entry", "custody_event", "custody_webhook_delivery",
                 "custody_webhook_delivery_attempt",
                 "custody_idempotency_key", "custody_audit_log"}) {
@@ -35,10 +36,10 @@ class CustodySchemaContractTest {
         }
         assertTrue(sql.contains("UNIQUE (tenant_id, event_type, aggregate_type, aggregate_id)"));
         assertTrue(sql.contains("UNIQUE (tenant_id, entry_type, reference_type, reference_id)"));
-        assertTrue(sql.contains("CREATE UNIQUE INDEX IF NOT EXISTS custody_address_allocation_key"));
-        assertTrue(sql.contains("ON custody_address (tenant_id, chain, external_reference)"));
+        assertTrue(sql.contains("PRIMARY KEY (tenant_id, subject)"));
+        assertTrue(sql.contains("custody_derivation_subject_path_key UNIQUE (derivation_subject)"));
         assertTrue(sql.contains("CONSTRAINT custody_address_chain_address_key UNIQUE (chain_address_id)"));
-        assertTrue(sql.contains("CONSTRAINT custody_address_derivation_subject_key UNIQUE (derivation_subject)"));
+        assertTrue(sql.contains("UNIQUE (tenant_id, chain, derivation_subject, derivation_child)"));
         assertTrue(sql.contains("total_attempt_count integer NOT NULL DEFAULT 0"));
         assertTrue(sql.contains("manual_retry_count integer NOT NULL DEFAULT 0"));
         assertTrue(sql.contains("UNIQUE (delivery_id, attempt_number)"));

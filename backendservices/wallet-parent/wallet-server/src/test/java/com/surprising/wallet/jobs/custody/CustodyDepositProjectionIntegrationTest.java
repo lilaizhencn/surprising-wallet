@@ -46,7 +46,7 @@ class CustodyDepositProjectionIntegrationTest {
     }
 
     @Test
-    void confirmedDepositProjectsDisabledAddressAndExternalReferenceAtomically() {
+    void confirmedDepositProjectsDisabledAddressAndSubjectAtomically() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         CustodyRepository custodyRepository = new CustodyRepository(jdbc);
         CustodyDepositCreditObserver observer =
@@ -69,7 +69,7 @@ class CustodyDepositProjectionIntegrationTest {
                      where chain = 'ETH' and asset_symbol = 'ETH' and account_id = ?
                     """, BigDecimal.class, fixture.accountId())));
             assertEquals("user_10086", jdbc.queryForObject("""
-                    select c.external_reference
+                    select c.subject
                       from custody_deposit d
                       join custody_address c on c.id = d.custody_address_id
                      where d.tenant_id = ? and d.tx_hash = ?
@@ -80,7 +80,7 @@ class CustodyDepositProjectionIntegrationTest {
                        and reference_id = ?
                     """, Integer.class, fixture.tenantId(), "ETH:" + event.txId() + ":0"));
             assertEquals("user_10086", jdbc.queryForObject("""
-                    select payload #>> '{data,externalReference}'
+                    select payload #>> '{data,subject}'
                       from custody_event
                      where tenant_id = ? and event_type = 'DEPOSIT.CONFIRMED'
                        and aggregate_id = ?
@@ -124,14 +124,33 @@ class CustodyDepositProjectionIntegrationTest {
                 """, Integer.class, accountId[0]));
     }
 
-    private DepositFixture createFixture(String externalReference, String status) {
+    @Test
+    void tenantSubjectMappingIsStableAndTenantIsolated() {
+        transactions.executeWithoutResult(status -> {
+            CustodyRepository repository = new CustodyRepository(jdbc);
+            UUID firstTenant = insertTenant("subject-first");
+            UUID secondTenant = insertTenant("subject-second");
+
+            int first = repository.resolveDerivationSubject(firstTenant, "user_10086");
+            int repeated = repository.resolveDerivationSubject(firstTenant, "user_10086");
+            int isolated = repository.resolveDerivationSubject(secondTenant, "user_10086");
+
+            assertEquals(first, repeated);
+            assertTrue(first > 0);
+            assertTrue(isolated > 0);
+            assertTrue(first != isolated);
+            status.setRollbackOnly();
+        });
+    }
+
+    private DepositFixture createFixture(String subjectValue, String status) {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         UUID tenantId = UUID.randomUUID();
         UUID custodyAddressId = UUID.randomUUID();
         int namespace = jdbc.queryForObject(
                 "select nextval('custody_derivation_namespace_seq')::integer", Integer.class);
         int subject = jdbc.queryForObject(
-                "select nextval('custody_derivation_subject_seq')::integer", Integer.class);
+                "select nextval('custody_derivation_subject_index_seq')::integer", Integer.class);
         String address = "0x" + suffix + suffix.substring(0, 8);
         Long chainAddressId = jdbc.queryForObject("""
                 insert into chain_address(
@@ -148,11 +167,21 @@ class CustodyDepositProjectionIntegrationTest {
         jdbc.update("""
                 insert into custody_address(
                     id, tenant_id, chain_address_id, chain, network, address,
-                    external_reference, source, status, derivation_subject)
-                values (?, ?, ?, 'ETH', 'integration', ?, ?, 'API', ?, ?)
+                    subject, source, status, derivation_subject, derivation_child)
+                values (?, ?, ?, 'ETH', 'integration', ?, ?, 'API', ?, ?, 0)
                 """, custodyAddressId, tenantId, chainAddressId, address,
-                externalReference, status, subject);
+                subjectValue, status, subject);
         return new DepositFixture(tenantId, custodyAddressId, address, address);
+    }
+
+    private UUID insertTenant(String prefix) {
+        UUID tenantId = UUID.randomUUID();
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        jdbc.update("""
+                insert into custody_tenant(id, slug, name)
+                values (?, ?, 'Subject allocation integration test')
+                """, tenantId, prefix + "-" + suffix);
+        return tenantId;
     }
 
     private static DepositEvent event(String address, BigDecimal amount) {

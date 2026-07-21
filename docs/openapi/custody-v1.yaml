@@ -42,13 +42,11 @@ paths:
       tags: [Public API]
       summary: Create a fresh tenant address on the enabled network
       description: |
-        The request body accepts only a chain code in chainId. The service
-        selects that chain's enabled network. A new Idempotency-Key allocates a
-        fresh address; retrying the same key returns the same result. Address
-        creation does not emit a Webhook.
+        The request body accepts a chain code and tenant-defined subject. The
+        service selects that chain's enabled network. Every successful call
+        allocates the next child address for that subject. Address creation
+        does not emit a Webhook and is intentionally not idempotent.
       security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1234,30 +1232,37 @@ components:
     CreatePublicAddress:
       type: object
       additionalProperties: false
-      required: [chainId]
+      required: [chainId, subject]
       properties:
         chainId:
           type: string
           pattern: '^[A-Z][A-Z0-9_]{1,31}$'
           description: Chain code such as ETH, BTC, or SOLANA; not an EVM numeric chain ID.
+        subject:
+          type: string
+          pattern: '^[A-Za-z0-9_][A-Za-z0-9._:-]{0,159}$'
+          description: Tenant-defined account or user identifier; the __sw_ prefix is reserved.
     CreateAddress:
       type: object
-      required: [chain]
+      required: [chain, subject]
       properties:
         chain: { type: string, pattern: '^[A-Z][A-Z0-9_]{1,31}$' }
-        externalReference: { type: string, maxLength: 160 }
+        subject:
+          type: string
+          pattern: '^[A-Za-z0-9_][A-Za-z0-9._:-]{0,159}$'
         label: { type: string, maxLength: 160 }
         metadata: { type: object, additionalProperties: true }
     Address:
       type: object
-      required: [id, chain, network, address, metadata, source, status, createdAt]
+      required: [id, chain, network, address, subject, childIndex, metadata, source, status, createdAt]
       properties:
         id: { type: string, format: uuid }
         chain: { type: string }
         network: { type: string }
         address: { type: string }
         memo: { type: [string, 'null'] }
-        externalReference: { type: [string, 'null'] }
+        subject: { type: string }
+        childIndex: { type: integer, format: int64, minimum: 0 }
         label: { type: [string, 'null'] }
         metadata: { type: object, additionalProperties: true }
         source: { type: string, enum: [API, CONSOLE] }
@@ -1278,7 +1283,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         custodyAddressId: { type: string, format: uuid }
-        externalReference: { type: [string, 'null'] }
+        subject: { type: string }
         chain: { type: string }
         assetSymbol: { type: string }
         txHash: { type: string }
@@ -1550,6 +1555,7 @@ components:
         - source
         - status
         - derivationSubject
+        - derivationChild
         - createdAt
         - updatedAt
       properties:
@@ -1560,7 +1566,7 @@ components:
         network: { type: string }
         address: { type: string }
         memo: { type: [string, 'null'] }
-        externalReference: { type: [string, 'null'] }
+        subject: { type: string }
         label: { type: [string, 'null'] }
         metadataJson:
           type: string
@@ -1568,6 +1574,7 @@ components:
         source: { type: string, enum: [API, CONSOLE] }
         status: { type: string, enum: [ACTIVE, DISABLED] }
         derivationSubject: { type: integer }
+        derivationChild: { type: integer, format: int64, minimum: 0 }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     CreateWebhook:

@@ -6,21 +6,21 @@
 
 ## Multi-Tenant Custody Flow
 
-The custody control plane keeps a tenant exchange's user model outside this repository. A tenant sends only `chainId`; the service selects the chain's one enabled network and allocates a new address. The tenant stores the returned address and owns the customer mapping.
+The custody control plane keeps a tenant exchange's user model outside this repository. A tenant sends `chainId` and its own `subject`; the service selects the enabled network and allocates the next address under that subject.
 
 ```text
 tenant backend
   -> HMAC-authenticated POST /custody/api/v1/addresses
-  -> idempotent custody_address creation by Idempotency-Key
-  -> chain_address allocation
-  -> return address ID, chain, selected network, and address
+  -> create a fresh custody_address on every call
+  -> allocate the subject's next chain_address child
+  -> return address ID, chain, selected network, subject, childIndex, and address
 
 chain scanner
   -> deposit_record + ledger_balance credit in one transaction
   -> custody_deposit projection
   -> durable custody_event
   -> per-endpoint webhook_delivery
-  -> signed DEPOSIT.CONFIRMED webhook with the deposit address
+  -> signed DEPOSIT.CONFIRMED webhook with subject and the deposit address
 ```
 
 Console users may attach labels and metadata when creating addresses; the public API does not accept those management fields. Addresses remain visible in tenant asset totals. Address creation itself does not produce a webhook. Tenant isolation is applied to every Console/API query and mutation.

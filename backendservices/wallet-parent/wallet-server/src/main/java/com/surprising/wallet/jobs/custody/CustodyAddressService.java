@@ -5,14 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.jobs.custody.CustodyRepository.AddressRecord;
-import com.surprising.wallet.jobs.custody.CustodyRepository.IdempotencyRecord;
 import com.surprising.wallet.jobs.custody.CustodyRepository.TenantRecord;
 import com.surprising.wallet.service.chain.BlockchainRuntimeService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,84 +20,56 @@ import java.util.UUID;
 
 @Service
 public class CustodyAddressService {
-    private static final String CREATE_OPERATION = "ADDRESS.CREATE";
-    private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
+    private static final String RESERVED_SUBJECT_PREFIX = "__sw_";
 
     private final CustodyRepository custodyRepository;
     private final ChainJdbcRepository chainRepository;
     private final BlockchainRuntimeService runtime;
-    private final CustodyCryptoService crypto;
     private final ObjectMapper objectMapper;
 
     public CustodyAddressService(CustodyRepository custodyRepository,
                                  ChainJdbcRepository chainRepository,
                                  BlockchainRuntimeService runtime,
-                                 CustodyCryptoService crypto,
                                  ObjectMapper objectMapper) {
         this.custodyRepository = custodyRepository;
         this.chainRepository = chainRepository;
         this.runtime = runtime;
-        this.crypto = crypto;
         this.objectMapper = objectMapper;
     }
 
     @Transactional(rollbackFor = Throwable.class)
     public AddressView create(CustodyPrincipal principal, CreateAddressCommand command,
-                              String source, String idempotencyKey, String sourceIp) {
+                              String source, String sourceIp) {
+        return createInternal(principal, command, source, sourceIp, false);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    AddressView createSystem(CustodyPrincipal principal, CreateAddressCommand command,
+                             String sourceIp) {
+        return createInternal(principal, command, "CONSOLE", sourceIp, true);
+    }
+
+    private AddressView createInternal(CustodyPrincipal principal, CreateAddressCommand command,
+                                       String source, String sourceIp, boolean allowReservedSubject) {
         requireScope(principal, "addresses:write");
         String normalizedSource = normalizeSource(source);
         String chain = requireChain(command.chain());
-        String externalReference = optional(command.externalReference(), 160, "externalReference");
+        String subject = requireSubject(command.subject(), allowReservedSubject);
         String label = optional(command.label(), 160, "label");
         String metadataJson = metadataJson(command.metadata());
-        String requestHash = crypto.sha256(chain + "\n" + externalReference + "\n"
-                + label + "\n" + metadataJson + "\n" + normalizedSource);
-        String normalizedIdempotencyKey = null;
-
-        if ("API".equals(normalizedSource)) {
-            normalizedIdempotencyKey = requireIdempotencyKey(idempotencyKey);
-            AddressView replay = replay(
-                    principal.tenantId(), normalizedIdempotencyKey, requestHash);
-            if (replay != null) {
-                return replay;
-            }
-            if (!custodyRepository.beginIdempotency(
-                    principal.tenantId(), normalizedIdempotencyKey, CREATE_OPERATION, requestHash,
-                    Instant.now().plus(IDEMPOTENCY_TTL))) {
-                replay = replay(principal.tenantId(), normalizedIdempotencyKey, requestHash);
-                if (replay != null) {
-                    return replay;
-                }
-                throw new IllegalStateException("an address request with this idempotency key is still processing");
-            }
-        }
 
         TenantRecord tenant = custodyRepository.requireTenant(principal.tenantId());
         if (!"ACTIVE".equals(tenant.status())) {
             throw new CustodyForbiddenException("tenant is not active");
         }
 
-        if (externalReference != null) {
-            custodyRepository.lockAddressAllocation(tenant.id(), chain, externalReference);
-            AddressRecord existing = custodyRepository.findAddressByExternalReference(
-                    tenant.id(), chain, externalReference).orElse(null);
-            if (existing != null) {
-                AddressView result = toView(existing);
-                if ("API".equals(normalizedSource)) {
-                    custodyRepository.completeIdempotency(
-                            tenant.id(), normalizedIdempotencyKey,
-                            CREATE_OPERATION, 201, json(result));
-                }
-                return result;
-            }
-        }
-
         BlockchainRuntimeService.RuntimeChain runtimeChain = runtime.requireRuntime(chain);
-        int subject = custodyRepository.nextDerivationSubject();
+        int derivationSubject = custodyRepository.resolveDerivationSubject(tenant.id(), subject);
+        custodyRepository.lockSubjectAddressAllocation(tenant.id(), chain, subject);
         Address generated = runtime.generateDepositAddress(
-                chain, Integer.toUnsignedLong(subject), tenant.derivationNamespace());
+                chain, Integer.toUnsignedLong(derivationSubject), tenant.derivationNamespace());
         ChainAddressRecord chainAddress = chainRepository.findChainAddress(
-                        chain, runtimeChain.nativeSymbol(), Integer.toUnsignedLong(subject),
+                        chain, runtimeChain.nativeSymbol(), Integer.toUnsignedLong(derivationSubject),
                         tenant.derivationNamespace(), generated.getIndex(), "DEPOSIT")
                 .orElseThrow(() -> new IllegalStateException("generated chain address was not persisted"));
 
@@ -112,11 +82,12 @@ public class CustodyAddressService {
                 runtimeChain.network(),
                 chainAddress.getAddress(),
                 null,
-                externalReference,
+                subject,
                 label,
                 metadataJson,
                 normalizedSource,
-                subject,
+                derivationSubject,
+                generated.getIndex(),
                 "CONSOLE".equals(normalizedSource) ? principal.actorId() : null);
         AddressView result = toView(saved);
         custodyRepository.audit(
@@ -127,12 +98,7 @@ public class CustodyAddressService {
                 "CUSTODY_ADDRESS",
                 addressId.toString(),
                 sourceIp,
-                addressAuditDetails(chain, normalizedSource, externalReference));
-
-        if ("API".equals(normalizedSource)) {
-            custodyRepository.completeIdempotency(
-                    tenant.id(), normalizedIdempotencyKey, CREATE_OPERATION, 201, json(result));
-        }
+                addressAuditDetails(chain, normalizedSource, subject, generated.getIndex()));
         return result;
     }
 
@@ -200,25 +166,6 @@ public class CustodyAddressService {
         return custodyRepository.tenantAssetOverview(principal.tenantId());
     }
 
-    private AddressView replay(UUID tenantId, String key, String requestHash) {
-        IdempotencyRecord existing = custodyRepository.findIdempotency(tenantId, key, CREATE_OPERATION)
-                .orElse(null);
-        if (existing == null) {
-            return null;
-        }
-        if (!crypto.constantTimeEquals(existing.requestHash(), requestHash)) {
-            throw new IllegalStateException("idempotency key was already used with a different request");
-        }
-        if (existing.responseJson() == null) {
-            return null;
-        }
-        try {
-            return objectMapper.readValue(existing.responseJson(), AddressView.class);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("stored idempotent response is invalid", e);
-        }
-    }
-
     private AddressView toView(AddressRecord record) {
         return new AddressView(
                 record.id(),
@@ -226,7 +173,8 @@ public class CustodyAddressService {
                 record.network(),
                 record.address(),
                 record.memo(),
-                record.externalReference(),
+                record.subject(),
+                record.derivationChild(),
                 record.label(),
                 readMetadata(record.metadataJson()),
                 record.source(),
@@ -260,11 +208,12 @@ public class CustodyAddressService {
         }
     }
 
-    String addressAuditDetails(String chain, String source, String externalReference) {
+    String addressAuditDetails(String chain, String source, String subject, long childIndex) {
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("chain", chain);
         details.put("source", source);
-        details.put("externalReference", externalReference);
+        details.put("subject", subject);
+        details.put("childIndex", childIndex);
         return json(details);
     }
 
@@ -284,21 +233,24 @@ public class CustodyAddressService {
         return result.isBlank() ? null : result;
     }
 
+    static String requireSubject(String value, boolean allowReserved) {
+        String subject = value == null ? "" : value.trim();
+        if (!subject.matches("^[A-Za-z0-9_][A-Za-z0-9._:-]{0,159}$")) {
+            throw new IllegalArgumentException(
+                    "subject must contain 1-160 letters, digits, dots, underscores, colons or hyphens");
+        }
+        if (!allowReserved && subject.toLowerCase(Locale.ROOT).startsWith(RESERVED_SUBJECT_PREFIX)) {
+            throw new IllegalArgumentException("subject prefix __sw_ is reserved");
+        }
+        return subject;
+    }
+
     private static String normalizeSource(String value) {
         String source = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!"API".equals(source) && !"CONSOLE".equals(source)) {
             throw new IllegalArgumentException("address source must be API or CONSOLE");
         }
         return source;
-    }
-
-    private static String requireIdempotencyKey(String value) {
-        String key = value == null ? "" : value.trim();
-        if (!key.matches("^[A-Za-z0-9._:-]{8,160}$")) {
-            throw new IllegalArgumentException(
-                    "Idempotency-Key must contain 8-160 letters, digits, dots, underscores, colons or hyphens");
-        }
-        return key;
     }
 
     private static String upperOrEmpty(String value) {
@@ -313,7 +265,7 @@ public class CustodyAddressService {
 
     public record CreateAddressCommand(
             String chain,
-            String externalReference,
+            String subject,
             String label,
             Map<String, Object> metadata
     ) {
@@ -332,7 +284,8 @@ public class CustodyAddressService {
             String network,
             String address,
             String memo,
-            String externalReference,
+            String subject,
+            long childIndex,
             String label,
             Map<String, Object> metadata,
             String source,

@@ -44,21 +44,21 @@ public class CustodyGasService {
         String chain = requireChain(command.chain());
         BigDecimal threshold = positiveAmount(
                 command.lowBalanceThreshold(), "lowBalanceThreshold");
+        repository.lockSubjectAddressAllocation(
+                principal.tenantId(), chain, SYSTEM_REFERENCE_PREFIX + chain.toLowerCase(Locale.ROOT));
         GasAccountRecord existing = repository.findGasAccount(principal.tenantId(), chain)
                 .orElse(null);
         if (existing != null) {
             return toView(existing);
         }
         BlockchainRuntimeService.RuntimeChain chainRuntime = runtime.requireRuntime(chain);
-        AddressView fundingAddress = addresses.create(
+        AddressView fundingAddress = addresses.createSystem(
                 principal,
                 new CreateAddressCommand(
                         chain,
                         SYSTEM_REFERENCE_PREFIX + chain.toLowerCase(Locale.ROOT),
                         chain + " gas reserve",
                         Map.of("systemPurpose", "GAS_FUNDING")),
-                "CONSOLE",
-                null,
                 sourceIp);
         GasAccountRecord saved = repository.insertGasAccount(
                 UUID.randomUUID(),

@@ -45,7 +45,6 @@ public class CustodyConsoleAddressController {
                 CustodyRequestSupport.requirePrincipal(request),
                 body,
                 "CONSOLE",
-                null,
                 CustodyRequestSupport.clientIp(request));
     }
 

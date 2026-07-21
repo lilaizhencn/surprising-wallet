@@ -25,8 +25,8 @@ ALTER TABLE chain_rpc_node ADD COLUMN IF NOT EXISTS last_error text;
 CREATE SEQUENCE IF NOT EXISTS custody_derivation_namespace_seq
     AS integer START WITH 1000 INCREMENT BY 1 MINVALUE 1000 MAXVALUE 2147483646 CACHE 16;
 
-CREATE SEQUENCE IF NOT EXISTS custody_derivation_subject_seq
-    AS integer START WITH 100000 INCREMENT BY 1 MINVALUE 100000 MAXVALUE 2147483646 CACHE 64;
+CREATE SEQUENCE IF NOT EXISTS custody_derivation_subject_index_seq
+    AS integer START WITH 1 INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483646 CACHE 64;
 
 CREATE TABLE IF NOT EXISTS custody_tenant (
     id uuid PRIMARY KEY,
@@ -43,6 +43,17 @@ CREATE TABLE IF NOT EXISTS custody_tenant (
     CONSTRAINT custody_tenant_derivation_namespace_key UNIQUE (derivation_namespace),
     CONSTRAINT custody_tenant_slug_check CHECK (slug ~ '^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$'),
     CONSTRAINT custody_tenant_status_check CHECK (status IN ('ACTIVE', 'SUSPENDED'))
+);
+
+CREATE TABLE IF NOT EXISTS custody_derivation_subject (
+    tenant_id uuid NOT NULL REFERENCES custody_tenant(id) ON DELETE RESTRICT,
+    subject varchar(160) NOT NULL,
+    derivation_subject integer NOT NULL DEFAULT nextval('custody_derivation_subject_index_seq'),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (tenant_id, subject),
+    CONSTRAINT custody_derivation_subject_path_key UNIQUE (derivation_subject),
+    CONSTRAINT custody_derivation_subject_value_check
+        CHECK (subject ~ '^[A-Za-z0-9_][A-Za-z0-9._:-]{0,159}$')
 );
 
 CREATE TABLE IF NOT EXISTS custody_tenant_user (
@@ -164,28 +175,49 @@ CREATE TABLE IF NOT EXISTS custody_address (
     network varchar(64) NOT NULL,
     address varchar(160) NOT NULL,
     memo varchar(160),
-    external_reference varchar(160),
+    subject varchar(160) NOT NULL,
     label varchar(160),
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
     source varchar(24) NOT NULL,
     status varchar(24) NOT NULL DEFAULT 'ACTIVE',
-    derivation_subject integer NOT NULL DEFAULT nextval('custody_derivation_subject_seq'),
+    derivation_subject integer NOT NULL,
+    derivation_child bigint NOT NULL,
     created_by uuid REFERENCES custody_tenant_user(id),
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT custody_address_source_check CHECK (source IN ('API', 'CONSOLE')),
     CONSTRAINT custody_address_status_check CHECK (status IN ('ACTIVE', 'DISABLED')),
     CONSTRAINT custody_address_chain_address_key UNIQUE (chain_address_id),
-    CONSTRAINT custody_address_derivation_subject_key UNIQUE (derivation_subject)
+    CONSTRAINT custody_address_derivation_key
+        UNIQUE (tenant_id, chain, derivation_subject, derivation_child)
 );
+
+-- Upgrade the local pre-release schema without deleting existing address records.
+ALTER TABLE custody_address ADD COLUMN IF NOT EXISTS subject varchar(160);
+ALTER TABLE custody_address ADD COLUMN IF NOT EXISTS derivation_child bigint;
+UPDATE custody_address
+   SET subject = 'legacy:' || id::text
+ WHERE subject IS NULL;
+UPDATE custody_address c
+   SET derivation_child = a.address_index
+  FROM chain_address a
+ WHERE a.id = c.chain_address_id
+   AND c.derivation_child IS NULL;
+ALTER TABLE custody_address ALTER COLUMN subject SET NOT NULL;
+ALTER TABLE custody_address ALTER COLUMN derivation_child SET NOT NULL;
+ALTER TABLE custody_address DROP CONSTRAINT IF EXISTS custody_address_derivation_subject_key;
+DROP INDEX IF EXISTS custody_address_allocation_key;
+CREATE UNIQUE INDEX IF NOT EXISTS custody_address_derivation_key
+    ON custody_address (tenant_id, chain, derivation_subject, derivation_child);
+INSERT INTO custody_derivation_subject(tenant_id, subject, derivation_subject)
+SELECT tenant_id, subject, derivation_subject
+  FROM custody_address
+ON CONFLICT DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS custody_address_tenant_created_idx
     ON custody_address (tenant_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS custody_address_tenant_reference_idx
-    ON custody_address (tenant_id, external_reference);
-CREATE UNIQUE INDEX IF NOT EXISTS custody_address_allocation_key
-    ON custody_address (tenant_id, chain, external_reference)
-    WHERE external_reference IS NOT NULL;
+CREATE INDEX IF NOT EXISTS custody_address_tenant_subject_idx
+    ON custody_address (tenant_id, subject);
 CREATE INDEX IF NOT EXISTS custody_address_lookup_idx
     ON custody_address (chain, lower(address), status);
 

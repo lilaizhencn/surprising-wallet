@@ -32,7 +32,7 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
     public void onDepositCredited(DepositEvent event, long logIndex, String accountId) {
         String chain = event.chainType().name();
         List<AddressOwner> owners = jdbc.query("""
-                        select c.id as custody_address_id, c.tenant_id, c.external_reference,
+                        select c.id as custody_address_id, c.tenant_id, c.subject,
                                c.address, c.memo,
                                case when exists (
                                    select 1 from custody_gas_account g
@@ -57,7 +57,7 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
                         """, (rs, rowNum) -> new AddressOwner(
                         rs.getObject("custody_address_id", UUID.class),
                         rs.getObject("tenant_id", UUID.class),
-                        rs.getString("external_reference"),
+                        rs.getString("subject"),
                         rs.getString("address"),
                         rs.getString("memo"),
                         rs.getString("purpose")),
@@ -106,7 +106,7 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
         UUID eventId = UUID.randomUUID();
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("depositId", custodyDepositId);
-        data.put("externalReference", owner.externalReference());
+        data.put("subject", owner.subject());
         data.put("chain", chain);
         data.put("asset", event.assetSymbol());
         data.put("address", owner.address());
@@ -139,7 +139,7 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
     private record AddressOwner(
             UUID addressId,
             UUID tenantId,
-            String externalReference,
+            String subject,
             String address,
             String memo,
             String purpose

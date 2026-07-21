@@ -23,13 +23,12 @@ audit query.
 
 ## Tenant-side users and address allocation
 
-To allocate a new deposit address, the tenant submits only the chain code as
-`chainId`. The service selects the network from the chain's one enabled
+To allocate a new deposit address, the tenant submits the chain code as
+`chainId` and its account identifier as `subject`. The service selects the network from the chain's one enabled
 `chain_profile`:
 
 ```http
 POST /custody/api/v1/addresses
-Idempotency-Key: new-address-eth-0001
 X-Custody-Key: swk_...
 X-Custody-Timestamp: 1784486400
 X-Custody-Nonce: 2FSvJwQp1QdwLk2B
@@ -37,14 +36,16 @@ X-Custody-Signature: ...
 Content-Type: application/json
 
 {
-  "chainId": "ETH"
+  "chainId": "ETH",
+  "subject": "user_10086"
 }
 ```
 
 `chainId` is a chain code such as `ETH`, `BTC`, or `SOLANA`, not an EVM numeric
-chain ID. Every new `Idempotency-Key` allocates a new address; safe retries with
-the same key return the same result. The tenant must store the returned address
-ID and address, then map deposit Webhooks back to its own customer by address.
+chain ID. `subject` is a stable tenant-defined user, merchant, or system-account
+identifier. Address creation has no idempotency key: every successful call
+allocates a new address, with `childIndex` increasing as `0, 1, 2...` for the
+same subject. The caller must store every returned address ID and address.
 
 The Console can create an address without using the tenant API. Console users
 can also change its label, metadata, and active/disabled state. Disabled
@@ -54,8 +55,9 @@ deposits and existing funds never disappear.
 ### Tenant address derivation
 
 Each tenant receives a unique `tenantNamespace` from
-`custody_derivation_namespace_seq`. Every new address receives a globally
-unique `derivationSubject` from `custody_derivation_subject_seq`.
+`custody_derivation_namespace_seq`. The service maps `(tenantId, subject)` to a
+stable internal `derivationSubject` allocated from 1. The same tenant subject
+always uses that derivation number, while different tenants never share one.
 Secp256k1 and Bitcoin-like addresses use this non-hardened, BIP44-shaped custom
 path:
 
@@ -71,11 +73,11 @@ m / 44' / coinType' / tenantNamespace' / derivationSubject' / childIndex'
 
 EVM chains always use `coinType=60`; other secp256k1 and Bitcoin-like chains
 use `chain_profile.bip44_coin_type`; Ed25519 chains use their fixed SLIP-0044
-coin type. `childIndex` starts at zero and increments
-within `(chain, nativeAsset, tenantNamespace, derivationSubject, DEPOSIT)`.
-Because every fresh public API allocation gets a new `derivationSubject`, its
-normal `childIndex` is zero; the level remains available for additional
-addresses under the same derivation subject.
+coin type. `childIndex` starts at zero and increments within
+`(chain, nativeAsset, tenantNamespace, derivationSubject, DEPOSIT)`. A database
+transaction lock serializes concurrent allocations for the same tenant, chain,
+and subject so two requests cannot receive the same child. The `__sw_` prefix
+is reserved for wallet-managed system accounts.
 
 Monero does not use BIP44. Its wallet RPC creates a subaddress recorded as
 `monero-wallet-rpc:m/0/{subaddressIndex}`.
@@ -89,7 +91,7 @@ Address creation does not produce a Webhook. A confirmed deposit does:
   "createdAt": "2026-07-20T01:00:00Z",
   "data": {
     "depositId": "13d45f9e-d8a1-4fae-a591-75b62dad5df4",
-    "externalReference": null,
+    "subject": "user_10086",
     "chain": "ETH",
     "asset": "USDT",
     "address": "0x...",
@@ -101,8 +103,7 @@ Address creation does not produce a Webhook. A confirmed deposit does:
 }
 ```
 
-The tenant consumes the event, maps `address` to its customer, and credits its
-own ledger.
+The tenant consumes the event, maps `subject` to its customer, and credits its ledger.
 
 ## Asset truth
 

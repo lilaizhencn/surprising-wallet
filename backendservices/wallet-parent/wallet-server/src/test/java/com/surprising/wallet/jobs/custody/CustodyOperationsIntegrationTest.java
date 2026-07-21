@@ -165,7 +165,7 @@ class CustodyOperationsIntegrationTest {
             int namespace = jdbc.queryForObject(
                     "select nextval('custody_derivation_namespace_seq')::integer", Integer.class);
             int subject = jdbc.queryForObject(
-                    "select nextval('custody_derivation_subject_seq')::integer", Integer.class);
+                    "select nextval('custody_derivation_subject_index_seq')::integer", Integer.class);
             String accountId = "0x" + UUID.randomUUID().toString().replace("-", "")
                     + "12345678";
             Long chainAddressId = jdbc.queryForObject("""
@@ -179,8 +179,8 @@ class CustodyOperationsIntegrationTest {
             jdbc.update("""
                     insert into custody_address(
                         id, tenant_id, chain_address_id, chain, network, address,
-                        external_reference, source, derivation_subject)
-                    values (?, ?, ?, 'ETH', 'qa', ?, ?, 'CONSOLE', ?)
+                        subject, source, derivation_subject, derivation_child)
+                    values (?, ?, ?, 'ETH', 'qa', ?, ?, 'CONSOLE', ?, 0)
                     """, addressId, tenantId, chainAddressId, accountId,
                     "__sw_gas_reserve__:eth", subject);
             jdbc.update("""
@@ -220,7 +220,7 @@ class CustodyOperationsIntegrationTest {
                     "select derivation_namespace from custody_tenant where id = ?",
                     Integer.class, tenantId);
             int subject = jdbc.queryForObject(
-                    "select nextval('custody_derivation_subject_seq')::integer",
+                    "select nextval('custody_derivation_subject_index_seq')::integer",
                     Integer.class);
             String accountId = "0x" + UUID.randomUUID().toString().replace("-", "")
                     + "12345678";
@@ -235,8 +235,8 @@ class CustodyOperationsIntegrationTest {
             jdbc.update("""
                     insert into custody_address(
                         id, tenant_id, chain_address_id, chain, network, address,
-                        external_reference, source, derivation_subject)
-                    values (?, ?, ?, 'ETH', 'qa', ?, ?, 'CONSOLE', ?)
+                        subject, source, derivation_subject, derivation_child)
+                    values (?, ?, ?, 'ETH', 'qa', ?, ?, 'CONSOLE', ?, 0)
                     """, addressId, tenantId, chainAddressId, accountId,
                     "__sw_gas_reserve__:eth", subject);
             jdbc.update("""
@@ -308,7 +308,7 @@ class CustodyOperationsIntegrationTest {
                     "select derivation_namespace from custody_tenant where id = ?",
                     Integer.class, tenantId);
             int subject = jdbc.queryForObject(
-                    "select nextval('custody_derivation_subject_seq')::integer",
+                    "select nextval('custody_derivation_subject_index_seq')::integer",
                     Integer.class);
             String accountId = "0x" + UUID.randomUUID().toString().replace("-", "")
                     + "12345678";
@@ -323,8 +323,8 @@ class CustodyOperationsIntegrationTest {
             jdbc.update("""
                     insert into custody_address(
                         id, tenant_id, chain_address_id, chain, network, address,
-                        external_reference, source, derivation_subject)
-                    values (?, ?, ?, 'ETH', 'qa', ?, ?, 'CONSOLE', ?)
+                        subject, source, derivation_subject, derivation_child)
+                    values (?, ?, ?, 'ETH', 'qa', ?, ?, 'CONSOLE', ?, 0)
                     """, addressId, tenantId, chainAddressId, accountId,
                     "__sw_gas_reserve__:eth", subject);
             jdbc.update("""

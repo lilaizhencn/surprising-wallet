@@ -31,14 +31,12 @@ public class CustodyPublicApiController {
     @PostMapping("/addresses")
     @ResponseStatus(HttpStatus.CREATED)
     public AddressView createAddress(
-            @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestBody CreatePublicAddressRequest body,
             HttpServletRequest request) {
         return addresses.create(
                 CustodyRequestSupport.requirePrincipal(request),
-                new CreateAddressCommand(body.chainId(), null, null, null),
+                new CreateAddressCommand(body.chainId(), body.subject(), null, null),
                 "API",
-                idempotencyKey,
                 CustodyRequestSupport.clientIp(request));
     }
 
@@ -90,6 +88,6 @@ public class CustodyPublicApiController {
                 CustodyRequestSupport.clientIp(request));
     }
 
-    public record CreatePublicAddressRequest(String chainId) {
+    public record CreatePublicAddressRequest(String chainId, String subject) {
     }
 }
