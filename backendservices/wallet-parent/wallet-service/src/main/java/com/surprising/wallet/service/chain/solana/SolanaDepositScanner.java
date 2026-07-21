@@ -43,16 +43,17 @@ public class SolanaDepositScanner {
         long currentSlot = rpc.getSlot();
         List<DepositEvent> events = new ArrayList<>();
         Set<String> processed = new HashSet<>();
+        Set<String> platformAddresses = platformAddresses();
 
         for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, "SOL")) {
             if ("DEPOSIT".equals(address.getWalletRole())) {
-                scanAddress(address, null, profile, currentSlot, processed, events);
+                scanAddress(address, null, profile, currentSlot, processed, platformAddresses, events);
             }
         }
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
             for (ChainAddressRecord address : tokenScanAddresses(token)) {
                 if ("DEPOSIT".equals(address.getWalletRole())) {
-                    scanAddress(address, token, profile, currentSlot, processed, events);
+                    scanAddress(address, token, profile, currentSlot, processed, platformAddresses, events);
                 }
             }
         }
@@ -62,7 +63,8 @@ public class SolanaDepositScanner {
     }
 
     private void scanAddress(ChainAddressRecord tracked, TokenDefinition token, AccountChainProfile profile,
-                             long currentSlot, Set<String> processed, List<DepositEvent> events) {
+                             long currentSlot, Set<String> processed, Set<String> platformAddresses,
+                             List<DepositEvent> events) {
         ArrayNode signatures = rpc.getSignaturesForAddress(tracked.getAddress(), scanLimit(profile));
         for (JsonNode signatureInfo : signatures) {
             if (!signatureInfo.path("err").isNull() && !signatureInfo.path("err").isMissingNode()) {
@@ -87,7 +89,7 @@ public class SolanaDepositScanner {
                 DepositEvent event = token == null
                         ? nativeDeposit(signature, tracked, slot, confirmations, transaction, type, info)
                         : tokenDeposit(signature, tracked, token, slot, confirmations, transaction, type, info);
-                if (event == null) {
+                if (event == null || platformAddresses.contains(event.fromAddress())) {
                     continue;
                 }
                 repository.recordSolanaTransaction(SolanaTransactionRecord.builder()
@@ -144,6 +146,19 @@ public class SolanaDepositScanner {
                     .walletRole(owner.getWalletRole())
                     .enabled(owner.getEnabled())
                     .build());
+        }
+        return addresses;
+    }
+
+    private Set<String> platformAddresses() {
+        Set<String> addresses = new HashSet<>();
+        for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
+            if (StringUtils.hasText(tracked.getAddress())) {
+                addresses.add(tracked.getAddress());
+            }
+            if (StringUtils.hasText(tracked.getOwnerAddress())) {
+                addresses.add(tracked.getOwnerAddress());
+            }
         }
         return addresses;
     }

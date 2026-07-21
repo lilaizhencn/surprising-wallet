@@ -41,12 +41,13 @@ commands:
   test-utxo     Run BTC/LTC/DOGE/BCH local regtest flow/concurrency/broadcast tests
   test-xmr      Run XMR local regtest deposit/withdraw/collection integration test
   test-sui      Run isolated local Sui gRPC SUI/USDC full-flow and reconciliation test
+  test-solana   Run isolated local Solana SOL/USDT/USDC full-flow and reconciliation test
   dot-runtime-up    Start the local Polkadot runtime companion service
   dot-runtime-down  Stop the local Polkadot runtime companion service
   test-evm      Run ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C fork regression
   test-db       Run DB-only flow tests for SOL/TON/APTOS/SUI/DOGE plus UTXO migration
   test-live     Run external testnet connectivity checks; spending tests require RUN_LIVE_SPENDING=true
-  test-local    Run local UTXO, XMR, EVM, and Sui full-flow tests
+  test-local    Run local UTXO, XMR, EVM, Sui, and Solana full-flow tests
   test-all      Run test-local and test-db; add RUN_LIVE=true to include test-live
 
 notes:
@@ -54,7 +55,8 @@ notes:
   - XMR uses local monerod regtest plus monero-wallet-rpc on 127.0.0.1:18088.
   - EVM chains run as one-at-a-time Hardhat forks on 127.0.0.1:8545.
   - SUI has an isolated local node, gRPC, mock USDC, and PostgreSQL full-flow test.
-  - TRON/SOL/TON/APTOS/ADA/DOT/NEAR use DB mocks, external testnet/devnet RPC, or a managed runtime service.
+  - SOLANA has an isolated local validator, mock USDT/USDC, and PostgreSQL full-flow test.
+  - TRON/TON/APTOS/ADA/DOT/NEAR use DB mocks, external testnet/devnet RPC, or a managed runtime service.
   - DOT token tests also need a separate Asset Hub WebSocket RPC configured as purpose=asset_rpc.
 USAGE
 }
@@ -76,7 +78,7 @@ XMR                                  local monerod regtest + monero-wallet-rpc
 ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/
 BASE/AVAX_C                          Hardhat fork, one chain per run on 127.0.0.1:8545
 TRON                                 external Nile live/testnet flow
-SOLANA                               DB mock + external devnet live flow
+SOLANA                               local validator + mock USDT/USDC full flow
 TON                                  DB mock + external testnet live flow
 APTOS                                DB mock + external testnet/devnet live flow
 SUI                                  local Sui node + gRPC + mock USDC full flow
@@ -108,7 +110,8 @@ status() {
     echo "==> evm-fork: not running; test-evm starts forks one chain at a time"
   fi
   echo "==> sui: isolated local flow is available through test-sui"
-  echo "==> tron/solana/ton/aptos/ada/dot/near: use test-db/test-live or the DOT runtime service"
+  echo "==> solana: isolated local flow is available through test-solana"
+  echo "==> tron/ton/aptos/ada/dot/near: use test-db/test-live or the DOT runtime service"
   if curl -fsS -m 2 \
       "${dot_runtime_headers[@]}" \
       http://127.0.0.1:8787/health >/dev/null 2>&1; then
@@ -145,6 +148,10 @@ test_xmr() {
 
 test_sui() {
   "${ROOT_DIR}/scripts/regtest/run-sui-flow.sh"
+}
+
+test_solana() {
+  "${ROOT_DIR}/scripts/regtest/run-solana-flow.sh"
 }
 
 test_db() {
@@ -229,6 +236,9 @@ case "${1:-matrix}" in
   test-sui)
     test_sui
     ;;
+  test-solana)
+    test_solana
+    ;;
   dot-runtime-up)
     dot_runtime_up
     ;;
@@ -246,12 +256,14 @@ case "${1:-matrix}" in
     test_xmr
     test_evm
     test_sui
+    test_solana
     ;;
   test-all)
     test_utxo
     test_xmr
     test_evm
     test_sui
+    test_solana
     test_db
     if [[ "${RUN_LIVE:-false}" == "true" ]]; then
       test_live

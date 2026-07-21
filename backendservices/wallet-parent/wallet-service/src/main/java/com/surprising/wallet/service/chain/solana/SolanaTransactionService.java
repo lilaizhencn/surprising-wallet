@@ -82,7 +82,11 @@ public class SolanaTransactionService {
 
     public String sendTokenAmount(ChainAddressRecord from, String mintAddress, String toOwnerAddress,
                                   BigDecimal amount, int decimals) {
-        return sendToken(from, mintAddress, toOwnerAddress, toAtomicAmount(amount, decimals), decimals);
+        ChainAddressRecord hot = defaultHotFeePayer();
+        Account sourceOwner = keyService.account(from.getUserId(), from.getBiz(), from.getAddressIndex());
+        Account feePayer = keyService.account(hot.getUserId(), hot.getBiz(), hot.getAddressIndex());
+        return sendTokenWithFeePayer(sourceOwner, feePayer, mintAddress, toOwnerAddress,
+                toAtomicAmount(amount, decimals), decimals);
     }
 
     private String sendToken(Account sender, String mintAddress, String toOwnerAddress,
@@ -160,21 +164,22 @@ public class SolanaTransactionService {
     }
 
     public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
-                                 String toAddress, BigDecimal amountLamports) {
+                                 String toAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "solana withdrawNative");
         Optional<String> previous = repository.findWithdrawalTxHash(CHAIN, orderNo);
         if (previous.isPresent()) {
             return previous.get();
         }
-        long amount = amountLamports.longValueExact();
-        long fee = profile().getDefaultFee();
+        long amountLamports = toAtomicAmount(amount, 9);
+        long feeLamports = profile().getDefaultFee();
+        BigDecimal fee = BigDecimal.valueOf(feeLamports).movePointLeft(9);
         int inserted = repository.createWithdrawalOrder(orderNo, userId, CHAIN, "SOL", toAddress,
-                amountLamports, BigDecimal.valueOf(fee));
+                amount, fee);
         if (inserted == 0) {
             return repository.findWithdrawalTxHash(CHAIN, orderNo)
                     .orElseThrow(() -> new IllegalStateException("withdrawal already claimed without tx hash"));
         }
-        BigDecimal totalDebit = amountLamports.add(BigDecimal.valueOf(fee));
+        BigDecimal totalDebit = amount.add(fee);
         if (!repository.freezeLedgerBalance(CHAIN, "SOL", from.getAccountId(), totalDebit)) {
             repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null,
                     "insufficient available ledger balance");
@@ -185,11 +190,12 @@ public class SolanaTransactionService {
             if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
                 throw new IllegalStateException("Solana withdrawal is not signable: " + orderNo);
             }
-            String signature = sendNative(from, toAddress, amount);
+            String signature = sendNative(from, toAddress, amountLamports);
             if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), signature) != 1) {
                 throw new IllegalStateException("Solana withdrawal state changed before SENT: " + orderNo);
             }
-            recordTransaction(signature, from.getAddress(), toAddress, "SOL", null, amountLamports, fee, "SENT");
+            recordTransaction(signature, from.getAddress(), toAddress, "SOL", null,
+                    amount, feeLamports, "SENT");
             return signature;
         } catch (RuntimeException e) {
             repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
@@ -344,6 +350,13 @@ public class SolanaTransactionService {
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
+    }
+
+    private ChainAddressRecord defaultHotFeePayer() {
+        return repository.listDefaultHotAddressCandidates(CHAIN, "SOL").stream()
+                .filter(address -> Boolean.TRUE.equals(address.getEnabled()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("missing enabled Solana default hot fee payer"));
     }
 
     private void requireTaskEnabled(String task, String operation) {

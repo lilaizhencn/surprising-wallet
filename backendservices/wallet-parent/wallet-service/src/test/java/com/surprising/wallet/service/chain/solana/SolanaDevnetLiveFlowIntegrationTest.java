@@ -47,7 +47,13 @@ class SolanaDevnetLiveFlowIntegrationTest {
         SolanaDepositScanner scanner = new SolanaDepositScanner(rpc, repository);
 
         assertTrue(rpc.health());
-        jdbc.update("update chain_address set enabled=false where chain='SOLANA'");
+        jdbc.update("""
+                update chain_address
+                   set enabled=false
+                 where chain='SOLANA'
+                   and not (asset_symbol='SOL' and user_id=0 and biz=0
+                            and address_index=0 and wallet_role='DEPOSIT')
+                """);
         long runBase = Long.getLong("solana.live.run-base",
                 1_000_000L + Math.abs(System.currentTimeMillis() % 500_000L));
         long funderIndex = Long.getLong("solana.live.funder-index", runBase);
@@ -61,30 +67,32 @@ class SolanaDevnetLiveFlowIntegrationTest {
         ChainAddressRecord hot = addresses.createNativeAddress(0, 0, 0L, "DEPOSIT");
 
         System.out.println("SOLANA_FUNDER=" + funder.getPublicKeyBase58());
-        if (rpc.getBalance(funder.getPublicKeyBase58()) < 100_000_000L
+        if (rpc.getBalance(funder.getPublicKeyBase58()) < 1_000_000_000L
                 && !Boolean.getBoolean("solana.live.skip-airdrop")) {
-            String airdrop = rpc.requestAirdrop(funder.getPublicKeyBase58(), 100_000_000L);
+            String airdrop = rpc.requestAirdrop(funder.getPublicKeyBase58(), 1_000_000_000L);
             transactions.requireSuccessfulConfirmation(airdrop, Duration.ofMinutes(2));
         }
         String depositA = sendNative(rpc, funder, userA.getAddress(), 20_000_000L);
         String depositB = sendNative(rpc, funder, userB.getAddress(), 20_000_000L);
+        String gasFunding = sendNative(rpc, funder, hot.getAddress(), 50_000_000L);
         transactions.requireSuccessfulConfirmation(depositA, Duration.ofMinutes(2));
         transactions.requireSuccessfulConfirmation(depositB, Duration.ofMinutes(2));
+        transactions.requireSuccessfulConfirmation(gasFunding, Duration.ofMinutes(2));
 
         scanner.scanAndCredit();
         BigDecimal userABefore = ledger(repository, "SOL", userA.getAccountId()).getTotalBalance();
         scanner.scanAndCredit();
         assertEquals(userABefore, ledger(repository, "SOL", userA.getAccountId()).getTotalBalance());
-        assertEquals(new BigDecimal("20000000.000000000000000000"), userABefore);
+        assertAmountEquals(new BigDecimal("0.02"), userABefore);
 
         String withdrawOrder = "sol-live-withdraw-" + UUID.randomUUID();
-        BigDecimal withdrawAmount = new BigDecimal("5000000");
+        BigDecimal withdrawAmount = new BigDecimal("0.005");
         String withdraw = transactions.withdrawNative(withdrawOrder, userA.getUserId(), userA,
                 external.getPublicKeyBase58(), withdrawAmount);
         assertEquals(withdraw, transactions.withdrawNative(withdrawOrder, userA.getUserId(), userA,
                 external.getPublicKeyBase58(), withdrawAmount));
         transactions.confirmWithdrawal(withdrawOrder, "SOL", userA.getAccountId(),
-                withdrawAmount.add(new BigDecimal("5000")));
+                withdrawAmount.add(new BigDecimal("0.000005")));
 
         String collectionNo = "sol-live-collection-" + UUID.randomUUID();
         BigDecimal collectionAmount = new BigDecimal("10000000");
@@ -95,13 +103,34 @@ class SolanaDevnetLiveFlowIntegrationTest {
         String insufficientOrder = "sol-live-insufficient-" + UUID.randomUUID();
         assertThrows(IllegalStateException.class, () -> transactions.withdrawNative(
                 insufficientOrder, userA.getUserId(), userA, external.getPublicKeyBase58(),
-                new BigDecimal("999999999999")));
+                new BigDecimal("999")));
         assertEquals("FAILED", repository.findWithdrawalStatus("SOLANA", insufficientOrder).orElseThrow());
 
         TokenFlow usdt = createAndFundMockToken("USDT", 6, runBase + 100, funderIndex,
                 funder, userA, userB, hot, external, rpc, keys, addresses, transactions, scanner, repository, jdbc);
         TokenFlow usdc = createAndFundMockToken("USDC", 6, runBase + 200, funderIndex,
                 funder, userA, userB, hot, external, rpc, keys, addresses, transactions, scanner, repository, jdbc);
+
+        scanner.scanAndCredit();
+        assertAmountEquals(new BigDecimal("0.014995"),
+                ledger(repository, "SOL", userA.getAccountId()).getTotalBalance());
+        assertAmountEquals(new BigDecimal("0.02"),
+                ledger(repository, "SOL", userB.getAccountId()).getTotalBalance());
+        assertAmountEquals(new BigDecimal("8"),
+                ledger(repository, "USDT", userA.getAccountId()).getTotalBalance());
+        assertAmountEquals(new BigDecimal("5"),
+                ledger(repository, "USDT", userB.getAccountId()).getTotalBalance());
+        assertAmountEquals(new BigDecimal("8"),
+                ledger(repository, "USDC", userA.getAccountId()).getTotalBalance());
+        assertAmountEquals(new BigDecimal("5"),
+                ledger(repository, "USDC", userB.getAccountId()).getTotalBalance());
+        BigDecimal customerSolLiability = ledger(repository, "SOL", userA.getAccountId()).getTotalBalance()
+                .add(ledger(repository, "SOL", userB.getAccountId()).getTotalBalance());
+        long controlledLamports = rpc.getBalance(userA.getAddress())
+                + rpc.getBalance(userB.getAddress())
+                + rpc.getBalance(hot.getAddress());
+        assertTrue(BigDecimal.valueOf(controlledLamports).movePointLeft(9)
+                .compareTo(customerSolLiability) >= 0);
 
         assertEquals(0L, jdbc.queryForObject("""
                 select count(*) from ledger_balance
@@ -165,7 +194,7 @@ class SolanaDevnetLiveFlowIntegrationTest {
                 )
                 values ('SOLANA','devnet',?,'SPL','SPL',?,?,?,true,1,1,1,1,true,1,
                         'SOL_FEE_PAYER',1,now(),now())
-                on conflict(chain,symbol) do update set
+                on conflict(chain,network,symbol) do update set
                     network=excluded.network,
                     standard=excluded.standard,
                     token_standard=excluded.token_standard,
@@ -198,11 +227,12 @@ class SolanaDevnetLiveFlowIntegrationTest {
         transactions.requireSuccessfulConfirmation(depositB, Duration.ofMinutes(2));
         scanner.scanAndCredit();
         BigDecimal beforeReplay = ledger(repository, symbol, userA.getAccountId()).getTotalBalance();
+        assertAmountEquals(new BigDecimal("10"), beforeReplay);
         scanner.scanAndCredit();
-        assertEquals(beforeReplay, ledger(repository, symbol, userA.getAccountId()).getTotalBalance());
+        assertAmountEquals(beforeReplay, ledger(repository, symbol, userA.getAccountId()).getTotalBalance());
 
         String orderNo = "sol-" + symbol.toLowerCase() + "-withdraw-" + UUID.randomUUID();
-        BigDecimal withdrawAmount = new BigDecimal("2000000");
+        BigDecimal withdrawAmount = new BigDecimal("2");
         String withdraw = transactions.withdrawToken(orderNo, nativeUserA.getUserId(), userA,
                 mint.getPublicKeyBase58(), external.getPublicKeyBase58(), withdrawAmount);
         assertEquals(withdraw, transactions.withdrawToken(orderNo, nativeUserA.getUserId(), userA,
@@ -210,12 +240,24 @@ class SolanaDevnetLiveFlowIntegrationTest {
         transactions.confirmWithdrawal(orderNo, symbol, userA.getAccountId(), withdrawAmount);
 
         String collectionNo = "sol-" + symbol.toLowerCase() + "-collection-" + UUID.randomUUID();
-        BigDecimal collectionAmount = new BigDecimal("3000000");
+        BigDecimal collectionAmount = new BigDecimal("3");
         String collection = transactions.collectToken(collectionNo, userB, mint.getPublicKeyBase58(),
                 hot.getAddress(), collectionAmount);
         assertEquals(collection, transactions.collectToken(collectionNo, userB, mint.getPublicKeyBase58(),
                 hot.getAddress(), collectionAmount));
         transactions.confirmCollection(collectionNo);
+        String userAAta = addresses.associatedTokenAddress(
+                nativeUserA.getAddress(), mint.getPublicKeyBase58());
+        String userBAta = addresses.associatedTokenAddress(
+                nativeUserB.getAddress(), mint.getPublicKeyBase58());
+        String externalAta = addresses.associatedTokenAddress(
+                external.getPublicKeyBase58(), mint.getPublicKeyBase58());
+        String hotAta = addresses.associatedTokenAddress(
+                hot.getAddress(), mint.getPublicKeyBase58());
+        assertEquals(8_000_000L, rpc.getTokenAccountBalance(userAAta));
+        assertEquals(2_000_000L, rpc.getTokenAccountBalance(userBAta));
+        assertEquals(2_000_000L, rpc.getTokenAccountBalance(externalAta));
+        assertEquals(3_000_000L, rpc.getTokenAccountBalance(hotAta));
         return new TokenFlow(mint.getPublicKeyBase58(), depositA, withdraw, collection);
     }
 
@@ -234,6 +276,12 @@ class SolanaDevnetLiveFlowIntegrationTest {
 
     private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String symbol, String accountId) {
         return repository.findLedgerBalance("SOLANA", symbol, accountId).orElseThrow();
+    }
+
+    private static void assertAmountEquals(BigDecimal expected, BigDecimal actual) {
+        assertEquals(0, expected.compareTo(actual),
+                () -> "expected amount " + expected.toPlainString()
+                        + " but was " + actual.toPlainString());
     }
 
     private static String env(String name, String fallback) {
