@@ -21,6 +21,8 @@ import java.util.UUID;
 @Service
 public class CustodyAddressService {
     private static final String RESERVED_SUBJECT_PREFIX = "__sw_";
+    static final long DEFAULT_ADDRESS_VERSION = 0L;
+    private static final long MAX_ADDRESS_VERSION = Integer.MAX_VALUE;
 
     private final CustodyRepository custodyRepository;
     private final ChainJdbcRepository chainRepository;
@@ -43,19 +45,23 @@ public class CustodyAddressService {
     @Transactional(rollbackFor = Throwable.class)
     public AddressView create(CustodyPrincipal principal, CreateAddressCommand command,
                               String source, String sourceIp) {
-        return createInternal(principal, command, source, sourceIp, false, null);
+        long addressVersion = requireAddressVersion(command.addressVersion());
+        return createInternal(
+                principal, command, source, sourceIp, false,
+                addressVersion, addressVersion);
     }
 
     @Transactional(rollbackFor = Throwable.class)
     AddressView createSystemAtChildIndex(CustodyPrincipal principal, CreateAddressCommand command,
                                          long childIndex, String sourceIp) {
         return createInternal(
-                principal, command, "CONSOLE", sourceIp, true, childIndex);
+                principal, command, "CONSOLE", sourceIp, true,
+                DEFAULT_ADDRESS_VERSION, childIndex);
     }
 
     private AddressView createInternal(CustodyPrincipal principal, CreateAddressCommand command,
                                        String source, String sourceIp, boolean allowReservedSubject,
-                                       Long fixedChildIndex) {
+                                       long addressVersion, long childIndex) {
         requireScope(principal, "addresses:write");
         String normalizedSource = normalizeSource(source);
         String chain = requireChain(command.chain());
@@ -69,15 +75,18 @@ public class CustodyAddressService {
         }
         tenantChains.requireActive(tenant.id(), chain);
 
+        custodyRepository.lockSubjectAddressAllocation(tenant.id(), chain, subject);
+        AddressRecord existing = custodyRepository.findAddressBySubjectAndVersion(
+                tenant.id(), chain, subject, addressVersion).orElse(null);
+        if (existing != null) {
+            return toView(existing);
+        }
+
         BlockchainRuntimeService.RuntimeChain runtimeChain = runtime.requireRuntime(chain);
         int derivationSubject = custodyRepository.resolveDerivationSubject(tenant.id(), subject);
-        custodyRepository.lockSubjectAddressAllocation(tenant.id(), chain, subject);
-        Address generated = fixedChildIndex == null
-                ? runtime.generateDepositAddress(
-                        chain, Integer.toUnsignedLong(derivationSubject), tenant.derivationNamespace())
-                : runtime.generateDepositAddressAtIndex(
-                        chain, Integer.toUnsignedLong(derivationSubject), tenant.derivationNamespace(),
-                        fixedChildIndex);
+        Address generated = runtime.generateDepositAddressAtIndex(
+                chain, Integer.toUnsignedLong(derivationSubject), tenant.derivationNamespace(),
+                childIndex);
         ChainAddressRecord chainAddress = chainRepository.findChainAddress(
                         chain, runtimeChain.nativeSymbol(), Integer.toUnsignedLong(derivationSubject),
                         tenant.derivationNamespace(), generated.getIndex(), "DEPOSIT")
@@ -98,6 +107,7 @@ public class CustodyAddressService {
                 metadataJson,
                 normalizedSource,
                 derivationSubject,
+                addressVersion,
                 generated.getIndex(),
                 "CONSOLE".equals(normalizedSource) ? principal.actorId() : null);
         AddressView result = toView(saved);
@@ -109,7 +119,8 @@ public class CustodyAddressService {
                 "CUSTODY_ADDRESS",
                 addressId.toString(),
                 sourceIp,
-                addressAuditDetails(chain, normalizedSource, subject, generated.getIndex()));
+                addressAuditDetails(
+                        chain, normalizedSource, subject, addressVersion, generated.getIndex()));
         return result;
     }
 
@@ -185,7 +196,7 @@ public class CustodyAddressService {
                 record.address(),
                 record.memo(),
                 record.subject(),
-                record.derivationChild(),
+                record.addressVersion(),
                 record.label(),
                 readMetadata(record.metadataJson()),
                 record.source(),
@@ -219,13 +230,24 @@ public class CustodyAddressService {
         }
     }
 
-    String addressAuditDetails(String chain, String source, String subject, long childIndex) {
+    String addressAuditDetails(String chain, String source, String subject,
+                               long addressVersion, long childIndex) {
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("chain", chain);
         details.put("source", source);
         details.put("subject", subject);
+        details.put("addressVersion", addressVersion);
         details.put("childIndex", childIndex);
         return json(details);
+    }
+
+    static long requireAddressVersion(Long value) {
+        long addressVersion = value == null ? DEFAULT_ADDRESS_VERSION : value;
+        if (addressVersion < 0 || addressVersion > MAX_ADDRESS_VERSION) {
+            throw new IllegalArgumentException(
+                    "addressVersion must be between 0 and " + MAX_ADDRESS_VERSION);
+        }
+        return addressVersion;
     }
 
     private static String requireChain(String value) {
@@ -277,6 +299,7 @@ public class CustodyAddressService {
     public record CreateAddressCommand(
             String chain,
             String subject,
+            Long addressVersion,
             String label,
             Map<String, Object> metadata
     ) {
@@ -296,7 +319,7 @@ public class CustodyAddressService {
             String address,
             String memo,
             String subject,
-            long childIndex,
+            long addressVersion,
             String label,
             Map<String, Object> metadata,
             String source,

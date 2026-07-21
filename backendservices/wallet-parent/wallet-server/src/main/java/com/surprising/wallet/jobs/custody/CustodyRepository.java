@@ -613,16 +613,18 @@ public class CustodyRepository {
     public AddressRecord insertAddress(UUID id, UUID tenantId, long chainAddressId, String chain,
                                        String network, String address, String memo,
                                        String subject, String label, String metadataJson,
-                                       String source, int derivationSubject, long derivationChild,
+                                       String source, int derivationSubject, long addressVersion,
+                                       long derivationChild,
                                        UUID createdBy) {
         jdbc.update("""
                         insert into custody_address(
                             id, tenant_id, chain_address_id, chain, network, address, memo,
                             subject, label, metadata, source, derivation_subject,
-                            derivation_child, created_by)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?)
+                            address_version, derivation_child, created_by)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, ?)
                         """, id, tenantId, chainAddressId, chain, network, address, memo,
-                subject, label, metadataJson, source, derivationSubject, derivationChild, createdBy);
+                subject, label, metadataJson, source, derivationSubject, addressVersion,
+                derivationChild, createdBy);
         return requireAddress(tenantId, id);
     }
 
@@ -640,12 +642,28 @@ public class CustodyRepository {
         return jdbc.query("""
                         select id, tenant_id, chain_address_id, chain, network, address, memo,
                                subject, label, metadata::text as metadata, source,
-                               status, derivation_subject, derivation_child, created_at, updated_at
+                               status, derivation_subject, address_version, derivation_child,
+                               created_at, updated_at
                           from custody_address
                          where tenant_id = ? and id = ?
                         """, (rs, rowNum) -> mapAddress(rs), tenantId, addressId)
                 .stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("custody address not found"));
+    }
+
+    public Optional<AddressRecord> findAddressBySubjectAndVersion(
+            UUID tenantId, String chain, String subject, long addressVersion) {
+        return jdbc.query("""
+                        select id, tenant_id, chain_address_id, chain, network, address, memo,
+                               subject, label, metadata::text as metadata, source,
+                               status, derivation_subject, address_version, derivation_child,
+                               created_at, updated_at
+                          from custody_address
+                         where tenant_id = ? and chain = ? and subject = ?
+                           and address_version = ?
+                        """, (rs, rowNum) -> mapAddress(rs),
+                tenantId, chain, subject, addressVersion)
+                .stream().findFirst();
     }
 
     public boolean isGasAddress(UUID tenantId, UUID addressId) {
@@ -679,7 +697,8 @@ public class CustodyRepository {
         return jdbc.query("""
                         select id, tenant_id, chain_address_id, chain, network, address, memo,
                                subject, label, metadata::text as metadata, source,
-                               status, derivation_subject, derivation_child, created_at, updated_at
+                               status, derivation_subject, address_version, derivation_child,
+                               created_at, updated_at
                           from custody_address
                          where tenant_id = ?
                            and not exists (
@@ -2058,6 +2077,7 @@ public class CustodyRepository {
                 rs.getString("source"),
                 rs.getString("status"),
                 rs.getInt("derivation_subject"),
+                rs.getLong("address_version"),
                 rs.getLong("derivation_child"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant());
@@ -2190,6 +2210,7 @@ public class CustodyRepository {
             String source,
             String status,
             int derivationSubject,
+            long addressVersion,
             long derivationChild,
             Instant createdAt,
             Instant updatedAt

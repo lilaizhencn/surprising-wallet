@@ -37,15 +37,22 @@ Content-Type: application/json
 
 {
   "chainId": "ETH",
-  "subject": "user_10086"
+  "subject": "user_10086",
+  "addressVersion": 0
 }
 ```
 
 `chainId` is a chain code such as `ETH`, `BTC`, or `SOLANA`, not an EVM numeric
 chain ID. `subject` is a stable tenant-defined user, merchant, or system-account
-identifier. Address creation has no idempotency key: every successful call
-allocates a new address, with `childIndex` increasing as `0, 1, 2...` for the
-same subject. The caller must store every returned address ID and address.
+identifier. `addressVersion` is managed by the tenant and defaults to `0`.
+`(tenant, chain, subject, addressVersion)` is the business idempotency key, so
+repeated requests return the existing address without an extra idempotency
+header. Increment the version to `1`, `2`, and so on when the user needs a new
+address. Older versions remain monitored, and late deposits are still credited
+to the same `subject`. Because all EVM chains use `coinType=60` and the same
+derivation coordinates, the same tenant, subject, and version receive the same
+address on every EVM chain. The caller should store the returned address ID,
+address, and version.
 
 The Console can create an address without using the tenant API. Console users
 can also change its label, metadata, and active/disabled state. Disabled
@@ -73,10 +80,11 @@ m / 44' / coinType' / tenantNamespace' / derivationSubject' / childIndex'
 
 EVM chains always use `coinType=60`; other secp256k1 and Bitcoin-like chains
 use `chain_profile.bip44_coin_type`; Ed25519 chains use their fixed SLIP-0044
-coin type. `childIndex` starts at zero and increments within
-`(chain, nativeAsset, tenantNamespace, derivationSubject, DEPOSIT)`. A database
-transaction lock serializes concurrent allocations for the same tenant, chain,
-and subject so two requests cannot receive the same child. The `__sw_` prefix
+coin type. An ordinary user's `addressVersion` maps to the internal derivation
+`childIndex`; it is not a wallet-fixed slot. Only one address row is allowed for
+a tenant, chain, subject, and version. A database transaction lock plus a unique
+constraint makes concurrent requests return one stable address. `childIndex` is
+internal derivation data and is not exposed by the tenant address API. The `__sw_` prefix
 is reserved for wallet-managed system accounts.
 
 For every enabled tenant chain, the asset overview can generate one

@@ -14,17 +14,27 @@ class CustodyPublicApiControllerTest {
             new CustodyJacksonConfiguration().custodyObjectMapper();
 
     @Test
-    void createAddressRequestAcceptsChainIdAndSubject() throws Exception {
+    void createAddressRequestDefaultsAddressVersion() throws Exception {
         CustodyPublicApiController.CreatePublicAddressRequest request = objectMapper.readValue(
                 "{\"chainId\":\"ETH\",\"subject\":\"user_10086\"}",
                 CustodyPublicApiController.CreatePublicAddressRequest.class);
 
         assertEquals("ETH", request.chainId());
         assertEquals("user_10086", request.subject());
+        assertEquals(null, request.addressVersion());
     }
 
     @Test
-    void createAddressEndpointDoesNotRequireIdempotencyHeader() throws Exception {
+    void createAddressRequestAcceptsAddressVersion() throws Exception {
+        CustodyPublicApiController.CreatePublicAddressRequest request = objectMapper.readValue(
+                "{\"chainId\":\"ETH\",\"subject\":\"user_10086\",\"addressVersion\":2}",
+                CustodyPublicApiController.CreatePublicAddressRequest.class);
+
+        assertEquals(2L, request.addressVersion());
+    }
+
+    @Test
+    void createAddressIsIdempotentByChainSubjectAndVersionWithoutAnExtraHeader() throws Exception {
         assertEquals(2, CustodyPublicApiController.class.getDeclaredMethod(
                 "createAddress",
                 CustodyPublicApiController.CreatePublicAddressRequest.class,

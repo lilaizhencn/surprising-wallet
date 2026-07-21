@@ -120,6 +120,8 @@ DROP INDEX IF EXISTS public.custody_audit_log_tenant_time_idx;
 DROP INDEX IF EXISTS public.custody_api_nonce_expiry_idx;
 DROP INDEX IF EXISTS public.custody_api_key_tenant_idx;
 DROP INDEX IF EXISTS public.custody_address_tenant_subject_idx;
+DROP INDEX IF EXISTS public.custody_address_tenant_chain_subject_key;
+DROP INDEX IF EXISTS public.custody_address_tenant_chain_subject_version_key;
 DROP INDEX IF EXISTS public.custody_address_tenant_reference_idx;
 DROP INDEX IF EXISTS public.custody_address_tenant_created_idx;
 DROP INDEX IF EXISTS public.custody_address_lookup_idx;
@@ -849,7 +851,9 @@ CREATE TABLE public.custody_address (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     subject character varying(160) NOT NULL,
+    address_version bigint DEFAULT 0 NOT NULL,
     derivation_child bigint NOT NULL,
+    CONSTRAINT custody_address_version_check CHECK (((address_version >= 0) AND (address_version <= 2147483647))),
     CONSTRAINT custody_address_source_check CHECK (((source)::text = ANY ((ARRAY['API'::character varying, 'CONSOLE'::character varying])::text[]))),
     CONSTRAINT custody_address_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'DISABLED'::character varying])::text[])))
 );
@@ -3675,6 +3679,13 @@ CREATE UNIQUE INDEX chain_profile_one_enabled_network_idx ON public.chain_profil
 --
 
 CREATE UNIQUE INDEX custody_address_derivation_key ON public.custody_address USING btree (tenant_id, chain, derivation_subject, derivation_child);
+
+
+--
+-- Name: custody_address_tenant_chain_subject_version_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX custody_address_tenant_chain_subject_version_key ON public.custody_address USING btree (tenant_id, chain, subject, address_version);
 
 
 --

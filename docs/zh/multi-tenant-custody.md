@@ -32,13 +32,18 @@ Content-Type: application/json
 
 {
   "chainId": "ETH",
-  "subject": "user_10086"
+  "subject": "user_10086",
+  "addressVersion": 0
 }
 ```
 
 `chainId` 是链代码，例如 `ETH`、`BTC`、`SOLANA`，不是 EVM 数值 chain ID。`subject`
-可以是用户、商户或系统账户的稳定业务标识。地址创建不使用幂等键，每次成功调用都会生成新地址；
-同一 `subject` 的 `childIndex` 依次为 `0、1、2...`。调用方必须保存每次返回的地址 ID 和地址。
+可以是用户、商户或系统账户的稳定业务标识。`addressVersion` 是租户管理的地址版本，省略时为
+`0`。`(tenant, chain, subject, addressVersion)` 是业务幂等键；相同参数重复请求返回原地址，
+不需要额外的幂等请求头。需要给用户更换地址时，把版本递增为 `1`、`2` 等即可。旧版本地址
+不会删除或停止监听，迟到充值仍会识别并记到同一个 `subject`。同一租户使用相同 `subject` 和
+`addressVersion` 请求任意 EVM 链时，因为统一使用 `coinType=60` 和相同派生坐标，所以返回同一个
+地址。调用方应保存返回的地址 ID、地址和版本。
 
 Console 可以不经过租户 API 手动创建地址，也可以修改地址的标签、元数据和启用状态。停用地址
 仍然继续监控，并继续计入租户资产总览，保证迟到充值和已有资金不会消失。
@@ -62,8 +67,9 @@ m / 44' / coinType' / tenantNamespace' / derivationSubject' / childIndex'
 
 其中 EVM 链统一使用 `coinType=60`；其他 secp256k1/Bitcoin-like 链使用
 `chain_profile.bip44_coin_type`；Ed25519 链使用代码中固定的 SLIP-0044 coin type。
-`childIndex` 在 `(chain, nativeAsset, tenantNamespace, derivationSubject, DEPOSIT)` 范围内从 0
-递增。数据库事务级锁会串行化同一租户、链和 subject 的并发分配，避免两个请求拿到同一个 child。
+普通用户的 `addressVersion` 会映射到派生路径的内部 `childIndex`；版本不是钱包写死的固定槽位。
+同一租户、链、subject 和版本只允许一条地址记录，数据库事务级锁和唯一约束共同保证并发请求
+返回同一个地址。`childIndex` 是内部派生信息，不在租户地址 API 中暴露。
 `__sw_` 前缀由钱包内部系统账户保留，API 和普通 Console 地址不能使用。
 
 每个租户在每条已开通链上可从资产总览生成一个系统归集地址。该地址使用钱包保留的

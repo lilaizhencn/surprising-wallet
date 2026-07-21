@@ -22,8 +22,10 @@ Tenant Console/API -> tenant-scoped addresses, assets, deposits, withdrawals
 ```
 
 Tenant identity always comes from a Console session or API credential. The
-public address API accepts `chainId` and a tenant-defined `subject`; every call
-allocates the next child address for that subject. Confirmed scanner credits are observed
+public address API accepts `chainId`, a tenant-defined `subject`, and an optional
+`addressVersion`; repeated requests for one tenant, chain, subject, and version
+return the same address. Incrementing the version rotates the address, and all
+EVM chains share one address for the same subject and version. Confirmed scanner credits are observed
 in the same database transaction and mapped to a custody deposit, tenant
 balance, and durable Webhook event. See
 [Multi-tenant Custody](multi-tenant-custody.md).

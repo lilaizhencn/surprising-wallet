@@ -22,7 +22,7 @@
 ```
 
 租户身份始终来自 Console 会话或 API 凭证。公开地址 API 接收 `chainId` 和租户定义的
-`subject`；每次调用在该 subject 下分配新的 child 地址。扫链确认入账后，会在同一数据库事务中映射 Custody 充值、
+`subject` 和可选的 `addressVersion`；同一租户、链、subject 和版本重复调用返回同一地址，递增版本可更换地址，相同 subject 和版本的所有 EVM 链地址一致。扫链确认入账后，会在同一数据库事务中映射 Custody 充值、
 租户资产和持久化 Webhook 事件。详见[多租户托管钱包](multi-tenant-custody.md)。
 
 ## 运行模型

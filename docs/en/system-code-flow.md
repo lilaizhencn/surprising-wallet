@@ -6,14 +6,15 @@
 
 ## Multi-Tenant Custody Flow
 
-The custody control plane keeps a tenant exchange's user model outside this repository. A tenant sends `chainId` and its own `subject`; the service selects the enabled network and allocates the next address under that subject.
+The custody control plane keeps a tenant exchange's user model outside this repository. A tenant sends `chainId`, its own `subject`, and an optional `addressVersion`; the service selects the enabled network and returns a stable address.
 
 ```text
 tenant backend
   -> HMAC-authenticated POST /custody/api/v1/addresses
-  -> create a fresh custody_address on every call
-  -> allocate the subject's next chain_address child
-  -> return address ID, chain, selected network, subject, childIndex, and address
+  -> get or create custody_address by tenant + chain + subject + addressVersion
+  -> addressVersion defaults to 0; increment it to rotate while older addresses stay monitored
+  -> return the same address on every EVM chain for the same subject + addressVersion
+  -> return address ID, chain, selected network, subject, addressVersion, and address
 
 chain scanner
   -> deposit_record + ledger_balance credit in one transaction

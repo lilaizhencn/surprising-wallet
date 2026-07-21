@@ -32,13 +32,13 @@ public class CustodyPublicApiController {
     }
 
     @PostMapping("/addresses")
-    @ResponseStatus(HttpStatus.CREATED)
     public AddressView createAddress(
             @RequestBody CreatePublicAddressRequest body,
             HttpServletRequest request) {
         return addresses.create(
                 CustodyRequestSupport.requirePrincipal(request),
-                new CreateAddressCommand(body.chainId(), body.subject(), null, null),
+                new CreateAddressCommand(
+                        body.chainId(), body.subject(), body.addressVersion(), null, null),
                 "API",
                 CustodyRequestSupport.clientIp(request));
     }
@@ -98,6 +98,10 @@ public class CustodyPublicApiController {
                 CustodyRequestSupport.clientIp(request));
     }
 
-    public record CreatePublicAddressRequest(String chainId, String subject) {
+    public record CreatePublicAddressRequest(
+            String chainId,
+            String subject,
+            Long addressVersion
+    ) {
     }
 }

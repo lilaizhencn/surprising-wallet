@@ -40,12 +40,16 @@ paths:
         default: { $ref: '#/components/responses/Error' }
     post:
       tags: [Public API]
-      summary: Create a fresh tenant address on the enabled network
+      summary: Get or create the stable tenant address on the enabled network
       description: |
         The request body accepts a chain code and tenant-defined subject. The
-        service selects that chain's enabled network. Every successful call
-        allocates the next child address for that subject. Address creation
-        does not emit a Webhook and is intentionally not idempotent.
+        service selects that chain's enabled network. The `(tenant, chain,
+        subject, addressVersion)` business key is idempotent. `addressVersion`
+        defaults to 0; increment it when the tenant wants to rotate a user's
+        deposit address. All EVM chains use coinType 60, so the same tenant,
+        subject, and addressVersion return the same address on every enabled
+        EVM chain. Older versions remain monitored. Address creation does not
+        emit a Webhook.
       security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
       requestBody:
         required: true
@@ -53,8 +57,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreatePublicAddress' }
       responses:
-        '201':
-          description: Address allocation
+        '200':
+          description: Existing or newly created stable address
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Address' }
@@ -1245,6 +1249,13 @@ components:
           type: string
           pattern: '^[A-Za-z0-9_][A-Za-z0-9._:-]{0,159}$'
           description: Tenant-defined account or user identifier; the __sw_ prefix is reserved.
+        addressVersion:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 2147483647
+          default: 0
+          description: Tenant-managed address generation; increment it to rotate the subject's address.
     CreateAddress:
       type: object
       required: [chain, subject]
@@ -1253,11 +1264,17 @@ components:
         subject:
           type: string
           pattern: '^[A-Za-z0-9_][A-Za-z0-9._:-]{0,159}$'
+        addressVersion:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 2147483647
+          default: 0
         label: { type: string, maxLength: 160 }
         metadata: { type: object, additionalProperties: true }
     Address:
       type: object
-      required: [id, chain, network, address, subject, childIndex, metadata, source, status, createdAt]
+      required: [id, chain, network, address, subject, addressVersion, metadata, source, status, createdAt]
       properties:
         id: { type: string, format: uuid }
         chain: { type: string }
@@ -1265,7 +1282,7 @@ components:
         address: { type: string }
         memo: { type: [string, 'null'] }
         subject: { type: string }
-        childIndex: { type: integer, format: int64, minimum: 0 }
+        addressVersion: { type: integer, format: int64, minimum: 0, maximum: 2147483647 }
         label: { type: [string, 'null'] }
         metadata: { type: object, additionalProperties: true }
         source: { type: string, enum: [API, CONSOLE] }

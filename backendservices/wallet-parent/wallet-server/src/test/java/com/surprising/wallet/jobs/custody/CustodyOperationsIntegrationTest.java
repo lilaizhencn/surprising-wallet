@@ -1,7 +1,11 @@
 package com.surprising.wallet.jobs.custody;
 
+import com.surprising.wallet.common.chain.ChainType;
+import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.service.chain.BlockchainAdapterRegistry;
+import com.surprising.wallet.service.chain.BlockchainRuntimeService;
 import com.surprising.wallet.service.chain.tron.TronChainAdapter;
+import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -13,10 +17,12 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -515,6 +521,88 @@ class CustodyOperationsIntegrationTest {
     }
 
     @Test
+    void userAddressCreationIsIdempotentAndSharedAcrossEvmChains() {
+        transactions.executeWithoutResult(status -> {
+            CustodyRepository custody = new CustodyRepository(jdbc);
+            CustodyTenantChainRepository tenantChainRepository =
+                    new CustodyTenantChainRepository(jdbc);
+            UUID tenantId = createTenant();
+            UUID administratorId = UUID.randomUUID();
+            String slug = jdbc.queryForObject(
+                    "select slug from custody_tenant where id = ?", String.class, tenantId);
+            jdbc.update("""
+                    insert into custody_tenant_user(
+                        id, tenant_id, email, display_name, password_hash, role, status)
+                    values (?, ?, ?, 'Address administrator', 'test-only-hash',
+                            'TENANT_ADMIN', 'ACTIVE')
+                    """, administratorId, tenantId, slug + "@example.test");
+            tenantChainRepository.setStatus(tenantId, "ETH", "ACTIVE", administratorId);
+            tenantChainRepository.setStatus(tenantId, "BNB", "ACTIVE", administratorId);
+
+            CustodyAddressService service = new CustodyAddressService(
+                    custody,
+                    new ChainJdbcRepository(jdbc),
+                    new StableEvmRuntime(jdbc),
+                    new CustodyTenantChainService(
+                            tenantChainRepository, custody,
+                            new BlockchainAdapterRegistry(List.of())),
+                    new CustodyJacksonConfiguration().custodyObjectMapper());
+            CustodyPrincipal principal = new CustodyPrincipal(
+                    CustodyPrincipal.ActorType.TENANT_USER,
+                    administratorId, tenantId, slug, "TENANT_ADMIN",
+                    Set.of("addresses:write"));
+
+            var ethFirst = service.create(
+                    principal,
+                    new CustodyAddressService.CreateAddressCommand(
+                            "ETH", "user_10086", null, null, null),
+                    "API", "127.0.0.1");
+            var ethRepeated = service.create(
+                    principal,
+                    new CustodyAddressService.CreateAddressCommand(
+                            "ETH", "user_10086", 0L, null, null),
+                    "API", "127.0.0.1");
+            var bnbFirst = service.create(
+                    principal,
+                    new CustodyAddressService.CreateAddressCommand(
+                            "BNB", "user_10086", 0L, null, null),
+                    "API", "127.0.0.1");
+            var ethRotated = service.create(
+                    principal,
+                    new CustodyAddressService.CreateAddressCommand(
+                            "ETH", "user_10086", 1L, null, null),
+                    "API", "127.0.0.1");
+            var bnbRotated = service.create(
+                    principal,
+                    new CustodyAddressService.CreateAddressCommand(
+                            "BNB", "user_10086", 1L, null, null),
+                    "API", "127.0.0.1");
+
+            assertEquals(ethFirst.id(), ethRepeated.id());
+            assertEquals(0L, ethFirst.addressVersion());
+            assertEquals(0L, bnbFirst.addressVersion());
+            assertEquals(ethFirst.address(), bnbFirst.address());
+            assertEquals(1L, ethRotated.addressVersion());
+            assertEquals(1L, bnbRotated.addressVersion());
+            assertEquals(ethRotated.address(), bnbRotated.address());
+            assertNotEquals(ethFirst.address(), ethRotated.address());
+            assertEquals(4, jdbc.queryForObject("""
+                    select count(*) from custody_address
+                     where tenant_id = ? and subject = 'user_10086'
+                    """, Integer.class, tenantId));
+            assertEquals(2, jdbc.queryForObject("""
+                    select count(distinct address_version) from custody_address
+                     where tenant_id = ? and subject = 'user_10086'
+                    """, Integer.class, tenantId));
+            assertEquals(1, jdbc.queryForObject("""
+                    select count(distinct derivation_subject) from custody_address
+                     where tenant_id = ? and subject = 'user_10086'
+                    """, Integer.class, tenantId));
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
     void dashboardListsOpenedChainsBeforeTheyHaveAddressesOrBalances() {
         transactions.executeWithoutResult(status -> {
             UUID tenantId = createTenant();
@@ -662,5 +750,48 @@ class CustodyOperationsIntegrationTest {
                        locked_at = null
                  where status in ('PENDING', 'RETRY', 'DELIVERING')
                 """);
+    }
+
+    private static final class StableEvmRuntime extends BlockchainRuntimeService {
+        private final JdbcTemplate jdbc;
+
+        private StableEvmRuntime(JdbcTemplate jdbc) {
+            super(null, null, null);
+            this.jdbc = jdbc;
+        }
+
+        @Override
+        public RuntimeChain requireRuntime(String chain) {
+            ChainType chainType = ChainType.valueOf(chain);
+            String nativeSymbol = chainType == ChainType.BNB ? "BNB" : "ETH";
+            return new RuntimeChain(
+                    chainType, chain, "qa", "evm", nativeSymbol, 1,
+                    "evm", "integration-test", Set.of());
+        }
+
+        @Override
+        public Address generateDepositAddressAtIndex(
+                String chain, long userId, int biz, long childIndex) {
+            RuntimeChain runtime = requireRuntime(chain);
+            String address = "0x" + String.format("%032x%08x", userId, childIndex);
+            String path = "m/44/60/" + biz + "/" + userId + "/" + childIndex;
+            jdbc.update("""
+                    insert into chain_address(
+                        chain, asset_symbol, account_id, user_id, biz, address_index,
+                        address, owner_address, derivation_path, wallet_role, enabled)
+                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DEPOSIT', true)
+                    """, chain, runtime.nativeSymbol(), address, userId, biz, childIndex,
+                    address, address, path);
+            return Address.builder()
+                    .address(address)
+                    .network(runtime.network())
+                    .scriptType(runtime.family())
+                    .derivationPath(path)
+                    .biz(biz)
+                    .currency(runtime.nativeSymbol().toLowerCase())
+                    .userId(userId)
+                    .index(Math.toIntExact(childIndex))
+                    .build();
+        }
     }
 }

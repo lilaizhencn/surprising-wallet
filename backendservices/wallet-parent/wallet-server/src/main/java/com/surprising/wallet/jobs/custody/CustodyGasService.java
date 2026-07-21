@@ -60,6 +60,7 @@ public class CustodyGasService {
                 new CreateAddressCommand(
                         chain,
                         collectionSubject,
+                        null,
                         chain + " collection address",
                         Map.of("systemPurpose", "COLLECTION_AND_GAS")),
                 COLLECTION_CHILD_INDEX,

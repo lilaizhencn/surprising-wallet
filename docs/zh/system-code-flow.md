@@ -6,14 +6,15 @@
 
 ## 多租户托管流程
 
-托管控制面不管理交易所内部的用户模型。租户传 `chainId` 和自己的 `subject`，服务根据该链唯一启用的网络，在同一 subject 下顺序分配新地址。
+托管控制面不管理交易所内部的用户模型。租户传 `chainId`、自己的 `subject` 和可选的 `addressVersion`，服务根据该链唯一启用的网络返回稳定地址。
 
 ```text
 交易所后端
   -> 通过 HMAC 鉴权调用 POST /custody/api/v1/addresses
-  -> 每次调用创建新的 custody_address
-  -> 为 subject 分配下一个 chain_address child
-  -> 返回地址 ID、链、自动选择的网络、subject、childIndex 和地址
+  -> 按 tenant + chain + subject + addressVersion 查询或创建 custody_address
+  -> addressVersion 默认 0；递增版本即可更换地址，旧地址继续监听
+  -> 相同 subject + addressVersion 的所有 EVM 链返回同一个地址
+  -> 返回地址 ID、链、自动选择的网络、subject、addressVersion 和地址
 
 链上扫描器
   -> 在同一事务中写 deposit_record 并增加 ledger_balance

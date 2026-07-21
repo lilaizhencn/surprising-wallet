@@ -11,18 +11,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CustodyAddressServiceTest {
 
     @Test
-    void auditDetailsRecordSubjectAndChildIndex() throws Exception {
+    void auditDetailsRecordAddressVersionAndChildIndex() throws Exception {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         CustodyAddressService service = new CustodyAddressService(
                 null, null, null, null, objectMapper);
 
         JsonNode details = objectMapper.readTree(
-                service.addressAuditDetails("ETH", "CONSOLE", "treasury", 3));
+                service.addressAuditDetails("ETH", "CONSOLE", "treasury", 2, 3));
 
         assertEquals("ETH", details.path("chain").asText());
         assertEquals("CONSOLE", details.path("source").asText());
         assertEquals("treasury", details.path("subject").asText());
+        assertEquals(2, details.path("addressVersion").asLong());
         assertEquals(3, details.path("childIndex").asLong());
+    }
+
+    @Test
+    void addressVersionDefaultsToZeroAndRejectsInvalidValues() {
+        assertEquals(0L, CustodyAddressService.requireAddressVersion(null));
+        assertEquals(7L, CustodyAddressService.requireAddressVersion(7L));
+        assertThrows(IllegalArgumentException.class,
+                () -> CustodyAddressService.requireAddressVersion(-1L));
+        assertThrows(IllegalArgumentException.class,
+                () -> CustodyAddressService.requireAddressVersion((long) Integer.MAX_VALUE + 1));
     }
 
     @Test

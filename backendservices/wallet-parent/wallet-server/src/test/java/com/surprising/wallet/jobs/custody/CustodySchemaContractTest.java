@@ -44,6 +44,8 @@ class CustodySchemaContractTest {
         assertTrue(sql.contains("custody_derivation_subject_path_key UNIQUE (derivation_subject)"));
         assertTrue(sql.contains("UNIQUE (chain_address_id)"));
         assertTrue(sql.contains("custody_address_derivation_key ON public.custody_address USING btree (tenant_id, chain, derivation_subject, derivation_child)"));
+        assertTrue(sql.contains("address_version bigint DEFAULT 0 NOT NULL"));
+        assertTrue(sql.contains("custody_address_tenant_chain_subject_version_key ON public.custody_address USING btree (tenant_id, chain, subject, address_version)"));
         assertTrue(sql.contains("total_attempt_count integer DEFAULT 0 NOT NULL"));
         assertTrue(sql.contains("manual_retry_count integer DEFAULT 0 NOT NULL"));
         assertTrue(sql.contains("UNIQUE (delivery_id, attempt_number)"));
