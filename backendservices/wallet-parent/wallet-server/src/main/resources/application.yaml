@@ -56,7 +56,7 @@ sw:
       password: ${SW_WALLET_ADMIN_PASSWORD:}
     network: test
     custody:
-      secret-master-key: ${SW_CUSTODY_SECRET_MASTER_KEY:}
+      secret-master-key: 339c28dcd013766105fe1c470b03b9e5637d99c4c260d04bbf2ead36f763b944
       session-ttl: ${SW_CUSTODY_SESSION_TTL:PT12H}
       api-clock-skew: ${SW_CUSTODY_API_CLOCK_SKEW:PT5M}
       platform-admin:
