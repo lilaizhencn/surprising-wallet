@@ -77,17 +77,17 @@ class AptosLiveTokenFlowIntegrationTest {
 
         String withdrawOrder = "aptos-live-token-withdraw-" + UUID.randomUUID();
         BigDecimal withdrawAmount = new BigDecimal("1000000");
-        String withdrawHash = transactions.withdrawCoin(withdrawOrder, owner.getUserId(), owner,
+        String withdrawHash = transactions.withdrawToken(withdrawOrder, owner.getUserId(), owner,
                 coinType, external.getAddress(), withdrawAmount);
-        assertEquals(withdrawHash, transactions.withdrawCoin(withdrawOrder, owner.getUserId(), owner,
+        assertEquals(withdrawHash, transactions.withdrawToken(withdrawOrder, owner.getUserId(), owner,
                 coinType, external.getAddress(), withdrawAmount));
         assertTrue(transactions.confirmWithdrawal(withdrawOrder, SYMBOL, owner.getAccountId(), withdrawAmount));
 
         String collectionNo = "aptos-live-token-collection-" + UUID.randomUUID();
         BigDecimal collectionAmount = new BigDecimal("1000000");
-        String collectionHash = transactions.collectCoin(collectionNo, owner, coinType, hot.getAddress(),
+        String collectionHash = transactions.collectToken(collectionNo, owner, coinType, hot.getAddress(),
                 collectionAmount);
-        assertEquals(collectionHash, transactions.collectCoin(collectionNo, owner, coinType,
+        assertEquals(collectionHash, transactions.collectToken(collectionNo, owner, coinType,
                 hot.getAddress(), collectionAmount));
         assertTrue(transactions.confirmCollection(collectionNo));
 
@@ -133,7 +133,7 @@ class AptosLiveTokenFlowIntegrationTest {
                     min_withdraw_amount, collect_enabled, collect_threshold, gas_strategy,
                     confirmation_required
                 )
-                values ('APTOS', 'devnet', ?, 'APTOS_COIN', 'COIN', ?, 6, true,
+                values ('APTOS', 'devnet', ?, 'APTOS_COIN', 'APTOS_COIN', ?, 6, true,
                         1, 1, 1, 1, true, 1, 'APT_GAS', 1)
                 on conflict (chain, symbol) do update
                 set network = excluded.network,

@@ -20,6 +20,8 @@ import java.util.Objects;
 public class AptosTransactionSigner {
     private static final byte[] RAW_TRANSACTION_PREFIX = sha3("APTOS::RawTransaction".getBytes());
     private static final String APTOS_ACCOUNT_MODULE = "0x1::aptos_account";
+    private static final String PRIMARY_FUNGIBLE_STORE_MODULE = "0x1::primary_fungible_store";
+    private static final String FUNGIBLE_ASSET_METADATA_TYPE = "0x1::fungible_asset::Metadata";
     private static final HexFormat HEX = HexFormat.of();
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -56,6 +58,24 @@ public class AptosTransactionSigner {
         return sign(userId, biz, derivationIndex, sender, sequenceNumber,
                 APTOS_ACCOUNT_MODULE, "transfer_coins", List.of(coinType),
                 List.of(FunctionArgument.address(recipient), FunctionArgument.u64(amountAtomic)),
+                maxGasAmount, gasUnitPrice, chainId);
+    }
+
+    public SignedTransaction fungibleAssetTransfer(long derivationIndex, String sender, long sequenceNumber,
+                                                    String metadataAddress, String recipient, long amountAtomic,
+                                                    long maxGasAmount, long gasUnitPrice, int chainId) {
+        return fungibleAssetTransfer(0L, 0, derivationIndex, sender, sequenceNumber,
+                metadataAddress, recipient, amountAtomic, maxGasAmount, gasUnitPrice, chainId);
+    }
+
+    public SignedTransaction fungibleAssetTransfer(long userId, int biz, long derivationIndex,
+                                                    String sender, long sequenceNumber,
+                                                    String metadataAddress, String recipient, long amountAtomic,
+                                                    long maxGasAmount, long gasUnitPrice, int chainId) {
+        return sign(userId, biz, derivationIndex, sender, sequenceNumber,
+                PRIMARY_FUNGIBLE_STORE_MODULE, "transfer", List.of(FUNGIBLE_ASSET_METADATA_TYPE),
+                List.of(FunctionArgument.address(metadataAddress), FunctionArgument.address(recipient),
+                        FunctionArgument.u64(amountAtomic)),
                 maxGasAmount, gasUnitPrice, chainId);
     }
 

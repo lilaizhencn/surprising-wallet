@@ -69,7 +69,7 @@ The application should resolve assets by `chain + symbol` or `chain + contract`,
 | TRON | TRON | DB tests | Nile live flow |
 | Solana | SOL, SPL tokens | DB tests | Devnet live flow |
 | TON | TON, Jetton | DB tests | Testnet connectivity and funded live flow |
-| Aptos | APT, coin resources | DB tests | Testnet live flow |
+| Aptos | APT, Coin<T>, Fungible Assets | DB tests | Testnet live flow |
 | Sui | SUI, coin resources | DB tests | Testnet live flow |
 | HyperCore | USDC, HYPE, HIP-1 tokens | DB/API tests | Hyperliquid testnet API |
 

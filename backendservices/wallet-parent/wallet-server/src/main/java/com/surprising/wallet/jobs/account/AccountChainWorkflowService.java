@@ -321,7 +321,7 @@ public class AccountChainWorkflowService {
             case "APTOS" -> isNative(profile, order.getAssetSymbol())
                     ? aptosTransactionService.sendNative(from, order.getToAddress(),
                     toAtomicLong(order.getAmount(), assetDecimals(order)))
-                    : aptosTransactionService.sendCoin(from, requireToken(chain, order.getAssetSymbol()).getContractAddress(),
+                    : aptosTransactionService.sendToken(from, requireToken(chain, order.getAssetSymbol()),
                     order.getToAddress(), toAtomicLong(order.getAmount(), assetDecimals(order)));
             case "SUI" -> isNative(profile, order.getAssetSymbol())
                     ? suiTransactionService.sendNative(from, order.getToAddress(),
@@ -461,7 +461,7 @@ public class AccountChainWorkflowService {
                     aptosTransactionService.collectNative(record.getCollectionNo(), from,
                             record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)));
                 } else {
-                    aptosTransactionService.collectCoin(record.getCollectionNo(), from,
+                    aptosTransactionService.collectToken(record.getCollectionNo(), from,
                             requireToken(record.getChain(), record.getAssetSymbol()).getContractAddress(),
                             record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)));
                 }

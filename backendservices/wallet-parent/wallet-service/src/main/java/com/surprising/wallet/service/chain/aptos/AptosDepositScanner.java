@@ -48,11 +48,11 @@ public class AptosDepositScanner {
                 .collect(Collectors.toMap(address -> AptosHex.normalizeAddress(address.getAddress()),
                         address -> address, (a, b) -> a));
         Map<String, TokenDefinition> metadataTokens = repository.listTokens(CHAIN).stream()
-                .filter(token -> token.getContractAddress() != null && !token.getContractAddress().contains("::"))
+                .filter(token -> AptosTokenStandard.from(token) == AptosTokenStandard.FUNGIBLE_ASSET)
                 .collect(Collectors.toMap(token -> AptosHex.normalizeAddress(token.getContractAddress()),
                         token -> token, (a, b) -> a));
         repository.listTokens(CHAIN).stream()
-                .filter(token -> token.getContractAddress() != null && token.getContractAddress().contains("::"))
+                .filter(token -> AptosTokenStandard.from(token) == AptosTokenStandard.COIN)
                 .forEach(token -> {
                     Optional<String> metadata = rpc.pairedMetadata(token.getContractAddress());
                     metadata.ifPresent(address -> metadataTokens.put(address, token));
@@ -99,8 +99,12 @@ public class AptosDepositScanner {
                 continue;
             }
             String store = AptosHex.normalizeAddress(eventNode.path("data").path("store").asText("0x0"));
-            String owner = storeOwners.get(store);
-            String metadata = storeMetadata.get(store);
+            String owner = Optional.ofNullable(storeOwners.get(store))
+                    .or(() -> rpc.fungibleStoreOwner(store))
+                    .orElse(null);
+            String metadata = Optional.ofNullable(storeMetadata.get(store))
+                    .or(() -> rpc.fungibleStoreMetadata(store))
+                    .orElse(null);
             if (owner == null || metadata == null) {
                 continue;
             }
@@ -140,8 +144,11 @@ public class AptosDepositScanner {
     private void scanCoinStoreDeposits(AccountChainProfile profile, long ledgerVersion,
                                        List<DepositEvent> events, int scanLimit) {
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
+            if (AptosTokenStandard.from(token) != AptosTokenStandard.COIN) {
+                continue;
+            }
             String coinType = token.getContractAddress();
-            if (coinType == null || !coinType.contains("::")) {
+            if (coinType == null || coinType.isBlank()) {
                 continue;
             }
             for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, token.getSymbol())) {

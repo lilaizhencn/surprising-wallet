@@ -153,6 +153,18 @@ public class AptosRpcClient {
         }
     }
 
+    public Optional<String> fungibleStoreOwner(String storeAddress) {
+        JsonNode value = resource(storeAddress, "0x1::object::ObjectCore")
+                .path("data").path("owner");
+        return normalizedAddress(value);
+    }
+
+    public Optional<String> fungibleStoreMetadata(String storeAddress) {
+        JsonNode value = resource(storeAddress, "0x1::fungible_asset::FungibleStore")
+                .path("data").path("metadata").path("inner");
+        return normalizedAddress(value);
+    }
+
     public JsonNode fundDevnetAccount(String address, long amountOctas) {
         String path = "/mint?amount=" + amountOctas + "&address=" + AptosHex.normalizeAddress(address);
         if (fixedFaucetUrl != null && !fixedFaucetUrl.isBlank()) {
@@ -282,5 +294,12 @@ public class AptosRpcClient {
             }
         }
         return Optional.empty();
+    }
+
+    private static Optional<String> normalizedAddress(JsonNode value) {
+        if (value == null || !value.isTextual() || !ADDRESS_PATTERN.matcher(value.asText()).matches()) {
+            return Optional.empty();
+        }
+        return Optional.of(AptosHex.normalizeAddress(value.asText()));
     }
 }

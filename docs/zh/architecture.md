@@ -64,7 +64,7 @@
 | TRON | TRON | DB 测试 | Nile live flow |
 | Solana | SOL, SPL token | DB 测试 | Devnet live flow |
 | TON | TON, Jetton | DB 测试 | Testnet 连通性和 funded live flow |
-| Aptos | APT, coin resource | DB 测试 | Testnet live flow |
+| Aptos | APT、Coin<T>、Fungible Asset | DB 测试 | Testnet live flow |
 | Sui | SUI, coin resource | DB 测试 | Testnet live flow |
 | HyperCore | USDC, HYPE, HIP-1 token | DB/API 测试 | Hyperliquid testnet API |
 

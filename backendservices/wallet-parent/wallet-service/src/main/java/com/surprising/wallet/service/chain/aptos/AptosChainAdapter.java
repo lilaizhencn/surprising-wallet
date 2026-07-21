@@ -42,7 +42,7 @@ public class AptosChainAdapter implements BlockchainAdapter {
 
     @Override
     public String describe() {
-        return "Aptos Ed25519, account sequence transaction, APT and Coin<T> wallet engine.";
+        return "Aptos Ed25519, account sequence transaction, APT, Coin<T> and Fungible Asset wallet engine.";
     }
 
     @Override
@@ -58,9 +58,13 @@ public class AptosChainAdapter implements BlockchainAdapter {
         TokenDefinition token = repository.findToken(CHAIN, request.assetSymbol())
                 .orElseThrow(() -> new IllegalArgumentException("Aptos token not configured: "
                         + request.assetSymbol()));
+        String transferFunction = switch (AptosTokenStandard.from(token)) {
+            case COIN -> "aptos_account::transfer_coins";
+            case FUNGIBLE_ASSET -> "primary_fungible_store::transfer";
+        };
         return new TransferQuote(ChainType.APTOS, token.getSymbol(), request.fromAddress(), request.toAddress(),
                 request.amount(), BigDecimal.valueOf(profile().getDefaultFee()), null, null, null, null,
-                "aptos_account::transfer_coins", true, "Aptos Coin<T> token transfer");
+                transferFunction, true, "Aptos " + token.getStandard() + " token transfer");
     }
 
     @Override
