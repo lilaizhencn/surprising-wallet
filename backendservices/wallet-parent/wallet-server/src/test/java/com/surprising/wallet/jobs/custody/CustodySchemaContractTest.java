@@ -80,7 +80,7 @@ class CustodySchemaContractTest {
         assertTrue(sql.contains("FOREIGN KEY (tenant_id, chain_address_id) REFERENCES public.chain_address(tenant_id, id)"));
         assertTrue(sql.contains("FOREIGN KEY (tenant_id, deposit_record_id) REFERENCES public.deposit_record(tenant_id, id)"));
         assertTrue(sql.contains("FOREIGN KEY (tenant_id, withdrawal_order_id) REFERENCES public.withdrawal_order(tenant_id, id)"));
-        assertFalse(CustodyWebhookService.ALLOWED_EVENTS.contains("ADDRESS.CREATED"));
+        assertFalse(sql.contains("subscribed_events"));
 
         assertTrue(sql.contains("token_config_chain_network_contract_address_key"));
     }

@@ -50,10 +50,9 @@ class CustodyOperationsIntegrationTest {
             UUID deliveryId = UUID.randomUUID();
             jdbc.update("""
                     insert into custody_webhook_endpoint(
-                        id, tenant_id, name, url, secret_ciphertext,
-                        subscribed_events, status, verified_at)
+                        id, tenant_id, name, url, secret_ciphertext, status, verified_at)
                     values (?, ?, 'QA endpoint', 'https://example.com/hooks', 'ciphertext',
-                            array['DEPOSIT.CONFIRMED'], 'ACTIVE', now())
+                            'ACTIVE', now())
                     """, endpointId, tenantId);
             jdbc.update("""
                     insert into custody_event(
@@ -135,10 +134,9 @@ class CustodyOperationsIntegrationTest {
             UUID deliveryId = UUID.randomUUID();
             jdbc.update("""
                     insert into custody_webhook_endpoint(
-                        id, tenant_id, name, url, secret_ciphertext,
-                        subscribed_events, status, verified_at)
+                        id, tenant_id, name, url, secret_ciphertext, status, verified_at)
                     values (?, ?, 'Recovery endpoint', 'https://example.com/hooks',
-                            'ciphertext', array['DEPOSIT.CONFIRMED'], 'ACTIVE', now())
+                            'ciphertext', 'ACTIVE', now())
                     """, endpointId, tenantId);
             jdbc.update("""
                     insert into custody_event(
@@ -713,10 +711,8 @@ class CustodyOperationsIntegrationTest {
         UUID endpointId = UUID.randomUUID();
         jdbc.update("""
                 insert into custody_webhook_endpoint(
-                    id, tenant_id, name, url, secret_ciphertext,
-                    subscribed_events, status, verified_at)
-                values (?, ?, ?, ?, 'ciphertext',
-                        array['DEPOSIT.CONFIRMED'], 'ACTIVE', now())
+                    id, tenant_id, name, url, secret_ciphertext, status, verified_at)
+                values (?, ?, ?, ?, 'ciphertext', 'ACTIVE', now())
                 """, endpointId, tenantId, name,
                 "https://example.com/hooks/" + endpointId);
         return endpointId;

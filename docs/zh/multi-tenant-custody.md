@@ -152,7 +152,9 @@ HMAC-SHA256(apiSecret, canonicalRequest)
 
 ## Webhook
 
-支持的事件：
+Webhook 不需要选择订阅事件。每个通过 API 创建的托管地址所产生的以下事件，都会自动投递到该
+租户所有已验证并启用的 Webhook 端点。Console 手动创建地址产生的事件只保留内部审计，不发送
+租户业务回调：
 
 - `DEPOSIT.CONFIRMED`
 - `WITHDRAWAL.CREATED`

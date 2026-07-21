@@ -183,7 +183,10 @@ trusted-proxy configuration.
 
 ## Webhooks
 
-Supported events:
+Webhook event selection is not configurable. Every event below that belongs to
+an API-created custody address is delivered automatically to every verified and
+active endpoint for the tenant. Events for Console-created addresses remain in
+the internal audit trail and are not sent to tenant business systems:
 
 - `DEPOSIT.CONFIRMED`
 - `WITHDRAWAL.CREATED`

@@ -21,20 +21,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 public class CustodyWebhookService {
-    public static final Set<String> ALLOWED_EVENTS = Set.of(
-            "DEPOSIT.CONFIRMED",
-            "WITHDRAWAL.CREATED",
-            "WITHDRAWAL.BROADCAST",
-            "WITHDRAWAL.BROADCAST_UNKNOWN",
-            "WITHDRAWAL.CONFIRMED",
-            "WITHDRAWAL.FAILED");
-    private static final Set<String> DELIVERY_STATUSES = Set.of(
+    private static final java.util.Set<String> DELIVERY_STATUSES = java.util.Set.of(
             "PENDING", "DELIVERING", "DELIVERED", "RETRY", "FAILED");
 
     private final CustodyRepository repository;
@@ -63,18 +54,17 @@ public class CustodyWebhookService {
         requireTenantAdmin(principal);
         String name = required(command.name(), "webhook name", 120);
         URI uri = validateEndpoint(command.url());
-        Set<String> events = normalizeEvents(command.events());
         String secret = "whsec_" + crypto.randomSecret(32);
         String verificationToken = crypto.randomSecret(24);
         UUID id = UUID.randomUUID();
         WebhookEndpointRecord saved = repository.insertWebhookEndpoint(
                 id, principal.tenantId(), name, uri.toString(), crypto.encrypt(secret),
-                events, crypto.sha256(verificationToken), principal.actorId());
+                crypto.sha256(verificationToken), principal.actorId());
         repository.audit(principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
                 "WEBHOOK.CREATE", "WEBHOOK_ENDPOINT", id.toString(), sourceIp,
-                json(Map.of("url", uri.toString(), "events", events)));
+                json(Map.of("url", uri.toString())));
         return new CreatedWebhook(
-                saved.id(), saved.name(), saved.url(), saved.events(), saved.status(),
+                saved.id(), saved.name(), saved.url(), saved.status(),
                 secret, saved.createdAt());
     }
 
@@ -250,20 +240,6 @@ public class CustodyWebhookService {
         }
     }
 
-    private Set<String> normalizeEvents(Set<String> events) {
-        if (events == null || events.isEmpty()) {
-            throw new IllegalArgumentException("subscribe to at least one webhook event");
-        }
-        Set<String> result = events.stream()
-                .map(event -> event == null ? "" : event.trim().toUpperCase(Locale.ROOT))
-                .filter(event -> !event.isBlank())
-                .collect(Collectors.toUnmodifiableSet());
-        if (result.isEmpty() || !ALLOWED_EVENTS.containsAll(result)) {
-            throw new IllegalArgumentException("unsupported webhook event");
-        }
-        return result;
-    }
-
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -292,14 +268,13 @@ public class CustodyWebhookService {
         }
     }
 
-    public record CreateWebhookCommand(String name, String url, Set<String> events) {
+    public record CreateWebhookCommand(String name, String url) {
     }
 
     public record CreatedWebhook(
             UUID id,
             String name,
             String url,
-            Set<String> events,
             String status,
             String signingSecret,
             Instant createdAt

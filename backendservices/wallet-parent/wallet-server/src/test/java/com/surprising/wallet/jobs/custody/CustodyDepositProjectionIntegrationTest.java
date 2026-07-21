@@ -132,7 +132,40 @@ class CustodyDepositProjectionIntegrationTest {
         });
     }
 
+    @Test
+    void webhookDeliveryIsAutomaticOnlyForApiCreatedAddresses() {
+        ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
+        CustodyRepository custodyRepository = new CustodyRepository(jdbc);
+        CustodyDepositCreditObserver observer =
+                new CustodyDepositCreditObserver(jdbc, objectMapper, custodyRepository);
+        StaticListableBeanFactory beans = new StaticListableBeanFactory(
+                Map.of("custodyDepositCreditObserver", observer));
+        ChainJdbcRepository chainRepository = new ChainJdbcRepository(
+                jdbc, beans.getBeanProvider(DepositCreditObserver.class));
+
+        transactions.executeWithoutResult(status -> {
+            DepositFixture apiAddress = createFixture("api-user", "ACTIVE", "API");
+            insertActiveWebhook(apiAddress.tenantId());
+            DepositEvent apiEvent = event(apiAddress.address(), new BigDecimal("1.25"));
+            assertTrue(chainRepository.recordAndCreditDeposit(
+                    apiEvent, 0L, 12, apiAddress.accountId()));
+            assertEquals(1, deliveryCount(apiAddress.tenantId()));
+
+            DepositFixture consoleAddress = createFixture("console-user", "ACTIVE", "CONSOLE");
+            insertActiveWebhook(consoleAddress.tenantId());
+            DepositEvent consoleEvent = event(consoleAddress.address(), new BigDecimal("2.50"));
+            assertTrue(chainRepository.recordAndCreditDeposit(
+                    consoleEvent, 0L, 12, consoleAddress.accountId()));
+            assertEquals(0, deliveryCount(consoleAddress.tenantId()));
+            status.setRollbackOnly();
+        });
+    }
+
     private DepositFixture createFixture(String subjectValue, String status) {
+        return createFixture(subjectValue, status, "API");
+    }
+
+    private DepositFixture createFixture(String subjectValue, String status, String source) {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         UUID tenantId = UUID.randomUUID();
         UUID custodyAddressId = UUID.randomUUID();
@@ -157,10 +190,25 @@ class CustodyDepositProjectionIntegrationTest {
                 insert into custody_address(
                     id, tenant_id, chain_address_id, chain, network, address,
                     subject, source, status, derivation_subject, derivation_child)
-                values (?, ?, ?, 'ETH', 'integration', ?, ?, 'API', ?, ?, 0)
+                values (?, ?, ?, 'ETH', 'integration', ?, ?, ?, ?, ?, 0)
                 """, custodyAddressId, tenantId, chainAddressId, address,
-                subjectValue, status, subject);
+                subjectValue, source, status, subject);
         return new DepositFixture(tenantId, custodyAddressId, address, address);
+    }
+
+    private void insertActiveWebhook(UUID tenantId) {
+        jdbc.update("""
+                insert into custody_webhook_endpoint(
+                    id, tenant_id, name, url, secret_ciphertext, status, verified_at)
+                values (?, ?, 'Automatic events', 'https://example.com/hooks',
+                        'ciphertext', 'ACTIVE', now())
+                """, UUID.randomUUID(), tenantId);
+    }
+
+    private int deliveryCount(UUID tenantId) {
+        return jdbc.queryForObject(
+                "select count(*) from custody_webhook_delivery where tenant_id = ?",
+                Integer.class, tenantId);
     }
 
     private UUID insertTenant(String prefix) {

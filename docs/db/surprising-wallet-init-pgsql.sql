@@ -1253,7 +1253,6 @@ CREATE TABLE public.custody_webhook_endpoint (
     url character varying(2048) NOT NULL,
     secret_ciphertext text NOT NULL,
     secret_version integer DEFAULT 1 NOT NULL,
-    subscribed_events text[] DEFAULT ARRAY[]::text[] NOT NULL,
     status character varying(24) DEFAULT 'PENDING_VERIFICATION'::character varying NOT NULL,
     verification_token_hash character varying(128),
     verified_at timestamp with time zone,

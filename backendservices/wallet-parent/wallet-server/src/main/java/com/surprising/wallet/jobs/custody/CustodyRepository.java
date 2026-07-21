@@ -1423,21 +1423,20 @@ public class CustodyRepository {
 
     public WebhookEndpointRecord insertWebhookEndpoint(
             UUID id, UUID tenantId, String name, String url, String encryptedSecret,
-            Set<String> events, String verificationTokenHash, UUID createdBy) {
-        String eventList = events.stream().sorted().collect(Collectors.joining(","));
+            String verificationTokenHash, UUID createdBy) {
         jdbc.update("""
                         insert into custody_webhook_endpoint(
-                            id, tenant_id, name, url, secret_ciphertext, subscribed_events,
+                            id, tenant_id, name, url, secret_ciphertext,
                             verification_token_hash, created_by)
-                        values (?, ?, ?, ?, ?, string_to_array(?, ','), ?, ?)
-                        """, id, tenantId, name, url, encryptedSecret, eventList,
+                        values (?, ?, ?, ?, ?, ?, ?)
+                        """, id, tenantId, name, url, encryptedSecret,
                 verificationTokenHash, createdBy);
         return requireWebhookEndpoint(tenantId, id);
     }
 
     public WebhookEndpointRecord requireWebhookEndpoint(UUID tenantId, UUID endpointId) {
         return jdbc.query("""
-                        select id, tenant_id, name, url, secret_ciphertext, subscribed_events,
+                        select id, tenant_id, name, url, secret_ciphertext,
                                status, verification_token_hash, verified_at, last_delivery_at,
                                created_at, updated_at
                           from custody_webhook_endpoint
@@ -1449,7 +1448,7 @@ public class CustodyRepository {
 
     public List<Map<String, Object>> listWebhookEndpoints(UUID tenantId) {
         return jdbc.query("""
-                        select e.id, e.name, e.url, e.subscribed_events, e.status,
+                        select e.id, e.name, e.url, e.status,
                                e.verified_at, e.last_delivery_at, e.created_at, e.updated_at,
                                count(d.id) filter (
                                    where d.created_at >= now() - interval '24 hours') as delivery_count_24h,
@@ -1468,7 +1467,6 @@ public class CustodyRepository {
                     row.put("id", rs.getObject("id", UUID.class));
                     row.put("name", rs.getString("name"));
                     row.put("url", rs.getString("url"));
-                    row.put("events", sqlArray(rs.getArray("subscribed_events")));
                     row.put("status", rs.getString("status"));
                     row.put("verifiedAt", instantOrNull(rs.getTimestamp("verified_at")));
                     row.put("lastDeliveryAt", instantOrNull(rs.getTimestamp("last_delivery_at")));
@@ -1848,10 +1846,11 @@ public class CustodyRepository {
                                w.external_reference, w.chain, w.asset_symbol, w.to_address,
                                w.amount, w.fee, w.status as previous_status,
                                wo.status as next_status, wo.tx_hash, wo.error_message,
-                               wo.debit_account_id
+                               wo.debit_account_id, a.source as address_source
                           from custody_withdrawal w
                           join withdrawal_order wo
                             on wo.chain = w.chain and wo.order_no = w.order_no
+                          join custody_address a on a.id = w.custody_address_id
                          where w.status <> wo.status
                          order by wo.updated_at, w.id
                          limit ?
@@ -1870,7 +1869,8 @@ public class CustodyRepository {
                         rs.getString("next_status"),
                         rs.getString("tx_hash"),
                         rs.getString("error_message"),
-                        rs.getString("debit_account_id")),
+                        rs.getString("debit_account_id"),
+                        rs.getString("address_source")),
                 Math.min(Math.max(limit, 1), 200));
     }
 
@@ -1887,7 +1887,8 @@ public class CustodyRepository {
         }
         if (eventType != null) {
             insertEventWithDeliveries(
-                    eventId, change.tenantId(), eventType, "WITHDRAWAL", change.orderNo(), payloadJson);
+                    eventId, change.tenantId(), eventType, "WITHDRAWAL", change.orderNo(),
+                    payloadJson, "API".equals(change.addressSource()));
         }
         if ("CONFIRMED".equals(change.nextStatus())) {
             jdbc.update("""
@@ -1924,7 +1925,7 @@ public class CustodyRepository {
     @Transactional(rollbackFor = Throwable.class)
     public UUID insertEventWithDeliveries(UUID eventId, UUID tenantId, String eventType,
                                           String aggregateType, String aggregateId,
-                                          String payloadJson) {
+                                          String payloadJson, boolean webhookEligible) {
         UUID persisted = jdbc.query("""
                         insert into custody_event(
                             id, tenant_id, event_type, aggregate_type, aggregate_id, payload)
@@ -1949,11 +1950,11 @@ public class CustodyRepository {
         jdbc.update("""
                         insert into custody_webhook_delivery(id, tenant_id, endpoint_id, event_id)
                         select gen_random_uuid(), e.tenant_id, e.id, ?
-                          from custody_webhook_endpoint e
+                         from custody_webhook_endpoint e
                          where e.tenant_id = ? and e.status = 'ACTIVE'
-                           and ? = any(e.subscribed_events)
+                           and ?
                         on conflict (endpoint_id, event_id) do nothing
-                        """, persisted, tenantId, eventType);
+                        """, persisted, tenantId, webhookEligible);
         jdbc.update("""
                         update custody_event
                            set status = 'PUBLISHED',
@@ -2090,7 +2091,6 @@ public class CustodyRepository {
                 rs.getString("name"),
                 rs.getString("url"),
                 rs.getString("secret_ciphertext"),
-                sqlArray(rs.getArray("subscribed_events")),
                 rs.getString("status"),
                 rs.getString("verification_token_hash"),
                 instantOrNull(rs.getTimestamp("verified_at")),
@@ -2256,7 +2256,6 @@ public class CustodyRepository {
             String name,
             String url,
             String secretCiphertext,
-            Set<String> events,
             String status,
             String verificationTokenHash,
             Instant verifiedAt,
@@ -2299,7 +2298,8 @@ public class CustodyRepository {
             String nextStatus,
             String txHash,
             String errorMessage,
-            String debitAccountId
+            String debitAccountId,
+            String addressSource
     ) {
     }
 

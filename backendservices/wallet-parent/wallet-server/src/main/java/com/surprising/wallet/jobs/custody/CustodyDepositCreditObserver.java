@@ -33,7 +33,7 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
         String chain = event.chainType().name();
         List<AddressOwner> owners = jdbc.query("""
                         select c.id as custody_address_id, c.tenant_id, c.subject,
-                               c.address, c.memo,
+                               c.address, c.memo, c.source,
                                case when exists (
                                    select 1 from custody_gas_account g
                                     where g.custody_address_id = c.id
@@ -60,6 +60,7 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
                         rs.getString("subject"),
                         rs.getString("address"),
                         rs.getString("memo"),
+                        rs.getString("source"),
                         rs.getString("purpose")),
                 chain, accountId, event.toAddress());
         if (owners.isEmpty()) {
@@ -142,7 +143,8 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
                 "data", data));
 
         repository.insertEventWithDeliveries(
-                eventId, owner.tenantId(), EVENT_TYPE, "DEPOSIT", referenceId, payload);
+                eventId, owner.tenantId(), EVENT_TYPE, "DEPOSIT", referenceId, payload,
+                "API".equals(owner.source()));
     }
 
     private String json(Object value) {
@@ -159,6 +161,7 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
             String subject,
             String address,
             String memo,
+            String source,
             String purpose
     ) {
     }

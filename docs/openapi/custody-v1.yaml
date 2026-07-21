@@ -530,7 +530,10 @@ paths:
     post:
       tags: [Console Webhooks]
       summary: Create a Webhook endpoint
-      description: The signing secret is returned only once.
+      description: |
+        The signing secret is returned only once. Event selection is not
+        configurable: every supported event associated with an API-created
+        custody address is delivered to every active endpoint.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -1601,19 +1604,8 @@ components:
         updatedAt: { type: string, format: date-time }
     CreateWebhook:
       type: object
-      required: [name, url, events]
+      additionalProperties: false
+      required: [name, url]
       properties:
         name: { type: string, maxLength: 120 }
         url: { type: string, format: uri, maxLength: 2048 }
-        events:
-          type: array
-          uniqueItems: true
-          items:
-            type: string
-            enum:
-              - DEPOSIT.CONFIRMED
-              - WITHDRAWAL.CREATED
-              - WITHDRAWAL.BROADCAST
-              - WITHDRAWAL.BROADCAST_UNKNOWN
-              - WITHDRAWAL.CONFIRMED
-              - WITHDRAWAL.FAILED

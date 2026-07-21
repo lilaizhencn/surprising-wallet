@@ -130,7 +130,8 @@ public class CustodyWithdrawalService {
                 status, null, null, normalizedSource, Instant.now());
         repository.insertEventWithDeliveries(
                 eventId, tenant.id(), "WITHDRAWAL.CREATED", "WITHDRAWAL", orderNo,
-                eventPayload(eventId, "WITHDRAWAL.CREATED", view));
+                eventPayload(eventId, "WITHDRAWAL.CREATED", view),
+                "API".equals(address.source()));
         repository.audit(
                 tenant.id(), principal.actorType().name(), principal.actorId().toString(),
                 "WITHDRAWAL.CREATE", "CUSTODY_WITHDRAWAL", withdrawalId.toString(), sourceIp,
