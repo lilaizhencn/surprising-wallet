@@ -15,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -39,7 +38,7 @@ public class CustodyConsoleSecurityController {
     public CustodyApiKeyService.CreatedApiKey createApiKey(@RequestBody CreateApiKeyRequest body,
                                                            HttpServletRequest request) {
         CustodyPrincipal principal = requireTenantAdmin(request);
-        return apiKeys.create(principal.tenantId(), principal.actorId(), body.name(), body.scopes(),
+        return apiKeys.create(principal.tenantId(), principal.actorId(), body.name(),
                 CustodyRequestSupport.clientIp(request));
     }
 
@@ -128,7 +127,7 @@ public class CustodyConsoleSecurityController {
         return result;
     }
 
-    public record CreateApiKeyRequest(String name, Set<String> scopes) {
+    public record CreateApiKeyRequest(String name) {
     }
 
     public record IpEnforcementRequest(boolean enabled) {

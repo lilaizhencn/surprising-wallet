@@ -81,6 +81,7 @@ class CustodySchemaContractTest {
         assertTrue(sql.contains("FOREIGN KEY (tenant_id, deposit_record_id) REFERENCES public.deposit_record(tenant_id, id)"));
         assertTrue(sql.contains("FOREIGN KEY (tenant_id, withdrawal_order_id) REFERENCES public.withdrawal_order(tenant_id, id)"));
         assertFalse(sql.contains("subscribed_events"));
+        assertFalse(sql.contains("scopes text[]"));
 
         assertTrue(sql.contains("token_config_chain_network_contract_address_key"));
     }

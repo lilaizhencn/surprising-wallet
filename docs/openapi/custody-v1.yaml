@@ -413,7 +413,7 @@ paths:
     post:
       tags: [Console security]
       summary: Create an API key
-      description: The plaintext secret is returned only once.
+      description: The plaintext secret is returned only once. Every API key can call all tenant API operations.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -421,21 +421,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name, scopes]
+              required: [name]
               properties:
                 name: { type: string, maxLength: 120 }
-                scopes:
-                  type: array
-                  uniqueItems: true
-                  items:
-                    type: string
-                    enum:
-                      - addresses:read
-                      - addresses:write
-                      - assets:read
-                      - deposits:read
-                      - withdrawals:read
-                      - withdrawals:write
       responses:
         '200': { description: One-time key ID and secret }
         default: { $ref: '#/components/responses/Error' }

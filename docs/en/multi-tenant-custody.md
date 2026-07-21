@@ -147,7 +147,7 @@ accounts keep their adapter-specific preparation checks.
 
 ## API authentication
 
-API keys have explicit scopes and their secrets are displayed once. The secret
+API keys can call every tenant API operation without selecting scopes. Their secrets are displayed once. The secret
 is encrypted at rest with `SW_CUSTODY_SECRET_MASTER_KEY`.
 
 Canonical request:
@@ -284,7 +284,7 @@ Tenant administrators:
 - create, search, label, disable, and reactivate addresses;
 - query deposit and withdrawal records;
 - create a Console withdrawal;
-- create/revoke API keys and choose scopes;
+- create/revoke full-access API keys;
 - enable/configure an IP allowlist;
 - create, verify, disable, and reactivate Webhook endpoints;
 - inspect complete Webhook attempt history and manually retry failed deliveries;

@@ -870,7 +870,6 @@ CREATE TABLE public.custody_api_key (
     name character varying(120) NOT NULL,
     secret_ciphertext text NOT NULL,
     secret_version integer DEFAULT 1 NOT NULL,
-    scopes text[] DEFAULT ARRAY[]::text[] NOT NULL,
     status character varying(24) DEFAULT 'ACTIVE'::character varying NOT NULL,
     last_used_at timestamp with time zone,
     last_used_ip inet,

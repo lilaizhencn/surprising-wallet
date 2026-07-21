@@ -15,10 +15,6 @@ import java.util.UUID;
 
 @Service
 public class CustodyApiKeyService {
-    public static final Set<String> ALLOWED_SCOPES = Set.of(
-            "addresses:read", "addresses:write", "assets:read", "deposits:read",
-            "withdrawals:read", "withdrawals:write", "chains:read");
-
     private final CustodyRepository repository;
     private final CustodyCryptoService crypto;
     private final CustodySecurityProperties properties;
@@ -31,20 +27,19 @@ public class CustodyApiKeyService {
     }
 
     @Transactional(rollbackFor = Throwable.class)
-    public CreatedApiKey create(UUID tenantId, UUID actorId, String name, Set<String> scopes, String sourceIp) {
+    public CreatedApiKey create(UUID tenantId, UUID actorId, String name, String sourceIp) {
         String normalizedName = name == null ? "" : name.trim();
         if (normalizedName.isBlank() || normalizedName.length() > 120) {
             throw new IllegalArgumentException("API key name is required and must not exceed 120 characters");
         }
-        Set<String> normalizedScopes = normalizeScopes(scopes);
         UUID id = UUID.randomUUID();
         String keyId = "swk_" + crypto.randomSecret(18);
         String secret = "sws_" + crypto.randomSecret(32);
         ApiKeyRecord saved = repository.insertApiKey(
-                id, tenantId, keyId, normalizedName, crypto.encrypt(secret), normalizedScopes, actorId);
+                id, tenantId, keyId, normalizedName, crypto.encrypt(secret), actorId);
         repository.audit(tenantId, ActorType.TENANT_USER.name(), actorId.toString(), "API_KEY.CREATE",
                 "API_KEY", id.toString(), sourceIp, "{\"keyId\":\"" + keyId + "\"}");
-        return new CreatedApiKey(saved.id(), keyId, secret, saved.name(), saved.scopes(), saved.createdAt());
+        return new CreatedApiKey(saved.id(), keyId, secret, saved.name(), saved.createdAt());
     }
 
     public List<Map<String, Object>> list(UUID tenantId) {
@@ -100,7 +95,7 @@ public class CustodyApiKeyService {
                 credential.tenantId(),
                 credential.tenantSlug(),
                 "API_KEY",
-                credential.scopes());
+                Set.of("*"));
     }
 
     public String canonicalRequest(long timestampSeconds, String nonce, String method,
@@ -112,26 +107,11 @@ public class CustodyApiKeyService {
                 + crypto.sha256(body == null ? new byte[0] : body);
     }
 
-    private static Set<String> normalizeScopes(Set<String> scopes) {
-        if (scopes == null || scopes.isEmpty()) {
-            throw new IllegalArgumentException("at least one API scope is required");
-        }
-        Set<String> result = scopes.stream()
-                .map(scope -> scope == null ? "" : scope.trim().toLowerCase(Locale.ROOT))
-                .filter(scope -> !scope.isBlank())
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        if (result.isEmpty() || !ALLOWED_SCOPES.containsAll(result)) {
-            throw new IllegalArgumentException("unsupported API key scope");
-        }
-        return result;
-    }
-
     public record CreatedApiKey(
             UUID id,
             String keyId,
             String secret,
             String name,
-            Set<String> scopes,
             Instant createdAt
     ) {
     }

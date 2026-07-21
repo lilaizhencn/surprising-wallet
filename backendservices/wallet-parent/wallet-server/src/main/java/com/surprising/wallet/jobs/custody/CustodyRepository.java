@@ -5,12 +5,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Array;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -18,7 +16,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Repository
 public class CustodyRepository {
@@ -432,13 +429,12 @@ public class CustodyRepository {
     }
 
     public ApiKeyRecord insertApiKey(UUID id, UUID tenantId, String keyId, String name,
-                                     String encryptedSecret, Set<String> scopes, UUID createdBy) {
-        String scopeList = normalizedScopes(scopes).stream().sorted().collect(Collectors.joining(","));
+                                     String encryptedSecret, UUID createdBy) {
         jdbc.update("""
                         insert into custody_api_key(
-                            id, tenant_id, key_id, name, secret_ciphertext, scopes, created_by)
-                        values (?, ?, ?, ?, ?, string_to_array(?, ','), ?)
-                        """, id, tenantId, keyId, name, encryptedSecret, scopeList, createdBy);
+                            id, tenant_id, key_id, name, secret_ciphertext, created_by)
+                        values (?, ?, ?, ?, ?, ?)
+                        """, id, tenantId, keyId, name, encryptedSecret, createdBy);
         return requireApiKey(keyId);
     }
 
@@ -446,7 +442,7 @@ public class CustodyRepository {
         return jdbc.query("""
                         select k.id, k.tenant_id, t.slug as tenant_slug, t.status as tenant_status,
                                t.ip_allowlist_enabled, k.key_id, k.name, k.secret_ciphertext,
-                               k.scopes, k.status, k.expires_at, k.created_at
+                               k.status, k.expires_at, k.created_at
                           from custody_api_key k
                           join custody_tenant t on t.id = k.tenant_id
                          where k.key_id = ?
@@ -459,7 +455,7 @@ public class CustodyRepository {
         return jdbc.query("""
                         select k.id, k.tenant_id, t.slug as tenant_slug, t.status as tenant_status,
                                t.ip_allowlist_enabled, k.key_id, k.name, k.secret_ciphertext,
-                               k.scopes, k.status, k.expires_at, k.created_at
+                               k.status, k.expires_at, k.created_at
                           from custody_api_key k
                           join custody_tenant t on t.id = k.tenant_id
                          where k.key_id = ?
@@ -469,7 +465,7 @@ public class CustodyRepository {
 
     public List<Map<String, Object>> listApiKeys(UUID tenantId) {
         return jdbc.query("""
-                        select id, key_id, name, scopes, status, last_used_at, last_used_ip,
+                        select id, key_id, name, status, last_used_at, last_used_ip,
                                expires_at, created_at, revoked_at
                           from custody_api_key
                          where tenant_id = ?
@@ -479,7 +475,6 @@ public class CustodyRepository {
                     row.put("id", rs.getObject("id", UUID.class));
                     row.put("keyId", rs.getString("key_id"));
                     row.put("name", rs.getString("name"));
-                    row.put("scopes", sqlArray(rs.getArray("scopes")));
                     row.put("status", rs.getString("status"));
                     row.put("lastUsedAt", instantOrNull(rs.getTimestamp("last_used_at")));
                     row.put("lastUsedIp", rs.getString("last_used_ip"));
@@ -2057,7 +2052,6 @@ public class CustodyRepository {
                 rs.getString("key_id"),
                 rs.getString("name"),
                 rs.getString("secret_ciphertext"),
-                sqlArray(rs.getArray("scopes")),
                 rs.getString("status"),
                 instantOrNull(rs.getTimestamp("expires_at")),
                 rs.getTimestamp("created_at").toInstant());
@@ -2097,26 +2091,6 @@ public class CustodyRepository {
                 instantOrNull(rs.getTimestamp("last_delivery_at")),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant());
-    }
-
-    private static Set<String> normalizedScopes(Set<String> scopes) {
-        if (scopes == null || scopes.isEmpty()) {
-            throw new IllegalArgumentException("at least one API scope is required");
-        }
-        return scopes.stream()
-                .map(scope -> scope == null ? "" : scope.trim().toLowerCase(Locale.ROOT))
-                .filter(scope -> !scope.isBlank())
-                .collect(Collectors.toUnmodifiableSet());
-    }
-
-    private static Set<String> sqlArray(Array array) throws SQLException {
-        if (array == null) {
-            return Set.of();
-        }
-        Object value = array.getArray();
-        return value instanceof String[] strings
-                ? Arrays.stream(strings).collect(Collectors.toUnmodifiableSet())
-                : Set.of();
     }
 
     private static Instant instantOrNull(Timestamp timestamp) {
@@ -2189,7 +2163,6 @@ public class CustodyRepository {
             String keyId,
             String name,
             String secretCiphertext,
-            Set<String> scopes,
             String status,
             Instant expiresAt,
             Instant createdAt
