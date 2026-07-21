@@ -1,0 +1,15 @@
+{
+  "name": "surprising-wallet-tenant-demo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A small exchange-style tenant application for end-to-end Surprising Wallet validation.",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test",
+    "verify:running": "node scripts/verify-running.js"
+  },
+  "engines": {
+    "node": ">=22.5"
+  }
+}

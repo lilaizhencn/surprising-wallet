@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exchange Tenant Demo</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">SURPRISING WALLET · TENANT</p>
+      <h1>模拟交易所</h1>
+      <p class="subtitle">用户地址、资产账本、提现与 Webhook 全流程验收端</p>
+    </div>
+    <div class="status"><span id="statusDot"></span><strong id="statusText">检查配置中</strong></div>
+  </header>
+
+  <main>
+    <section class="summary" id="summary"></section>
+
+    <nav>
+      <button class="active" data-tab="users">用户与地址</button>
+      <button data-tab="assets">用户资产</button>
+      <button data-tab="withdrawals">提现</button>
+      <button data-tab="events">回调明细</button>
+      <button data-tab="settings">连接配置</button>
+    </nav>
+
+    <section class="tab active" id="tab-users">
+      <div class="grid two">
+        <article class="panel">
+          <h2>创建交易所用户</h2>
+          <form id="userForm">
+            <label>用户标识<input name="externalId" placeholder="user-10001" required></label>
+            <label>显示名称<input name="displayName" placeholder="张三" required></label>
+            <button type="submit">创建用户</button>
+          </form>
+        </article>
+        <article class="panel">
+          <h2>生成充值地址</h2>
+          <form id="addressForm">
+            <label>用户<select name="userId" id="addressUser" required></select></label>
+            <label>已开通链<select name="chain" id="addressChain" required></select></label>
+            <label>地址版本<input name="addressVersion" type="number" min="0" value="0" required></label>
+            <button type="submit">调用钱包 API</button>
+          </form>
+        </article>
+      </div>
+      <article class="panel table-panel"><h2>用户</h2><div id="usersTable"></div></article>
+      <article class="panel table-panel"><h2>充值地址</h2><div id="addressesTable"></div></article>
+    </section>
+
+    <section class="tab" id="tab-assets">
+      <div class="toolbar"><button id="refreshAssets">刷新并对账</button></div>
+      <div class="grid two">
+        <article class="panel table-panel"><h2>交易所用户账本</h2><div id="balancesTable"></div></article>
+        <article class="panel table-panel"><h2>钱包租户总资产</h2><div id="walletAssetsTable"></div></article>
+      </div>
+      <article class="panel table-panel"><h2>本地资产流水</h2><div id="ledgerTable"></div></article>
+    </section>
+
+    <section class="tab" id="tab-withdrawals">
+      <article class="panel">
+        <h2>模拟用户发起提现</h2>
+        <form id="withdrawalForm" class="form-grid">
+          <label>充值地址/用户<select name="custodyAddressId" id="withdrawalAddress" required></select></label>
+          <label>资产<input name="assetSymbol" placeholder="BTC / USDC" required></label>
+          <label>目标地址<input name="toAddress" placeholder="链上外部地址" required></label>
+          <label>金额<input name="amount" inputmode="decimal" placeholder="0.01" required></label>
+          <button type="submit">确认提现</button>
+        </form>
+      </article>
+      <article class="panel table-panel"><h2>提现记录</h2><div id="withdrawalsTable"></div></article>
+    </section>
+
+    <section class="tab" id="tab-events">
+      <div class="toolbar"><button id="refreshEvents">刷新回调</button></div>
+      <article class="panel table-panel"><h2>Webhook 接收记录</h2><div id="eventsTable"></div></article>
+    </section>
+
+    <section class="tab" id="tab-settings">
+      <article class="panel settings">
+        <h2>钱包连接配置</h2>
+        <p>Secret 只保存在本 Demo 的本地 SQLite 数据库，不提交到 Git。</p>
+        <form id="configForm">
+          <label>钱包服务地址<input name="walletBaseUrl" value="http://127.0.0.1:8002" required></label>
+          <label>API Key ID<input name="walletKeyId" placeholder="swk_..." required></label>
+          <label>API Secret<input name="walletApiSecret" type="password" placeholder="sws_..." required></label>
+          <label>Webhook Secret<input name="webhookSecret" type="password" placeholder="whsec_...（完成回调配置后填写）"></label>
+          <label>本 Demo 回调地址<input id="webhookUrl" readonly></label>
+          <button type="submit">保存配置</button>
+        </form>
+      </article>
+    </section>
+  </main>
+
+  <div id="toast"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+data/*.db
+data/*.db-*
+node_modules/
+.env
+reports/runs/*.json
