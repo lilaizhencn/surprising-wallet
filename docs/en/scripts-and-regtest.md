@@ -40,6 +40,11 @@ scripts/regtest/all-chain-regtest.sh test-utxo
 scripts/regtest/all-chain-regtest.sh test-xmr
 ```
 
+`test-utxo` runs BTC, LTC, DOGE, and BCH sequentially. For each chain it resets
+the explicitly named regtest test volume, starts from genesis, runs that chain's
+full-flow, concurrency, and bulk-broadcast tests, stops the node, and only then
+moves to the next chain. It uses a temporary database that is removed on exit.
+
 `test-xmr` requires Docker, `curl`, `python3`, Maven, and a PostgreSQL database
 initialized from `docs/db/surprising-wallet-init-pgsql.sql`. By default it uses
 `jdbc:postgresql://127.0.0.1:5432/wallet`, user `wallet`, and an empty password;
@@ -94,4 +99,3 @@ docs/db/surprising-wallet-init-pgsql.sql
 ```
 
 The `scripts/` directory no longer stores standalone SQL upgrade or cutover scripts. Fresh local databases and test2/sandbox databases should start from this init SQL.
-

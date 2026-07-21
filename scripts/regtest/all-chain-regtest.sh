@@ -128,16 +128,7 @@ dot_runtime_down() {
 }
 
 test_utxo() {
-  init_local_nodes
-  mvn_wallet_test \
-    -Dsurefire.failIfNoSpecifiedTests=false \
-    -Dbitcoinlike.regtest.enabled=true \
-    -Dbitcoinlike.concurrency.enabled=true \
-    -Dbitcoinlike.broadcast.enabled=true \
-    -Dbitcoinlike.broadcast.deposits="${BITCOINLIKE_BROADCAST_DEPOSITS:-40}" \
-    -Dbitcoinlike.broadcast.withdrawals="${BITCOINLIKE_BROADCAST_WITHDRAWALS:-20}" \
-    -Dtest="${UTXO_TEST}" \
-    test
+  "${ROOT_DIR}/scripts/regtest/run-bitcoinlike-matrix.sh"
 }
 
 test_evm() {

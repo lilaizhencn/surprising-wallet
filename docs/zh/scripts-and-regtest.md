@@ -40,6 +40,10 @@ scripts/regtest/all-chain-regtest.sh test-utxo
 scripts/regtest/all-chain-regtest.sh test-xmr
 ```
 
+`test-utxo` 会按 BTC、LTC、DOGE、BCH 顺序执行。每条链先重置明确命名的
+regtest 测试卷，从创世状态启动，只运行该链的全流程、并发和批量广播测试，完成后
+立即停止节点，再进入下一条链。数据库使用临时实例并在脚本退出时清理。
+
 `test-xmr` 需要 Docker、`curl`、`python3`、Maven，以及已经用
 `docs/db/surprising-wallet-init-pgsql.sql` 初始化过的 PostgreSQL 数据库。
 默认连接 `jdbc:postgresql://127.0.0.1:5432/wallet`、用户 `wallet`、空密码；
@@ -94,4 +98,3 @@ docs/db/surprising-wallet-init-pgsql.sql
 ```
 
 `scripts/` 目录不再保存独立 SQL 升级或 cutover 脚本。全新本地库、test2/sandbox 库都以这份 init SQL 为准。
-

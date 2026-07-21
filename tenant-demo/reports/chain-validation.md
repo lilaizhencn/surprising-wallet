@@ -27,16 +27,16 @@
 | ARBITRUM | sepolia 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | AVAX_C | fuji 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | BASE | sepolia 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
-| BCH | regtest 优先 | 无 | 待测试 | 仓库已有 regtest 基础设施 |
+| BCH | regtest | 无 | 钱包资金流通过 | 全新链充值、提现、归集、幂等、并发、防双花和批量广播通过；待租户 API/Webhook 实际资金流 |
 | BNB | testnet 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
-| BTC | regtest | 无 | 待测试 | 仓库已有 regtest 基础设施 |
-| DOGE | regtest | 无 | 待测试 | 仓库已有 regtest 基础设施 |
+| BTC | regtest | 无 | 钱包资金流通过 | 全新链充值、提现、归集、幂等、并发、防双花和批量广播通过；待租户 API/Webhook 实际资金流 |
+| DOGE | regtest | 无 | 钱包资金流通过 | 全新链充值、提现、归集、幂等、并发、防双花和批量广播通过；待租户 API/Webhook 实际资金流 |
 | DOT | westend / 本地 runtime | 待核对 | 待测试 | Profile 当前关闭 |
 | ETH | sepolia 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | HYPERCORE | testnet | HYPE | 待测试 | - |
 | HYPEREVM | testnet 配置 + Hardhat | USDC | 钱包资金流通过 | HYPE/USDC 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | LINEA | sepolia 配置 + Hardhat | USDC | 钱包资金流通过 | ETH_LINEA/USDC 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
-| LTC | regtest 优先 | 无 | 待测试 | 仓库已有 regtest 基础设施 |
+| LTC | regtest | 无 | 钱包资金流通过 | 全新链充值、提现、归集、幂等、并发、防双花和批量广播通过；待租户 API/Webhook 实际资金流 |
 | MANTLE | sepolia 配置 + Hardhat | 无 | 钱包资金流通过 | 原生 MNT 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | NEAR | testnet / sandbox | 待核对 | 待测试 | Profile 当前关闭 |
 | OPTIMISM | sepolia 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
@@ -76,3 +76,13 @@
 - 所有订单进入终态，没有负数可用、锁定或总余额；
 - 修复 `evm_tx` 与 `tron_tx` upsert 冲突更新时交叉引用错误表名的问题；
 - 仍需让租户 Demo 通过正式 API/Webhook 驱动 EVM 实际资金流，完成 SaaS 层验收。
+
+## Bitcoin-like 当前证据
+
+- BTC、LTC、DOGE、BCH 分别从创世 regtest 状态启动，测试完一条立即停止后再启动下一条；
+- 每条链完成真实充值、6 确认、重复入账幂等、提现、UTXO 锁定、归集及余额检查；
+- 每条链完成 32 路并发入账、并发冻结、UTXO 防重复锁、提现/归集任务抢占；
+- 每条链完成 8 笔并发充值和 4 笔并发提现广播，全部产生真实 txid；
+- 所有账本均保持非负，临时 PostgreSQL 数据库已删除，4 个节点均处于停止状态；
+- 修复 regtest profile 切换顺序，确保启用 regtest 前关闭同链已有测试网络；
+- 仍需让租户 Demo 通过正式 API/Webhook 驱动 UTXO 实际资金流，完成 SaaS 层验收。

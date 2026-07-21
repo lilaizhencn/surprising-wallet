@@ -29,6 +29,7 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
@@ -112,14 +113,11 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         Assumptions.assumeTrue(Boolean.getBoolean("bitcoinlike.regtest.enabled"),
                 "set -Dbitcoinlike.regtest.enabled=true to run real BTC/LTC/DOGE/BCH regtest flow validation");
         Path root = repoRoot();
-        Assumptions.assumeTrue(Files.isExecutable(root.resolve(BTC.script())),
-                "missing executable " + BTC.script());
-        Assumptions.assumeTrue(Files.isExecutable(root.resolve(LTC.script())),
-                "missing executable " + LTC.script());
-        Assumptions.assumeTrue(Files.isExecutable(root.resolve(DOGE.script())),
-                "missing executable " + DOGE.script());
-        Assumptions.assumeTrue(Files.isExecutable(root.resolve(BCH.script())),
-                "missing executable " + BCH.script());
+        List<RegtestChain> chains = selectedChains();
+        for (RegtestChain chain : chains) {
+            Assumptions.assumeTrue(Files.isExecutable(root.resolve(chain.script())),
+                    "missing executable " + chain.script());
+        }
 
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 env("BITCOINLIKE_REGTEST_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
@@ -132,10 +130,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
             ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
             try {
                 ensureBitcoinLikeProfiles(jdbc);
-                runFullFlow(root, BTC, jdbc, repository);
-                runFullFlow(root, LTC, jdbc, repository);
-                runFullFlow(root, DOGE, jdbc, repository);
-                runFullFlow(root, BCH, jdbc, repository);
+                for (RegtestChain chain : chains) {
+                    runFullFlow(root, chain, jdbc, repository);
+                }
             } finally {
                 connection.rollback();
             }
@@ -157,10 +154,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
 
         try {
             ensureBitcoinLikeProfiles(jdbc);
-            runConcurrencyGuards(BTC, jdbc, repository, runId);
-            runConcurrencyGuards(LTC, jdbc, repository, runId);
-            runConcurrencyGuards(DOGE, jdbc, repository, runId);
-            runConcurrencyGuards(BCH, jdbc, repository, runId);
+            for (RegtestChain chain : selectedChains()) {
+                runConcurrencyGuards(chain, jdbc, repository, runId);
+            }
         } finally {
             cleanupConcurrencyRows(jdbc, runId);
         }
@@ -187,13 +183,33 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
 
         try {
             ensureBitcoinLikeProfiles(jdbc);
-            runBulkBroadcastFlow(root, BTC, jdbc, repository, runId, cleanupTxids, depositCount, withdrawalCount);
-            runBulkBroadcastFlow(root, LTC, jdbc, repository, runId, cleanupTxids, depositCount, withdrawalCount);
-            runBulkBroadcastFlow(root, DOGE, jdbc, repository, runId, cleanupTxids, depositCount, withdrawalCount);
-            runBulkBroadcastFlow(root, BCH, jdbc, repository, runId, cleanupTxids, depositCount, withdrawalCount);
+            for (RegtestChain chain : selectedChains()) {
+                runBulkBroadcastFlow(
+                        root, chain, jdbc, repository, runId, cleanupTxids, depositCount, withdrawalCount);
+            }
         } finally {
             cleanupBroadcastRows(jdbc, runId, cleanupTxids);
         }
+    }
+
+    private static List<RegtestChain> selectedChains() {
+        String configured = System.getProperty("bitcoinlike.regtest.chains", "BTC,LTC,DOGE,BCH");
+        List<RegtestChain> selected = Arrays.stream(configured.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .map(value -> switch (value.toUpperCase(Locale.ROOT)) {
+                    case "BTC" -> BTC;
+                    case "LTC" -> LTC;
+                    case "DOGE" -> DOGE;
+                    case "BCH" -> BCH;
+                    default -> throw new IllegalArgumentException("unsupported bitcoin-like regtest chain " + value);
+                })
+                .distinct()
+                .toList();
+        if (selected.isEmpty()) {
+            throw new IllegalArgumentException("bitcoinlike.regtest.chains must not be empty");
+        }
+        return selected;
     }
 
     private void runFullFlow(Path root, RegtestChain chain, JdbcTemplate jdbc,
@@ -818,6 +834,14 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
     }
 
     private static void ensureBitcoinLikeProfiles(JdbcTemplate jdbc) {
+        jdbc.update("""
+                update chain_profile
+                   set enabled = false,
+                       updated_at = now()
+                 where chain in ('BTC', 'LTC', 'DOGE', 'BCH')
+                   and network <> 'regtest'
+                   and enabled = true
+                """);
         jdbc.update("""
                 insert into chain_profile(chain, network, family, runtime_currency_id, bip44_coin_type,
                                           native_symbol, deposit_confirmations, withdraw_confirmations,
