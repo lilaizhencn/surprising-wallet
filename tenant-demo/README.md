@@ -30,6 +30,18 @@ TEST_CHAIN=APTOS npm run verify:running
 
 该脚本会通过 Demo 创建一个独立用户，验证地址幂等、地址轮换、已开通链和租户资产 API。后续逐链测试都复用同一入口。
 
+从“平台创建租户”开始执行完整初始化时，先启动钱包和 Demo，然后提供开发环境管理员凭证：
+
+```bash
+PLATFORM_ADMIN_EMAIL='platform@example.com' \
+PLATFORM_ADMIN_PASSWORD='development-password' \
+TENANT_ADMIN_PASSWORD='temporary-tenant-password' \
+TEST_CHAIN=APTOS \
+npm run bootstrap:tenant
+```
+
+脚本会依次创建隔离租户和租户管理员、登录租户、开通指定链、生成归集/Gas 地址、创建全权限 API Key、把凭证写入 Demo 本地数据库、创建并验证 Webhook。密码和生成的 Secret 不会打印。每次运行默认使用新的测试 Slug；也可以通过 `TEST_RUN_ID`、`TENANT_SLUG` 和 `TENANT_ADMIN_EMAIL` 指定。
+
 访问 <http://127.0.0.1:9300>。默认 Webhook 地址：
 
 ```text

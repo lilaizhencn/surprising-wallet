@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning src/server.js",
     "test": "node --disable-warning=ExperimentalWarning --test",
+    "bootstrap:tenant": "node scripts/bootstrap-tenant.js",
     "verify:running": "node scripts/verify-running.js"
   },
   "engines": {
