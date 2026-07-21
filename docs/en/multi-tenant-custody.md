@@ -87,14 +87,19 @@ constraint makes concurrent requests return one stable address. `childIndex` is
 internal derivation data and is not exposed by the tenant address API. The `__sw_` prefix
 is reserved for wallet-managed system accounts.
 
-For every enabled tenant chain, the asset overview can generate one
+For every enabled tenant chain, Tenant chains can generate one
 wallet-managed collection address. It uses the reserved derivation subject and
 is fixed at `childIndex=1`. All EVM chains for one tenant share the
 `__sw_collection__:evm` derivation subject and therefore the exact same address;
 non-EVM chains retain chain-specific subjects. Repeated generation for the same
 tenant and chain returns the same address. Confirmed native coins at this address also fund that
-chain's network-fee operations. The asset overview lists every enabled chain,
-including chains without an address or balance.
+chain's network-fee operations. Tenant chains displays and copies this address;
+there is no separate Gas-pool page.
+
+A tenant can only see and enable tokens already configured and enabled by a
+platform administrator. Each available token has only three switches: enabled,
+deposits, and withdrawals. Deposits or withdrawals cannot be enabled while the
+token is disabled. A platform-disabled token cannot be enabled by a tenant.
 
 Monero does not use BIP44. Its wallet RPC creates a subaddress recorded as
 `monero-wallet-rpc:m/0/{subaddressIndex}`.
@@ -124,11 +129,11 @@ The tenant consumes the event, maps `subject` to its customer, and credits its l
 
 ## Asset truth
 
-`ledger_balance` is the balance source of truth. Tenant asset overview joins
-all account IDs derived for every customer custody address, including token
-accounts and disabled addresses, then aggregates by `chain + asset_symbol`.
-Dedicated Gas station addresses and balances are shown separately and are not
-included in customer assets.
+`ledger_balance` is the balance source of truth. The overview asset details list
+native coins for opened chains and tenant-enabled tokens, including zero balances.
+Native coins and tokens are peers. A token enabled on multiple chains is shown as
+one aggregate row that expands into per-chain balances. Values aggregate all
+related account IDs by `chain + asset_symbol`.
 
 The overview returns:
 
@@ -231,18 +236,18 @@ HTTP result, duration, error, next attempt, retry cycle, and lifetime attempt
 number. Expired worker leases are recovered as explicit history entries, and
 attempt fencing prevents a late stale worker from overwriting the newer result.
 
-## Tenant activation and Gas station
+## Tenant activation and network-fee address
 
 The Console onboarding checklist is complete only after the tenant has:
 
 1. created an API key and copied its one-time secret;
 2. enabled an IP allowlist with at least one CIDR;
 3. created and verified a Webhook endpoint;
-4. created a Gas station account for the required network;
+4. generated the collection/network-fee address in Tenant chains;
 5. funded that account with confirmed native coin;
 6. allocated at least one customer address.
 
-A Gas station account is a dedicated tenant address for a network's native
+A collection/network-fee account is a dedicated tenant address for a network's native
 coin. Confirmed funding is collected through the normal chain workflow and
 becomes an auditable prepaid network-fee balance. It does not appear in
 customer addresses, customer deposits, or customer asset totals.

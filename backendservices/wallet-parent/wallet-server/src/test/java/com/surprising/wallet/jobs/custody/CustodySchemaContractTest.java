@@ -32,6 +32,7 @@ class CustodySchemaContractTest {
                 "custody_gas_usage", "custody_ledger_entry", "custody_event", "custody_webhook_delivery",
                 "custody_webhook_delivery_attempt",
                 "custody_idempotency_key", "custody_audit_log", "custody_tenant_chain",
+                "custody_tenant_token",
                 "custody_asset_price"}) {
             assertTrue(sql.contains("CREATE TABLE public." + table), table + " is required");
         }
@@ -82,6 +83,8 @@ class CustodySchemaContractTest {
         assertTrue(sql.contains("FOREIGN KEY (tenant_id, withdrawal_order_id) REFERENCES public.withdrawal_order(tenant_id, id)"));
         assertFalse(sql.contains("subscribed_events"));
         assertFalse(sql.contains("scopes text[]"));
+        assertTrue(sql.contains("deposit_enabled boolean DEFAULT false NOT NULL"));
+        assertTrue(sql.contains("withdrawal_enabled boolean DEFAULT false NOT NULL"));
 
         assertTrue(sql.contains("token_config_chain_network_contract_address_key"));
     }

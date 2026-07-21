@@ -505,6 +505,35 @@ class CustodyOperationsIntegrationTest {
             service.requireActive(tenantId, "TRON");
             assertTrue(service.list(principal).stream()
                     .anyMatch(chain -> chain.chain().equals("TRON") && chain.enabled()));
+            Long tokenConfigId = jdbc.queryForObject("""
+                    select id from token_config
+                     where chain = 'TRON' and symbol = 'USDT' and enabled = true
+                    """, Long.class);
+            jdbc.update("update token_config set enabled = false where id = ?", tokenConfigId);
+            assertTrue(service.list(principal).stream()
+                    .filter(chain -> chain.chain().equals("TRON"))
+                    .flatMap(chain -> chain.tokens().stream())
+                    .noneMatch(row -> row.symbol().equals("USDT")));
+            assertThrows(IllegalArgumentException.class, () -> service.setToken(
+                    principal, "TRON", "USDT",
+                    new CustodyTenantChainService.TokenSettings(true, true, true),
+                    "127.0.0.1"));
+            jdbc.update("update token_config set enabled = true where id = ?", tokenConfigId);
+            var token = service.setToken(
+                    principal, "TRON", "USDT",
+                    new CustodyTenantChainService.TokenSettings(true, true, true),
+                    "127.0.0.1");
+            assertTrue(token.enabled());
+            assertTrue(token.depositEnabled());
+            assertTrue(token.withdrawalEnabled());
+            assertTrue(service.list(principal).stream()
+                    .filter(chain -> chain.chain().equals("TRON"))
+                    .flatMap(chain -> chain.tokens().stream())
+                    .anyMatch(row -> row.symbol().equals("USDT") && row.enabled()));
+            jdbc.update("update token_config set enabled = false where id = ?", tokenConfigId);
+            assertFalse(chainRepository.depositEnabled(tenantId, "TRON", "USDT"));
+            assertFalse(chainRepository.withdrawalEnabled(tenantId, "TRON", "USDT"));
+            jdbc.update("update token_config set enabled = true where id = ?", tokenConfigId);
 
             var closed = service.setEnabled(principal, "TRON", false, "127.0.0.1");
             assertFalse(closed.enabled());
@@ -601,7 +630,7 @@ class CustodyOperationsIntegrationTest {
     }
 
     @Test
-    void dashboardListsOpenedChainsBeforeTheyHaveAddressesOrBalances() {
+    void dashboardListsOpenedNativeAssetsBeforeTheyHaveAddressesOrBalances() {
         transactions.executeWithoutResult(status -> {
             UUID tenantId = createTenant();
             UUID administratorId = UUID.randomUUID();
@@ -618,19 +647,17 @@ class CustodyOperationsIntegrationTest {
             chainRepository.setStatus(tenantId, "TRON", "ACTIVE", administratorId);
 
             CustodyAssetDashboardService service = new CustodyAssetDashboardService(
-                    new CustodyAssetDashboardRepository(jdbc), new CustodyRepository(jdbc),
-                    chainRepository);
+                    new CustodyAssetDashboardRepository(jdbc), new CustodyRepository(jdbc));
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER,
                     administratorId, tenantId, slug, "TENANT_ADMIN", java.util.Set.of("assets:read"));
 
             var dashboard = service.dashboard(principal);
-            assertTrue(dashboard.assets().isEmpty());
-            assertEquals(1, dashboard.openedChains().size());
-            var tron = dashboard.openedChains().getFirst();
+            assertEquals(1, dashboard.assets().size());
+            var tron = dashboard.assets().getFirst();
             assertEquals("TRON", tron.chain());
-            assertEquals("NOT_GENERATED", tron.status());
-            assertNull(tron.collectionAddress());
+            assertEquals("TRX", tron.assetSymbol());
+            assertTrue(tron.nativeAsset());
             assertEquals(0, BigDecimal.ZERO.compareTo(tron.totalBalance()));
             status.setRollbackOnly();
         });
@@ -640,12 +667,27 @@ class CustodyOperationsIntegrationTest {
     void assetDashboardAggregatesStablecoinsAcrossChainsWithoutFloatingPointMath() {
         transactions.executeWithoutResult(status -> {
             UUID tenantId = createTenant();
+            UUID administratorId = UUID.randomUUID();
+            String slug = jdbc.queryForObject(
+                    "select slug from custody_tenant where id = ?", String.class, tenantId);
+            jdbc.update("""
+                    insert into custody_tenant_user(
+                        id, tenant_id, email, display_name, password_hash, role, status)
+                    values (?, ?, ?, 'Dashboard administrator', 'test-only-hash',
+                            'TENANT_ADMIN', 'ACTIVE')
+                    """, administratorId, tenantId, slug + "@example.test");
+            CustodyTenantChainRepository chainRepository =
+                    new CustodyTenantChainRepository(jdbc);
             int namespace = jdbc.queryForObject(
                     "select derivation_namespace from custody_tenant where id = ?",
                     Integer.class, tenantId);
             String[] chains = {"TRON", "ARBITRUM"};
             BigDecimal[] totals = {new BigDecimal("5.25"), new BigDecimal("6.75")};
             for (int index = 0; index < chains.length; index++) {
+                chainRepository.setStatus(
+                        tenantId, chains[index], "ACTIVE", administratorId);
+                chainRepository.setTokenSettings(
+                        tenantId, chains[index], "USDT", true, true, true, administratorId);
                 int subject = jdbc.queryForObject(
                         "select nextval('custody_derivation_subject_index_seq')::integer",
                         Integer.class);
@@ -675,8 +717,7 @@ class CustodyOperationsIntegrationTest {
             }
 
             CustodyAssetDashboardService service = new CustodyAssetDashboardService(
-                    new CustodyAssetDashboardRepository(jdbc), new CustodyRepository(jdbc),
-                    new CustodyTenantChainRepository(jdbc));
+                    new CustodyAssetDashboardRepository(jdbc), new CustodyRepository(jdbc));
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER, UUID.randomUUID(), tenantId,
                     "dashboard-it", "VIEWER", java.util.Set.of("assets:read"));

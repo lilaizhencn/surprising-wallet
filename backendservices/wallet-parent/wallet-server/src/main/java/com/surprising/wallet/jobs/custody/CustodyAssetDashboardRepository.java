@@ -40,25 +40,54 @@ public class CustodyAssetDashboardRepository {
                      where c.tenant_id = ?
                        and not exists (select 1 from custody_gas_account g
                                         where g.custody_address_id = c.id)
+                ), configured_assets as (
+                    select tc.chain, a.symbol as asset_symbol, true as native_asset
+                      from custody_tenant_chain tc
+                      join chain_profile p
+                        on p.chain = tc.chain and p.enabled = true
+                      join chain_asset a
+                        on a.chain = tc.chain and a.active = true and a.native_asset = true
+                     where tc.tenant_id = ? and tc.status = 'ACTIVE'
+                    union all
+                    select tt.chain, tt.symbol, false
+                      from custody_tenant_token tt
+                      join custody_tenant_chain tc
+                        on tc.tenant_id = tt.tenant_id and tc.chain = tt.chain
+                       and tc.status = 'ACTIVE'
+                      join chain_profile p
+                        on p.chain = tt.chain and p.enabled = true
+                      join chain_asset a
+                        on a.chain = tt.chain and a.symbol = tt.symbol
+                       and a.active = true and a.native_asset = false
+                      join token_config t
+                        on t.chain = tt.chain and t.symbol = tt.symbol and t.enabled = true
+                       and (lower(t.network) = lower(p.network) or t.network is null)
+                     where tt.tenant_id = ? and tt.enabled = true
                 )
-                select lb.chain, lb.asset_symbol,
+                select ca.chain, ca.asset_symbol, ca.native_asset,
                        coalesce(sum(lb.available_balance), 0) as available_balance,
                        coalesce(sum(lb.locked_balance), 0) as locked_balance,
                        coalesce(sum(lb.total_balance), 0) as total_balance,
-                       count(distinct ta.custody_address_id) as address_count,
+                       count(distinct ta.custody_address_id)
+                           filter (where lb.account_id is not null) as address_count,
                        p.usd_price, p.source as price_source, p.observed_at
-                  from tenant_accounts ta
-                  join ledger_balance lb
+                  from configured_assets ca
+                  left join tenant_accounts ta on ta.chain = ca.chain
+                  left join ledger_balance lb
                     on lb.chain = ta.chain and lower(lb.account_id) = lower(ta.account_id)
-                  left join custody_asset_price p on p.asset_symbol = lb.asset_symbol
-                 group by lb.chain, lb.asset_symbol, p.usd_price, p.source, p.observed_at
-                 order by lb.asset_symbol, lb.chain
+                   and lb.asset_symbol = ca.asset_symbol
+                  left join custody_asset_price p on p.asset_symbol = ca.asset_symbol
+                 group by ca.chain, ca.asset_symbol, ca.native_asset,
+                          p.usd_price, p.source, p.observed_at
+                 order by ca.native_asset desc, ca.asset_symbol, ca.chain
                 """, (rs, rowNum) -> new AssetBalance(
                 rs.getString("chain"), rs.getString("asset_symbol"),
+                rs.getBoolean("native_asset"),
                 rs.getBigDecimal("available_balance"), rs.getBigDecimal("locked_balance"),
                 rs.getBigDecimal("total_balance"), rs.getLong("address_count"),
                 rs.getBigDecimal("usd_price"), rs.getString("price_source"),
-                instantOrNull(rs.getTimestamp("observed_at"))), tenantId, tenantId);
+                instantOrNull(rs.getTimestamp("observed_at"))),
+                tenantId, tenantId, tenantId, tenantId);
     }
 
     public List<AssetPrice> prices() {
@@ -95,6 +124,7 @@ public class CustodyAssetDashboardRepository {
     public record AssetBalance(
             String chain,
             String assetSymbol,
+            boolean nativeAsset,
             BigDecimal availableBalance,
             BigDecimal lockedBalance,
             BigDecimal totalBalance,

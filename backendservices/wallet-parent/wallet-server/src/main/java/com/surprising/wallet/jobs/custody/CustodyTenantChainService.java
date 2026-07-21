@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -27,8 +28,12 @@ public class CustodyTenantChainService {
 
     public List<ChainView> list(CustodyPrincipal principal) {
         requireScope(principal, "chains:read");
+        Map<String, CustodyRepository.GasAccountRecord> addresses = custody
+                .listGasAccounts(principal.tenantId()).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        CustodyRepository.GasAccountRecord::chain, row -> row));
         return chains.list(principal.tenantId()).stream()
-                .map(this::toSupportedView)
+                .map(row -> toSupportedView(row, addresses.get(row.chain())))
                 .filter(java.util.Objects::nonNull)
                 .toList();
     }
@@ -49,11 +54,48 @@ public class CustodyTenantChainService {
                 enabled ? "TENANT_CHAIN.OPEN" : "TENANT_CHAIN.CLOSE",
                 "TENANT_CHAIN", chain, sourceIp,
                 "{\"chain\":\"" + chain + "\",\"status\":\"" + status + "\"}");
+        Map<String, CustodyRepository.GasAccountRecord> addresses = custody
+                .listGasAccounts(principal.tenantId()).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        CustodyRepository.GasAccountRecord::chain, row -> row));
         return chains.list(principal.tenantId()).stream()
                 .filter(row -> row.chain().equals(chain))
-                .map(this::toSupportedView)
+                .map(row -> toSupportedView(row, addresses.get(row.chain())))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("tenant chain status was not persisted"));
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public TokenView setToken(CustodyPrincipal principal, String chainValue, String symbolValue,
+                              TokenSettings command, String sourceIp) {
+        requireTenantAdmin(principal);
+        String chain = normalizeChain(chainValue);
+        String symbol = normalizeSymbol(symbolValue);
+        if ((command.depositEnabled() || command.withdrawalEnabled()) && !command.enabled()) {
+            throw new IllegalArgumentException(
+                    "deposit and withdrawal require the token to be enabled");
+        }
+        if (command.enabled()) {
+            requireActive(principal.tenantId(), chain);
+        }
+        if (!chains.tokenAvailable(chain, symbol)) {
+            throw new IllegalArgumentException("token is not available on this chain");
+        }
+        chains.setTokenSettings(
+                principal.tenantId(), chain, symbol, command.enabled(),
+                command.depositEnabled(), command.withdrawalEnabled(), principal.actorId());
+        custody.audit(principal.tenantId(), principal.actorType().name(),
+                principal.actorId().toString(), "TENANT_TOKEN.UPDATE", "TENANT_TOKEN",
+                chain + ":" + symbol, sourceIp,
+                "{\"chain\":\"" + chain + "\",\"symbol\":\"" + symbol
+                        + "\",\"enabled\":" + command.enabled()
+                        + ",\"depositEnabled\":" + command.depositEnabled()
+                        + ",\"withdrawalEnabled\":" + command.withdrawalEnabled() + "}");
+        return chains.availableTokens(principal.tenantId()).stream()
+                .filter(row -> row.chain().equals(chain) && row.symbol().equals(symbol))
+                .map(CustodyTenantChainService::tokenView)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("tenant token settings were not persisted"));
     }
 
     public void requireActive(UUID tenantId, String chainValue) {
@@ -64,18 +106,45 @@ public class CustodyTenantChainService {
         }
     }
 
-    private ChainView toSupportedView(CustodyTenantChainRepository.ChainRecord row) {
+    public void requireWithdrawalEnabled(UUID tenantId, String chainValue, String symbolValue) {
+        String chain = normalizeChain(chainValue);
+        String symbol = normalizeSymbol(symbolValue);
+        if (!chains.withdrawalEnabled(tenantId, chain, symbol)) {
+            throw new CustodyForbiddenException(
+                    symbol + " withdrawals are not enabled on " + chain + " for this tenant");
+        }
+    }
+
+    private ChainView toSupportedView(CustodyTenantChainRepository.ChainRecord row,
+                                      CustodyRepository.GasAccountRecord address) {
         BlockchainAdapter adapter;
         try {
             adapter = requireAdapter(row.chain());
         } catch (IllegalArgumentException e) {
             return null;
         }
+        List<TokenView> tokens = row.tokens().stream()
+                .map(CustodyTenantChainService::tokenView)
+                .toList();
+        List<String> enabledAssets = java.util.stream.Stream.concat(
+                        java.util.stream.Stream.of(row.nativeSymbol()),
+                        tokens.stream().filter(TokenView::enabled).map(TokenView::symbol))
+                .distinct().toList();
         return new ChainView(
                 row.chain(), row.network(), row.family(), row.nativeSymbol(),
-                row.assetSymbols(), row.status(), "ACTIVE".equals(row.status()),
+                enabledAssets, tokens, row.status(), "ACTIVE".equals(row.status()),
                 row.scanEnabled(), row.withdrawalEnabled(), row.transferEnabled(),
-                adapter.capabilities(), row.openedAt(), row.closedAt());
+                adapter.capabilities(),
+                address == null ? null : address.custodyAddressId(),
+                address == null ? null : address.address(),
+                address == null ? null : address.memo(),
+                row.openedAt(), row.closedAt());
+    }
+
+    private static TokenView tokenView(CustodyTenantChainRepository.TokenRecord row) {
+        return new TokenView(
+                row.symbol(), row.standard(), row.contractAddress(), row.decimals(),
+                row.enabled(), row.depositEnabled(), row.withdrawalEnabled());
     }
 
     private BlockchainAdapter requireAdapter(String chain) {
@@ -92,6 +161,14 @@ public class CustodyTenantChainService {
             throw new IllegalArgumentException("valid chain is required");
         }
         return chain;
+    }
+
+    private static String normalizeSymbol(String value) {
+        String symbol = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+        if (!symbol.matches("^[A-Z][A-Z0-9_]{1,31}$")) {
+            throw new IllegalArgumentException("valid token symbol is required");
+        }
+        return symbol;
     }
 
     private static void requireScope(CustodyPrincipal principal, String scope) {
@@ -113,14 +190,36 @@ public class CustodyTenantChainService {
             String family,
             String nativeSymbol,
             List<String> assetSymbols,
+            List<TokenView> tokens,
             String status,
             boolean enabled,
             boolean scanEnabled,
             boolean withdrawalEnabled,
             boolean transferEnabled,
             Set<BlockchainAdapter.Capability> capabilities,
+            UUID collectionAddressId,
+            String collectionAddress,
+            String memo,
             java.time.Instant openedAt,
             java.time.Instant closedAt
+    ) {
+    }
+
+    public record TokenView(
+            String symbol,
+            String standard,
+            String contractAddress,
+            int decimals,
+            boolean enabled,
+            boolean depositEnabled,
+            boolean withdrawalEnabled
+    ) {
+    }
+
+    public record TokenSettings(
+            boolean enabled,
+            boolean depositEnabled,
+            boolean withdrawalEnabled
     ) {
     }
 }

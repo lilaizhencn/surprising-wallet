@@ -12,6 +12,7 @@ tags:
   - name: Public API
   - name: Console authentication
   - name: Console addresses
+  - name: Console chains
   - name: Console transfers
   - name: Console Gas
   - name: Console security
@@ -236,6 +237,68 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Address' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/chains:
+    get:
+      tags: [Console chains]
+      summary: List platform-enabled chains and tokens available to the tenant
+      description: Only tokens enabled in platform chain and token configuration are returned.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Tenant chain state, available tokens, and collection addresses
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TenantChain' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/chains/{chain}:
+    put:
+      tags: [Console chains]
+      summary: Open or close a chain for the tenant
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ChainPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: Updated tenant chain
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TenantChain' }
+        default: { $ref: '#/components/responses/Error' }
+  /custody/console/v1/chains/{chain}/tokens/{symbol}:
+    put:
+      tags: [Console chains]
+      summary: Update an available token for the tenant
+      description: The token must already be enabled by a platform administrator. Deposit and withdrawal cannot be enabled while the token is disabled.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/ChainPath'
+        - name: symbol
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TenantTokenSettings' }
+      responses:
+        '200':
+          description: Updated tenant token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TenantToken' }
         default: { $ref: '#/components/responses/Error' }
   /custody/console/v1/assets:
     get:
@@ -1022,6 +1085,11 @@ components:
       name: chain
       in: query
       schema: { type: string }
+    ChainPath:
+      name: chain
+      in: path
+      required: true
+      schema: { type: string }
     Status:
       name: status
       in: query
@@ -1281,14 +1349,60 @@ components:
         createdAt: { type: string, format: date-time }
     AssetBalance:
       type: object
-      required: [chain, assetSymbol, availableBalance, lockedBalance, totalBalance, addressCount]
+      required: [chain, assetSymbol, nativeAsset, availableBalance, lockedBalance, totalBalance, addressCount]
       properties:
         chain: { type: string }
         assetSymbol: { type: string }
+        nativeAsset: { type: boolean }
         availableBalance: { type: number }
         lockedBalance: { type: number }
         totalBalance: { type: number }
         addressCount: { type: integer, format: int64 }
+    TenantToken:
+      type: object
+      required: [symbol, decimals, enabled, depositEnabled, withdrawalEnabled]
+      properties:
+        symbol: { type: string }
+        standard: { type: [string, 'null'] }
+        contractAddress: { type: [string, 'null'] }
+        decimals: { type: integer }
+        enabled: { type: boolean }
+        depositEnabled: { type: boolean }
+        withdrawalEnabled: { type: boolean }
+    TenantTokenSettings:
+      type: object
+      required: [enabled, depositEnabled, withdrawalEnabled]
+      properties:
+        enabled: { type: boolean }
+        depositEnabled: { type: boolean }
+        withdrawalEnabled: { type: boolean }
+    TenantChain:
+      type: object
+      required: [chain, network, family, nativeSymbol, assetSymbols, tokens, status, enabled, scanEnabled, withdrawalEnabled, transferEnabled, capabilities]
+      properties:
+        chain: { type: string }
+        network: { type: string }
+        family: { type: string }
+        nativeSymbol: { type: string }
+        assetSymbols:
+          type: array
+          items: { type: string }
+        tokens:
+          type: array
+          items: { $ref: '#/components/schemas/TenantToken' }
+        status: { type: string, enum: [ACTIVE, CLOSED] }
+        enabled: { type: boolean }
+        scanEnabled: { type: boolean }
+        withdrawalEnabled: { type: boolean }
+        transferEnabled: { type: boolean }
+        capabilities:
+          type: array
+          items: { type: string }
+        collectionAddressId: { type: [string, 'null'], format: uuid }
+        collectionAddress: { type: [string, 'null'] }
+        memo: { type: [string, 'null'] }
+        openedAt: { type: [string, 'null'], format: date-time }
+        closedAt: { type: [string, 'null'], format: date-time }
     Deposit:
       type: object
       properties:

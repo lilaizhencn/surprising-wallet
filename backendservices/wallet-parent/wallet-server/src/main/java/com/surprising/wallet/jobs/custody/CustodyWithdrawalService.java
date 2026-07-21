@@ -65,6 +65,7 @@ public class CustodyWithdrawalService {
             throw new IllegalArgumentException("custody address belongs to a different chain");
         }
         tenantChains.requireActive(principal.tenantId(), chain);
+        tenantChains.requireWithdrawalEnabled(principal.tenantId(), chain, symbol);
         String toAddress = required(command.toAddress(), "toAddress", 160);
         String amount = required(command.amount(), "amount", 120);
         String externalReference = optional(command.externalReference(), 160);

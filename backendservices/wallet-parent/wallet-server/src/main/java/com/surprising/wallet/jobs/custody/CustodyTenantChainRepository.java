@@ -5,8 +5,10 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -18,22 +20,18 @@ public class CustodyTenantChainRepository {
     }
 
     public List<ChainRecord> list(UUID tenantId) {
+        Map<String, List<TokenRecord>> tokensByChain = availableTokens(tenantId).stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        TokenRecord::chain, LinkedHashMap::new, java.util.stream.Collectors.toList()));
         return jdbc.query("""
                         select p.chain, p.network, p.family, p.native_symbol,
                                p.scan_enabled, p.withdraw_enabled, p.transfer_enabled,
                                coalesce(tc.status, 'CLOSED') as tenant_status,
-                               tc.opened_at, tc.closed_at,
-                               coalesce(array_agg(a.symbol order by a.native_asset desc, a.symbol)
-                                   filter (where a.symbol is not null), array[]::varchar[]) as asset_symbols
+                               tc.opened_at, tc.closed_at
                           from chain_profile p
                           left join custody_tenant_chain tc
                             on tc.tenant_id = ? and tc.chain = p.chain
-                          left join chain_asset a
-                            on a.chain = p.chain and a.active = true
                          where p.enabled = true
-                         group by p.chain, p.network, p.family, p.native_symbol,
-                                  p.scan_enabled, p.withdraw_enabled, p.transfer_enabled,
-                                  tc.status, tc.opened_at, tc.closed_at
                          order by p.chain
                         """, (rs, rowNum) -> new ChainRecord(
                 rs.getString("chain"),
@@ -46,7 +44,32 @@ public class CustodyTenantChainRepository {
                 rs.getString("tenant_status"),
                 instantOrNull(rs.getTimestamp("opened_at")),
                 instantOrNull(rs.getTimestamp("closed_at")),
-                arrayValues(rs.getArray("asset_symbols").getArray())), tenantId);
+                tokensByChain.getOrDefault(rs.getString("chain"), List.of())), tenantId);
+    }
+
+    public List<TokenRecord> availableTokens(UUID tenantId) {
+        return jdbc.query("""
+                select p.chain, a.symbol,
+                       coalesce(t.token_standard, t.standard) as standard,
+                       t.contract_address, t.decimals,
+                       coalesce(tt.enabled, false) as tenant_enabled,
+                       coalesce(tt.deposit_enabled, false) as deposit_enabled,
+                       coalesce(tt.withdrawal_enabled, false) as withdrawal_enabled
+                  from chain_profile p
+                  join chain_asset a
+                    on a.chain = p.chain and a.active = true and a.native_asset = false
+                  join token_config t
+                    on t.chain = p.chain and t.symbol = a.symbol and t.enabled = true
+                   and (lower(t.network) = lower(p.network) or t.network is null)
+                  left join custody_tenant_token tt
+                    on tt.tenant_id = ? and tt.chain = p.chain and tt.symbol = a.symbol
+                 where p.enabled = true
+                 order by p.chain, a.symbol
+                """, (rs, rowNum) -> new TokenRecord(
+                rs.getString("chain"), rs.getString("symbol"), rs.getString("standard"),
+                rs.getString("contract_address"), rs.getInt("decimals"),
+                rs.getBoolean("tenant_enabled"), rs.getBoolean("deposit_enabled"),
+                rs.getBoolean("withdrawal_enabled")), tenantId);
     }
 
     public boolean platformChainEnabled(String chain) {
@@ -93,14 +116,79 @@ public class CustodyTenantChainRepository {
                 status, actorId, status, status, actorId, status);
     }
 
-    private static Instant instantOrNull(Timestamp value) {
-        return value == null ? null : value.toInstant();
+    public boolean tokenAvailable(String chain, String symbol) {
+        Boolean available = jdbc.queryForObject("""
+                select exists(
+                    select 1
+                      from chain_profile p
+                      join chain_asset a
+                        on a.chain = p.chain and a.symbol = ?
+                       and a.active = true and a.native_asset = false
+                      join token_config t
+                        on t.chain = p.chain and t.symbol = a.symbol and t.enabled = true
+                       and (lower(t.network) = lower(p.network) or t.network is null)
+                     where p.chain = ? and p.enabled = true
+                )
+                """, Boolean.class, symbol, chain);
+        return Boolean.TRUE.equals(available);
     }
 
-    private static List<String> arrayValues(Object value) {
-        return value instanceof Object[] values
-                ? Arrays.stream(values).map(Object::toString).toList()
-                : List.of();
+    public void setTokenSettings(UUID tenantId, String chain, String symbol,
+                                 boolean enabled, boolean depositEnabled,
+                                 boolean withdrawalEnabled, UUID actorId) {
+        jdbc.update("""
+                insert into custody_tenant_token(
+                    tenant_id, chain, symbol, enabled, deposit_enabled,
+                    withdrawal_enabled, updated_by, updated_at)
+                values (?, ?, ?, ?, ?, ?, ?, now())
+                on conflict (tenant_id, chain, symbol) do update set
+                    enabled = excluded.enabled,
+                    deposit_enabled = excluded.deposit_enabled,
+                    withdrawal_enabled = excluded.withdrawal_enabled,
+                    updated_by = excluded.updated_by,
+                    updated_at = now()
+                """, tenantId, chain, symbol, enabled, depositEnabled,
+                withdrawalEnabled, actorId);
+    }
+
+    public boolean depositEnabled(UUID tenantId, String chain, String symbol) {
+        return assetOperationEnabled(tenantId, chain, symbol, "deposit_enabled");
+    }
+
+    public boolean withdrawalEnabled(UUID tenantId, String chain, String symbol) {
+        return assetOperationEnabled(tenantId, chain, symbol, "withdrawal_enabled");
+    }
+
+    private boolean assetOperationEnabled(UUID tenantId, String chain, String symbol,
+                                          String operationColumn) {
+        if (!Set.of("deposit_enabled", "withdrawal_enabled").contains(operationColumn)) {
+            throw new IllegalArgumentException("unsupported tenant token operation");
+        }
+        Boolean enabled = jdbc.queryForObject("""
+                select exists(
+                    select 1
+                      from chain_asset a
+                      join chain_profile p
+                        on p.chain = a.chain and p.enabled = true
+                      join custody_tenant_chain tc
+                        on tc.tenant_id = ? and tc.chain = a.chain and tc.status = 'ACTIVE'
+                      left join custody_tenant_token tt
+                        on tt.tenant_id = tc.tenant_id
+                       and tt.chain = a.chain and tt.symbol = a.symbol
+                      left join token_config t
+                        on t.chain = a.chain and t.symbol = a.symbol and t.enabled = true
+                       and (lower(t.network) = lower(p.network) or t.network is null)
+                     where a.chain = ? and a.symbol = ? and a.active = true
+                       and (a.native_asset = true
+                            or (tt.enabled = true and %s = true and t.id is not null))
+                )
+                """.formatted("tt." + operationColumn), Boolean.class,
+                tenantId, chain, symbol);
+        return Boolean.TRUE.equals(enabled);
+    }
+
+    private static Instant instantOrNull(Timestamp value) {
+        return value == null ? null : value.toInstant();
     }
 
     public record ChainRecord(
@@ -114,7 +202,19 @@ public class CustodyTenantChainRepository {
             String status,
             Instant openedAt,
             Instant closedAt,
-            List<String> assetSymbols
+            List<TokenRecord> tokens
+    ) {
+    }
+
+    public record TokenRecord(
+            String chain,
+            String symbol,
+            String standard,
+            String contractAddress,
+            int decimals,
+            boolean enabled,
+            boolean depositEnabled,
+            boolean withdrawalEnabled
     ) {
     }
 }

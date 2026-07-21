@@ -20,12 +20,15 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
     private final CustodyRepository repository;
+    private final CustodyTenantChainRepository tenantChains;
 
     public CustodyDepositCreditObserver(JdbcTemplate jdbc, ObjectMapper objectMapper,
-                                        CustodyRepository repository) {
+                                        CustodyRepository repository,
+                                        CustodyTenantChainRepository tenantChains) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
         this.repository = repository;
+        this.tenantChains = tenantChains;
     }
 
     @Override
@@ -70,6 +73,10 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
             throw new IllegalStateException("deposit address maps to more than one custody tenant");
         }
         AddressOwner owner = owners.getFirst();
+        if (!tenantChains.depositEnabled(
+                owner.tenantId(), chain, event.assetSymbol())) {
+            return;
+        }
         Long depositRecordId = jdbc.queryForObject("""
                         select id from deposit_record
                          where chain = ? and tx_hash = ? and log_index = ?

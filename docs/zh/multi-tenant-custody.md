@@ -72,12 +72,15 @@ m / 44' / coinType' / tenantNamespace' / derivationSubject' / childIndex'
 返回同一个地址。`childIndex` 是内部派生信息，不在租户地址 API 中暴露。
 `__sw_` 前缀由钱包内部系统账户保留，API 和普通 Console 地址不能使用。
 
-每个租户在每条已开通链上可从资产总览生成一个系统归集地址。该地址使用钱包保留的
+每个租户在每条已开通链上可从“租户链管理”生成一个系统归集/Gas 地址。该地址使用钱包保留的
 `derivationSubject`，并固定为 `childIndex=1`。同一租户的所有 EVM 链共用
 `__sw_collection__:evm` 派生主体，因此地址完全相同；非 EVM 链仍使用链级派生主体。
 同一租户和链重复生成会返回同一个地址。
-地址收到并确认的原生币同时作为该链链上操作的 Gas 资金，资产总览始终显示全部已开通链，
-包括尚未生成地址或余额为零的链。
+地址收到并确认的原生币同时作为该链链上操作的 Gas 资金。链管理页面直接展示地址和复制按钮，
+不再设置单独的 Gas 资金池页面。
+
+租户只能看到并开启平台管理员已配置为启用状态的 Token。每个可用 Token 仅有“启用、充值、提现”
+三个开关；充值或提现不能脱离 Token 总开关启用。平台关闭 Token 后，租户不能再开启它。
 
 Monero 不使用 BIP44；地址由 wallet RPC 创建 subaddress，并记录
 `monero-wallet-rpc:m/0/{subaddressIndex}`。
@@ -107,9 +110,9 @@ Monero 不使用 BIP44；地址由 wallet RPC 创建 subaddress，并记录
 
 ## 资产口径
 
-`ledger_balance` 是余额事实来源。租户资产总览会找出每个客户托管地址对应的全部 account ID，
-包括 token 账户和已停用地址，然后按 `chain + asset_symbol` 聚合。Gas station 专用地址和余额
-单独展示，不计入客户资产：
+`ledger_balance` 是余额事实来源。概览的资产明细只列出已开通链的原生币和租户已启用 Token，
+即使余额为零也会显示。原生币与 Token 平级展示；同一 Token 存在于多条链时先显示跨链汇总，
+展开后按链展示余额。余额按 `chain + asset_symbol` 从全部相关 account ID 聚合：
 
 - `availableBalance`
 - `lockedBalance`
@@ -193,18 +196,18 @@ timestamp + "." + 原始请求 Body
 Console 可以查看每次尝试的触发方式、HTTP 结果、耗时、错误、下次重试时间、周期和累计次数。
 Worker 租约过期会形成明确的恢复记录，尝试隔离会阻止迟到的旧 Worker 覆盖较新的投递结果。
 
-## 租户开通与 Gas station
+## 租户开通与网络费地址
 
 Console 开通检查包含 6 步：
 
 1. 创建 API Key，并妥善保存只显示一次的 Secret；
 2. 开启 IP 白名单并至少配置一条 CIDR；
 3. 创建并验证 Webhook；
-4. 为业务网络创建 Gas station 账户；
+4. 在租户链管理中生成业务网络的归集/Gas 地址；
 5. 向 Gas 地址充值原生币并等待确认；
 6. 至少创建一个客户地址。
 
-Gas station 账户是租户在对应网络上的原生币专用地址。确认后的充值通过现有链上归集流程进入
+归集/Gas 地址是租户在对应网络上的原生币专用地址。确认后的充值通过现有链上归集流程进入
 热钱包，同时形成可审计的租户预付 Gas 余额。Gas 地址、Gas 充值和 Gas 余额不会混入客户地址、
 客户充值或客户资产总览。
 

@@ -39,7 +39,9 @@ class CustodyDepositProjectionIntegrationTest {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         CustodyRepository custodyRepository = new CustodyRepository(jdbc);
         CustodyDepositCreditObserver observer =
-                new CustodyDepositCreditObserver(jdbc, objectMapper, custodyRepository);
+                new CustodyDepositCreditObserver(
+                        jdbc, objectMapper, custodyRepository,
+                        new CustodyTenantChainRepository(jdbc));
         StaticListableBeanFactory beans = new StaticListableBeanFactory(
                 Map.of("custodyDepositCreditObserver", observer));
         ChainJdbcRepository chainRepository = new ChainJdbcRepository(
@@ -137,7 +139,9 @@ class CustodyDepositProjectionIntegrationTest {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         CustodyRepository custodyRepository = new CustodyRepository(jdbc);
         CustodyDepositCreditObserver observer =
-                new CustodyDepositCreditObserver(jdbc, objectMapper, custodyRepository);
+                new CustodyDepositCreditObserver(
+                        jdbc, objectMapper, custodyRepository,
+                        new CustodyTenantChainRepository(jdbc));
         StaticListableBeanFactory beans = new StaticListableBeanFactory(
                 Map.of("custodyDepositCreditObserver", observer));
         ChainJdbcRepository chainRepository = new ChainJdbcRepository(
@@ -178,6 +182,15 @@ class CustodyDepositProjectionIntegrationTest {
                 insert into custody_tenant(id, slug, name, derivation_namespace)
                 values (?, ?, 'Custody deposit integration test', ?)
                 """, tenantId, "deposit-it-" + suffix.substring(0, 16), namespace);
+        UUID administratorId = UUID.randomUUID();
+        jdbc.update("""
+                insert into custody_tenant_user(
+                    id, tenant_id, email, display_name, password_hash, role, status)
+                values (?, ?, ?, 'Deposit administrator', 'test-only-hash',
+                        'TENANT_ADMIN', 'ACTIVE')
+                """, administratorId, tenantId, "deposit-" + suffix.substring(0, 12) + "@example.test");
+        new CustodyTenantChainRepository(jdbc).setStatus(
+                tenantId, "ETH", "ACTIVE", administratorId);
         Long chainAddressId = jdbc.queryForObject("""
                 insert into chain_address(
                     tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
