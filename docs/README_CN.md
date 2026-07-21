@@ -9,6 +9,7 @@
 | 主题 | 英文 | 中文 |
 |---|---|---|
 | 多租户托管钱包 | [en/multi-tenant-custody.md](en/multi-tenant-custody.md) | [zh/multi-tenant-custody.md](zh/multi-tenant-custody.md) |
+| EIP-7702 免 Gas 批量归集（目标设计） | - | [zh/eip7702-collection.md](zh/eip7702-collection.md) |
 | Custody API | [openapi/custody-v1.yaml](openapi/custody-v1.yaml) | [openapi/custody-v1.yaml](openapi/custody-v1.yaml) |
 | 启动与测试 | [en/startup-and-testing.md](en/startup-and-testing.md) | [zh/startup-and-testing.md](zh/startup-and-testing.md) |
 | 数据库 | [en/database.md](en/database.md) | [zh/database.md](zh/database.md) |
