@@ -3816,7 +3816,7 @@ CREATE INDEX custody_tenant_chain_status_idx ON public.custody_tenant_chain USIN
 -- Name: custody_tenant_user_email_key; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX custody_tenant_user_email_key ON public.custody_tenant_user USING btree (COALESCE(tenant_id, '00000000-0000-0000-0000-000000000000'::uuid), lower((email)::text));
+CREATE UNIQUE INDEX custody_tenant_user_email_key ON public.custody_tenant_user USING btree (lower((email)::text));
 
 
 --

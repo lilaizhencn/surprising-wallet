@@ -23,7 +23,7 @@ public class CustodyConsoleAuthController {
     public CustodyAuthService.LoginResult login(@RequestBody TenantLoginRequest body,
                                                 HttpServletRequest request,
                                                 HttpServletResponse response) {
-        CustodyAuthService.LoginResult result = auth.tenantLogin(body.tenantSlug(), body.email(), body.password(),
+        CustodyAuthService.LoginResult result = auth.tenantLogin(body.email(), body.password(),
                 CustodyRequestSupport.clientIp(request), request.getHeader("User-Agent"));
         CustodySessionCookie.set(response, result.token(),
                 java.time.Duration.between(java.time.Instant.now(), result.expiresAt()),
@@ -49,6 +49,6 @@ public class CustodyConsoleAuthController {
         return Map.of("ok", true);
     }
 
-    public record TenantLoginRequest(String tenantSlug, String email, String password) {
+    public record TenantLoginRequest(String email, String password) {
     }
 }

@@ -8,6 +8,7 @@ import com.surprising.wallet.service.chain.tron.TronChainAdapter;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -37,6 +38,33 @@ class CustodyOperationsIntegrationTest {
         jdbc = new JdbcTemplate(dataSource);
         transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         CustodyIntegrationDatabase.reset(dataSource);
+    }
+
+    @Test
+    void tenantLoginLookupUsesGloballyUniqueEmail() {
+        transactions.executeWithoutResult(status -> {
+            CustodyRepository repository = new CustodyRepository(jdbc);
+            UUID firstTenantId = createTenant();
+            UUID secondTenantId = createTenant();
+            String email = "shared-login@example.test";
+            jdbc.update("""
+                    insert into custody_tenant_user(
+                        id, tenant_id, email, display_name, password_hash, role, status)
+                    values (?, ?, ?, 'First administrator', 'test-only-hash',
+                            'TENANT_ADMIN', 'ACTIVE')
+                    """, UUID.randomUUID(), firstTenantId, email);
+
+            var user = repository.findTenantUser(email.toUpperCase(java.util.Locale.ROOT))
+                    .orElseThrow();
+            assertEquals(firstTenantId, user.tenantId());
+            assertThrows(DuplicateKeyException.class, () -> jdbc.update("""
+                    insert into custody_tenant_user(
+                        id, tenant_id, email, display_name, password_hash, role, status)
+                    values (?, ?, ?, 'Second administrator', 'test-only-hash',
+                            'TENANT_ADMIN', 'ACTIVE')
+                    """, UUID.randomUUID(), secondTenantId, email.toUpperCase(java.util.Locale.ROOT)));
+            status.setRollbackOnly();
+        });
     }
 
     @Test

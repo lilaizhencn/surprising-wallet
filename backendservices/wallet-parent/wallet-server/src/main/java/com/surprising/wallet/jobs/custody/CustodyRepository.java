@@ -273,15 +273,15 @@ public class CustodyRepository {
                 """, tenantId);
     }
 
-    public Optional<AuthUser> findTenantUser(String tenantSlug, String email) {
+    public Optional<AuthUser> findTenantUser(String email) {
         return jdbc.query("""
                         select u.id, u.tenant_id, t.slug as tenant_slug, t.status as tenant_status,
                                u.email, u.display_name, u.password_hash, u.role, u.status,
                                u.failed_login_count, u.locked_until
                           from custody_tenant_user u
                           join custody_tenant t on t.id = u.tenant_id
-                         where t.slug = ? and lower(u.email) = lower(?)
-                        """, (rs, rowNum) -> mapAuthUser(rs), tenantSlug, email).stream().findFirst();
+                         where u.tenant_id is not null and lower(u.email) = lower(?)
+                        """, (rs, rowNum) -> mapAuthUser(rs), email).stream().findFirst();
     }
 
     public Optional<AuthUser> findPlatformUser(String email) {

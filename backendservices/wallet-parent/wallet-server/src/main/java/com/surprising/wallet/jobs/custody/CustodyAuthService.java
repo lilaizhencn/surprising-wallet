@@ -37,10 +37,9 @@ public class CustodyAuthService {
     @Transactional(
             rollbackFor = Throwable.class,
             noRollbackFor = {CustodyUnauthorizedException.class, CustodyForbiddenException.class})
-    public LoginResult tenantLogin(String tenantSlug, String email, String password,
+    public LoginResult tenantLogin(String email, String password,
                                    String sourceIp, String userAgent) {
-        String slug = normalizeSlug(tenantSlug);
-        AuthUser user = repository.findTenantUser(slug, normalizeEmail(email))
+        AuthUser user = repository.findTenantUser(normalizeEmail(email))
                 .orElseThrow(() -> new CustodyUnauthorizedException("invalid credentials"));
         return authenticate(user, password, sourceIp, userAgent, ActorType.TENANT_USER);
     }
@@ -147,14 +146,6 @@ public class CustodyAuthService {
                     "addresses:read", "assets:read", "deposits:read",
                     "withdrawals:read", "webhooks:read", "audit:read", "chains:read");
         };
-    }
-
-    private static String normalizeSlug(String slug) {
-        String value = slug == null ? "" : slug.trim().toLowerCase(Locale.ROOT);
-        if (!value.matches("^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")) {
-            throw new CustodyUnauthorizedException("invalid credentials");
-        }
-        return value;
     }
 
     private static String normalizeEmail(String email) {

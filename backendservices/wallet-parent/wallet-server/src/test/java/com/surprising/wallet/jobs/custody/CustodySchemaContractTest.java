@@ -83,6 +83,8 @@ class CustodySchemaContractTest {
         assertFalse(sql.contains("subscribed_events"));
         assertFalse(sql.contains("scopes text[]"));
         assertTrue(sql.contains("token_config_chain_network_contract_address_key"));
+        assertTrue(sql.contains("custody_tenant_user_email_key ON public.custody_tenant_user USING btree (lower((email)::text))"));
+        assertFalse(sql.contains("custody_tenant_user_email_key ON public.custody_tenant_user USING btree (COALESCE(tenant_id"));
     }
 
     @Test
