@@ -1,17 +1,15 @@
 package com.surprising.wallet.jobs.custody;
 
+import com.surprising.wallet.service.chain.BlockchainAdapterRegistry;
+import com.surprising.wallet.service.chain.tron.TronChainAdapter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
-import java.sql.Connection;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -20,28 +18,19 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@EnabledIfEnvironmentVariable(named = "SW_TEST_CUSTODY_DB_URL", matches = ".+")
 class CustodyOperationsIntegrationTest {
     private JdbcTemplate jdbc;
     private TransactionTemplate transactions;
 
     @BeforeEach
     void setUp() throws Exception {
-        DriverManagerDataSource dataSource = new DriverManagerDataSource();
-        dataSource.setDriverClassName("org.postgresql.Driver");
-        dataSource.setUrl(System.getenv("SW_TEST_CUSTODY_DB_URL"));
-        dataSource.setUsername(System.getenv().getOrDefault(
-                "SW_TEST_CUSTODY_DB_USERNAME", "postgres"));
-        dataSource.setPassword(System.getenv().getOrDefault(
-                "SW_TEST_CUSTODY_DB_PASSWORD", ""));
+        DriverManagerDataSource dataSource = CustodyIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
-        try (Connection connection = dataSource.getConnection()) {
-            ScriptUtils.executeSqlScript(
-                    connection, new ClassPathResource("db/custody-schema.sql"));
-        }
+        CustodyIntegrationDatabase.reset(dataSource);
     }
 
     @Test
@@ -170,11 +159,11 @@ class CustodyOperationsIntegrationTest {
                     + "12345678";
             Long chainAddressId = jdbc.queryForObject("""
                     insert into chain_address(
-                        chain, asset_symbol, account_id, user_id, biz, address_index,
+                        tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                         address, derivation_path, wallet_role, enabled)
-                    values ('ETH', 'ETH', ?, ?, ?, 0, ?, ?, 'DEPOSIT', true)
+                    values (?, 'ETH', 'ETH', ?, ?, ?, 0, ?, ?, 'DEPOSIT', true)
                     returning id
-                    """, Long.class, accountId, Integer.toUnsignedLong(subject), namespace,
+                    """, Long.class, tenantId, accountId, Integer.toUnsignedLong(subject), namespace,
                     accountId, "m/44'/60'/" + namespace + "'/" + subject + "/0");
             jdbc.update("""
                     insert into custody_address(
@@ -191,10 +180,10 @@ class CustodyOperationsIntegrationTest {
                     """, gasAccountId, tenantId, addressId);
             jdbc.update("""
                     insert into ledger_balance(
-                        chain, asset_symbol, account_id,
+                        tenant_id, chain, asset_symbol, account_id,
                         available_balance, locked_balance, total_balance)
-                    values ('ETH', 'ETH', ?, 2.5, 0.5, 3)
-                    """, accountId);
+                    values (?, 'ETH', 'ETH', ?, 2.5, 0.5, 3)
+                    """, tenantId, accountId);
 
             var account = repository.requireGasAccount(tenantId, gasAccountId);
             assertEquals(0, new BigDecimal("2.5").compareTo(account.availableBalance()));
@@ -226,11 +215,11 @@ class CustodyOperationsIntegrationTest {
                     + "12345678";
             Long chainAddressId = jdbc.queryForObject("""
                     insert into chain_address(
-                        chain, asset_symbol, account_id, user_id, biz, address_index,
+                        tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                         address, derivation_path, wallet_role, enabled)
-                    values ('ETH', 'ETH', ?, ?, ?, 0, ?, ?, 'DEPOSIT', true)
+                    values (?, 'ETH', 'ETH', ?, ?, ?, 0, ?, ?, 'DEPOSIT', true)
                     returning id
-                    """, Long.class, accountId, Integer.toUnsignedLong(subject), namespace,
+                    """, Long.class, tenantId, accountId, Integer.toUnsignedLong(subject), namespace,
                     accountId, "m/44'/60'/" + namespace + "'/" + subject + "/0");
             jdbc.update("""
                     insert into custody_address(
@@ -247,19 +236,19 @@ class CustodyOperationsIntegrationTest {
                     """, gasAccountId, tenantId, addressId);
             jdbc.update("""
                     insert into ledger_balance(
-                        chain, asset_symbol, account_id,
+                        tenant_id, chain, asset_symbol, account_id,
                         available_balance, locked_balance, total_balance)
-                    values ('ETH', 'ETH', ?, 1, 0, 1)
-                    """, accountId);
+                    values (?, 'ETH', 'ETH', ?, 1, 0, 1)
+                    """, tenantId, accountId);
             String orderNo = "CW-QA-" + UUID.randomUUID().toString().substring(0, 8);
             String txHash = "0x" + UUID.randomUUID().toString().replace("-", "");
             jdbc.update("""
                     insert into withdrawal_order(
-                        order_no, user_id, chain, asset_symbol, from_address,
+                        tenant_id, order_no, user_id, chain, asset_symbol, from_address,
                         debit_account_id, to_address, amount, fee, status, tx_hash)
-                    values (?, ?, 'ETH', 'ETH', ?, ?, ?, 0.25, 0,
+                    values (?, ?, ?, 'ETH', 'ETH', ?, ?, ?, 0.25, 0,
                             'CONFIRMED', ?)
-                    """, orderNo, Integer.toUnsignedLong(subject), accountId,
+                    """, tenantId, orderNo, Integer.toUnsignedLong(subject), accountId,
                     accountId, accountId, txHash);
             repository.insertCustodyWithdrawal(
                     withdrawalId, tenantId, addressId, orderNo, null, null,
@@ -314,11 +303,11 @@ class CustodyOperationsIntegrationTest {
                     + "12345678";
             Long chainAddressId = jdbc.queryForObject("""
                     insert into chain_address(
-                        chain, asset_symbol, account_id, user_id, biz, address_index,
+                        tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                         address, derivation_path, wallet_role, enabled)
-                    values ('ETH', 'ETH', ?, ?, ?, 0, ?, ?, 'DEPOSIT', true)
+                    values (?, 'ETH', 'ETH', ?, ?, ?, 0, ?, ?, 'DEPOSIT', true)
                     returning id
-                    """, Long.class, accountId, Integer.toUnsignedLong(subject), namespace,
+                    """, Long.class, tenantId, accountId, Integer.toUnsignedLong(subject), namespace,
                     accountId, "m/44'/60'/" + namespace + "'/" + subject + "/0");
             jdbc.update("""
                     insert into custody_address(
@@ -335,11 +324,18 @@ class CustodyOperationsIntegrationTest {
                     """, gasAccountId, tenantId, addressId);
             jdbc.update("""
                     insert into ledger_balance(
-                        chain, asset_symbol, account_id,
+                        tenant_id, chain, asset_symbol, account_id,
                         available_balance, locked_balance, total_balance)
-                    values ('ETH', 'ETH', ?, 0.1, 0, 0.1)
-                    """, accountId);
+                    values (?, 'ETH', 'ETH', ?, 0.1, 0, 0.1)
+                    """, tenantId, accountId);
             String orderNo = "CW-OVERDUE-" + UUID.randomUUID().toString().substring(0, 8);
+            jdbc.update("""
+                    insert into withdrawal_order(
+                        tenant_id, order_no, user_id, chain, asset_symbol,
+                        from_address, debit_account_id, to_address, amount, fee, status)
+                    values (?, ?, ?, 'ETH', 'ETH', ?, ?, ?, 0.25, 0, 'CONFIRMED')
+                    """, tenantId, orderNo, Integer.toUnsignedLong(subject),
+                    accountId, accountId, accountId);
             repository.insertCustodyWithdrawal(
                     withdrawalId, tenantId, addressId, orderNo, null, null,
                     "ETH", "ETH", accountId, new BigDecimal("0.25"),
@@ -436,6 +432,107 @@ class CustodyOperationsIntegrationTest {
             assertEquals(1, repository.revokeTenantSessions(tenantId));
             assertEquals(0L,
                     repository.tenantOperationsSummary(tenantId).get("activeSessionCount"));
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
+    void tenantChainMustBeOpenedBeforeOperationsAndCanBeClosedAgain() {
+        transactions.executeWithoutResult(status -> {
+            CustodyRepository custody = new CustodyRepository(jdbc);
+            CustodyTenantChainRepository chainRepository =
+                    new CustodyTenantChainRepository(jdbc);
+            CustodyTenantChainService service = new CustodyTenantChainService(
+                    chainRepository, custody,
+                    new BlockchainAdapterRegistry(List.of(new TronChainAdapter())));
+            UUID tenantId = createTenant();
+            UUID administratorId = UUID.randomUUID();
+            String slug = jdbc.queryForObject(
+                    "select slug from custody_tenant where id = ?", String.class, tenantId);
+            jdbc.update("""
+                    insert into custody_tenant_user(
+                        id, tenant_id, email, display_name, password_hash, role, status)
+                    values (?, ?, ?, 'Chain administrator', 'test-only-hash',
+                            'TENANT_ADMIN', 'ACTIVE')
+                    """, administratorId, tenantId, slug + "@example.test");
+            CustodyPrincipal principal = new CustodyPrincipal(
+                    CustodyPrincipal.ActorType.TENANT_USER,
+                    administratorId, tenantId, slug, "TENANT_ADMIN", java.util.Set.of("*"));
+
+            assertThrows(CustodyForbiddenException.class,
+                    () -> service.requireActive(tenantId, "TRON"));
+            var opened = service.setEnabled(principal, "TRON", true, "127.0.0.1");
+            assertTrue(opened.enabled());
+            service.requireActive(tenantId, "TRON");
+            assertTrue(service.list(principal).stream()
+                    .anyMatch(chain -> chain.chain().equals("TRON") && chain.enabled()));
+
+            var closed = service.setEnabled(principal, "TRON", false, "127.0.0.1");
+            assertFalse(closed.enabled());
+            assertThrows(CustodyForbiddenException.class,
+                    () -> service.requireActive(tenantId, "TRON"));
+            assertEquals(2, jdbc.queryForObject("""
+                    select count(*) from custody_audit_log
+                     where tenant_id = ? and action in ('TENANT_CHAIN.OPEN', 'TENANT_CHAIN.CLOSE')
+                    """, Integer.class, tenantId));
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
+    void assetDashboardAggregatesStablecoinsAcrossChainsWithoutFloatingPointMath() {
+        transactions.executeWithoutResult(status -> {
+            UUID tenantId = createTenant();
+            int namespace = jdbc.queryForObject(
+                    "select derivation_namespace from custody_tenant where id = ?",
+                    Integer.class, tenantId);
+            String[] chains = {"TRON", "ARBITRUM"};
+            BigDecimal[] totals = {new BigDecimal("5.25"), new BigDecimal("6.75")};
+            for (int index = 0; index < chains.length; index++) {
+                int subject = jdbc.queryForObject(
+                        "select nextval('custody_derivation_subject_index_seq')::integer",
+                        Integer.class);
+                String accountId = "account-" + UUID.randomUUID();
+                Long chainAddressId = jdbc.queryForObject("""
+                        insert into chain_address(
+                            tenant_id, chain, asset_symbol, account_id, user_id, biz,
+                            address_index, address, derivation_path, wallet_role, enabled)
+                        values (?, ?, 'USDT', ?, ?, ?, 0, ?, ?, 'DEPOSIT', true)
+                        returning id
+                        """, Long.class, tenantId, chains[index], accountId,
+                        Integer.toUnsignedLong(subject), namespace, accountId,
+                        "m/44'/60'/" + namespace + "'/" + subject + "/0");
+                jdbc.update("""
+                        insert into custody_address(
+                            id, tenant_id, chain_address_id, chain, network, address,
+                            subject, source, derivation_subject, derivation_child)
+                        values (?, ?, ?, ?, 'qa', ?, ?, 'CONSOLE', ?, 0)
+                        """, UUID.randomUUID(), tenantId, chainAddressId, chains[index],
+                        accountId, "customer-" + index, subject);
+                jdbc.update("""
+                        insert into ledger_balance(
+                            tenant_id, chain, asset_symbol, account_id,
+                            available_balance, locked_balance, total_balance)
+                        values (?, ?, 'USDT', ?, ?, 0, ?)
+                        """, tenantId, chains[index], accountId, totals[index], totals[index]);
+            }
+
+            CustodyAssetDashboardService service = new CustodyAssetDashboardService(
+                    new CustodyAssetDashboardRepository(jdbc), new CustodyRepository(jdbc));
+            CustodyPrincipal principal = new CustodyPrincipal(
+                    CustodyPrincipal.ActorType.TENANT_USER, UUID.randomUUID(), tenantId,
+                    "dashboard-it", "VIEWER", java.util.Set.of("assets:read"));
+            var dashboard = service.dashboard(principal);
+            var usdt = dashboard.bySymbol().stream()
+                    .filter(row -> row.assetSymbol().equals("USDT"))
+                    .findFirst().orElseThrow();
+
+            assertEquals(0, new BigDecimal("12.00").compareTo(usdt.totalBalance()));
+            assertEquals(0, new BigDecimal("12.00").compareTo(usdt.valueUsd()));
+            assertEquals(0, new BigDecimal("12.00").compareTo(dashboard.totalValueUsd()));
+            assertEquals(List.of("ARBITRUM", "TRON"),
+                    usdt.chains().stream().sorted().toList());
+            assertEquals(0, dashboard.unpricedAssetCount());
             status.setRollbackOnly();
         });
     }

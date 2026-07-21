@@ -1,5 +1,6 @@
 package com.surprising.wallet.jobs.custody;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.surprising.wallet.jobs.custody.CustodyPrincipal.ActorType;
 import com.surprising.wallet.jobs.custody.CustodyRepository.AuthUser;
 import com.surprising.wallet.jobs.custody.CustodyRepository.SessionRecord;
@@ -12,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -55,7 +55,7 @@ public class CustodyAuthService {
     }
 
     public CustodyPrincipal requireSession(HttpServletRequest request, boolean platformRoute) {
-        String token = bearerToken(request);
+        String token = CustodySessionCookie.read(request.getCookies());
         String tokenHash = crypto.sha256(token);
         SessionRecord session = repository.findActiveSession(tokenHash)
                 .orElseThrow(() -> new CustodyUnauthorizedException("session expired or invalid"));
@@ -77,7 +77,11 @@ public class CustodyAuthService {
     }
 
     public void logout(HttpServletRequest request) {
-        repository.revokeSession(crypto.sha256(bearerToken(request)));
+        repository.revokeSession(crypto.sha256(CustodySessionCookie.read(request.getCookies())));
+    }
+
+    public boolean sessionCookieSecure() {
+        return properties.isSessionCookieSecure();
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -121,7 +125,8 @@ public class CustodyAuthService {
                 user.tenantSlug(),
                 user.email(),
                 user.displayName(),
-                user.role());
+                user.role(),
+                consoleScopes(user.role()));
     }
 
     private Duration validatedSessionTtl() {
@@ -132,27 +137,15 @@ public class CustodyAuthService {
         return ttl;
     }
 
-    private static String bearerToken(HttpServletRequest request) {
-        String authorization = request.getHeader("Authorization");
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
-            throw new CustodyUnauthorizedException("bearer session required");
-        }
-        String token = authorization.substring("Bearer ".length()).trim();
-        if (!token.startsWith("cs_") || token.length() < 32) {
-            throw new CustodyUnauthorizedException("invalid bearer session");
-        }
-        return token;
-    }
-
     private static Set<String> consoleScopes(String role) {
         return switch (role) {
             case "PLATFORM_ADMIN", "TENANT_ADMIN" -> Set.of("*");
             case "OPERATOR" -> Set.of(
                     "addresses:read", "addresses:write", "assets:read", "deposits:read",
-                    "withdrawals:read", "withdrawals:write", "webhooks:read");
+                    "withdrawals:read", "withdrawals:write", "webhooks:read", "chains:read");
             default -> Set.of(
                     "addresses:read", "assets:read", "deposits:read",
-                    "withdrawals:read", "webhooks:read", "audit:read");
+                    "withdrawals:read", "webhooks:read", "audit:read", "chains:read");
         };
     }
 
@@ -173,14 +166,15 @@ public class CustodyAuthService {
     }
 
     public record LoginResult(
-            String token,
+            @JsonIgnore String token,
             Instant expiresAt,
             UUID userId,
             UUID tenantId,
             String tenantSlug,
             String email,
             String displayName,
-            String role
+            String role,
+            Set<String> scopes
     ) {
     }
 }

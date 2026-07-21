@@ -139,7 +139,7 @@ public class CustodyCryptoService {
     private byte[] masterKey() {
         String configured = properties.getSecretMasterKey();
         if (configured == null || configured.isBlank()) {
-            throw new IllegalStateException("SW_CUSTODY_SECRET_MASTER_KEY must be configured");
+            throw new IllegalStateException("custody.security.secret-master-key must be configured");
         }
         byte[] key;
         try {
@@ -148,10 +148,10 @@ public class CustodyCryptoService {
                     : Base64.getDecoder().decode(configured);
         } catch (IllegalArgumentException e) {
             throw new IllegalStateException(
-                    "SW_CUSTODY_SECRET_MASTER_KEY must be a 32-byte Base64 value or 64 hex characters", e);
+                    "custody.security.secret-master-key must be a 32-byte Base64 value or 64 hex characters", e);
         }
         if (key.length != 32) {
-            throw new IllegalStateException("SW_CUSTODY_SECRET_MASTER_KEY must decode to exactly 32 bytes");
+            throw new IllegalStateException("custody.security.secret-master-key must decode to exactly 32 bytes");
         }
         return key;
     }

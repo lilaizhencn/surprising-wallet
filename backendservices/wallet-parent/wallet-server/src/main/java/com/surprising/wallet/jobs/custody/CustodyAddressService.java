@@ -25,15 +25,18 @@ public class CustodyAddressService {
     private final CustodyRepository custodyRepository;
     private final ChainJdbcRepository chainRepository;
     private final BlockchainRuntimeService runtime;
+    private final CustodyTenantChainService tenantChains;
     private final ObjectMapper objectMapper;
 
     public CustodyAddressService(CustodyRepository custodyRepository,
                                  ChainJdbcRepository chainRepository,
                                  BlockchainRuntimeService runtime,
+                                 CustodyTenantChainService tenantChains,
                                  ObjectMapper objectMapper) {
         this.custodyRepository = custodyRepository;
         this.chainRepository = chainRepository;
         this.runtime = runtime;
+        this.tenantChains = tenantChains;
         this.objectMapper = objectMapper;
     }
 
@@ -62,6 +65,7 @@ public class CustodyAddressService {
         if (!"ACTIVE".equals(tenant.status())) {
             throw new CustodyForbiddenException("tenant is not active");
         }
+        tenantChains.requireActive(tenant.id(), chain);
 
         BlockchainRuntimeService.RuntimeChain runtimeChain = runtime.requireRuntime(chain);
         int derivationSubject = custodyRepository.resolveDerivationSubject(tenant.id(), subject);
@@ -72,6 +76,7 @@ public class CustodyAddressService {
                         chain, runtimeChain.nativeSymbol(), Integer.toUnsignedLong(derivationSubject),
                         tenant.derivationNamespace(), generated.getIndex(), "DEPOSIT")
                 .orElseThrow(() -> new IllegalStateException("generated chain address was not persisted"));
+        custodyRepository.assignChainAddressTenant(tenant.id(), chainAddress.getId());
 
         UUID addressId = UUID.randomUUID();
         AddressRecord saved = custodyRepository.insertAddress(

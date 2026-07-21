@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Repository
@@ -965,6 +966,22 @@ public class ChainJdbcRepository {
                         """,
                 orderNo, userId, chain, assetSymbol, fromAddress, debitAccountId, toAddress, amount, fee,
                 toTs(now()), toTs(now()));
+    }
+
+    public int createTenantWithdrawalOrder(UUID tenantId, String orderNo, long userId,
+                                           String chain, String assetSymbol,
+                                           String fromAddress, String debitAccountId,
+                                           String toAddress, BigDecimal amount, BigDecimal fee) {
+        return jdbcTemplate.update("""
+                        insert into withdrawal_order(
+                            tenant_id, order_no, user_id, chain, asset_symbol, from_address,
+                            debit_account_id, to_address, amount, fee, status,
+                            created_at, updated_at)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?)
+                        on conflict (chain, order_no) do nothing
+                        """,
+                tenantId, orderNo, userId, chain, assetSymbol, fromAddress,
+                debitAccountId, toAddress, amount, fee, toTs(now()), toTs(now()));
     }
 
     public List<WithdrawalOrderRecord> listWithdrawalsForSigning(String chain, String assetSymbol, int limit) {

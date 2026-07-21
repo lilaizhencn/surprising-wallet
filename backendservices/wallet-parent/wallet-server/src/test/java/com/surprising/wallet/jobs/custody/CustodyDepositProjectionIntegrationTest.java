@@ -7,17 +7,13 @@ import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.dao.DepositCreditObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
-import java.sql.Connection;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,7 +21,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@EnabledIfEnvironmentVariable(named = "SW_TEST_CUSTODY_DB_URL", matches = ".+")
 class CustodyDepositProjectionIntegrationTest {
     private DriverManagerDataSource dataSource;
     private JdbcTemplate jdbc;
@@ -33,16 +28,10 @@ class CustodyDepositProjectionIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        dataSource = new DriverManagerDataSource();
-        dataSource.setDriverClassName("org.postgresql.Driver");
-        dataSource.setUrl(System.getenv("SW_TEST_CUSTODY_DB_URL"));
-        dataSource.setUsername(System.getenv().getOrDefault("SW_TEST_CUSTODY_DB_USERNAME", "postgres"));
-        dataSource.setPassword(System.getenv().getOrDefault("SW_TEST_CUSTODY_DB_PASSWORD", ""));
+        dataSource = CustodyIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
-        try (Connection connection = dataSource.getConnection()) {
-            ScriptUtils.executeSqlScript(connection, new ClassPathResource("db/custody-schema.sql"));
-        }
+        CustodyIntegrationDatabase.reset(dataSource);
     }
 
     @Test
@@ -152,18 +141,18 @@ class CustodyDepositProjectionIntegrationTest {
         int subject = jdbc.queryForObject(
                 "select nextval('custody_derivation_subject_index_seq')::integer", Integer.class);
         String address = "0x" + suffix + suffix.substring(0, 8);
-        Long chainAddressId = jdbc.queryForObject("""
-                insert into chain_address(
-                    chain, asset_symbol, account_id, user_id, biz, address_index,
-                    address, derivation_path, wallet_role, enabled)
-                values ('ETH', 'ETH', ?, ?, ?, 0, ?, ?, 'DEPOSIT', true)
-                returning id
-                """, Long.class, address, Integer.toUnsignedLong(subject), namespace,
-                address, "m/44'/60'/" + namespace + "'/" + subject + "/0");
         jdbc.update("""
                 insert into custody_tenant(id, slug, name, derivation_namespace)
                 values (?, ?, 'Custody deposit integration test', ?)
                 """, tenantId, "deposit-it-" + suffix.substring(0, 16), namespace);
+        Long chainAddressId = jdbc.queryForObject("""
+                insert into chain_address(
+                    tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                    address, derivation_path, wallet_role, enabled)
+                values (?, 'ETH', 'ETH', ?, ?, ?, 0, ?, ?, 'DEPOSIT', true)
+                returning id
+                """, Long.class, tenantId, address, Integer.toUnsignedLong(subject), namespace,
+                address, "m/44'/60'/" + namespace + "'/" + subject + "/0");
         jdbc.update("""
                 insert into custody_address(
                     id, tenant_id, chain_address_id, chain, network, address,

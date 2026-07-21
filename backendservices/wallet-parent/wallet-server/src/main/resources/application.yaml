@@ -26,8 +26,7 @@ spring:
       maximum-pool-size: 20
   sql:
     init:
-      mode: always
-      schema-locations: classpath:db/custody-schema.sql
+      mode: never
   data:
     redis:
       host: ${SW_REDIS_HOST:127.0.0.1}
@@ -58,6 +57,7 @@ sw:
     custody:
       secret-master-key: 339c28dcd013766105fe1c470b03b9e5637d99c4c260d04bbf2ead36f763b944
       session-ttl: ${SW_CUSTODY_SESSION_TTL:PT12H}
+      session-cookie-secure: false
       api-clock-skew: ${SW_CUSTODY_API_CLOCK_SKEW:PT5M}
       platform-admin:
         email: ${SW_CUSTODY_PLATFORM_ADMIN_EMAIL:}

@@ -14,7 +14,7 @@ class CustodyAddressServiceTest {
     void auditDetailsRecordSubjectAndChildIndex() throws Exception {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         CustodyAddressService service = new CustodyAddressService(
-                null, null, null, objectMapper);
+                null, null, null, null, objectMapper);
 
         JsonNode details = objectMapper.readTree(
                 service.addressAuditDetails("ETH", "CONSOLE", "treasury", 3));

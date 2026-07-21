@@ -5,10 +5,12 @@ import com.surprising.wallet.jobs.custody.CustodyTenantService.TenantDetail;
 import com.surprising.wallet.jobs.custody.CustodyTenantService.TenantPage;
 import com.surprising.wallet.jobs.custody.CustodyTenantService.UpdateTenantCommand;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -22,17 +24,25 @@ import java.util.UUID;
 public class CustodyPlatformController {
     private final CustodyAuthService auth;
     private final CustodyTenantService tenants;
+    private final CustodyAssetDashboardService assets;
 
-    public CustodyPlatformController(CustodyAuthService auth, CustodyTenantService tenants) {
+    public CustodyPlatformController(CustodyAuthService auth, CustodyTenantService tenants,
+                                     CustodyAssetDashboardService assets) {
         this.auth = auth;
         this.tenants = tenants;
+        this.assets = assets;
     }
 
     @PostMapping("/auth/login")
     public CustodyAuthService.LoginResult login(@RequestBody PlatformLoginRequest body,
-                                                HttpServletRequest request) {
-        return auth.platformLogin(body.email(), body.password(),
+                                                HttpServletRequest request,
+                                                HttpServletResponse response) {
+        CustodyAuthService.LoginResult result = auth.platformLogin(body.email(), body.password(),
                 CustodyRequestSupport.clientIp(request), request.getHeader("User-Agent"));
+        CustodySessionCookie.set(response, result.token(),
+                java.time.Duration.between(java.time.Instant.now(), result.expiresAt()),
+                auth.sessionCookieSecure());
+        return result;
     }
 
     @GetMapping("/auth/me")
@@ -45,8 +55,9 @@ public class CustodyPlatformController {
     }
 
     @PostMapping("/auth/logout")
-    public Map<String, Object> logout(HttpServletRequest request) {
+    public Map<String, Object> logout(HttpServletRequest request, HttpServletResponse response) {
         auth.logout(request);
+        CustodySessionCookie.clear(response, auth.sessionCookieSecure());
         return Map.of("ok", true);
     }
 
@@ -104,6 +115,21 @@ public class CustodyPlatformController {
                 CustodyRequestSupport.requirePrincipal(request),
                 tenantId,
                 userId,
+                CustodyRequestSupport.clientIp(request));
+    }
+
+    @GetMapping("/asset-prices")
+    public java.util.List<CustodyAssetDashboardRepository.AssetPrice> assetPrices(
+            HttpServletRequest request) {
+        return assets.prices(CustodyRequestSupport.requirePrincipal(request));
+    }
+
+    @PutMapping("/asset-prices/{symbol}")
+    public CustodyAssetDashboardRepository.AssetPrice setAssetPrice(
+            @PathVariable String symbol,
+            @RequestBody CustodyAssetDashboardService.SetPriceCommand body,
+            HttpServletRequest request) {
+        return assets.setPrice(CustodyRequestSupport.requirePrincipal(request), symbol, body,
                 CustodyRequestSupport.clientIp(request));
     }
 

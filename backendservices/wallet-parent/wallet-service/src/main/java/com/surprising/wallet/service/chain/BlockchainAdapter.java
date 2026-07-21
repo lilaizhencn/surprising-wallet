@@ -9,9 +9,12 @@ import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 
 import java.util.List;
+import java.util.Set;
 
 public interface BlockchainAdapter {
     ChainType chainType();
+
+    Set<Capability> capabilities();
 
     default boolean supports(ChainType chainType) {
         return chainType() == chainType;
@@ -30,42 +33,62 @@ public interface BlockchainAdapter {
     }
 
     default List<DepositEvent> scanDeposits(long height) {
-        throw new UnsupportedOperationException("deposit scanning must be implemented by the concrete chain runtime");
+        throw missing(Capability.DEPOSIT_SCAN);
     }
 
     default Address generateDepositAddress(ChainType chainType, long userId, int biz) {
-        throw new UnsupportedOperationException("deposit address generation is not implemented by this adapter");
+        throw missing(Capability.ADDRESS_GENERATION);
     }
 
     default boolean checkAddress(ChainType chainType, String address) {
-        throw new UnsupportedOperationException("address validation is not implemented by this adapter");
+        throw missing(Capability.ADDRESS_VALIDATION);
     }
 
     default long depositConfirmationThreshold(ChainType chainType) {
-        throw new UnsupportedOperationException("deposit confirmation threshold is not implemented by this adapter");
+        throw missing(Capability.CONFIRMATION_POLICY);
     }
 
     default long dustThresholdAtomic(ChainType chainType) {
-        throw new UnsupportedOperationException("dust threshold is not implemented by this adapter");
+        throw missing(Capability.DUST_POLICY);
     }
 
     default long bestHeight(ChainType chainType) {
-        throw new UnsupportedOperationException("best height lookup is not implemented by this adapter");
+        throw missing(Capability.BEST_HEIGHT);
     }
 
     default List<TransactionDTO> findRelatedTransactions(ChainType chainType, long height) {
-        throw new UnsupportedOperationException("block transaction scanning is not implemented by this adapter");
+        throw missing(Capability.BLOCK_TRANSACTION_SCAN);
     }
 
     default void updateTransactionConfirmations(ChainType chainType) {
-        throw new UnsupportedOperationException("transaction confirmation refresh is not implemented by this adapter");
+        throw missing(Capability.CONFIRMATION_REFRESH);
     }
 
     default void updateTotalBalance(ChainType chainType) {
-        throw new UnsupportedOperationException("total balance refresh is not implemented by this adapter");
+        throw missing(Capability.BALANCE_REFRESH);
     }
 
     default String broadcastSignedTransaction(ChainType chainType, WithdrawTransaction transaction) {
-        throw new UnsupportedOperationException("signed transaction broadcast is not implemented by this adapter");
+        throw missing(Capability.SIGNED_TRANSACTION_BROADCAST);
+    }
+
+    private IllegalStateException missing(Capability capability) {
+        return new IllegalStateException(
+                chainType() + " adapter does not provide capability " + capability);
+    }
+
+    enum Capability {
+        NATIVE_QUOTE,
+        TOKEN_QUOTE,
+        DEPOSIT_SCAN,
+        ADDRESS_GENERATION,
+        ADDRESS_VALIDATION,
+        CONFIRMATION_POLICY,
+        DUST_POLICY,
+        BEST_HEIGHT,
+        BLOCK_TRANSACTION_SCAN,
+        CONFIRMATION_REFRESH,
+        BALANCE_REFRESH,
+        SIGNED_TRANSACTION_BROADCAST
     }
 }

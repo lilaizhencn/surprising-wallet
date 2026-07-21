@@ -44,7 +44,8 @@ public class BlockchainRuntimeService {
                 profile.getNativeSymbol(),
                 profile.getRuntimeCurrencyId(),
                 adapter.family(),
-                adapter.describe()
+                adapter.describe(),
+                adapter.capabilities()
         );
     }
 
@@ -55,41 +56,37 @@ public class BlockchainRuntimeService {
     public Address generateDepositAddress(String chain, long userId, int biz) {
         RuntimeChain runtime = requireRuntime(chain);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
-        try {
+        if (adapter.capabilities().contains(BlockchainAdapter.Capability.ADDRESS_GENERATION)) {
             return adapter.generateDepositAddress(runtime.chainType(), userId, biz);
-        } catch (UnsupportedOperationException ignored) {
-            return addressRuntime.generateDepositAddress(runtime.chainType(), userId, biz);
         }
+        return addressRuntime.generateDepositAddress(runtime.chainType(), userId, biz);
     }
 
     public boolean checkAddress(String chain, String address) {
         RuntimeChain runtime = requireRuntime(chain);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
-        try {
+        if (adapter.capabilities().contains(BlockchainAdapter.Capability.ADDRESS_VALIDATION)) {
             return adapter.checkAddress(runtime.chainType(), address);
-        } catch (UnsupportedOperationException ignored) {
-            return addressRuntime.checkAddress(runtime.chainType(), address);
         }
+        return addressRuntime.checkAddress(runtime.chainType(), address);
     }
 
     public long depositConfirmationThreshold(AssetRuntimeMetadata asset) {
         RuntimeChain runtime = requireRuntime(asset);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
-        try {
+        if (adapter.capabilities().contains(BlockchainAdapter.Capability.CONFIRMATION_POLICY)) {
             return adapter.depositConfirmationThreshold(runtime.chainType());
-        } catch (UnsupportedOperationException ignored) {
-            return profile(asset).getDepositConfirmations();
         }
+        return profile(asset).getDepositConfirmations();
     }
 
     public long dustThresholdAtomic(AssetRuntimeMetadata asset) {
         RuntimeChain runtime = requireRuntime(asset);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
-        try {
+        if (adapter.capabilities().contains(BlockchainAdapter.Capability.DUST_POLICY)) {
             return adapter.dustThresholdAtomic(runtime.chainType());
-        } catch (UnsupportedOperationException ignored) {
-            return 0L;
         }
+        return 0L;
     }
 
     public long bestHeight(AssetRuntimeMetadata asset) {
@@ -107,20 +104,16 @@ public class BlockchainRuntimeService {
     public void updateTransactionConfirmations(AssetRuntimeMetadata asset) {
         RuntimeChain runtime = requireRuntime(asset);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
-        try {
+        if (adapter.capabilities().contains(BlockchainAdapter.Capability.CONFIRMATION_REFRESH)) {
             adapter.updateTransactionConfirmations(runtime.chainType());
-        } catch (UnsupportedOperationException ignored) {
-            // Account-chain scanners refresh confirmations in their own workflow services.
         }
     }
 
     public void updateTotalBalance(AssetRuntimeMetadata asset) {
         RuntimeChain runtime = requireRuntime(asset);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
-        try {
+        if (adapter.capabilities().contains(BlockchainAdapter.Capability.BALANCE_REFRESH)) {
             adapter.updateTotalBalance(runtime.chainType());
-        } catch (UnsupportedOperationException ignored) {
-            // Ledger balance is the runtime source; aggregate wallet-balance writes are no longer used.
         }
     }
 
@@ -204,7 +197,8 @@ public class BlockchainRuntimeService {
             String nativeSymbol,
             Integer runtimeCurrencyId,
             String adapterFamily,
-            String adapterDescription
+            String adapterDescription,
+            java.util.Set<BlockchainAdapter.Capability> capabilities
     ) {
     }
 }

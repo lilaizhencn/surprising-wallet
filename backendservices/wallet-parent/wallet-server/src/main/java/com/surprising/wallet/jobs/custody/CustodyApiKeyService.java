@@ -17,7 +17,7 @@ import java.util.UUID;
 public class CustodyApiKeyService {
     public static final Set<String> ALLOWED_SCOPES = Set.of(
             "addresses:read", "addresses:write", "assets:read", "deposits:read",
-            "withdrawals:read", "withdrawals:write");
+            "withdrawals:read", "withdrawals:write", "chains:read");
 
     private final CustodyRepository repository;
     private final CustodyCryptoService crypto;

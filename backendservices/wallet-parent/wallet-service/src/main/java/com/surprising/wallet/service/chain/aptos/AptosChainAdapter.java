@@ -31,6 +31,11 @@ public class AptosChainAdapter implements BlockchainAdapter {
     }
 
     @Override
+    public java.util.Set<Capability> capabilities() {
+        return java.util.Set.of(Capability.NATIVE_QUOTE, Capability.TOKEN_QUOTE);
+    }
+
+    @Override
     public String family() {
         return "aptos";
     }

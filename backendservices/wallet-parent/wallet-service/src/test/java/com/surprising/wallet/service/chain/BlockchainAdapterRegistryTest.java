@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -79,6 +80,8 @@ class BlockchainAdapterRegistryTest {
         assertTrue(unichainTokenQuote.supported());
         assertEquals("USDC", unichainTokenQuote.assetSymbol());
         assertTrue(unichainTokenQuote.payload() != null && !unichainTokenQuote.payload().isBlank());
-        assertThrows(UnsupportedOperationException.class, () -> registry.require(ChainType.POLYGON).scanDeposits(1L));
+        assertFalse(registry.require(ChainType.POLYGON).capabilities()
+                .contains(BlockchainAdapter.Capability.DEPOSIT_SCAN));
+        assertThrows(IllegalStateException.class, () -> registry.require(ChainType.POLYGON).scanDeposits(1L));
     }
 }

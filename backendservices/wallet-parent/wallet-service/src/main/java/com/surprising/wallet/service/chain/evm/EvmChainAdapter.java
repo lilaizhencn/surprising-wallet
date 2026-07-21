@@ -63,6 +63,15 @@ public class EvmChainAdapter implements BlockchainAdapter {
     }
 
     @Override
+    public java.util.Set<Capability> capabilities() {
+        return depositScanner == null
+                ? java.util.Set.of(Capability.NATIVE_QUOTE, Capability.TOKEN_QUOTE)
+                : java.util.Set.of(
+                        Capability.NATIVE_QUOTE, Capability.TOKEN_QUOTE,
+                        Capability.DEPOSIT_SCAN);
+    }
+
+    @Override
     public boolean supports(ChainType chainType) {
         return chainType != null && chainType.isEvm();
     }
@@ -105,7 +114,7 @@ public class EvmChainAdapter implements BlockchainAdapter {
     @Override
     public List<DepositEvent> scanDeposits(long height) {
         if (depositScanner == null) {
-            throw new UnsupportedOperationException("EVM deposit scanner runtime is not configured");
+            throw new IllegalStateException("EVM deposit scanner runtime is not configured");
         }
         try {
             return depositScanner.scanAndCreditNativeEth(height);

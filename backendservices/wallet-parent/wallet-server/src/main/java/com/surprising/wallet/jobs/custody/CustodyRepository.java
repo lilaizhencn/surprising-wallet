@@ -625,6 +625,16 @@ public class CustodyRepository {
         return requireAddress(tenantId, id);
     }
 
+    public void assignChainAddressTenant(UUID tenantId, long chainAddressId) {
+        if (jdbc.update("""
+                        update chain_address
+                           set tenant_id = ?, updated_at = now()
+                         where id = ? and (tenant_id is null or tenant_id = ?)
+                        """, tenantId, chainAddressId, tenantId) != 1) {
+            throw new IllegalStateException("chain address belongs to another tenant");
+        }
+    }
+
     public AddressRecord requireAddress(UUID tenantId, UUID addressId) {
         return jdbc.query("""
                         select id, tenant_id, chain_address_id, chain, network, address, memo,
@@ -1217,6 +1227,10 @@ public class CustodyRepository {
                                  where tenant_id = t.id and status = 'ACTIVE'
                             ) as has_api_key,
                             exists (
+                                select 1 from custody_tenant_chain tc
+                                 where tc.tenant_id = t.id and tc.status = 'ACTIVE'
+                            ) as has_open_chain,
+                            exists (
                                 select 1 from custody_webhook_endpoint
                                  where tenant_id = t.id and status = 'ACTIVE'
                                    and verified_at is not null
@@ -1263,22 +1277,24 @@ public class CustodyRepository {
                         """, (rs, rowNum) -> {
                     Map<String, Object> result = new LinkedHashMap<>();
                     boolean apiKey = rs.getBoolean("has_api_key");
+                    boolean openChain = rs.getBoolean("has_open_chain");
                     boolean webhook = rs.getBoolean("has_verified_webhook");
                     boolean allowlist = rs.getBoolean("has_ip_allowlist");
                     boolean address = rs.getBoolean("has_customer_address");
                     boolean gasAccount = rs.getBoolean("has_gas_account");
                     boolean fundedGas = rs.getBoolean("has_funded_gas");
                     result.put("apiKeyConfigured", apiKey);
+                    result.put("chainOpened", openChain);
                     result.put("webhookConfigured", webhook);
                     result.put("ipAllowlistConfigured", allowlist);
                     result.put("addressCreated", address);
                     result.put("gasAccountConfigured", gasAccount);
                     result.put("gasAccountFunded", fundedGas);
                     result.put("completedSteps", List.of(
-                            apiKey, webhook, allowlist, address, gasAccount, fundedGas)
+                            openChain, apiKey, webhook, allowlist, address, gasAccount, fundedGas)
                             .stream().filter(Boolean::booleanValue).count());
-                    result.put("totalSteps", 6);
-                    result.put("ready", apiKey && webhook && allowlist && address
+                    result.put("totalSteps", 7);
+                    result.put("ready", openChain && apiKey && webhook && allowlist && address
                             && gasAccount && fundedGas);
                     return result;
                 }, tenantId);
@@ -1701,13 +1717,16 @@ public class CustodyRepository {
             java.math.BigDecimal fee, String status, String createdByType, String createdById) {
         jdbc.update("""
                         insert into custody_withdrawal(
-                            id, tenant_id, custody_address_id, order_no, external_reference,
+                            id, tenant_id, custody_address_id, withdrawal_order_id,
+                            order_no, external_reference,
                             idempotency_key, chain, asset_symbol, to_address, amount, fee,
                             status, created_by_type, created_by_id)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        select ?, ?, ?, orders.id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                          from withdrawal_order orders
+                         where orders.tenant_id = ? and orders.chain = ? and orders.order_no = ?
                         """, id, tenantId, custodyAddressId, orderNo, externalReference,
                 idempotencyKey, chain, assetSymbol, toAddress, amount, fee, status,
-                createdByType, createdById);
+                createdByType, createdById, tenantId, chain, orderNo);
     }
 
     public List<Map<String, Object>> listCustodyWithdrawals(

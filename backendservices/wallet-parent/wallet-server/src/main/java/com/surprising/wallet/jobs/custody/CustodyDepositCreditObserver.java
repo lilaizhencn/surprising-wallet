@@ -76,6 +76,23 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
         if (depositRecordId == null) {
             throw new IllegalStateException("credited deposit record is missing");
         }
+        if (jdbc.update("""
+                        update deposit_record
+                           set tenant_id = ?, updated_at = now()
+                         where id = ? and (tenant_id is null or tenant_id = ?)
+                        """, owner.tenantId(), depositRecordId, owner.tenantId()) != 1) {
+            throw new IllegalStateException("deposit record belongs to another tenant");
+        }
+        if (jdbc.update("""
+                        update ledger_balance
+                           set tenant_id = ?, updated_at = now()
+                         where chain = ? and asset_symbol = ?
+                           and lower(account_id) = lower(?)
+                           and (tenant_id is null or tenant_id = ?)
+                        """, owner.tenantId(), chain, event.assetSymbol(), accountId,
+                owner.tenantId()) != 1) {
+            throw new IllegalStateException("ledger balance belongs to another tenant");
+        }
 
         UUID custodyDepositId = jdbc.queryForObject("""
                         insert into custody_deposit(

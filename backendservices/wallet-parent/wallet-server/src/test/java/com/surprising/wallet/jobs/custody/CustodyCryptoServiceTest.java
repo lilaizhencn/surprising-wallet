@@ -22,8 +22,9 @@ class CustodyCryptoServiceTest {
         assertNotEquals(first, second);
         assertEquals("tenant-secret", crypto.decrypt(first));
         assertEquals("tenant-secret", crypto.decrypt(second));
-        char last = first.charAt(first.length() - 1);
-        String tampered = first.substring(0, first.length() - 1) + (last == 'A' ? "B" : "A");
+        byte[] payload = Base64.getUrlDecoder().decode(first.substring("v1:".length()));
+        payload[payload.length - 1] ^= 1;
+        String tampered = "v1:" + Base64.getUrlEncoder().withoutPadding().encodeToString(payload);
         assertThrows(IllegalStateException.class, () -> crypto.decrypt(tampered));
     }
 

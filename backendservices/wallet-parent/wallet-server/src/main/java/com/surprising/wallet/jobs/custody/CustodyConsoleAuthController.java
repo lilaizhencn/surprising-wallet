@@ -1,6 +1,7 @@
 package com.surprising.wallet.jobs.custody;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,9 +21,14 @@ public class CustodyConsoleAuthController {
 
     @PostMapping("/login")
     public CustodyAuthService.LoginResult login(@RequestBody TenantLoginRequest body,
-                                                HttpServletRequest request) {
-        return auth.tenantLogin(body.tenantSlug(), body.email(), body.password(),
+                                                HttpServletRequest request,
+                                                HttpServletResponse response) {
+        CustodyAuthService.LoginResult result = auth.tenantLogin(body.tenantSlug(), body.email(), body.password(),
                 CustodyRequestSupport.clientIp(request), request.getHeader("User-Agent"));
+        CustodySessionCookie.set(response, result.token(),
+                java.time.Duration.between(java.time.Instant.now(), result.expiresAt()),
+                auth.sessionCookieSecure());
+        return result;
     }
 
     @GetMapping("/me")
@@ -37,8 +43,9 @@ public class CustodyConsoleAuthController {
     }
 
     @PostMapping("/logout")
-    public Map<String, Object> logout(HttpServletRequest request) {
+    public Map<String, Object> logout(HttpServletRequest request, HttpServletResponse response) {
         auth.logout(request);
+        CustodySessionCookie.clear(response, auth.sessionCookieSecure());
         return Map.of("ok", true);
     }
 

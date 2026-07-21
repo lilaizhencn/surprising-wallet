@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.jobs.custody.CustodyRepository.AddressRecord;
 import com.surprising.wallet.jobs.custody.CustodyRepository.IdempotencyRecord;
 import com.surprising.wallet.jobs.custody.CustodyRepository.TenantRecord;
-import com.surprising.wallet.jobs.walletapp.WalletAppService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,19 +21,22 @@ public class CustodyWithdrawalService {
     private static final String CREATE_OPERATION = "WITHDRAWAL.CREATE";
 
     private final CustodyRepository repository;
-    private final WalletAppService walletAppService;
+    private final CustodyWithdrawalExecutionService executionService;
     private final CustodyGasService gasService;
+    private final CustodyTenantChainService tenantChains;
     private final CustodyCryptoService crypto;
     private final ObjectMapper objectMapper;
 
     public CustodyWithdrawalService(CustodyRepository repository,
-                                    WalletAppService walletAppService,
+                                    CustodyWithdrawalExecutionService executionService,
                                     CustodyGasService gasService,
+                                    CustodyTenantChainService tenantChains,
                                     CustodyCryptoService crypto,
                                     ObjectMapper objectMapper) {
         this.repository = repository;
-        this.walletAppService = walletAppService;
+        this.executionService = executionService;
         this.gasService = gasService;
+        this.tenantChains = tenantChains;
         this.crypto = crypto;
         this.objectMapper = objectMapper;
     }
@@ -62,6 +64,7 @@ public class CustodyWithdrawalService {
         if (!address.chain().equals(chain)) {
             throw new IllegalArgumentException("custody address belongs to a different chain");
         }
+        tenantChains.requireActive(principal.tenantId(), chain);
         String toAddress = required(command.toAddress(), "toAddress", 160);
         String amount = required(command.amount(), "amount", 120);
         String externalReference = optional(command.externalReference(), 160);
@@ -93,19 +96,15 @@ public class CustodyWithdrawalService {
         String tenantOrderSlug = tenant.slug().substring(0, Math.min(tenant.slug().length(), 32));
         String orderPrefix = "CW-" + tenantOrderSlug + "-"
                 + address.id().toString().substring(0, 8);
-        Map<String, Object> result = walletAppService.withdrawForAccount(
-                Integer.toUnsignedLong(address.derivationSubject()),
-                tenant.derivationNamespace(),
-                new WalletAppService.WithdrawRequest(
-                        chain, symbol, toAddress, amount, Boolean.TRUE),
-                orderPrefix,
-                true);
+        CustodyWithdrawalExecutionService.ExecutionResult result = executionService.execute(
+                tenant.id(), address, chain, symbol, toAddress,
+                new BigDecimal(amount), orderPrefix);
         UUID withdrawalId = UUID.randomUUID();
-        String orderNo = String.valueOf(result.get("orderNo"));
-        String status = String.valueOf(result.get("status"));
-        BigDecimal amountValue = decimal(result.get("amount"), "withdrawal amount");
-        BigDecimal feeValue = decimal(result.get("fee"), "withdrawal fee");
-        String broadcastAddress = String.valueOf(result.get("toAddress"));
+        String orderNo = result.orderNo();
+        String status = result.status();
+        BigDecimal amountValue = result.amount();
+        BigDecimal feeValue = result.fee();
+        String broadcastAddress = result.toAddress();
         repository.insertCustodyWithdrawal(
                 withdrawalId,
                 tenant.id(),
@@ -207,17 +206,6 @@ public class CustodyWithdrawalService {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("value cannot be serialized as JSON", e);
-        }
-    }
-
-    private static BigDecimal decimal(Object value, String field) {
-        if (value instanceof BigDecimal decimal) {
-            return decimal;
-        }
-        try {
-            return new BigDecimal(String.valueOf(value));
-        } catch (NumberFormatException e) {
-            throw new IllegalStateException(field + " is invalid", e);
         }
     }
 

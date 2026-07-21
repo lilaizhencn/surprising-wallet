@@ -78,6 +78,11 @@ class BlockchainRuntimeServiceTest {
         }
 
         @Override
+        public java.util.Set<Capability> capabilities() {
+            return java.util.Set.of(Capability.NATIVE_QUOTE);
+        }
+
+        @Override
         public boolean supports(ChainType chainType) {
             return chainType != null && chainType.isEvm();
         }

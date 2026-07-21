@@ -77,7 +77,7 @@ public class ChainAddressRuntime {
             case DOT -> PolkadotKeyService.isValidSs58Address(value);
             case NEAR -> NearKeyService.isValidAccountId(value);
             case XMR -> MoneroAddressValidator.isValid(value);
-            default -> throw new UnsupportedOperationException(
+            default -> throw new IllegalStateException(
                     "address validation is not implemented by generic runtime for " + chainType);
         };
     }

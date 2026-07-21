@@ -21,11 +21,14 @@ import java.util.Map;
 public class CustodyPublicApiController {
     private final CustodyAddressService addresses;
     private final CustodyWithdrawalService transfers;
+    private final CustodyTenantChainService chains;
 
     public CustodyPublicApiController(CustodyAddressService addresses,
-                                      CustodyWithdrawalService transfers) {
+                                      CustodyWithdrawalService transfers,
+                                      CustodyTenantChainService chains) {
         this.addresses = addresses;
         this.transfers = transfers;
+        this.chains = chains;
     }
 
     @PostMapping("/addresses")
@@ -55,6 +58,13 @@ public class CustodyPublicApiController {
     @GetMapping("/assets")
     public List<Map<String, Object>> assets(HttpServletRequest request) {
         return addresses.assets(CustodyRequestSupport.requirePrincipal(request));
+    }
+
+    @GetMapping("/chains")
+    public List<CustodyTenantChainService.ChainView> chains(HttpServletRequest request) {
+        return chains.list(CustodyRequestSupport.requirePrincipal(request)).stream()
+                .filter(CustodyTenantChainService.ChainView::enabled)
+                .toList();
     }
 
     @GetMapping("/deposits")

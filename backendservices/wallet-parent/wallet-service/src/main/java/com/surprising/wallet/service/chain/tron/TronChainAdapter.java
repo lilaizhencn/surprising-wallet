@@ -1,14 +1,12 @@
 package com.surprising.wallet.service.chain.tron;
 
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TransferQuote;
 import com.surprising.wallet.common.chain.TransferRequest;
 import com.surprising.wallet.service.chain.BlockchainAdapter;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.util.List;
 
 @Component
 public class TronChainAdapter implements BlockchainAdapter {
@@ -17,6 +15,11 @@ public class TronChainAdapter implements BlockchainAdapter {
     @Override
     public ChainType chainType() {
         return ChainType.TRON;
+    }
+
+    @Override
+    public java.util.Set<Capability> capabilities() {
+        return java.util.Set.of(Capability.NATIVE_QUOTE, Capability.TOKEN_QUOTE);
     }
 
     @Override
@@ -45,8 +48,4 @@ public class TronChainAdapter implements BlockchainAdapter {
                 "tron trc20 transfer");
     }
 
-    @Override
-    public List<DepositEvent> scanDeposits(long height) {
-        throw new UnsupportedOperationException("TRON deposit scanning requires the RPC-backed TronScanner runtime; empty scans are forbidden");
-    }
 }

@@ -11,6 +11,7 @@ public class CustodySecurityProperties {
     private String secretMasterKey = "";
     private Duration sessionTtl = Duration.ofHours(12);
     private Duration apiClockSkew = Duration.ofMinutes(5);
+    private boolean sessionCookieSecure;
     private final PlatformAdmin platformAdmin = new PlatformAdmin();
 
     public String getSecretMasterKey() {
@@ -39,6 +40,14 @@ public class CustodySecurityProperties {
 
     public PlatformAdmin getPlatformAdmin() {
         return platformAdmin;
+    }
+
+    public boolean isSessionCookieSecure() {
+        return sessionCookieSecure;
+    }
+
+    public void setSessionCookieSecure(boolean sessionCookieSecure) {
+        this.sessionCookieSecure = sessionCookieSecure;
     }
 
     public static class PlatformAdmin {

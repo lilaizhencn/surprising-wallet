@@ -19,10 +19,10 @@ class CustodySchemaContractTest {
             "keypairs", "755b669714430fc2aa814bca1402907bf3bd6636a6381c746db6bae19aec0fc7");
 
     @Test
-    void additiveSchemaContainsTenantIsolationAndReliableEvents() throws Exception {
+    void cleanBaselineContainsTenantIsolationAndReliableEvents() throws Exception {
         Path root = projectRoot();
         String sql = Files.readString(root.resolve(
-                "backendservices/wallet-parent/wallet-server/src/main/resources/db/custody-schema.sql"));
+                "docs/db/surprising-wallet-init-pgsql.sql"));
 
         for (String table : new String[]{
                 "custody_tenant", "custody_tenant_user", "custody_session", "custody_api_key",
@@ -31,25 +31,30 @@ class CustodySchemaContractTest {
                 "custody_deposit", "custody_withdrawal",
                 "custody_gas_usage", "custody_ledger_entry", "custody_event", "custody_webhook_delivery",
                 "custody_webhook_delivery_attempt",
-                "custody_idempotency_key", "custody_audit_log"}) {
-            assertTrue(sql.contains("CREATE TABLE IF NOT EXISTS " + table), table + " is required");
+                "custody_idempotency_key", "custody_audit_log", "custody_tenant_chain",
+                "custody_asset_price"}) {
+            assertTrue(sql.contains("CREATE TABLE public." + table), table + " is required");
         }
+        assertFalse(sql.contains("intentionally additive"));
+        assertFalse(sql.contains("legacy:"));
+        assertFalse(sql.contains("CREATE TABLE IF NOT EXISTS"));
         assertTrue(sql.contains("UNIQUE (tenant_id, event_type, aggregate_type, aggregate_id)"));
         assertTrue(sql.contains("UNIQUE (tenant_id, entry_type, reference_type, reference_id)"));
         assertTrue(sql.contains("PRIMARY KEY (tenant_id, subject)"));
         assertTrue(sql.contains("custody_derivation_subject_path_key UNIQUE (derivation_subject)"));
-        assertTrue(sql.contains("CONSTRAINT custody_address_chain_address_key UNIQUE (chain_address_id)"));
-        assertTrue(sql.contains("UNIQUE (tenant_id, chain, derivation_subject, derivation_child)"));
-        assertTrue(sql.contains("total_attempt_count integer NOT NULL DEFAULT 0"));
-        assertTrue(sql.contains("manual_retry_count integer NOT NULL DEFAULT 0"));
+        assertTrue(sql.contains("UNIQUE (chain_address_id)"));
+        assertTrue(sql.contains("custody_address_derivation_key ON public.custody_address USING btree (tenant_id, chain, derivation_subject, derivation_child)"));
+        assertTrue(sql.contains("total_attempt_count integer DEFAULT 0 NOT NULL"));
+        assertTrue(sql.contains("manual_retry_count integer DEFAULT 0 NOT NULL"));
         assertTrue(sql.contains("UNIQUE (delivery_id, attempt_number)"));
         assertTrue(sql.contains("UNIQUE (custody_withdrawal_id)"));
-        assertTrue(sql.contains("status IN ('RESERVED', 'SETTLED', 'RELEASED', 'OVERDUE')"));
+        assertTrue(sql.contains("custody_gas_usage_status_check"));
+        assertTrue(sql.contains("'RESERVED'::character varying, 'SETTLED'::character varying, 'RELEASED'::character varying, 'OVERDUE'::character varying"));
         assertTrue(sql.contains("chain_profile_one_enabled_network_idx"));
-        assertTrue(sql.contains("ON chain_profile (upper(chain)) WHERE enabled = true"));
-        assertTrue(sql.contains("token_config_chain_network_symbol_key\n    ON token_config (chain, network, symbol)"));
+        assertTrue(sql.contains("upper((chain)::text)) WHERE (enabled = true)"));
+        assertTrue(sql.contains("token_config_chain_network_symbol_key ON public.token_config"));
         assertTrue(sql.contains("token_config_one_enabled_network_per_asset_idx"));
-        assertTrue(sql.contains("WHERE enabled = true"));
+        assertTrue(sql.contains("WHERE (enabled = true)"));
         assertTrue(sql.contains("https://developers.circle.com/stablecoins/usdc-contract-addresses"));
         assertTrue(sql.contains("https://tether.to/en/supported-protocols/"));
         assertTrue(sql.contains("https://docs.usdt0.to/technical-documentation/deployments"));
@@ -65,18 +70,17 @@ class CustodySchemaContractTest {
         assertTrue(sql.contains("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"));
         assertTrue(sql.contains("stablecoin.decimals, false, 1, 1, 1, 1, false, 1"),
                 "mainnet stablecoins must remain disabled for transfers and collection");
-        assertTrue(sql.contains("last_checked_at timestamptz"));
+        assertTrue(sql.contains("last_checked_at timestamp with time zone"));
         assertTrue(sql.contains("last_latency_ms bigint"));
         assertTrue(sql.matches(
-                "(?s).*CREATE TABLE IF NOT EXISTS custody_idempotency_key \\(.*"
-                        + "expires_at timestamptz,\\R\\s+created_at timestamptz.*"));
+                "(?s).*CREATE TABLE public.custody_idempotency_key \\(.*"
+                        + "expires_at timestamp with time zone,\\R\\s+created_at timestamp with time zone.*"));
+        assertTrue(sql.contains("FOREIGN KEY (tenant_id, chain_address_id) REFERENCES public.chain_address(tenant_id, id)"));
+        assertTrue(sql.contains("FOREIGN KEY (tenant_id, deposit_record_id) REFERENCES public.deposit_record(tenant_id, id)"));
+        assertTrue(sql.contains("FOREIGN KEY (tenant_id, withdrawal_order_id) REFERENCES public.withdrawal_order(tenant_id, id)"));
         assertFalse(CustodyWebhookService.ALLOWED_EVENTS.contains("ADDRESS.CREATED"));
 
-        String databaseSeed = Files.readString(root.resolve("docs/db/surprising-wallet-init-pgsql.sql"));
-        assertTrue(databaseSeed.contains(
-                "token_config_chain_network_symbol_key\" UNIQUE (\"chain\", \"network\", \"symbol\")"));
-        assertTrue(databaseSeed.contains(
-                "token_config_chain_network_contract_address_key\" UNIQUE (\"chain\", \"network\", \"contract_address\")"));
+        assertTrue(sql.contains("token_config_chain_network_contract_address_key"));
     }
 
     @Test

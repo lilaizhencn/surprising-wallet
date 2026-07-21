@@ -31,6 +31,16 @@ public class DogeChainAdapter implements BlockchainAdapter {
     }
 
     @Override
+    public java.util.Set<Capability> capabilities() {
+        return java.util.EnumSet.of(
+                Capability.NATIVE_QUOTE, Capability.ADDRESS_GENERATION,
+                Capability.ADDRESS_VALIDATION, Capability.CONFIRMATION_POLICY,
+                Capability.DUST_POLICY, Capability.BEST_HEIGHT,
+                Capability.BLOCK_TRANSACTION_SCAN, Capability.CONFIRMATION_REFRESH,
+                Capability.BALANCE_REFRESH, Capability.SIGNED_TRANSACTION_BROADCAST);
+    }
+
+    @Override
     public String family() {
         return "dogecoin";
     }
