@@ -40,8 +40,8 @@ public class AptosAddressService {
                 });
     }
 
-    public ChainAddressRecord createCoinAddress(String symbol, long userId, int biz,
-                                                long derivationIndex, String walletRole) {
+    public ChainAddressRecord createTokenAddress(String symbol, long userId, int biz,
+                                                 long derivationIndex, String walletRole) {
         HotWalletRules.requireAllowedReservedAddress(CHAIN, symbol, "APT", userId, biz, derivationIndex, walletRole);
         ChainAddressRecord owner = createNativeAddress(userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)

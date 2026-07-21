@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AptosDepositScanner {
     private static final String CHAIN = "APTOS";
-    private static final String SCANNER = "aptos-coin-event-scanner";
+    static final String SCANNER = "aptos-fa-event-scanner";
     private static final String FUNGIBLE_DEPOSIT = "0x1::fungible_asset::Deposit";
     private static final String FUNGIBLE_STORE = "0x1::fungible_asset::FungibleStore";
     private static final String OBJECT_CORE = "0x1::object::ObjectCore";
@@ -48,15 +48,9 @@ public class AptosDepositScanner {
                 .collect(Collectors.toMap(address -> AptosHex.normalizeAddress(address.getAddress()),
                         address -> address, (a, b) -> a));
         Map<String, TokenDefinition> metadataTokens = repository.listTokens(CHAIN).stream()
-                .filter(token -> AptosTokenStandard.from(token) == AptosTokenStandard.FUNGIBLE_ASSET)
+                .filter(AptosFungibleAsset::supports)
                 .collect(Collectors.toMap(token -> AptosHex.normalizeAddress(token.getContractAddress()),
                         token -> token, (a, b) -> a));
-        repository.listTokens(CHAIN).stream()
-                .filter(token -> AptosTokenStandard.from(token) == AptosTokenStandard.COIN)
-                .forEach(token -> {
-                    Optional<String> metadata = rpc.pairedMetadata(token.getContractAddress());
-                    metadata.ifPresent(address -> metadataTokens.put(address, token));
-                });
 
         long start = repository.findScanSafeHeight(CHAIN, SCANNER)
                 .map(height -> Math.min(height + 1L, ledgerVersion))
@@ -69,7 +63,6 @@ public class AptosDepositScanner {
             }
             start += limit;
         }
-        scanCoinStoreDeposits(profile, ledgerVersion, events, scanLimit);
         long safeVersion = Math.max(0, ledgerVersion - profile.getDepositConfirmations() + 1L);
         repository.updateScanHeight(CHAIN, SCANNER, ledgerVersion, safeVersion);
         return events;
@@ -125,7 +118,7 @@ public class AptosDepositScanner {
                     .sender(sender)
                     .receiver(asset.address().getAddress())
                     .assetSymbol(asset.symbol())
-                    .coinType(asset.coinType())
+                    .coinType(asset.assetType())
                     .amount(amount)
                     .gasUsed(transaction.path("gas_used").asLong(0))
                     .gasUnitPrice(transaction.path("gas_unit_price").asLong(0))
@@ -139,78 +132,6 @@ public class AptosDepositScanner {
                     asset.address().getAccountId());
             events.add(event);
         }
-    }
-
-    private void scanCoinStoreDeposits(AccountChainProfile profile, long ledgerVersion,
-                                       List<DepositEvent> events, int scanLimit) {
-        for (TokenDefinition token : repository.listTokens(CHAIN)) {
-            if (AptosTokenStandard.from(token) != AptosTokenStandard.COIN) {
-                continue;
-            }
-            String coinType = token.getContractAddress();
-            if (coinType == null || coinType.isBlank()) {
-                continue;
-            }
-            for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, token.getSymbol())) {
-                if (!"DEPOSIT".equals(address.getWalletRole())) {
-                    continue;
-                }
-                long counter = rpc.coinDepositEventCounter(address.getAddress(), coinType);
-                for (long start = 0; start < counter; start += scanLimit) {
-                    int limit = (int) Math.min(scanLimit, counter - start);
-                    JsonNode depositEvents = rpc.coinDepositEvents(address.getAddress(), coinType, start, limit);
-                    for (JsonNode eventNode : depositEvents) {
-                        scanCoinStoreDepositEvent(eventNode, token, address, profile, ledgerVersion, events);
-                    }
-                }
-            }
-        }
-    }
-
-    private void scanCoinStoreDepositEvent(JsonNode eventNode, TokenDefinition token,
-                                           ChainAddressRecord address, AccountChainProfile profile,
-                                           long ledgerVersion, List<DepositEvent> events) {
-        BigDecimal rawAmount = new BigDecimal(eventNode.path("data").path("amount").asText("0"));
-        if (rawAmount.signum() <= 0) {
-            return;
-        }
-        BigDecimal amount = rawAmount.movePointLeft(token.getDecimals());
-        long version = eventNode.path("version").asLong(0);
-        JsonNode transaction = rpc.transactionByVersion(version);
-        if (transaction == null || transaction.isNull()
-                || !"user_transaction".equals(transaction.path("type").asText())
-                || !transaction.path("success").asBoolean(false)) {
-            return;
-        }
-        String sender = AptosHex.normalizeAddress(transaction.path("sender").asText("0x0"));
-        if (isPlatformAddress(sender)) {
-            return;
-        }
-        String hash = transaction.path("hash").asText(Long.toString(version));
-        int confirmations = (int) Math.min(Integer.MAX_VALUE, Math.max(1, ledgerVersion - version + 1));
-        long eventIndex = eventNode.path("sequence_number").asLong(0);
-        DepositEvent event = new DepositEvent(ChainType.APTOS, token.getSymbol(), hash, sender,
-                address.getAddress(), amount, version, confirmations, token.getContractAddress(),
-                transaction.toString());
-        repository.recordAptosTransaction(AptosTransactionRecord.builder()
-                .chain(CHAIN)
-                .txHash(hash)
-                .sender(sender)
-                .receiver(address.getAddress())
-                .assetSymbol(token.getSymbol())
-                .coinType(token.getContractAddress())
-                .amount(amount)
-                .gasUsed(transaction.path("gas_used").asLong(0))
-                .gasUnitPrice(transaction.path("gas_unit_price").asLong(0))
-                .version(version)
-                .sequenceNumber(transaction.path("sequence_number").asLong(0))
-                .confirmations(confirmations)
-                .status(confirmations >= profile.getDepositConfirmations() ? "CONFIRMED" : "CONFIRMING")
-                .rawPayload(transaction.toString())
-                .build());
-        repository.recordAndCreditDeposit(event, eventIndex, profile.getDepositConfirmations(),
-                address.getAccountId());
-        events.add(event);
     }
 
     private AccountChainProfile profile() {
@@ -295,7 +216,7 @@ public class AptosDepositScanner {
         }
     }
 
-    private record ResolvedAsset(String symbol, String coinType, String tokenAddress, ChainAddressRecord address,
+    private record ResolvedAsset(String symbol, String assetType, String tokenAddress, ChainAddressRecord address,
                                  int decimals) {
     }
 }

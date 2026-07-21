@@ -49,34 +49,9 @@ public class AptosTransactionService {
         return rpc.submitTransaction(tx.json());
     }
 
-    public String sendCoin(long derivationIndex, String fromAddress, String coinType,
-                           String toAddress, long amountAtomic) {
-        return sendCoin(0L, 0, derivationIndex, fromAddress, coinType, toAddress, amountAtomic);
-    }
-
-    public String sendCoin(ChainAddressRecord from, String coinType, String toAddress, long amountAtomic) {
-        return sendCoin(from.getUserId(), from.getBiz(), from.getAddressIndex(),
-                from.getAddress(), coinType, toAddress, amountAtomic);
-    }
-
-    private String sendCoin(long userId, int biz, long derivationIndex, String fromAddress, String coinType,
-                            String toAddress, long amountAtomic) {
-        GasPlan gas = gasPlan();
-        long chainSequence = rpc.sequenceNumber(fromAddress);
-        long sequence = repository.reserveAccountSequence(CHAIN, AptosHex.normalizeAddress(fromAddress), chainSequence);
-        AptosTransactionSigner.SignedTransaction tx = signer.coinTransfer(
-                userId, biz, derivationIndex, fromAddress, sequence, coinType, toAddress, amountAtomic,
-                gas.maxGasAmount(), gas.gasUnitPrice(), rpc.chainId());
-        return rpc.submitTransaction(tx.json());
-    }
-
     public String sendToken(ChainAddressRecord from, TokenDefinition token,
                             String toAddress, long amountAtomic) {
-        String contractAddress = requireContractAddress(token);
-        return switch (AptosTokenStandard.from(token)) {
-            case COIN -> sendCoin(from, contractAddress, toAddress, amountAtomic);
-            case FUNGIBLE_ASSET -> sendFungibleAsset(from, contractAddress, toAddress, amountAtomic);
-        };
+        return sendFungibleAsset(from, AptosFungibleAsset.requireMetadata(token), toAddress, amountAtomic);
     }
 
     public String sendFungibleAsset(ChainAddressRecord from, String metadataAddress,
@@ -88,19 +63,6 @@ public class AptosTransactionService {
         AptosTransactionSigner.SignedTransaction tx = signer.fungibleAssetTransfer(
                 from.getUserId(), from.getBiz(), from.getAddressIndex(), from.getAddress(), sequence,
                 metadataAddress, toAddress, amountAtomic,
-                gas.maxGasAmount(), gas.gasUnitPrice(), rpc.chainId());
-        return rpc.submitTransaction(tx.json());
-    }
-
-    public String registerCoin(long derivationIndex, String ownerAddress, String coinType) {
-        if (rpc.coinStoreExists(ownerAddress, coinType)) {
-            return "";
-        }
-        GasPlan gas = gasPlan();
-        long chainSequence = rpc.sequenceNumber(ownerAddress);
-        long sequence = repository.reserveAccountSequence(CHAIN, AptosHex.normalizeAddress(ownerAddress), chainSequence);
-        AptosTransactionSigner.SignedTransaction tx = signer.managedCoinRegister(
-                derivationIndex, ownerAddress, sequence, coinType,
                 gas.maxGasAmount(), gas.gasUnitPrice(), rpc.chainId());
         return rpc.submitTransaction(tx.json());
     }
@@ -336,14 +298,6 @@ public class AptosTransactionService {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
-    }
-
-    private static String requireContractAddress(TokenDefinition token) {
-        String contractAddress = token == null ? null : token.getContractAddress();
-        if (contractAddress == null || contractAddress.isBlank()) {
-            throw new IllegalArgumentException("Aptos token contract address is required");
-        }
-        return contractAddress.trim();
     }
 
     private void record(String hash, String sender, String receiver, String symbol, String coinType,

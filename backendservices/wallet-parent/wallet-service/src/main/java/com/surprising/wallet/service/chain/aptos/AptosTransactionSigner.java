@@ -44,23 +44,6 @@ public class AptosTransactionSigner {
                 maxGasAmount, gasUnitPrice, chainId);
     }
 
-    public SignedTransaction coinTransfer(long derivationIndex, String sender, long sequenceNumber,
-                                          String coinType, String recipient, long amountAtomic,
-                                          long maxGasAmount, long gasUnitPrice, int chainId) {
-        return coinTransfer(0L, 0, derivationIndex, sender, sequenceNumber,
-                coinType, recipient, amountAtomic, maxGasAmount, gasUnitPrice, chainId);
-    }
-
-    public SignedTransaction coinTransfer(long userId, int biz, long derivationIndex,
-                                          String sender, long sequenceNumber,
-                                          String coinType, String recipient, long amountAtomic,
-                                          long maxGasAmount, long gasUnitPrice, int chainId) {
-        return sign(userId, biz, derivationIndex, sender, sequenceNumber,
-                APTOS_ACCOUNT_MODULE, "transfer_coins", List.of(coinType),
-                List.of(FunctionArgument.address(recipient), FunctionArgument.u64(amountAtomic)),
-                maxGasAmount, gasUnitPrice, chainId);
-    }
-
     public SignedTransaction fungibleAssetTransfer(long derivationIndex, String sender, long sequenceNumber,
                                                     String metadataAddress, String recipient, long amountAtomic,
                                                     long maxGasAmount, long gasUnitPrice, int chainId) {
@@ -76,22 +59,6 @@ public class AptosTransactionSigner {
                 PRIMARY_FUNGIBLE_STORE_MODULE, "transfer", List.of(FUNGIBLE_ASSET_METADATA_TYPE),
                 List.of(FunctionArgument.address(metadataAddress), FunctionArgument.address(recipient),
                         FunctionArgument.u64(amountAtomic)),
-                maxGasAmount, gasUnitPrice, chainId);
-    }
-
-    public SignedTransaction managedCoinRegister(long derivationIndex, String sender, long sequenceNumber,
-                                                 String coinType, long maxGasAmount,
-                                                 long gasUnitPrice, int chainId) {
-        return managedCoinRegister(0L, 0, derivationIndex, sender, sequenceNumber,
-                coinType, maxGasAmount, gasUnitPrice, chainId);
-    }
-
-    public SignedTransaction managedCoinRegister(long userId, int biz, long derivationIndex,
-                                                 String sender, long sequenceNumber,
-                                                 String coinType, long maxGasAmount,
-                                                 long gasUnitPrice, int chainId) {
-        return sign(userId, biz, derivationIndex, sender, sequenceNumber,
-                "0x1::managed_coin", "register", List.of(coinType), List.of(),
                 maxGasAmount, gasUnitPrice, chainId);
     }
 

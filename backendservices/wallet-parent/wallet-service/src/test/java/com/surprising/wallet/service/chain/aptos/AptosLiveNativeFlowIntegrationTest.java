@@ -90,7 +90,7 @@ class AptosLiveNativeFlowIntegrationTest {
     private static void waitForBalanceAtLeast(AptosRpcClient rpc, String address, long amount, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
-            if (rpc.coinBalance(address, AptosRpcClient.aptCoinType()) >= amount) {
+            if (rpc.aptBalance(address) >= amount) {
                 return;
             }
             sleep(1_000L);

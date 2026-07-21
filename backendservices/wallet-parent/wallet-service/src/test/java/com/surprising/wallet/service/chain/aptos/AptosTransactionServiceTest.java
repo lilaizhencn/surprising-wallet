@@ -39,22 +39,6 @@ class AptosTransactionServiceTest {
     }
 
     @Test
-    void keepsConfiguredCoinTokensOnCoinTransfer() {
-        AptosKeyService keys = new AptosKeyService(MASTER_SEED);
-        CapturingRpc rpc = new CapturingRpc();
-        AptosTransactionService service = new AptosTransactionService(
-                rpc, new AptosTransactionSigner(keys), new FakeRepository());
-        ChainAddressRecord from = address(keys, 24);
-        String coinType = keys.address(25) + "::mock_coin::MockCoin";
-
-        service.sendToken(from, token("APTOS_COIN", coinType), keys.address(26), 99L);
-
-        ObjectNode payload = (ObjectNode) rpc.submitted.path("payload");
-        assertEquals("0x1::aptos_account::transfer_coins", payload.path("function").asText());
-        assertEquals(coinType, payload.path("type_arguments").get(0).asText());
-    }
-
-    @Test
     void rejectsUnknownAptosTokenStandards() {
         AptosKeyService keys = new AptosKeyService(MASTER_SEED);
         AptosTransactionService service = new AptosTransactionService(

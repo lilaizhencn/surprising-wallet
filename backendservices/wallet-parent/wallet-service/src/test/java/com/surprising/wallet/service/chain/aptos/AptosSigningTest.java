@@ -33,22 +33,6 @@ class AptosSigningTest {
     }
 
     @Test
-    void buildsCoinTransferWithTypeArgument() {
-        AptosKeyService keys = new AptosKeyService(MASTER_SEED);
-        AptosTransactionSigner signer = new AptosTransactionSigner(keys);
-        String sender = keys.address(9);
-        String recipient = keys.address(10);
-
-        AptosTransactionSigner.SignedTransaction signed = signer.coinTransfer(
-                9, sender, 0, "0x1::aptos_coin::AptosCoin", recipient, 5, 2_000, 100, 4);
-
-        assertEquals("0x1::aptos_account::transfer_coins",
-                signed.json().path("payload").path("function").asText());
-        assertEquals("0x1::aptos_coin::AptosCoin",
-                signed.json().path("payload").path("type_arguments").get(0).asText());
-    }
-
-    @Test
     void buildsFungibleAssetTransferWithMetadataObject() {
         AptosKeyService keys = new AptosKeyService(MASTER_SEED);
         AptosTransactionSigner signer = new AptosTransactionSigner(keys);
@@ -68,19 +52,4 @@ class AptosSigningTest {
         assertTrue(signed.rawTransaction().length > 0);
     }
 
-    @Test
-    void buildsManagedCoinRegisterWithNoArguments() {
-        AptosKeyService keys = new AptosKeyService(MASTER_SEED);
-        AptosTransactionSigner signer = new AptosTransactionSigner(keys);
-        String sender = keys.address(11);
-
-        AptosTransactionSigner.SignedTransaction signed = signer.managedCoinRegister(
-                11, sender, 0, "0x1::aptos_coin::AptosCoin", 2_000, 100, 4);
-
-        assertEquals("0x1::managed_coin::register",
-                signed.json().path("payload").path("function").asText());
-        assertEquals(0, signed.json().path("payload").path("arguments").size());
-        assertEquals("0x1::aptos_coin::AptosCoin",
-                signed.json().path("payload").path("type_arguments").get(0).asText());
-    }
 }
