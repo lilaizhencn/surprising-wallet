@@ -4,6 +4,7 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.TransferQuote;
 import com.surprising.wallet.common.chain.TransferRequest;
+import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.junit.jupiter.api.Test;
 
@@ -42,6 +43,22 @@ class BlockchainRuntimeServiceTest {
         assertThrows(IllegalStateException.class, () -> service.requireRuntime("ETH"));
     }
 
+    @Test
+    void fixedChildAddressGenerationIsDelegatedWithoutAllocatingAnotherIndex() {
+        FixedIndexAdapter adapter = new FixedIndexAdapter();
+        BlockchainRuntimeService service = new BlockchainRuntimeService(
+                new BlockchainAdapterRegistry(List.of(adapter)),
+                new StubRepository(profile("ETH", "sepolia", "evm", "ETH", 121)),
+                null);
+
+        Address address = service.generateDepositAddressAtIndex("ETH", 41L, 9, 1L);
+
+        assertEquals(1, address.getIndex());
+        assertEquals(41L, adapter.userId);
+        assertEquals(9, adapter.biz);
+        assertEquals(1L, adapter.childIndex);
+    }
+
     private static AccountChainProfile profile(String chain, String network, String family,
                                                String nativeSymbol, int runtimeCurrencyId) {
         return AccountChainProfile.builder()
@@ -71,7 +88,7 @@ class BlockchainRuntimeServiceTest {
         }
     }
 
-    private static final class EvmStubAdapter implements BlockchainAdapter {
+    private static class EvmStubAdapter implements BlockchainAdapter {
         @Override
         public ChainType chainType() {
             return ChainType.ETH;
@@ -100,6 +117,26 @@ class BlockchainRuntimeServiceTest {
         @Override
         public TransferQuote quoteNativeTransfer(TransferRequest request) {
             throw new UnsupportedOperationException("not needed by this test");
+        }
+    }
+
+    private static final class FixedIndexAdapter extends EvmStubAdapter {
+        private long userId;
+        private int biz;
+        private long childIndex;
+
+        @Override
+        public java.util.Set<Capability> capabilities() {
+            return java.util.Set.of(Capability.NATIVE_QUOTE, Capability.ADDRESS_GENERATION);
+        }
+
+        @Override
+        public Address generateDepositAddressAtIndex(
+                ChainType chainType, long userId, int biz, long childIndex) {
+            this.userId = userId;
+            this.biz = biz;
+            this.childIndex = childIndex;
+            return Address.builder().index(Math.toIntExact(childIndex)).build();
         }
     }
 }

@@ -40,6 +40,11 @@ public interface BlockchainAdapter {
         throw missing(Capability.ADDRESS_GENERATION);
     }
 
+    default Address generateDepositAddressAtIndex(
+            ChainType chainType, long userId, int biz, long childIndex) {
+        throw missing(Capability.ADDRESS_GENERATION);
+    }
+
     default boolean checkAddress(ChainType chainType, String address) {
         throw missing(Capability.ADDRESS_VALIDATION);
     }

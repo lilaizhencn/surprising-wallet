@@ -17,7 +17,9 @@ import java.util.UUID;
 
 @Service
 public class CustodyGasService {
-    private static final String SYSTEM_REFERENCE_PREFIX = "__sw_gas_reserve__:";
+    static final long COLLECTION_CHILD_INDEX = 1L;
+    private static final BigDecimal DEFAULT_LOW_BALANCE_THRESHOLD = new BigDecimal("0.01");
+    private static final String SYSTEM_REFERENCE_PREFIX = "__sw_collection__:";
 
     private final CustodyRepository repository;
     private final CustodyAddressService addresses;
@@ -42,8 +44,7 @@ public class CustodyGasService {
                                  String sourceIp) {
         requireTenantAdmin(principal);
         String chain = requireChain(command.chain());
-        BigDecimal threshold = positiveAmount(
-                command.lowBalanceThreshold(), "lowBalanceThreshold");
+        BigDecimal threshold = DEFAULT_LOW_BALANCE_THRESHOLD;
         repository.lockSubjectAddressAllocation(
                 principal.tenantId(), chain, SYSTEM_REFERENCE_PREFIX + chain.toLowerCase(Locale.ROOT));
         GasAccountRecord existing = repository.findGasAccount(principal.tenantId(), chain)
@@ -52,13 +53,14 @@ public class CustodyGasService {
             return toView(existing);
         }
         BlockchainRuntimeService.RuntimeChain chainRuntime = runtime.requireRuntime(chain);
-        AddressView fundingAddress = addresses.createSystem(
+        AddressView fundingAddress = addresses.createSystemAtChildIndex(
                 principal,
                 new CreateAddressCommand(
                         chain,
                         SYSTEM_REFERENCE_PREFIX + chain.toLowerCase(Locale.ROOT),
-                        chain + " gas reserve",
-                        Map.of("systemPurpose", "GAS_FUNDING")),
+                        chain + " collection address",
+                        Map.of("systemPurpose", "COLLECTION_AND_GAS")),
+                COLLECTION_CHILD_INDEX,
                 sourceIp);
         GasAccountRecord saved = repository.insertGasAccount(
                 UUID.randomUUID(),
@@ -174,6 +176,7 @@ public class CustodyGasService {
                 record.nativeSymbol(),
                 record.address(),
                 record.memo(),
+                record.childIndex(),
                 record.availableBalance(),
                 record.lockedBalance(),
                 record.totalBalance(),
@@ -218,10 +221,7 @@ public class CustodyGasService {
         }
     }
 
-    public record CreateGasAccountCommand(
-            String chain,
-            String lowBalanceThreshold
-    ) {
+    public record CreateGasAccountCommand(String chain) {
     }
 
     public record UpdateGasAccountCommand(
@@ -238,6 +238,7 @@ public class CustodyGasService {
             String nativeSymbol,
             String address,
             String memo,
+            long childIndex,
             BigDecimal availableBalance,
             BigDecimal lockedBalance,
             BigDecimal totalBalance,

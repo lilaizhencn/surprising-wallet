@@ -43,17 +43,19 @@ public class CustodyAddressService {
     @Transactional(rollbackFor = Throwable.class)
     public AddressView create(CustodyPrincipal principal, CreateAddressCommand command,
                               String source, String sourceIp) {
-        return createInternal(principal, command, source, sourceIp, false);
+        return createInternal(principal, command, source, sourceIp, false, null);
     }
 
     @Transactional(rollbackFor = Throwable.class)
-    AddressView createSystem(CustodyPrincipal principal, CreateAddressCommand command,
-                             String sourceIp) {
-        return createInternal(principal, command, "CONSOLE", sourceIp, true);
+    AddressView createSystemAtChildIndex(CustodyPrincipal principal, CreateAddressCommand command,
+                                         long childIndex, String sourceIp) {
+        return createInternal(
+                principal, command, "CONSOLE", sourceIp, true, childIndex);
     }
 
     private AddressView createInternal(CustodyPrincipal principal, CreateAddressCommand command,
-                                       String source, String sourceIp, boolean allowReservedSubject) {
+                                       String source, String sourceIp, boolean allowReservedSubject,
+                                       Long fixedChildIndex) {
         requireScope(principal, "addresses:write");
         String normalizedSource = normalizeSource(source);
         String chain = requireChain(command.chain());
@@ -70,8 +72,12 @@ public class CustodyAddressService {
         BlockchainRuntimeService.RuntimeChain runtimeChain = runtime.requireRuntime(chain);
         int derivationSubject = custodyRepository.resolveDerivationSubject(tenant.id(), subject);
         custodyRepository.lockSubjectAddressAllocation(tenant.id(), chain, subject);
-        Address generated = runtime.generateDepositAddress(
-                chain, Integer.toUnsignedLong(derivationSubject), tenant.derivationNamespace());
+        Address generated = fixedChildIndex == null
+                ? runtime.generateDepositAddress(
+                        chain, Integer.toUnsignedLong(derivationSubject), tenant.derivationNamespace())
+                : runtime.generateDepositAddressAtIndex(
+                        chain, Integer.toUnsignedLong(derivationSubject), tenant.derivationNamespace(),
+                        fixedChildIndex);
         ChainAddressRecord chainAddress = chainRepository.findChainAddress(
                         chain, runtimeChain.nativeSymbol(), Integer.toUnsignedLong(derivationSubject),
                         tenant.derivationNamespace(), generated.getIndex(), "DEPOSIT")
@@ -133,7 +139,7 @@ public class CustodyAddressService {
         AddressRecord current = custodyRepository.requireAddress(principal.tenantId(), addressId);
         if (custodyRepository.isGasAddress(principal.tenantId(), addressId)) {
             throw new IllegalArgumentException(
-                    "manage gas reserve addresses from Gas station");
+                    "collection addresses are managed from the asset overview");
         }
         String status = optional(command.status(), 24, "status");
         String normalizedStatus = status == null

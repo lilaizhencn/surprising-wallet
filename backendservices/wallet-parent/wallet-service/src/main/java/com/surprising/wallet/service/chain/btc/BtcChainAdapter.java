@@ -65,6 +65,12 @@ public class BtcChainAdapter implements BlockchainAdapter {
     }
 
     @Override
+    public Address generateDepositAddressAtIndex(
+            ChainType chainType, long userId, int biz, long childIndex) {
+        return runtime.generateDepositAddressAtIndex(ChainType.BTC, userId, biz, childIndex);
+    }
+
+    @Override
     public boolean checkAddress(ChainType chainType, String address) {
         return runtime.checkAddress(ChainType.BTC, address);
     }

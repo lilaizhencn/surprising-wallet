@@ -66,6 +66,11 @@ m / 44' / coinType' / tenantNamespace' / derivationSubject' / childIndex'
 递增。数据库事务级锁会串行化同一租户、链和 subject 的并发分配，避免两个请求拿到同一个 child。
 `__sw_` 前缀由钱包内部系统账户保留，API 和普通 Console 地址不能使用。
 
+每个租户在每条已开通链上可从资产总览生成一个系统归集地址。该地址使用钱包保留的
+`derivationSubject`，并固定为 `childIndex=1`；同一租户和链重复生成会返回同一个地址。
+地址收到并确认的原生币同时作为该链链上操作的 Gas 资金，资产总览始终显示全部已开通链，
+包括尚未生成地址或余额为零的链。
+
 Monero 不使用 BIP44；地址由 wallet RPC 创建 subaddress，并记录
 `monero-wallet-rpc:m/0/{subaddressIndex}`。
 

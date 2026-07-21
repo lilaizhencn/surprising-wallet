@@ -60,6 +60,27 @@ public class ChainAddressRuntime {
         throw new IllegalStateException("failed to allocate a unique address index for " + chainType);
     }
 
+    @Transactional(rollbackFor = Throwable.class)
+    public synchronized Address generateDepositAddressAtIndex(
+            ChainType chainType, long userId, int biz, long childIndex) {
+        if (HotWalletRules.isDefaultHotUser(userId, biz)) {
+            throw new IllegalArgumentException(
+                    "userId=0,biz=0 is reserved for the unique default hot wallet address");
+        }
+        if (childIndex < 0 || childIndex > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("childIndex must be between 0 and 2147483647");
+        }
+        AccountChainProfile profile = profile(chainType);
+        ChainAddressRecord record = hotWalletAddressService.deriveAddress(
+                profile, userId, biz, childIndex, WALLET_ROLE_DEPOSIT);
+        repository.upsertChainAddress(record);
+        ChainAddressRecord saved = repository.findChainAddress(
+                        profile.getChain(), profile.getNativeSymbol(), userId, biz,
+                        childIndex, WALLET_ROLE_DEPOSIT)
+                .orElse(record);
+        return toAddress(profile, saved);
+    }
+
     public boolean checkAddress(ChainType chainType, String address) {
         if (!StringUtils.hasText(address)) {
             return false;

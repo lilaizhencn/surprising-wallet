@@ -515,6 +515,42 @@ class CustodyOperationsIntegrationTest {
     }
 
     @Test
+    void dashboardListsOpenedChainsBeforeTheyHaveAddressesOrBalances() {
+        transactions.executeWithoutResult(status -> {
+            UUID tenantId = createTenant();
+            UUID administratorId = UUID.randomUUID();
+            String slug = jdbc.queryForObject(
+                    "select slug from custody_tenant where id = ?", String.class, tenantId);
+            jdbc.update("""
+                    insert into custody_tenant_user(
+                        id, tenant_id, email, display_name, password_hash, role, status)
+                    values (?, ?, ?, 'Asset administrator', 'test-only-hash',
+                            'TENANT_ADMIN', 'ACTIVE')
+                    """, administratorId, tenantId, slug + "@example.test");
+            CustodyTenantChainRepository chainRepository =
+                    new CustodyTenantChainRepository(jdbc);
+            chainRepository.setStatus(tenantId, "TRON", "ACTIVE", administratorId);
+
+            CustodyAssetDashboardService service = new CustodyAssetDashboardService(
+                    new CustodyAssetDashboardRepository(jdbc), new CustodyRepository(jdbc),
+                    chainRepository);
+            CustodyPrincipal principal = new CustodyPrincipal(
+                    CustodyPrincipal.ActorType.TENANT_USER,
+                    administratorId, tenantId, slug, "TENANT_ADMIN", java.util.Set.of("assets:read"));
+
+            var dashboard = service.dashboard(principal);
+            assertTrue(dashboard.assets().isEmpty());
+            assertEquals(1, dashboard.openedChains().size());
+            var tron = dashboard.openedChains().getFirst();
+            assertEquals("TRON", tron.chain());
+            assertEquals("NOT_GENERATED", tron.status());
+            assertNull(tron.collectionAddress());
+            assertEquals(0, BigDecimal.ZERO.compareTo(tron.totalBalance()));
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
     void assetDashboardAggregatesStablecoinsAcrossChainsWithoutFloatingPointMath() {
         transactions.executeWithoutResult(status -> {
             UUID tenantId = createTenant();
@@ -553,7 +589,8 @@ class CustodyOperationsIntegrationTest {
             }
 
             CustodyAssetDashboardService service = new CustodyAssetDashboardService(
-                    new CustodyAssetDashboardRepository(jdbc), new CustodyRepository(jdbc));
+                    new CustodyAssetDashboardRepository(jdbc), new CustodyRepository(jdbc),
+                    new CustodyTenantChainRepository(jdbc));
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER, UUID.randomUUID(), tenantId,
                     "dashboard-it", "VIEWER", java.util.Set.of("assets:read"));

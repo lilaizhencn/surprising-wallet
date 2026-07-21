@@ -10,16 +10,20 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class CustodyAssetDashboardService {
     private final CustodyAssetDashboardRepository repository;
     private final CustodyRepository custody;
+    private final CustodyTenantChainRepository tenantChains;
 
     public CustodyAssetDashboardService(CustodyAssetDashboardRepository repository,
-                                        CustodyRepository custody) {
+                                        CustodyRepository custody,
+                                        CustodyTenantChainRepository tenantChains) {
         this.repository = repository;
         this.custody = custody;
+        this.tenantChains = tenantChains;
     }
 
     public Dashboard dashboard(CustodyPrincipal principal) {
@@ -55,11 +59,38 @@ public class CustodyAssetDashboardService {
             chains.computeIfAbsent(row.chain(), MutableChain::new).add(asset);
         }
 
+        Map<String, CustodyRepository.GasAccountRecord> collectionAddresses = custody
+                .listGasAccounts(principal.tenantId()).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        CustodyRepository.GasAccountRecord::chain, row -> row));
+        List<OpenedChain> openedChains = tenantChains.list(principal.tenantId()).stream()
+                .filter(row -> "ACTIVE".equals(row.status()))
+                .map(row -> openedChain(row, collectionAddresses.get(row.chain())))
+                .toList();
+
         return new Dashboard(
                 Instant.now(), "USD", totalValueUsd, unpricedAssetCount, oldestPriceAt,
                 assets,
                 symbols.values().stream().map(MutableAggregate::view).toList(),
-                chains.values().stream().map(MutableChain::view).toList());
+                chains.values().stream().map(MutableChain::view).toList(),
+                openedChains);
+    }
+
+    private static OpenedChain openedChain(
+            CustodyTenantChainRepository.ChainRecord chain,
+            CustodyRepository.GasAccountRecord address) {
+        if (address == null) {
+            return new OpenedChain(
+                    chain.chain(), chain.network(), chain.family(), chain.nativeSymbol(),
+                    chain.assetSymbols(), null, null, null, null,
+                    BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                    false, "NOT_GENERATED");
+        }
+        return new OpenedChain(
+                chain.chain(), chain.network(), chain.family(), chain.nativeSymbol(),
+                chain.assetSymbols(), address.custodyAddressId(), address.address(), address.memo(),
+                address.childIndex(), address.availableBalance(), address.lockedBalance(),
+                address.totalBalance(), address.lowBalance(), address.status());
     }
 
     public List<CustodyAssetDashboardRepository.AssetPrice> prices(CustodyPrincipal principal) {
@@ -174,7 +205,8 @@ public class CustodyAssetDashboardService {
             Instant oldestPriceObservedAt,
             List<AssetRow> assets,
             List<SymbolAggregate> bySymbol,
-            List<ChainAggregate> byChain
+            List<ChainAggregate> byChain,
+            List<OpenedChain> openedChains
     ) {
     }
 
@@ -203,6 +235,24 @@ public class CustodyAssetDashboardService {
     }
 
     public record ChainAggregate(String chain, BigDecimal valueUsd, List<AssetRow> assets) {
+    }
+
+    public record OpenedChain(
+            String chain,
+            String network,
+            String family,
+            String nativeSymbol,
+            List<String> assetSymbols,
+            UUID collectionAddressId,
+            String collectionAddress,
+            String memo,
+            Long childIndex,
+            BigDecimal availableBalance,
+            BigDecimal lockedBalance,
+            BigDecimal totalBalance,
+            boolean lowBalance,
+            String status
+    ) {
     }
 
     public record SetPriceCommand(BigDecimal usdPrice, String source, Instant observedAt) {

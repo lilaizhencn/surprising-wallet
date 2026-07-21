@@ -79,6 +79,13 @@ transaction lock serializes concurrent allocations for the same tenant, chain,
 and subject so two requests cannot receive the same child. The `__sw_` prefix
 is reserved for wallet-managed system accounts.
 
+For every enabled tenant chain, the asset overview can generate one
+wallet-managed collection address. It uses the reserved derivation subject and
+is fixed at `childIndex=1`; repeated generation for the same tenant and chain
+returns the same address. Confirmed native coins at this address also fund that
+chain's network-fee operations. The asset overview lists every enabled chain,
+including chains without an address or balance.
+
 Monero does not use BIP44. Its wallet RPC creates a subaddress recorded as
 `monero-wallet-rpc:m/0/{subaddressIndex}`.
 

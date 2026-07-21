@@ -112,6 +112,19 @@ public class BitcoinLikeChainRuntime {
         throw new IllegalStateException("failed to allocate a unique address index for " + chainType);
     }
 
+    @Transactional(rollbackFor = Throwable.class)
+    public synchronized Address generateDepositAddressAtIndex(
+            ChainType chainType, long userId, int biz, long childIndex) {
+        rejectReservedHotAddress(userId, biz);
+        if (childIndex < 0 || childIndex > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("childIndex must be between 0 and 2147483647");
+        }
+        AssetRuntimeMetadata asset = assetMetadata(chainType);
+        Address address = buildAddress(chainType, userId, biz, Math.toIntExact(childIndex));
+        chainRepository.upsertChainAddress(toChainAddressRecord(address, asset));
+        return address;
+    }
+
     public boolean checkAddress(ChainType chainType, String address) {
         if (!StringUtils.hasText(address)) {
             return false;

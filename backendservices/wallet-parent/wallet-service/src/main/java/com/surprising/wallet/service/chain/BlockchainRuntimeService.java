@@ -62,6 +62,18 @@ public class BlockchainRuntimeService {
         return addressRuntime.generateDepositAddress(runtime.chainType(), userId, biz);
     }
 
+    public Address generateDepositAddressAtIndex(
+            String chain, long userId, int biz, long childIndex) {
+        RuntimeChain runtime = requireRuntime(chain);
+        BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
+        if (adapter.capabilities().contains(BlockchainAdapter.Capability.ADDRESS_GENERATION)) {
+            return adapter.generateDepositAddressAtIndex(
+                    runtime.chainType(), userId, biz, childIndex);
+        }
+        return addressRuntime.generateDepositAddressAtIndex(
+                runtime.chainType(), userId, biz, childIndex);
+    }
+
     public boolean checkAddress(String chain, String address) {
         RuntimeChain runtime = requireRuntime(chain);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());

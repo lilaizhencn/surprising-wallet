@@ -258,11 +258,11 @@ paths:
   /custody/console/v1/gas-accounts:
     get:
       tags: [Console Gas]
-      summary: List tenant network-fee reserves
+      summary: List tenant collection and network-fee addresses
       security: [{ bearerAuth: [] }]
       responses:
         '200':
-          description: Gas accounts backed by confirmed native-coin balances
+          description: Fixed childIndex 1 addresses backed by confirmed native-coin balances
           content:
             application/json:
               schema:
@@ -271,7 +271,7 @@ paths:
         default: { $ref: '#/components/responses/Error' }
     post:
       tags: [Console Gas]
-      summary: Create a native-coin gas funding address
+      summary: Generate the chain collection and network-fee address
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -279,10 +279,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [chain, lowBalanceThreshold]
+              required: [chain]
               properties:
                 chain: { type: string }
-                lowBalanceThreshold: { type: string }
       responses:
         '201':
           description: Created or existing gas account for the network
@@ -1335,6 +1334,7 @@ components:
         - network
         - nativeSymbol
         - address
+        - childIndex
         - availableBalance
         - lockedBalance
         - totalBalance
@@ -1349,6 +1349,7 @@ components:
         nativeSymbol: { type: string }
         address: { type: string }
         memo: { type: [string, 'null'] }
+        childIndex: { type: integer, format: int64, const: 1 }
         availableBalance: { type: number }
         lockedBalance: { type: number }
         totalBalance: { type: number }
