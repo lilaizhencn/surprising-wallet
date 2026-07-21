@@ -49,20 +49,16 @@ public class CustodyAssetDashboardRepository {
                         on a.chain = tc.chain and a.active = true and a.native_asset = true
                      where tc.tenant_id = ? and tc.status = 'ACTIVE'
                     union all
-                    select tt.chain, tt.symbol, false
-                      from custody_tenant_token tt
-                      join custody_tenant_chain tc
-                        on tc.tenant_id = tt.tenant_id and tc.chain = tt.chain
-                       and tc.status = 'ACTIVE'
+                    select tc.chain, a.symbol, false
+                      from custody_tenant_chain tc
                       join chain_profile p
-                        on p.chain = tt.chain and p.enabled = true
+                        on p.chain = tc.chain and p.enabled = true
                       join chain_asset a
-                        on a.chain = tt.chain and a.symbol = tt.symbol
-                       and a.active = true and a.native_asset = false
+                        on a.chain = tc.chain and a.active = true and a.native_asset = false
                       join token_config t
-                        on t.chain = tt.chain and t.symbol = tt.symbol
+                        on t.chain = tc.chain and t.symbol = a.symbol
                        and lower(t.network) = lower(p.network)
-                     where tt.tenant_id = ? and tt.enabled = true
+                     where tc.tenant_id = ? and tc.status = 'ACTIVE'
                 )
                 select ca.chain, ca.asset_symbol, ca.native_asset,
                        coalesce(sum(lb.available_balance), 0) as available_balance,

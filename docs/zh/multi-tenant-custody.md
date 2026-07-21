@@ -79,9 +79,9 @@ m / 44' / coinType' / tenantNamespace' / derivationSubject' / childIndex'
 地址收到并确认的原生币同时作为该链链上操作的 Gas 资金。链管理页面直接展示地址和复制按钮，
 不再设置单独的 Gas 资金池页面。
 
-租户可以看到平台管理员已配置的 Token；只有平台已支持的 Token 才能开启。每个 Token 仅有
-“启用、充值、提现”三个租户开关；充值或提现不能脱离 Token 总开关启用。平台关闭 Token 后，
-Token 和已有资产仍然展示，但充值、提现立即停止；租户再次点击开启时会收到平台未支持提示。
+租户只需要开通主链，不需要逐个开通 Token。主链开通后，平台当前支持的全部 Token 自动支持
+充值和提现。平台已配置但暂停的 Token 仍然展示，但不可充值或提现；平台恢复支持后，所有已开通
+该主链的租户自动恢复使用。
 
 Monero 不使用 BIP44；地址由 wallet RPC 创建 subaddress，并记录
 `monero-wallet-rpc:m/0/{subaddressIndex}`。
@@ -111,7 +111,7 @@ Monero 不使用 BIP44；地址由 wallet RPC 创建 subaddress，并记录
 
 ## 资产口径
 
-`ledger_balance` 是余额事实来源。概览的资产明细只列出已开通链的原生币和租户已启用 Token，
+`ledger_balance` 是余额事实来源。概览的资产明细列出已开通链的原生币和平台已配置 Token，
 即使余额为零也会显示。原生币与 Token 平级展示；同一 Token 存在于多条链时先显示跨链汇总，
 展开后按链展示余额。余额按 `chain + asset_symbol` 从全部相关 account ID 聚合：
 

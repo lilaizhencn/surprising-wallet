@@ -33,16 +33,6 @@ public class CustodyConsoleChainController {
                 body.enabled(), CustodyRequestSupport.clientIp(request));
     }
 
-    @PutMapping("/{chain}/tokens/{symbol}")
-    public CustodyTenantChainService.TokenView setToken(
-            @PathVariable String chain,
-            @PathVariable String symbol,
-            @RequestBody CustodyTenantChainService.TokenSettings body,
-            HttpServletRequest request) {
-        return chains.setToken(CustodyRequestSupport.requirePrincipal(request), chain, symbol,
-                body, CustodyRequestSupport.clientIp(request));
-    }
-
     public record UpdateTenantChainRequest(boolean enabled) {
     }
 }

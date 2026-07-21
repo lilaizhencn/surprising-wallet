@@ -65,42 +65,6 @@ public class CustodyTenantChainService {
                 .orElseThrow(() -> new IllegalStateException("tenant chain status was not persisted"));
     }
 
-    @Transactional(rollbackFor = Throwable.class)
-    public TokenView setToken(CustodyPrincipal principal, String chainValue, String symbolValue,
-                              TokenSettings command, String sourceIp) {
-        requireTenantAdmin(principal);
-        String chain = normalizeChain(chainValue);
-        String symbol = normalizeSymbol(symbolValue);
-        if ((command.depositEnabled() || command.withdrawalEnabled()) && !command.enabled()) {
-            throw new IllegalArgumentException(
-                    "deposit and withdrawal require the token to be enabled");
-        }
-        if (!chains.tokenConfigured(chain, symbol)) {
-            throw new IllegalArgumentException("token is not configured on this chain");
-        }
-        if (command.enabled() && !chains.tokenAvailable(chain, symbol)) {
-            throw new IllegalArgumentException("token is not enabled by the platform");
-        }
-        if (command.enabled()) {
-            requireActive(principal.tenantId(), chain);
-        }
-        chains.setTokenSettings(
-                principal.tenantId(), chain, symbol, command.enabled(),
-                command.depositEnabled(), command.withdrawalEnabled(), principal.actorId());
-        custody.audit(principal.tenantId(), principal.actorType().name(),
-                principal.actorId().toString(), "TENANT_TOKEN.UPDATE", "TENANT_TOKEN",
-                chain + ":" + symbol, sourceIp,
-                "{\"chain\":\"" + chain + "\",\"symbol\":\"" + symbol
-                        + "\",\"enabled\":" + command.enabled()
-                        + ",\"depositEnabled\":" + command.depositEnabled()
-                        + ",\"withdrawalEnabled\":" + command.withdrawalEnabled() + "}");
-        return chains.availableTokens(principal.tenantId()).stream()
-                .filter(row -> row.chain().equals(chain) && row.symbol().equals(symbol))
-                .map(CustodyTenantChainService::tokenView)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("tenant token settings were not persisted"));
-    }
-
     public void requireActive(UUID tenantId, String chainValue) {
         String chain = normalizeChain(chainValue);
         if (!chains.active(tenantId, chain)) {
@@ -131,7 +95,7 @@ public class CustodyTenantChainService {
                 .toList();
         List<String> enabledAssets = java.util.stream.Stream.concat(
                         java.util.stream.Stream.of(row.nativeSymbol()),
-                        tokens.stream().filter(TokenView::enabled).map(TokenView::symbol))
+                        tokens.stream().filter(TokenView::platformEnabled).map(TokenView::symbol))
                 .distinct().toList();
         return new ChainView(
                 row.chain(), row.network(), row.family(), row.nativeSymbol(),
@@ -147,8 +111,7 @@ public class CustodyTenantChainService {
     private static TokenView tokenView(CustodyTenantChainRepository.TokenRecord row) {
         return new TokenView(
                 row.symbol(), row.standard(), row.contractAddress(), row.decimals(),
-                row.platformEnabled(),
-                row.enabled(), row.depositEnabled(), row.withdrawalEnabled());
+                row.platformEnabled());
     }
 
     private BlockchainAdapter requireAdapter(String chain) {
@@ -170,7 +133,7 @@ public class CustodyTenantChainService {
     private static String normalizeSymbol(String value) {
         String symbol = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!symbol.matches("^[A-Z][A-Z0-9_]{1,31}$")) {
-            throw new IllegalArgumentException("valid token symbol is required");
+            throw new IllegalArgumentException("valid asset symbol is required");
         }
         return symbol;
     }
@@ -214,17 +177,7 @@ public class CustodyTenantChainService {
             String standard,
             String contractAddress,
             int decimals,
-            boolean platformEnabled,
-            boolean enabled,
-            boolean depositEnabled,
-            boolean withdrawalEnabled
-    ) {
-    }
-
-    public record TokenSettings(
-            boolean enabled,
-            boolean depositEnabled,
-            boolean withdrawalEnabled
+            boolean platformEnabled
     ) {
     }
 }

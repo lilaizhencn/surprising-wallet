@@ -199,10 +199,6 @@ ALTER TABLE IF EXISTS ONLY public.custody_webhook_delivery DROP CONSTRAINT IF EX
 ALTER TABLE IF EXISTS ONLY public.custody_webhook_delivery DROP CONSTRAINT IF EXISTS custody_webhook_delivery_event_key;
 ALTER TABLE IF EXISTS ONLY public.custody_webhook_delivery_attempt DROP CONSTRAINT IF EXISTS custody_webhook_delivery_attempt_pkey;
 ALTER TABLE IF EXISTS ONLY public.custody_webhook_delivery_attempt DROP CONSTRAINT IF EXISTS custody_webhook_attempt_number_key;
-ALTER TABLE IF EXISTS ONLY public.custody_tenant_token DROP CONSTRAINT IF EXISTS custody_tenant_token_updated_by_fk;
-ALTER TABLE IF EXISTS ONLY public.custody_tenant_token DROP CONSTRAINT IF EXISTS custody_tenant_token_chain_fk;
-ALTER TABLE IF EXISTS ONLY public.custody_tenant_token DROP CONSTRAINT IF EXISTS custody_tenant_token_asset_fk;
-ALTER TABLE IF EXISTS ONLY public.custody_tenant_token DROP CONSTRAINT IF EXISTS custody_tenant_token_pkey;
 ALTER TABLE IF EXISTS ONLY public.custody_tenant_user DROP CONSTRAINT IF EXISTS custody_tenant_user_tenant_id_key;
 ALTER TABLE IF EXISTS ONLY public.custody_tenant_user DROP CONSTRAINT IF EXISTS custody_tenant_user_pkey;
 ALTER TABLE IF EXISTS ONLY public.custody_tenant DROP CONSTRAINT IF EXISTS custody_tenant_slug_key;
@@ -347,7 +343,6 @@ DROP TABLE IF EXISTS public.custody_withdrawal;
 DROP TABLE IF EXISTS public.custody_webhook_endpoint;
 DROP TABLE IF EXISTS public.custody_webhook_delivery_attempt;
 DROP TABLE IF EXISTS public.custody_webhook_delivery;
-DROP TABLE IF EXISTS public.custody_tenant_token;
 DROP TABLE IF EXISTS public.custody_tenant_user;
 DROP TABLE IF EXISTS public.custody_tenant_chain;
 DROP TABLE IF EXISTS public.custody_tenant;
@@ -1168,24 +1163,6 @@ CREATE TABLE public.custody_tenant_chain (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT custody_tenant_chain_lifecycle_check CHECK (((((status)::text = 'ACTIVE'::text) AND (opened_by IS NOT NULL) AND (opened_at IS NOT NULL) AND (closed_at IS NULL)) OR (((status)::text = 'CLOSED'::text) AND (closed_by IS NOT NULL) AND (closed_at IS NOT NULL)))),
     CONSTRAINT custody_tenant_chain_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'CLOSED'::character varying])::text[])))
-);
-
-
---
--- Name: custody_tenant_token; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.custody_tenant_token (
-    tenant_id uuid NOT NULL,
-    chain character varying(32) NOT NULL,
-    symbol character varying(32) NOT NULL,
-    enabled boolean DEFAULT false NOT NULL,
-    deposit_enabled boolean DEFAULT false NOT NULL,
-    withdrawal_enabled boolean DEFAULT false NOT NULL,
-    updated_by uuid NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT custody_tenant_token_operation_check CHECK ((enabled OR ((NOT deposit_enabled) AND (NOT withdrawal_enabled))))
 );
 
 
@@ -3073,14 +3050,6 @@ ALTER TABLE ONLY public.custody_tenant_chain
 
 
 --
--- Name: custody_tenant_token custody_tenant_token_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.custody_tenant_token
-    ADD CONSTRAINT custody_tenant_token_pkey PRIMARY KEY (tenant_id, chain, symbol);
-
-
---
 -- Name: custody_tenant custody_tenant_derivation_namespace_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4358,30 +4327,6 @@ ALTER TABLE ONLY public.custody_tenant_chain
 
 ALTER TABLE ONLY public.custody_tenant_chain
     ADD CONSTRAINT custody_tenant_chain_tenant_fk FOREIGN KEY (tenant_id) REFERENCES public.custody_tenant(id) ON DELETE CASCADE;
-
-
---
--- Name: custody_tenant_token custody_tenant_token_asset_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.custody_tenant_token
-    ADD CONSTRAINT custody_tenant_token_asset_fk FOREIGN KEY (chain, symbol) REFERENCES public.chain_asset(chain, symbol) ON DELETE RESTRICT;
-
-
---
--- Name: custody_tenant_token custody_tenant_token_chain_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.custody_tenant_token
-    ADD CONSTRAINT custody_tenant_token_chain_fk FOREIGN KEY (tenant_id, chain) REFERENCES public.custody_tenant_chain(tenant_id, chain) ON DELETE CASCADE;
-
-
---
--- Name: custody_tenant_token custody_tenant_token_updated_by_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.custody_tenant_token
-    ADD CONSTRAINT custody_tenant_token_updated_by_fk FOREIGN KEY (tenant_id, updated_by) REFERENCES public.custody_tenant_user(tenant_id, id) ON DELETE RESTRICT;
 
 
 --

@@ -242,7 +242,7 @@ paths:
     get:
       tags: [Console chains]
       summary: List platform-enabled chains and tokens available to the tenant
-      description: Configured tokens remain visible after platform disablement, while their deposit and withdrawal switches become ineffective.
+      description: Opening a chain automatically enables every platform-supported token. Configured but platform-disabled tokens remain visible and unavailable.
       security: [{ bearerAuth: [] }]
       responses:
         '200':
@@ -275,30 +275,6 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/TenantChain' }
-        default: { $ref: '#/components/responses/Error' }
-  /custody/console/v1/chains/{chain}/tokens/{symbol}:
-    put:
-      tags: [Console chains]
-      summary: Update an available token for the tenant
-      description: The token must be configured on the current network. Enabling requires platform support. Deposit and withdrawal cannot be enabled while the token is disabled or platform support is off.
-      security: [{ bearerAuth: [] }]
-      parameters:
-        - $ref: '#/components/parameters/ChainPath'
-        - name: symbol
-          in: path
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/TenantTokenSettings' }
-      responses:
-        '200':
-          description: Updated tenant token
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/TenantToken' }
         default: { $ref: '#/components/responses/Error' }
   /custody/console/v1/assets:
     get:
@@ -1360,23 +1336,13 @@ components:
         addressCount: { type: integer, format: int64 }
     TenantToken:
       type: object
-      required: [symbol, decimals, platformEnabled, enabled, depositEnabled, withdrawalEnabled]
+      required: [symbol, decimals, platformEnabled]
       properties:
         symbol: { type: string }
         standard: { type: [string, 'null'] }
         contractAddress: { type: [string, 'null'] }
         decimals: { type: integer }
         platformEnabled: { type: boolean }
-        enabled: { type: boolean }
-        depositEnabled: { type: boolean }
-        withdrawalEnabled: { type: boolean }
-    TenantTokenSettings:
-      type: object
-      required: [enabled, depositEnabled, withdrawalEnabled]
-      properties:
-        enabled: { type: boolean }
-        depositEnabled: { type: boolean }
-        withdrawalEnabled: { type: boolean }
     TenantChain:
       type: object
       required: [chain, network, family, nativeSymbol, assetSymbols, tokens, status, enabled, scanEnabled, withdrawalEnabled, transferEnabled, capabilities]

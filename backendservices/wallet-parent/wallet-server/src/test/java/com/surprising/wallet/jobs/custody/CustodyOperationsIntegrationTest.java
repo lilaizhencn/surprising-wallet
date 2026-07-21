@@ -500,11 +500,21 @@ class CustodyOperationsIntegrationTest {
 
             assertThrows(CustodyForbiddenException.class,
                     () -> service.requireActive(tenantId, "TRON"));
+            assertFalse(chainRepository.depositEnabled(tenantId, "TRON", "USDT"));
+            assertFalse(chainRepository.withdrawalEnabled(tenantId, "TRON", "USDT"));
             var opened = service.setEnabled(principal, "TRON", true, "127.0.0.1");
             assertTrue(opened.enabled());
             service.requireActive(tenantId, "TRON");
             assertTrue(service.list(principal).stream()
                     .anyMatch(chain -> chain.chain().equals("TRON") && chain.enabled()));
+            var enabledToken = service.list(principal).stream()
+                    .filter(chain -> chain.chain().equals("TRON"))
+                    .flatMap(chain -> chain.tokens().stream())
+                    .filter(row -> row.symbol().equals("USDT"))
+                    .findFirst().orElseThrow();
+            assertTrue(enabledToken.platformEnabled());
+            assertTrue(chainRepository.depositEnabled(tenantId, "TRON", "USDT"));
+            assertTrue(chainRepository.withdrawalEnabled(tenantId, "TRON", "USDT"));
             Long tokenConfigId = jdbc.queryForObject("""
                     select id from token_config
                      where chain = 'TRON' and symbol = 'USDT' and enabled = true
@@ -516,37 +526,11 @@ class CustodyOperationsIntegrationTest {
                     .filter(row -> row.symbol().equals("USDT"))
                     .findFirst().orElseThrow();
             assertFalse(platformDisabledToken.platformEnabled());
-            assertFalse(platformDisabledToken.depositEnabled());
-            assertFalse(platformDisabledToken.withdrawalEnabled());
-            assertThrows(IllegalArgumentException.class, () -> service.setToken(
-                    principal, "TRON", "USDT",
-                    new CustodyTenantChainService.TokenSettings(true, true, true),
-                    "127.0.0.1"));
-            jdbc.update("update token_config set enabled = true where id = ?", tokenConfigId);
-            var token = service.setToken(
-                    principal, "TRON", "USDT",
-                    new CustodyTenantChainService.TokenSettings(true, true, true),
-                    "127.0.0.1");
-            assertTrue(token.enabled());
-            assertTrue(token.depositEnabled());
-            assertTrue(token.withdrawalEnabled());
-            assertTrue(service.list(principal).stream()
-                    .filter(chain -> chain.chain().equals("TRON"))
-                    .flatMap(chain -> chain.tokens().stream())
-                    .anyMatch(row -> row.symbol().equals("USDT") && row.enabled()));
-            jdbc.update("update token_config set enabled = false where id = ?", tokenConfigId);
             assertFalse(chainRepository.depositEnabled(tenantId, "TRON", "USDT"));
             assertFalse(chainRepository.withdrawalEnabled(tenantId, "TRON", "USDT"));
-            var retainedToken = service.list(principal).stream()
-                    .filter(chain -> chain.chain().equals("TRON"))
-                    .flatMap(chain -> chain.tokens().stream())
-                    .filter(row -> row.symbol().equals("USDT"))
-                    .findFirst().orElseThrow();
-            assertTrue(retainedToken.enabled());
-            assertFalse(retainedToken.platformEnabled());
-            assertFalse(retainedToken.depositEnabled());
-            assertFalse(retainedToken.withdrawalEnabled());
             jdbc.update("update token_config set enabled = true where id = ?", tokenConfigId);
+            assertTrue(chainRepository.depositEnabled(tenantId, "TRON", "USDT"));
+            assertTrue(chainRepository.withdrawalEnabled(tenantId, "TRON", "USDT"));
 
             var closed = service.setEnabled(principal, "TRON", false, "127.0.0.1");
             assertFalse(closed.enabled());
@@ -666,12 +650,19 @@ class CustodyOperationsIntegrationTest {
                     administratorId, tenantId, slug, "TENANT_ADMIN", java.util.Set.of("assets:read"));
 
             var dashboard = service.dashboard(principal);
-            assertEquals(1, dashboard.assets().size());
-            var tron = dashboard.assets().getFirst();
+            assertEquals(2, dashboard.assets().size());
+            Map<String, CustodyAssetDashboardService.AssetRow> assets = dashboard.assets().stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            CustodyAssetDashboardService.AssetRow::assetSymbol, asset -> asset));
+            var tron = assets.get("TRX");
             assertEquals("TRON", tron.chain());
             assertEquals("TRX", tron.assetSymbol());
             assertTrue(tron.nativeAsset());
             assertEquals(0, BigDecimal.ZERO.compareTo(tron.totalBalance()));
+            var usdt = assets.get("USDT");
+            assertEquals("TRON", usdt.chain());
+            assertFalse(usdt.nativeAsset());
+            assertEquals(0, BigDecimal.ZERO.compareTo(usdt.totalBalance()));
             status.setRollbackOnly();
         });
     }
@@ -699,8 +690,6 @@ class CustodyOperationsIntegrationTest {
             for (int index = 0; index < chains.length; index++) {
                 chainRepository.setStatus(
                         tenantId, chains[index], "ACTIVE", administratorId);
-                chainRepository.setTokenSettings(
-                        tenantId, chains[index], "USDT", true, true, true, administratorId);
                 int subject = jdbc.queryForObject(
                         "select nextval('custody_derivation_subject_index_seq')::integer",
                         Integer.class);
