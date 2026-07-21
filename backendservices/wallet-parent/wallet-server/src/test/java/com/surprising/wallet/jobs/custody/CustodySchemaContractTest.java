@@ -47,12 +47,29 @@ class CustodySchemaContractTest {
         assertTrue(sql.contains("status IN ('RESERVED', 'SETTLED', 'RELEASED', 'OVERDUE')"));
         assertTrue(sql.contains("chain_profile_one_enabled_network_idx"));
         assertTrue(sql.contains("ON chain_profile (upper(chain)) WHERE enabled = true"));
+        assertTrue(sql.contains("token_config_chain_network_symbol_key UNIQUE (chain, network, symbol)"));
+        assertTrue(sql.contains("token_config_one_enabled_network_per_asset_idx"));
+        assertTrue(sql.contains("WHERE enabled = true"));
+        assertTrue(sql.contains("https://developers.circle.com/stablecoins/usdc-contract-addresses"));
+        assertTrue(sql.contains("https://tether.to/en/supported-protocols/"));
+        assertTrue(sql.contains("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"));
+        assertTrue(sql.contains("0xdAC17F958D2ee523a2206206994597C13D831ec7"));
+        assertTrue(sql.contains("TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"));
+        assertTrue(sql.contains("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"));
+        assertTrue(sql.contains("stablecoin.decimals, false, 1, 1, 1, 1, false, 1"),
+                "mainnet stablecoins must remain disabled for transfers and collection");
         assertTrue(sql.contains("last_checked_at timestamptz"));
         assertTrue(sql.contains("last_latency_ms bigint"));
         assertTrue(sql.matches(
                 "(?s).*CREATE TABLE IF NOT EXISTS custody_idempotency_key \\(.*"
                         + "expires_at timestamptz,\\R\\s+created_at timestamptz.*"));
         assertFalse(CustodyWebhookService.ALLOWED_EVENTS.contains("ADDRESS.CREATED"));
+
+        String databaseSeed = Files.readString(root.resolve("docs/db/surprising-wallet-init-pgsql.sql"));
+        assertTrue(databaseSeed.contains(
+                "token_config_chain_network_symbol_key\" UNIQUE (\"chain\", \"network\", \"symbol\")"));
+        assertTrue(databaseSeed.contains(
+                "token_config_chain_network_contract_address_key\" UNIQUE (\"chain\", \"network\", \"contract_address\")"));
     }
 
     @Test

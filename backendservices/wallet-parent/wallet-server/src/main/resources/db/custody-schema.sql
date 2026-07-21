@@ -17,6 +17,136 @@ CREATE TABLE IF NOT EXISTS wallet_key_config (
 CREATE UNIQUE INDEX IF NOT EXISTS chain_profile_one_enabled_network_idx
     ON chain_profile (upper(chain)) WHERE enabled = true;
 
+-- Token contracts are network-scoped. Preserve testnet and mainnet contracts side by side,
+-- while allowing only one enabled contract per chain/symbol at runtime.
+UPDATE token_config token
+   SET network = profile.network,
+       updated_at = now()
+  FROM chain_profile profile
+ WHERE upper(profile.chain) = upper(token.chain)
+   AND profile.enabled = true
+   AND coalesce(trim(token.network), '') = '';
+
+ALTER TABLE token_config DROP CONSTRAINT IF EXISTS token_config_chain_symbol_key;
+ALTER TABLE token_config DROP CONSTRAINT IF EXISTS token_config_chain_contract_address_key;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conrelid = 'token_config'::regclass
+           AND conname = 'token_config_chain_network_symbol_key'
+    ) THEN
+        ALTER TABLE token_config
+            ADD CONSTRAINT token_config_chain_network_symbol_key UNIQUE (chain, network, symbol);
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conrelid = 'token_config'::regclass
+           AND conname = 'token_config_chain_network_contract_address_key'
+    ) THEN
+        ALTER TABLE token_config
+            ADD CONSTRAINT token_config_chain_network_contract_address_key
+            UNIQUE (chain, network, contract_address);
+    END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS token_config_one_enabled_network_per_asset_idx
+    ON token_config (upper(chain), upper(symbol)) WHERE enabled = true;
+
+-- Official issuer references (checked 2026-07-21):
+-- Circle USDC: https://developers.circle.com/stablecoins/usdc-contract-addresses
+-- Tether USDt: https://tether.to/en/supported-protocols/
+-- Mainnet contracts are configuration-only and remain disabled until the matching chain,
+-- audited RPC nodes and wallet tasks are deliberately enabled.
+WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_address,
+                         contract_address_base58, contract_address_hex, decimals, gas_strategy) AS (
+    VALUES
+        ('APTOS', 'USDC', 'APTOS_FA', 'APTOS_FA',
+         '0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b', NULL, NULL, 6, 'APT_GAS'),
+        ('APTOS', 'USDT', 'APTOS_FA', 'APTOS_FA',
+         '0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b', NULL, NULL, 6, 'APT_GAS'),
+        ('ARBITRUM', 'USDC', 'ERC20', 'ERC20',
+         '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', NULL, NULL, 6, 'native-gas'),
+        ('AVAX_C', 'USDC', 'ERC20', 'ERC20',
+         '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', NULL, NULL, 6, 'native-gas'),
+        ('AVAX_C', 'USDT', 'ERC20', 'ERC20',
+         '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7', NULL, NULL, 6, 'native-gas'),
+        ('BASE', 'USDC', 'ERC20', 'ERC20',
+         '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', NULL, NULL, 6, 'native-gas'),
+        ('DOT', 'USDC', 'ASSET_HUB_ASSET', 'ASSET_HUB_ASSET',
+         '1337', NULL, NULL, 6, 'ASSET_HUB_NATIVE_GAS'),
+        ('DOT', 'USDT', 'ASSET_HUB_ASSET', 'ASSET_HUB_ASSET',
+         '1984', NULL, NULL, 6, 'ASSET_HUB_NATIVE_GAS'),
+        ('ETH', 'USDC', 'ERC20', 'ERC20',
+         '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', NULL, NULL, 6, 'native-gas'),
+        ('ETH', 'USDT', 'ERC20', 'ERC20',
+         '0xdAC17F958D2ee523a2206206994597C13D831ec7', NULL, NULL, 6, 'native-gas'),
+        ('HYPEREVM', 'USDC', 'ERC20', 'ERC20',
+         '0xb88339CB7199b77E23DB6E890353E22632Ba630f', NULL, NULL, 6, 'native-gas'),
+        ('LINEA', 'USDC', 'ERC20', 'ERC20',
+         '0x176211869cA2b568f2A7D4EE941E073a821EE1ff', NULL, NULL, 6, 'native-gas'),
+        ('NEAR', 'USDC', 'NEP141', 'NEP141',
+         '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1', NULL, NULL, 6, 'NEAR_STORAGE_DEPOSIT'),
+        ('NEAR', 'USDT', 'NEP141', 'NEP141',
+         'usdt.tether-token.near', NULL, NULL, 6, 'NEAR_STORAGE_DEPOSIT'),
+        ('OPTIMISM', 'USDC', 'ERC20', 'ERC20',
+         '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', NULL, NULL, 6, 'native-gas'),
+        ('POLYGON', 'USDC', 'ERC20', 'ERC20',
+         '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', NULL, NULL, 6, 'native-gas'),
+        ('SOLANA', 'USDC', 'SPL', 'SPL',
+         'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+         'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', NULL, 6, 'SOL_FEE_PAYER'),
+        ('SOLANA', 'USDT', 'SPL', 'SPL',
+         'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+         'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', NULL, 6, 'SOL_FEE_PAYER'),
+        ('SUI', 'USDC', 'SUI_COIN', 'COIN',
+         '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC', NULL, NULL, 6, 'SUI_GAS_OBJECT'),
+        ('TON', 'USDT', 'JETTON', 'JETTON',
+         'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', NULL, NULL, 6, 'TON_FORWARD_FEE'),
+        ('TRON', 'USDT', 'TRC20', 'TRC20',
+         'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+         'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+         '41a614f803b6fd780986a42c78ec9c7f77e6ded13c', 6, 'energy-bandwidth'),
+        ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
+         '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
+        ('XRP', 'USDC', 'XRPL_ISSUED', 'ISSUED_CURRENCY',
+         'rGm7WCVp9gb4jZHWTEtGUr4dd74z2XuWhE:5553444300000000000000000000000000000000',
+         NULL, '5553444300000000000000000000000000000000', 6, 'XRP_TRUSTLINE')
+)
+INSERT INTO token_config(
+    chain, network, symbol, standard, token_standard, contract_address,
+    contract_address_base58, contract_address_hex, decimals, enabled,
+    min_deposit, min_withdraw, min_deposit_amount, min_withdraw_amount,
+    collect_enabled, collect_threshold, gas_strategy, confirmation_required, updated_at)
+SELECT stablecoin.chain, 'mainnet', stablecoin.symbol, stablecoin.standard,
+       stablecoin.token_standard, stablecoin.contract_address,
+       stablecoin.contract_address_base58, stablecoin.contract_address_hex,
+       stablecoin.decimals, false, 1, 1, 1, 1, false, 1,
+       stablecoin.gas_strategy, profile.deposit_confirmations, now()
+  FROM mainnet_stablecoins stablecoin
+  JOIN chain_profile profile
+    ON profile.chain = stablecoin.chain AND profile.network = 'mainnet'
+ WHERE NOT EXISTS (
+       SELECT 1
+         FROM token_config existing
+        WHERE existing.chain = stablecoin.chain
+          AND existing.network = 'mainnet'
+          AND existing.symbol = stablecoin.symbol
+ );
+
+UPDATE token_config
+   SET collect_enabled = false,
+       updated_at = now()
+ WHERE network = 'mainnet'
+   AND symbol IN ('USDC', 'USDT')
+   AND enabled = false
+   AND collect_enabled = true;
+
 ALTER TABLE chain_rpc_node ADD COLUMN IF NOT EXISTS last_checked_at timestamptz;
 ALTER TABLE chain_rpc_node ADD COLUMN IF NOT EXISTS last_latency_ms bigint;
 ALTER TABLE chain_rpc_node ADD COLUMN IF NOT EXISTS last_http_status integer;

@@ -65,6 +65,8 @@ ALTER TABLE IF EXISTS ONLY "public"."monero_transaction" DROP CONSTRAINT IF EXIS
 ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_chain_symbol_key";
 ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_chain_contract_address_key";
+ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_chain_network_symbol_key";
+ALTER TABLE IF EXISTS ONLY "public"."token_config" DROP CONSTRAINT IF EXISTS "token_config_chain_network_contract_address_key";
 ALTER TABLE IF EXISTS ONLY "public"."xrp_transaction" DROP CONSTRAINT IF EXISTS "xrp_transaction_pkey";
 ALTER TABLE IF EXISTS ONLY "public"."xrp_transaction" DROP CONSTRAINT IF EXISTS "xrp_transaction_chain_tx_hash_key";
 ALTER TABLE IF EXISTS ONLY "public"."near_transaction" DROP CONSTRAINT IF EXISTS "near_transaction_pkey";
@@ -2253,19 +2255,19 @@ ALTER TABLE ONLY "public"."monero_transaction"
 
 
 --
--- Name: token_config token_config_chain_contract_address_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: token_config token_config_chain_network_contract_address_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY "public"."token_config"
-    ADD CONSTRAINT "token_config_chain_contract_address_key" UNIQUE ("chain", "contract_address");
+    ADD CONSTRAINT "token_config_chain_network_contract_address_key" UNIQUE ("chain", "network", "contract_address");
 
 
 --
--- Name: token_config token_config_chain_symbol_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: token_config token_config_chain_network_symbol_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY "public"."token_config"
-    ADD CONSTRAINT "token_config_chain_symbol_key" UNIQUE ("chain", "symbol");
+    ADD CONSTRAINT "token_config_chain_network_symbol_key" UNIQUE ("chain", "network", "symbol");
 
 
 --
@@ -2887,6 +2889,14 @@ SELECT pg_catalog.setval('"public"."token_config_id_seq"', 105, true);
 -- Normalize testnet token contracts and expose enabled wallet-app token assets.
 --
 
+UPDATE "public"."token_config" token
+   SET "network" = profile."network",
+       "updated_at" = now()
+  FROM "public"."chain_profile" profile
+ WHERE upper(profile."chain") = upper(token."chain")
+   AND profile."enabled" = true
+   AND coalesce(trim(token."network"), '') = '';
+
 WITH token_data(chain, symbol, standard, network, token_standard, contract_address, decimals,
                 contract_address_base58, contract_address_hex, gas_strategy) AS (
     VALUES
@@ -2923,7 +2933,7 @@ SELECT chain, symbol, standard, contract_address, decimals, true,
        network, token_standard, contract_address_base58, contract_address_hex,
        1, 1, 1, gas_strategy, 1
   FROM token_data
-ON CONFLICT ("chain", "symbol") DO UPDATE SET
+ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
     "contract_address" = EXCLUDED."contract_address",
     "decimals" = EXCLUDED."decimals",
@@ -3024,7 +3034,7 @@ INSERT INTO "public"."token_config" ("chain", "symbol", "standard", "contract_ad
 VALUES
     ('HYPEREVM', 'USDC', 'ERC20', '0x2B3370eE501B4a559b57D449569354196457D8Ab', 6, true,
      1, 1, true, now(), now(), 'testnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
-ON CONFLICT ("chain", "symbol") DO UPDATE SET
+ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
     "contract_address" = EXCLUDED."contract_address",
     "decimals" = EXCLUDED."decimals",
@@ -3157,7 +3167,7 @@ VALUES
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('UNICHAIN', 'USDC', 'ERC20', '0x31d0220469e10c4E71834a79b1f276d740d3768F', 6, true,
      1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1)
-ON CONFLICT ("chain", "symbol") DO UPDATE SET
+ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
     "contract_address" = EXCLUDED."contract_address",
     "decimals" = EXCLUDED."decimals",
@@ -3337,7 +3347,7 @@ INSERT INTO "public"."token_config" ("chain", "symbol", "standard", "contract_ad
 VALUES
     ('HYPERCORE', 'HYPE', 'HIP1', '0x7317beb7cceed72ef0b346074cc8e7ab', 8, true,
      0.000001, 0.000001, true, now(), now(), 'testnet', 'HIP1', 0.000001, 0.000001, 0.000001, 'hypercore-no-gas', 1)
-ON CONFLICT ("chain", "symbol") DO UPDATE SET
+ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
     "contract_address" = EXCLUDED."contract_address",
     "decimals" = EXCLUDED."decimals",
@@ -3528,7 +3538,7 @@ SELECT chain, symbol, standard, contract_address, decimals, false,
        min_deposit, min_withdraw, false, now(), now(), network, token_standard,
        min_deposit, min_withdraw, collect_threshold, gas_strategy, confirmation_required
   FROM new_chain_tokens
-ON CONFLICT ("chain", "symbol") DO UPDATE SET
+ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
     "contract_address" = EXCLUDED."contract_address",
     "decimals" = EXCLUDED."decimals",

@@ -336,7 +336,9 @@ public class WalletConfigManagementService {
                 values.contractAddressHex(), values.decimals(), values.enabled(), values.minDeposit(),
                 values.minWithdraw(), values.minDeposit(), values.minWithdraw(), values.collectEnabled(),
                 values.collectThreshold(), values.gasStrategy(), values.confirmationRequired());
-        upsertAsset(values);
+        if (values.enabled()) {
+            upsertAsset(values);
+        }
         audit(actor, "WALLET_TOKEN.CREATE", "TOKEN_CONFIG", String.valueOf(id), sourceIp,
                 tokenAudit(values));
         return requireToken(id);
@@ -373,7 +375,11 @@ public class WalletConfigManagementService {
             jdbc.update("delete from chain_asset where chain = ? and symbol = ? and native_asset = false",
                     current.chain(), current.symbol());
         }
-        upsertAsset(values);
+        if (values.enabled()) {
+            upsertAsset(values);
+        } else if (current.enabled()) {
+            setAssetActive(current.chain(), current.symbol(), false);
+        }
         audit(actor, "WALLET_TOKEN.UPDATE", "TOKEN_CONFIG", String.valueOf(id), sourceIp,
                 tokenAudit(values));
         return requireToken(id);
@@ -397,8 +403,15 @@ public class WalletConfigManagementService {
         boolean collectEnabled = command.enabled() && current.collectEnabled();
         jdbc.update("update token_config set enabled = ?, collect_enabled = ?, updated_at = now() where id = ?",
                 command.enabled(), collectEnabled, id);
-        jdbc.update("update chain_asset set active = ?, updated_at = now() where chain = ? and symbol = ? and native_asset = false",
-                command.enabled(), current.chain(), current.symbol());
+        if (command.enabled()) {
+            upsertAsset(new TokenValues(current.chain(), current.network(), current.symbol(),
+                    current.standard(), current.contractAddress(), current.contractAddressBase58(),
+                    current.contractAddressHex(), current.decimals(), true, collectEnabled,
+                    current.minDeposit(), current.minWithdraw(), current.collectThreshold(),
+                    current.gasStrategy(), current.confirmationRequired()));
+        } else {
+            setAssetActive(current.chain(), current.symbol(), false);
+        }
         audit(actor, "WALLET_TOKEN.STATUS_UPDATE", "TOKEN_CONFIG", String.valueOf(id), sourceIp,
                 "{\"enabled\":" + command.enabled() + "}");
         return requireToken(id);
@@ -646,6 +659,11 @@ public class WalletConfigManagementService {
                        updated_at = now()
                 """, value.chain(), value.symbol(), value.standard(), value.contractAddress(),
                 value.decimals(), value.enabled(), value.minWithdraw(), value.minWithdraw());
+    }
+
+    private void setAssetActive(String chain, String symbol, boolean active) {
+        jdbc.update("update chain_asset set active = ?, updated_at = now() where chain = ? and symbol = ? and native_asset = false",
+                active, chain, symbol);
     }
 
     private List<String> chainChecks(ChainView chain, List<RpcNodeView> rpcNodes, List<TokenView> tokens) {
