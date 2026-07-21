@@ -42,6 +42,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS token_config_one_enabled_network_per_asset_idx
 -- Official issuer references (checked 2026-07-21):
 -- Circle USDC: https://developers.circle.com/stablecoins/usdc-contract-addresses
 -- Tether USDt: https://tether.to/en/supported-protocols/
+-- USDT0 deployments: https://docs.usdt0.to/technical-documentation/deployments
 -- Mainnet contracts are configuration-only and remain disabled until the matching chain,
 -- audited RPC nodes and wallet tasks are deliberately enabled.
 WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_address,
@@ -53,6 +54,8 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b', NULL, NULL, 6, 'APT_GAS'),
         ('ARBITRUM', 'USDC', 'ERC20', 'ERC20',
          '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', NULL, NULL, 6, 'native-gas'),
+        ('ARBITRUM', 'USDT', 'ERC20', 'ERC20',
+         '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', NULL, NULL, 6, 'native-gas'),
         ('AVAX_C', 'USDC', 'ERC20', 'ERC20',
          '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', NULL, NULL, 6, 'native-gas'),
         ('AVAX_C', 'USDT', 'ERC20', 'ERC20',
@@ -69,16 +72,24 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0xdAC17F958D2ee523a2206206994597C13D831ec7', NULL, NULL, 6, 'native-gas'),
         ('HYPEREVM', 'USDC', 'ERC20', 'ERC20',
          '0xb88339CB7199b77E23DB6E890353E22632Ba630f', NULL, NULL, 6, 'native-gas'),
+        ('HYPEREVM', 'USDT', 'ERC20', 'ERC20',
+         '0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb', NULL, NULL, 6, 'native-gas'),
         ('LINEA', 'USDC', 'ERC20', 'ERC20',
          '0x176211869cA2b568f2A7D4EE941E073a821EE1ff', NULL, NULL, 6, 'native-gas'),
+        ('MANTLE', 'USDT', 'ERC20', 'ERC20',
+         '0x779Ded0c9e1022225f8E0630b35a9b54bE713736', NULL, NULL, 6, 'native-gas'),
         ('NEAR', 'USDC', 'NEP141', 'NEP141',
          '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1', NULL, NULL, 6, 'NEAR_STORAGE_DEPOSIT'),
         ('NEAR', 'USDT', 'NEP141', 'NEP141',
          'usdt.tether-token.near', NULL, NULL, 6, 'NEAR_STORAGE_DEPOSIT'),
         ('OPTIMISM', 'USDC', 'ERC20', 'ERC20',
          '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', NULL, NULL, 6, 'native-gas'),
+        ('OPTIMISM', 'USDT', 'ERC20', 'ERC20',
+         '0x01bFF41798a0BcF287b996046Ca68b395DbC1071', NULL, NULL, 6, 'native-gas'),
         ('POLYGON', 'USDC', 'ERC20', 'ERC20',
          '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', NULL, NULL, 6, 'native-gas'),
+        ('POLYGON', 'USDT', 'ERC20', 'ERC20',
+         '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', NULL, NULL, 6, 'native-gas'),
         ('SOLANA', 'USDC', 'SPL', 'SPL',
          'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
          'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', NULL, 6, 'SOL_FEE_PAYER'),
@@ -95,6 +106,8 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '41a614f803b6fd780986a42c78ec9c7f77e6ded13c', 6, 'energy-bandwidth'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
+        ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',
+         '0x9151434b16b9763660705744891fA906F660EcC5', NULL, NULL, 6, 'native-gas'),
         ('XRP', 'USDC', 'XRPL_ISSUED', 'ISSUED_CURRENCY',
          'rGm7WCVp9gb4jZHWTEtGUr4dd74z2XuWhE:5553444300000000000000000000000000000000',
          NULL, '5553444300000000000000000000000000000000', 6, 'XRP_TRUSTLINE')
@@ -119,6 +132,17 @@ SELECT stablecoin.chain, 'mainnet', stablecoin.symbol, stablecoin.standard,
           AND existing.network = 'mainnet'
           AND existing.symbol = stablecoin.symbol
  );
+
+-- Mantle's canonical USDT moved to USDT0. Correct only the known disabled legacy
+-- template; never rewrite an enabled production token contract during startup.
+UPDATE token_config
+   SET contract_address = '0x779Ded0c9e1022225f8E0630b35a9b54bE713736',
+       updated_at = now()
+ WHERE chain = 'MANTLE'
+   AND network = 'mainnet'
+   AND symbol = 'USDT'
+   AND lower(contract_address) = lower('0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE')
+   AND enabled = false;
 
 UPDATE token_config
    SET collect_enabled = false,
