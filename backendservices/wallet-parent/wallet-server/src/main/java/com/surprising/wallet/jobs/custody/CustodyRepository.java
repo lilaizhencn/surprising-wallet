@@ -9,6 +9,7 @@ import java.sql.Array;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1482,12 +1483,19 @@ public class CustodyRepository {
     }
 
     public List<Map<String, Object>> listWebhookDeliveries(UUID tenantId, UUID endpointId,
-                                                            int limit, int offset) {
+                                                            String status, int limit, int offset) {
         String endpointPredicate = endpointId == null ? "" : "and d.endpoint_id = ?";
-        Object[] parameters = endpointId == null
-                ? new Object[]{tenantId, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0)}
-                : new Object[]{tenantId, endpointId,
-                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0)};
+        String statusPredicate = status == null ? "" : "and d.status = ?";
+        List<Object> parameters = new ArrayList<>();
+        parameters.add(tenantId);
+        if (endpointId != null) {
+            parameters.add(endpointId);
+        }
+        if (status != null) {
+            parameters.add(status);
+        }
+        parameters.add(Math.min(Math.max(limit, 1), 200));
+        parameters.add(Math.max(offset, 0));
         return jdbc.query("""
                         select d.id, d.endpoint_id, d.event_id, e.event_type,
                                e.aggregate_type, e.aggregate_id, d.status, d.attempt_count,
@@ -1499,9 +1507,10 @@ public class CustodyRepository {
                           join custody_event e on e.id = d.event_id
                          where d.tenant_id = ?
                            %s
+                           %s
                          order by d.created_at desc, d.id
                          limit ? offset ?
-                        """.formatted(endpointPredicate), (rs, rowNum) -> {
+                        """.formatted(endpointPredicate, statusPredicate), (rs, rowNum) -> {
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("id", rs.getObject("id", UUID.class));
                     row.put("endpointId", rs.getObject("endpoint_id", UUID.class));
@@ -1521,7 +1530,7 @@ public class CustodyRepository {
                     row.put("createdAt", rs.getTimestamp("created_at").toInstant());
                     row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
                     return row;
-                }, parameters);
+                }, parameters.toArray());
     }
 
     @Transactional(rollbackFor = Throwable.class)
@@ -1677,6 +1686,19 @@ public class CustodyRepository {
                         """, tenantId, deliveryId) != 1) {
             throw new IllegalStateException("failed or retryable webhook delivery not found");
         }
+    }
+
+    public int retryFailedWebhookDeliveries(UUID tenantId, UUID endpointId) {
+        return jdbc.update("""
+                        update custody_webhook_delivery
+                           set status = 'RETRY', attempt_count = 0,
+                               manual_retry_count = manual_retry_count + 1,
+                               next_attempt_trigger = 'MANUAL',
+                               next_attempt_at = now(), locked_by = null,
+                               locked_at = null, updated_at = now()
+                         where tenant_id = ? and endpoint_id = ?
+                           and status in ('FAILED', 'RETRY')
+                        """, tenantId, endpointId);
     }
 
     public List<Map<String, Object>> listWebhookDeliveryAttempts(

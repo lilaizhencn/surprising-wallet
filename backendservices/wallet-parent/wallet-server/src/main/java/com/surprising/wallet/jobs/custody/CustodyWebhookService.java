@@ -34,6 +34,8 @@ public class CustodyWebhookService {
             "WITHDRAWAL.BROADCAST_UNKNOWN",
             "WITHDRAWAL.CONFIRMED",
             "WITHDRAWAL.FAILED");
+    private static final Set<String> DELIVERY_STATUSES = Set.of(
+            "PENDING", "DELIVERING", "DELIVERED", "RETRY", "FAILED");
 
     private final CustodyRepository repository;
     private final CustodyCryptoService crypto;
@@ -131,9 +133,11 @@ public class CustodyWebhookService {
     }
 
     public List<Map<String, Object>> deliveries(CustodyPrincipal principal, UUID endpointId,
-                                                int limit, int offset) {
+                                                String status, int limit, int offset) {
         requireScope(principal, "webhooks:read");
-        return repository.listWebhookDeliveries(principal.tenantId(), endpointId, limit, offset);
+        String normalizedStatus = normalizeDeliveryStatus(status);
+        return repository.listWebhookDeliveries(
+                principal.tenantId(), endpointId, normalizedStatus, limit, offset);
     }
 
     public List<Map<String, Object>> deliveryAttempts(
@@ -152,6 +156,31 @@ public class CustodyWebhookService {
         repository.retryWebhookDelivery(principal.tenantId(), deliveryId);
         repository.audit(principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
                 "WEBHOOK.DELIVERY_RETRY", "WEBHOOK_DELIVERY", deliveryId.toString(), sourceIp, "{}");
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public int retryFailed(CustodyPrincipal principal, UUID endpointId, String sourceIp) {
+        requireTenantAdmin(principal);
+        if (endpointId == null) {
+            throw new IllegalArgumentException("endpointId is required");
+        }
+        repository.requireWebhookEndpoint(principal.tenantId(), endpointId);
+        int queued = repository.retryFailedWebhookDeliveries(principal.tenantId(), endpointId);
+        repository.audit(principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
+                "WEBHOOK.DELIVERY_RETRY_BATCH", "WEBHOOK_ENDPOINT", endpointId.toString(), sourceIp,
+                json(Map.of("queued", queued, "statuses", List.of("FAILED", "RETRY"))));
+        return queued;
+    }
+
+    private String normalizeDeliveryStatus(String status) {
+        String normalized = status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
+        if (normalized.isBlank()) {
+            return null;
+        }
+        if (!DELIVERY_STATUSES.contains(normalized)) {
+            throw new IllegalArgumentException("unsupported webhook delivery status");
+        }
+        return normalized;
     }
 
     public WebhookHttpResult send(String url, String secret, UUID eventId,

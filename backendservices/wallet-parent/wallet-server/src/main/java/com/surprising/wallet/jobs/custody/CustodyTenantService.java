@@ -74,7 +74,7 @@ public class CustodyTenantService {
                 repository.listApiKeys(tenantId),
                 repository.listIpRules(tenantId),
                 repository.listWebhookEndpoints(tenantId),
-                repository.listWebhookDeliveries(tenantId, null, 20, 0),
+                repository.listWebhookDeliveries(tenantId, null, null, 20, 0),
                 repository.listCustodyDeposits(tenantId, "", 20, 0),
                 repository.listCustodyWithdrawals(tenantId, "", 20, 0),
                 repository.listAudit(tenantId, 50, 0));

@@ -55,11 +55,12 @@ public class CustodyConsoleWebhookController {
     @GetMapping("/webhook-deliveries")
     public List<Map<String, Object>> deliveries(
             @RequestParam(required = false) UUID endpointId,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
         return webhooks.deliveries(
-                CustodyRequestSupport.requirePrincipal(request), endpointId, limit, offset);
+                CustodyRequestSupport.requirePrincipal(request), endpointId, status, limit, offset);
     }
 
     @PostMapping("/webhook-deliveries/{deliveryId}/retry")
@@ -67,6 +68,15 @@ public class CustodyConsoleWebhookController {
         webhooks.retry(CustodyRequestSupport.requirePrincipal(request), deliveryId,
                 CustodyRequestSupport.clientIp(request));
         return Map.of("ok", true);
+    }
+
+    @PostMapping("/webhook-deliveries/retry-failed")
+    public Map<String, Object> retryFailed(@RequestParam UUID endpointId,
+                                           HttpServletRequest request) {
+        int queued = webhooks.retryFailed(
+                CustodyRequestSupport.requirePrincipal(request), endpointId,
+                CustodyRequestSupport.clientIp(request));
+        return Map.of("queued", queued);
     }
 
     @GetMapping("/webhook-deliveries/{deliveryId}/attempts")

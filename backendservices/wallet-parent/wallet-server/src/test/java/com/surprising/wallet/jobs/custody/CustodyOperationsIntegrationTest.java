@@ -84,6 +84,41 @@ class CustodyOperationsIntegrationTest {
     }
 
     @Test
+    void webhookDeliveriesCanBeFilteredAndFailedBatchRetryIsEndpointScoped() {
+        transactions.executeWithoutResult(transaction -> {
+            CustodyRepository repository = new CustodyRepository(jdbc);
+            UUID tenantId = createTenant();
+            UUID endpointId = insertWebhookEndpoint(tenantId, "Batch endpoint");
+            UUID otherEndpointId = insertWebhookEndpoint(tenantId, "Other endpoint");
+            insertWebhookDelivery(tenantId, endpointId, "FAILED");
+            insertWebhookDelivery(tenantId, endpointId, "RETRY");
+            insertWebhookDelivery(tenantId, endpointId, "DELIVERED");
+            insertWebhookDelivery(tenantId, otherEndpointId, "FAILED");
+
+            List<Map<String, Object>> failed = repository.listWebhookDeliveries(
+                    tenantId, endpointId, "FAILED", 20, 0);
+            assertEquals(1, failed.size());
+            assertEquals("FAILED", failed.getFirst().get("status"));
+
+            assertEquals(2, repository.retryFailedWebhookDeliveries(tenantId, endpointId));
+            assertEquals(2, jdbc.queryForObject("""
+                    select count(*) from custody_webhook_delivery
+                     where tenant_id = ? and endpoint_id = ? and status = 'RETRY'
+                       and next_attempt_trigger = 'MANUAL' and manual_retry_count = 1
+                    """, Integer.class, tenantId, endpointId));
+            assertEquals(1, jdbc.queryForObject("""
+                    select count(*) from custody_webhook_delivery
+                     where tenant_id = ? and endpoint_id = ? and status = 'DELIVERED'
+                    """, Integer.class, tenantId, endpointId));
+            assertEquals("FAILED", jdbc.queryForObject("""
+                    select status from custody_webhook_delivery
+                     where tenant_id = ? and endpoint_id = ?
+                    """, String.class, tenantId, otherEndpointId));
+            transaction.setRollbackOnly();
+        });
+    }
+
+    @Test
     void recoveredWebhookLeaseFencesTheStaleWorker() {
         transactions.executeWithoutResult(status -> {
             CustodyRepository repository = new CustodyRepository(jdbc);
@@ -413,7 +448,7 @@ class CustodyOperationsIntegrationTest {
                     repository.tenantOperationsSummary(tenantId);
             assertEquals(1L, statistics.get("userCount"));
             assertEquals(1L, statistics.get("activeSessionCount"));
-            assertTrue(repository.listWebhookDeliveries(tenantId, null, 20, 0).isEmpty());
+            assertTrue(repository.listWebhookDeliveries(tenantId, null, null, 20, 0).isEmpty());
 
             Map<String, Object> administrator =
                     repository.listTenantUsers(tenantId).getFirst();
@@ -547,6 +582,38 @@ class CustodyOperationsIntegrationTest {
                 """, tenantId, "operations-it-"
                         + UUID.randomUUID().toString().replace("-", "").substring(0, 16), namespace);
         return tenantId;
+    }
+
+    private UUID insertWebhookEndpoint(UUID tenantId, String name) {
+        UUID endpointId = UUID.randomUUID();
+        jdbc.update("""
+                insert into custody_webhook_endpoint(
+                    id, tenant_id, name, url, secret_ciphertext,
+                    subscribed_events, status, verified_at)
+                values (?, ?, ?, ?, 'ciphertext',
+                        array['DEPOSIT.CONFIRMED'], 'ACTIVE', now())
+                """, endpointId, tenantId, name,
+                "https://example.com/hooks/" + endpointId);
+        return endpointId;
+    }
+
+    private UUID insertWebhookDelivery(UUID tenantId, UUID endpointId, String status) {
+        UUID eventId = UUID.randomUUID();
+        UUID deliveryId = UUID.randomUUID();
+        jdbc.update("""
+                insert into custody_event(
+                    id, tenant_id, event_type, aggregate_type, aggregate_id,
+                    payload, status, published_at)
+                values (?, ?, 'DEPOSIT.CONFIRMED', 'DEPOSIT', ?, '{}'::jsonb,
+                        'PUBLISHED', now())
+                """, eventId, tenantId, UUID.randomUUID().toString());
+        jdbc.update("""
+                insert into custody_webhook_delivery(
+                    id, tenant_id, endpoint_id, event_id, status,
+                    next_attempt_at, delivered_at)
+                values (?, ?, ?, ?, ?, now(), case when ? = 'DELIVERED' then now() end)
+                """, deliveryId, tenantId, endpointId, eventId, status, status);
+        return deliveryId;
     }
 
     private void quiesceExistingWebhookQueue() {
