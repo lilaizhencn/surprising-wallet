@@ -30,6 +30,21 @@ scripts/regtest/all-chain-regtest.sh test-evm
 
 脚本会在 `127.0.0.1:8545` 启动 Hardhat fork，部署 mock ERC20 合约，运行 Java 集成测试，停止 fork，然后进入下一条链。
 
+## 无外部 RPC 的完整本地矩阵
+
+```bash
+./evm-fork/scripts/run-local-matrix.sh
+```
+
+该脚本从数据库种子核对每条链实际启用的 Token，为每条链分别启动对应
+chainId 的全新 Hardhat 节点，在临时 PostgreSQL 数据库中部署所需的 USDC/USDT，
+执行原生币和全部已启用 Token 的充值、重复扫描、提现、归集、失败恢复、nonce
+以及链上余额对账。每条链结束后立即停止节点，最后删除临时数据库并清理测试目录。
+
+覆盖 ETH、BNB、Polygon、Arbitrum、Optimism、Base、Avalanche C-Chain、
+HyperEVM、Linea、Mantle、Scroll、Unichain。Mantle 当前没有启用 Token，因此只
+执行原生 MNT 流程。
+
 同时运行多用户业务流测试：
 
 ```bash

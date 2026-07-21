@@ -34,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -71,7 +72,7 @@ class EvmForkFullChainIntegrationTest {
             assertEquals(expectedChainId, chainId, "fork chainId must match target chain");
 
             prepareDatabase(jdbcTemplate, chain, nativeSymbol, wallet.getAddress(), derivationPath(chain));
-            TokenContracts tokens = tokenContracts(jdbcTemplate, chain);
+            List<TokenContract> tokens = tokenContracts(jdbcTemplate, chain);
 
             BigDecimal nativeDeposit = new BigDecimal("1.0");
             TransactionReceipt nativeDepositReceipt = sendUnlockedNative(web3j, deployer, wallet.getAddress(), nativeDeposit);
@@ -82,17 +83,19 @@ class EvmForkFullChainIntegrationTest {
                     nativeDepositReceipt.getBlockNumber().longValueExact());
             assertBalanceEquals(nativeDeposit, ledger(jdbcTemplate, chain, nativeSymbol, wallet.getAddress()));
 
-            BigDecimal usdtDeposit = new BigDecimal("100");
-            BigDecimal usdcDeposit = new BigDecimal("50");
-            TransactionReceipt usdtMintReceipt = sendUnlockedTokenCall(web3j, deployer, tokens.usdt(),
-                    encodeMint(wallet.getAddress(), usdtDeposit));
-            TransactionReceipt usdcMintReceipt = sendUnlockedTokenCall(web3j, deployer, tokens.usdc(),
-                    encodeMint(wallet.getAddress(), usdcDeposit));
-            scanner.scanAndCreditErc20(chain, LOCAL_RPC, confirmations, usdtMintReceipt.getBlockNumber().longValueExact());
-            scanner.scanAndCreditErc20(chain, LOCAL_RPC, confirmations, usdcMintReceipt.getBlockNumber().longValueExact());
-            scanner.scanAndCreditErc20(chain, LOCAL_RPC, confirmations, usdtMintReceipt.getBlockNumber().longValueExact());
-            assertBalanceEquals(usdtDeposit, ledger(jdbcTemplate, chain, "USDT", wallet.getAddress()));
-            assertBalanceEquals(usdcDeposit, ledger(jdbcTemplate, chain, "USDC", wallet.getAddress()));
+            Map<TokenContract, BigDecimal> tokenDeposits = new LinkedHashMap<>();
+            for (int tokenIndex = 0; tokenIndex < tokens.size(); tokenIndex++) {
+                TokenContract token = tokens.get(tokenIndex);
+                BigDecimal deposit = BigDecimal.valueOf(100L - tokenIndex * 25L);
+                TransactionReceipt receipt = sendUnlockedTokenCall(web3j, deployer, token.address(),
+                        encodeMint(wallet.getAddress(), deposit));
+                scanner.scanAndCreditErc20(chain, LOCAL_RPC, confirmations,
+                        receipt.getBlockNumber().longValueExact());
+                scanner.scanAndCreditErc20(chain, LOCAL_RPC, confirmations,
+                        receipt.getBlockNumber().longValueExact());
+                assertBalanceEquals(deposit, ledger(jdbcTemplate, chain, token.symbol(), wallet.getAddress()));
+                tokenDeposits.put(token, deposit);
+            }
 
             BigDecimal nativeWithdraw = new BigDecimal("0.1");
             SignedTx nativeWithdrawTx = sendSignedNative(web3j, wallet, recipient, nativeWithdraw, chainId);
@@ -106,41 +109,41 @@ class EvmForkFullChainIntegrationTest {
             assertTrue(repository.debitLedgerBalance(chain.name(), nativeSymbol, wallet.getAddress(),
                     nativeCollection.add(nativeCollectionFee)));
 
-            BigDecimal usdtWithdraw = new BigDecimal("10");
-            SignedTx usdtWithdrawTx = sendSignedTokenTransfer(web3j, wallet, tokens.usdt(), recipient, usdtWithdraw, chainId);
-            BigDecimal usdtWithdrawFee = fee(usdtWithdrawTx);
-            assertTrue(repository.debitLedgerBalance(chain.name(), "USDT", wallet.getAddress(), usdtWithdraw));
-            assertTrue(repository.debitLedgerBalance(chain.name(), nativeSymbol, wallet.getAddress(), usdtWithdrawFee));
+            for (Map.Entry<TokenContract, BigDecimal> entry : tokenDeposits.entrySet()) {
+                TokenContract token = entry.getKey();
+                BigDecimal deposit = entry.getValue();
+                BigDecimal withdrawal = deposit.movePointLeft(1);
+                SignedTx withdrawalTx = sendSignedTokenTransfer(
+                        web3j, wallet, token.address(), recipient, withdrawal, chainId);
+                assertTrue(repository.debitLedgerBalance(
+                        chain.name(), token.symbol(), wallet.getAddress(), withdrawal));
+                assertTrue(repository.debitLedgerBalance(
+                        chain.name(), nativeSymbol, wallet.getAddress(), fee(withdrawalTx)));
 
-            BigDecimal usdcWithdraw = new BigDecimal("5");
-            SignedTx usdcWithdrawTx = sendSignedTokenTransfer(web3j, wallet, tokens.usdc(), recipient, usdcWithdraw, chainId);
-            BigDecimal usdcWithdrawFee = fee(usdcWithdrawTx);
-            assertTrue(repository.debitLedgerBalance(chain.name(), "USDC", wallet.getAddress(), usdcWithdraw));
-            assertTrue(repository.debitLedgerBalance(chain.name(), nativeSymbol, wallet.getAddress(), usdcWithdrawFee));
-
-            BigDecimal usdtCollection = usdtDeposit.subtract(usdtWithdraw);
-            SignedTx usdtCollectionTx = sendSignedTokenTransfer(web3j, wallet, tokens.usdt(), deployer, usdtCollection, chainId);
-            BigDecimal usdtCollectionFee = fee(usdtCollectionTx);
-            assertTrue(repository.debitLedgerBalance(chain.name(), "USDT", wallet.getAddress(), usdtCollection));
-            assertTrue(repository.debitLedgerBalance(chain.name(), nativeSymbol, wallet.getAddress(), usdtCollectionFee));
-
-            BigDecimal usdcCollection = usdcDeposit.subtract(usdcWithdraw);
-            SignedTx usdcCollectionTx = sendSignedTokenTransfer(web3j, wallet, tokens.usdc(), deployer, usdcCollection, chainId);
-            BigDecimal usdcCollectionFee = fee(usdcCollectionTx);
-            assertTrue(repository.debitLedgerBalance(chain.name(), "USDC", wallet.getAddress(), usdcCollection));
-            assertTrue(repository.debitLedgerBalance(chain.name(), nativeSymbol, wallet.getAddress(), usdcCollectionFee));
+                BigDecimal collection = deposit.subtract(withdrawal);
+                SignedTx collectionTx = sendSignedTokenTransfer(
+                        web3j, wallet, token.address(), deployer, collection, chainId);
+                assertTrue(repository.debitLedgerBalance(
+                        chain.name(), token.symbol(), wallet.getAddress(), collection));
+                assertTrue(repository.debitLedgerBalance(
+                        chain.name(), nativeSymbol, wallet.getAddress(), fee(collectionTx)));
+            }
 
             assertBalanceEquals(getNativeBalance(web3j, wallet.getAddress()), ledger(jdbcTemplate, chain, nativeSymbol, wallet.getAddress()));
-            assertBalanceEquals(tokenBalance(web3j, tokens.usdt(), wallet.getAddress()), ledger(jdbcTemplate, chain, "USDT", wallet.getAddress()));
-            assertBalanceEquals(tokenBalance(web3j, tokens.usdc(), wallet.getAddress()), ledger(jdbcTemplate, chain, "USDC", wallet.getAddress()));
-            assertEquals(BigDecimal.ZERO.setScale(18), ledger(jdbcTemplate, chain, "USDT", wallet.getAddress()).setScale(18));
-            assertEquals(BigDecimal.ZERO.setScale(18), ledger(jdbcTemplate, chain, "USDC", wallet.getAddress()).setScale(18));
-            assertFalse(repository.debitLedgerBalance(chain.name(), "USDT", wallet.getAddress(), BigDecimal.ONE),
-                    "ledger debit guard must reject token double spend");
+            for (TokenContract token : tokens) {
+                assertBalanceEquals(tokenBalance(web3j, token.address(), wallet.getAddress()),
+                        ledger(jdbcTemplate, chain, token.symbol(), wallet.getAddress()));
+                assertEquals(BigDecimal.ZERO.setScale(18),
+                        ledger(jdbcTemplate, chain, token.symbol(), wallet.getAddress()).setScale(18));
+                assertFalse(repository.debitLedgerBalance(
+                                chain.name(), token.symbol(), wallet.getAddress(), BigDecimal.ONE),
+                        "ledger debit guard must reject " + token.symbol() + " double spend");
+            }
 
             BigInteger pendingNonce = web3j.ethGetTransactionCount(wallet.getAddress(), DefaultBlockParameterName.PENDING)
                     .send().getTransactionCount();
-            assertEquals(BigInteger.valueOf(6L), pendingNonce, "native withdraw, native collection and four token transfers");
+            assertEquals(BigInteger.valueOf(2L + tokens.size() * 2L), pendingNonce,
+                    "native withdrawal/collection plus two transfers per configured token");
         } finally {
             web3j.shutdown();
         }
@@ -173,12 +176,15 @@ class EvmForkFullChainIntegrationTest {
                 derivationPath);
     }
 
-    private static TokenContracts tokenContracts(JdbcTemplate jdbcTemplate, ChainType chain) {
-        Map<String, Object> usdt = jdbcTemplate.queryForMap(
-                "select contract_address from token_config where chain = ? and symbol = 'USDT' and enabled = true", chain.name());
-        Map<String, Object> usdc = jdbcTemplate.queryForMap(
-                "select contract_address from token_config where chain = ? and symbol = 'USDC' and enabled = true", chain.name());
-        return new TokenContracts((String) usdt.get("contract_address"), (String) usdc.get("contract_address"));
+    private static List<TokenContract> tokenContracts(JdbcTemplate jdbcTemplate, ChainType chain) {
+        return jdbcTemplate.query("""
+                        select symbol, contract_address
+                          from token_config
+                         where chain = ? and enabled = true and standard = 'ERC20'
+                         order by symbol
+                        """,
+                (rs, rowNum) -> new TokenContract(rs.getString("symbol"), rs.getString("contract_address")),
+                chain.name());
     }
 
     private static Credentials walletCredentials(ChainType chain) throws Exception {
@@ -384,7 +390,7 @@ class EvmForkFullChainIntegrationTest {
         return dataSource;
     }
 
-    private record TokenContracts(String usdt, String usdc) {
+    private record TokenContract(String symbol, String address) {
     }
 
     private record SignedTx(TransactionReceipt receipt, BigDecimal nativeFee) {

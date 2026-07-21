@@ -6,20 +6,36 @@ const hre = require("hardhat");
 
 const CHAIN = process.env.EVM_CHAIN || "ETH";
 const DB_URL = process.env.PG_URL || "postgresql://wallet:wallet123@127.0.0.1:5432/wallet";
+const TOKEN_SYMBOLS = (process.env.TOKEN_SYMBOLS ?? "USDC,USDT")
+  .split(",")
+  .map((symbol) => symbol.trim().toUpperCase())
+  .filter(Boolean);
+const TOKEN_DEFINITIONS = {
+  USDC: { symbol: "USDC", name: "USD Coin", decimals: 6 },
+  USDT: { symbol: "USDT", name: "Tether USD", decimals: 6 },
+};
 
 async function upsertTokenConfig(client, chain, token) {
+  const updated = await client.query(
+    `update token_config
+        set contract_address = $3,
+            contract_address_hex = $3,
+            decimals = $4,
+            standard = 'ERC20',
+            token_standard = 'ERC20',
+            collect_enabled = true,
+            updated_at = now()
+      where chain = $1 and symbol = $2 and enabled = true`,
+    [chain, token.symbol, token.address, token.decimals]
+  );
+  if (updated.rowCount !== 1) {
+    throw new Error(`${chain}/${token.symbol} must have exactly one enabled token configuration`);
+  }
   await client.query(
-    `insert into token_config(chain, symbol, standard, contract_address, decimals, enabled,
-                              min_deposit, min_withdraw, collect_enabled, created_at, updated_at)
-     values ($1, $2, 'ERC20', $3, 6, true, 0, 0, true, now(), now())
-     on conflict (chain, symbol) do update set
-       contract_address = excluded.contract_address,
-       decimals = excluded.decimals,
-       standard = excluded.standard,
-       enabled = true,
-       collect_enabled = true,
-       updated_at = now()`,
-    [chain, token.symbol, token.address]
+    `update chain_asset
+        set contract_address = $3, decimals = $4, updated_at = now()
+      where chain = $1 and symbol = $2 and active = true`,
+    [chain, token.symbol, token.address, token.decimals]
   );
 }
 
@@ -49,30 +65,37 @@ async function main() {
   const contract = output.contracts["MockERC20.sol"].MockERC20;
   const factory = new hre.ethers.ContractFactory(contract.abi, contract.evm.bytecode.object, deployer);
 
-  const usdt = await factory.deploy("Tether USD", "USDT", 6);
-  await usdt.waitForDeployment();
-  const usdc = await factory.deploy("USD Coin", "USDC", 6);
-  await usdc.waitForDeployment();
-
-  await (await usdt.mint(deployer.address, hre.ethers.parseUnits("1000000", 6))).wait();
-  await (await usdc.mint(deployer.address, hre.ethers.parseUnits("1000000", 6))).wait();
+  const tokens = {};
+  for (const symbol of TOKEN_SYMBOLS) {
+    const definition = TOKEN_DEFINITIONS[symbol];
+    if (!definition) {
+      throw new Error(`unsupported local mock token ${symbol}`);
+    }
+    const contract = await factory.deploy(definition.name, definition.symbol, definition.decimals);
+    await contract.waitForDeployment();
+    await (await contract.mint(
+      deployer.address,
+      hre.ethers.parseUnits("1000000", definition.decimals),
+    )).wait();
+    tokens[symbol] = { ...definition, address: await contract.getAddress() };
+  }
 
   const deployment = {
     chain: CHAIN,
     deployer: deployer.address,
-    tokens: {
-      USDT: { symbol: "USDT", name: "Tether USD", decimals: 6, address: await usdt.getAddress() },
-      USDC: { symbol: "USDC", name: "USD Coin", decimals: 6, address: await usdc.getAddress() }
-    }
+    tokens,
   };
 
   const client = new Client({ connectionString: DB_URL });
   await client.connect();
-  await upsertTokenConfig(client, CHAIN, deployment.tokens.USDT);
-  await upsertTokenConfig(client, CHAIN, deployment.tokens.USDC);
+  for (const token of Object.values(tokens)) {
+    await upsertTokenConfig(client, CHAIN, token);
+  }
   await client.end();
 
-  const outDir = path.join(__dirname, "..", "deployments");
+  const outDir = process.env.DEPLOYMENT_OUT_DIR
+    ? path.resolve(process.env.DEPLOYMENT_OUT_DIR)
+    : path.join(__dirname, "..", "deployments");
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, `${CHAIN}.json`), JSON.stringify(deployment, null, 2));
   console.log(JSON.stringify(deployment, null, 2));

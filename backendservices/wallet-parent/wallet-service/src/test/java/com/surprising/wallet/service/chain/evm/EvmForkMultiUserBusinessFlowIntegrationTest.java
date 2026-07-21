@@ -37,7 +37,6 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -79,7 +78,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
 
             Actors actors = actors(chain);
             prepareDatabase(jdbcTemplate, chain, nativeSymbol, actors);
-            TokenContracts tokens = tokenContracts(jdbcTemplate, chain);
+            List<TokenContract> tokens = tokenContracts(jdbcTemplate, chain);
+            TokenContract collectionToken = tokens.isEmpty() ? null : tokens.getFirst();
+            TokenContract withdrawalToken = tokens.size() > 1 ? tokens.get(1) : collectionToken;
 
             // Setup confirmed balances for users that will withdraw or pay collection gas.
             scanNativeDeposit(scanner, chain, nativeSymbol, confirmations,
@@ -88,46 +89,68 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
                     sendUnlockedNative(web3j, deployer, actors.userC().address(), new BigDecimal("1.00")));
             scanNativeDeposit(scanner, chain, nativeSymbol, confirmations,
                     sendUnlockedNative(web3j, deployer, actors.userD().address(), new BigDecimal("0.20")));
-            scanTokenDeposit(scanner, chain, confirmations,
-                    sendUnlockedTokenCall(web3j, deployer, tokens.usdc(), encodeTransfer(actors.userD().address(), new BigDecimal("80"))));
+            if (withdrawalToken != null) {
+                scanTokenDeposit(scanner, chain, confirmations,
+                        sendUnlockedTokenCall(web3j, deployer, withdrawalToken.address(),
+                                encodeTransfer(actors.userD().address(), new BigDecimal("80"))));
+            }
 
             // Scanner is "stopped": chain deposits are mined, but DB has not been scanned yet.
             TransactionReceipt userAEthDeposit = sendUnlockedNative(web3j, deployer, actors.userA().address(), new BigDecimal("1.25"));
-            TransactionReceipt userBUsdtDeposit = sendUnlockedTokenCall(web3j, deployer, tokens.usdt(),
+            TransactionReceipt userBTokenDeposit = collectionToken == null ? null
+                    : sendUnlockedTokenCall(web3j, deployer, collectionToken.address(),
                     encodeTransfer(actors.userB().address(), new BigDecimal("100")));
             assertBalanceEquals(BigDecimal.ZERO, ledgerOrZero(jdbcTemplate, chain, nativeSymbol, actors.userA().address()));
-            assertBalanceEquals(BigDecimal.ZERO, ledgerOrZero(jdbcTemplate, chain, "USDT", actors.userB().address()));
+            if (collectionToken != null) {
+                assertBalanceEquals(BigDecimal.ZERO,
+                        ledgerOrZero(jdbcTemplate, chain, collectionToken.symbol(), actors.userB().address()));
+            }
 
             // Scanner recovery: rescan the mined blocks and assert idempotent crediting.
             scanNativeDeposit(scanner, chain, nativeSymbol, confirmations, userAEthDeposit);
-            scanTokenDeposit(scanner, chain, confirmations, userBUsdtDeposit);
+            if (userBTokenDeposit != null) {
+                scanTokenDeposit(scanner, chain, confirmations, userBTokenDeposit);
+            }
             scanNativeDeposit(scanner, chain, nativeSymbol, confirmations, userAEthDeposit);
-            scanTokenDeposit(scanner, chain, confirmations, userBUsdtDeposit);
+            if (userBTokenDeposit != null) {
+                scanTokenDeposit(scanner, chain, confirmations, userBTokenDeposit);
+            }
             assertBalanceEquals(new BigDecimal("1.25"), ledgerOrZero(jdbcTemplate, chain, nativeSymbol, actors.userA().address()));
-            assertBalanceEquals(new BigDecimal("100"), ledgerOrZero(jdbcTemplate, chain, "USDT", actors.userB().address()));
             assertDepositCount(jdbcTemplate, chain, nativeSymbol, actors.userA().address(), 1);
-            assertDepositCount(jdbcTemplate, chain, "USDT", actors.userB().address(), 1);
+            if (collectionToken != null) {
+                assertBalanceEquals(new BigDecimal("100"),
+                        ledgerOrZero(jdbcTemplate, chain, collectionToken.symbol(), actors.userB().address()));
+                assertDepositCount(jdbcTemplate, chain, collectionToken.symbol(), actors.userB().address(), 1);
+            }
 
             executeFailedThenRecoveredNativeWithdrawal(jdbcTemplate, repository, web3j, chain, nativeSymbol,
                     actors.userC(), externalNativeRecipient, new BigDecimal("0.05"), chainId);
-            executeTokenWithdrawal(jdbcTemplate, repository, web3j, chain, nativeSymbol, actors.userD(),
-                    tokens.usdc(), "USDC", externalTokenRecipient, new BigDecimal("12.5"), chainId);
+            if (withdrawalToken != null) {
+                executeTokenWithdrawal(jdbcTemplate, repository, web3j, chain, nativeSymbol, actors.userD(),
+                        withdrawalToken.address(), withdrawalToken.symbol(), externalTokenRecipient,
+                        new BigDecimal("12.5"), chainId);
+            }
             executeNativeCollection(jdbcTemplate, repository, web3j, chain, nativeSymbol, actors.userA(),
                     actors.hotWallet(), new BigDecimal("0.30"), chainId);
-            executeInterruptedTokenCollectionRecovery(jdbcTemplate, repository, web3j, chain, nativeSymbol,
-                    actors.userB(), actors.hotWallet(), tokens.usdt(), "USDT", new BigDecimal("100"), chainId);
-
-            assertFalse(repository.freezeLedgerBalance(chain.name(), "USDT", actors.userB().address(), BigDecimal.ONE),
-                    "double-spend guard must reject a second USDT collection after balance reached zero");
+            if (collectionToken != null) {
+                executeInterruptedTokenCollectionRecovery(jdbcTemplate, repository, web3j, chain, nativeSymbol,
+                        actors.userB(), actors.hotWallet(), collectionToken.address(), collectionToken.symbol(),
+                        new BigDecimal("100"), chainId);
+                assertFalse(repository.freezeLedgerBalance(
+                                chain.name(), collectionToken.symbol(), actors.userB().address(), BigDecimal.ONE),
+                        "double-spend guard must reject a second token collection after balance reached zero");
+            }
             assertAddressMatchesChain(jdbcTemplate, web3j, chain, nativeSymbol, tokens, actors.userA());
             assertAddressMatchesChain(jdbcTemplate, web3j, chain, nativeSymbol, tokens, actors.userB());
             assertAddressMatchesChain(jdbcTemplate, web3j, chain, nativeSymbol, tokens, actors.userC());
             assertAddressMatchesChain(jdbcTemplate, web3j, chain, nativeSymbol, tokens, actors.userD());
             assertAddressMatchesChain(jdbcTemplate, web3j, chain, nativeSymbol, tokens, actors.hotWallet());
             assertEquals(BigInteger.ONE, pendingNonce(web3j, actors.userA().credentials()), "user A native collection nonce");
-            assertEquals(BigInteger.ONE, pendingNonce(web3j, actors.userB().credentials()), "user B USDT collection nonce");
+            assertEquals(collectionToken == null ? BigInteger.ZERO : BigInteger.ONE,
+                    pendingNonce(web3j, actors.userB().credentials()), "user B token collection nonce");
             assertEquals(BigInteger.ONE, pendingNonce(web3j, actors.userC().credentials()), "user C recovered withdraw nonce");
-            assertEquals(BigInteger.ONE, pendingNonce(web3j, actors.userD().credentials()), "user D USDC withdraw nonce");
+            assertEquals(withdrawalToken == null ? BigInteger.ZERO : BigInteger.ONE,
+                    pendingNonce(web3j, actors.userD().credentials()), "user D token withdrawal nonce");
             assertEquals(0, countNonConfirmedOrders(jdbcTemplate, chain), "all stability orders must be terminal CONFIRMED");
         } finally {
             web3j.shutdown();
@@ -382,24 +405,27 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     }
 
     private static void assertAddressMatchesChain(JdbcTemplate jdbcTemplate, Web3j web3j, ChainType chain,
-                                                  String nativeSymbol, TokenContracts tokens, Actor actor) throws Exception {
+                                                  String nativeSymbol, List<TokenContract> tokens, Actor actor) throws Exception {
         assertBalanceEquals(getNativeBalance(web3j, actor.address()),
                 ledgerOrZero(jdbcTemplate, chain, nativeSymbol, actor.address()));
-        assertBalanceEquals(tokenBalance(web3j, tokens.usdt(), actor.address()),
-                ledgerOrZero(jdbcTemplate, chain, "USDT", actor.address()));
-        assertBalanceEquals(tokenBalance(web3j, tokens.usdc(), actor.address()),
-                ledgerOrZero(jdbcTemplate, chain, "USDC", actor.address()));
+        for (TokenContract token : tokens) {
+            assertBalanceEquals(tokenBalance(web3j, token.address(), actor.address()),
+                    ledgerOrZero(jdbcTemplate, chain, token.symbol(), actor.address()));
+        }
         assertBalanceEquals(BigDecimal.ZERO, lockedOrZero(jdbcTemplate, chain, nativeSymbol, actor.address()));
         assertBalanceEquals(BigDecimal.ZERO, lockedOrZero(jdbcTemplate, chain, "USDT", actor.address()));
         assertBalanceEquals(BigDecimal.ZERO, lockedOrZero(jdbcTemplate, chain, "USDC", actor.address()));
     }
 
-    private static TokenContracts tokenContracts(JdbcTemplate jdbcTemplate, ChainType chain) {
-        Map<String, Object> usdt = jdbcTemplate.queryForMap(
-                "select contract_address from token_config where chain = ? and symbol = 'USDT' and enabled = true", chain.name());
-        Map<String, Object> usdc = jdbcTemplate.queryForMap(
-                "select contract_address from token_config where chain = ? and symbol = 'USDC' and enabled = true", chain.name());
-        return new TokenContracts((String) usdt.get("contract_address"), (String) usdc.get("contract_address"));
+    private static List<TokenContract> tokenContracts(JdbcTemplate jdbcTemplate, ChainType chain) {
+        return jdbcTemplate.query("""
+                        select symbol, contract_address
+                          from token_config
+                         where chain = ? and enabled = true and standard = 'ERC20'
+                         order by symbol
+                        """,
+                (rs, rowNum) -> new TokenContract(rs.getString("symbol"), rs.getString("contract_address")),
+                chain.name());
     }
 
     private static Actors actors(ChainType chain) throws Exception {
@@ -628,7 +654,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return dataSource;
     }
 
-    private record TokenContracts(String usdt, String usdc) {
+    private record TokenContract(String symbol, String address) {
     }
 
     private record Actor(String label, String role, long userId, int derivationIndex,

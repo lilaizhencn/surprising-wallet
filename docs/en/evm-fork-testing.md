@@ -30,6 +30,23 @@ scripts/regtest/all-chain-regtest.sh test-evm
 
 The script starts a Hardhat fork on `127.0.0.1:8545`, deploys mock ERC20 contracts, runs Java integration tests, stops the fork, and moves to the next chain.
 
+## Complete Local Matrix Without External RPCs
+
+```bash
+./evm-fork/scripts/run-local-matrix.sh
+```
+
+The runner checks each chain's enabled tokens from the database seed, starts a
+fresh Hardhat node with the configured chain ID, deploys only the required
+USDC/USDT contracts into a temporary PostgreSQL database, and validates native
+and enabled-token deposits, replay safety, withdrawals, collections, recovery,
+nonces, and on-chain balance reconciliation. It stops each node before moving to
+the next chain and removes all temporary state when finished.
+
+It covers ETH, BNB, Polygon, Arbitrum, Optimism, Base, Avalanche C-Chain,
+HyperEVM, Linea, Mantle, Scroll, and Unichain. Mantle currently has no enabled
+token, so its run is native MNT only.
+
 Run multi-user business-flow tests as well:
 
 ```bash

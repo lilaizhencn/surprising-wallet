@@ -226,10 +226,10 @@ public class ChainJdbcRepository {
                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict (chain, tx_hash) do update set
                     fee = excluded.fee,
-                    block_height = coalesce(excluded.block_height, tron_tx.block_height),
+                    block_height = coalesce(excluded.block_height, evm_tx.block_height),
                     confirmations = excluded.confirmations,
                     status = excluded.status,
-                    raw_payload = coalesce(excluded.raw_payload, tron_tx.raw_payload),
+                    raw_payload = coalesce(excluded.raw_payload, evm_tx.raw_payload),
                     updated_at = excluded.updated_at
                 """,
                 tx.getChain(), tx.getTxHash(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),
@@ -245,10 +245,10 @@ public class ChainJdbcRepository {
                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 on conflict (chain, tx_hash) do update set
                     fee = excluded.fee,
-                    block_height = coalesce(excluded.block_height, evm_tx.block_height),
+                    block_height = coalesce(excluded.block_height, tron_tx.block_height),
                     confirmations = excluded.confirmations,
                     status = excluded.status,
-                    raw_payload = coalesce(excluded.raw_payload, evm_tx.raw_payload),
+                    raw_payload = coalesce(excluded.raw_payload, tron_tx.raw_payload),
                     updated_at = excluded.updated_at
                 """,
                 tx.getChain(), tx.getTxHash(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),

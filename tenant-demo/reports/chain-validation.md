@@ -24,29 +24,29 @@
 |---|---|---|---|---|
 | ADA | preprod | 待核对 | 待测试 | Profile 当前关闭 |
 | APTOS | testnet 配置 + localnet 资金流 | USDC、USDT（FA） | 进行中 | 官方 Testnet 配置、API/Webhook、地址幂等已通过；USDC/USDT 本地真实链上充值、提现、归集和对账已通过；待补 APT 与 Demo 实际回调资金流 |
-| ARBITRUM | sepolia | USDC、USDT | 待测试 | - |
-| AVAX_C | fuji | USDC、USDT | 待测试 | - |
-| BASE | sepolia | USDC、USDT | 待测试 | - |
+| ARBITRUM | sepolia 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
+| AVAX_C | fuji 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
+| BASE | sepolia 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | BCH | regtest 优先 | 无 | 待测试 | 仓库已有 regtest 基础设施 |
-| BNB | testnet / Hardhat | USDC、USDT | 待测试 | - |
+| BNB | testnet 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | BTC | regtest | 无 | 待测试 | 仓库已有 regtest 基础设施 |
 | DOGE | regtest | 无 | 待测试 | 仓库已有 regtest 基础设施 |
 | DOT | westend / 本地 runtime | 待核对 | 待测试 | Profile 当前关闭 |
-| ETH | Hardhat / sepolia | USDC、USDT | 待测试 | 仓库已有 Hardhat 工程 |
+| ETH | sepolia 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | HYPERCORE | testnet | HYPE | 待测试 | - |
-| HYPEREVM | testnet | USDC | 待测试 | - |
-| LINEA | sepolia / Hardhat | USDC | 待测试 | - |
+| HYPEREVM | testnet 配置 + Hardhat | USDC | 钱包资金流通过 | HYPE/USDC 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
+| LINEA | sepolia 配置 + Hardhat | USDC | 钱包资金流通过 | ETH_LINEA/USDC 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | LTC | regtest 优先 | 无 | 待测试 | 仓库已有 regtest 基础设施 |
-| MANTLE | sepolia / Hardhat | 无 | 待测试 | - |
+| MANTLE | sepolia 配置 + Hardhat | 无 | 钱包资金流通过 | 原生 MNT 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | NEAR | testnet / sandbox | 待核对 | 待测试 | Profile 当前关闭 |
-| OPTIMISM | sepolia / Hardhat | USDC、USDT | 待测试 | - |
-| POLYGON | amoy / Hardhat | USDC、USDT | 待测试 | - |
-| SCROLL | sepolia / Hardhat | USDC | 待测试 | - |
+| OPTIMISM | sepolia 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
+| POLYGON | amoy 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
+| SCROLL | sepolia 配置 + Hardhat | USDC | 钱包资金流通过 | ETH_SCROLL/USDC 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | SOLANA | devnet / test-validator | USDC、USDT | 待测试 | - |
 | SUI | testnet / localnet | USDC | 待测试 | - |
 | TON | testnet | USDC、USDT | 待测试 | - |
 | TRON | nile / local private chain | 当前无启用 Token | 待测试 | - |
-| UNICHAIN | sepolia / Hardhat | USDC | 待测试 | - |
+| UNICHAIN | sepolia 配置 + Hardhat | USDC | 钱包资金流通过 | ETH_UNICHAIN/USDC 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | XMR | regtest | 无 | 待测试 | Profile 当前关闭，仓库已有 regtest 配置 |
 | XRP | testnet | USDC | 待测试 | - |
 
@@ -65,3 +65,14 @@
 - 隔离库中的用户账本与平台控制地址链上余额逐币相等，锁定余额和负余额均为 0；
 - `infra/aptos/run-fa-flow.sh` 可从空 Localnet 和临时数据库重复执行并自动清理；
 - Aptos 整链仍需补 APT 原生币资金流，以及通过正式 API/Webhook 驱动 Demo 的实际回调验收。
+
+## EVM 当前证据
+
+- `evm-fork/scripts/run-local-matrix.sh` 从空临时数据库和全新节点开始逐链执行；
+- 12 条启用 EVM 链全部通过，节点逐链停止，临时数据库与日志自动清理；
+- 双 Token、单 Token 和无 Token 配置都按数据库实际启用范围执行；
+- 原生币及每个 Token 完成充值、重复扫描幂等、提现、归集、广播失败恢复和中断恢复；
+- 各用户数据库余额与链上余额一致，nonce 与实际广播次数一致；
+- 所有订单进入终态，没有负数可用、锁定或总余额；
+- 修复 `evm_tx` 与 `tron_tx` upsert 冲突更新时交叉引用错误表名的问题；
+- 仍需让租户 Demo 通过正式 API/Webhook 驱动 EVM 实际资金流，完成 SaaS 层验收。
