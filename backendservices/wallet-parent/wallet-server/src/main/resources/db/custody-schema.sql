@@ -30,30 +30,11 @@ UPDATE token_config token
 ALTER TABLE token_config DROP CONSTRAINT IF EXISTS token_config_chain_symbol_key;
 ALTER TABLE token_config DROP CONSTRAINT IF EXISTS token_config_chain_contract_address_key;
 
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-         WHERE conrelid = 'token_config'::regclass
-           AND conname = 'token_config_chain_network_symbol_key'
-    ) THEN
-        ALTER TABLE token_config
-            ADD CONSTRAINT token_config_chain_network_symbol_key UNIQUE (chain, network, symbol);
-    END IF;
-END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS token_config_chain_network_symbol_key
+    ON token_config (chain, network, symbol);
 
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-         WHERE conrelid = 'token_config'::regclass
-           AND conname = 'token_config_chain_network_contract_address_key'
-    ) THEN
-        ALTER TABLE token_config
-            ADD CONSTRAINT token_config_chain_network_contract_address_key
-            UNIQUE (chain, network, contract_address);
-    END IF;
-END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS token_config_chain_network_contract_address_key
+    ON token_config (chain, network, contract_address);
 
 CREATE UNIQUE INDEX IF NOT EXISTS token_config_one_enabled_network_per_asset_idx
     ON token_config (upper(chain), upper(symbol)) WHERE enabled = true;
