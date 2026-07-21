@@ -25,7 +25,8 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
             "0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832";
     private static final long OWNER_INDEX = 1_310_011L;
     private static final long EXTERNAL_INDEX = 1_310_012L;
-    private static final long HOT_INDEX = 0L;
+    private static final long HOT_USER_ID = 6_110L;
+    private static final long HOT_INDEX = 1_310_010L;
 
     @Test
     void liveFaDepositWithdrawCollectionAndReplayAreSafe() {
@@ -65,7 +66,8 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
         String ownerAddress = address(keys, 6111L, OWNER_INDEX);
         requireFunding(rpc, external.getAddress(), ownerAddress, metadataAddress, depositAtomic);
         ChainAddressRecord owner = addresses.createTokenAddress(symbol, 6111, 0, OWNER_INDEX, "DEPOSIT");
-        ChainAddressRecord hot = addresses.createTokenAddress(symbol, 0, 0, HOT_INDEX, "DEPOSIT");
+        ChainAddressRecord hot = addresses.createTokenAddress(
+                symbol, HOT_USER_ID, 0, HOT_INDEX, "DEPOSIT");
 
         long checkpoint = rpc.ledgerVersion();
         repository.updateScanHeight("APTOS", AptosDepositScanner.SCANNER, checkpoint, checkpoint);
@@ -76,9 +78,9 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
         transactions.requireSuccessfulConfirmation(depositHash, Duration.ofMinutes(2));
         scanner.scanAndCredit();
         BigDecimal ledgerAfterDeposit = ledger(repository, symbol, owner.getAccountId());
-        assertEquals(ledgerBefore.add(depositAmount), ledgerAfterDeposit);
+        assertAmountEquals(ledgerBefore.add(depositAmount), ledgerAfterDeposit);
         scanner.scanAndCredit();
-        assertEquals(ledgerAfterDeposit, ledger(repository, symbol, owner.getAccountId()));
+        assertAmountEquals(ledgerAfterDeposit, ledger(repository, symbol, owner.getAccountId()));
 
         String withdrawalNo = "aptos-fa-withdraw-" + UUID.randomUUID();
         assertEquals(1, repository.createWithdrawalOrder(withdrawalNo, owner.getUserId(), "APTOS", symbol,
@@ -145,6 +147,12 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
         return repository.findLedgerBalance("APTOS", symbol, accountId)
                 .map(LedgerBalanceRecord::getTotalBalance)
                 .orElse(BigDecimal.ZERO);
+    }
+
+    private static void assertAmountEquals(BigDecimal expected, BigDecimal actual) {
+        assertEquals(0, expected.compareTo(actual),
+                () -> "expected amount " + expected.toPlainString()
+                        + " but was " + actual.toPlainString());
     }
 
     private static long pow10(int decimals) {

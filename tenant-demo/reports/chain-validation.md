@@ -23,7 +23,7 @@
 | 链 | 验收网络 | Token 范围 | 当前状态 | 已有证据 / 待完成 |
 |---|---|---|---|---|
 | ADA | preprod | 待核对 | 待测试 | Profile 当前关闭 |
-| APTOS | testnet | USDC、USDT（FA） | 进行中 | API 鉴权、Webhook 验证、APT/USDC/USDT 配置、地址幂等及轮换已通过；缺真实资金充值、提现、归集和对账 |
+| APTOS | testnet 配置 + localnet 资金流 | USDC、USDT（FA） | 进行中 | 官方 Testnet 配置、API/Webhook、地址幂等已通过；USDC/USDT 本地真实链上充值、提现、归集和对账已通过；待补 APT 与 Demo 实际回调资金流 |
 | ARBITRUM | sepolia | USDC、USDT | 待测试 | - |
 | AVAX_C | fuji | USDC、USDT | 待测试 | - |
 | BASE | sepolia | USDC、USDT | 待测试 | - |
@@ -58,4 +58,10 @@
 - 在线验收脚本验证同一 `subject + addressVersion` 幂等，以及 `addressVersion=1` 的地址轮换；
 - 公开链接口返回原生 APT、FA USDC、FA USDT；
 - Webhook HMAC、事件幂等、充值记账、提现冻结/确认/失败解冻已通过 Demo 自动化测试；
-- 测试账户仍缺 APT Gas 与 FA 测试币，因此尚未产生真实链上充值、提现和归集交易。
+- 官方 Testnet USDC 元数据验证通过；USDT 使用明确标记为测试用途的 FA 地址；
+- 公共 Testnet Faucet 需要外部账户凭证，因此资金广播验收使用隔离 Aptos Localnet；
+- Localnet 部署的 USDC、USDT 均为 Aptos FA、6 位精度，不包含 MUSD 或 `APTOS_COIN`；
+- USDC、USDT 分别完成真实链上充值、扫描入账、重复扫描幂等、提现确认、归集确认；
+- 隔离库中的用户账本与平台控制地址链上余额逐币相等，锁定余额和负余额均为 0；
+- `infra/aptos/run-fa-flow.sh` 可从空 Localnet 和临时数据库重复执行并自动清理；
+- Aptos 整链仍需补 APT 原生币资金流，以及通过正式 API/Webhook 驱动 Demo 的实际回调验收。

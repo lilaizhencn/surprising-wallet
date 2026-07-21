@@ -1,0 +1,13 @@
+[package]
+name = "surprising_test_fa"
+version = "1.0.0"
+authors = ["Surprising Wallet"]
+
+[addresses]
+test_fa = "_"
+
+[dev-addresses]
+test_fa = "0xcafe"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-framework.git", rev = "mainnet", subdir = "aptos-framework" }
