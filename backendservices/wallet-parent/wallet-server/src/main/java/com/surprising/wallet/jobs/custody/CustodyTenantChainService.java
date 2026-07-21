@@ -75,11 +75,14 @@ public class CustodyTenantChainService {
             throw new IllegalArgumentException(
                     "deposit and withdrawal require the token to be enabled");
         }
+        if (!chains.tokenConfigured(chain, symbol)) {
+            throw new IllegalArgumentException("token is not configured on this chain");
+        }
+        if (command.enabled() && !chains.tokenAvailable(chain, symbol)) {
+            throw new IllegalArgumentException("token is not enabled by the platform");
+        }
         if (command.enabled()) {
             requireActive(principal.tenantId(), chain);
-        }
-        if (!chains.tokenAvailable(chain, symbol)) {
-            throw new IllegalArgumentException("token is not available on this chain");
         }
         chains.setTokenSettings(
                 principal.tenantId(), chain, symbol, command.enabled(),
@@ -144,6 +147,7 @@ public class CustodyTenantChainService {
     private static TokenView tokenView(CustodyTenantChainRepository.TokenRecord row) {
         return new TokenView(
                 row.symbol(), row.standard(), row.contractAddress(), row.decimals(),
+                row.platformEnabled(),
                 row.enabled(), row.depositEnabled(), row.withdrawalEnabled());
     }
 
@@ -210,6 +214,7 @@ public class CustodyTenantChainService {
             String standard,
             String contractAddress,
             int decimals,
+            boolean platformEnabled,
             boolean enabled,
             boolean depositEnabled,
             boolean withdrawalEnabled

@@ -96,10 +96,11 @@ tenant and chain returns the same address. Confirmed native coins at this addres
 chain's network-fee operations. Tenant chains displays and copies this address;
 there is no separate Gas-pool page.
 
-A tenant can only see and enable tokens already configured and enabled by a
-platform administrator. Each available token has only three switches: enabled,
-deposits, and withdrawals. Deposits or withdrawals cannot be enabled while the
-token is disabled. A platform-disabled token cannot be enabled by a tenant.
+A tenant can see tokens configured by a platform administrator, but can only
+enable tokens currently supported by the platform. Each token has three tenant
+switches: enabled, deposits, and withdrawals. When platform support is turned
+off, the token and its assets remain visible while deposits and withdrawals stop
+immediately. A new enable attempt returns a clear platform-unavailable message.
 
 Monero does not use BIP44. Its wallet RPC creates a subaddress recorded as
 `monero-wallet-rpc:m/0/{subaddressIndex}`.

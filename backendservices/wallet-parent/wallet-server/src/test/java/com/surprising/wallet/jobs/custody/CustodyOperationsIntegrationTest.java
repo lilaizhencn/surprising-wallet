@@ -510,10 +510,14 @@ class CustodyOperationsIntegrationTest {
                      where chain = 'TRON' and symbol = 'USDT' and enabled = true
                     """, Long.class);
             jdbc.update("update token_config set enabled = false where id = ?", tokenConfigId);
-            assertTrue(service.list(principal).stream()
+            var platformDisabledToken = service.list(principal).stream()
                     .filter(chain -> chain.chain().equals("TRON"))
                     .flatMap(chain -> chain.tokens().stream())
-                    .noneMatch(row -> row.symbol().equals("USDT")));
+                    .filter(row -> row.symbol().equals("USDT"))
+                    .findFirst().orElseThrow();
+            assertFalse(platformDisabledToken.platformEnabled());
+            assertFalse(platformDisabledToken.depositEnabled());
+            assertFalse(platformDisabledToken.withdrawalEnabled());
             assertThrows(IllegalArgumentException.class, () -> service.setToken(
                     principal, "TRON", "USDT",
                     new CustodyTenantChainService.TokenSettings(true, true, true),
@@ -533,6 +537,15 @@ class CustodyOperationsIntegrationTest {
             jdbc.update("update token_config set enabled = false where id = ?", tokenConfigId);
             assertFalse(chainRepository.depositEnabled(tenantId, "TRON", "USDT"));
             assertFalse(chainRepository.withdrawalEnabled(tenantId, "TRON", "USDT"));
+            var retainedToken = service.list(principal).stream()
+                    .filter(chain -> chain.chain().equals("TRON"))
+                    .flatMap(chain -> chain.tokens().stream())
+                    .filter(row -> row.symbol().equals("USDT"))
+                    .findFirst().orElseThrow();
+            assertTrue(retainedToken.enabled());
+            assertFalse(retainedToken.platformEnabled());
+            assertFalse(retainedToken.depositEnabled());
+            assertFalse(retainedToken.withdrawalEnabled());
             jdbc.update("update token_config set enabled = true where id = ?", tokenConfigId);
 
             var closed = service.setEnabled(principal, "TRON", false, "127.0.0.1");
@@ -715,6 +728,10 @@ class CustodyOperationsIntegrationTest {
                         values (?, ?, 'USDT', ?, ?, 0, ?)
                         """, tenantId, chains[index], accountId, totals[index], totals[index]);
             }
+            jdbc.update("""
+                    update token_config set enabled = false
+                     where chain = 'TRON' and symbol = 'USDT' and enabled = true
+                    """);
 
             CustodyAssetDashboardService service = new CustodyAssetDashboardService(
                     new CustodyAssetDashboardRepository(jdbc), new CustodyRepository(jdbc));

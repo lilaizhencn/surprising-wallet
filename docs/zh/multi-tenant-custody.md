@@ -79,8 +79,9 @@ m / 44' / coinType' / tenantNamespace' / derivationSubject' / childIndex'
 地址收到并确认的原生币同时作为该链链上操作的 Gas 资金。链管理页面直接展示地址和复制按钮，
 不再设置单独的 Gas 资金池页面。
 
-租户只能看到并开启平台管理员已配置为启用状态的 Token。每个可用 Token 仅有“启用、充值、提现”
-三个开关；充值或提现不能脱离 Token 总开关启用。平台关闭 Token 后，租户不能再开启它。
+租户可以看到平台管理员已配置的 Token；只有平台已支持的 Token 才能开启。每个 Token 仅有
+“启用、充值、提现”三个租户开关；充值或提现不能脱离 Token 总开关启用。平台关闭 Token 后，
+Token 和已有资产仍然展示，但充值、提现立即停止；租户再次点击开启时会收到平台未支持提示。
 
 Monero 不使用 BIP44；地址由 wallet RPC 创建 subaddress，并记录
 `monero-wallet-rpc:m/0/{subaddressIndex}`。

@@ -242,7 +242,7 @@ paths:
     get:
       tags: [Console chains]
       summary: List platform-enabled chains and tokens available to the tenant
-      description: Only tokens enabled in platform chain and token configuration are returned.
+      description: Configured tokens remain visible after platform disablement, while their deposit and withdrawal switches become ineffective.
       security: [{ bearerAuth: [] }]
       responses:
         '200':
@@ -280,7 +280,7 @@ paths:
     put:
       tags: [Console chains]
       summary: Update an available token for the tenant
-      description: The token must already be enabled by a platform administrator. Deposit and withdrawal cannot be enabled while the token is disabled.
+      description: The token must be configured on the current network. Enabling requires platform support. Deposit and withdrawal cannot be enabled while the token is disabled or platform support is off.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/ChainPath'
@@ -1360,12 +1360,13 @@ components:
         addressCount: { type: integer, format: int64 }
     TenantToken:
       type: object
-      required: [symbol, decimals, enabled, depositEnabled, withdrawalEnabled]
+      required: [symbol, decimals, platformEnabled, enabled, depositEnabled, withdrawalEnabled]
       properties:
         symbol: { type: string }
         standard: { type: [string, 'null'] }
         contractAddress: { type: [string, 'null'] }
         decimals: { type: integer }
+        platformEnabled: { type: boolean }
         enabled: { type: boolean }
         depositEnabled: { type: boolean }
         withdrawalEnabled: { type: boolean }

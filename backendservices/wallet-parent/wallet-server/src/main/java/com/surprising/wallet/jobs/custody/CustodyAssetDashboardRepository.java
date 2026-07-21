@@ -60,8 +60,8 @@ public class CustodyAssetDashboardRepository {
                         on a.chain = tt.chain and a.symbol = tt.symbol
                        and a.active = true and a.native_asset = false
                       join token_config t
-                        on t.chain = tt.chain and t.symbol = tt.symbol and t.enabled = true
-                       and (lower(t.network) = lower(p.network) or t.network is null)
+                        on t.chain = tt.chain and t.symbol = tt.symbol
+                       and lower(t.network) = lower(p.network)
                      where tt.tenant_id = ? and tt.enabled = true
                 )
                 select ca.chain, ca.asset_symbol, ca.native_asset,

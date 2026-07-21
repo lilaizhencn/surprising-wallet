@@ -52,15 +52,16 @@ public class CustodyTenantChainRepository {
                 select p.chain, a.symbol,
                        coalesce(t.token_standard, t.standard) as standard,
                        t.contract_address, t.decimals,
+                       t.enabled as platform_enabled,
                        coalesce(tt.enabled, false) as tenant_enabled,
-                       coalesce(tt.deposit_enabled, false) as deposit_enabled,
-                       coalesce(tt.withdrawal_enabled, false) as withdrawal_enabled
+                       coalesce(tt.deposit_enabled, false) and t.enabled as deposit_enabled,
+                       coalesce(tt.withdrawal_enabled, false) and t.enabled as withdrawal_enabled
                   from chain_profile p
                   join chain_asset a
                     on a.chain = p.chain and a.active = true and a.native_asset = false
                   join token_config t
-                    on t.chain = p.chain and t.symbol = a.symbol and t.enabled = true
-                   and (lower(t.network) = lower(p.network) or t.network is null)
+                    on t.chain = p.chain and t.symbol = a.symbol
+                   and lower(t.network) = lower(p.network)
                   left join custody_tenant_token tt
                     on tt.tenant_id = ? and tt.chain = p.chain and tt.symbol = a.symbol
                  where p.enabled = true
@@ -68,6 +69,7 @@ public class CustodyTenantChainRepository {
                 """, (rs, rowNum) -> new TokenRecord(
                 rs.getString("chain"), rs.getString("symbol"), rs.getString("standard"),
                 rs.getString("contract_address"), rs.getInt("decimals"),
+                rs.getBoolean("platform_enabled"),
                 rs.getBoolean("tenant_enabled"), rs.getBoolean("deposit_enabled"),
                 rs.getBoolean("withdrawal_enabled")), tenantId);
     }
@@ -126,11 +128,28 @@ public class CustodyTenantChainRepository {
                        and a.active = true and a.native_asset = false
                       join token_config t
                         on t.chain = p.chain and t.symbol = a.symbol and t.enabled = true
-                       and (lower(t.network) = lower(p.network) or t.network is null)
+                       and lower(t.network) = lower(p.network)
                      where p.chain = ? and p.enabled = true
                 )
                 """, Boolean.class, symbol, chain);
         return Boolean.TRUE.equals(available);
+    }
+
+    public boolean tokenConfigured(String chain, String symbol) {
+        Boolean configured = jdbc.queryForObject("""
+                select exists(
+                    select 1
+                      from chain_profile p
+                      join chain_asset a
+                        on a.chain = p.chain and a.symbol = ?
+                       and a.active = true and a.native_asset = false
+                      join token_config t
+                        on t.chain = p.chain and t.symbol = a.symbol
+                       and lower(t.network) = lower(p.network)
+                     where p.chain = ? and p.enabled = true
+                )
+                """, Boolean.class, symbol, chain);
+        return Boolean.TRUE.equals(configured);
     }
 
     public void setTokenSettings(UUID tenantId, String chain, String symbol,
@@ -177,7 +196,7 @@ public class CustodyTenantChainRepository {
                        and tt.chain = a.chain and tt.symbol = a.symbol
                       left join token_config t
                         on t.chain = a.chain and t.symbol = a.symbol and t.enabled = true
-                       and (lower(t.network) = lower(p.network) or t.network is null)
+                       and lower(t.network) = lower(p.network)
                      where a.chain = ? and a.symbol = ? and a.active = true
                        and (a.native_asset = true
                             or (tt.enabled = true and %s = true and t.id is not null))
@@ -212,6 +231,7 @@ public class CustodyTenantChainRepository {
             String standard,
             String contractAddress,
             int decimals,
+            boolean platformEnabled,
             boolean enabled,
             boolean depositEnabled,
             boolean withdrawalEnabled
