@@ -26,13 +26,13 @@ CHAIN_MODE=${MONERO_REGTEST_CHAIN_MODE:-regtest}
 FAUCET_AMOUNT=${MONERO_REGTEST_FAUCET_AMOUNT:-1}
 WAIT_SECONDS=${MONERO_REGTEST_WAIT_SECONDS:-90}
 DOCKER_BIN=${DOCKER_BIN:-docker}
-DOCKER_PREFIX=()
-if [[ "${DOCKER_USE_SUDO:-false}" == "true" ]]; then
-  DOCKER_PREFIX=(sudo)
-fi
 
 docker_cmd() {
-  "${DOCKER_PREFIX[@]}" "${DOCKER_BIN}" "$@"
+  if [[ "${DOCKER_USE_SUDO:-false}" == "true" ]]; then
+    sudo "${DOCKER_BIN}" "$@"
+  else
+    "${DOCKER_BIN}" "$@"
+  fi
 }
 
 require_command() {

@@ -3,8 +3,6 @@ set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 
-UTXO_TEST="com.surprising.wallet.service.chain.BitcoinLikeRegtestFullFlowIntegrationTest"
-XMR_TEST="com.surprising.wallet.service.chain.monero.MoneroRegtestFullFlowIntegrationTest"
 DB_TESTS=(
   "com.surprising.wallet.service.chain.solana.SolanaDatabaseFlowIntegrationTest"
   "com.surprising.wallet.service.chain.ton.TonDatabaseFlowIntegrationTest"
@@ -140,12 +138,7 @@ test_evm() {
 }
 
 test_xmr() {
-  "${ROOT_DIR}/scripts/regtest/monero-regtest.sh" init
-  mvn_wallet_test \
-    -Dsurefire.failIfNoSpecifiedTests=false \
-    -Dmonero.regtest.enabled=true \
-    -Dtest="${XMR_TEST}" \
-    test
+  "${ROOT_DIR}/scripts/regtest/run-monero-flow.sh"
 }
 
 test_db() {

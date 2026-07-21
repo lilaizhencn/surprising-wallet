@@ -44,13 +44,11 @@ scripts/regtest/all-chain-regtest.sh test-xmr
 regtest 测试卷，从创世状态启动，只运行该链的全流程、并发和批量广播测试，完成后
 立即停止节点，再进入下一条链。数据库使用临时实例并在脚本退出时清理。
 
-`test-xmr` 需要 Docker、`curl`、`python3`、Maven，以及已经用
-`docs/db/surprising-wallet-init-pgsql.sql` 初始化过的 PostgreSQL 数据库。
-默认连接 `jdbc:postgresql://127.0.0.1:5432/wallet`、用户 `wallet`、空密码；
-可通过 `MONERO_REGTEST_DB_URL`、`MONERO_REGTEST_DB_USER`、
-`MONERO_REGTEST_DB_PASSWORD` 覆盖。如果 wallet-rpc 容器启用了认证，设置
-`MONERO_REGTEST_RPC_LOGIN=user:password`；Java 测试会把 regtest RPC 节点
-upsert 为 `DIGEST`，否则使用 `NONE`。
+`test-xmr` 需要 Docker、`curl`、`python3`、Maven 和本地 PostgreSQL。它只会
+重置明确命名的 XMR regtest 容器和测试卷，从创世状态启动，并使用
+`docs/db/surprising-wallet-init-pgsql.sql` 创建临时数据库，然后执行真实充值、
+提现、归集、幂等和余额检查。退出时会停止节点并删除临时数据库。如果
+wallet-rpc 启用了认证，设置 `MONERO_REGTEST_RPC_LOGIN=user:password`。
 
 调整广播压力：
 

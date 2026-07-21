@@ -47,7 +47,7 @@
 | TON | testnet | USDC、USDT | 待测试 | - |
 | TRON | nile / local private chain | 当前无启用 Token | 待测试 | - |
 | UNICHAIN | sepolia 配置 + Hardhat | USDC | 钱包资金流通过 | ETH_UNICHAIN/USDC 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
-| XMR | regtest | 无 | 待测试 | Profile 当前关闭，仓库已有 regtest 配置 |
+| XMR | regtest | 无 | 钱包资金流通过 | 全新链充值、扫描幂等、提现、内部转账防重复入账、归集和余额审计通过；待租户 API/Webhook 实际资金流 |
 | XRP | testnet | USDC | 待测试 | - |
 
 ## Aptos 当前证据
@@ -86,3 +86,12 @@
 - 所有账本均保持非负，临时 PostgreSQL 数据库已删除，4 个节点均处于停止状态；
 - 修复 regtest profile 切换顺序，确保启用 regtest 前关闭同链已有测试网络；
 - 仍需让租户 Demo 通过正式 API/Webhook 驱动 UTXO 实际资金流，完成 SaaS 层验收。
+
+## Monero 当前证据
+
+- XMR 从创世 regtest 状态启动，使用真实 `monerod` 和两个隔离的 `monero-wallet-rpc`；
+- 完成子地址充值、链上确认、扫描入账、重复扫描幂等和精确账本余额断言；
+- 完成用户提现、内部收款地址识别并防止重复入账；
+- 完成第二次充值和归集，归集不错误扣减用户托管账本；
+- 临时 PostgreSQL 数据库无负余额并已删除，XMR 节点已停止；
+- 仍需让租户 Demo 通过正式 API/Webhook 驱动 XMR 实际资金流，完成 SaaS 层验收。

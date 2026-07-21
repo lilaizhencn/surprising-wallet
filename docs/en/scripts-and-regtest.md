@@ -45,13 +45,13 @@ the explicitly named regtest test volume, starts from genesis, runs that chain's
 full-flow, concurrency, and bulk-broadcast tests, stops the node, and only then
 moves to the next chain. It uses a temporary database that is removed on exit.
 
-`test-xmr` requires Docker, `curl`, `python3`, Maven, and a PostgreSQL database
-initialized from `docs/db/surprising-wallet-init-pgsql.sql`. By default it uses
-`jdbc:postgresql://127.0.0.1:5432/wallet`, user `wallet`, and an empty password;
-override with `MONERO_REGTEST_DB_URL`, `MONERO_REGTEST_DB_USER`, and
-`MONERO_REGTEST_DB_PASSWORD`. If the wallet-rpc containers are started with
-authentication, set `MONERO_REGTEST_RPC_LOGIN=user:password`; the Java test will
-upsert the regtest RPC node as `DIGEST`, otherwise it uses `NONE`.
+`test-xmr` requires Docker, `curl`, `python3`, Maven, and local PostgreSQL. It
+resets only the explicitly named XMR regtest containers and volumes, starts from
+genesis, initializes a temporary database from
+`docs/db/surprising-wallet-init-pgsql.sql`, then runs the real deposit,
+withdrawal, collection, idempotency, and balance checks. The node is stopped and
+the temporary database is removed on exit. If wallet-rpc authentication is
+enabled, set `MONERO_REGTEST_RPC_LOGIN=user:password`.
 
 Tune broadcast pressure:
 
