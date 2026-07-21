@@ -86,41 +86,22 @@ public class SuiTransactionService {
         return rpc.executeSignedTransaction(txBytes, signature).path("digest").asText();
     }
 
-    public PublishResult publishPackage(ChainAddressRecord from, List<String> compiledModules,
-                                        List<String> dependencies, long gasBudget) {
-        if (gasBudget <= 0) {
-            throw new IllegalArgumentException("Sui publish gas budget must be positive");
-        }
-        JsonNode unsigned = rpc.publishTransaction(from.getAddress(), compiledModules, dependencies, gasBudget);
-        String txBytes = unsigned.path("txBytes").asText("");
-        if (txBytes.isBlank()) {
-            throw new IllegalStateException("Sui publish builder returned empty txBytes");
-        }
-        String signature = signer.signTransactionBytes(from.getUserId(), from.getBiz(), from.getAddressIndex(), txBytes);
-        JsonNode result = rpc.executeSignedTransaction(txBytes, signature);
-        String digest = result.path("digest").asText("");
-        if (digest.isBlank()) {
-            throw new IllegalStateException("Sui publish execution returned empty digest");
-        }
-        record(digest, from.getAddress(), from.getAddress(), "SUI_CONTRACT", "PACKAGE",
-                BigDecimal.ZERO, gasBudget, "SENT", result.toString());
-        return new PublishResult(digest, result);
-    }
-
     public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
-                                 String toAddress, BigDecimal amountMist) {
+                                 String toAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "sui withdrawNative");
         Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
         if (existing.isPresent()) {
             return existing.get();
         }
         long feeReserve = profile().getDefaultFee();
+        int decimals = decimals("SUI");
+        BigDecimal fee = BigDecimal.valueOf(feeReserve).movePointLeft(decimals);
         if (repository.createWithdrawalOrder(orderNo, userId, CHAIN, "SUI", toAddress,
-                amountMist, BigDecimal.valueOf(feeReserve)) == 0) {
+                amount, fee) == 0) {
             return repository.findWithdrawalTxHash(CHAIN, orderNo)
                     .orElseThrow(() -> new IllegalStateException("Sui withdrawal already claimed"));
         }
-        BigDecimal debit = amountMist.add(BigDecimal.valueOf(feeReserve));
+        BigDecimal debit = amount.add(fee);
         if (!repository.freezeLedgerBalance(CHAIN, "SUI", from.getAccountId(), debit)) {
             repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null,
                     "insufficient SUI ledger balance");
@@ -131,11 +112,11 @@ public class SuiTransactionService {
             if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
                 throw new IllegalStateException("Sui withdrawal is not signable: " + orderNo);
             }
-            String digest = sendNative(from, toAddress, amountMist.longValueExact());
+            String digest = sendNative(from, toAddress, toAtomic(amount, decimals));
             if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), digest) != 1) {
                 throw new IllegalStateException("Sui withdrawal state changed before SENT: " + orderNo);
             }
-            record(digest, from.getAddress(), toAddress, "SUI", SuiRpcClient.SUI_COIN_TYPE, amountMist,
+            record(digest, from.getAddress(), toAddress, "SUI", SuiRpcClient.SUI_COIN_TYPE, amount,
                     feeReserve, "SENT", null);
             return digest;
         } catch (RuntimeException e) {
@@ -145,7 +126,7 @@ public class SuiTransactionService {
     }
 
     public String withdrawCoin(String orderNo, long userId, ChainAddressRecord from,
-                               String coinType, String toAddress, BigDecimal amountAtomic) {
+                               String coinType, String toAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "sui withdrawCoin");
         Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
         if (existing.isPresent()) {
@@ -154,11 +135,11 @@ public class SuiTransactionService {
         TokenDefinition token = repository.findTokenByContract(CHAIN, coinType)
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Sui coin " + coinType));
         if (repository.createWithdrawalOrder(orderNo, userId, CHAIN, token.getSymbol(), toAddress,
-                amountAtomic, BigDecimal.ZERO) == 0) {
+                amount, BigDecimal.ZERO) == 0) {
             return repository.findWithdrawalTxHash(CHAIN, orderNo)
                     .orElseThrow(() -> new IllegalStateException("Sui coin withdrawal already claimed"));
         }
-        if (!repository.freezeLedgerBalance(CHAIN, token.getSymbol(), from.getAccountId(), amountAtomic)) {
+        if (!repository.freezeLedgerBalance(CHAIN, token.getSymbol(), from.getAccountId(), amount)) {
             repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null,
                     "insufficient " + token.getSymbol() + " ledger balance");
             throw new IllegalStateException("insufficient " + token.getSymbol() + " ledger balance");
@@ -168,11 +149,11 @@ public class SuiTransactionService {
             if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
                 throw new IllegalStateException("Sui coin withdrawal is not signable: " + orderNo);
             }
-            String digest = sendCoin(from, coinType, toAddress, amountAtomic.longValueExact());
+            String digest = sendCoin(from, coinType, toAddress, toAtomic(amount, token.getDecimals()));
             if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), digest) != 1) {
                 throw new IllegalStateException("Sui coin withdrawal state changed before SENT: " + orderNo);
             }
-            record(digest, from.getAddress(), toAddress, token.getSymbol(), coinType, amountAtomic,
+            record(digest, from.getAddress(), toAddress, token.getSymbol(), coinType, amount,
                     profile().getDefaultFee(), "SENT", null);
             return digest;
         } catch (RuntimeException e) {
@@ -324,6 +305,16 @@ public class SuiTransactionService {
                 - gas.path("storageRebate").asLong(0);
     }
 
+    private int decimals(String symbol) {
+        return repository.findAsset(CHAIN, symbol)
+                .map(asset -> asset.getDecimals())
+                .orElseThrow(() -> new IllegalStateException("missing Sui asset configuration: " + symbol));
+    }
+
+    private long toAtomic(BigDecimal amount, int decimals) {
+        return amount.movePointRight(decimals).longValueExact();
+    }
+
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);
@@ -333,6 +324,4 @@ public class SuiTransactionService {
         }
     }
 
-    public record PublishResult(String digest, JsonNode result) {
-    }
 }

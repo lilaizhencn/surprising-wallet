@@ -15,13 +15,15 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class SuiDepositScanner {
     private static final String CHAIN = "SUI";
-    private static final String SCANNER = "sui-balance-change-scanner";
+    static final String SCANNER = "sui-balance-change-scanner";
 
     private final SuiRpcClient rpc;
     private final ChainJdbcRepository repository;
@@ -32,38 +34,43 @@ public class SuiDepositScanner {
     public List<DepositEvent> scanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "sui scanAndCredit");
         AccountChainProfile profile = profile();
-        long checkpoint = rpc.latestCheckpoint();
+        long latest = rpc.latestCheckpoint();
+        long start = scanStart(profile, latest);
+        long end = Math.min(latest, start + scanBatchSize(profile) - 1L);
         List<DepositEvent> events = new ArrayList<>();
-        scanSymbol("SUI", SuiRpcClient.SUI_COIN_TYPE, profile, checkpoint, events);
+        List<AssetScanTarget> targets = new ArrayList<>();
+        Set<String> platformAddresses = platformAddresses();
+        addTargets(targets, "SUI", SuiRpcClient.SUI_COIN_TYPE);
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
             if (token.getContractAddress() != null && Boolean.TRUE.equals(token.getActive())) {
-                scanSymbol(token.getSymbol(), token.getContractAddress(), profile, checkpoint, events);
+                addTargets(targets, token.getSymbol(), token.getContractAddress());
             }
         }
-        repository.updateScanHeight(CHAIN, SCANNER, checkpoint, checkpoint);
+        for (JsonNode transaction : rpc.checkpointTransactions(start, end)) {
+            for (AssetScanTarget target : targets) {
+                scanTransaction(transaction, target.symbol(), target.coinType(), target.address(),
+                        profile, latest, platformAddresses, events);
+            }
+        }
+        repository.updateScanHeight(CHAIN, SCANNER, latest, end);
         return events;
     }
 
-    private void scanSymbol(String symbol, String coinType, AccountChainProfile profile,
-                            long bestCheckpoint, List<DepositEvent> events) {
+    private void addTargets(List<AssetScanTarget> targets, String symbol, String coinType) {
         for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, symbol)) {
-            if (!"DEPOSIT".equals(address.getWalletRole())) {
-                continue;
-            }
-            JsonNode page = rpc.queryToAddress(address.getAddress(), null, scanLimit(profile), true);
-            JsonNode data = page.path("data");
-            for (int txIndex = 0; txIndex < data.size(); txIndex++) {
-                scanTransaction(data.get(txIndex), symbol, coinType, address, profile, bestCheckpoint, events);
+            if ("DEPOSIT".equals(address.getWalletRole())) {
+                targets.add(new AssetScanTarget(symbol, coinType, address));
             }
         }
     }
 
     private void scanTransaction(JsonNode transaction, String symbol, String coinType,
                                  ChainAddressRecord address, AccountChainProfile profile,
-                                 long bestCheckpoint, List<DepositEvent> events) {
+                                 long bestCheckpoint, Set<String> platformAddresses,
+                                 List<DepositEvent> events) {
         String sender = SuiHex.normalizeAddress(transaction.path("transaction").path("data").path("sender")
                 .asText("0x0"));
-        if (isPlatformAddress(sender)) {
+        if (platformAddresses.contains(sender)) {
             return;
         }
         String digest = transaction.path("digest").asText();
@@ -117,23 +124,23 @@ public class SuiDepositScanner {
         return value != null && expected.equals(SuiHex.normalizeAddress(value));
     }
 
-    private boolean isPlatformAddress(String address) {
+    private Set<String> platformAddresses() {
+        Set<String> addresses = new HashSet<>();
         for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
-            if (sameAddress(address, tracked.getAddress()) || sameAddress(address, tracked.getOwnerAddress())) {
-                return true;
-            }
+            addAddress(addresses, tracked.getAddress());
+            addAddress(addresses, tracked.getOwnerAddress());
         }
-        return false;
+        return addresses;
     }
 
-    private boolean sameAddress(String first, String second) {
-        if (first == null || first.isBlank() || second == null || second.isBlank()) {
-            return false;
+    private void addAddress(Set<String> addresses, String address) {
+        if (address == null || address.isBlank()) {
+            return;
         }
         try {
-            return SuiHex.normalizeAddress(first).equals(SuiHex.normalizeAddress(second));
+            addresses.add(SuiHex.normalizeAddress(address));
         } catch (RuntimeException ignored) {
-            return false;
+            // Ignore malformed historical records; address creation validates new rows.
         }
     }
 
@@ -168,9 +175,26 @@ public class SuiDepositScanner {
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
 
-    private int scanLimit(AccountChainProfile profile) {
+    private long scanStart(AccountChainProfile profile, long latest) {
+        return repository.findScanSafeHeight(CHAIN, SCANNER)
+                .map(height -> Math.min(latest, height + 1L))
+                .orElseGet(() -> {
+                    long configured = profile.getScanStartHeight() == null
+                            ? 0L : Math.max(0L, profile.getScanStartHeight());
+                    return Math.max(configured, latest - scanBatchSize(profile) + 1L);
+                });
+    }
+
+    private int scanBatchSize(AccountChainProfile profile) {
+        Long maxBlocks = profile.getScanMaxBlocksPerRun();
+        if (maxBlocks != null && maxBlocks > 0L) {
+            return (int) Math.min(Integer.MAX_VALUE, maxBlocks);
+        }
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 50 : batchSize;
+    }
+
+    private record AssetScanTarget(String symbol, String coinType, ChainAddressRecord address) {
     }
 
     private void requireTaskEnabled(String task, String operation) {

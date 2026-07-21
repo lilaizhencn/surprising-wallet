@@ -1,0 +1,5 @@
+[package]
+name = "sui_mock_coin"
+edition = "2024"
+
+[dependencies]

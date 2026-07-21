@@ -23,8 +23,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SuiLiveNativeFlowIntegrationTest {
-    private static final long OWNER_INDEX = 1_400_001L;
-    private static final long EXTERNAL_INDEX = 1_400_002L;
+    private static final long RUN_INDEX = 1_400_000L
+            + Math.floorMod(UUID.randomUUID().getLeastSignificantBits(), 100_000L) * 3L;
+    private static final long OWNER_INDEX = RUN_INDEX + 1L;
+    private static final long EXTERNAL_INDEX = RUN_INDEX + 2L;
     private static final long HOT_INDEX = 0L;
     private static final long ONE_SUI = 1_000_000_000L;
 
@@ -42,7 +44,7 @@ class SuiLiveNativeFlowIntegrationTest {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
         SuiRpcClient rpc = new SuiRpcClient(new ObjectMapper(),
-                env("SUI_RPC_URL", "https://fullnode.testnet.sui.io:443"));
+                env("SUI_GRPC_ENDPOINT", "fullnode.testnet.sui.io:443"));
         SuiKeyService keys = new SuiKeyService(masterSeed);
         SuiAddressService addresses = new SuiAddressService(keys, repository);
         SuiTransactionSigner signer = new SuiTransactionSigner(keys);
@@ -61,18 +63,18 @@ class SuiLiveNativeFlowIntegrationTest {
 
         scanner.scanAndCredit();
         BigDecimal beforeReplay = ledger(repository, owner.getAccountId()).getTotalBalance();
-        assertTrue(beforeReplay.compareTo(BigDecimal.valueOf(ONE_SUI)) >= 0);
+        assertTrue(beforeReplay.compareTo(BigDecimal.ONE) >= 0);
         scanner.scanAndCredit();
         assertEquals(beforeReplay, ledger(repository, owner.getAccountId()).getTotalBalance());
 
         String withdrawOrder = "sui-live-withdraw-" + UUID.randomUUID();
-        BigDecimal withdrawAmount = new BigDecimal("100000000");
+        BigDecimal withdrawAmount = new BigDecimal("0.1");
         String withdrawDigest = transactions.withdrawNative(withdrawOrder, owner.getUserId(), owner,
                 external.getAddress(), withdrawAmount);
         assertEquals(withdrawDigest, transactions.withdrawNative(withdrawOrder, owner.getUserId(), owner,
                 external.getAddress(), withdrawAmount));
         assertTrue(transactions.confirmWithdrawal(withdrawOrder, "SUI", owner.getAccountId(),
-                withdrawAmount.add(new BigDecimal("10000000"))));
+                withdrawAmount.add(new BigDecimal("0.01"))));
 
         String collectionNo = "sui-live-collection-" + UUID.randomUUID();
         BigDecimal collectionAmount = new BigDecimal("100000000");

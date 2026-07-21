@@ -53,12 +53,12 @@ public class SuiPtbTransactionBuilder {
 
     private void writeSuiTransferPtb(BcsWriter out, String recipient, long amountMist) {
         out.vectorLength(2);
-        writePure(out, u64Bytes(amountMist));
         writePure(out, SuiHex.addressBytes(recipient));
+        writePure(out, u64Bytes(amountMist));
 
         out.vectorLength(2);
-        writeSplitCoins(out, Argument.gasCoin(), List.of(Argument.input(0)));
-        writeTransferObjects(out, List.of(Argument.result(0)), Argument.input(1));
+        writeSplitCoins(out, Argument.gasCoin(), List.of(Argument.input(1)));
+        writeTransferObjects(out, List.of(Argument.result(0)), Argument.input(0));
     }
 
     private void writeCoinTransferPtb(BcsWriter out, List<SuiRpcClient.SuiCoin> inputCoins,
@@ -121,7 +121,7 @@ public class SuiPtbTransactionBuilder {
         Objects.requireNonNull(coin, "coin");
         out.fixedBytes(SuiHex.addressBytes(coin.objectId()), SUI_ADDRESS_LENGTH);
         out.u64(Long.parseUnsignedLong(coin.version()));
-        out.fixedBytes(decodeDigest(coin.digest()), SUI_DIGEST_LENGTH);
+        out.bytes(decodeDigest(coin.digest()));
     }
 
     private void writeTransferObjects(BcsWriter out, List<Argument> objects, Argument recipient) {
