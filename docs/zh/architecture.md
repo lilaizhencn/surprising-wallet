@@ -21,8 +21,8 @@
                  扫链 / 签名 / RPC 服务
 ```
 
-租户身份始终来自 Console 会话或 API 凭证。租户自己的客户 ID 只作为不透明
-`externalReference` 保存。扫链确认入账后，会在同一数据库事务中映射 Custody 充值、
+租户身份始终来自 Console 会话或 API 凭证。公开地址 API 只接收 `chainId`；租户保存返回的
+地址并维护自己的客户映射。扫链确认入账后，会在同一数据库事务中映射 Custody 充值、
 租户资产和持久化 Webhook 事件。详见[多租户托管钱包](multi-tenant-custody.md)。
 
 ## 运行模型

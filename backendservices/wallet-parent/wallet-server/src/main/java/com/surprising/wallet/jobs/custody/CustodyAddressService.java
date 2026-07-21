@@ -94,8 +94,8 @@ public class CustodyAddressService {
             }
         }
 
-        int subject = custodyRepository.nextDerivationSubject();
         BlockchainRuntimeService.RuntimeChain runtimeChain = runtime.requireRuntime(chain);
+        int subject = custodyRepository.nextDerivationSubject();
         Address generated = runtime.generateDepositAddress(
                 chain, Integer.toUnsignedLong(subject), tenant.derivationNamespace());
         ChainAddressRecord chainAddress = chainRepository.findChainAddress(

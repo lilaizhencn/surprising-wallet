@@ -6,24 +6,24 @@
 
 ## Multi-Tenant Custody Flow
 
-The custody control plane keeps a tenant exchange's user model outside this repository. The exchange sends an opaque `externalReference`; the permanent key `(tenantId, chain, externalReference)` always resolves to the same address.
+The custody control plane keeps a tenant exchange's user model outside this repository. A tenant sends only `chainId`; the service selects the chain's one enabled network and allocates a new address. The tenant stores the returned address and owns the customer mapping.
 
 ```text
 tenant backend
   -> HMAC-authenticated POST /custody/api/v1/addresses
-  -> custody_address get-or-create
+  -> idempotent custody_address creation by Idempotency-Key
   -> chain_address allocation
-  -> return address + externalReference
+  -> return address ID, chain, selected network, and address
 
 chain scanner
   -> deposit_record + ledger_balance credit in one transaction
   -> custody_deposit projection
   -> durable custody_event
   -> per-endpoint webhook_delivery
-  -> signed DEPOSIT.CONFIRMED webhook with externalReference
+  -> signed DEPOSIT.CONFIRMED webhook with the deposit address
 ```
 
-Console-created addresses may omit `externalReference`; they remain visible in the tenant asset total but are not coupled to a tenant-internal user. Address creation itself does not produce a webhook. Tenant isolation is applied to every Console/API query and mutation.
+Console users may attach labels and metadata when creating addresses; the public API does not accept those management fields. Addresses remain visible in tenant asset totals. Address creation itself does not produce a webhook. Tenant isolation is applied to every Console/API query and mutation.
 
 Withdrawal requests use a permanent idempotency key, pass through the existing ledger lock/broadcast/confirmation workflow, and produce signed lifecycle Webhooks from durable delivery rows.
 
@@ -107,4 +107,3 @@ SOL/TON/APTOS/SUI:
 - Use Ed25519 key derivation.
 - DB tests cover deterministic scanner/ledger/transaction behavior.
 - Live tests depend on external devnet/testnet RPC, faucet limits, and funded addresses.
-

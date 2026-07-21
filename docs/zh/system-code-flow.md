@@ -6,24 +6,24 @@
 
 ## 多租户托管流程
 
-托管控制面不管理交易所内部的用户模型。交易所只传入不透明的 `externalReference`；永久键 `(tenantId, chain, externalReference)` 始终返回同一地址。
+托管控制面不管理交易所内部的用户模型。租户只传 `chainId`，服务根据该链唯一启用的网络分配新地址；租户保存返回的地址并自行维护客户映射。
 
 ```text
 交易所后端
   -> 通过 HMAC 鉴权调用 POST /custody/api/v1/addresses
-  -> custody_address 幂等查询或创建
+  -> 按 Idempotency-Key 幂等创建 custody_address
   -> 分配 chain_address
-  -> 返回地址和 externalReference
+  -> 返回地址 ID、链、自动选择的网络和地址
 
 链上扫描器
   -> 在同一事务中写 deposit_record 并增加 ledger_balance
   -> 写 custody_deposit 投影
   -> 写持久化 custody_event
   -> 为每个端点生成 webhook_delivery
-  -> 签名回调 DEPOSIT.CONFIRMED，并带回 externalReference
+  -> 签名回调 DEPOSIT.CONFIRMED，并带回充值地址
 ```
 
-Console 手动创建的地址可以不传 `externalReference`；这些地址仍计入租户资产总额，但不绑定租户内部用户。创建地址本身不产生 Webhook。所有 Console/API 查询和变更都强制应用租户隔离。
+Console 可附带标签和元数据手动创建地址；公开 API 不接收这些管理字段。地址仍计入租户资产总额。创建地址本身不产生 Webhook。所有 Console/API 查询和变更都强制应用租户隔离。
 
 提现请求使用永久幂等键，复用现有的资金锁定、广播和确认流程，并从持久化投递记录发送签名生命周期 Webhook。
 
@@ -107,4 +107,3 @@ SOL/TON/APTOS/SUI：
 - 使用 Ed25519 key 派生。
 - DB 测试覆盖确定性的 scanner/ledger/transaction 行为。
 - live 测试依赖外部 devnet/testnet RPC、faucet 限流和已充值地址。
-

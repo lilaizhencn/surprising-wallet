@@ -26,6 +26,7 @@ class BlockchainRuntimeServiceTest {
 
         assertEquals(ChainType.ETH, runtime.chainType());
         assertEquals("ETH", runtime.chain());
+        assertEquals("sepolia", runtime.network());
         assertEquals("ETH", runtime.nativeSymbol());
         assertEquals("evm", runtime.adapterFamily());
         assertEquals(121, runtime.runtimeCurrencyId());

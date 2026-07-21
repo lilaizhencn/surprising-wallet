@@ -22,9 +22,10 @@ Tenant Console/API -> tenant-scoped addresses, assets, deposits, withdrawals
 ```
 
 Tenant identity always comes from a Console session or API credential. The
-tenant's own customer ID is stored only as an opaque `externalReference`.
-Confirmed scanner credits are observed in the same database transaction and
-mapped to a custody deposit, tenant balance, and durable Webhook event. See
+public address API accepts only `chainId`; the tenant stores the returned
+address and owns its customer mapping. Confirmed scanner credits are observed
+in the same database transaction and mapped to a custody deposit, tenant
+balance, and durable Webhook event. See
 [Multi-tenant Custody](multi-tenant-custody.md).
 
 ## Runtime Model

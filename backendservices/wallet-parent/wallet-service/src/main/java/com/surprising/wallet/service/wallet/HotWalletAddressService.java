@@ -225,29 +225,29 @@ public class HotWalletAddressService {
 
     private ChainAddressRecord deriveSolana(AccountChainProfile profile, long userId, int biz,
                                             long addressIndex, String walletRole) {
-        Ed25519DerivedKey key = solanaKeyService.derive(addressIndex);
+        Ed25519DerivedKey key = solanaKeyService.derive(userId, biz, addressIndex);
         String address = new PublicKey(key.publicKey()).toBase58();
         return baseRecord(profile, userId, biz, addressIndex, address, address, key.derivationPath(), walletRole);
     }
 
     private ChainAddressRecord deriveSui(AccountChainProfile profile, long userId, int biz,
                                          long addressIndex, String walletRole) {
-        Ed25519DerivedKey key = suiKeyService.derive(addressIndex);
+        Ed25519DerivedKey key = suiKeyService.derive(userId, biz, addressIndex);
         String address = SuiKeyService.address(key.publicKey());
         return baseRecord(profile, userId, biz, addressIndex, address, address, key.derivationPath(), walletRole);
     }
 
     private ChainAddressRecord deriveAptos(AccountChainProfile profile, long userId, int biz,
                                            long addressIndex, String walletRole) {
-        Ed25519DerivedKey key = aptosKeyService.derive(addressIndex);
+        Ed25519DerivedKey key = aptosKeyService.derive(userId, biz, addressIndex);
         String address = AptosKeyService.address(key.publicKey());
         return baseRecord(profile, userId, biz, addressIndex, address, address, key.derivationPath(), walletRole);
     }
 
     private ChainAddressRecord deriveTon(AccountChainProfile profile, long userId, int biz,
                                          long addressIndex, String walletRole) {
-        Ed25519DerivedKey key = tonKeyService.derive(addressIndex);
-        org.ton.ton4j.address.Address rawAddress = tonKeyService.wallet(addressIndex).getAddress();
+        Ed25519DerivedKey key = tonKeyService.derive(userId, biz, addressIndex);
+        org.ton.ton4j.address.Address rawAddress = tonKeyService.wallet(userId, biz, addressIndex).getAddress();
         boolean testnet = normalize(profile.getNetwork()).contains("test");
         String address = rawAddress.toString(true, true, false, testnet);
         return baseRecord(profile, userId, biz, addressIndex, address, address, key.derivationPath(), walletRole);

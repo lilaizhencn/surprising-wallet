@@ -40,11 +40,12 @@ paths:
         default: { $ref: '#/components/responses/Error' }
     post:
       tags: [Public API]
-      summary: Get or create a tenant address
+      summary: Create a fresh tenant address on the enabled network
       description: |
-        With externalReference, tenant + chain + externalReference is a
-        permanent get-or-create allocation key. Without it, a fresh address is
-        allocated. Address creation does not emit a Webhook.
+        The request body accepts only a chain code in chainId. The service
+        selects that chain's enabled network. A new Idempotency-Key allocates a
+        fresh address; retrying the same key returns the same result. Address
+        creation does not emit a Webhook.
       security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -52,7 +53,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateAddress' }
+            schema: { $ref: '#/components/schemas/CreatePublicAddress' }
       responses:
         '201':
           description: Address allocation
@@ -1230,6 +1231,15 @@ components:
         email: { type: string, format: email }
         displayName: { type: string }
         role: { type: string }
+    CreatePublicAddress:
+      type: object
+      additionalProperties: false
+      required: [chainId]
+      properties:
+        chainId:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]{1,31}$'
+          description: Chain code such as ETH, BTC, or SOLANA; not an EVM numeric chain ID.
     CreateAddress:
       type: object
       required: [chain]

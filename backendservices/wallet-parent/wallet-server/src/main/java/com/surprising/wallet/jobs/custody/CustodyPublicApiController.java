@@ -32,11 +32,11 @@ public class CustodyPublicApiController {
     @ResponseStatus(HttpStatus.CREATED)
     public AddressView createAddress(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
-            @RequestBody CreateAddressCommand body,
+            @RequestBody CreatePublicAddressRequest body,
             HttpServletRequest request) {
         return addresses.create(
                 CustodyRequestSupport.requirePrincipal(request),
-                body,
+                new CreateAddressCommand(body.chainId(), null, null, null),
                 "API",
                 idempotencyKey,
                 CustodyRequestSupport.clientIp(request));
@@ -88,5 +88,8 @@ public class CustodyPublicApiController {
         return transfers.create(
                 CustodyRequestSupport.requirePrincipal(request), body, "API", idempotencyKey,
                 CustodyRequestSupport.clientIp(request));
+    }
+
+    public record CreatePublicAddressRequest(String chainId) {
     }
 }
