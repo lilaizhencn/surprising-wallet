@@ -67,7 +67,9 @@ m / 44' / coinType' / tenantNamespace' / derivationSubject' / childIndex'
 `__sw_` 前缀由钱包内部系统账户保留，API 和普通 Console 地址不能使用。
 
 每个租户在每条已开通链上可从资产总览生成一个系统归集地址。该地址使用钱包保留的
-`derivationSubject`，并固定为 `childIndex=1`；同一租户和链重复生成会返回同一个地址。
+`derivationSubject`，并固定为 `childIndex=1`。同一租户的所有 EVM 链共用
+`__sw_collection__:evm` 派生主体，因此地址完全相同；非 EVM 链仍使用链级派生主体。
+同一租户和链重复生成会返回同一个地址。
 地址收到并确认的原生币同时作为该链链上操作的 Gas 资金，资产总览始终显示全部已开通链，
 包括尚未生成地址或余额为零的链。
 

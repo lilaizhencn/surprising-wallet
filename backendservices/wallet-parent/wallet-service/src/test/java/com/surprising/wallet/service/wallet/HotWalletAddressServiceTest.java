@@ -48,6 +48,25 @@ class HotWalletAddressServiceTest {
         assertTrue(address.getAddress().matches("^0x[0-9a-f]{40}$"));
     }
 
+    @Test
+    void evmChainsShareAddressAtTheSameTenantCoordinates() {
+        Bip32Node node = Bip32Node.decode(XPUB_2);
+        PubKeyConfig pubKeyConfig = new PubKeyConfig(node, node, node);
+        HotWalletAddressService service = new HotWalletAddressService(
+                null, pubKeyConfig, null, null, null, null, null, null, null, null, null);
+        AccountChainProfile ethereum = profile("ETH", "evm", "ETH", 60);
+        AccountChainProfile bnb = profile("BNB", "evm", "BNB", 714);
+
+        ChainAddressRecord ethAddress = service.deriveAddress(
+                ethereum, 130, 1016, 1, "DEPOSIT");
+        ChainAddressRecord bnbAddress = service.deriveAddress(
+                bnb, 130, 1016, 1, "DEPOSIT");
+
+        assertEquals("m/44/60/1016/130/1", ethAddress.getDerivationPath());
+        assertEquals(ethAddress.getDerivationPath(), bnbAddress.getDerivationPath());
+        assertEquals(ethAddress.getAddress(), bnbAddress.getAddress());
+    }
+
     @ParameterizedTest
     @MethodSource("tenantEd25519Profiles")
     void tenantEd25519AddressesIncludeNamespaceAndSubject(

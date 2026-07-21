@@ -272,6 +272,10 @@ paths:
     post:
       tags: [Console Gas]
       summary: Generate the chain collection and network-fee address
+      description: >-
+        Uses fixed childIndex 1. All EVM chains for the tenant share one
+        derivation subject and therefore return the same EVM address, while
+        balances and network-fee accounting remain isolated by chain.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true

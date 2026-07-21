@@ -81,8 +81,10 @@ is reserved for wallet-managed system accounts.
 
 For every enabled tenant chain, the asset overview can generate one
 wallet-managed collection address. It uses the reserved derivation subject and
-is fixed at `childIndex=1`; repeated generation for the same tenant and chain
-returns the same address. Confirmed native coins at this address also fund that
+is fixed at `childIndex=1`. All EVM chains for one tenant share the
+`__sw_collection__:evm` derivation subject and therefore the exact same address;
+non-EVM chains retain chain-specific subjects. Repeated generation for the same
+tenant and chain returns the same address. Confirmed native coins at this address also fund that
 chain's network-fee operations. The asset overview lists every enabled chain,
 including chains without an address or balance.
 

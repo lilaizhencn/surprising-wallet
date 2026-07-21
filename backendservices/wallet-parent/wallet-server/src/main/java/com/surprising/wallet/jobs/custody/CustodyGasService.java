@@ -1,5 +1,6 @@
 package com.surprising.wallet.jobs.custody;
 
+import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.jobs.custody.CustodyAddressService.AddressView;
 import com.surprising.wallet.jobs.custody.CustodyAddressService.CreateAddressCommand;
 import com.surprising.wallet.jobs.custody.CustodyRepository.GasAccountRecord;
@@ -45,19 +46,20 @@ public class CustodyGasService {
         requireTenantAdmin(principal);
         String chain = requireChain(command.chain());
         BigDecimal threshold = DEFAULT_LOW_BALANCE_THRESHOLD;
+        BlockchainRuntimeService.RuntimeChain chainRuntime = runtime.requireRuntime(chain);
+        String collectionSubject = collectionSubject(chain, chainRuntime.chainType());
         repository.lockSubjectAddressAllocation(
-                principal.tenantId(), chain, SYSTEM_REFERENCE_PREFIX + chain.toLowerCase(Locale.ROOT));
+                principal.tenantId(), chain, collectionSubject);
         GasAccountRecord existing = repository.findGasAccount(principal.tenantId(), chain)
                 .orElse(null);
         if (existing != null) {
             return toView(existing);
         }
-        BlockchainRuntimeService.RuntimeChain chainRuntime = runtime.requireRuntime(chain);
         AddressView fundingAddress = addresses.createSystemAtChildIndex(
                 principal,
                 new CreateAddressCommand(
                         chain,
-                        SYSTEM_REFERENCE_PREFIX + chain.toLowerCase(Locale.ROOT),
+                        collectionSubject,
                         chain + " collection address",
                         Map.of("systemPurpose", "COLLECTION_AND_GAS")),
                 COLLECTION_CHILD_INDEX,
@@ -82,6 +84,13 @@ public class CustodyGasService {
                 "{\"chain\":\"" + chain + "\",\"nativeSymbol\":\""
                         + chainRuntime.nativeSymbol() + "\"}");
         return toView(saved);
+    }
+
+    static String collectionSubject(String chain, ChainType chainType) {
+        String namespace = chainType.isEvm()
+                ? "evm"
+                : chain.toLowerCase(Locale.ROOT);
+        return SYSTEM_REFERENCE_PREFIX + namespace;
     }
 
     @Transactional(rollbackFor = Throwable.class)
