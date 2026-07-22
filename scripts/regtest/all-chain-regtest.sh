@@ -43,6 +43,7 @@ commands:
   test-sui      Run isolated local Sui gRPC SUI/USDC full-flow and reconciliation test
   test-solana   Run isolated local Solana SOL/USDT/USDC full-flow and reconciliation test
   test-ton      Run TON/USDT/USDC full flow against an isolated MyLocalTon v2 RPC
+  test-xrp      Run isolated XRPL Testnet XRP/USDC full flow with automatic faucet funding
   dot-runtime-up    Start the local Polkadot runtime companion service
   dot-runtime-down  Stop the local Polkadot runtime companion service
   test-evm      Run ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C fork regression
@@ -58,7 +59,7 @@ notes:
   - SUI has an isolated local node, gRPC, mock USDC, and PostgreSQL full-flow test.
   - SOLANA has an isolated local validator, mock USDT/USDC, and PostgreSQL full-flow test.
   - TON uses MyLocalTon; start it and fund the deterministic source shown by test-ton.
-  - TRON/APTOS/ADA/DOT/NEAR use DB mocks, external testnet/devnet RPC, or a managed runtime service.
+  - TRON/XRP/APTOS/ADA/DOT/NEAR use DB mocks, external testnet/devnet RPC, or a managed runtime service.
   - DOT token tests also need a separate Asset Hub WebSocket RPC configured as purpose=asset_rpc.
 USAGE
 }
@@ -80,6 +81,7 @@ XMR                                  local monerod regtest + monero-wallet-rpc
 ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/
 BASE/AVAX_C                          Hardhat fork, one chain per run on 127.0.0.1:8545
 TRON                                 external Nile live/testnet flow
+XRP                                  external Testnet XRP + issued USDC full flow
 SOLANA                               local validator + mock USDT/USDC full flow
 TON                                  MyLocalTon + mock USDT/USDC full flow
 APTOS                                DB mock + external testnet/devnet live flow
@@ -159,6 +161,10 @@ test_solana() {
 
 test_ton() {
   "${ROOT_DIR}/scripts/regtest/run-ton-flow.sh"
+}
+
+test_xrp() {
+  "${ROOT_DIR}/scripts/regtest/run-xrp-flow.sh"
 }
 
 test_db() {
@@ -248,6 +254,9 @@ case "${1:-matrix}" in
     ;;
   test-ton)
     test_ton
+    ;;
+  test-xrp)
+    test_xrp
     ;;
   dot-runtime-up)
     dot_runtime_up

@@ -2,6 +2,8 @@ package com.surprising.wallet.service.chain.tron;
 
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
+import com.surprising.wallet.common.key.WalletKeyConfigStore;
+import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.bitcoinj.crypto.ECKey;
@@ -41,8 +43,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TronLiveFullFlowIntegrationTest {
     private static final String CHAIN = ChainType.TRON.name();
     private static final String NETWORK = "NILE";
-    private static final String SOURCE_ADDRESS = "TB1x9vmH5SbBd1EUaUePGbZzqmXGosFtxK";
-    private static final String SOURCE_PATH = "m/44/23/1/91001/0";
     private static final String NILE_USDT_CONTRACT = "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf";
     private static final int TRX_DECIMALS = 6;
     private static final int USDT_DECIMALS = 6;
@@ -55,6 +55,8 @@ class TronLiveFullFlowIntegrationTest {
                 "set -Dtron.live.flow.enabled=true to broadcast Nile TRX/TRC20 transactions");
 
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource());
+        WalletKeyMaterialProvider keyMaterial = new WalletKeyMaterialProvider(
+                new WalletKeyConfigStore(jdbcTemplate), WalletKeyMaterialProvider.Mode.WALLET_SERVER);
         ChainJdbcRepository repository = new ChainJdbcRepository(jdbcTemplate);
         TronDepositScanner depositScanner = new TronDepositScanner(repository, new TronScanner());
         TronTransactionService trxService = new TronTransactionService();
@@ -71,13 +73,13 @@ class TronLiveFullFlowIntegrationTest {
                 93000 + (int) (System.currentTimeMillis() % 30000));
 
         try (TronTridentClient client = new TronTridentClient(fullNode, solidityNode, apiKey)) {
-            Actor source = actor("source", 91001);
-            assertEquals(SOURCE_ADDRESS, source.address(), "funded faucet address must match derived BTC ECKey path");
-            Actor userA = actor("userA", userBase);
-            Actor userB = actor("userB", userBase + 1);
-            Actor userC = actor("userC", userBase + 2);
-            Actor hot = actor("hot", userBase + 3);
-            Actor external = actor("external", userBase + 4);
+            Bip32Node sig2Root = keyMaterial.sig2Root();
+            Actor source = actor(sig2Root, "source", 91001);
+            Actor userA = actor(sig2Root, "userA", userBase);
+            Actor userB = actor(sig2Root, "userB", userBase + 1);
+            Actor userC = actor(sig2Root, "userC", userBase + 2);
+            Actor hot = actor(sig2Root, "hot", userBase + 3);
+            Actor external = actor(sig2Root, "external", userBase + 4);
 
             prepareDatabase(jdbcTemplate, source, userA, userB, userC, hot, external, runId);
             upsertNileUsdt(jdbcTemplate);
@@ -85,9 +87,9 @@ class TronLiveFullFlowIntegrationTest {
             BigDecimal sourceTrx = trxBalance(client, source.address());
             BigDecimal sourceUsdt = trc20Balance(client, source.address(), NILE_USDT_CONTRACT, USDT_DECIMALS);
             assertTrue(sourceTrx.compareTo(new BigDecimal("120")) > 0,
-                    "funded Nile source must have enough TRX; current=" + sourceTrx);
+                    "fund Nile source " + source.address() + " with TRX; current=" + sourceTrx);
             assertTrue(sourceUsdt.compareTo(new BigDecimal("80")) > 0,
-                    "funded Nile source must have enough USDT; current=" + sourceUsdt);
+                    "fund Nile source " + source.address() + " with USDT; current=" + sourceUsdt);
 
             Response.AccountResourceMessage sourceResources = client.getResources(source.address());
             Response.AccountNetMessage sourceBandwidth = client.getBandwidth(source.address());
@@ -381,8 +383,7 @@ class TronLiveFullFlowIntegrationTest {
                                                  collect_threshold, gas_strategy, confirmation_required, updated_at)
                         values (?, ?, 'USDT', 'TRC20', 'TRC20', ?, ?, ?, ?, true,
                                 0.000001, 0.000001, 0.000001, 0.000001, 1, 'energy-bandwidth', 1, now())
-                        on conflict (chain, symbol) do update set
-                            network = excluded.network,
+                        on conflict (chain, network, symbol) do update set
                             standard = excluded.standard,
                             token_standard = excluded.token_standard,
                             contract_address = excluded.contract_address,
@@ -506,52 +507,20 @@ class TronLiveFullFlowIntegrationTest {
                 message + ", expected=" + expected + ", actual=" + actual);
     }
 
-    private static Actor actor(String name, int userId) throws Exception {
+    private static Actor actor(Bip32Node sig2Root, String name, int userId) {
         String path = "m/44/23/1/" + userId + "/0";
-        ECKey ecKey = deriveEcKey(path);
+        ECKey ecKey = deriveEcKey(sig2Root, path);
         KeyPair keyPair = TronTridentKeyFactory.fromBitcoinEcKey(ecKey);
         return new Actor(name, userId, path, keyPair, keyPair.toBase58CheckAddress());
     }
 
-    private static ECKey deriveEcKey(String path) throws Exception {
+    private static ECKey deriveEcKey(Bip32Node sig2Root, String path) {
         String[] parts = path.substring(2).split("/");
-        Bip32Node node = Bip32Node.decode(sig2Master());
+        Bip32Node node = sig2Root;
         for (String part : parts) {
             node = node.getChild(Integer.parseInt(part));
         }
         return node.getEcKey();
-    }
-
-    private static String sig2Master() throws Exception {
-        String fromProperty = System.getProperty("tron.sig2.master");
-        if (fromProperty != null && !fromProperty.isBlank()) {
-            return fromProperty.trim();
-        }
-        String fromEnv = System.getenv("SW_SIG2_MASTER_KEY");
-        if (fromEnv != null && !fromEnv.isBlank()) {
-            return fromEnv.trim();
-        }
-        Path yaml = projectRoot().resolve("backendservices/wallet-sig2/src/main/resources/application-test.yaml");
-        for (String line : Files.readAllLines(yaml)) {
-            String trimmed = line.trim();
-            if (trimmed.startsWith("masterKey:")) {
-                return trimmed.substring("masterKey:".length()).trim();
-            }
-        }
-        throw new IllegalStateException("missing sig2 master key for TRON live test");
-    }
-
-    private static Path projectRoot() {
-        Path current = Path.of("").toAbsolutePath();
-        while (current != null) {
-            if (Files.exists(current.resolve("pom.xml"))
-                    && Files.exists(current.resolve("backendservices"))
-                    && Files.exists(current.resolve("currency-sdks"))) {
-                return current;
-            }
-            current = current.getParent();
-        }
-        throw new IllegalStateException("cannot locate project root");
     }
 
     private static DriverManagerDataSource dataSource() {
