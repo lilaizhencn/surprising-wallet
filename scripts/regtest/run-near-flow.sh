@@ -117,6 +117,10 @@ begin
       and asset_symbol in ('NEAR','USDC','USDT')) <> 3 then
     raise exception 'expected confirmed NEAR, USDC, and USDT withdrawals';
   end if;
+  if (select count(*) from collection_record where chain='NEAR' and status='CONFIRMED'
+      and asset_symbol in ('NEAR','USDC','USDT')) <> 3 then
+    raise exception 'expected confirmed NEAR, USDC, and USDT collections';
+  end if;
   if exists (select 1 from ledger_balance where chain='NEAR'
       and (available_balance < 0 or locked_balance < 0 or total_balance < 0)) then
     raise exception 'negative NEAR ledger balance detected';
@@ -133,4 +137,4 @@ begin
 end
 \$\$;"
 
-printf 'NEAR PASS local sandbox NEAR/USDC/USDT deposit, replay, withdrawal, and ledger audit\n'
+printf 'NEAR PASS local sandbox NEAR/USDC/USDT deposit, replay, withdrawal, collection, and ledger audit\n'

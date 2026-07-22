@@ -139,12 +139,6 @@ public class NearTransactionService {
         return new BigInteger(min);
     }
 
-    public boolean confirmWithdrawal(AccountChainProfile profile, String orderNo, String txHash,
-                                     String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
-        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
-                profile, orderNo, txHash, assetSymbol, debitAccountId, debitAmount);
-    }
-
     public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
                                      String orderNo, String txHash,
                                      String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
@@ -156,19 +150,6 @@ public class NearTransactionService {
             return true;
         }
         return false;
-    }
-
-    public boolean confirmWithdrawal(AccountChainProfile profile, String orderNo, String txHash,
-                                     String debitAccountId, BigDecimal debitAmount) {
-        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
-                profile, orderNo, txHash, SYMBOL, debitAccountId, debitAmount);
-    }
-
-    public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
-                                     String orderNo, String txHash,
-                                     String debitAccountId, BigDecimal debitAmount) {
-        return confirmWithdrawal(
-                tenantId, profile, orderNo, txHash, SYMBOL, debitAccountId, debitAmount);
     }
 
     public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
