@@ -1888,18 +1888,32 @@ public class CustodyRepository {
     }
 
     public List<Map<String, Object>> listCustodyWithdrawals(
-            UUID tenantId, String status, int limit, int offset) {
+            UUID tenantId, String chain, String assetSymbol, String status,
+            String search, int limit, int offset) {
+        String normalizedSearch = search == null ? "" : search.trim();
         return jdbc.query("""
                         select w.id, w.custody_address_id, w.order_no, w.external_reference,
                                w.chain, w.asset_symbol, w.to_address, w.amount, w.fee,
                                wo.tx_hash, wo.status, wo.error_message, w.created_by_type,
+                               a.address as source_address, a.subject,
                                w.created_at, greatest(w.updated_at, wo.updated_at) as updated_at
                           from custody_withdrawal w
                           join withdrawal_order wo
                             on wo.tenant_id = w.tenant_id
                            and wo.chain = w.chain and wo.order_no = w.order_no
+                          join custody_address a
+                            on a.tenant_id = w.tenant_id and a.id = w.custody_address_id
                          where w.tenant_id = ?
+                           and (? = '' or w.chain = ?)
+                           and (? = '' or w.asset_symbol = ?)
                            and (? = '' or wo.status = ?)
+                           and (? = ''
+                                or w.order_no ilike '%' || ? || '%'
+                                or coalesce(w.external_reference, '') ilike '%' || ? || '%'
+                                or w.to_address ilike '%' || ? || '%'
+                                or coalesce(wo.tx_hash, '') ilike '%' || ? || '%'
+                                or a.address ilike '%' || ? || '%'
+                                or a.subject ilike '%' || ? || '%')
                          order by w.created_at desc, w.id
                          limit ? offset ?
                         """, (rs, rowNum) -> {
@@ -1917,17 +1931,26 @@ public class CustodyRepository {
                     row.put("status", rs.getString("status"));
                     row.put("errorMessage", rs.getString("error_message"));
                     row.put("createdByType", rs.getString("created_by_type"));
+                    row.put("sourceAddress", rs.getString("source_address"));
+                    row.put("subject", rs.getString("subject"));
                     row.put("createdAt", rs.getTimestamp("created_at").toInstant());
                     row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
                     return row;
-                }, tenantId, blankToEmpty(status), blankToEmpty(status),
+                }, tenantId,
+                blankToEmpty(chain), blankToEmpty(chain),
+                blankToEmpty(assetSymbol), blankToEmpty(assetSymbol),
+                blankToEmpty(status), blankToEmpty(status),
+                normalizedSearch, normalizedSearch, normalizedSearch, normalizedSearch,
+                normalizedSearch, normalizedSearch, normalizedSearch,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
 
     public List<Map<String, Object>> listCustodyDeposits(
-            UUID tenantId, String status, int limit, int offset) {
+            UUID tenantId, String chain, String assetSymbol, String status,
+            String search, int limit, int offset) {
+        String normalizedSearch = search == null ? "" : search.trim();
         return jdbc.query("""
-                        select d.id, d.custody_address_id, a.subject,
+                        select d.id, d.custody_address_id, a.address, a.subject,
                                d.chain, d.asset_symbol, d.tx_hash, d.log_index, d.amount,
                                d.status, d.credited_at, d.created_at, d.updated_at
                           from custody_deposit d
@@ -1938,13 +1961,21 @@ public class CustodyRepository {
                                select 1 from custody_gas_account g
                                 where g.custody_address_id = d.custody_address_id
                            )
+                           and (? = '' or d.chain = ?)
+                           and (? = '' or d.asset_symbol = ?)
                            and (? = '' or d.status = ?)
+                           and (? = ''
+                                or d.tx_hash ilike '%' || ? || '%'
+                                or a.address ilike '%' || ? || '%'
+                                or a.subject ilike '%' || ? || '%'
+                                or coalesce(a.label, '') ilike '%' || ? || '%')
                          order by d.created_at desc, d.id
                          limit ? offset ?
                         """, (rs, rowNum) -> {
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("id", rs.getObject("id", UUID.class));
                     row.put("custodyAddressId", rs.getObject("custody_address_id", UUID.class));
+                    row.put("address", rs.getString("address"));
                     row.put("subject", rs.getString("subject"));
                     row.put("chain", rs.getString("chain"));
                     row.put("assetSymbol", rs.getString("asset_symbol"));
@@ -1956,7 +1987,12 @@ public class CustodyRepository {
                     row.put("createdAt", rs.getTimestamp("created_at").toInstant());
                     row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
                     return row;
-                }, tenantId, blankToEmpty(status), blankToEmpty(status),
+                }, tenantId,
+                blankToEmpty(chain), blankToEmpty(chain),
+                blankToEmpty(assetSymbol), blankToEmpty(assetSymbol),
+                blankToEmpty(status), blankToEmpty(status),
+                normalizedSearch, normalizedSearch, normalizedSearch,
+                normalizedSearch, normalizedSearch,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
 

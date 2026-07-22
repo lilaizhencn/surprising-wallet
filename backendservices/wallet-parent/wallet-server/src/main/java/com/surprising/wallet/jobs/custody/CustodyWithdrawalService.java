@@ -149,18 +149,22 @@ public class CustodyWithdrawalService {
         return view;
     }
 
-    public List<Map<String, Object>> withdrawals(CustodyPrincipal principal, String status,
-                                                  int limit, int offset) {
+    public List<Map<String, Object>> withdrawals(CustodyPrincipal principal, String chain,
+                                                  String assetSymbol, String status,
+                                                  String search, int limit, int offset) {
         requireScope(principal, "withdrawals:read");
         return repository.listCustodyWithdrawals(
-                principal.tenantId(), upperOrEmpty(status), limit, offset);
+                principal.tenantId(), upperOrEmpty(chain), upperOrEmpty(assetSymbol),
+                upperOrEmpty(status), search, limit, offset);
     }
 
-    public List<Map<String, Object>> deposits(CustodyPrincipal principal, String status,
-                                               int limit, int offset) {
+    public List<Map<String, Object>> deposits(CustodyPrincipal principal, String chain,
+                                               String assetSymbol, String status,
+                                               String search, int limit, int offset) {
         requireScope(principal, "deposits:read");
         return repository.listCustodyDeposits(
-                principal.tenantId(), upperOrEmpty(status), limit, offset);
+                principal.tenantId(), upperOrEmpty(chain), upperOrEmpty(assetSymbol),
+                upperOrEmpty(status), search, limit, offset);
     }
 
     private WithdrawalView replay(UUID tenantId, String key, String requestHash) {

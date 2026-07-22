@@ -265,6 +265,53 @@ class CustodyOperationsIntegrationTest {
     }
 
     @Test
+    void transferListsReturnFullAddressesAndApplyTenantScopedFilters() {
+        transactions.executeWithoutResult(status -> {
+            CustodyRepository repository = new CustodyRepository(jdbc);
+            UUID tenantId = createTenant();
+            UUID otherTenantId = createTenant();
+            TestAddress address = insertTestAddress(
+                    tenantId, "ETH", "USDT", "customer-alpha",
+                    "0x1111111111111111111111111111111111111111");
+            TestAddress otherAddress = insertTestAddress(
+                    otherTenantId, "ETH", "USDT", "customer-alpha-other-tenant",
+                    "0x9999999999999999999999999999999999999999");
+            String depositHash = "0xdeposit-filter-alpha";
+            insertTestDeposit(tenantId, address, "USDT", depositHash, "CONFIRMED");
+            insertTestDeposit(
+                    otherTenantId, otherAddress, "USDT", depositHash + "-other", "CONFIRMED");
+
+            List<Map<String, Object>> deposits = repository.listCustodyDeposits(
+                    tenantId, "ETH", "USDT", "CONFIRMED", "customer-alpha", 20, 0);
+            assertEquals(1, deposits.size());
+            assertEquals(address.address(), deposits.getFirst().get("address"));
+            assertEquals(depositHash, deposits.getFirst().get("txHash"));
+            assertTrue(repository.listCustodyDeposits(
+                    tenantId, "BTC", "USDT", "CONFIRMED", "customer-alpha", 20, 0).isEmpty());
+
+            String orderNo = "CW-FILTER-ALPHA";
+            String destination = "0x2222222222222222222222222222222222222222";
+            String withdrawalHash = "0xwithdrawal-filter-alpha";
+            insertTestWithdrawal(
+                    repository, tenantId, address, orderNo, "payout-alpha",
+                    destination, withdrawalHash, "CONFIRMED");
+            insertTestWithdrawal(
+                    repository, otherTenantId, otherAddress, orderNo + "-OTHER",
+                    "payout-alpha-other", destination, withdrawalHash + "-other", "CONFIRMED");
+
+            List<Map<String, Object>> withdrawals = repository.listCustodyWithdrawals(
+                    tenantId, "ETH", "USDT", "CONFIRMED", "payout-alpha", 20, 0);
+            assertEquals(1, withdrawals.size());
+            assertEquals(address.address(), withdrawals.getFirst().get("sourceAddress"));
+            assertEquals(destination, withdrawals.getFirst().get("toAddress"));
+            assertEquals("customer-alpha", withdrawals.getFirst().get("subject"));
+            assertTrue(repository.listCustodyWithdrawals(
+                    tenantId, "ETH", "BTC", "CONFIRMED", destination, 20, 0).isEmpty());
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
     void gasReservationSettlesConfirmedFeeAndPreservesAuditTrail() {
         transactions.executeWithoutResult(status -> {
             CustodyRepository repository = new CustodyRepository(jdbc);
@@ -780,6 +827,72 @@ class CustodyOperationsIntegrationTest {
                 """, tenantId, "operations-it-"
                         + UUID.randomUUID().toString().replace("-", "").substring(0, 16), namespace);
         return tenantId;
+    }
+
+    private TestAddress insertTestAddress(UUID tenantId, String chain, String assetSymbol,
+                                          String subjectLabel, String address) {
+        int namespace = jdbc.queryForObject(
+                "select derivation_namespace from custody_tenant where id = ?",
+                Integer.class, tenantId);
+        int subject = jdbc.queryForObject(
+                "select nextval('custody_derivation_subject_index_seq')::integer",
+                Integer.class);
+        Long chainAddressId = jdbc.queryForObject("""
+                insert into chain_address(
+                    tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                    address, derivation_path, wallet_role, enabled)
+                values (?, ?, ?, ?, ?, ?, 0, ?, ?, 'DEPOSIT', true)
+                returning id
+                """, Long.class, tenantId, chain, assetSymbol, address,
+                Integer.toUnsignedLong(subject), namespace, address,
+                "m/44'/60'/" + namespace + "'/" + subject + "/0");
+        UUID custodyAddressId = UUID.randomUUID();
+        jdbc.update("""
+                insert into custody_address(
+                    id, tenant_id, chain_address_id, chain, network, address,
+                    subject, label, source, derivation_subject, derivation_child)
+                values (?, ?, ?, ?, 'qa', ?, ?, ?, 'API', ?, 0)
+                """, custodyAddressId, tenantId, chainAddressId, chain, address,
+                subjectLabel, "Label " + subjectLabel, subject);
+        return new TestAddress(custodyAddressId, address, Integer.toUnsignedLong(subject));
+    }
+
+    private void insertTestDeposit(UUID tenantId, TestAddress address, String assetSymbol,
+                                   String txHash, String status) {
+        Long depositRecordId = jdbc.queryForObject("""
+                insert into deposit_record(
+                    tenant_id, chain, asset_symbol, tx_hash, to_address,
+                    amount, block_height, confirmations, status, credited, credited_at)
+                values (?, 'ETH', ?, ?, ?, 12.5, 100, 12, ?, true, now())
+                returning id
+                """, Long.class, tenantId, assetSymbol, txHash, address.address(), status);
+        jdbc.update("""
+                insert into custody_deposit(
+                    id, tenant_id, custody_address_id, deposit_record_id,
+                    chain, asset_symbol, tx_hash, amount, status, credited_at)
+                values (?, ?, ?, ?, 'ETH', ?, ?, 12.5, ?, now())
+                """, UUID.randomUUID(), tenantId, address.id(), depositRecordId,
+                assetSymbol, txHash, status);
+    }
+
+    private void insertTestWithdrawal(CustodyRepository repository, UUID tenantId,
+                                      TestAddress address, String orderNo,
+                                      String externalReference, String destination,
+                                      String txHash, String status) {
+        jdbc.update("""
+                insert into withdrawal_order(
+                    tenant_id, order_no, user_id, chain, asset_symbol,
+                    from_address, debit_account_id, to_address, amount, fee, status, tx_hash)
+                values (?, ?, ?, 'ETH', 'USDT', ?, ?, ?, 3.5, 0.1, ?, ?)
+                """, tenantId, orderNo, address.userId(), address.address(),
+                address.address(), destination, status, txHash);
+        repository.insertCustodyWithdrawal(
+                UUID.randomUUID(), tenantId, address.id(), orderNo, externalReference, null,
+                "ETH", "USDT", destination, new BigDecimal("3.5"),
+                new BigDecimal("0.1"), status, "CONSOLE", "qa");
+    }
+
+    private record TestAddress(UUID id, String address, long userId) {
     }
 
     private UUID insertWebhookEndpoint(UUID tenantId, String name) {

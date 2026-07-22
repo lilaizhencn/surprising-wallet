@@ -69,22 +69,30 @@ public class CustodyPublicApiController {
 
     @GetMapping("/deposits")
     public List<Map<String, Object>> deposits(
+            @RequestParam(defaultValue = "") String chain,
+            @RequestParam(defaultValue = "") String assetSymbol,
             @RequestParam(defaultValue = "") String status,
+            @RequestParam(defaultValue = "") String search,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
         return transfers.deposits(
-                CustodyRequestSupport.requirePrincipal(request), status, limit, offset);
+                CustodyRequestSupport.requirePrincipal(request),
+                chain, assetSymbol, status, search, limit, offset);
     }
 
     @GetMapping("/withdrawals")
     public List<Map<String, Object>> withdrawals(
+            @RequestParam(defaultValue = "") String chain,
+            @RequestParam(defaultValue = "") String assetSymbol,
             @RequestParam(defaultValue = "") String status,
+            @RequestParam(defaultValue = "") String search,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
         return transfers.withdrawals(
-                CustodyRequestSupport.requirePrincipal(request), status, limit, offset);
+                CustodyRequestSupport.requirePrincipal(request),
+                chain, assetSymbol, status, search, limit, offset);
     }
 
     @PostMapping("/withdrawals")
