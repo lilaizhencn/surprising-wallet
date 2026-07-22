@@ -83,12 +83,6 @@ public class PolkadotTransactionService {
         return tx.txHash();
     }
 
-    public boolean confirmWithdrawal(AccountChainProfile profile, String orderNo, String txHash,
-                                     String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
-        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
-                profile, orderNo, txHash, assetSymbol, debitAccountId, debitAmount);
-    }
-
     public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
                                      String orderNo, String txHash,
                                      String assetSymbol, String debitAccountId, BigDecimal debitAmount) {

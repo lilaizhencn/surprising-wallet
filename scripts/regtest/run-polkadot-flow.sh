@@ -224,6 +224,12 @@ begin
   if exists (select 1 from ledger_balance where chain='DOT' and locked_balance <> 0) then
     raise exception 'non-zero locked DOT balance remains';
   end if;
+  if exists (select 1 from withdrawal_order where chain='DOT' and status <> 'CONFIRMED') then
+    raise exception 'unresolved DOT withdrawal remains';
+  end if;
+  if exists (select 1 from collection_record where chain='DOT' and status <> 'CONFIRMED') then
+    raise exception 'unresolved DOT collection remains';
+  end if;
 end
 \$\$;"
 

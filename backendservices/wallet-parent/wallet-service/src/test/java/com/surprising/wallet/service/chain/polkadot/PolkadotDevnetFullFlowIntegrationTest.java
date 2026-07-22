@@ -18,6 +18,7 @@ import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -37,6 +38,7 @@ class PolkadotDevnetFullFlowIntegrationTest {
 
         JdbcTemplate jdbc = new JdbcTemplate(dataSource());
         ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        UUID tenantId = PolkadotTenantIntegrationFixture.ensureTenant(jdbc);
         WalletKeyMaterialProvider keyMaterial = new WalletKeyMaterialProvider(
                 new WalletKeyConfigStore(jdbc), WalletKeyMaterialProvider.Mode.WALLET_SERVER);
         PolkadotKeyService keys = new PolkadotKeyService(keyMaterial);
@@ -50,13 +52,16 @@ class PolkadotDevnetFullFlowIntegrationTest {
                 runtime, keys, repository, hotWalletService);
         PolkadotDepositScanner scanner = new PolkadotDepositScanner(runtime, repository);
 
-        ChainAddressRecord hot = address(keys, 0L, 0, 0L, "DEPOSIT", CHAIN, "dot-hot");
-        ChainAddressRecord source = address(keys, SOURCE_USER, 9, 0L, "EXTERNAL", CHAIN, "dot-source");
-        ChainAddressRecord user = address(keys, USER, 1, 0L, "DEPOSIT", CHAIN, "dot-user");
-        ChainAddressRecord external = address(keys, EXTERNAL_USER, 1, 0L,
+        ChainAddressRecord hot = address(tenantId, keys, 0L, 0, 0L, "DEPOSIT", CHAIN, "dot-hot");
+        ChainAddressRecord source = address(
+                tenantId, keys, SOURCE_USER, 9, 0L, "EXTERNAL", CHAIN, "dot-source");
+        ChainAddressRecord user = address(
+                tenantId, keys, USER, 1, 0L, "DEPOSIT", CHAIN, "dot-user");
+        ChainAddressRecord external = address(tenantId, keys, EXTERNAL_USER, 1, 0L,
                 "EXTERNAL", CHAIN, "dot-external");
         repository.upsertChainAddress(hot);
         repository.upsertChainAddress(user);
+        UUID custodyAddressId = PolkadotTenantIntegrationFixture.attachDepositAddress(jdbc, user);
         assertTrue(runtime.nativeBalance(source.getAddress())
                 .compareTo(PolkadotTransactionService.toPlanck(new BigDecimal("1000"))) >= 0,
                 "deterministic source was not funded on the local Polkadot node");
@@ -70,13 +75,21 @@ class PolkadotDevnetFullFlowIntegrationTest {
         assertAmount(new BigDecimal("100"), ledger(repository, CHAIN, user.getAccountId()).getTotalBalance());
 
         String runId = "DOT-DEVNET-" + System.currentTimeMillis();
-        withdraw(repository, transactions, runId + "-DOT-WD", user, external, null,
+        withdraw(tenantId, repository, transactions, runId + "-DOT-WD", user, external, null,
                 new BigDecimal("20"));
         assertAmount(new BigDecimal("80"), ledger(repository, CHAIN, user.getAccountId()).getTotalBalance());
+        BigInteger hotBeforeCollection = runtime.nativeBalance(hot.getAddress());
+        String nativeCollectionHash = collect(tenantId, custodyAddressId, repository, transactions,
+                runId + "-DOT-COLLECT", user, hot, null, new BigDecimal("30"));
+        scanUntil(scanner, nativeCollectionHash, CHAIN);
+        assertInternalCollectionNotCredited(
+                jdbc, repository, nativeCollectionHash, CHAIN, user.getAccountId());
+        assertEquals(PolkadotTransactionService.toPlanck(new BigDecimal("30")),
+                runtime.nativeBalance(hot.getAddress()).subtract(hotBeforeCollection));
 
-        tokenFlow(jdbc, repository, keys, runtime, transactions, scanner,
+        tokenFlow(tenantId, custodyAddressId, jdbc, repository, keys, runtime, transactions, scanner,
                 source, user, external, hot, "USDC", "31337", true, runId);
-        tokenFlow(jdbc, repository, keys, runtime, transactions, scanner,
+        tokenFlow(tenantId, custodyAddressId, jdbc, repository, keys, runtime, transactions, scanner,
                 source, user, external, hot, "USDT", "1984", false, runId);
 
         assertFalse(repository.freezeLedgerBalance(CHAIN, "USDC", user.getAccountId(),
@@ -87,10 +100,13 @@ class PolkadotDevnetFullFlowIntegrationTest {
                 + "and locked_balance <> 0", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from withdrawal_order where chain='DOT' "
                 + "and status <> 'CONFIRMED'", Integer.class));
+        assertEquals(0, jdbc.queryForObject("select count(*) from collection_record where chain='DOT' "
+                + "and status <> 'CONFIRMED'", Integer.class));
         assertAmount(new BigDecimal("80"), ledger(repository, CHAIN, user.getAccountId()).getTotalBalance());
     }
 
-    private static void tokenFlow(JdbcTemplate jdbc, ChainJdbcRepository repository, PolkadotKeyService keys,
+    private static void tokenFlow(UUID tenantId, UUID custodyAddressId,
+                                  JdbcTemplate jdbc, ChainJdbcRepository repository, PolkadotKeyService keys,
                                   PolkadotRuntimeClient runtime, PolkadotTransactionService transactions,
                                   PolkadotDepositScanner scanner, ChainAddressRecord nativeSource,
                                   ChainAddressRecord nativeUser, ChainAddressRecord nativeExternal,
@@ -131,34 +147,79 @@ class PolkadotDevnetFullFlowIntegrationTest {
         assertAmount(new BigDecimal("100"), ledger(repository, symbol, user.getAccountId()).getTotalBalance());
 
         BigInteger gasBefore = runtime.assetHubNativeBalance(user.getAddress());
-        withdraw(repository, transactions, runId + "-" + symbol + "-WD", user, external, token,
+        withdraw(tenantId, repository, transactions, runId + "-" + symbol + "-WD", user, external, token,
                 new BigDecimal("20"));
         BigInteger gasAfter = runtime.assetHubNativeBalance(user.getAddress());
         assertEquals(expectGasTopUp, gasAfter.compareTo(gasBefore) > 0,
                 "unexpected Asset Hub gas top-up result; before=" + gasBefore + ", after=" + gasAfter);
-        assertAmount(new BigDecimal("80"), ledger(repository, symbol, user.getAccountId()).getTotalBalance());
+        String collectionHash = collect(tenantId, custodyAddressId, repository, transactions,
+                runId + "-" + symbol + "-COLLECT", user, hot, token, new BigDecimal("30"));
+        scanUntil(scanner, collectionHash, symbol);
+        assertInternalCollectionNotCredited(jdbc, repository, collectionHash, symbol, user.getAccountId());
 
-        assertAssetBalance(runtime, assetId, user.getAddress(), new BigDecimal("80"));
+        assertAssetBalance(runtime, assetId, user.getAddress(), new BigDecimal("50"));
         assertAssetBalance(runtime, assetId, external.getAddress(), new BigDecimal("20"));
-        assertAmount(new BigDecimal("80"), ledger(repository, symbol, user.getAccountId()).getTotalBalance());
+        assertAssetBalance(runtime, assetId, hot.getAddress(), new BigDecimal("30"));
+        BigDecimal tenantCustody = assetBalance(runtime, assetId, user.getAddress())
+                .add(assetBalance(runtime, assetId, hot.getAddress()));
+        assertAmount(ledger(repository, symbol, user.getAccountId()).getTotalBalance(), tenantCustody);
     }
 
-    private static void withdraw(ChainJdbcRepository repository, PolkadotTransactionService transactions,
+    private static void withdraw(UUID tenantId, ChainJdbcRepository repository,
+                                 PolkadotTransactionService transactions,
                                  String orderNo, ChainAddressRecord from, ChainAddressRecord to,
                                  TokenDefinition token, BigDecimal amount) {
         String symbol = token == null ? CHAIN : token.getSymbol();
-        assertEquals(1, repository.createWithdrawalOrder(orderNo, from.getUserId(), CHAIN, symbol,
+        assertEquals(1, repository.createTenantWithdrawalOrder(
+                tenantId, orderNo, from.getUserId(), CHAIN, symbol,
                 from.getAddress(), from.getAccountId(), to.getAddress(), amount, BigDecimal.ZERO));
-        assertTrue(repository.freezeLedgerBalance(CHAIN, symbol, from.getAccountId(), amount));
-        assertEquals(1, repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN",
+        assertTrue(repository.freezeLedgerBalance(tenantId, CHAIN, symbol, from.getAccountId(), amount));
+        assertEquals(1, repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FROZEN",
                 from.getAddress(), null, null));
-        assertEquals(1, repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()));
+        assertEquals(1, repository.claimWithdrawalSigning(
+                tenantId, CHAIN, orderNo, from.getAddress()));
         String txHash = token == null
                 ? transactions.sendNative(from, to.getAddress(), PolkadotTransactionService.toPlanck(amount))
                 : transactions.sendAsset(from, token, to.getAddress(), amount);
-        assertEquals(1, repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), txHash));
-        assertTrue(transactions.confirmWithdrawal(repository.findProfileByChain(CHAIN).orElseThrow(),
-                orderNo, txHash, symbol, from.getAccountId(), amount));
+        assertEquals(1, repository.markWithdrawalSent(
+                tenantId, CHAIN, orderNo, from.getAddress(), txHash));
+        assertTrue(transactions.confirmWithdrawal(tenantId,
+                repository.findProfileByChain(CHAIN).orElseThrow(), orderNo, txHash,
+                symbol, from.getAccountId(), amount));
+    }
+
+    private static String collect(UUID tenantId, UUID custodyAddressId,
+                                  ChainJdbcRepository repository, PolkadotTransactionService transactions,
+                                  String collectionNo, ChainAddressRecord from, ChainAddressRecord hot,
+                                  TokenDefinition token, BigDecimal amount) {
+        String symbol = token == null ? CHAIN : token.getSymbol();
+        assertEquals(1, repository.createCollectionRecord(
+                tenantId, custodyAddressId, collectionNo, CHAIN, symbol,
+                from.getAddress(), hot.getAddress(), amount, BigDecimal.ZERO, null));
+        String txHash = token == null
+                ? transactions.collectNative(
+                        tenantId, collectionNo, from, hot.getAddress(),
+                        PolkadotTransactionService.toPlanck(amount))
+                : transactions.collectAsset(tenantId, collectionNo, from, token, hot.getAddress(), amount);
+        assertEquals(txHash, token == null
+                ? transactions.collectNative(
+                        tenantId, collectionNo, from, hot.getAddress(),
+                        PolkadotTransactionService.toPlanck(amount))
+                : transactions.collectAsset(tenantId, collectionNo, from, token, hot.getAddress(), amount));
+        assertTrue(transactions.confirmCollection(
+                tenantId, repository.findProfileByChain(CHAIN).orElseThrow(), collectionNo, symbol));
+        return txHash;
+    }
+
+    private static void assertInternalCollectionNotCredited(
+            JdbcTemplate jdbc, ChainJdbcRepository repository, String txHash,
+            String symbol, String userAccountId) {
+        assertEquals(0, jdbc.queryForObject("""
+                select count(*) from deposit_record
+                 where chain = ? and tx_hash = ? and asset_symbol = ?
+                """, Integer.class, CHAIN, txHash, symbol));
+        assertAmount(new BigDecimal("80"),
+                ledger(repository, symbol, userAccountId).getTotalBalance());
     }
 
     private static List<DepositEvent> scanUntil(PolkadotDepositScanner scanner,
@@ -176,14 +237,18 @@ class PolkadotDevnetFullFlowIntegrationTest {
 
     private static void assertAssetBalance(PolkadotRuntimeClient runtime, String assetId,
                                            String address, BigDecimal expected) {
-        BigDecimal actual = new BigDecimal(runtime.assetBalance(assetId, address))
-                .movePointLeft(6).stripTrailingZeros();
-        assertAmount(expected, actual);
+        assertAmount(expected, assetBalance(runtime, assetId, address));
     }
 
-    private static ChainAddressRecord address(PolkadotKeyService keys, long userId, int biz, long index,
+    private static BigDecimal assetBalance(PolkadotRuntimeClient runtime, String assetId, String address) {
+        return new BigDecimal(runtime.assetBalance(assetId, address)).movePointLeft(6).stripTrailingZeros();
+    }
+
+    private static ChainAddressRecord address(UUID tenantId, PolkadotKeyService keys,
+                                              long userId, int biz, long index,
                                               String role, String symbol, String accountId) {
         return ChainAddressRecord.builder()
+                .tenantId(tenantId)
                 .chain(CHAIN)
                 .assetSymbol(symbol)
                 .accountId(accountId)
@@ -200,6 +265,7 @@ class PolkadotDevnetFullFlowIntegrationTest {
     private static ChainAddressRecord tokenAddress(ChainAddressRecord nativeAddress,
                                                    String symbol, String accountId) {
         return ChainAddressRecord.builder()
+                .tenantId(nativeAddress.getTenantId())
                 .chain(CHAIN)
                 .assetSymbol(symbol)
                 .accountId(accountId)
