@@ -7,6 +7,9 @@ import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Objects;
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class SuiAddressService {
@@ -15,23 +18,26 @@ public class SuiAddressService {
     private final SuiKeyService keyService;
     private final ChainJdbcRepository repository;
 
-    public ChainAddressRecord createNativeAddress(long userId, int biz, long derivationIndex, String walletRole) {
-        return createAddress("SUI", userId, biz, derivationIndex, walletRole);
+    public ChainAddressRecord createNativeAddress(UUID tenantId, long userId, int biz,
+                                                  long derivationIndex, String walletRole) {
+        return createAddress(tenantId, "SUI", userId, biz, derivationIndex, walletRole);
     }
 
-    public ChainAddressRecord createCoinAddress(String symbol, long userId, int biz,
+    public ChainAddressRecord createCoinAddress(UUID tenantId, String symbol, long userId, int biz,
                                                 long derivationIndex, String walletRole) {
-        return createAddress(symbol, userId, biz, derivationIndex, walletRole);
+        return createAddress(tenantId, symbol, userId, biz, derivationIndex, walletRole);
     }
 
-    private ChainAddressRecord createAddress(String symbol, long userId, int biz,
+    private ChainAddressRecord createAddress(UUID tenantId, String symbol, long userId, int biz,
                                              long derivationIndex, String walletRole) {
+        Objects.requireNonNull(tenantId, "tenantId is required");
         HotWalletRules.requireAllowedReservedAddress(CHAIN, symbol, "SUI", userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     Ed25519DerivedKey key = keyService.derive(userId, biz, derivationIndex);
                     String address = SuiKeyService.address(key.publicKey());
                     ChainAddressRecord record = ChainAddressRecord.builder()
+                            .tenantId(tenantId)
                             .chain(CHAIN)
                             .assetSymbol(symbol)
                             .accountId(address)

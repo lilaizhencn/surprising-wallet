@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class SuiTransactionService {
@@ -86,78 +87,80 @@ public class SuiTransactionService {
         return rpc.executeSignedTransaction(txBytes, signature).path("digest").asText();
     }
 
-    public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
+    public String withdrawNative(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "sui withdrawNative");
-        Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
+        Optional<String> existing = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo);
         if (existing.isPresent()) {
             return existing.get();
         }
         long feeReserve = profile().getDefaultFee();
         int decimals = decimals("SUI");
         BigDecimal fee = BigDecimal.valueOf(feeReserve).movePointLeft(decimals);
-        if (repository.createWithdrawalOrder(orderNo, userId, CHAIN, "SUI", toAddress,
-                amount, fee) == 0) {
-            return repository.findWithdrawalTxHash(CHAIN, orderNo)
+        if (repository.createTenantWithdrawalOrder(tenantId, orderNo, userId, CHAIN, "SUI",
+                from.getAddress(), from.getAccountId(), toAddress, amount, fee) == 0) {
+            return repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo)
                     .orElseThrow(() -> new IllegalStateException("Sui withdrawal already claimed"));
         }
         BigDecimal debit = amount.add(fee);
-        if (!repository.freezeLedgerBalance(CHAIN, "SUI", from.getAccountId(), debit)) {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null,
+        if (!repository.freezeLedgerBalance(tenantId, CHAIN, "SUI", from.getAccountId(), debit)) {
+            repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FAILED", from.getAddress(), null,
                     "insufficient SUI ledger balance");
             throw new IllegalStateException("insufficient SUI ledger balance");
         }
-        repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
+        repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
-            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
+            if (repository.claimWithdrawalSigning(tenantId, CHAIN, orderNo, from.getAddress()) != 1) {
                 throw new IllegalStateException("Sui withdrawal is not signable: " + orderNo);
             }
             String digest = sendNative(from, toAddress, toAtomic(amount, decimals));
-            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), digest) != 1) {
+            if (repository.markWithdrawalSent(tenantId, CHAIN, orderNo, from.getAddress(), digest) != 1) {
                 throw new IllegalStateException("Sui withdrawal state changed before SENT: " + orderNo);
             }
             record(digest, from.getAddress(), toAddress, "SUI", SuiRpcClient.SUI_COIN_TYPE, amount,
                     feeReserve, "SENT", null);
             return digest;
         } catch (RuntimeException e) {
-            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(
+                    tenantId, CHAIN, orderNo, from.getAddress(), e.getMessage());
             throw e;
         }
     }
 
-    public String withdrawCoin(String orderNo, long userId, ChainAddressRecord from,
+    public String withdrawCoin(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                String coinType, String toAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "sui withdrawCoin");
-        Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
+        Optional<String> existing = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo);
         if (existing.isPresent()) {
             return existing.get();
         }
         TokenDefinition token = repository.findTokenByContract(CHAIN, coinType)
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Sui coin " + coinType));
-        if (repository.createWithdrawalOrder(orderNo, userId, CHAIN, token.getSymbol(), toAddress,
-                amount, BigDecimal.ZERO) == 0) {
-            return repository.findWithdrawalTxHash(CHAIN, orderNo)
+        if (repository.createTenantWithdrawalOrder(tenantId, orderNo, userId, CHAIN, token.getSymbol(),
+                from.getAddress(), from.getAccountId(), toAddress, amount, BigDecimal.ZERO) == 0) {
+            return repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo)
                     .orElseThrow(() -> new IllegalStateException("Sui coin withdrawal already claimed"));
         }
-        if (!repository.freezeLedgerBalance(CHAIN, token.getSymbol(), from.getAccountId(), amount)) {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null,
+        if (!repository.freezeLedgerBalance(tenantId, CHAIN, token.getSymbol(), from.getAccountId(), amount)) {
+            repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FAILED", from.getAddress(), null,
                     "insufficient " + token.getSymbol() + " ledger balance");
             throw new IllegalStateException("insufficient " + token.getSymbol() + " ledger balance");
         }
-        repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
+        repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
-            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
+            if (repository.claimWithdrawalSigning(tenantId, CHAIN, orderNo, from.getAddress()) != 1) {
                 throw new IllegalStateException("Sui coin withdrawal is not signable: " + orderNo);
             }
             String digest = sendCoin(from, coinType, toAddress, toAtomic(amount, token.getDecimals()));
-            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), digest) != 1) {
+            if (repository.markWithdrawalSent(tenantId, CHAIN, orderNo, from.getAddress(), digest) != 1) {
                 throw new IllegalStateException("Sui coin withdrawal state changed before SENT: " + orderNo);
             }
             record(digest, from.getAddress(), toAddress, token.getSymbol(), coinType, amount,
                     profile().getDefaultFee(), "SENT", null);
             return digest;
         } catch (RuntimeException e) {
-            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(
+                    tenantId, CHAIN, orderNo, from.getAddress(), e.getMessage());
             throw e;
         }
     }
@@ -177,7 +180,8 @@ public class SuiTransactionService {
         try {
             String digest = sendNative(from, hotAddress, amountMist.longValueExact());
             repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", digest, null, null);
-            record(digest, from.getAddress(), hotAddress, "SUI", SuiRpcClient.SUI_COIN_TYPE, amountMist,
+            record(digest, from.getAddress(), hotAddress, "SUI", SuiRpcClient.SUI_COIN_TYPE,
+                    amountMist.movePointLeft(decimals("SUI")),
                     feeReserve, "SENT", null);
             return digest;
         } catch (RuntimeException e) {
@@ -204,7 +208,8 @@ public class SuiTransactionService {
         try {
             String digest = sendCoin(from, coinType, hotAddress, amountAtomic.longValueExact());
             repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", digest, null, null);
-            record(digest, from.getAddress(), hotAddress, token.getSymbol(), coinType, amountAtomic,
+            record(digest, from.getAddress(), hotAddress, token.getSymbol(), coinType,
+                    amountAtomic.movePointLeft(token.getDecimals()),
                     profile().getDefaultFee(), "SENT", null);
             return digest;
         } catch (RuntimeException e) {
@@ -214,13 +219,7 @@ public class SuiTransactionService {
         }
     }
 
-    public boolean confirmWithdrawal(String orderNo, String assetSymbol,
-                                     String accountId, BigDecimal debitAmount) {
-        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
-                orderNo, assetSymbol, accountId, debitAmount);
-    }
-
-    public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo, String assetSymbol,
+    public boolean confirmWithdrawal(UUID tenantId, String orderNo, String assetSymbol,
                                      String accountId, BigDecimal debitAmount) {
         String digest = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(digest, Duration.ofMinutes(2));

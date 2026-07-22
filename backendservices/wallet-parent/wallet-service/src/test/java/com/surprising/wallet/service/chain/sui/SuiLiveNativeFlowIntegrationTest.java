@@ -29,6 +29,7 @@ class SuiLiveNativeFlowIntegrationTest {
     private static final long EXTERNAL_INDEX = RUN_INDEX + 2L;
     private static final long HOT_INDEX = 0L;
     private static final long ONE_SUI = 1_000_000_000L;
+    private static final long COLLECTION_MIST = 200_000_000L;
 
     @Test
     void liveSuiDepositWithdrawAreIdempotent() {
@@ -42,6 +43,7 @@ class SuiLiveNativeFlowIntegrationTest {
                 env("SUI_DB_USER", "wallet"),
                 env("SUI_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        UUID tenantId = SuiTenantIntegrationFixture.ensureTenant(jdbc);
         ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
         SuiRpcClient rpc = new SuiRpcClient(new ObjectMapper(),
                 env("SUI_GRPC_ENDPOINT", "fullnode.testnet.sui.io:443"));
@@ -51,9 +53,13 @@ class SuiLiveNativeFlowIntegrationTest {
         SuiTransactionService transactions = new SuiTransactionService(rpc, signer, repository);
         SuiDepositScanner scanner = new SuiDepositScanner(rpc, repository);
 
-        ChainAddressRecord owner = addresses.createNativeAddress(7001, 0, OWNER_INDEX, "DEPOSIT");
-        ChainAddressRecord external = addresses.createNativeAddress(7002, 0, EXTERNAL_INDEX, "EXTERNAL");
-        ChainAddressRecord hot = addresses.createNativeAddress(0, 0, HOT_INDEX, "DEPOSIT");
+        ChainAddressRecord owner = addresses.createNativeAddress(
+                tenantId, 7001, 0, OWNER_INDEX, "DEPOSIT");
+        ChainAddressRecord external = addresses.createNativeAddress(
+                tenantId, 7002, 0, EXTERNAL_INDEX, "EXTERNAL");
+        ChainAddressRecord hot = addresses.createNativeAddress(
+                tenantId, 0, 0, HOT_INDEX, "DEPOSIT");
+        UUID custodyAddressId = SuiTenantIntegrationFixture.attachDepositAddress(jdbc, owner);
 
         String faucetDigest = "existing-balance";
         if (rpc.balance(owner.getAddress(), SuiRpcClient.SUI_COIN_TYPE).compareTo(BigDecimal.valueOf(ONE_SUI)) < 0) {
@@ -69,12 +75,26 @@ class SuiLiveNativeFlowIntegrationTest {
 
         String withdrawOrder = "sui-live-withdraw-" + UUID.randomUUID();
         BigDecimal withdrawAmount = new BigDecimal("0.1");
-        String withdrawDigest = transactions.withdrawNative(withdrawOrder, owner.getUserId(), owner,
+        String withdrawDigest = transactions.withdrawNative(tenantId, withdrawOrder, owner.getUserId(), owner,
                 external.getAddress(), withdrawAmount);
-        assertEquals(withdrawDigest, transactions.withdrawNative(withdrawOrder, owner.getUserId(), owner,
+        assertEquals(withdrawDigest, transactions.withdrawNative(
+                tenantId, withdrawOrder, owner.getUserId(), owner,
                 external.getAddress(), withdrawAmount));
-        assertTrue(transactions.confirmWithdrawal(withdrawOrder, "SUI", owner.getAccountId(),
+        assertTrue(transactions.confirmWithdrawal(tenantId, withdrawOrder, "SUI", owner.getAccountId(),
                 withdrawAmount.add(new BigDecimal("0.01"))));
+
+        String collectionNo = "sui-live-collection-" + UUID.randomUUID();
+        assertEquals(1, repository.createCollectionRecord(
+                tenantId, custodyAddressId, collectionNo, "SUI", "SUI",
+                owner.getAddress(), hot.getAddress(), new BigDecimal("0.2"),
+                new BigDecimal("0.01"), null));
+        String collectionDigest = transactions.collectNative(
+                tenantId, collectionNo, owner, hot.getAddress(), BigDecimal.valueOf(COLLECTION_MIST));
+        assertEquals(collectionDigest, transactions.collectNative(
+                tenantId, collectionNo, owner, hot.getAddress(), BigDecimal.valueOf(COLLECTION_MIST)));
+        assertTrue(transactions.confirmCollection(tenantId, collectionNo));
+        assertEquals(0, rpc.balance(hot.getAddress(), SuiRpcClient.SUI_COIN_TYPE)
+                .compareTo(BigDecimal.valueOf(COLLECTION_MIST)));
 
         assertEquals(0L, jdbc.queryForObject("""
                 select count(*) from ledger_balance
@@ -87,6 +107,7 @@ class SuiLiveNativeFlowIntegrationTest {
         System.out.println("SUI_HOT=" + hot.getAddress());
         System.out.println("SUI_FAUCET_TX=" + faucetDigest);
         System.out.println("SUI_WITHDRAW_TX=" + withdrawDigest);
+        System.out.println("SUI_COLLECTION_TX=" + collectionDigest);
     }
 
     private static String fund(String address) {

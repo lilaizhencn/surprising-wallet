@@ -28,12 +28,13 @@ class SuiDatabaseFlowIntegrationTest {
                 env("SUI_DB_USER", "wallet"),
                 env("SUI_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        UUID tenantId = SuiTenantIntegrationFixture.ensureTenant(jdbc);
         ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
         SuiKeyService keys = new SuiKeyService("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
         SuiAddressService addresses = new SuiAddressService(keys, repository);
 
         long derivationIndex = 1_410_000L + Math.floorMod(UUID.randomUUID().getLeastSignificantBits(), 100_000L);
-        ChainAddressRecord user = addresses.createNativeAddress(8101 + derivationIndex, 0,
+        ChainAddressRecord user = addresses.createNativeAddress(tenantId, 8101 + derivationIndex, 0,
                 derivationIndex, "DEPOSIT");
         String digest = "sui-db-" + UUID.randomUUID();
         DepositEvent event = new DepositEvent(ChainType.SUI, "SUI", digest,
@@ -42,8 +43,10 @@ class SuiDatabaseFlowIntegrationTest {
 
         assertTrue(repository.recordAndCreditDeposit(event, 0, 1, user.getAccountId()));
         assertFalse(repository.recordAndCreditDeposit(event, 0, 1, user.getAccountId()));
-        assertTrue(repository.freezeLedgerBalance("SUI", "SUI", user.getAccountId(), new BigDecimal("1")));
-        assertTrue(repository.releaseLockedBalance("SUI", "SUI", user.getAccountId(), new BigDecimal("1")));
+        assertTrue(repository.freezeLedgerBalance(
+                tenantId, "SUI", "SUI", user.getAccountId(), new BigDecimal("1")));
+        assertTrue(repository.releaseLockedBalance(
+                tenantId, "SUI", "SUI", user.getAccountId(), new BigDecimal("1")));
 
         repository.recordSuiTransaction(SuiTransactionRecord.builder()
                 .chain("SUI")

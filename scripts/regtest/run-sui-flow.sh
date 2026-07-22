@@ -105,8 +105,9 @@ SUI_MOCK_PACKAGE_ID="$SUI_FLOW_PACKAGE" \
 SUI_MOCK_TREASURY_ID="$SUI_FLOW_TREASURY" \
 mvn -f "$SUI_FLOW_ROOT/pom.xml" \
   -pl backendservices/wallet-parent/wallet-service -am \
-  -Dtest=SuiPtbTransactionBuilderTest,SuiGrpcReadIntegrationTest,SuiLiveNativeFlowIntegrationTest,SuiLiveTokenFlowIntegrationTest \
+  -Dtest=SuiPtbTransactionBuilderTest,SuiGrpcReadIntegrationTest,SuiDatabaseFlowIntegrationTest,SuiLiveNativeFlowIntegrationTest,SuiLiveTokenFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
+  -Dsui.db.enabled=true \
   -Dsui.grpc.live.enabled=true \
   -Dsui.live.enabled=true \
   -Dsui.token.live.enabled=true \
@@ -115,8 +116,9 @@ mvn -f "$SUI_FLOW_ROOT/pom.xml" \
 local_pg_psql "$SUI_FLOW_DB" -v ON_ERROR_STOP=1 -Atqc "
 do \$\$
 begin
-  if (select count(*) from deposit_record where chain='SUI' and status='CREDITED' and asset_symbol in ('SUI','USDC')) <> 2 then
-    raise exception 'expected one credited SUI deposit and one credited USDC deposit';
+  if (select count(*) from deposit_record where chain='SUI' and status='CREDITED' and asset_symbol='SUI') <> 2
+     or (select count(*) from deposit_record where chain='SUI' and status='CREDITED' and asset_symbol='USDC') <> 1 then
+    raise exception 'expected two credited SUI deposits and one credited USDC deposit';
   end if;
   if (select count(*) from withdrawal_order where chain='SUI' and status='CONFIRMED' and asset_symbol in ('SUI','USDC')) <> 2 then
     raise exception 'expected one confirmed SUI withdrawal and one confirmed USDC withdrawal';
