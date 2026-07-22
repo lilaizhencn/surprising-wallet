@@ -29,7 +29,7 @@ public class HyperCoreTransactionService {
 
     public String sendUsd(AccountChainProfile profile, ChainAddressRecord from,
                           String destination, BigDecimal amount) {
-        long nonce = System.currentTimeMillis();
+        long nonce = nextNonce(from);
         ObjectNode action = objectMapper.createObjectNode();
         action.put("destination", normalizeAddress(destination));
         action.put("amount", amountString(amount));
@@ -42,7 +42,7 @@ public class HyperCoreTransactionService {
 
     public String sendSpot(AccountChainProfile profile, ChainAddressRecord from,
                            TokenDefinition token, String destination, BigDecimal amount) {
-        long nonce = System.currentTimeMillis();
+        long nonce = nextNonce(from);
         ObjectNode action = objectMapper.createObjectNode();
         action.put("destination", normalizeAddress(destination));
         action.put("amount", amountString(amount));
@@ -96,6 +96,13 @@ public class HyperCoreTransactionService {
     private String wireToken(AccountChainProfile profile, TokenDefinition token) {
         return hyperCoreRepository.tokenNameBySymbol(profile.getNetwork(), token.getSymbol())
                 .orElse(token.getSymbol());
+    }
+
+    private long nextNonce(ChainAddressRecord from) {
+        return chainRepository.reserveAccountSequence(
+                CHAIN,
+                normalizeAddress(from.getAddress()),
+                System.currentTimeMillis());
     }
 
     private static boolean isMainnet(AccountChainProfile profile) {

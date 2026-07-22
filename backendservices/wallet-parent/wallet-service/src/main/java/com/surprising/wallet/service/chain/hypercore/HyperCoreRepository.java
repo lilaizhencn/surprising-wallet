@@ -27,6 +27,15 @@ public class HyperCoreRepository {
     public Optional<BigDecimal> recordObservedBalance(ChainAddressRecord address, String symbol,
                                                       BigDecimal observedBalance, String rawPayload) {
         BigDecimal observed = observedBalance == null ? BigDecimal.ZERO : observedBalance.stripTrailingZeros();
+        jdbcTemplate.update("""
+                        insert into hypercore_balance_snapshot(chain, asset_symbol, account_id, address,
+                                                               observed_balance, raw_payload,
+                                                               observed_at, created_at, updated_at)
+                        values (?, ?, ?, ?, 0, ?, ?, ?, ?)
+                        on conflict (chain, asset_symbol, account_id) do nothing
+                        """,
+                CHAIN, symbol, address.getAccountId(), address.getAddress(), rawPayload,
+                tsNow(), tsNow(), tsNow());
         List<BigDecimal> previousRows = jdbcTemplate.queryForList("""
                         select observed_balance
                           from hypercore_balance_snapshot

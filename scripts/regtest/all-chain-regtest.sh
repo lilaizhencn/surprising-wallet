@@ -41,7 +41,8 @@ commands:
   test-sui      Run isolated local Sui gRPC SUI/USDC full-flow and reconciliation test
   test-solana   Run isolated local Solana SOL/USDT/USDC full-flow and reconciliation test
   test-ton      Run TON/USDT/USDC full flow against an isolated MyLocalTon v2 RPC
-  test-xrp      Run isolated XRPL Testnet XRP/USDC full flow with automatic faucet funding
+  test-xrp      Run isolated XRPL Testnet XRP/USDC/USDT full flow with automatic faucet funding
+  test-hypercore Run HyperCore testnet metadata plus local USDC/HYPE full flow and concurrency audit
   test-near     Run isolated NEAR sandbox NEAR/USDC/USDT full flow and reconciliation test
   test-cardano  Run isolated Cardano Yaci devnet ADA/USDC/USDT full flow and reconciliation test
   test-dot      Run isolated Polkadot + Asset Hub DOT/USDC/USDT full flow and reconciliation test
@@ -51,7 +52,7 @@ commands:
   test-system   Run TRON/NEAR/Cardano flows and the 1000-user load simultaneously
   dot-runtime-up    Start the local Polkadot runtime companion service
   dot-runtime-down  Stop the local Polkadot runtime companion service
-  test-evm      Run ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C fork regression
+  test-evm      Run all 12 configured EVM chains locally, one Hardhat chain at a time
   test-db       Run DB-only flow tests for SOL/TON/APTOS/SUI/DOGE plus UTXO migration
   test-live     Run external testnet connectivity checks; spending tests require RUN_LIVE_SPENDING=true
   test-local    Run local UTXO, XMR, EVM, TRON, Sui, Solana, and NEAR full-flow tests
@@ -60,7 +61,7 @@ commands:
 notes:
   - BTC/LTC/DOGE/BCH have real local regtest nodes.
   - XMR uses local monerod regtest plus monero-wallet-rpc on 127.0.0.1:18088.
-  - EVM chains run as one-at-a-time Hardhat forks on 127.0.0.1:8545.
+  - EVM chains run as one-at-a-time local Hardhat networks on 127.0.0.1:8545.
   - SUI has an isolated local node, gRPC, mock USDC, and PostgreSQL full-flow test.
   - SOLANA has an isolated local validator, mock USDT/USDC, and PostgreSQL full-flow test.
   - TON uses MyLocalTon; start it and fund the deterministic source shown by test-ton.
@@ -86,10 +87,11 @@ matrix() {
 chain/family                         environment in repo
 BTC/LTC/DOGE/BCH                     local Docker regtest nodes
 XMR                                  local monerod regtest + monero-wallet-rpc
-ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/
-BASE/AVAX_C                          Hardhat fork, one chain per run on 127.0.0.1:8545
+ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C/
+HYPEREVM/LINEA/MANTLE/SCROLL/UNICHAIN
+                                     local Hardhat, one chain per run on 127.0.0.1:8545
 TRON                                 local TRE + mock USDT/USDC full flow
-XRP                                  external Testnet XRP + issued USDC full flow
+XRP                                  external Testnet XRP + issued USDC/USDT full flow
 SOLANA                               local validator + mock USDT/USDC full flow
 TON                                  MyLocalTon + mock USDT/USDC full flow
 APTOS                                localnet + mock FA USDT/USDC full flow
@@ -97,6 +99,7 @@ SUI                                  local Sui node + gRPC + mock USDC full flow
 ADA                                  local Yaci devnet + mock USDC/USDT full flow
 DOT                                  local Polkadot + Asset Hub + polkadot-runtime-service
 NEAR                                 local official sandbox + mock USDC/USDT full flow
+HYPERCORE                            official metadata + local API simulation, USDC/HYPE full flow
 MATRIX
 }
 
@@ -149,11 +152,7 @@ test_utxo() {
 }
 
 test_evm() {
-  (
-    cd "${ROOT_DIR}"
-    RUN_MULTIUSER="${RUN_MULTIUSER:-true}" \
-      "${ROOT_DIR}/evm-fork/scripts/run-fork-regression.sh"
-  )
+  "${ROOT_DIR}/evm-fork/scripts/run-local-matrix.sh"
 }
 
 test_xmr() {
@@ -174,6 +173,10 @@ test_ton() {
 
 test_xrp() {
   "${ROOT_DIR}/scripts/regtest/run-xrp-flow.sh"
+}
+
+test_hypercore() {
+  "${ROOT_DIR}/scripts/regtest/run-hypercore-flow.sh"
 }
 
 test_near() {
@@ -294,6 +297,9 @@ case "${1:-matrix}" in
     ;;
   test-xrp)
     test_xrp
+    ;;
+  test-hypercore)
+    test_hypercore
     ;;
   test-near)
     test_near
