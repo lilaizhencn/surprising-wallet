@@ -26,7 +26,10 @@ export function signedHeaders({ keyId, secret, method, requestTarget, body, time
 
 export class WalletApiError extends Error {
   constructor(status, payload) {
-    const message = payload?.message ?? payload?.error ?? `wallet API returned HTTP ${status}`;
+    const message = payload?.error?.message
+      ?? payload?.message
+      ?? (typeof payload?.error === "string" ? payload.error : null)
+      ?? `wallet API returned HTTP ${status}`;
     super(message);
     this.name = "WalletApiError";
     this.status = status;

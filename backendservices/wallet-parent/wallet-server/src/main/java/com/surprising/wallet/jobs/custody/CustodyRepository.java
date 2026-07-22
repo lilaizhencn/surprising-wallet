@@ -894,6 +894,8 @@ public class CustodyRepository {
                 .filter(candidate -> "ACTIVE".equals(candidate.status()))
                 .orElseThrow(() -> new IllegalStateException(
                         "set up an active " + chain + " gas account before creating withdrawals"));
+        GasFundingSource funding = gasFundingSource(
+                tenantId, operationType, operationId, account);
         if (jdbc.update("""
                         update ledger_balance
                            set available_balance = available_balance - ?,
@@ -908,10 +910,10 @@ public class CustodyRepository {
                                   and u.status = 'OVERDUE'
                            )
                         """, reservedAmount, reservedAmount, chain, account.nativeSymbol(),
-                account.accountId(), tenantId, reservedAmount, tenantId, account.id()) != 1) {
+                funding.accountId(), tenantId, reservedAmount, tenantId, account.id()) != 1) {
             throw new IllegalStateException(
                     "insufficient " + account.nativeSymbol()
-                            + " gas balance; fund the gas account and wait for confirmations");
+                            + " balance for network fees");
         }
         UUID usageId = UUID.randomUUID();
         jdbc.update("""
@@ -938,6 +940,8 @@ public class CustodyRepository {
             return usage;
         }
         GasAccountRecord account = requireGasAccount(usage.tenantId(), usage.gasAccountId());
+        GasFundingSource funding = gasFundingSource(
+                usage.tenantId(), usage.operationType(), usage.operationId(), account);
         if (jdbc.update("""
                         update ledger_balance
                            set available_balance = available_balance + ?,
@@ -947,7 +951,7 @@ public class CustodyRepository {
                            and tenant_id = ?
                            and locked_balance >= ?
                         """, usage.reservedAmount(), usage.reservedAmount(),
-                usage.chain(), usage.nativeSymbol(), account.accountId(),
+                usage.chain(), usage.nativeSymbol(), funding.accountId(),
                 usage.tenantId(), usage.reservedAmount()) != 1) {
             throw new IllegalStateException("gas reservation balance is inconsistent");
         }
@@ -981,6 +985,8 @@ public class CustodyRepository {
                 ? usage.reservedAmount()
                 : actualAmount.stripTrailingZeros();
         GasAccountRecord account = requireGasAccount(usage.tenantId(), usage.gasAccountId());
+        GasFundingSource funding = gasFundingSource(
+                usage.tenantId(), usage.operationType(), usage.operationId(), account);
         java.math.BigDecimal difference = usage.reservedAmount().subtract(actual);
         int settled;
         if (difference.signum() >= 0) {
@@ -994,7 +1000,7 @@ public class CustodyRepository {
                                and tenant_id = ?
                                and locked_balance >= ? and total_balance >= ?
                             """, difference, usage.reservedAmount(), actual,
-                    usage.chain(), usage.nativeSymbol(), account.accountId(),
+                    usage.chain(), usage.nativeSymbol(), funding.accountId(),
                     usage.tenantId(), usage.reservedAmount(), actual);
         } else {
             java.math.BigDecimal extra = difference.negate();
@@ -1009,7 +1015,7 @@ public class CustodyRepository {
                                and available_balance >= ? and locked_balance >= ?
                                and total_balance >= ?
                             """, extra, usage.reservedAmount(), actual,
-                    usage.chain(), usage.nativeSymbol(), account.accountId(),
+                    usage.chain(), usage.nativeSymbol(), funding.accountId(),
                     usage.tenantId(), extra, usage.reservedAmount(), actual);
         }
         if (settled != 1) {
@@ -1041,8 +1047,8 @@ public class CustodyRepository {
                                 ?, ?)
                         on conflict (tenant_id, entry_type, reference_type, reference_id)
                         do nothing
-                        """, UUID.randomUUID(), usage.tenantId(), account.custodyAddressId(),
-                usage.chain(), usage.nativeSymbol(), account.accountId(), actual,
+                        """, UUID.randomUUID(), usage.tenantId(), funding.custodyAddressId(),
+                usage.chain(), usage.nativeSymbol(), funding.accountId(), actual,
                 usage.operationType(), usage.referenceNo());
         return requireGasUsage(tenantId, operationType, operationId);
     }
@@ -1209,6 +1215,32 @@ public class CustodyRepository {
         if (!Boolean.TRUE.equals(valid)) {
             throw new IllegalArgumentException("gas operation does not belong to tenant and chain");
         }
+    }
+
+    private GasFundingSource gasFundingSource(
+            UUID tenantId, String operationType, UUID operationId, GasAccountRecord gasAccount) {
+        if (!"WITHDRAWAL".equalsIgnoreCase(operationType)) {
+            return new GasFundingSource(gasAccount.custodyAddressId(), gasAccount.accountId());
+        }
+        return jdbc.query("""
+                        select address.id as custody_address_id, base.account_id
+                          from custody_withdrawal withdrawal
+                          join custody_address address
+                            on address.tenant_id = withdrawal.tenant_id
+                           and address.id = withdrawal.custody_address_id
+                          join chain_address base
+                            on base.tenant_id = address.tenant_id
+                           and base.id = address.chain_address_id
+                         where withdrawal.tenant_id = ? and withdrawal.id = ?
+                        """, (rs, rowNum) -> new GasFundingSource(
+                        rs.getObject("custody_address_id", UUID.class),
+                        rs.getString("account_id")), tenantId, operationId)
+                .stream().findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "withdrawal network-fee account is unavailable"));
+    }
+
+    private record GasFundingSource(UUID custodyAddressId, String accountId) {
     }
 
     public Optional<NetworkFee> confirmedNetworkFee(

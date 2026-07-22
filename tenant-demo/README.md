@@ -31,6 +31,14 @@ TEST_CHAIN=APTOS npm run verify:running
 
 该脚本会通过 Demo 创建一个独立用户，验证地址幂等、地址轮换、已开通链和租户资产 API。后续逐链测试都复用同一入口。
 
+从空 Aptos Localnet、本机 PostgreSQL 18 临时库和当前源码开始执行 APT、FA USDC、FA USDT 的真实 SaaS 资金闭环：
+
+```bash
+npm run test:aptos:e2e
+```
+
+该流程会构建并启动隔离端口的当前钱包后端与 Demo，创建租户、开通 Aptos、生成租户归集地址和用户地址，验证充值、Webhook、自动归集、提现、交易审计和账务非负，最后停止服务、节点并删除临时库。
+
 从“平台创建租户”开始执行完整初始化时，先启动钱包和 Demo，然后提供开发环境管理员凭证：
 
 ```bash

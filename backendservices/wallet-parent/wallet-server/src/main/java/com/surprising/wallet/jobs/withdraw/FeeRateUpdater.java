@@ -4,6 +4,7 @@ import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.chain.BlockchainRuntimeService;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -50,12 +51,18 @@ public class FeeRateUpdater {
             .build();
     @Autowired
     private BlockchainRuntimeService blockchainRuntimeService;
+    @Autowired
+    private WalletRuntimeConfigService runtimeConfigService;
 
     /**
      * 每 2 分钟更新一次费率
      */
     @Scheduled(cron = "0 */2 * * * ?")
     public void updateFeeRate() {
+        if (!runtimeConfigService.isTaskEnabled("BTC", WalletRuntimeConfigService.TASK_WITHDRAW)) {
+            log.debug("BTC fee-rate update skipped: withdraw switch disabled");
+            return;
+        }
         for (AssetRuntimeMetadata currency : new AssetRuntimeMetadata[]{btc()}) {
             try {
                 int feeRate = fetchFeeRate();

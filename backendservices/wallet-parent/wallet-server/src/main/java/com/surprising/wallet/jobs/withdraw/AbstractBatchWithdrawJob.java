@@ -42,15 +42,15 @@ abstract public class AbstractBatchWithdrawJob {
     private static final int DEFAULT_FEE_RATE = 10;
 
     public void execute() {
-        if (!runtimeConfigService.isTaskEnabled(currency, WalletRuntimeConfigService.TASK_WITHDRAW)) {
-            log.warn("提现任务跳过 币种:{} DB withdraw switch disabled", currency.getName());
+        String chain = chain();
+        if (!runtimeConfigService.isTaskEnabled(chain, WalletRuntimeConfigService.TASK_WITHDRAW)) {
+            log.debug("提现任务跳过 币种:{} DB withdraw switch disabled", chain);
             return;
         }
+        currency = blockchainRuntimeService.assetMetadata(chain);
         log.info("提现任务开始 币种:{}", currency.getName());
 
         try {
-            String chain = currency.getName().toUpperCase(Locale.ROOT);
-
             while (true) {
                 List<WithdrawalOrderRecord> orders =
                         chainJdbcRepository.listWithdrawalsForSigning(chain, chain, COUNT);
@@ -95,6 +95,8 @@ abstract public class AbstractBatchWithdrawJob {
         log.info("提现任务结束 币种:{}", currency.getName());
 
     }
+
+    protected abstract String chain();
 
     protected WithdrawTransaction buildTransaction(UUID tenantId, List<WithdrawRecord> records) {
         log.info("构建提现交易对象开始");

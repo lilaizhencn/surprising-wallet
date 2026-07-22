@@ -166,9 +166,6 @@ public class EvmChainAdapter implements BlockchainAdapter {
                     .chainId(chainId)
                     .build());
         }
-        if (profiles.isEmpty()) {
-            throw new IllegalStateException("missing enabled EVM chain_profile rows");
-        }
     }
 
     private void registerProfile(ChainType chainType, String nativeSymbol, Long chainId, Long gasFloorGwei) {

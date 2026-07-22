@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { canonicalRequest, hmacBase64Url, sha256Hex, signedHeaders } from "../src/wallet-client.js";
+import {
+  WalletApiError,
+  canonicalRequest,
+  hmacBase64Url,
+  sha256Hex,
+  signedHeaders
+} from "../src/wallet-client.js";
 
 test("builds the exact custody API canonical request and signature", () => {
   const body = Buffer.from('{"chainId":"BTC","subject":"user-1","addressVersion":0}');
@@ -29,4 +35,13 @@ test("builds the exact custody API canonical request and signature", () => {
   });
   assert.equal(headers["X-Custody-Key"], "swk_demo");
   assert.equal(headers["X-Custody-Signature"], hmacBase64Url("sws_demo_secret", canonical));
+});
+
+test("surfaces the structured custody API error message", () => {
+  const error = new WalletApiError(409, {
+    error: { code: "INVALID_STATE", message: "chain is not enabled" }
+  });
+
+  assert.equal(error.message, "chain is not enabled");
+  assert.equal(error.status, 409);
 });

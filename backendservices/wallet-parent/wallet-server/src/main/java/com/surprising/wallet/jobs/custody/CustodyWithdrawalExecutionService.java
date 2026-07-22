@@ -106,25 +106,19 @@ public class CustodyWithdrawalExecutionService {
                                                    String chain, String symbol,
                                                    BigDecimal requiredAmount) {
         List<Map<String, Object>> rows = jdbc.queryForList("""
-                select balance.account_id, related.address
+                select balance.account_id, base.address
                   from custody_address custody
                   join chain_address base
                     on base.tenant_id = custody.tenant_id
                    and base.id = custody.chain_address_id
-                  join chain_address related
-                    on related.tenant_id = custody.tenant_id
-                   and related.chain = base.chain
-                   and related.user_id = base.user_id and related.biz = base.biz
-                   and related.address_index = base.address_index
-                   and related.wallet_role = base.wallet_role
-                   and related.asset_symbol = ? and related.enabled = true
                   join ledger_balance balance
                     on balance.tenant_id = custody.tenant_id
-                   and balance.chain = related.chain
-                   and balance.asset_symbol = related.asset_symbol
-                   and lower(balance.account_id) = lower(related.account_id)
+                   and balance.chain = base.chain
+                   and balance.asset_symbol = ?
+                   and lower(balance.account_id) = lower(base.account_id)
                  where custody.tenant_id = ? and custody.id = ? and custody.chain = ?
-                   and custody.status = 'ACTIVE' and balance.available_balance >= ?
+                   and custody.status = 'ACTIVE' and base.enabled = true
+                   and balance.available_balance >= ?
                  order by balance.available_balance desc
                  limit 1
                 """, symbol, tenantId, custodyAddressId, chain, requiredAmount);

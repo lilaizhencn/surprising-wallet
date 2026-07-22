@@ -18,4 +18,3 @@ sw:
       username: ${SW_WALLET_ADMIN_USERNAME:admin}
       password: ${SW_WALLET_ADMIN_PASSWORD:}
     network: test
-    init-default-hot-wallets: ${SW_WALLET_INIT_DEFAULT_HOT_WALLETS:false}

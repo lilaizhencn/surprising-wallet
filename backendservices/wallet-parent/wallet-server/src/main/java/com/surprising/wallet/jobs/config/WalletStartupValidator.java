@@ -1,12 +1,10 @@
 package com.surprising.wallet.jobs.config;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import com.surprising.wallet.service.wallet.HotWalletAddressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,7 +26,6 @@ import java.util.stream.Collectors;
 public class WalletStartupValidator implements ApplicationRunner {
     private final ChainJdbcRepository repository;
     private final WalletRuntimeConfigService runtimeConfigService;
-    private final HotWalletAddressService hotWalletAddressService;
     private final JdbcTemplate jdbcTemplate;
     private final WalletKeyMaterialProvider keyMaterial;
 
@@ -39,10 +36,8 @@ public class WalletStartupValidator implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         boolean keysetConfigured = validateKeyset();
         validateEnabledAssetsAndTokens();
-        List<AccountChainProfile> enabledProfiles = validateProfiles();
-        if (keysetConfigured) {
-            validateDefaultHotWallets(enabledProfiles);
-        } else {
+        validateProfiles();
+        if (!keysetConfigured) {
             log.warn("wallet keyset is not configured; address derivation and signing are unavailable");
         }
         logRuntimeMatrix();
@@ -243,14 +238,6 @@ public class WalletStartupValidator implements ApplicationRunner {
         return StringUtils.hasText(left)
                 && StringUtils.hasText(right)
                 && left.trim().equalsIgnoreCase(right.trim());
-    }
-
-    private void validateDefaultHotWallets(List<AccountChainProfile> enabledProfiles) {
-        for (AccountChainProfile profile : enabledProfiles) {
-            ChainAddressRecord hotAddress = hotWalletAddressService.requireVerifiedDefaultHotAddress(profile);
-            log.info("default hot wallet check passed: chain={} asset={} userId=0 biz=0 index=0 address={}",
-                    profile.getChain(), profile.getNativeSymbol(), hotAddress.getAddress());
-        }
     }
 
     private void logRuntimeMatrix() {

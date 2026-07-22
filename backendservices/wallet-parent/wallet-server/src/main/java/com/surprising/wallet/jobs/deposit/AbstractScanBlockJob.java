@@ -32,11 +32,12 @@ abstract public class AbstractScanBlockJob {
     WalletRuntimeConfigService runtimeConfigService;
 
     public void execute() {
-
-        if (!isScanEnabled(requireCurrency())) {
-            log.warn("{} scan skipped: DB scan switch disabled", requireCurrency().getName());
+        String chain = chain();
+        if (!runtimeConfigService.isTaskEnabled(chain, WalletRuntimeConfigService.TASK_SCAN)) {
+            log.debug("{} scan skipped: DB scan switch disabled", chain);
             return;
         }
+        currency = blockchainRuntimeService.assetMetadata(chain);
         log.info("扫描 {} 交易 开始", requireCurrency().getName());
         Long bestHeight = null;
         try {
@@ -118,9 +119,7 @@ abstract public class AbstractScanBlockJob {
         log.info("扫描 {} 交易高度结束 当前高度:{}", requireCurrency().getName(), bestHeight);
     }
 
-    private boolean isScanEnabled(AssetRuntimeMetadata currency) {
-        return runtimeConfigService.isTaskEnabled(currency, WalletRuntimeConfigService.TASK_SCAN);
-    }
+    protected abstract String chain();
 
     protected AssetRuntimeMetadata requireCurrency() {
         if (currency == null) {

@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "test": "bash scripts/test-local-pg.sh",
     "test:node": "node --test",
+    "test:aptos:e2e": "bash scripts/run-aptos-e2e.sh",
     "bootstrap:tenant": "node scripts/bootstrap-tenant.js",
     "verify:running": "node scripts/verify-running.js"
   },

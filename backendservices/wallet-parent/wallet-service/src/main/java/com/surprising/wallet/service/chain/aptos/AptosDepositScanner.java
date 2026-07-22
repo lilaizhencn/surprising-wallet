@@ -162,13 +162,12 @@ public class AptosDepositScanner {
         if (token == null) {
             return null;
         }
-        for (ChainAddressRecord record : repository.listChainAddresses(CHAIN, token.getSymbol())) {
-            if ("DEPOSIT".equals(record.getWalletRole()) && sameAddress(owner, record.getAddress())) {
-                return new ResolvedAsset(token.getSymbol(), token.getContractAddress(),
-                        metadata, record, token.getDecimals());
-            }
+        ChainAddressRecord address = nativeAddresses.get(owner);
+        if (address == null) {
+            return null;
         }
-        return null;
+        return new ResolvedAsset(token.getSymbol(), token.getContractAddress(),
+                metadata, address, token.getDecimals());
     }
 
     private Map<String, String> storeOwners(JsonNode transaction) {

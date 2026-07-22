@@ -1,6 +1,5 @@
 package com.surprising.wallet.jobs.deposit;
 
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -13,10 +12,9 @@ import org.springframework.stereotype.Component;
 @Component
 @Slf4j
 public class ScanBtcBlockJob extends AbstractScanUtxoBlockJob {
-
-    @PostConstruct
-    public void init() {
-        currency = blockchainRuntimeService.assetMetadata("BTC");
+    @Override
+    protected String chain() {
+        return "BTC";
     }
 
     @Scheduled(cron = "0/59 * * * * ?")

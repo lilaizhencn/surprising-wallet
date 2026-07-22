@@ -6,14 +6,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.annotation.PostConstruct;
-
 @Component
 @Slf4j
 public class BatchLtcWithdrawJob extends AbstractBatchWithdrawJob {
-    @PostConstruct
-    public void init() {
-        currency = blockchainRuntimeService.assetMetadata("LTC");
+    @Override
+    protected String chain() {
+        return "LTC";
     }
 
     @Scheduled(cron = "10/30 * * * * ?")

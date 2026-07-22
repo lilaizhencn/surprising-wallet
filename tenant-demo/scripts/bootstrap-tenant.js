@@ -33,7 +33,7 @@ async function request(baseUrl, path, { method = "GET", body, cookie } = {}) {
   if (!response.ok) {
     throw new Error(`${method} ${path} returned HTTP ${response.status}: ${payload?.message ?? text}`);
   }
-  return { payload, cookie: response.headers.getSetCookie()[0]?.split(";", 1)[0] };
+  return { payload, cookie: response.headers.get("set-cookie")?.split(";", 1)[0] };
 }
 
 const platformLogin = await request(walletBaseUrl, "/custody/platform/v1/auth/login", {

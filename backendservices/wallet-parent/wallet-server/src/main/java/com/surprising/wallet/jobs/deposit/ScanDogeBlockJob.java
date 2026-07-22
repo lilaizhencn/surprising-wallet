@@ -1,6 +1,5 @@
 package com.surprising.wallet.jobs.deposit;
 
-import jakarta.annotation.PostConstruct;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -9,9 +8,9 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class ScanDogeBlockJob extends AbstractScanUtxoBlockJob {
-    @PostConstruct
-    public void init() {
-        currency = blockchainRuntimeService.assetMetadata("DOGE");
+    @Override
+    protected String chain() {
+        return "DOGE";
     }
 
     @Scheduled(cron = "7/59 * * * * ?")

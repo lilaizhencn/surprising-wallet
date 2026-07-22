@@ -4,19 +4,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import jakarta.annotation.PostConstruct;
-
 /**
  * @author atomex
  */
 @Component
 @Slf4j
 public class BatchBtcWithdrawJob extends AbstractBatchWithdrawJob {
-
-
-    @PostConstruct
-    public void init() {
-        currency = blockchainRuntimeService.assetMetadata("BTC");
+    @Override
+    protected String chain() {
+        return "BTC";
     }
 
     //    @Scheduled(cron = "1 1/2 * * * ?")
@@ -26,7 +22,6 @@ public class BatchBtcWithdrawJob extends AbstractBatchWithdrawJob {
         super.execute();
     }
 }
-
 
 
 

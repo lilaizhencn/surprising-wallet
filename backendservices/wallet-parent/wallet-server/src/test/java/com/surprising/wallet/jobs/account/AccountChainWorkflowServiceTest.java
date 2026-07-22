@@ -3,6 +3,7 @@ package com.surprising.wallet.jobs.account;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAsset;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.service.chain.aptos.AptosTransactionService;
@@ -15,15 +16,41 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AccountChainWorkflowServiceTest {
     private static final UUID TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000010");
+
+    @Test
+    void collectionCandidateAlwaysUsesTenantCollectionAddress() throws Exception {
+        TenantCollectionRepository repository = new TenantCollectionRepository();
+        AccountChainWorkflowService service = service(repository, new CapturingAptosService());
+        AccountChainProfile profile = AccountChainProfile.builder()
+                .chain("APTOS")
+                .network("testnet")
+                .family("aptos")
+                .nativeSymbol("APT")
+                .defaultFee(5_000_000L)
+                .dustThreshold(0L)
+                .enabled(true)
+                .build();
+
+        Method method = AccountChainWorkflowService.class.getDeclaredMethod(
+                "createCollectionCandidates", AccountChainProfile.class);
+        method.setAccessible(true);
+        method.invoke(service, profile);
+
+        assertEquals("0xtenant-collection", repository.collectionTarget);
+        assertEquals(0, new BigDecimal("0.95").compareTo(repository.collectionAmount));
+        assertTrue(repository.created);
+    }
 
     @Test
     void broadcastFailureKeepsFundsLockedForManualAudit() throws Exception {
@@ -212,7 +239,6 @@ class AccountChainWorkflowServiceTest {
                 null,
                 null,
                 null,
-                null,
                 evmService,
                 null,
                 null,
@@ -253,7 +279,6 @@ class AccountChainWorkflowServiceTest {
                 null,
                 null,
                 null,
-                null,
                 aptosService,
                 null,
                 null,
@@ -279,7 +304,7 @@ class AccountChainWorkflowServiceTest {
                                                        TonTransactionService tonService) {
         return new AccountChainWorkflowService(
                 repository,
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
                 null, null, null, null, null, tonService, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null);
     }
@@ -396,6 +421,65 @@ class AccountChainWorkflowServiceTest {
                                                   String accountId, BigDecimal amount) {
             withdrawalSettlements++;
             return true;
+        }
+    }
+
+    private static final class TenantCollectionRepository extends ChainJdbcRepository {
+        private final UUID custodyAddressId = UUID.fromString("77020000-0000-0000-0000-000000000011");
+        private String collectionTarget;
+        private BigDecimal collectionAmount;
+        private boolean created;
+
+        private TenantCollectionRepository() {
+            super(null);
+        }
+
+        @Override
+        public List<CollectionCandidateRecord> listCollectableLedgerBalances(
+                String chain, BigDecimal minimumAmount, int limit) {
+            return List.of(CollectionCandidateRecord.builder()
+                    .tenantId(TENANT_ID)
+                    .custodyAddressId(custodyAddressId)
+                    .chain("APTOS")
+                    .assetSymbol("APT")
+                    .accountId("0xdeposit")
+                    .address("0xdeposit")
+                    .ownerAddress("0xdeposit")
+                    .userId(1L)
+                    .biz(0)
+                    .addressIndex(0L)
+                    .walletRole("DEPOSIT")
+                    .amount(BigDecimal.ONE)
+                    .build());
+        }
+
+        @Override
+        public Optional<String> findActiveTenantCollectionAddress(UUID tenantId, String chain) {
+            return Optional.of("0xtenant-collection");
+        }
+
+        @Override
+        public Optional<ChainAsset> findAsset(String chain, String symbol) {
+            return Optional.of(ChainAsset.builder()
+                    .chain("APTOS")
+                    .symbol("APT")
+                    .decimals(8)
+                    .nativeAsset(true)
+                    .active(true)
+                    .build());
+        }
+
+        @Override
+        public int createCollectionRecord(
+                UUID tenantId, UUID custodyAddressId, String collectionNo,
+                String chain, String assetSymbol, String fromAddress, String toAddress,
+                BigDecimal amount, BigDecimal fee, String rawPayload) {
+            assertEquals(TENANT_ID, tenantId);
+            assertEquals(this.custodyAddressId, custodyAddressId);
+            collectionTarget = toAddress;
+            collectionAmount = amount;
+            created = true;
+            return 1;
         }
     }
 

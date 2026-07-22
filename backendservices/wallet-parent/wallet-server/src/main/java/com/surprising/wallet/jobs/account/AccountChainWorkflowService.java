@@ -88,7 +88,6 @@ public class AccountChainWorkflowService {
 
     private final ChainJdbcRepository repository;
     private final WalletRuntimeConfigService runtimeConfigService;
-    private final HotWalletAddressService hotWalletAddressService;
     private final AccountSecp256k1KeyService secp256k1KeyService;
 
     private final EvmDepositScanner evmDepositScanner;
@@ -430,14 +429,11 @@ public class AccountChainWorkflowService {
             if (amount.signum() <= 0) {
                 continue;
             }
-            String hotAddress = "evm".equalsIgnoreCase(profile.getFamily())
-                    && !isNative(profile, candidate.getAssetSymbol())
-                    ? repository.findActiveTenantCollectionAddress(
-                                    candidate.getTenantId(), candidate.getChain())
-                            .orElseThrow(() -> new IllegalStateException(
-                                    "active tenant collection/gas address is required for "
-                                            + candidate.getChain() + " token collection"))
-                    : hotAddress(profile, candidate.getAssetSymbol());
+            String hotAddress = repository.findActiveTenantCollectionAddress(
+                            candidate.getTenantId(), candidate.getChain())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "active tenant collection/gas address is required for "
+                                    + candidate.getChain() + " collection"));
             repository.createCollectionRecord(candidate.getTenantId(), candidate.getCustodyAddressId(),
                     collectionNo(candidate, amount), candidate.getChain(),
                     candidate.getAssetSymbol(), candidate.getAddress(), hotAddress,
@@ -883,12 +879,6 @@ public class AccountChainWorkflowService {
                 ? BigDecimal.ZERO
                 : BigDecimal.valueOf(profile.getDustThreshold()).movePointLeft(decimals);
         return feeReserve.add(dustReserve);
-    }
-
-    private String hotAddress(AccountChainProfile profile, String assetSymbol) {
-        ChainAddressRecord hot = hotWalletAddressService.findDefaultHotAddress(profile.getChain(), assetSymbol)
-                .orElseGet(() -> hotWalletAddressService.requireVerifiedDefaultHotAddress(profile));
-        return hot.getAddress();
     }
 
     private ChainAddressRecord requireAddress(String chain, String symbol, String address) {

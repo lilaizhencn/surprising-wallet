@@ -28,7 +28,7 @@ class AptosDepositScannerTest {
             "0x4444444444444444444444444444444444444444444444444444444444444444";
 
     @Test
-    void resolvesExistingPrimaryStoreOwnerFromRpc() throws Exception {
+    void creditsFungibleAssetToTheTrackedNativeChainAddress() throws Exception {
         FakeRepository repository = new FakeRepository();
         ExistingStoreRpc rpc = new ExistingStoreRpc(transaction());
         AptosDepositScanner scanner = new AptosDepositScanner(rpc, repository);
@@ -42,7 +42,7 @@ class AptosDepositScannerTest {
         assertEquals(METADATA, events.get(0).tokenAddress());
         assertEquals(1, rpc.ownerLookups);
         assertEquals(events.get(0), repository.credited);
-        assertEquals("tenant-usdc", repository.creditedAccountId);
+        assertEquals("tenant-aptos", repository.creditedAccountId);
     }
 
     private static JsonNode transaction() throws Exception {
@@ -79,8 +79,8 @@ class AptosDepositScannerTest {
     private static ChainAddressRecord depositAddress() {
         return ChainAddressRecord.builder()
                 .chain("APTOS")
-                .assetSymbol("USDC")
-                .accountId("tenant-usdc")
+                .assetSymbol("APT")
+                .accountId("tenant-aptos")
                 .userId(100L)
                 .biz(0)
                 .addressIndex(1L)
@@ -153,7 +153,7 @@ class AptosDepositScannerTest {
 
         @Override
         public List<ChainAddressRecord> listChainAddresses(String chain, String assetSymbol) {
-            return "USDC".equals(assetSymbol) ? List.of(depositAddress()) : List.of();
+            return "APT".equals(assetSymbol) ? List.of(depositAddress()) : List.of();
         }
 
         @Override

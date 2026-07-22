@@ -314,7 +314,7 @@ class WalletStartupValidatorTest {
 
     private static WalletStartupValidator validator(ChainJdbcRepository repository,
                                                     JdbcTemplate jdbcTemplate) throws Exception {
-        WalletStartupValidator validator = new WalletStartupValidator(repository, null, null, jdbcTemplate, null);
+        WalletStartupValidator validator = new WalletStartupValidator(repository, null, jdbcTemplate, null);
         setField(validator, "environmentName", "test2");
         return validator;
     }

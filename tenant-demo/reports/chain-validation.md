@@ -23,7 +23,7 @@
 | 链 | 验收网络 | Token 范围 | 当前状态 | 已有证据 / 待完成 |
 |---|---|---|---|---|
 | ADA | preprod | 待核对 | 待测试 | Profile 当前关闭 |
-| APTOS | testnet 配置 + localnet 资金流 | APT、USDC、USDT（FA） | 钱包资金流通过 | APT 与 USDC/USDT 本地真实链上充值、提现、归集、交易审计和对账已通过；待租户 Demo 通过正式 API/Webhook 完成实际资金流 |
+| APTOS | testnet 配置 + localnet 资金流 | APT、USDC、USDT（FA） | SaaS 全流程通过 | 正式租户 API/Webhook 已完成地址幂等与轮换、三资产充值、自动归集、提现、回调和对账 |
 | ARBITRUM | sepolia 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | AVAX_C | fuji 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | BASE | sepolia 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
@@ -62,10 +62,15 @@
 - 公共 Testnet Faucet 需要外部账户凭证，因此资金广播验收使用隔离 Aptos Localnet；
 - Localnet 部署的 USDC、USDT 均为 Aptos FA、6 位精度，不包含 MUSD 或 `APTOS_COIN`；
 - APT、USDC、USDT 分别完成真实链上充值、扫描入账、重复扫描幂等、提现确认、归集确认；
+- 同一个 Aptos 用户地址可接收 APT、FA USDC 和 FA USDT，不再为每个 Token 建立独立地址记录；
+- 租户归集/Gas 地址由开链流程创建，三种资产均自动归集到该租户地址，提现也从该地址广播；
+- Demo 通过正式 HMAC API 创建地址和提现，通过正式 Webhook 收到三笔充值与三笔提现确认；
+- Demo 最终用户余额精确为 APT `4.8`、USDC `19`、USDT `19`，锁定余额全部为 0；
+- 网络费预留从该提现所属用户的原生币账本扣锁，链上交易确认后按实际 Gas 结算并保留审计流水；
 - 三种资产的广播交易均写入 `aptos_transaction`，确认后包含真实 gas、版本、状态和原始交易载荷；
 - 隔离库中的用户账本与平台控制地址链上余额逐币相等，锁定余额和负余额均为 0；
 - `infra/aptos/run-fa-flow.sh` 可从空 Localnet 和本机 PostgreSQL 18 的 `surprising_wallet_test_aptos_*` 临时库重复执行并自动清理；
-- Aptos 整链仍需通过正式 API/Webhook 驱动 Demo 的实际回调验收。
+- `tenant-demo/scripts/run-aptos-e2e.sh` 可从空 Localnet 和本机 PostgreSQL 18 临时库重复完成 SaaS 全流程并自动清理。
 
 ## EVM 当前证据
 
