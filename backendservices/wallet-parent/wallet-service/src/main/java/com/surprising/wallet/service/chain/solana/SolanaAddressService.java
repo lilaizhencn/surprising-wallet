@@ -11,6 +11,8 @@ import org.p2p.solanaj.programs.TokenProgram;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -20,13 +22,16 @@ public class SolanaAddressService {
     private final SolanaKeyService keyService;
     private final ChainJdbcRepository repository;
 
-    public ChainAddressRecord createNativeAddress(long userId, int biz, long derivationIndex, String walletRole) {
+    public ChainAddressRecord createNativeAddress(UUID tenantId, long userId, int biz,
+                                                  long derivationIndex, String walletRole) {
+        Objects.requireNonNull(tenantId, "tenantId is required");
         HotWalletRules.requireAllowedReservedAddress(CHAIN, "SOL", "SOL", userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, "SOL", userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     Ed25519DerivedKey key = keyService.derive(userId, biz, derivationIndex);
                     String address = new PublicKey(key.publicKey()).toBase58();
                     ChainAddressRecord record = ChainAddressRecord.builder()
+                            .tenantId(tenantId)
                             .chain(CHAIN)
                             .assetSymbol("SOL")
                             .accountId(address)
@@ -45,14 +50,16 @@ public class SolanaAddressService {
                 });
     }
 
-    public ChainAddressRecord createTokenAddress(String symbol, String mintAddress, long userId, int biz,
+    public ChainAddressRecord createTokenAddress(UUID tenantId, String symbol, String mintAddress,
+                                                  long userId, int biz,
                                                   long derivationIndex, String walletRole) {
         HotWalletRules.requireAllowedReservedAddress(CHAIN, symbol, "SOL", userId, biz, derivationIndex, walletRole);
-        ChainAddressRecord owner = createNativeAddress(userId, biz, derivationIndex, walletRole);
+        ChainAddressRecord owner = createNativeAddress(tenantId, userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     String ata = associatedTokenAddress(owner.getAddress(), mintAddress);
                     ChainAddressRecord record = ChainAddressRecord.builder()
+                            .tenantId(tenantId)
                             .chain(CHAIN)
                             .assetSymbol(symbol)
                             .accountId(owner.getAddress())

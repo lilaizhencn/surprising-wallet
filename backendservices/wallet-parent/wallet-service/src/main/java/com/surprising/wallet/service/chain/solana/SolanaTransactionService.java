@@ -23,7 +23,9 @@ import java.math.BigInteger;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -82,7 +84,8 @@ public class SolanaTransactionService {
 
     public String sendTokenAmount(ChainAddressRecord from, String mintAddress, String toOwnerAddress,
                                   BigDecimal amount, int decimals) {
-        ChainAddressRecord hot = defaultHotFeePayer();
+        ChainAddressRecord hot = defaultHotFeePayer(
+                Objects.requireNonNull(from.getTenantId(), "source tenantId is required"));
         Account sourceOwner = keyService.account(from.getUserId(), from.getBiz(), from.getAddressIndex());
         Account feePayer = keyService.account(hot.getUserId(), hot.getBiz(), hot.getAddressIndex());
         return sendTokenWithFeePayer(sourceOwner, feePayer, mintAddress, toOwnerAddress,
@@ -163,85 +166,91 @@ public class SolanaTransactionService {
                 : signAndSend(transaction, List.of(feePayer, sourceOwner));
     }
 
-    public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
+    public String withdrawNative(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "solana withdrawNative");
-        Optional<String> previous = repository.findWithdrawalTxHash(CHAIN, orderNo);
+        Optional<String> previous = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo);
         if (previous.isPresent()) {
             return previous.get();
         }
         long amountLamports = toAtomicAmount(amount, 9);
         long feeLamports = profile().getDefaultFee();
         BigDecimal fee = BigDecimal.valueOf(feeLamports).movePointLeft(9);
-        int inserted = repository.createWithdrawalOrder(orderNo, userId, CHAIN, "SOL", toAddress,
-                amount, fee);
+        int inserted = repository.createTenantWithdrawalOrder(
+                tenantId, orderNo, userId, CHAIN, "SOL", from.getAddress(), from.getAccountId(),
+                toAddress, amount, fee);
         if (inserted == 0) {
-            return repository.findWithdrawalTxHash(CHAIN, orderNo)
+            return repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo)
                     .orElseThrow(() -> new IllegalStateException("withdrawal already claimed without tx hash"));
         }
         BigDecimal totalDebit = amount.add(fee);
-        if (!repository.freezeLedgerBalance(CHAIN, "SOL", from.getAccountId(), totalDebit)) {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null,
+        if (!repository.freezeLedgerBalance(tenantId, CHAIN, "SOL", from.getAccountId(), totalDebit)) {
+            repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FAILED", from.getAddress(), null,
                     "insufficient available ledger balance");
             throw new IllegalStateException("insufficient SOL ledger balance");
         }
-        repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
+        repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
-            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
+            if (repository.claimWithdrawalSigning(tenantId, CHAIN, orderNo, from.getAddress()) != 1) {
                 throw new IllegalStateException("Solana withdrawal is not signable: " + orderNo);
             }
             String signature = sendNative(from, toAddress, amountLamports);
-            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), signature) != 1) {
+            if (repository.markWithdrawalSent(tenantId, CHAIN, orderNo, from.getAddress(), signature) != 1) {
                 throw new IllegalStateException("Solana withdrawal state changed before SENT: " + orderNo);
             }
             recordTransaction(signature, from.getAddress(), toAddress, "SOL", null,
                     amount, feeLamports, "SENT");
             return signature;
         } catch (RuntimeException e) {
-            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(
+                    tenantId, CHAIN, orderNo, from.getAddress(), e.getMessage());
             throw e;
         }
     }
 
-    public String withdrawToken(String orderNo, long userId, ChainAddressRecord from,
+    public String withdrawToken(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                 String mintAddress, String toOwnerAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "solana withdrawToken");
-        Optional<String> previous = repository.findWithdrawalTxHash(CHAIN, orderNo);
+        Optional<String> previous = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo);
         if (previous.isPresent()) {
             return previous.get();
         }
         TokenDefinition token = repository.findTokenByContract(CHAIN, mintAddress)
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Solana mint " + mintAddress));
-        int inserted = repository.createWithdrawalOrder(orderNo, userId, CHAIN, token.getSymbol(), toOwnerAddress,
-                amount, BigDecimal.ZERO);
+        int inserted = repository.createTenantWithdrawalOrder(
+                tenantId, orderNo, userId, CHAIN, token.getSymbol(), from.getOwnerAddress(),
+                from.getAccountId(), toOwnerAddress, amount, BigDecimal.ZERO);
         if (inserted == 0) {
-            return repository.findWithdrawalTxHash(CHAIN, orderNo)
+            return repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo)
                     .orElseThrow(() -> new IllegalStateException("withdrawal already claimed without tx hash"));
         }
-        if (!repository.freezeLedgerBalance(CHAIN, token.getSymbol(), from.getAccountId(), amount)) {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getOwnerAddress(), null,
+        if (!repository.freezeLedgerBalance(tenantId, CHAIN, token.getSymbol(), from.getAccountId(), amount)) {
+            repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FAILED", from.getOwnerAddress(), null,
                     "insufficient available token ledger balance");
             throw new IllegalStateException("insufficient " + token.getSymbol() + " ledger balance");
         }
-        repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getOwnerAddress(), null, null);
+        repository.updateWithdrawalStatus(
+                tenantId, CHAIN, orderNo, "FROZEN", from.getOwnerAddress(), null, null);
         try {
-            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getOwnerAddress()) != 1) {
+            if (repository.claimWithdrawalSigning(tenantId, CHAIN, orderNo, from.getOwnerAddress()) != 1) {
                 throw new IllegalStateException("Solana token withdrawal is not signable: " + orderNo);
             }
             String signature = sendTokenAmount(from, mintAddress, toOwnerAddress, amount, token.getDecimals());
-            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getOwnerAddress(), signature) != 1) {
+            if (repository.markWithdrawalSent(
+                    tenantId, CHAIN, orderNo, from.getOwnerAddress(), signature) != 1) {
                 throw new IllegalStateException("Solana token withdrawal state changed before SENT: " + orderNo);
             }
             recordTransaction(signature, from.getAddress(), toOwnerAddress, token.getSymbol(), mintAddress,
                     amount, profile().getDefaultFee(), "SENT");
             return signature;
         } catch (RuntimeException e) {
-            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getOwnerAddress(), e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(
+                    tenantId, CHAIN, orderNo, from.getOwnerAddress(), e.getMessage());
             throw e;
         }
     }
 
-    public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
+    public String collectNative(UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountLamports) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "solana collectNative");
         Optional<String> previous = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
@@ -257,7 +266,7 @@ public class SolanaTransactionService {
             String signature = sendNative(from, hotAddress, amountLamports.longValueExact());
             repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", signature, null, null);
             recordTransaction(signature, from.getAddress(), hotAddress, "SOL", null,
-                    amountLamports, fee, "SENT");
+                    amountLamports.movePointLeft(9), fee, "SENT");
             return signature;
         } catch (RuntimeException e) {
             repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
@@ -266,7 +275,7 @@ public class SolanaTransactionService {
         }
     }
 
-    public String collectToken(java.util.UUID tenantId, String collectionNo,
+    public String collectToken(UUID tenantId, String collectionNo,
                                ChainAddressRecord from, String mintAddress,
                                String hotOwnerAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "solana collectToken");
@@ -281,8 +290,9 @@ public class SolanaTransactionService {
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
         }
         try {
-            ChainAddressRecord hot = repository.findChainAddressByAddress(CHAIN, "SOL", hotOwnerAddress)
-                    .or(() -> repository.findChainAddressByAddress(CHAIN, hotOwnerAddress))
+            ChainAddressRecord hot = repository.findChainAddressByAddress(
+                            tenantId, CHAIN, "SOL", hotOwnerAddress)
+                    .or(() -> repository.findChainAddressByAddress(tenantId, CHAIN, hotOwnerAddress))
                     .orElseThrow(() -> new IllegalStateException("missing Solana hot fee payer " + hotOwnerAddress));
             Account sourceOwner = keyService.account(from.getUserId(), from.getBiz(), from.getAddressIndex());
             Account feePayer = keyService.account(hot.getUserId(), hot.getBiz(), hot.getAddressIndex());
@@ -299,13 +309,7 @@ public class SolanaTransactionService {
         }
     }
 
-    public boolean confirmWithdrawal(String orderNo, String assetSymbol,
-                                     String accountId, BigDecimal debitAmount) {
-        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
-                orderNo, assetSymbol, accountId, debitAmount);
-    }
-
-    public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo, String assetSymbol,
+    public boolean confirmWithdrawal(UUID tenantId, String orderNo, String assetSymbol,
                                      String accountId, BigDecimal debitAmount) {
         String signature = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo).orElseThrow();
         JsonNode status = requireSuccessfulConfirmation(signature, Duration.ofMinutes(2));
@@ -317,7 +321,7 @@ public class SolanaTransactionService {
         return false;
     }
 
-    public boolean confirmCollection(java.util.UUID tenantId, String collectionNo) {
+    public boolean confirmCollection(UUID tenantId, String collectionNo) {
         String signature = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         JsonNode status = requireSuccessfulConfirmation(signature, Duration.ofMinutes(2));
         boolean updated = repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, signature) == 1;
@@ -359,8 +363,9 @@ public class SolanaTransactionService {
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
 
-    private ChainAddressRecord defaultHotFeePayer() {
+    private ChainAddressRecord defaultHotFeePayer(UUID tenantId) {
         return repository.listDefaultHotAddressCandidates(CHAIN, "SOL").stream()
+                .filter(address -> tenantId.equals(address.getTenantId()))
                 .filter(address -> Boolean.TRUE.equals(address.getEnabled()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("missing enabled Solana default hot fee payer"));

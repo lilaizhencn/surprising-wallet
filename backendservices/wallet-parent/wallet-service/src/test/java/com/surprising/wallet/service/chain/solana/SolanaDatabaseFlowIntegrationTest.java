@@ -37,13 +37,16 @@ class SolanaDatabaseFlowIntegrationTest {
             ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
             SolanaKeyService keys = new SolanaKeyService(MASTER_SEED);
             SolanaAddressService addresses = new SolanaAddressService(keys, repository);
+            UUID tenantId = SolanaTenantIntegrationFixture.ensureTenant(jdbc);
             long baseIndex = 700_000L + Math.abs(UUID.randomUUID().getLeastSignificantBits() % 100_000L);
 
-            ChainAddressRecord userA = addresses.createNativeAddress(1001, 0, baseIndex, "DEPOSIT");
+            ChainAddressRecord userA = addresses.createNativeAddress(
+                    tenantId, 1001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userAAfterRestart = new SolanaAddressService(
                     new SolanaKeyService(MASTER_SEED), repository)
-                    .createNativeAddress(1001, 0, baseIndex, "DEPOSIT");
-            ChainAddressRecord userB = addresses.createNativeAddress(1002, 0, baseIndex + 1, "DEPOSIT");
+                    .createNativeAddress(tenantId, 1001, 0, baseIndex, "DEPOSIT");
+            ChainAddressRecord userB = addresses.createNativeAddress(
+                    tenantId, 1002, 0, baseIndex + 1, "DEPOSIT");
             assertEquals(userA.getAddress(), userAAfterRestart.getAddress());
             assertNotEquals(userA.getAddress(), userB.getAddress());
 
@@ -53,11 +56,11 @@ class SolanaDatabaseFlowIntegrationTest {
                     123L, 2, null, "{}");
             assertTrue(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
             assertFalse(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
-            assertTrue(repository.freezeLedgerBalance("SOLANA", "SOL", userA.getAccountId(),
+            assertTrue(repository.freezeLedgerBalance(tenantId, "SOLANA", "SOL", userA.getAccountId(),
                     new BigDecimal("2000000")));
-            assertFalse(repository.freezeLedgerBalance("SOLANA", "SOL", userA.getAccountId(),
+            assertFalse(repository.freezeLedgerBalance(tenantId, "SOLANA", "SOL", userA.getAccountId(),
                     new BigDecimal("9000000")));
-            assertTrue(repository.releaseLockedBalance("SOLANA", "SOL", userA.getAccountId(),
+            assertTrue(repository.releaseLockedBalance(tenantId, "SOLANA", "SOL", userA.getAccountId(),
                     new BigDecimal("2000000")));
 
             assertEquals(1L, jdbc.queryForObject("""
