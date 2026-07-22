@@ -1,0 +1,31 @@
+[Unit]
+Description=Surprising Wallet Hardhat ETH devtest with mock stablecoins
+After=network-online.target postgresql.service
+Wants=network-online.target postgresql.service
+
+[Service]
+Type=exec
+User=wallet
+Group=wallet
+WorkingDirectory=/opt/surprising-wallet/evm-fork
+Environment=HOME=/opt/surprising-wallet
+Environment=HARDHAT_DISABLE_TELEMETRY_PROMPT=true
+Environment=HARDHAT_CHAIN_ID=31337
+Environment=EVM_CHAIN=ETH
+Environment=EVM_NETWORK=devtest
+Environment=TOKEN_SYMBOLS=USDC,USDT
+EnvironmentFile=/etc/surprising-wallet/devtest.env
+ExecStart=/opt/surprising-wallet/evm-fork/node_modules/.bin/hardhat node --hostname 127.0.0.1 --port 8545
+ExecStartPost=/opt/surprising-wallet/scripts/devtest/deploy-hardhat-tokens.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/surprising-wallet/evm-fork
+
+[Install]
+WantedBy=multi-user.target

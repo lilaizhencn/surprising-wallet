@@ -1,0 +1,18 @@
+[Unit]
+Description=Surprising Wallet Bitcoin Core regtest
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/surprising-wallet
+EnvironmentFile=/etc/surprising-wallet/regtest.env
+ExecStart=/opt/surprising-wallet/scripts/regtest/bitcoin-regtest.sh init
+ExecStop=/opt/surprising-wallet/scripts/regtest/bitcoin-regtest.sh stop
+RemainAfterExit=yes
+TimeoutStartSec=300
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
