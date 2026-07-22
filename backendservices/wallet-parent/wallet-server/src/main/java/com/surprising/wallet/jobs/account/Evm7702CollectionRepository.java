@@ -328,6 +328,14 @@ public class Evm7702CollectionRepository {
                 update evm_collection_batch_item set status = 'SUBMITTED', updated_at = now()
                  where tenant_id = ? and batch_id = ? and status = 'SIGNED'
                 """, tenantId, batchId);
+        jdbc.update("""
+                update collection_record cr
+                   set status = 'SENT', tx_hash = ?, error_message = null, updated_at = now()
+                  from evm_collection_batch_item item
+                 where item.tenant_id = ? and item.batch_id = ?
+                   and cr.tenant_id = item.tenant_id and cr.id = item.collection_record_id
+                   and cr.status in ('SIGNING', 'SENT')
+                """, txHash, tenantId, batchId);
     }
 
     public void markBroadcastUnknown(UUID tenantId, UUID batchId, String errorCode, String errorMessage) {

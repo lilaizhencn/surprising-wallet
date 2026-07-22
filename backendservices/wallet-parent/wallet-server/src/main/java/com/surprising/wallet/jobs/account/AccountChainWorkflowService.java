@@ -66,7 +66,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -279,8 +281,11 @@ public class AccountChainWorkflowService {
     }
 
     private void processWithdrawal(AccountChainProfile profile, WithdrawalOrderRecord order) {
-        ChainAddressRecord from = requireAddress(order.getChain(), order.getAssetSymbol(), order.getFromAddress());
-        if (repository.claimWithdrawalSigning(order.getChain(), order.getOrderNo(), from.getAddress()) != 1) {
+        UUID tenantId = Objects.requireNonNull(order.getTenantId(), "withdrawal tenantId is required");
+        ChainAddressRecord from = requireAddress(
+                tenantId, order.getChain(), order.getAssetSymbol(), order.getFromAddress());
+        if (repository.claimWithdrawalSigning(
+                tenantId, order.getChain(), order.getOrderNo(), from.getAddress()) != 1) {
             return;
         }
         try {
@@ -288,12 +293,13 @@ public class AccountChainWorkflowService {
             if (txHash == null || txHash.isBlank()) {
                 throw new IllegalStateException("withdrawal broadcast returned empty tx hash");
             }
-            if (repository.markWithdrawalSent(order.getChain(), order.getOrderNo(), from.getAddress(), txHash) != 1) {
+            if (repository.markWithdrawalSent(
+                    tenantId, order.getChain(), order.getOrderNo(), from.getAddress(), txHash) != 1) {
                 throw new IllegalStateException("withdrawal state changed before SENT: " + order.getOrderNo());
             }
         } catch (Exception e) {
-            repository.markWithdrawalBroadcastUnknown(order.getChain(), order.getOrderNo(),
-                    from.getAddress(), e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(
+                    tenantId, order.getChain(), order.getOrderNo(), from.getAddress(), e.getMessage());
             throw new IllegalStateException(e);
         }
     }
@@ -378,35 +384,37 @@ public class AccountChainWorkflowService {
     }
 
     private void confirmWithdrawal(AccountChainProfile profile, WithdrawalOrderRecord order) throws Exception {
-        ChainAddressRecord from = requireAddress(order.getChain(), order.getAssetSymbol(), order.getFromAddress());
+        UUID tenantId = Objects.requireNonNull(order.getTenantId(), "withdrawal tenantId is required");
+        ChainAddressRecord from = requireAddress(
+                tenantId, order.getChain(), order.getAssetSymbol(), order.getFromAddress());
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
-            evmTransactionService.confirmWithdrawal(order.getChain(), order.getOrderNo(),
+            evmTransactionService.confirmWithdrawal(tenantId, order.getChain(), order.getOrderNo(),
                     order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
             return;
         }
         switch (profile.getChain()) {
-            case "SOLANA" -> solanaTransactionService.confirmWithdrawal(
+            case "SOLANA" -> solanaTransactionService.confirmWithdrawal(tenantId,
                     order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
-            case "APTOS" -> aptosTransactionService.confirmWithdrawal(
+            case "APTOS" -> aptosTransactionService.confirmWithdrawal(tenantId,
                     order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
-            case "SUI" -> suiTransactionService.confirmWithdrawal(
+            case "SUI" -> suiTransactionService.confirmWithdrawal(tenantId,
                     order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
             case "TON" -> confirmTonWithdrawal(order, from);
-            case "XRP" -> xrpTransactionService.confirmWithdrawal(
+            case "XRP" -> xrpTransactionService.confirmWithdrawal(tenantId,
                     profile, order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
-            case "ADA" -> cardanoTransactionService.confirmWithdrawal(
+            case "ADA" -> cardanoTransactionService.confirmWithdrawal(tenantId,
                     profile, order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
                     debitAccountId(order, from), withdrawalDebitAmount(order));
-            case "DOT" -> polkadotTransactionService.confirmWithdrawal(
+            case "DOT" -> polkadotTransactionService.confirmWithdrawal(tenantId,
                     profile, order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
                     debitAccountId(order, from), withdrawalDebitAmount(order));
-            case "XMR" -> moneroTransactionService.confirmWithdrawal(
+            case "XMR" -> moneroTransactionService.confirmWithdrawal(tenantId,
                     profile, order.getOrderNo(), order.getTxHash(), debitAccountId(order, from),
                     withdrawalDebitAmount(order), order.getToAddress(), order.getAmount());
-            case "NEAR" -> nearTransactionService.confirmWithdrawal(
+            case "NEAR" -> nearTransactionService.confirmWithdrawal(tenantId,
                     profile, order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
                     debitAccountId(order, from), withdrawalDebitAmount(order));
-            case "HYPERCORE" -> hyperCoreTransactionService.confirmWithdrawal(
+            case "HYPERCORE" -> hyperCoreTransactionService.confirmWithdrawal(tenantId,
                     order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
                     debitAccountId(order, from), withdrawalDebitAmount(order));
             case "TRON" -> confirmTronWithdrawal(profile, order, from);
@@ -754,7 +762,7 @@ public class AccountChainWorkflowService {
         if (txInfo != null) {
             recordTronConfirmed(order.getChain(), order.getTxHash(), from.getAddress(),
                     order.getToAddress(), order.getAssetSymbol(), order.getAmount(), txInfo);
-            repository.confirmWithdrawalAndSettle(order.getChain(), order.getOrderNo(), order.getTxHash(),
+            repository.confirmWithdrawalAndSettle(order.getTenantId(), order.getChain(), order.getOrderNo(), order.getTxHash(),
                     order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
         }
     }
@@ -809,7 +817,7 @@ public class AccountChainWorkflowService {
             return;
         }
         if (tonTransactionService.confirmSentMessage(order.getTxHash(), tonOwnerAddress(from))) {
-            repository.confirmWithdrawalAndSettle(order.getChain(), order.getOrderNo(), order.getTxHash(),
+            repository.confirmWithdrawalAndSettle(order.getTenantId(), order.getChain(), order.getOrderNo(), order.getTxHash(),
                     order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
         }
     }
@@ -891,6 +899,16 @@ public class AccountChainWorkflowService {
                 .or(() -> repository.findChainAddressByAddress(chain, address))
                 .orElseThrow(() -> new IllegalStateException(
                         "missing chain_address for " + chain + "/" + symbol + " " + address));
+    }
+
+    private ChainAddressRecord requireAddress(UUID tenantId, String chain, String symbol, String address) {
+        if (address == null || address.isBlank()) {
+            throw new IllegalStateException("missing source address");
+        }
+        return repository.findChainAddressByAddress(tenantId, chain, symbol, address)
+                .or(() -> repository.findChainAddressByAddress(tenantId, chain, address))
+                .orElseThrow(() -> new IllegalStateException(
+                        "missing tenant chain_address for " + chain + "/" + symbol + " " + address));
     }
 
     private TokenDefinition requireToken(String chain, String symbol) {

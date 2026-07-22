@@ -75,7 +75,13 @@ public class EvmAccountTransactionService {
 
     public boolean confirmWithdrawal(String chain, String orderNo, String symbol,
                                      String accountId, BigDecimal debitAmount) {
-        String txHash = repository.findWithdrawalTxHash(chain, orderNo).orElseThrow();
+        return confirmWithdrawal(repository.requireWithdrawalTenant(chain, orderNo),
+                chain, orderNo, symbol, accountId, debitAmount);
+    }
+
+    public boolean confirmWithdrawal(java.util.UUID tenantId, String chain, String orderNo, String symbol,
+                                     String accountId, BigDecimal debitAmount) {
+        String txHash = repository.findWithdrawalTxHash(tenantId, chain, orderNo).orElseThrow();
         TransactionReceipt receipt = confirmedReceipt(chain, txHash).orElse(null);
         if (receipt == null) {
             return false;
@@ -84,7 +90,8 @@ public class EvmAccountTransactionService {
             throw new IllegalStateException("EVM transaction failed: " + txHash);
         }
         markConfirmed(chain, txHash, receipt);
-        if (repository.confirmWithdrawalAndSettle(chain, orderNo, txHash, symbol, accountId, debitAmount)) {
+        if (repository.confirmWithdrawalAndSettle(
+                tenantId, chain, orderNo, txHash, symbol, accountId, debitAmount)) {
             return true;
         }
         return false;

@@ -449,8 +449,12 @@ public class BitcoinLikeChainRuntime {
     private void markConfirming(ChainType chainType, JSONObject signature, String txId) {
         String chain = chainType.name();
         List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
-        records.forEach(record -> chainRepository.updateWithdrawalStatus(
-                chain, record.getWithdrawId(), "CONFIRMING", null, txId, null));
+        records.forEach(record -> {
+            java.util.UUID tenantId = chainRepository.requireWithdrawalTenant(
+                    chain, record.getWithdrawId());
+            chainRepository.updateWithdrawalStatus(
+                    tenantId, chain, record.getWithdrawId(), "CONFIRMING", null, txId, null);
+        });
     }
 
     private boolean enrichUtxoMetadata(UtxoTransaction utxo, AssetRuntimeMetadata asset) {

@@ -203,6 +203,10 @@ class Evm7702ProductionFlowIntegrationTest {
             workflow.confirm(profile);
             assertTenantCompleted(web3j, tenantA, tenantATx);
             assertEquals(0, confirmedCollections(tenantB.tenantId()));
+            int tenantASettledGas = settledBatchGasUsages(tenantA.tenantId());
+            workflow.confirm(profile);
+            assertTenantCompleted(web3j, tenantA, tenantATx);
+            assertEquals(tenantASettledGas, settledBatchGasUsages(tenantA.tenantId()));
 
             String tenantBTx = workflow.processOne(profile).orElseThrow();
             assertNotEquals(tenantATx, tenantBTx);
@@ -370,6 +374,13 @@ class Evm7702ProductionFlowIntegrationTest {
     private int confirmedCollections(UUID tenantId) {
         return jdbc.queryForObject("select count(*) from collection_record where tenant_id = ? and status = 'CONFIRMED'",
                 Integer.class, tenantId);
+    }
+
+    private int settledBatchGasUsages(UUID tenantId) {
+        return jdbc.queryForObject("""
+                select count(*) from custody_gas_usage
+                 where tenant_id = ? and operation_type = 'COLLECTION_BATCH' and status = 'SETTLED'
+                """, Integer.class, tenantId);
     }
 
     private long insertChainAddress(ChainAddressRecord record, UUID tenantId) {

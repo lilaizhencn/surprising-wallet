@@ -1864,7 +1864,8 @@ public class CustodyRepository {
                                w.created_at, greatest(w.updated_at, wo.updated_at) as updated_at
                           from custody_withdrawal w
                           join withdrawal_order wo
-                            on wo.chain = w.chain and wo.order_no = w.order_no
+                            on wo.tenant_id = w.tenant_id
+                           and wo.chain = w.chain and wo.order_no = w.order_no
                          where w.tenant_id = ?
                            and (? = '' or wo.status = ?)
                          order by w.created_at desc, w.id
@@ -1898,7 +1899,8 @@ public class CustodyRepository {
                                d.chain, d.asset_symbol, d.tx_hash, d.log_index, d.amount,
                                d.status, d.credited_at, d.created_at, d.updated_at
                           from custody_deposit d
-                          join custody_address a on a.id = d.custody_address_id
+                          join custody_address a
+                            on a.tenant_id = d.tenant_id and a.id = d.custody_address_id
                          where d.tenant_id = ?
                            and not exists (
                                select 1 from custody_gas_account g
@@ -1935,8 +1937,10 @@ public class CustodyRepository {
                                wo.debit_account_id, a.source as address_source
                           from custody_withdrawal w
                           join withdrawal_order wo
-                            on wo.chain = w.chain and wo.order_no = w.order_no
-                          join custody_address a on a.id = w.custody_address_id
+                            on wo.tenant_id = w.tenant_id
+                           and wo.chain = w.chain and wo.order_no = w.order_no
+                          join custody_address a
+                            on a.tenant_id = w.tenant_id and a.id = w.custody_address_id
                          where w.status <> wo.status
                          order by wo.updated_at, w.id
                          limit ?

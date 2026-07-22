@@ -85,10 +85,17 @@ public class PolkadotTransactionService {
 
     public boolean confirmWithdrawal(AccountChainProfile profile, String orderNo, String txHash,
                                      String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
+        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
+                profile, orderNo, txHash, assetSymbol, debitAccountId, debitAmount);
+    }
+
+    public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
+                                     String orderNo, String txHash,
+                                     String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
         if (!transactionFinalized(assetSymbol, txHash, confirmationLookback(profile))) {
             return false;
         }
-        return repository.confirmWithdrawalAndSettle(CHAIN, orderNo, txHash,
+        return repository.confirmWithdrawalAndSettle(tenantId, CHAIN, orderNo, txHash,
                 assetSymbol, debitAccountId, debitAmount);
     }
 

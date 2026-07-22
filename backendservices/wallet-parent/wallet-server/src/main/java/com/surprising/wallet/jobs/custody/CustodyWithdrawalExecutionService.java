@@ -1,6 +1,5 @@
 package com.surprising.wallet.jobs.custody;
 
-import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.jobs.custody.CustodyRepository.AddressRecord;
 import com.surprising.wallet.service.chain.cardano.CardanoKeyService;
@@ -45,7 +44,7 @@ public class CustodyWithdrawalExecutionService {
         BigDecimal frozenAmount = amount.add(asset.networkFeeReserve());
         SpendAccount spend = requireTenantSpendAccount(
                 tenantId, custodyAddress.id(), chain, symbol, frozenAmount);
-        String sourceAddress = withdrawalSourceAddress(asset, spend);
+        String sourceAddress = withdrawalSourceAddress(tenantId, asset, spend);
         String orderNo = normalizeOrderPrefix(orderPrefix) + "-" + System.currentTimeMillis()
                 + "-" + randomSuffix();
 
@@ -56,9 +55,9 @@ public class CustodyWithdrawalExecutionService {
         if (created != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "duplicate withdrawal order");
         }
-        if (!chains.freezeLedgerBalance(chain, symbol, spend.accountId(), frozenAmount)) {
+        if (!chains.freezeLedgerBalance(tenantId, chain, symbol, spend.accountId(), frozenAmount)) {
             chains.updateWithdrawalStatus(
-                    chain, orderNo, "FAILED", sourceAddress, null, "insufficient balance");
+                    tenantId, chain, orderNo, "FAILED", sourceAddress, null, "insufficient balance");
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "insufficient available balance");
         }
 
@@ -67,7 +66,8 @@ public class CustodyWithdrawalExecutionService {
         String statusMessage = approvalRequired
                 ? "waiting for platform withdrawal approval before broadcast"
                 : null;
-        chains.updateWithdrawalStatus(chain, orderNo, status, sourceAddress, null, statusMessage);
+        chains.updateWithdrawalStatus(
+                tenantId, chain, orderNo, status, sourceAddress, null, statusMessage);
         return new ExecutionResult(orderNo, status, chain, symbol, amount,
                 asset.networkFeeReserve(), toAddress, sourceAddress, spend.address(), approvalRequired);
     }
@@ -135,20 +135,12 @@ public class CustodyWithdrawalExecutionService {
         return new SpendAccount(String.valueOf(row.get("account_id")), String.valueOf(row.get("address")));
     }
 
-    private String withdrawalSourceAddress(AssetMeta asset, SpendAccount spend) {
+    private String withdrawalSourceAddress(UUID tenantId, AssetMeta asset, SpendAccount spend) {
         if (ChainType.valueOf(asset.chain()).isUtxo()) {
             return spend.address();
         }
-        String hotSymbol = asset.nativeAsset() ? asset.symbol() : asset.nativeSymbol();
-        if ("TON".equals(asset.chain()) && !asset.nativeAsset()) {
-            hotSymbol = asset.symbol();
-        }
-        List<ChainAddressRecord> candidates = chains.listDefaultHotAddressCandidates(
-                asset.chain(), hotSymbol);
-        if (candidates.isEmpty() && !asset.nativeAsset()) {
-            candidates = chains.listDefaultHotAddressCandidates(asset.chain(), asset.nativeSymbol());
-        }
-        return candidates.isEmpty() ? spend.address() : candidates.getFirst().getAddress();
+        return chains.findActiveTenantCollectionAddress(tenantId, asset.chain())
+                .orElse(spend.address());
     }
 
     private static String normalizeOrderPrefix(String value) {

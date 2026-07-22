@@ -214,10 +214,18 @@ public class SuiTransactionService {
         }
     }
 
-    public boolean confirmWithdrawal(String orderNo, String assetSymbol, String accountId, BigDecimal debitAmount) {
-        String digest = repository.findWithdrawalTxHash(CHAIN, orderNo).orElseThrow();
+    public boolean confirmWithdrawal(String orderNo, String assetSymbol,
+                                     String accountId, BigDecimal debitAmount) {
+        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
+                orderNo, assetSymbol, accountId, debitAmount);
+    }
+
+    public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo, String assetSymbol,
+                                     String accountId, BigDecimal debitAmount) {
+        String digest = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(digest, Duration.ofMinutes(2));
-        if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, digest, assetSymbol, accountId, debitAmount)) {
+        if (repository.confirmWithdrawalAndSettle(
+                tenantId, CHAIN, orderNo, digest, assetSymbol, accountId, debitAmount)) {
             markConfirmed(digest, transaction);
             return true;
         }

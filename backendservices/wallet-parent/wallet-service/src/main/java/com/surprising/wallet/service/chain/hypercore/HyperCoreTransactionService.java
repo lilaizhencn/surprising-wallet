@@ -54,12 +54,13 @@ public class HyperCoreTransactionService {
         return submit("spotSend", token.getSymbol(), from.getAddress(), destination, amount, nonce, action, signature);
     }
 
-    public boolean confirmWithdrawal(String orderNo, String actionId, String assetSymbol,
+    public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo,
+                                     String actionId, String assetSymbol,
                                      String debitAccountId, BigDecimal debitAmount) {
         if (!hyperCoreRepository.actionAccepted(actionId)) {
             return false;
         }
-        return chainRepository.confirmWithdrawalAndSettle(CHAIN, orderNo, actionId,
+        return chainRepository.confirmWithdrawalAndSettle(tenantId, CHAIN, orderNo, actionId,
                 assetSymbol, debitAccountId, debitAmount);
     }
 

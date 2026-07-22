@@ -44,9 +44,18 @@ public class MoneroTransactionService {
     public void confirmWithdrawal(AccountChainProfile profile, String orderNo, String txHash,
                                   String debitAccountId, BigDecimal debitAmount,
                                   String toAddress, BigDecimal amount) {
+        confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
+                profile, orderNo, txHash, debitAccountId, debitAmount, toAddress, amount);
+    }
+
+    public void confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
+                                  String orderNo, String txHash,
+                                  String debitAccountId, BigDecimal debitAmount,
+                                  String toAddress, BigDecimal amount) {
         MoneroWalletRpcClient.Transfer transfer = confirmedTransfer(profile, txHash, profile.getWithdrawConfirmations());
         if (transfer != null) {
-            if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, txHash, SYMBOL, debitAccountId, debitAmount)) {
+            if (repository.confirmWithdrawalAndSettle(
+                    tenantId, CHAIN, orderNo, txHash, SYMBOL, debitAccountId, debitAmount)) {
                 creditInternalRecipient(profile, transfer, toAddress, amount);
             }
         }

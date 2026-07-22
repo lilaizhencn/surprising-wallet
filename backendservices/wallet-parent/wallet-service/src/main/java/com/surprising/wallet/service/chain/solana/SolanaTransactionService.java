@@ -299,10 +299,18 @@ public class SolanaTransactionService {
         }
     }
 
-    public boolean confirmWithdrawal(String orderNo, String assetSymbol, String accountId, BigDecimal debitAmount) {
-        String signature = repository.findWithdrawalTxHash(CHAIN, orderNo).orElseThrow();
+    public boolean confirmWithdrawal(String orderNo, String assetSymbol,
+                                     String accountId, BigDecimal debitAmount) {
+        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
+                orderNo, assetSymbol, accountId, debitAmount);
+    }
+
+    public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo, String assetSymbol,
+                                     String accountId, BigDecimal debitAmount) {
+        String signature = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo).orElseThrow();
         JsonNode status = requireSuccessfulConfirmation(signature, Duration.ofMinutes(2));
-        if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, signature, assetSymbol, accountId, debitAmount)) {
+        if (repository.confirmWithdrawalAndSettle(
+                tenantId, CHAIN, orderNo, signature, assetSymbol, accountId, debitAmount)) {
             updateConfirmedTransaction(signature, status);
             return true;
         }

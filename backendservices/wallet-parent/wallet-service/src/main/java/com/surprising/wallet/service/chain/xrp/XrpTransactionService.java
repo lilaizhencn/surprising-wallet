@@ -96,12 +96,20 @@ public class XrpTransactionService {
 
     public boolean confirmWithdrawal(AccountChainProfile profile, String orderNo, String assetSymbol,
                                      String accountId, BigDecimal debitAmount) {
-        String txHash = repository.findWithdrawalTxHash(CHAIN, orderNo).orElseThrow();
+        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
+                profile, orderNo, assetSymbol, accountId, debitAmount);
+    }
+
+    public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
+                                     String orderNo, String assetSymbol,
+                                     String accountId, BigDecimal debitAmount) {
+        String txHash = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo).orElseThrow();
         Confirmation confirmation = confirmation(profile, txHash);
         if (!confirmation.confirmed()) {
             return false;
         }
-        if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, txHash, assetSymbol, accountId, debitAmount)) {
+        if (repository.confirmWithdrawalAndSettle(
+                tenantId, CHAIN, orderNo, txHash, assetSymbol, accountId, debitAmount)) {
             updateConfirmedTransaction(txHash, confirmation);
             return true;
         }

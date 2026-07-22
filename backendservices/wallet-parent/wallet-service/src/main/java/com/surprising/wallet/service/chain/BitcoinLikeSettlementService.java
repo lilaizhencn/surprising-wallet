@@ -48,12 +48,16 @@ public class BitcoinLikeSettlementService {
         for (WithdrawRecord record : records) {
             BigDecimal fee = record.getFee() == null ? BigDecimal.ZERO : record.getFee();
             BigDecimal settled = record.getBalance().add(fee);
-            String debitAccountId = chainRepository.findWithdrawalOrder(chain, record.getWithdrawId())
-                    .map(WithdrawalOrderRecord::getDebitAccountId)
+            WithdrawalOrderRecord order = chainRepository.findWithdrawalOrder(chain, record.getWithdrawId())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "missing withdrawal order " + chain + ":" + record.getWithdrawId()));
+            java.util.UUID tenantId = java.util.Objects.requireNonNull(
+                    order.getTenantId(), "withdrawal tenantId is required");
+            String debitAccountId = java.util.Optional.ofNullable(order.getDebitAccountId())
                     .filter(value -> value != null && !value.isBlank())
                     .orElse(record.getUserId().toString());
             chainRepository.confirmWithdrawalAndSettle(
-                    chain, record.getWithdrawId(), txId, chain, debitAccountId, settled);
+                    tenantId, chain, record.getWithdrawId(), txId, chain, debitAccountId, settled);
             record.setStatus((byte) Constants.CONFIRM);
             record.setUpdateDate(Date.from(Instant.now()));
         }

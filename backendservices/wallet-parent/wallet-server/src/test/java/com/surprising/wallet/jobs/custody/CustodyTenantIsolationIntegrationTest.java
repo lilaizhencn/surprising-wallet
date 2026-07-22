@@ -7,9 +7,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -123,6 +125,100 @@ class CustodyTenantIsolationIntegrationTest {
                 """, Integer.class, gasTenant, withdrawalId));
     }
 
+    @Test
+    void singleTransactionWithdrawalSettlesOnceAndOnlyForItsTenant() {
+        UUID ownerTenant = createTenant();
+        UUID otherTenant = createTenant();
+        String accountId = "tenant-withdrawal-" + UUID.randomUUID();
+        createAddress(ownerTenant, accountId);
+        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        String orderNo = "tenant-withdrawal-" + UUID.randomUUID();
+        String txHash = "0x" + UUID.randomUUID().toString().replace("-", "");
+        BigDecimal debit = new BigDecimal("1.25");
+
+        jdbc.update("""
+                insert into ledger_balance(
+                    tenant_id, chain, asset_symbol, account_id,
+                    available_balance, locked_balance, total_balance)
+                values (?, 'ETH', 'ETH', ?, 0, ?, ?)
+                """, ownerTenant, accountId, debit, debit);
+        assertEquals(1, repository.createTenantWithdrawalOrder(
+                ownerTenant, orderNo, 1L, "ETH", "ETH", accountId, accountId,
+                "0x0000000000000000000000000000000000000002",
+                BigDecimal.ONE, new BigDecimal("0.25")));
+        assertEquals(1, repository.updateWithdrawalStatus(
+                ownerTenant, "ETH", orderNo, "SENT", accountId, txHash, null));
+
+        assertThrows(IllegalStateException.class, () -> repository.confirmWithdrawalAndSettle(
+                otherTenant, "ETH", orderNo, txHash, "ETH", accountId, debit));
+        assertThrows(IllegalStateException.class, () -> repository.confirmWithdrawalAndSettle(
+                ownerTenant, "ETH", orderNo, txHash + "bad", "ETH", accountId, debit));
+        assertEquals(0, new BigDecimal("1.25").compareTo(jdbc.queryForObject("""
+                select locked_balance from ledger_balance
+                 where tenant_id = ? and chain = 'ETH' and asset_symbol = 'ETH'
+                   and account_id = ?
+                """, BigDecimal.class, ownerTenant, accountId)));
+
+        assertTrue(repository.confirmWithdrawalAndSettle(
+                ownerTenant, "ETH", orderNo, txHash, "ETH", accountId, debit));
+        assertFalse(repository.confirmWithdrawalAndSettle(
+                ownerTenant, "ETH", orderNo, txHash, "ETH", accountId, debit));
+        assertEquals("CONFIRMED", repository.findWithdrawalOrder(
+                ownerTenant, "ETH", orderNo).orElseThrow().getStatus());
+        assertEquals(0, BigDecimal.ZERO.compareTo(jdbc.queryForObject("""
+                select locked_balance from ledger_balance
+                 where tenant_id = ? and chain = 'ETH' and asset_symbol = 'ETH'
+                   and account_id = ?
+                """, BigDecimal.class, ownerTenant, accountId)));
+        assertEquals(0, BigDecimal.ZERO.compareTo(jdbc.queryForObject("""
+                select total_balance from ledger_balance
+                 where tenant_id = ? and chain = 'ETH' and asset_symbol = 'ETH'
+                   and account_id = ?
+                """, BigDecimal.class, ownerTenant, accountId)));
+    }
+
+    @Test
+    void bitcoinLikeSigningBatchAndUtxosStayWithinOneTenant() {
+        UUID firstTenant = createTenant();
+        UUID secondTenant = createTenant();
+        String firstAddress = "btc-first-" + UUID.randomUUID();
+        String secondAddress = "btc-second-" + UUID.randomUUID();
+        createChainAddress(firstTenant, "BTC", firstAddress);
+        createChainAddress(secondTenant, "BTC", secondAddress);
+        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+
+        assertEquals(1, repository.createTenantWithdrawalOrder(
+                firstTenant, "btc-first-order", 11L, "BTC", "BTC",
+                firstAddress, firstAddress, "btc-first-recipient",
+                new BigDecimal("0.10"), new BigDecimal("0.001")));
+        assertEquals(1, repository.updateWithdrawalStatus(
+                firstTenant, "BTC", "btc-first-order", "FROZEN", firstAddress, null, null));
+        assertEquals(1, repository.createTenantWithdrawalOrder(
+                secondTenant, "btc-second-order", 12L, "BTC", "BTC",
+                secondAddress, secondAddress, "btc-second-recipient",
+                new BigDecimal("0.20"), new BigDecimal("0.001")));
+        assertEquals(1, repository.updateWithdrawalStatus(
+                secondTenant, "BTC", "btc-second-order", "FROZEN", secondAddress, null, null));
+
+        List<com.surprising.wallet.common.chain.WithdrawalOrderRecord> batch =
+                repository.listWithdrawalsForSigning("BTC", "BTC", 10);
+        assertEquals(1, batch.size());
+        assertEquals(firstTenant, batch.getFirst().getTenantId());
+
+        repository.upsertUtxo("BTC", "BTC", "first-utxo", 0,
+                firstAddress, BigDecimal.ONE, 100L, 12, true);
+        repository.upsertUtxo("BTC", "BTC", "second-utxo", 0,
+                secondAddress, new BigDecimal("2"), 100L, 12, true);
+        var firstUtxos = repository.listSpendableUtxos(
+                firstTenant, "BTC", "BTC", 6, 10, 0);
+        assertEquals(1, firstUtxos.size());
+        assertEquals("first-utxo", firstUtxos.getFirst().getTxId());
+        assertEquals(0, repository.lockUtxo(
+                secondTenant, "BTC", "first-utxo", 0, "wrong-tenant-lock"));
+        assertEquals(1, repository.lockUtxo(
+                firstTenant, "BTC", "first-utxo", 0, "owner-lock"));
+    }
+
     private UUID createTenant() {
         UUID tenantId = UUID.randomUUID();
         int namespace = jdbc.queryForObject(
@@ -159,5 +255,21 @@ class CustodyTenantIsolationIntegrationTest {
                 """, custodyAddressId, tenantId, chainAddressId, accountId,
                 "tenant-isolation-address-" + subject, subject);
         return custodyAddressId;
+    }
+
+    private void createChainAddress(UUID tenantId, String chain, String accountId) {
+        int namespace = jdbc.queryForObject(
+                "select derivation_namespace from custody_tenant where id = ?",
+                Integer.class, tenantId);
+        int subject = jdbc.queryForObject(
+                "select nextval('custody_derivation_subject_index_seq')::integer", Integer.class);
+        jdbc.update("""
+                insert into chain_address(
+                    tenant_id, chain, asset_symbol, account_id, user_id, biz,
+                    address_index, address, owner_address, derivation_path,
+                    wallet_role, enabled)
+                values (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'DEPOSIT', true)
+                """, tenantId, chain, chain, accountId, Integer.toUnsignedLong(subject), namespace,
+                accountId, accountId, "m/test/" + namespace + "/" + subject);
     }
 }

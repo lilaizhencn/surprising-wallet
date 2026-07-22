@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Runtime withdrawal order stored in withdrawal_order.
@@ -17,6 +18,7 @@ import java.time.Instant;
 @AllArgsConstructor
 public class WithdrawalOrderRecord {
     private Long id;
+    private UUID tenantId;
     private String orderNo;
     private Long userId;
     private String chain;

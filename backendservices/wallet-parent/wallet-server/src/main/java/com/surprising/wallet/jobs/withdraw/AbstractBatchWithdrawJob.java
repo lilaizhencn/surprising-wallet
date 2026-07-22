@@ -4,7 +4,6 @@ import com.alibaba.fastjson.JSONObject;
 import com.google.common.collect.Sets;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
@@ -61,7 +60,12 @@ abstract public class AbstractBatchWithdrawJob {
                 List<WithdrawRecord> records = orders.stream()
                         .map(order -> toWithdrawRecord(order, currency))
                         .toList();
-                WithdrawTransaction transaction = buildTransaction(records);
+                UUID tenantId = Objects.requireNonNull(
+                        orders.getFirst().getTenantId(), "withdrawal tenantId is required");
+                if (orders.stream().anyMatch(order -> !tenantId.equals(order.getTenantId()))) {
+                    throw new IllegalStateException("withdraw batch cannot contain multiple tenants");
+                }
+                WithdrawTransaction transaction = buildTransaction(tenantId, records);
                 if (transaction == null) {
                     log.error("提现任务异常 交易创建失败 币种:{}", currency.getName());
                     break;
@@ -92,7 +96,7 @@ abstract public class AbstractBatchWithdrawJob {
 
     }
 
-    protected WithdrawTransaction buildTransaction(List<WithdrawRecord> records) {
+    protected WithdrawTransaction buildTransaction(UUID tenantId, List<WithdrawRecord> records) {
         log.info("构建提现交易对象开始");
         int size = 1;
         WithdrawTransaction transaction = null;
@@ -112,7 +116,7 @@ abstract public class AbstractBatchWithdrawJob {
         BigDecimal walletAmount = BigDecimal.ZERO;
         while (true) {
             List<UtxoTransaction> tmps = listCandidateUtxos(
-                    depositConfirmationThreshold, size, offset);
+                    tenantId, depositConfirmationThreshold, size, offset);
             if (CollectionUtils.isEmpty(tmps)) {
                 log.error("构建交易失败 钱包余额不足");
                 return null;
@@ -137,7 +141,8 @@ abstract public class AbstractBatchWithdrawJob {
             utxos.add(utxo);
             walletAmount = walletAmount.add(utxo.getBalance());
             String chain = currency.getName().toUpperCase(Locale.ROOT);
-            Address address = chainJdbcRepository.findChainAddressByAddress(chain, utxo.getAddress())
+            Address address = chainJdbcRepository.findChainAddressByAddress(
+                            tenantId, chain, utxo.getAddress())
                     .map(record -> toAddress(record, currency))
                     .orElseThrow(() -> new IllegalStateException(
                             "missing chain_address for " + chain + " UTXO address " + utxo.getAddress()));
@@ -149,7 +154,7 @@ abstract public class AbstractBatchWithdrawJob {
 
         //初始化交易
         JSONObject signature = new JSONObject();
-        Address changeAddress = defaultHotChangeAddress(currency);
+        Address changeAddress = defaultHotChangeAddress(tenantId, currency);
         signature.put("utxos", utxos);
         signature.put("addresses", addresses);
         signature.put("withdraw", records);
@@ -183,7 +188,7 @@ abstract public class AbstractBatchWithdrawJob {
         String chain = currency.getName().toUpperCase(Locale.ROOT);
         for (UtxoTransaction utxo : utxos) {
             int locked = chainJdbcRepository.lockUtxo(
-                    chain, utxo.getTxId(), utxo.getSeq(), transactionId);
+                    tenantId, chain, utxo.getTxId(), utxo.getSeq(), transactionId);
             if (locked != 1) {
                 throw new IllegalStateException(
                         "failed to lock unified " + chain + " UTXO "
@@ -193,9 +198,9 @@ abstract public class AbstractBatchWithdrawJob {
         String fromAddress = addresses.isEmpty() ? null : addresses.get(0).getAddress();
         records.forEach(record -> {
             chainJdbcRepository.updateWithdrawalStatus(
-                    chain, record.getWithdrawId(), "UTXO_LOCKED", fromAddress, null, null);
+                    tenantId, chain, record.getWithdrawId(), "UTXO_LOCKED", fromAddress, null, null);
             chainJdbcRepository.updateWithdrawalStatus(
-                    chain, record.getWithdrawId(), "SIGNING", fromAddress, null, null);
+                    tenantId, chain, record.getWithdrawId(), "SIGNING", fromAddress, null, null);
         });
 
         records.parallelStream().forEach((record) -> {
@@ -225,25 +230,21 @@ abstract public class AbstractBatchWithdrawJob {
         return P2wshFeeCalculator.calculateFeeSat(inputCount, outputCount, feeRate);
     }
 
-    private List<UtxoTransaction> listCandidateUtxos(long depositConfirmationThreshold,
+    private List<UtxoTransaction> listCandidateUtxos(UUID tenantId, long depositConfirmationThreshold,
                                                      int limit,
                                                      int offset) {
         String chain = currency.getName().toUpperCase(Locale.ROOT);
         return chainJdbcRepository.listSpendableUtxos(
-                chain, chain, depositConfirmationThreshold, limit, offset);
+                tenantId, chain, chain, depositConfirmationThreshold, limit, offset);
     }
 
-    private Address defaultHotChangeAddress(AssetRuntimeMetadata currency) {
-        return chainJdbcRepository.findChainAddress(
-                        currency.chain(),
-                        currency.assetSymbol(),
-                        HotWalletRules.DEFAULT_HOT_USER_ID,
-                        HotWalletRules.DEFAULT_HOT_BIZ,
-                        HotWalletRules.DEFAULT_HOT_ADDRESS_INDEX,
-                        HotWalletRules.DEFAULT_HOT_WALLET_ROLE)
+    private Address defaultHotChangeAddress(UUID tenantId, AssetRuntimeMetadata currency) {
+        return chainJdbcRepository.findActiveTenantCollectionAddress(tenantId, currency.chain())
+                .flatMap(address -> chainJdbcRepository.findChainAddressByAddress(
+                        tenantId, currency.chain(), currency.assetSymbol(), address))
                 .map(record -> toAddress(record, currency))
                 .orElseThrow(() -> new IllegalStateException(
-                        "missing default hot wallet change address for "
+                        "missing tenant hot wallet change address for "
                                 + currency.chain() + "/" + currency.assetSymbol()));
     }
 

@@ -141,8 +141,16 @@ public class NearTransactionService {
 
     public boolean confirmWithdrawal(AccountChainProfile profile, String orderNo, String txHash,
                                      String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
+        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
+                profile, orderNo, txHash, assetSymbol, debitAccountId, debitAmount);
+    }
+
+    public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
+                                     String orderNo, String txHash,
+                                     String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
         JsonNode status = requireSuccessfulConfirmation(txHash, debitAccountId, Duration.ofMinutes(2));
-        if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, txHash, assetSymbol, debitAccountId, debitAmount)) {
+        if (repository.confirmWithdrawalAndSettle(
+                tenantId, CHAIN, orderNo, txHash, assetSymbol, debitAccountId, debitAmount)) {
             repository.markNearTransactionConfirmed(CHAIN, txHash, blockHeight(status), gasBurnt(status),
                     status.toString());
             return true;
@@ -152,7 +160,15 @@ public class NearTransactionService {
 
     public boolean confirmWithdrawal(AccountChainProfile profile, String orderNo, String txHash,
                                      String debitAccountId, BigDecimal debitAmount) {
-        return confirmWithdrawal(profile, orderNo, txHash, SYMBOL, debitAccountId, debitAmount);
+        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
+                profile, orderNo, txHash, SYMBOL, debitAccountId, debitAmount);
+    }
+
+    public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
+                                     String orderNo, String txHash,
+                                     String debitAccountId, BigDecimal debitAmount) {
+        return confirmWithdrawal(
+                tenantId, profile, orderNo, txHash, SYMBOL, debitAccountId, debitAmount);
     }
 
     public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,

@@ -5,12 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class ChainAddressRecord {
     private Long id;
+    private UUID tenantId;
     private String chain;
     private String assetSymbol;
     private String accountId;

@@ -353,7 +353,7 @@ public class ChainJdbcRepository {
     public Optional<ChainAddressRecord> findChainAddress(String chain, String assetSymbol, long userId,
                                                          int biz, long addressIndex, String walletRole) {
         List<ChainAddressRecord> results = jdbcTemplate.query("""
-                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                                owner_address, derivation_path, wallet_role, enabled
                         from chain_address
                         where chain = ? and asset_symbol = ? and user_id = ? and biz = ?
@@ -366,7 +366,7 @@ public class ChainJdbcRepository {
 
     public List<ChainAddressRecord> listDefaultHotAddressCandidates(String chain, String assetSymbol) {
         return jdbcTemplate.query("""
-                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                                owner_address, derivation_path, wallet_role, enabled
                         from chain_address
                         where chain = ?
@@ -386,7 +386,7 @@ public class ChainJdbcRepository {
 
     public List<ChainAddressRecord> listReservedHotNamespaceAddresses(String chain) {
         return jdbcTemplate.query("""
-                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                                owner_address, derivation_path, wallet_role, enabled
                         from chain_address
                         where chain = ?
@@ -402,7 +402,7 @@ public class ChainJdbcRepository {
 
     public List<ChainAddressRecord> listChainAddresses(String chain, String assetSymbol) {
         return jdbcTemplate.query("""
-                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                                owner_address, derivation_path, wallet_role, enabled
                         from chain_address
                         where chain = ? and asset_symbol = ? and enabled = true
@@ -413,7 +413,7 @@ public class ChainJdbcRepository {
 
     public List<ChainAddressRecord> listChainAddresses(String chain) {
         return jdbcTemplate.query("""
-                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                                owner_address, derivation_path, wallet_role, enabled
                         from chain_address
                         where chain = ? and enabled = true
@@ -424,7 +424,7 @@ public class ChainJdbcRepository {
 
     public Optional<ChainAddressRecord> findChainAddressByAddress(String chain, String address) {
         List<ChainAddressRecord> results = jdbcTemplate.query("""
-                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                                owner_address, derivation_path, wallet_role, enabled
                         from chain_address
                         where chain = ? and address = ? and enabled = true
@@ -435,12 +435,37 @@ public class ChainJdbcRepository {
 
     public Optional<ChainAddressRecord> findChainAddressByAddress(String chain, String assetSymbol, String address) {
         List<ChainAddressRecord> results = jdbcTemplate.query("""
-                        select id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                                owner_address, derivation_path, wallet_role, enabled
                         from chain_address
                         where chain = ? and asset_symbol = ? and address = ? and enabled = true
                         """,
                 (rs, rowNum) -> mapChainAddress(rs), chain, assetSymbol, address);
+        return results.stream().findFirst();
+    }
+
+    public Optional<ChainAddressRecord> findChainAddressByAddress(
+            UUID tenantId, String chain, String assetSymbol, String address) {
+        List<ChainAddressRecord> results = jdbcTemplate.query("""
+                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz,
+                               address_index, address, owner_address, derivation_path, wallet_role, enabled
+                        from chain_address
+                        where tenant_id = ? and chain = ? and asset_symbol = ?
+                          and address = ? and enabled = true
+                        """,
+                (rs, rowNum) -> mapChainAddress(rs), tenantId, chain, assetSymbol, address);
+        return results.stream().findFirst();
+    }
+
+    public Optional<ChainAddressRecord> findChainAddressByAddress(
+            UUID tenantId, String chain, String address) {
+        List<ChainAddressRecord> results = jdbcTemplate.query("""
+                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz,
+                               address_index, address, owner_address, derivation_path, wallet_role, enabled
+                        from chain_address
+                        where tenant_id = ? and chain = ? and address = ? and enabled = true
+                        """,
+                (rs, rowNum) -> mapChainAddress(rs), tenantId, chain, address);
         return results.stream().findFirst();
     }
 
@@ -725,6 +750,10 @@ public class ChainJdbcRepository {
                                           String accountId) {
         String chain = event.chainType().name();
         UUID tenantId = requireDepositTenant(chain, accountId, event.toAddress());
+        if (isInternalCollectionTransfer(
+                tenantId, chain, event.assetSymbol(), event.txId(), event.toAddress())) {
+            return false;
+        }
         String status = event.confirmations() <= 0 ? "DETECTED"
                 : event.confirmations() < requiredConfirmations ? "CONFIRMING" : "CONFIRMED";
         int recorded = jdbcTemplate.update("""
@@ -766,6 +795,19 @@ public class ChainJdbcRepository {
             return true;
         }
         return false;
+    }
+
+    private boolean isInternalCollectionTransfer(UUID tenantId, String chain, String assetSymbol,
+                                                 String txHash, String toAddress) {
+        Boolean internal = jdbcTemplate.queryForObject("""
+                select exists(
+                    select 1
+                      from collection_record
+                     where tenant_id = ? and chain = ? and asset_symbol = ?
+                       and lower(tx_hash) = lower(?) and lower(to_address) = lower(?)
+                )
+                """, Boolean.class, tenantId, chain, assetSymbol, txHash, toAddress);
+        return Boolean.TRUE.equals(internal);
     }
 
     private UUID requireDepositTenant(String chain, String accountId, String address) {
@@ -826,6 +868,21 @@ public class ChainJdbcRepository {
                 lockRef, toTs(now()), chain, txHash, vout, lockRef);
     }
 
+    public int lockUtxo(UUID tenantId, String chain, String txHash, int vout, String lockRef) {
+        return jdbcTemplate.update("""
+                        update utxo_record ur
+                           set state = 'LOCKED', lock_ref = ?, updated_at = ?
+                         where ur.chain = ? and ur.tx_hash = ? and ur.vout = ?
+                           and (ur.state = 'AVAILABLE' or (ur.state = 'LOCKED' and ur.lock_ref = ?))
+                           and exists (
+                               select 1 from chain_address a
+                                where a.tenant_id = ? and a.chain = ur.chain
+                                  and lower(a.address) = lower(ur.address) and a.enabled = true
+                           )
+                        """,
+                lockRef, toTs(now()), chain, txHash, vout, lockRef, tenantId);
+    }
+
     public int releaseUtxos(String chain, String lockRef) {
         return jdbcTemplate.update("""
                         update utxo_record
@@ -883,6 +940,40 @@ public class ChainJdbcRepository {
                         """,
                 (rs, rowNum) -> mapUtxoRecord(rs, chain),
                 chain, assetSymbol, requiredConfirmations, limit, offset);
+    }
+
+    public List<UtxoTransaction> listSpendableUtxos(UUID tenantId, String chain, String assetSymbol,
+                                                    long requiredConfirmations, int limit, int offset) {
+        return jdbcTemplate.query("""
+                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height,
+                               ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
+                               (
+                                   select cp.runtime_currency_id
+                                   from chain_profile cp
+                                   where cp.chain = ur.chain
+                                     and cp.native_symbol = ur.asset_symbol
+                                     and cp.enabled = true
+                                   order by case cp.network
+                                       when 'regtest' then 0
+                                       when 'testnet' then 1
+                                       when 'testnet3' then 1
+                                       else 2
+                                   end
+                                   limit 1
+                               ) as runtime_currency_id
+                        from utxo_record ur
+                        where ur.chain = ? and ur.asset_symbol = ?
+                          and ur.state = 'AVAILABLE' and ur.confirmations >= ?
+                          and exists (
+                              select 1 from chain_address a
+                               where a.tenant_id = ? and a.chain = ur.chain
+                                 and lower(a.address) = lower(ur.address) and a.enabled = true
+                          )
+                        order by ur.id
+                        limit ? offset ?
+                        """,
+                (rs, rowNum) -> mapUtxoRecord(rs, chain),
+                chain, assetSymbol, requiredConfirmations, tenantId, limit, offset);
     }
 
     public List<UtxoTransaction> listAvailableUtxosBelowConfirmations(String chain, String assetSymbol,
@@ -1029,23 +1120,34 @@ public class ChainJdbcRepository {
 
     public List<WithdrawalOrderRecord> listWithdrawalsForSigning(String chain, String assetSymbol, int limit) {
         return jdbcTemplate.query("""
-                        select id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
+                        select w.id, w.tenant_id, w.order_no, w.user_id, w.chain, w.asset_symbol,
+                               w.from_address, w.debit_account_id, w.to_address,
                                amount, fee, tx_hash, status, error_message, created_at, updated_at
-                        from withdrawal_order
-                        where chain = ? and asset_symbol = ? and status in ('FROZEN', 'RETRYING')
-                        order by id
+                        from withdrawal_order w
+                        where w.tenant_id = (
+                            select candidate.tenant_id
+                              from withdrawal_order candidate
+                             where candidate.tenant_id is not null and candidate.chain = ?
+                               and candidate.asset_symbol = ?
+                               and candidate.status in ('FROZEN', 'RETRYING')
+                             order by candidate.id
+                             limit 1
+                        )
+                          and w.chain = ? and w.asset_symbol = ?
+                          and w.status in ('FROZEN', 'RETRYING')
+                        order by w.id
                         limit ?
                         """,
                 (rs, rowNum) -> mapWithdrawalOrder(rs),
-                chain, assetSymbol, limit);
+                chain, assetSymbol, chain, assetSymbol, limit);
     }
 
     public List<WithdrawalOrderRecord> listWithdrawalsForSigning(String chain, int limit) {
         return jdbcTemplate.query("""
-                        select id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
+                        select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
                                amount, fee, tx_hash, status, error_message, created_at, updated_at
                         from withdrawal_order
-                        where chain = ? and status in ('FROZEN', 'RETRYING')
+                        where tenant_id is not null and chain = ? and status in ('FROZEN', 'RETRYING')
                         order by id
                         limit ?
                         """,
@@ -1055,10 +1157,10 @@ public class ChainJdbcRepository {
 
     public List<WithdrawalOrderRecord> listWithdrawalsByStatus(String chain, String status, int limit) {
         return jdbcTemplate.query("""
-                        select id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
+                        select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
                                amount, fee, tx_hash, status, error_message, created_at, updated_at
                         from withdrawal_order
-                        where chain = ? and status = ?
+                        where tenant_id is not null and chain = ? and status = ?
                         order by id
                         limit ?
                         """,
@@ -1078,13 +1180,27 @@ public class ChainJdbcRepository {
                 fromAddress, toTs(now()), chain, orderNo);
     }
 
+    public int claimWithdrawalSigning(UUID tenantId, String chain, String orderNo, String fromAddress) {
+        return jdbcTemplate.update("""
+                        update withdrawal_order
+                        set status = 'SIGNING',
+                            from_address = coalesce(?, from_address),
+                            error_message = null,
+                            updated_at = ?
+                        where tenant_id = ? and chain = ? and order_no = ?
+                          and status in ('FROZEN', 'RETRYING')
+                        """,
+                fromAddress, toTs(now()), tenantId, chain, orderNo);
+    }
+
     public int markStaleSigningWithdrawalsUnknown(String chain, Instant before) {
         return jdbcTemplate.update("""
                         update withdrawal_order
                         set status = 'BROADCAST_UNKNOWN',
                             error_message = 'signing state expired before a tx hash was recorded; manual chain audit required',
                             updated_at = ?
-                        where chain = ? and status = 'SIGNING' and tx_hash is null and updated_at < ?
+                        where tenant_id is not null and chain = ? and status = 'SIGNING'
+                          and tx_hash is null and updated_at < ?
                         """,
                 toTs(now()), chain, toTs(before));
     }
@@ -1105,6 +1221,24 @@ public class ChainJdbcRepository {
                 fromAddress, txHash, toTs(now()), chain, orderNo);
     }
 
+    public int markWithdrawalSent(UUID tenantId, String chain, String orderNo,
+                                  String fromAddress, String txHash) {
+        if (txHash == null || txHash.isBlank()) {
+            throw new IllegalArgumentException("withdrawal tx hash must not be blank");
+        }
+        return jdbcTemplate.update("""
+                        update withdrawal_order
+                        set status = 'SENT',
+                            from_address = coalesce(?, from_address),
+                            tx_hash = ?,
+                            error_message = null,
+                            updated_at = ?
+                        where tenant_id = ? and chain = ? and order_no = ?
+                          and status = 'SIGNING' and tx_hash is null
+                        """,
+                fromAddress, txHash, toTs(now()), tenantId, chain, orderNo);
+    }
+
     public int markWithdrawalBroadcastUnknown(String chain, String orderNo, String fromAddress, String errorMessage) {
         return jdbcTemplate.update("""
                         update withdrawal_order
@@ -1115,6 +1249,20 @@ public class ChainJdbcRepository {
                         where chain = ? and order_no = ? and status = 'SIGNING' and tx_hash is null
                         """,
                 fromAddress, errorMessage, toTs(now()), chain, orderNo);
+    }
+
+    public int markWithdrawalBroadcastUnknown(UUID tenantId, String chain, String orderNo,
+                                              String fromAddress, String errorMessage) {
+        return jdbcTemplate.update("""
+                        update withdrawal_order
+                        set status = 'BROADCAST_UNKNOWN',
+                            from_address = coalesce(?, from_address),
+                            error_message = ?,
+                            updated_at = ?
+                        where tenant_id = ? and chain = ? and order_no = ?
+                          and status = 'SIGNING' and tx_hash is null
+                        """,
+                fromAddress, errorMessage, toTs(now()), tenantId, chain, orderNo);
     }
 
     public int updateWithdrawalStatus(String chain, String orderNo, String status, String fromAddress,
@@ -1131,6 +1279,20 @@ public class ChainJdbcRepository {
                 status, fromAddress, txHash, errorMessage, toTs(now()), chain, orderNo);
     }
 
+    public int updateWithdrawalStatus(UUID tenantId, String chain, String orderNo, String status,
+                                      String fromAddress, String txHash, String errorMessage) {
+        return jdbcTemplate.update("""
+                        update withdrawal_order
+                        set status = ?,
+                            from_address = coalesce(?, from_address),
+                            tx_hash = coalesce(?, tx_hash),
+                            error_message = ?,
+                            updated_at = ?
+                        where tenant_id = ? and chain = ? and order_no = ?
+                        """,
+                status, fromAddress, txHash, errorMessage, toTs(now()), tenantId, chain, orderNo);
+    }
+
     public int markWithdrawalConfirmed(String chain, String orderNo, String txHash) {
         return jdbcTemplate.update("""
                         update withdrawal_order
@@ -1139,6 +1301,45 @@ public class ChainJdbcRepository {
                           and tx_hash = ?
                         """,
                 txHash, toTs(now()), chain, orderNo, txHash);
+    }
+
+    public int markWithdrawalConfirmed(UUID tenantId, String chain, String orderNo, String txHash) {
+        return jdbcTemplate.update("""
+                        update withdrawal_order
+                        set status = 'CONFIRMED', tx_hash = ?, error_message = null, updated_at = ?
+                        where tenant_id = ? and chain = ? and order_no = ?
+                          and status in ('SENT', 'CONFIRMING') and tx_hash = ?
+                        """,
+                txHash, toTs(now()), tenantId, chain, orderNo, txHash);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public boolean confirmWithdrawalAndSettle(UUID tenantId, String chain, String orderNo, String txHash,
+                                              String assetSymbol, String accountId, BigDecimal amount) {
+        Objects.requireNonNull(tenantId, "tenantId is required");
+        if (txHash == null || txHash.isBlank()) {
+            throw new IllegalArgumentException("withdrawal tx hash must not be blank");
+        }
+        WithdrawalOrderRecord record = findWithdrawalOrder(tenantId, chain, orderNo)
+                .orElseThrow(() -> new IllegalStateException(
+                        "missing tenant withdrawal order " + chain + ":" + orderNo));
+        if ("CONFIRMED".equals(record.getStatus())) {
+            return false;
+        }
+        if (!Set.of("SENT", "CONFIRMING").contains(record.getStatus())) {
+            throw new IllegalStateException("withdrawal " + orderNo + " is not confirmable from status "
+                    + record.getStatus());
+        }
+        if (record.getTxHash() == null || !record.getTxHash().equals(txHash)) {
+            throw new IllegalStateException("withdrawal " + orderNo + " tx hash mismatch");
+        }
+        if (!settleLockedDebit(tenantId, chain, assetSymbol, accountId, amount)) {
+            throw new IllegalStateException("unable to settle locked " + assetSymbol + " balance");
+        }
+        if (markWithdrawalConfirmed(tenantId, chain, orderNo, txHash) != 1) {
+            throw new IllegalStateException("unable to mark withdrawal " + orderNo + " confirmed");
+        }
+        return true;
     }
 
     @Transactional(rollbackFor = Throwable.class)
@@ -1187,9 +1388,29 @@ public class ChainJdbcRepository {
         return results.stream().findFirst();
     }
 
+    public Optional<String> findWithdrawalTxHash(UUID tenantId, String chain, String orderNo) {
+        List<String> results = jdbcTemplate.queryForList("""
+                        select tx_hash from withdrawal_order
+                        where tenant_id = ? and chain = ? and order_no = ? and tx_hash is not null
+                        """, String.class, tenantId, chain, orderNo);
+        return results.stream().findFirst();
+    }
+
+    public UUID requireWithdrawalTenant(String chain, String orderNo) {
+        List<UUID> tenants = jdbcTemplate.queryForList("""
+                        select tenant_id from withdrawal_order
+                        where chain = ? and order_no = ? and tenant_id is not null
+                        """, UUID.class, chain, orderNo);
+        if (tenants.size() != 1) {
+            throw new IllegalStateException(
+                    "withdrawal order must belong to exactly one tenant: " + chain + ":" + orderNo);
+        }
+        return tenants.getFirst();
+    }
+
     public Optional<WithdrawalOrderRecord> findWithdrawalOrder(String chain, String orderNo) {
         List<WithdrawalOrderRecord> results = jdbcTemplate.query("""
-                        select id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
+                        select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
                                amount, fee, tx_hash, status, error_message, created_at, updated_at
                         from withdrawal_order
                         where chain = ? and order_no = ?
@@ -1199,9 +1420,21 @@ public class ChainJdbcRepository {
         return results.stream().findFirst();
     }
 
+    public Optional<WithdrawalOrderRecord> findWithdrawalOrder(UUID tenantId, String chain, String orderNo) {
+        List<WithdrawalOrderRecord> results = jdbcTemplate.query("""
+                        select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
+                               amount, fee, tx_hash, status, error_message, created_at, updated_at
+                        from withdrawal_order
+                        where tenant_id = ? and chain = ? and order_no = ?
+                        """,
+                (rs, rowNum) -> mapWithdrawalOrder(rs), tenantId, chain, orderNo);
+        return results.stream().findFirst();
+    }
+
     private WithdrawalOrderRecord mapWithdrawalOrder(java.sql.ResultSet rs) throws java.sql.SQLException {
         return WithdrawalOrderRecord.builder()
                 .id(rs.getLong("id"))
+                .tenantId(rs.getObject("tenant_id", UUID.class))
                 .orderNo(rs.getString("order_no"))
                 .userId(rs.getLong("user_id"))
                 .chain(rs.getString("chain"))
@@ -1688,6 +1921,20 @@ public class ChainJdbcRepository {
         return updated == 1;
     }
 
+    public boolean debitLedgerBalance(UUID tenantId, String chain, String assetSymbol,
+                                      String accountId, BigDecimal amount) {
+        int updated = jdbcTemplate.update("""
+                        update ledger_balance
+                        set available_balance = available_balance - ?,
+                            total_balance = total_balance - ?,
+                            updated_at = ?
+                        where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
+                          and available_balance >= ?
+                        """,
+                amount, amount, toTs(now()), tenantId, chain, assetSymbol, accountId, amount);
+        return updated == 1;
+    }
+
     /**
      * Freezes spendable balance before a withdrawal or collection transaction is signed.
      * The guarded update prevents over-spend and makes repeated freeze attempts visible.
@@ -1702,6 +1949,20 @@ public class ChainJdbcRepository {
                           and available_balance >= ?
                         """,
                 amount, amount, toTs(now()), chain, assetSymbol, accountId, amount);
+        return updated == 1;
+    }
+
+    public boolean freezeLedgerBalance(UUID tenantId, String chain, String assetSymbol,
+                                       String accountId, BigDecimal amount) {
+        int updated = jdbcTemplate.update("""
+                        update ledger_balance
+                        set available_balance = available_balance - ?,
+                            locked_balance = locked_balance + ?,
+                            updated_at = ?
+                        where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
+                          and available_balance >= ?
+                        """,
+                amount, amount, toTs(now()), tenantId, chain, assetSymbol, accountId, amount);
         return updated == 1;
     }
 
@@ -1721,6 +1982,20 @@ public class ChainJdbcRepository {
         return updated == 1;
     }
 
+    public boolean releaseLockedBalance(UUID tenantId, String chain, String assetSymbol,
+                                        String accountId, BigDecimal amount) {
+        int updated = jdbcTemplate.update("""
+                        update ledger_balance
+                        set available_balance = available_balance + ?,
+                            locked_balance = locked_balance - ?,
+                            updated_at = ?
+                        where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
+                          and locked_balance >= ?
+                        """,
+                amount, amount, toTs(now()), tenantId, chain, assetSymbol, accountId, amount);
+        return updated == 1;
+    }
+
     /**
      * Finalizes a frozen debit after the chain transaction is confirmed.
      */
@@ -1734,6 +2009,20 @@ public class ChainJdbcRepository {
                           and locked_balance >= ?
                         """,
                 amount, amount, toTs(now()), chain, assetSymbol, accountId, amount);
+        return updated == 1;
+    }
+
+    public boolean settleLockedDebit(UUID tenantId, String chain, String assetSymbol,
+                                     String accountId, BigDecimal amount) {
+        int updated = jdbcTemplate.update("""
+                        update ledger_balance
+                        set locked_balance = locked_balance - ?,
+                            total_balance = total_balance - ?,
+                            updated_at = ?
+                        where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
+                          and locked_balance >= ?
+                        """,
+                amount, amount, toTs(now()), tenantId, chain, assetSymbol, accountId, amount);
         return updated == 1;
     }
 
@@ -2174,6 +2463,7 @@ public class ChainJdbcRepository {
     private static ChainAddressRecord mapChainAddress(java.sql.ResultSet rs) throws java.sql.SQLException {
         return ChainAddressRecord.builder()
                 .id(rs.getLong("id"))
+                .tenantId(rs.getObject("tenant_id", UUID.class))
                 .chain(rs.getString("chain"))
                 .assetSymbol(rs.getString("asset_symbol"))
                 .accountId(rs.getString("account_id"))

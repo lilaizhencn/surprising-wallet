@@ -243,10 +243,18 @@ public class AptosTransactionService {
         }
     }
 
-    public boolean confirmWithdrawal(String orderNo, String assetSymbol, String accountId, BigDecimal debitAmount) {
-        String hash = repository.findWithdrawalTxHash(CHAIN, orderNo).orElseThrow();
+    public boolean confirmWithdrawal(String orderNo, String assetSymbol,
+                                     String accountId, BigDecimal debitAmount) {
+        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
+                orderNo, assetSymbol, accountId, debitAmount);
+    }
+
+    public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo, String assetSymbol,
+                                     String accountId, BigDecimal debitAmount) {
+        String hash = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(hash, Duration.ofMinutes(2));
-        if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, hash, assetSymbol, accountId, debitAmount)) {
+        if (repository.confirmWithdrawalAndSettle(
+                tenantId, CHAIN, orderNo, hash, assetSymbol, accountId, debitAmount)) {
             markConfirmed(hash, transaction);
             return true;
         }

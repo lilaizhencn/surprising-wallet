@@ -16,12 +16,14 @@ import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class AccountChainWorkflowServiceTest {
+    private static final UUID TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000010");
 
     @Test
     void broadcastFailureKeepsFundsLockedForManualAudit() throws Exception {
@@ -134,7 +136,7 @@ class AccountChainWorkflowServiceTest {
         CapturingTonService ton = new CapturingTonService();
         AccountChainWorkflowService service = service(repository, ton);
         WithdrawalOrderRecord order = WithdrawalOrderRecord.builder()
-                .orderNo("ton-confirm").chain("TON").assetSymbol("TON").fromAddress("owner")
+                .tenantId(TENANT_ID).orderNo("ton-confirm").chain("TON").assetSymbol("TON").fromAddress("owner")
                 .debitAccountId("owner").toAddress("destination").amount(BigDecimal.ONE)
                 .fee(BigDecimal.ZERO).txHash("ton-message-hash").status("SENT").build();
 
@@ -189,6 +191,7 @@ class AccountChainWorkflowServiceTest {
 
     private static WithdrawalOrderRecord order() {
         return WithdrawalOrderRecord.builder()
+                .tenantId(TENANT_ID)
                 .orderNo("wd-test")
                 .userId(1L)
                 .chain("ETH")
@@ -324,6 +327,18 @@ class AccountChainWorkflowServiceTest {
         }
 
         @Override
+        public Optional<ChainAddressRecord> findChainAddressByAddress(
+                UUID tenantId, String chain, String assetSymbol, String address) {
+            return TENANT_ID.equals(tenantId) ? Optional.of(this.address) : Optional.empty();
+        }
+
+        @Override
+        public Optional<ChainAddressRecord> findChainAddressByAddress(
+                UUID tenantId, String chain, String address) {
+            return TENANT_ID.equals(tenantId) ? Optional.of(this.address) : Optional.empty();
+        }
+
+        @Override
         public Optional<TokenDefinition> findToken(String chain, String symbol) {
             return Optional.ofNullable(token);
         }
@@ -340,7 +355,22 @@ class AccountChainWorkflowServiceTest {
         }
 
         @Override
+        public int claimWithdrawalSigning(
+                UUID tenantId, String chain, String orderNo, String fromAddress) {
+            signingClaims++;
+            return 1;
+        }
+
+        @Override
         public int markWithdrawalBroadcastUnknown(String chain, String orderNo,
+                                                  String fromAddress, String errorMessage) {
+            broadcastUnknownMarks++;
+            broadcastError = errorMessage;
+            return 1;
+        }
+
+        @Override
+        public int markWithdrawalBroadcastUnknown(UUID tenantId, String chain, String orderNo,
                                                   String fromAddress, String errorMessage) {
             broadcastUnknownMarks++;
             broadcastError = errorMessage;
@@ -356,6 +386,14 @@ class AccountChainWorkflowServiceTest {
         @Override
         public boolean confirmWithdrawalAndSettle(String chain, String orderNo, String txHash,
                                                   String assetSymbol, String accountId, BigDecimal amount) {
+            withdrawalSettlements++;
+            return true;
+        }
+
+        @Override
+        public boolean confirmWithdrawalAndSettle(UUID tenantId, String chain, String orderNo,
+                                                  String txHash, String assetSymbol,
+                                                  String accountId, BigDecimal amount) {
             withdrawalSettlements++;
             return true;
         }

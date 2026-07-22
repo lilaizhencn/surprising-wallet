@@ -143,6 +143,37 @@ class CustodyDepositProjectionIntegrationTest {
     }
 
     @Test
+    void collectionTransferToTenantHotAddressIsNotCreditedAsANewDeposit() {
+        transactions.executeWithoutResult(status -> {
+            DepositFixture fixture = createFixture("internal-hot", "ACTIVE");
+            ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+            DepositEvent event = event(fixture.address(), new BigDecimal("3.50"));
+            jdbc.update("""
+                    insert into collection_record(
+                        tenant_id, custody_address_id, collection_no, chain, asset_symbol,
+                        from_address, to_address, amount, fee, tx_hash, status)
+                    values (?, ?, ?, 'ETH', 'ETH', ?, ?, 3.50, 0, ?, 'SENT')
+                    """, fixture.tenantId(), fixture.custodyAddressId(),
+                    "internal-collection-" + UUID.randomUUID(),
+                    "0x1111111111111111111111111111111111111111",
+                    fixture.address(), event.txId());
+
+            assertFalse(repository.recordAndCreditDeposit(
+                    event, 0L, 12, fixture.accountId()));
+            assertEquals(0, jdbc.queryForObject("""
+                    select count(*) from deposit_record
+                     where chain = 'ETH' and tx_hash = ?
+                    """, Integer.class, event.txId()));
+            assertEquals(0, jdbc.queryForObject("""
+                    select count(*) from ledger_balance
+                     where tenant_id = ? and chain = 'ETH' and asset_symbol = 'ETH'
+                       and account_id = ?
+                    """, Integer.class, fixture.tenantId(), fixture.accountId()));
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
     void tenantSubjectMappingIsStableAndTenantIsolated() {
         transactions.executeWithoutResult(status -> {
             CustodyRepository repository = new CustodyRepository(jdbc);
