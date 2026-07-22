@@ -2,15 +2,15 @@
 set -euo pipefail
 
 DOT_FLOW_SOURCE_ROOT=$(git rev-parse --show-toplevel)
+source "$DOT_FLOW_SOURCE_ROOT/scripts/regtest/local-postgres.sh"
 DOT_FLOW_BUILD_ROOT=$(mktemp -d /tmp/surprising-wallet-dot-build.XXXXXX)
-DOT_FLOW_DB="surprising-wallet-dot-flow-$$"
+DOT_FLOW_DB="surprising_wallet_test_dot_$$"
 DOT_FLOW_NATIVE="surprising-wallet-dot-native-$$"
 DOT_FLOW_ASSET="surprising-wallet-dot-assethub-$$"
 DOT_FLOW_RUNTIME="surprising-wallet-dot-runtime-$$"
 DOT_FLOW_SPEC_CACHE="surprising-wallet-dot-assethub-v1240"
 DOT_FLOW_SPEC_FILE="/spec/asset-hub-westend-dev-v1.24.0-raw.json"
 DOT_FLOW_RUNTIME_IMAGE="surprising-wallet/polkadot-runtime-service:flow"
-DOT_FLOW_DB_PORT=${DOT_FLOW_DB_PORT:-55444}
 DOT_FLOW_NATIVE_PORT=${DOT_FLOW_NATIVE_PORT:-19944}
 DOT_FLOW_ASSET_PORT=${DOT_FLOW_ASSET_PORT:-19945}
 DOT_FLOW_RUNTIME_PORT=${DOT_FLOW_RUNTIME_PORT:-18787}
@@ -23,13 +23,14 @@ DOT_FLOW_EXTERNAL_ADDRESS="5DxwtdZkatUKsjMUafscZ1yKLTksRfD74nH3GGBbM8WCEYuB"
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
+  local_pg_drop "$DOT_FLOW_DB" >/dev/null 2>&1 || true
   if [[ "$status" != 0 && "${DOT_FLOW_KEEP_ON_FAILURE:-false}" == true ]]; then
-    printf 'Polkadot failure resources kept: native=%s asset=%s runtime=%s db=%s build=%s\n' \
-      "$DOT_FLOW_NATIVE" "$DOT_FLOW_ASSET" "$DOT_FLOW_RUNTIME" "$DOT_FLOW_DB" \
+    printf 'Polkadot failure resources kept: native=%s asset=%s runtime=%s build=%s\n' \
+      "$DOT_FLOW_NATIVE" "$DOT_FLOW_ASSET" "$DOT_FLOW_RUNTIME" \
       "$DOT_FLOW_BUILD_ROOT" >&2
     exit "$status"
   fi
-  docker rm -f "$DOT_FLOW_RUNTIME" "$DOT_FLOW_ASSET" "$DOT_FLOW_NATIVE" "$DOT_FLOW_DB" \
+  docker rm -f "$DOT_FLOW_RUNTIME" "$DOT_FLOW_ASSET" "$DOT_FLOW_NATIVE" \
     >/dev/null 2>&1 || true
   if [[ "$DOT_FLOW_BUILD_ROOT" == /tmp/surprising-wallet-dot-build.* ]]; then
     rm -rf "$DOT_FLOW_BUILD_ROOT"
@@ -38,7 +39,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-for command in curl docker git jq mvn rsync sed; do
+for command in curl docker git jq mvn rsync; do
   command -v "$command" >/dev/null || {
     printf 'missing required command: %s\n' "$command" >&2
     exit 1
@@ -55,6 +56,9 @@ rsync -a \
   "$DOT_FLOW_SOURCE_ROOT/" "$DOT_FLOW_BUILD_ROOT/"
 
 docker info >/dev/null
+local_pg_require
+local_pg_create "$DOT_FLOW_DB"
+DOT_FLOW_DB_URL=$(local_pg_jdbc_url "$DOT_FLOW_DB")
 docker volume create "$DOT_FLOW_SPEC_CACHE" >/dev/null
 if ! docker run --rm -v "${DOT_FLOW_SPEC_CACHE}:/spec" alpine:3.20 \
     test -s "$DOT_FLOW_SPEC_FILE"; then
@@ -66,27 +70,9 @@ if ! docker run --rm -v "${DOT_FLOW_SPEC_CACHE}:/spec" alpine:3.20 \
        > ${DOT_FLOW_SPEC_FILE}.tmp && mv ${DOT_FLOW_SPEC_FILE}.tmp ${DOT_FLOW_SPEC_FILE}"
 fi
 
-docker run -d --name "$DOT_FLOW_DB" \
-  -e POSTGRES_USER=wallet \
-  -e POSTGRES_PASSWORD=wallet \
-  -e POSTGRES_DB=wallet \
-  -p "127.0.0.1:${DOT_FLOW_DB_PORT}:5432" \
-  postgres:16-alpine >/dev/null
-
-for attempt in $(seq 1 60); do
-  if docker exec "$DOT_FLOW_DB" psql -U wallet -d wallet -Atqc 'select 1' >/dev/null 2>&1; then
-    break
-  fi
-  if [[ "$attempt" == 60 ]]; then
-    printf 'Polkadot integration PostgreSQL did not become ready\n' >&2
-    exit 1
-  fi
-  sleep 1
-done
-
-sed '/^SET transaction_timeout = /d' "$DOT_FLOW_BUILD_ROOT/docs/db/surprising-wallet-init-pgsql.sql" \
-  | docker exec -i "$DOT_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -q
-docker exec -i "$DOT_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -q <<SQL
+local_pg_psql "$DOT_FLOW_DB" -v ON_ERROR_STOP=1 -q \
+  -f "$DOT_FLOW_BUILD_ROOT/docs/db/surprising-wallet-init-pgsql.sql"
+local_pg_psql "$DOT_FLOW_DB" -v ON_ERROR_STOP=1 -q <<SQL
 INSERT INTO wallet_key_config
     (id, sig1_seed, sig2_seed, recovery_seed, ed25519_seed, updated_by)
 VALUES
@@ -211,12 +197,12 @@ mvn -f "$DOT_FLOW_BUILD_ROOT/pom.xml" \
   -Dtest=PolkadotAddressGenerationTest,PolkadotRuntimeClientTest,PolkadotDepositScannerTest,PolkadotTransactionServiceTest,PolkadotDevnetFullFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dpolkadot.devnet.flow.enabled=true \
-  -Dpolkadot.db.url="jdbc:postgresql://127.0.0.1:${DOT_FLOW_DB_PORT}/wallet" \
-  -Dpolkadot.db.user=wallet \
-  -Dpolkadot.db.password=wallet \
+  -Dpolkadot.db.url="$DOT_FLOW_DB_URL" \
+  -Dpolkadot.db.user="$REGTEST_PG_USER" \
+  -Dpolkadot.db.password="$REGTEST_PG_PASSWORD" \
   test
 
-docker exec "$DOT_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -Atqc "
+local_pg_psql "$DOT_FLOW_DB" -v ON_ERROR_STOP=1 -Atqc "
 do \$\$
 begin
   if (select count(*) from deposit_record where chain='DOT' and status='CREDITED'

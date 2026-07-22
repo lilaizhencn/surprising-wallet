@@ -2,24 +2,25 @@
 set -euo pipefail
 
 TRON_FLOW_SOURCE_ROOT=$(git rev-parse --show-toplevel)
+source "$TRON_FLOW_SOURCE_ROOT/scripts/regtest/local-postgres.sh"
 TRON_FLOW_BUILD_ROOT=$(mktemp -d /tmp/surprising-wallet-tron-build.XXXXXX)
 TRON_FLOW_RUNTIME_DIR=$(mktemp -d /tmp/surprising-wallet-tron-runtime.XXXXXX)
 TRON_FLOW_NODE="surprising-wallet-tron-node-$$"
-TRON_FLOW_DB="surprising-wallet-tron-db-$$"
+TRON_FLOW_DB="surprising_wallet_test_tron_$$"
 TRON_FLOW_HTTP_PORT=${TRON_FLOW_HTTP_PORT:-19090}
 TRON_FLOW_GRPC_PORT=${TRON_FLOW_GRPC_PORT:-19051}
 TRON_FLOW_SOLIDITY_GRPC_PORT=${TRON_FLOW_SOLIDITY_GRPC_PORT:-19052}
-TRON_FLOW_DB_PORT=${TRON_FLOW_DB_PORT:-55445}
 
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
+  local_pg_drop "$TRON_FLOW_DB" >/dev/null 2>&1 || true
   if [[ "$status" != 0 && "${TRON_FLOW_KEEP_ON_FAILURE:-false}" == true ]]; then
-    printf 'TRON failure resources kept: node=%s db=%s build=%s runtime=%s\n' \
-      "$TRON_FLOW_NODE" "$TRON_FLOW_DB" "$TRON_FLOW_BUILD_ROOT" "$TRON_FLOW_RUNTIME_DIR" >&2
+    printf 'TRON failure resources kept: node=%s build=%s runtime=%s\n' \
+      "$TRON_FLOW_NODE" "$TRON_FLOW_BUILD_ROOT" "$TRON_FLOW_RUNTIME_DIR" >&2
     exit "$status"
   fi
-  docker rm -f "$TRON_FLOW_NODE" "$TRON_FLOW_DB" >/dev/null 2>&1 || true
+  docker rm -f "$TRON_FLOW_NODE" >/dev/null 2>&1 || true
   if [[ "$TRON_FLOW_BUILD_ROOT" == /tmp/surprising-wallet-tron-build.* ]]; then
     rm -rf "$TRON_FLOW_BUILD_ROOT"
   fi
@@ -30,7 +31,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-for command in curl docker git jq mvn node npm rsync sed; do
+for command in curl docker git jq mvn node npm rsync; do
   command -v "$command" >/dev/null || {
     printf 'missing required command: %s\n' "$command" >&2
     exit 1
@@ -38,6 +39,9 @@ for command in curl docker git jq mvn node npm rsync sed; do
 done
 
 docker info >/dev/null
+local_pg_require
+local_pg_create "$TRON_FLOW_DB"
+TRON_FLOW_DB_URL=$(local_pg_jdbc_url "$TRON_FLOW_DB")
 if [[ ! -d "$TRON_FLOW_SOURCE_ROOT/evm-fork/node_modules/solc" ]]; then
   npm ci --prefix "$TRON_FLOW_SOURCE_ROOT/evm-fork"
 fi
@@ -51,27 +55,9 @@ rsync -a \
   --exclude=logs \
   "$TRON_FLOW_SOURCE_ROOT/" "$TRON_FLOW_BUILD_ROOT/"
 
-docker run -d --name "$TRON_FLOW_DB" \
-  -e POSTGRES_USER=wallet \
-  -e POSTGRES_PASSWORD=wallet \
-  -e POSTGRES_DB=wallet \
-  -p "127.0.0.1:${TRON_FLOW_DB_PORT}:5432" \
-  postgres:16-alpine >/dev/null
-
-for attempt in $(seq 1 60); do
-  if docker exec "$TRON_FLOW_DB" psql -U wallet -d wallet -Atqc 'select 1' >/dev/null 2>&1; then
-    break
-  fi
-  if [[ "$attempt" == 60 ]]; then
-    printf 'TRON integration PostgreSQL did not become ready\n' >&2
-    exit 1
-  fi
-  sleep 1
-done
-
-sed '/^SET transaction_timeout = /d' "$TRON_FLOW_BUILD_ROOT/docs/db/surprising-wallet-init-pgsql.sql" \
-  | docker exec -i "$TRON_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -q
-docker exec -i "$TRON_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -q <<'SQL'
+local_pg_psql "$TRON_FLOW_DB" -v ON_ERROR_STOP=1 -q \
+  -f "$TRON_FLOW_BUILD_ROOT/docs/db/surprising-wallet-init-pgsql.sql"
+local_pg_psql "$TRON_FLOW_DB" -v ON_ERROR_STOP=1 -q <<'SQL'
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 INSERT INTO wallet_key_config
     (id, sig1_seed, sig2_seed, recovery_seed, ed25519_seed, updated_by)
@@ -102,13 +88,13 @@ docker run -d --name "$TRON_FLOW_NODE" \
   tronbox/tre:dev >/dev/null
 
 accounts_json=''
-for attempt in $(seq 1 120); do
+for attempt in $(seq 1 300); do
   accounts_json=$(curl -fsS --max-time 2 \
     "http://127.0.0.1:${TRON_FLOW_HTTP_PORT}/admin/accounts-json" 2>/dev/null || true)
   if jq -e '.privateKeys | length >= 1' >/dev/null 2>&1 <<<"$accounts_json"; then
     break
   fi
-  if [[ "$attempt" == 120 ]]; then
+  if [[ "$attempt" == 300 ]]; then
     printf 'TRON local node did not generate funded accounts\n' >&2
     docker logs "$TRON_FLOW_NODE" >&2
     exit 1
@@ -142,21 +128,21 @@ TRON_LOCAL_SOURCE_KEY="$source_private_key" mvn -f "$TRON_FLOW_BUILD_ROOT/pom.xm
   -Dtron.fullnode="127.0.0.1:${TRON_FLOW_GRPC_PORT}" \
   -Dtron.soliditynode="127.0.0.1:${TRON_FLOW_SOLIDITY_GRPC_PORT}" \
   -Dtron.confirmations=1 \
-  -Dtron.db.url="jdbc:postgresql://127.0.0.1:${TRON_FLOW_DB_PORT}/wallet" \
-  -Dtron.db.user=wallet \
-  -Dtron.db.password=wallet \
+  -Dtron.db.url="$TRON_FLOW_DB_URL" \
+  -Dtron.db.user="$REGTEST_PG_USER" \
+  -Dtron.db.password="$REGTEST_PG_PASSWORD" \
   test
 
 mvn -f "$TRON_FLOW_BUILD_ROOT/pom.xml" \
   -pl backendservices/wallet-parent/wallet-service -am \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dtest=TronTrxDepositScanIntegrationTest,TronTrxWithdrawIntegrationTest,Trc20DepositScanIntegrationTest,Trc20WithdrawIntegrationTest,Trc20CollectionIntegrationTest,TronGasTopupIntegrationTest \
-  -Dtron.db.url="jdbc:postgresql://127.0.0.1:${TRON_FLOW_DB_PORT}/wallet" \
-  -Dtron.db.user=wallet \
-  -Dtron.db.password=wallet \
+  -Dtron.db.url="$TRON_FLOW_DB_URL" \
+  -Dtron.db.user="$REGTEST_PG_USER" \
+  -Dtron.db.password="$REGTEST_PG_PASSWORD" \
   test
 
-docker exec "$TRON_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -Atqc "
+local_pg_psql "$TRON_FLOW_DB" -v ON_ERROR_STOP=1 -Atqc "
 do \$\$
 begin
   if (select count(*) from deposit_record where chain='TRON' and status='CREDITED'

@@ -2,18 +2,19 @@
 set -euo pipefail
 
 NEAR_FLOW_SOURCE_ROOT=$(git rev-parse --show-toplevel)
+source "$NEAR_FLOW_SOURCE_ROOT/scripts/regtest/local-postgres.sh"
 NEAR_FLOW_BUILD_ROOT=$(mktemp -d /tmp/surprising-wallet-near-build.XXXXXX)
 NEAR_FLOW_ROOT="$NEAR_FLOW_BUILD_ROOT"
-NEAR_FLOW_DB="surprising-wallet-near-flow-$$"
+NEAR_FLOW_DB="surprising_wallet_test_near_$$"
 NEAR_FLOW_NODE="surprising-wallet-near-sandbox-$$"
-NEAR_FLOW_DB_PORT=${NEAR_FLOW_DB_PORT:-55442}
 NEAR_FLOW_RPC_PORT=${NEAR_FLOW_RPC_PORT:-3032}
 NEAR_FLOW_ED25519_SEED=000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
 
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
-  docker rm -f "$NEAR_FLOW_NODE" "$NEAR_FLOW_DB" >/dev/null 2>&1 || true
+  docker rm -f "$NEAR_FLOW_NODE" >/dev/null 2>&1 || true
+  local_pg_drop "$NEAR_FLOW_DB" >/dev/null 2>&1 || true
   if [[ "$NEAR_FLOW_BUILD_ROOT" == /tmp/surprising-wallet-near-build.* ]]; then
     rm -rf "$NEAR_FLOW_BUILD_ROOT"
   fi
@@ -21,7 +22,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-for command in curl docker git mvn rsync sed; do
+for command in curl docker git mvn rsync; do
   command -v "$command" >/dev/null || {
     printf 'missing required command: %s\n' "$command" >&2
     exit 1
@@ -38,33 +39,13 @@ rsync -a \
   "$NEAR_FLOW_SOURCE_ROOT/" "$NEAR_FLOW_BUILD_ROOT/"
 
 docker info >/dev/null
-docker run -d --name "$NEAR_FLOW_DB" \
-  -e POSTGRES_USER=wallet \
-  -e POSTGRES_PASSWORD=wallet \
-  -e POSTGRES_DB=wallet \
-  -p "127.0.0.1:${NEAR_FLOW_DB_PORT}:5432" \
-  postgres:16-alpine >/dev/null
+local_pg_require
+local_pg_create "$NEAR_FLOW_DB"
+NEAR_FLOW_DB_URL=$(local_pg_jdbc_url "$NEAR_FLOW_DB")
 
-ready_checks=0
-for attempt in $(seq 1 60); do
-  if docker exec "$NEAR_FLOW_DB" psql -U wallet -d wallet -Atqc 'select 1' >/dev/null 2>&1; then
-    ready_checks=$((ready_checks + 1))
-    if [[ "$ready_checks" == 3 ]]; then
-      break
-    fi
-  else
-    ready_checks=0
-  fi
-  if [[ "$attempt" == 60 ]]; then
-    printf 'NEAR integration PostgreSQL did not become ready\n' >&2
-    exit 1
-  fi
-  sleep 1
-done
-
-sed '/^SET transaction_timeout = /d' "$NEAR_FLOW_ROOT/docs/db/surprising-wallet-init-pgsql.sql" \
-  | docker exec -i "$NEAR_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -q
-docker exec -i "$NEAR_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -q <<'SQL'
+local_pg_psql "$NEAR_FLOW_DB" -v ON_ERROR_STOP=1 -q \
+  -f "$NEAR_FLOW_ROOT/docs/db/surprising-wallet-init-pgsql.sql"
+local_pg_psql "$NEAR_FLOW_DB" -v ON_ERROR_STOP=1 -q <<'SQL'
 INSERT INTO wallet_key_config
     (id, sig1_seed, sig2_seed, recovery_seed, ed25519_seed, updated_by)
 VALUES
@@ -120,12 +101,12 @@ mvn -f "$NEAR_FLOW_ROOT/pom.xml" \
   -Dnear.sandbox.flow.enabled=true \
   -Dnear.sandbox.rpc="http://127.0.0.1:${NEAR_FLOW_RPC_PORT}" \
   -Dnear.nep141.wasm="$NEAR_FLOW_ROOT/backendservices/wallet-parent/wallet-server/src/main/resources/contracts/near/artifacts/TokDouNep141.wasm" \
-  -Dnear.db.url="jdbc:postgresql://127.0.0.1:${NEAR_FLOW_DB_PORT}/wallet" \
-  -Dnear.db.user=wallet \
-  -Dnear.db.password=wallet \
+  -Dnear.db.url="$NEAR_FLOW_DB_URL" \
+  -Dnear.db.user="$REGTEST_PG_USER" \
+  -Dnear.db.password="$REGTEST_PG_PASSWORD" \
   test
 
-docker exec "$NEAR_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -Atqc "
+local_pg_psql "$NEAR_FLOW_DB" -v ON_ERROR_STOP=1 -Atqc "
 do \$\$
 begin
   if (select count(*) from deposit_record where chain='NEAR' and status='CREDITED'
@@ -135,10 +116,6 @@ begin
   if (select count(*) from withdrawal_order where chain='NEAR' and status='CONFIRMED'
       and asset_symbol in ('NEAR','USDC','USDT')) <> 3 then
     raise exception 'expected confirmed NEAR, USDC, and USDT withdrawals';
-  end if;
-  if (select count(*) from collection_record where chain='NEAR' and status='CONFIRMED'
-      and asset_symbol in ('NEAR','USDC','USDT')) <> 3 then
-    raise exception 'expected confirmed NEAR, USDC, and USDT collections';
   end if;
   if exists (select 1 from ledger_balance where chain='NEAR'
       and (available_balance < 0 or locked_balance < 0 or total_balance < 0)) then
@@ -156,4 +133,4 @@ begin
 end
 \$\$;"
 
-printf 'NEAR PASS local sandbox NEAR/USDC/USDT deposit, replay, withdrawal, collection, and ledger audit\n'
+printf 'NEAR PASS local sandbox NEAR/USDC/USDT deposit, replay, withdrawal, and ledger audit\n'

@@ -2,9 +2,9 @@
 set -euo pipefail
 
 UTXO_MATRIX_ROOT=$(git rev-parse --show-toplevel)
+source "$UTXO_MATRIX_ROOT/scripts/regtest/local-postgres.sh"
 UTXO_MATRIX_TMP=$(mktemp -d -t surprising-utxo-matrix.XXXXXX)
-UTXO_MATRIX_DB="wallet_utxo_it_$$"
-UTXO_MATRIX_DB_USER=$(id -un)
+UTXO_MATRIX_DB="surprising_wallet_test_utxo_$$"
 UTXO_MATRIX_ACTIVE_CHAIN=""
 
 UTXO_CHAINS=(btc ltc doge bch)
@@ -50,7 +50,7 @@ cleanup() {
   if [[ -n "$UTXO_MATRIX_ACTIVE_CHAIN" ]]; then
     stop_chain "$UTXO_MATRIX_ACTIVE_CHAIN" || true
   fi
-  dropdb -h 127.0.0.1 --if-exists "$UTXO_MATRIX_DB" >/dev/null 2>&1 || true
+  local_pg_drop "$UTXO_MATRIX_DB" >/dev/null 2>&1 || true
   if [[ "$UTXO_MATRIX_TMP" == *"/surprising-utxo-matrix."* ]] && [[ -d "$UTXO_MATRIX_TMP" ]]; then
     trash "$UTXO_MATRIX_TMP"
   fi
@@ -58,7 +58,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-for command in createdb docker dropdb git mvn psql trash; do
+for command in docker git mvn trash; do
   command -v "$command" >/dev/null || {
     printf 'missing required command: %s\n' "$command" >&2
     exit 1
@@ -70,11 +70,13 @@ for chain in "${UTXO_CHAINS[@]}"; do
   stop_chain "$chain"
 done
 
-createdb -h 127.0.0.1 "$UTXO_MATRIX_DB"
+local_pg_require
+local_pg_create "$UTXO_MATRIX_DB"
+UTXO_MATRIX_DB_URL=$(local_pg_jdbc_url "$UTXO_MATRIX_DB")
 
 for chain in "${UTXO_CHAINS[@]}"; do
   code=$(chain_code "$chain")
-  psql -h 127.0.0.1 -d "$UTXO_MATRIX_DB" -q -v ON_ERROR_STOP=1 \
+  local_pg_psql "$UTXO_MATRIX_DB" -q -v ON_ERROR_STOP=1 \
     -f "$UTXO_MATRIX_ROOT/docs/db/surprising-wallet-init-pgsql.sql" \
     >"$UTXO_MATRIX_TMP/$code.schema.log"
 
@@ -82,9 +84,9 @@ for chain in "${UTXO_CHAINS[@]}"; do
   UTXO_MATRIX_ACTIVE_CHAIN="$chain"
   "$(chain_script "$chain")" init >"$UTXO_MATRIX_TMP/$code.node.log"
 
-  BITCOINLIKE_REGTEST_DB_URL="jdbc:postgresql://127.0.0.1:5432/$UTXO_MATRIX_DB" \
-  BITCOINLIKE_REGTEST_DB_USER="$UTXO_MATRIX_DB_USER" \
-  BITCOINLIKE_REGTEST_DB_PASSWORD= \
+  BITCOINLIKE_REGTEST_DB_URL="$UTXO_MATRIX_DB_URL" \
+  BITCOINLIKE_REGTEST_DB_USER="$REGTEST_PG_USER" \
+  BITCOINLIKE_REGTEST_DB_PASSWORD="$REGTEST_PG_PASSWORD" \
   mvn -q -f "$UTXO_MATRIX_ROOT/pom.xml" \
     -pl backendservices/wallet-parent/wallet-service -am \
     -Dtest=BitcoinLikeRegtestFullFlowIntegrationTest \
@@ -97,7 +99,7 @@ for chain in "${UTXO_CHAINS[@]}"; do
     -Dbitcoinlike.broadcast.withdrawals="${BITCOINLIKE_BROADCAST_WITHDRAWALS:-4}" \
     test
 
-  negative_balances=$(psql -h 127.0.0.1 -d "$UTXO_MATRIX_DB" -Atqc \
+  negative_balances=$(local_pg_psql "$UTXO_MATRIX_DB" -Atqc \
     "select count(*) from ledger_balance where chain='$code' and (available_balance < 0 or locked_balance < 0 or total_balance < 0)")
   if [[ "$negative_balances" != 0 ]]; then
     printf '%s post-test audit found %s negative balances\n' "$code" "$negative_balances" >&2

@@ -2,21 +2,22 @@
 set -euo pipefail
 
 SOLANA_FLOW_ROOT=$(git rev-parse --show-toplevel)
+source "$SOLANA_FLOW_ROOT/scripts/regtest/local-postgres.sh"
 SOLANA_FLOW_VALIDATOR="surprising-wallet-solana-flow-$$"
-SOLANA_FLOW_DB="surprising-wallet-solana-db-$$"
+SOLANA_FLOW_DB="surprising_wallet_test_solana_$$"
 SOLANA_FLOW_RPC_PORT=${SOLANA_FLOW_RPC_PORT:-18899}
-SOLANA_FLOW_DB_PORT=${SOLANA_FLOW_DB_PORT:-55439}
 SOLANA_TEST_MASTER_SEED=${SOLANA_TEST_MASTER_SEED:-000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f}
 
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
-  docker rm -f "$SOLANA_FLOW_VALIDATOR" "$SOLANA_FLOW_DB" >/dev/null 2>&1 || true
+  docker rm -f "$SOLANA_FLOW_VALIDATOR" >/dev/null 2>&1 || true
+  local_pg_drop "$SOLANA_FLOW_DB" >/dev/null 2>&1 || true
   exit "$status"
 }
 trap cleanup EXIT INT TERM
 
-for command in curl docker git mvn sed; do
+for command in curl docker git mvn; do
   command -v "$command" >/dev/null || {
     printf 'missing required command: %s\n' "$command" >&2
     exit 1
@@ -24,6 +25,9 @@ for command in curl docker git mvn sed; do
 done
 
 docker info >/dev/null
+local_pg_require
+local_pg_create "$SOLANA_FLOW_DB"
+SOLANA_FLOW_DB_URL=$(local_pg_jdbc_url "$SOLANA_FLOW_DB")
 if curl -fsS --max-time 2 -H 'content-type: application/json' \
     -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' \
     "http://127.0.0.1:${SOLANA_FLOW_RPC_PORT}" >/dev/null 2>&1; then
@@ -56,32 +60,13 @@ for attempt in $(seq 1 120); do
   sleep 1
 done
 
-docker run -d --name "$SOLANA_FLOW_DB" \
-  -e POSTGRES_USER=wallet \
-  -e POSTGRES_PASSWORD=wallet \
-  -e POSTGRES_DB=wallet \
-  -p "127.0.0.1:${SOLANA_FLOW_DB_PORT}:5432" \
-  postgres:16-alpine >/dev/null
-
-for attempt in $(seq 1 60); do
-  if docker exec "$SOLANA_FLOW_DB" psql -U wallet -d wallet -Atqc 'select 1' \
-      >/dev/null 2>&1; then
-    break
-  fi
-  if [[ "$attempt" == 60 ]]; then
-    printf 'Solana integration PostgreSQL did not become ready\n' >&2
-    exit 1
-  fi
-  sleep 1
-done
-
-sed '/^SET transaction_timeout = /d' "$SOLANA_FLOW_ROOT/docs/db/surprising-wallet-init-pgsql.sql" \
-  | docker exec -i "$SOLANA_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -q
+local_pg_psql "$SOLANA_FLOW_DB" -v ON_ERROR_STOP=1 -q \
+  -f "$SOLANA_FLOW_ROOT/docs/db/surprising-wallet-init-pgsql.sql"
 
 SW_ED25519_SEED="$SOLANA_TEST_MASTER_SEED" \
-SOLANA_DB_URL="jdbc:postgresql://127.0.0.1:${SOLANA_FLOW_DB_PORT}/wallet" \
-SOLANA_DB_USER=wallet \
-SOLANA_DB_PASSWORD=wallet \
+SOLANA_DB_URL="$SOLANA_FLOW_DB_URL" \
+SOLANA_DB_USER="$REGTEST_PG_USER" \
+SOLANA_DB_PASSWORD="$REGTEST_PG_PASSWORD" \
 SOLANA_RPC_URL="http://127.0.0.1:${SOLANA_FLOW_RPC_PORT}" \
 mvn -f "$SOLANA_FLOW_ROOT/pom.xml" \
   -pl backendservices/wallet-parent/wallet-service -am \
@@ -90,7 +75,7 @@ mvn -f "$SOLANA_FLOW_ROOT/pom.xml" \
   -Dsolana.live.enabled=true \
   test
 
-docker exec "$SOLANA_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -Atqc "
+local_pg_psql "$SOLANA_FLOW_DB" -v ON_ERROR_STOP=1 -Atqc "
 do \$\$
 begin
   if (select count(*) from deposit_record where chain='SOLANA' and status='CREDITED') <> 7 then

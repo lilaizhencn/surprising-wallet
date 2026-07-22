@@ -2,8 +2,8 @@
 set -euo pipefail
 
 TON_FLOW_ROOT=$(git rev-parse --show-toplevel)
-TON_FLOW_DB="surprising-wallet-ton-flow-$$"
-TON_FLOW_DB_PORT=${TON_FLOW_DB_PORT:-55440}
+source "$TON_FLOW_ROOT/scripts/regtest/local-postgres.sh"
+TON_FLOW_DB="surprising_wallet_test_ton_$$"
 TON_FLOW_RPC_URL=${TON_FLOW_RPC_URL:-http://127.0.0.1:8081}
 TON_TEST_MASTER_SEED=${TON_TEST_MASTER_SEED:-000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f}
 TON_TEST_SOURCE_ADDRESS=0QBi-S8V1mNK01lqxSNfYUQk3pX3ays7bbjYqgAG1SpHOjkS
@@ -11,19 +11,21 @@ TON_TEST_SOURCE_ADDRESS=0QBi-S8V1mNK01lqxSNfYUQk3pX3ays7bbjYqgAG1SpHOjkS
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
-  docker rm -f "$TON_FLOW_DB" >/dev/null 2>&1 || true
+  local_pg_drop "$TON_FLOW_DB" >/dev/null 2>&1 || true
   exit "$status"
 }
 trap cleanup EXIT INT TERM
 
-for command in curl docker git jq mvn sed; do
+for command in curl git jq mvn; do
   command -v "$command" >/dev/null || {
     printf 'missing required command: %s\n' "$command" >&2
     exit 1
   }
 done
 
-docker info >/dev/null
+local_pg_require
+local_pg_create "$TON_FLOW_DB"
+TON_FLOW_DB_URL=$(local_pg_jdbc_url "$TON_FLOW_DB")
 curl -fsS --max-time 10 "$TON_FLOW_RPC_URL/getMasterchainInfo" \
   | jq -e '.ok == true' >/dev/null || {
     printf 'TON v2 RPC is not ready at %s; start an isolated MyLocalTon network first\n' \
@@ -39,31 +41,13 @@ if (( source_balance <= 16000000000 )); then
   exit 1
 fi
 
-docker run -d --name "$TON_FLOW_DB" \
-  -e POSTGRES_USER=wallet \
-  -e POSTGRES_PASSWORD=wallet \
-  -e POSTGRES_DB=wallet \
-  -p "127.0.0.1:${TON_FLOW_DB_PORT}:5432" \
-  postgres:16-alpine >/dev/null
-
-for attempt in $(seq 1 60); do
-  if docker exec "$TON_FLOW_DB" pg_isready -U wallet -d wallet >/dev/null 2>&1; then
-    break
-  fi
-  if [[ "$attempt" == 60 ]]; then
-    printf 'TON integration PostgreSQL did not become ready\n' >&2
-    exit 1
-  fi
-  sleep 1
-done
-
-sed '/^SET transaction_timeout = /d' "$TON_FLOW_ROOT/docs/db/surprising-wallet-init-pgsql.sql" \
-  | docker exec -i "$TON_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -q
+local_pg_psql "$TON_FLOW_DB" -v ON_ERROR_STOP=1 -q \
+  -f "$TON_FLOW_ROOT/docs/db/surprising-wallet-init-pgsql.sql"
 
 SW_ED25519_SEED="$TON_TEST_MASTER_SEED" \
-TON_DB_URL="jdbc:postgresql://127.0.0.1:${TON_FLOW_DB_PORT}/wallet" \
-TON_DB_USER=wallet \
-TON_DB_PASSWORD=wallet \
+TON_DB_URL="$TON_FLOW_DB_URL" \
+TON_DB_USER="$REGTEST_PG_USER" \
+TON_DB_PASSWORD="$REGTEST_PG_PASSWORD" \
 TON_RPC_URL="$TON_FLOW_RPC_URL" \
 mvn -f "$TON_FLOW_ROOT/pom.xml" \
   -pl backendservices/wallet-parent/wallet-service -am \
@@ -74,7 +58,7 @@ mvn -f "$TON_FLOW_ROOT/pom.xml" \
   -Dton.live.enabled=true \
   test
 
-docker exec "$TON_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -Atqc "
+local_pg_psql "$TON_FLOW_DB" -v ON_ERROR_STOP=1 -Atqc "
 do \$\$
 begin
   if (select count(*) from deposit_record where chain='TON' and status='CREDITED'

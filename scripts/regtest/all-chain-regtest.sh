@@ -47,6 +47,8 @@ commands:
   test-cardano  Run isolated Cardano Yaci devnet ADA/USDC/USDT full flow and reconciliation test
   test-dot      Run isolated Polkadot + Asset Hub DOT/USDC/USDT full flow and reconciliation test
   test-tron     Run isolated TRON TRE TRX/USDT/USDC full flow and reconciliation test
+  test-load     Run 1000-user ETH/TRON/SOLANA/SUI ledger and webhook concurrency load
+  test-system   Run TRON/NEAR/Cardano flows and the 1000-user load simultaneously
   dot-runtime-up    Start the local Polkadot runtime companion service
   dot-runtime-down  Stop the local Polkadot runtime companion service
   test-evm      Run ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C fork regression
@@ -189,6 +191,14 @@ test_tron() {
   "${ROOT_DIR}/scripts/regtest/run-tron-flow.sh"
 }
 
+test_load() {
+  "${ROOT_DIR}/scripts/regtest/run-multichain-load.sh"
+}
+
+test_system() {
+  "${ROOT_DIR}/scripts/regtest/run-multichain-system-test.sh"
+}
+
 test_db() {
   mvn_wallet_test \
     -Dsurefire.failIfNoSpecifiedTests=false \
@@ -291,6 +301,12 @@ case "${1:-matrix}" in
     ;;
   test-tron)
     test_tron
+    ;;
+  test-load)
+    test_load
+    ;;
+  test-system)
+    test_system
     ;;
   dot-runtime-up)
     dot_runtime_up

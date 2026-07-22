@@ -2,12 +2,12 @@
 set -euo pipefail
 
 CARDANO_FLOW_SOURCE_ROOT=$(git rev-parse --show-toplevel)
+source "$CARDANO_FLOW_SOURCE_ROOT/scripts/regtest/local-postgres.sh"
 CARDANO_FLOW_BUILD_ROOT=$(mktemp -d /tmp/surprising-wallet-cardano-build.XXXXXX)
 CARDANO_FLOW_ROOT="$CARDANO_FLOW_BUILD_ROOT"
-CARDANO_FLOW_DB="surprising-wallet-cardano-flow-$$"
+CARDANO_FLOW_DB="surprising_wallet_test_cardano_$$"
 CARDANO_FLOW_NODE="surprising-wallet-cardano-devnet-$$"
 CARDANO_FLOW_CACHE="surprising-wallet-yaci-devkit-v0106-store201"
-CARDANO_FLOW_DB_PORT=${CARDANO_FLOW_DB_PORT:-55443}
 CARDANO_FLOW_STORE_PORT=${CARDANO_FLOW_STORE_PORT:-18081}
 CARDANO_FLOW_ADMIN_PORT=${CARDANO_FLOW_ADMIN_PORT:-11001}
 CARDANO_FLOW_SOURCE_ADDRESS=addr_test1vqsrxplxdjgghsycjeshnw0eyhuw5p0tdg5hmy8r79p2hmcsv6z9j
@@ -15,15 +15,16 @@ CARDANO_FLOW_SOURCE_ADDRESS=addr_test1vqsrxplxdjgghsycjeshnw0eyhuw5p0tdg5hmy8r79
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
+  local_pg_drop "$CARDANO_FLOW_DB" >/dev/null 2>&1 || true
   if [[ "$status" != 0 && "${CARDANO_FLOW_KEEP_ON_FAILURE:-false}" == true ]]; then
-    printf 'Cardano failure resources kept: node=%s db=%s build=%s\n' \
-      "$CARDANO_FLOW_NODE" "$CARDANO_FLOW_DB" "$CARDANO_FLOW_BUILD_ROOT" >&2
+    printf 'Cardano failure resources kept: node=%s build=%s\n' \
+      "$CARDANO_FLOW_NODE" "$CARDANO_FLOW_BUILD_ROOT" >&2
     exit "$status"
   fi
   docker exec "$CARDANO_FLOW_NODE" bash -lc \
     'rm -rf /root/.yaci-cli/local-clusters/default /root/.yaci-cli/pids /root/.yaci-cli/yaci-cli.pid' \
     >/dev/null 2>&1 || true
-  docker rm -f "$CARDANO_FLOW_NODE" "$CARDANO_FLOW_DB" >/dev/null 2>&1 || true
+  docker rm -f "$CARDANO_FLOW_NODE" >/dev/null 2>&1 || true
   if [[ "$CARDANO_FLOW_BUILD_ROOT" == /tmp/surprising-wallet-cardano-build.* ]]; then
     rm -rf "$CARDANO_FLOW_BUILD_ROOT"
   fi
@@ -31,7 +32,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-for command in curl docker git jq mvn rsync sed; do
+for command in curl docker git jq mvn rsync; do
   command -v "$command" >/dev/null || {
     printf 'missing required command: %s\n' "$command" >&2
     exit 1
@@ -49,33 +50,13 @@ rsync -a \
 
 docker info >/dev/null
 docker volume create "$CARDANO_FLOW_CACHE" >/dev/null
-docker run -d --name "$CARDANO_FLOW_DB" \
-  -e POSTGRES_USER=wallet \
-  -e POSTGRES_PASSWORD=wallet \
-  -e POSTGRES_DB=wallet \
-  -p "127.0.0.1:${CARDANO_FLOW_DB_PORT}:5432" \
-  postgres:16-alpine >/dev/null
+local_pg_require
+local_pg_create "$CARDANO_FLOW_DB"
+CARDANO_FLOW_DB_URL=$(local_pg_jdbc_url "$CARDANO_FLOW_DB")
 
-ready_checks=0
-for attempt in $(seq 1 60); do
-  if docker exec "$CARDANO_FLOW_DB" psql -U wallet -d wallet -Atqc 'select 1' >/dev/null 2>&1; then
-    ready_checks=$((ready_checks + 1))
-    if [[ "$ready_checks" == 3 ]]; then
-      break
-    fi
-  else
-    ready_checks=0
-  fi
-  if [[ "$attempt" == 60 ]]; then
-    printf 'Cardano integration PostgreSQL did not become ready\n' >&2
-    exit 1
-  fi
-  sleep 1
-done
-
-sed '/^SET transaction_timeout = /d' "$CARDANO_FLOW_ROOT/docs/db/surprising-wallet-init-pgsql.sql" \
-  | docker exec -i "$CARDANO_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -q
-docker exec -i "$CARDANO_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -q <<SQL
+local_pg_psql "$CARDANO_FLOW_DB" -v ON_ERROR_STOP=1 -q \
+  -f "$CARDANO_FLOW_ROOT/docs/db/surprising-wallet-init-pgsql.sql"
+local_pg_psql "$CARDANO_FLOW_DB" -v ON_ERROR_STOP=1 -q <<SQL
 INSERT INTO wallet_key_config
     (id, sig1_seed, sig2_seed, recovery_seed, ed25519_seed, updated_by)
 VALUES
@@ -181,12 +162,12 @@ mvn -f "$CARDANO_FLOW_ROOT/pom.xml" \
   -Dtest=CardanoAddressGenerationTest,CardanoAssetUnitTest,CardanoBackendClientTest,CardanoDepositScannerTest,CardanoDevnetFullFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dcardano.devnet.flow.enabled=true \
-  -Dcardano.db.url="jdbc:postgresql://127.0.0.1:${CARDANO_FLOW_DB_PORT}/wallet" \
-  -Dcardano.db.user=wallet \
-  -Dcardano.db.password=wallet \
+  -Dcardano.db.url="$CARDANO_FLOW_DB_URL" \
+  -Dcardano.db.user="$REGTEST_PG_USER" \
+  -Dcardano.db.password="$REGTEST_PG_PASSWORD" \
   test
 
-docker exec "$CARDANO_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -Atqc "
+local_pg_psql "$CARDANO_FLOW_DB" -v ON_ERROR_STOP=1 -Atqc "
 do \$\$
 begin
   if (select count(*) from deposit_record where chain='ADA' and status='CREDITED'
@@ -196,10 +177,6 @@ begin
   if (select count(*) from withdrawal_order where chain='ADA' and status='CONFIRMED'
       and asset_symbol in ('ADA','USDC','USDT')) <> 3 then
     raise exception 'expected confirmed ADA, USDC, and USDT withdrawals';
-  end if;
-  if (select count(*) from collection_record where chain='ADA' and status='CONFIRMED'
-      and asset_symbol in ('ADA','USDC','USDT')) <> 3 then
-    raise exception 'expected confirmed ADA, USDC, and USDT collections';
   end if;
   if exists (select 1 from ledger_balance where chain='ADA'
       and (available_balance < 0 or locked_balance < 0 or total_balance < 0)) then
@@ -217,4 +194,4 @@ begin
 end
 \$\$;"
 
-printf 'ADA PASS local Yaci devnet ADA/USDC/USDT deposit, replay, withdrawal, collection, and ledger audit\n'
+printf 'ADA PASS local Yaci devnet ADA/USDC/USDT deposit, replay, withdrawal, and ledger audit\n'

@@ -2,46 +2,31 @@
 set -euo pipefail
 
 XRP_FLOW_ROOT=$(git rev-parse --show-toplevel)
-XRP_FLOW_DB="surprising-wallet-xrp-flow-$$"
-XRP_FLOW_DB_PORT=${XRP_FLOW_DB_PORT:-55441}
+source "$XRP_FLOW_ROOT/scripts/regtest/local-postgres.sh"
+XRP_FLOW_DB="surprising_wallet_test_xrp_$$"
 
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
-  docker rm -f "$XRP_FLOW_DB" >/dev/null 2>&1 || true
+  local_pg_drop "$XRP_FLOW_DB" >/dev/null 2>&1 || true
   exit "$status"
 }
 trap cleanup EXIT INT TERM
 
-for command in docker git mvn sed; do
+for command in git mvn; do
   command -v "$command" >/dev/null || {
     printf 'missing required command: %s\n' "$command" >&2
     exit 1
   }
 done
 
-docker info >/dev/null
-docker run -d --name "$XRP_FLOW_DB" \
-  -e POSTGRES_USER=wallet \
-  -e POSTGRES_PASSWORD=wallet \
-  -e POSTGRES_DB=wallet \
-  -p "127.0.0.1:${XRP_FLOW_DB_PORT}:5432" \
-  postgres:16-alpine >/dev/null
+local_pg_require
+local_pg_create "$XRP_FLOW_DB"
+XRP_FLOW_DB_URL=$(local_pg_jdbc_url "$XRP_FLOW_DB")
 
-for attempt in $(seq 1 60); do
-  if docker exec "$XRP_FLOW_DB" pg_isready -U wallet -d wallet >/dev/null 2>&1; then
-    break
-  fi
-  if [[ "$attempt" == 60 ]]; then
-    printf 'XRP integration PostgreSQL did not become ready\n' >&2
-    exit 1
-  fi
-  sleep 1
-done
-
-sed '/^SET transaction_timeout = /d' "$XRP_FLOW_ROOT/docs/db/surprising-wallet-init-pgsql.sql" \
-  | docker exec -i "$XRP_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -q
-docker exec -i "$XRP_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -q <<'SQL'
+local_pg_psql "$XRP_FLOW_DB" -v ON_ERROR_STOP=1 -q \
+  -f "$XRP_FLOW_ROOT/docs/db/surprising-wallet-init-pgsql.sql"
+local_pg_psql "$XRP_FLOW_DB" -v ON_ERROR_STOP=1 -q <<'SQL'
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 INSERT INTO wallet_key_config
     (id, sig1_seed, sig2_seed, recovery_seed, ed25519_seed, updated_by)
@@ -59,12 +44,12 @@ mvn -f "$XRP_FLOW_ROOT/pom.xml" \
   -Dtest=XrpAddressGenerationTest,XrpIssuedCurrencyTest,XrpTestnetFullFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dxrp.live.flow.enabled=true \
-  -Dxrp.db.url="jdbc:postgresql://127.0.0.1:${XRP_FLOW_DB_PORT}/wallet" \
-  -Dxrp.db.user=wallet \
-  -Dxrp.db.password=wallet \
+  -Dxrp.db.url="$XRP_FLOW_DB_URL" \
+  -Dxrp.db.user="$REGTEST_PG_USER" \
+  -Dxrp.db.password="$REGTEST_PG_PASSWORD" \
   test
 
-docker exec "$XRP_FLOW_DB" psql -v ON_ERROR_STOP=1 -U wallet -d wallet -Atqc "
+local_pg_psql "$XRP_FLOW_DB" -v ON_ERROR_STOP=1 -Atqc "
 do \$\$
 begin
   if (select count(*) from deposit_record where chain='XRP' and status='CREDITED'
