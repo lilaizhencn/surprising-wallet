@@ -73,7 +73,7 @@ public class NearRpcClient {
     public JsonNode accessKey(String accountId, String publicKeyBase58) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("request_type", "view_access_key");
-        params.put("finality", "final");
+        params.put("finality", "optimistic");
         params.put("account_id", accountId);
         params.put("public_key", "ed25519:" + publicKeyBase58);
         return call("query", params);

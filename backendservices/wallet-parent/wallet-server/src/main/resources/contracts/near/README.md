@@ -11,7 +11,8 @@ The TypeScript sources are based on the official near-sdk-js examples:
 Build command used for the checked-in Wasm artifacts:
 
 ```bash
-npm install near-sdk-js@2.0.0 near-contract-standards@2.0.0 typescript@4.7.4
+npm install near-sdk-js@2.0.0 near-contract-standards@2.0.0 typescript@4.7.4 @types/node@16.18.126
+mkdir -p build
 npx near-sdk-js build src/fungible-token/my-ft.ts build/TokDouNep141.wasm package.json
 npx near-sdk-js build src/non-fungible-token/my-nft.ts build/TokDouNep171.wasm package.json
 ```

@@ -50,9 +50,18 @@ export class MyFt implements FungibleTokenCore, StorageManagement, FungibleToken
         total_supply: Balance;
         metadata: FungibleTokenMetadata;
     }) {
-        metadata.assert_valid();
+        const validatedMetadata = new FungibleTokenMetadata(
+            metadata.spec,
+            metadata.name,
+            metadata.symbol,
+            metadata.icon,
+            metadata.reference,
+            metadata.reference_hash,
+            metadata.decimals,
+        );
+        validatedMetadata.assert_valid();
         this.token = new FungibleToken().init(new FTPrefix());
-        this.metadata = metadata;
+        this.metadata = validatedMetadata;
         this.token.internal_register_account(owner_id);
         this.token.internal_deposit(owner_id, total_supply);
     }

@@ -44,6 +44,7 @@ commands:
   test-solana   Run isolated local Solana SOL/USDT/USDC full-flow and reconciliation test
   test-ton      Run TON/USDT/USDC full flow against an isolated MyLocalTon v2 RPC
   test-xrp      Run isolated XRPL Testnet XRP/USDC full flow with automatic faucet funding
+  test-near     Run isolated NEAR sandbox NEAR/USDC/USDT full flow and reconciliation test
   dot-runtime-up    Start the local Polkadot runtime companion service
   dot-runtime-down  Stop the local Polkadot runtime companion service
   test-evm      Run ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C fork regression
@@ -59,7 +60,8 @@ notes:
   - SUI has an isolated local node, gRPC, mock USDC, and PostgreSQL full-flow test.
   - SOLANA has an isolated local validator, mock USDT/USDC, and PostgreSQL full-flow test.
   - TON uses MyLocalTon; start it and fund the deterministic source shown by test-ton.
-  - TRON/XRP/APTOS/ADA/DOT/NEAR use DB mocks, external testnet/devnet RPC, or a managed runtime service.
+  - NEAR uses an isolated official sandbox with mock USDC/USDT and PostgreSQL.
+  - TRON/XRP/APTOS/ADA/DOT use DB mocks, external testnet/devnet RPC, or a managed runtime service.
   - DOT token tests also need a separate Asset Hub WebSocket RPC configured as purpose=asset_rpc.
 USAGE
 }
@@ -88,7 +90,7 @@ APTOS                                DB mock + external testnet/devnet live flow
 SUI                                  local Sui node + gRPC + mock USDC full flow
 ADA                                  external preprod Blockfrost-compatible flow
 DOT                                  external Westend/Asset Hub + polkadot-runtime-service
-NEAR                                 external testnet JSON-RPC flow
+NEAR                                 local official sandbox + mock USDC/USDT full flow
 MATRIX
 }
 
@@ -165,6 +167,10 @@ test_ton() {
 
 test_xrp() {
   "${ROOT_DIR}/scripts/regtest/run-xrp-flow.sh"
+}
+
+test_near() {
+  "${ROOT_DIR}/scripts/regtest/run-near-flow.sh"
 }
 
 test_db() {
@@ -258,6 +264,9 @@ case "${1:-matrix}" in
   test-xrp)
     test_xrp
     ;;
+  test-near)
+    test_near
+    ;;
   dot-runtime-up)
     dot_runtime_up
     ;;
@@ -276,6 +285,7 @@ case "${1:-matrix}" in
     test_evm
     test_sui
     test_solana
+    test_near
     ;;
   test-all)
     test_utxo
@@ -283,6 +293,7 @@ case "${1:-matrix}" in
     test_evm
     test_sui
     test_solana
+    test_near
     test_db
     if [[ "${RUN_LIVE:-false}" == "true" ]]; then
       test_live
