@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -50,6 +51,7 @@ class CardanoDevnetFullFlowIntegrationTest {
 
         JdbcTemplate jdbc = new JdbcTemplate(dataSource());
         ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        UUID tenantId = CardanoTenantIntegrationFixture.ensureTenant(jdbc);
         WalletKeyMaterialProvider keyMaterial = new WalletKeyMaterialProvider(
                 new WalletKeyConfigStore(jdbc), WalletKeyMaterialProvider.Mode.WALLET_SERVER);
         CardanoKeyService keys = new CardanoKeyService(keyMaterial);
@@ -60,13 +62,16 @@ class CardanoDevnetFullFlowIntegrationTest {
         CardanoTransactionService transactions = new CardanoTransactionService(backend, keys, repository);
         CardanoDepositScanner scanner = new CardanoDepositScanner(backend, repository);
 
-        ChainAddressRecord hot = address(keys, 0L, 0, 0L, "DEPOSIT", CHAIN, "cardano-hot");
-        ChainAddressRecord source = address(keys, SOURCE_USER, 9, 0L, "EXTERNAL", CHAIN, "cardano-source");
-        ChainAddressRecord user = address(keys, USER, 1, 0L, "DEPOSIT", CHAIN, "cardano-user");
-        ChainAddressRecord external = address(keys, EXTERNAL_USER, 1, 0L, "EXTERNAL", CHAIN,
+        ChainAddressRecord hot = address(tenantId, keys, 0L, 0, 0L, "DEPOSIT", CHAIN, "cardano-hot");
+        ChainAddressRecord source = address(
+                tenantId, keys, SOURCE_USER, 9, 0L, "EXTERNAL", CHAIN, "cardano-source");
+        ChainAddressRecord user = address(
+                tenantId, keys, USER, 1, 0L, "DEPOSIT", CHAIN, "cardano-user");
+        ChainAddressRecord external = address(tenantId, keys, EXTERNAL_USER, 1, 0L, "EXTERNAL", CHAIN,
                 "cardano-external");
         repository.upsertChainAddress(hot);
         repository.upsertChainAddress(user);
+        UUID custodyAddressId = CardanoTenantIntegrationFixture.attachDepositAddress(jdbc, user);
         assertTrue(nativeAtomicBalance(backend, source.getAddress())
                 .compareTo(CardanoTransactionService.toLovelace(new BigDecimal("1000"))) >= 0,
                 "deterministic source was not funded by the devnet topup API");
@@ -80,13 +85,20 @@ class CardanoDevnetFullFlowIntegrationTest {
         assertAmount(new BigDecimal("100"), ledger(repository, CHAIN, user.getAccountId()).getTotalBalance());
 
         String runId = "ADA-DEVNET-" + System.currentTimeMillis();
-        withdraw(repository, transactions, runId + "-ADA-WD", user, external, null,
+        withdraw(tenantId, repository, transactions, runId + "-ADA-WD", user, external, null,
                 new BigDecimal("20"));
         assertAmount(new BigDecimal("80"), ledger(repository, CHAIN, user.getAccountId()).getTotalBalance());
+        String nativeCollectionHash = collect(tenantId, custodyAddressId, repository, transactions,
+                runId + "-ADA-COLLECT", user, hot, null, new BigDecimal("30"));
+        scanner.scanAndCredit();
+        assertInternalCollectionNotCredited(
+                jdbc, repository, nativeCollectionHash, CHAIN, user.getAccountId(), new BigDecimal("80"));
 
-        BigDecimal attachedAda = tokenFlow(jdbc, repository, keys, backend, transactions, scanner,
+        BigDecimal attachedAda = tokenFlow(tenantId, custodyAddressId,
+                jdbc, repository, keys, backend, transactions, scanner,
                 source, user, external, hot, "USDC", runId);
-        attachedAda = attachedAda.add(tokenFlow(jdbc, repository, keys, backend, transactions, scanner,
+        attachedAda = attachedAda.add(tokenFlow(tenantId, custodyAddressId,
+                jdbc, repository, keys, backend, transactions, scanner,
                 source, user, external, hot, "USDT", runId));
 
         assertFalse(repository.freezeLedgerBalance(CHAIN, "USDC", user.getAccountId(),
@@ -104,7 +116,8 @@ class CardanoDevnetFullFlowIntegrationTest {
                 ledger(repository, CHAIN, user.getAccountId()).getTotalBalance());
     }
 
-    private static BigDecimal tokenFlow(JdbcTemplate jdbc, ChainJdbcRepository repository, CardanoKeyService keys,
+    private static BigDecimal tokenFlow(UUID tenantId, UUID custodyAddressId,
+                                        JdbcTemplate jdbc, ChainJdbcRepository repository, CardanoKeyService keys,
                                         CardanoBackendClient backend, CardanoTransactionService transactions,
                                         CardanoDepositScanner scanner, ChainAddressRecord nativeSource,
                                         ChainAddressRecord nativeUser, ChainAddressRecord nativeExternal,
@@ -135,12 +148,17 @@ class CardanoDevnetFullFlowIntegrationTest {
         scanner.scanAndCredit();
         assertAmount(new BigDecimal("100"), ledger(repository, symbol, user.getAccountId()).getTotalBalance());
 
-        withdraw(repository, transactions, runId + "-" + symbol + "-WD", user, external, token,
+        withdraw(tenantId, repository, transactions, runId + "-" + symbol + "-WD", user, external, token,
                 new BigDecimal("20"));
-        assertAmount(new BigDecimal("80"), ledger(repository, symbol, user.getAccountId()).getTotalBalance());
+        String collectionHash = collect(tenantId, custodyAddressId, repository, transactions,
+                runId + "-" + symbol + "-COLLECT", user, hot, token, new BigDecimal("30"));
+        scanner.scanAndCredit();
+        assertInternalCollectionNotCredited(
+                jdbc, repository, collectionHash, symbol, user.getAccountId(), new BigDecimal("80"));
 
-        assertTokenBalance(backend, unit, user.getAddress(), new BigDecimal("80"));
+        assertTokenBalance(backend, unit, user.getAddress(), new BigDecimal("50"));
         assertTokenBalance(backend, unit, external.getAddress(), new BigDecimal("20"));
+        assertTokenBalance(backend, unit, hot.getAddress(), new BigDecimal("30"));
         return deposits.stream()
                 .filter(event -> depositHash.equals(event.txId()) && CHAIN.equals(event.assetSymbol()))
                 .map(DepositEvent::amount)
@@ -168,22 +186,60 @@ class CardanoDevnetFullFlowIntegrationTest {
         return unit;
     }
 
-    private static void withdraw(ChainJdbcRepository repository, CardanoTransactionService transactions,
+    private static void withdraw(UUID tenantId, ChainJdbcRepository repository,
+                                 CardanoTransactionService transactions,
                                  String orderNo, ChainAddressRecord from, ChainAddressRecord to,
                                  TokenDefinition token, BigDecimal amount) {
         String symbol = token == null ? CHAIN : token.getSymbol();
-        assertEquals(1, repository.createWithdrawalOrder(orderNo, from.getUserId(), CHAIN, symbol,
+        assertEquals(1, repository.createTenantWithdrawalOrder(
+                tenantId, orderNo, from.getUserId(), CHAIN, symbol,
                 from.getAddress(), from.getAccountId(), to.getAddress(), amount, BigDecimal.ZERO));
-        assertTrue(repository.freezeLedgerBalance(CHAIN, symbol, from.getAccountId(), amount));
-        assertEquals(1, repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN",
+        assertTrue(repository.freezeLedgerBalance(tenantId, CHAIN, symbol, from.getAccountId(), amount));
+        assertEquals(1, repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FROZEN",
                 from.getAddress(), null, null));
-        assertEquals(1, repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()));
+        assertEquals(1, repository.claimWithdrawalSigning(
+                tenantId, CHAIN, orderNo, from.getAddress()));
         String txHash = token == null
                 ? transactions.sendNative(from, to.getAddress(), CardanoTransactionService.toLovelace(amount))
                 : transactions.sendToken(from, token, to.getAddress(), amount);
-        assertEquals(1, repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), txHash));
-        assertTrue(transactions.confirmWithdrawal(repository.findProfileByChain(CHAIN).orElseThrow(),
-                orderNo, txHash, symbol, from.getAccountId(), amount));
+        assertEquals(1, repository.markWithdrawalSent(
+                tenantId, CHAIN, orderNo, from.getAddress(), txHash));
+        assertTrue(transactions.confirmWithdrawal(tenantId,
+                repository.findProfileByChain(CHAIN).orElseThrow(), orderNo, txHash,
+                symbol, from.getAccountId(), amount));
+    }
+
+    private static String collect(UUID tenantId, UUID custodyAddressId,
+                                  ChainJdbcRepository repository, CardanoTransactionService transactions,
+                                  String collectionNo, ChainAddressRecord from, ChainAddressRecord hot,
+                                  TokenDefinition token, BigDecimal amount) {
+        String symbol = token == null ? CHAIN : token.getSymbol();
+        assertEquals(1, repository.createCollectionRecord(
+                tenantId, custodyAddressId, collectionNo, CHAIN, symbol,
+                from.getAddress(), hot.getAddress(), amount, BigDecimal.ZERO, null));
+        String txHash = token == null
+                ? transactions.collectNative(
+                        tenantId, collectionNo, from, hot.getAddress(),
+                        CardanoTransactionService.toLovelace(amount))
+                : transactions.collectToken(tenantId, collectionNo, from, token, hot.getAddress(), amount);
+        assertEquals(txHash, token == null
+                ? transactions.collectNative(
+                        tenantId, collectionNo, from, hot.getAddress(),
+                        CardanoTransactionService.toLovelace(amount))
+                : transactions.collectToken(tenantId, collectionNo, from, token, hot.getAddress(), amount));
+        assertTrue(transactions.confirmCollection(
+                tenantId, repository.findProfileByChain(CHAIN).orElseThrow(), collectionNo));
+        return txHash;
+    }
+
+    private static void assertInternalCollectionNotCredited(
+            JdbcTemplate jdbc, ChainJdbcRepository repository, String txHash,
+            String symbol, String userAccountId, BigDecimal expectedLedger) {
+        assertEquals(0, jdbc.queryForObject("""
+                select count(*) from deposit_record
+                 where chain = ? and tx_hash = ?
+                """, Integer.class, CHAIN, txHash));
+        assertAmount(expectedLedger, ledger(repository, symbol, userAccountId).getTotalBalance());
     }
 
     private static List<DepositEvent> scanUntil(CardanoDepositScanner scanner, String txHash, String symbol) {
@@ -225,9 +281,11 @@ class CardanoDevnetFullFlowIntegrationTest {
         assertAmount(expected, actual);
     }
 
-    private static ChainAddressRecord address(CardanoKeyService keys, long userId, int biz, long index,
+    private static ChainAddressRecord address(UUID tenantId, CardanoKeyService keys,
+                                              long userId, int biz, long index,
                                               String role, String symbol, String accountId) {
         return ChainAddressRecord.builder()
+                .tenantId(tenantId)
                 .chain(CHAIN)
                 .assetSymbol(symbol)
                 .accountId(accountId)
@@ -244,6 +302,7 @@ class CardanoDevnetFullFlowIntegrationTest {
     private static ChainAddressRecord tokenAddress(ChainAddressRecord nativeAddress,
                                                    String symbol, String accountId) {
         return ChainAddressRecord.builder()
+                .tenantId(nativeAddress.getTenantId())
                 .chain(CHAIN)
                 .assetSymbol(symbol)
                 .accountId(accountId)

@@ -751,8 +751,7 @@ public class ChainJdbcRepository {
                                           String accountId) {
         String chain = event.chainType().name();
         UUID tenantId = requireDepositTenant(chain, accountId, event.toAddress());
-        if (isInternalCollectionTransfer(
-                tenantId, chain, event.assetSymbol(), event.txId(), event.toAddress())) {
+        if (isInternalCollectionTransfer(tenantId, chain, event.txId(), event.toAddress())) {
             return false;
         }
         String status = event.confirmations() <= 0 ? "DETECTED"
@@ -798,16 +797,16 @@ public class ChainJdbcRepository {
         return false;
     }
 
-    private boolean isInternalCollectionTransfer(UUID tenantId, String chain, String assetSymbol,
+    private boolean isInternalCollectionTransfer(UUID tenantId, String chain,
                                                  String txHash, String toAddress) {
         Boolean internal = jdbcTemplate.queryForObject("""
                 select exists(
                     select 1
                       from collection_record
-                     where tenant_id = ? and chain = ? and asset_symbol = ?
+                     where tenant_id = ? and chain = ?
                        and lower(tx_hash) = lower(?) and lower(to_address) = lower(?)
                 )
-                """, Boolean.class, tenantId, chain, assetSymbol, txHash, toAddress);
+                """, Boolean.class, tenantId, chain, txHash, toAddress);
         return Boolean.TRUE.equals(internal);
     }
 

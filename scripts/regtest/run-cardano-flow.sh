@@ -178,6 +178,10 @@ begin
       and asset_symbol in ('ADA','USDC','USDT')) <> 3 then
     raise exception 'expected confirmed ADA, USDC, and USDT withdrawals';
   end if;
+  if (select count(*) from collection_record where chain='ADA' and status='CONFIRMED'
+      and asset_symbol in ('ADA','USDC','USDT')) <> 3 then
+    raise exception 'expected confirmed ADA, USDC, and USDT collections';
+  end if;
   if exists (select 1 from ledger_balance where chain='ADA'
       and (available_balance < 0 or locked_balance < 0 or total_balance < 0)) then
     raise exception 'negative ADA ledger balance detected';
@@ -194,4 +198,4 @@ begin
 end
 \$\$;"
 
-printf 'ADA PASS local Yaci devnet ADA/USDC/USDT deposit, replay, withdrawal, and ledger audit\n'
+printf 'ADA PASS local Yaci devnet ADA/USDC/USDT deposit, replay, withdrawal, collection, and ledger audit\n'

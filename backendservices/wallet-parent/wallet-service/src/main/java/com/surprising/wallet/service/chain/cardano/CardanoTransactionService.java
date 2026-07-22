@@ -48,12 +48,6 @@ public class CardanoTransactionService {
         return send(from, toAddress, Amount.asset(unit, atomic));
     }
 
-    public boolean confirmWithdrawal(AccountChainProfile profile, String orderNo, String txHash,
-                                     String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
-        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
-                profile, orderNo, txHash, assetSymbol, debitAccountId, debitAmount);
-    }
-
     public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
                                      String orderNo, String txHash,
                                      String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
