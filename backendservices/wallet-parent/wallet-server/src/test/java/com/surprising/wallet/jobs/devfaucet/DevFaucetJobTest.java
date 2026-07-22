@@ -3,16 +3,41 @@ package com.surprising.wallet.jobs.devfaucet;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.jobs.custody.CustodyRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.core.env.MapPropertySource;
 
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class DevFaucetJobTest {
+    @Test
+    void selectsTheProductionConstructorWhenSpringCreatesTheJob() {
+        try (AnnotationConfigApplicationContext context =
+                     new AnnotationConfigApplicationContext()) {
+            context.getEnvironment().getPropertySources().addFirst(
+                    new MapPropertySource("dev-faucet-test", Map.of(
+                            "sw.wallet.dev-faucet.enabled", "true",
+                            "sw.app.env.name", "test")));
+            context.registerBean(DevFaucetProperties.class,
+                    DevFaucetPropertiesTest::validProperties);
+            context.registerBean(DevFaucetRepository.class,
+                    () -> new FakeRepository(List.of()));
+            context.registerBean(DevFaucetRpcClient.class, FakeRpcClient::new);
+            context.registerBean(CustodyRepository.class, FakeCustodyRepository::new);
+            context.registerBean(ObjectMapper.class, () -> new ObjectMapper());
+            context.register(DevFaucetJob.class);
+            context.refresh();
+
+            assertEquals(1, context.getBeansOfType(DevFaucetJob.class).size());
+        }
+    }
+
     @Test
     void fundsNativeAndTokensOncePerApiAddressAndNativeOnlyForGasAddress() {
         UUID tenantId = UUID.randomUUID();

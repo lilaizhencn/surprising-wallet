@@ -6,6 +6,7 @@ import com.surprising.wallet.jobs.custody.CustodyRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,6 +29,7 @@ public class DevFaucetJob {
     private final DevFaucetAmountGenerator amounts;
     private final String environment;
 
+    @Autowired
     DevFaucetJob(DevFaucetProperties properties,
                  DevFaucetRepository repository,
                  DevFaucetRpcClient rpcClient,
