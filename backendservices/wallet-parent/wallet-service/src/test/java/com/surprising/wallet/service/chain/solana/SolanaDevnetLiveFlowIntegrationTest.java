@@ -96,9 +96,9 @@ class SolanaDevnetLiveFlowIntegrationTest {
 
         String collectionNo = "sol-live-collection-" + UUID.randomUUID();
         BigDecimal collectionAmount = new BigDecimal("10000000");
-        String collection = transactions.collectNative(collectionNo, userB, hot.getAddress(), collectionAmount);
-        assertEquals(collection, transactions.collectNative(collectionNo, userB, hot.getAddress(), collectionAmount));
-        transactions.confirmCollection(collectionNo);
+        String collection = transactions.collectNative(null, collectionNo, userB, hot.getAddress(), collectionAmount);
+        assertEquals(collection, transactions.collectNative(null, collectionNo, userB, hot.getAddress(), collectionAmount));
+        transactions.confirmCollection(null, collectionNo);
 
         String insufficientOrder = "sol-live-insufficient-" + UUID.randomUUID();
         assertThrows(IllegalStateException.class, () -> transactions.withdrawNative(
@@ -241,11 +241,11 @@ class SolanaDevnetLiveFlowIntegrationTest {
 
         String collectionNo = "sol-" + symbol.toLowerCase() + "-collection-" + UUID.randomUUID();
         BigDecimal collectionAmount = new BigDecimal("3");
-        String collection = transactions.collectToken(collectionNo, userB, mint.getPublicKeyBase58(),
+        String collection = transactions.collectToken(null, collectionNo, userB, mint.getPublicKeyBase58(),
                 hot.getAddress(), collectionAmount);
-        assertEquals(collection, transactions.collectToken(collectionNo, userB, mint.getPublicKeyBase58(),
+        assertEquals(collection, transactions.collectToken(null, collectionNo, userB, mint.getPublicKeyBase58(),
                 hot.getAddress(), collectionAmount));
-        transactions.confirmCollection(collectionNo);
+        transactions.confirmCollection(null, collectionNo);
         String userAAta = addresses.associatedTokenAddress(
                 nativeUserA.getAddress(), mint.getPublicKeyBase58());
         String userBAta = addresses.associatedTokenAddress(

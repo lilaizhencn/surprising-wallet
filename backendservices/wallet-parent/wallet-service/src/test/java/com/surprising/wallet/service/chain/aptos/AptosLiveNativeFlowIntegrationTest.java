@@ -68,10 +68,10 @@ class AptosLiveNativeFlowIntegrationTest {
 
         String collectionNo = "aptos-live-collection-" + UUID.randomUUID();
         BigDecimal collectionAmount = new BigDecimal("10000000");
-        String collectionHash = transactions.collectNative(collectionNo, owner, hot.getAddress(), collectionAmount);
-        assertEquals(collectionHash, transactions.collectNative(collectionNo, owner, hot.getAddress(),
+        String collectionHash = transactions.collectNative(null, collectionNo, owner, hot.getAddress(), collectionAmount);
+        assertEquals(collectionHash, transactions.collectNative(null, collectionNo, owner, hot.getAddress(),
                 collectionAmount));
-        assertTrue(transactions.confirmCollection(collectionNo));
+        assertTrue(transactions.confirmCollection(null, collectionNo));
 
         assertEquals(0L, jdbc.queryForObject("""
                 select count(*) from ledger_balance

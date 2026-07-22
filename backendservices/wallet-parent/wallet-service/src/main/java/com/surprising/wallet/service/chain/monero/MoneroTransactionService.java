@@ -52,24 +52,27 @@ public class MoneroTransactionService {
         }
     }
 
-    public void collectNative(AccountChainProfile profile, String collectionNo,
+    public void collectNative(java.util.UUID tenantId, AccountChainProfile profile, String collectionNo,
                               ChainAddressRecord from, String toAddress, BigDecimal amount) {
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
             return;
         }
         try {
             String txHash = sendNative(profile, from, toAddress, amount);
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", txHash, null, null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
 
-    public void confirmCollection(AccountChainProfile profile, String collectionNo) {
-        repository.findCollectionTxHash(CHAIN, collectionNo)
+    public void confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
+                                  String collectionNo) {
+        repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                 .filter(txHash -> confirmedTransfer(profile, txHash, profile.getWithdrawConfirmations()) != null)
-                .ifPresent(txHash -> repository.markCollectionConfirmed(CHAIN, collectionNo, txHash));
+                .ifPresent(txHash -> repository.markCollectionConfirmed(
+                        tenantId, CHAIN, collectionNo, txHash));
     }
 
     private void creditInternalRecipient(AccountChainProfile profile, MoneroWalletRpcClient.Transfer transfer,

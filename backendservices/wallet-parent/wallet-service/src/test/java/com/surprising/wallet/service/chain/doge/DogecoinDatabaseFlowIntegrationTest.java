@@ -71,17 +71,17 @@ class DogecoinDatabaseFlowIntegrationTest {
                 assertEquals(1, repository.createCollectionRecord(
                         collectionNo, chain, chain, "source", "hot",
                         new BigDecimal("24.00000000"), BigDecimal.ONE, "{}"));
-                assertEquals(1, repository.claimCollectionSigning(chain, collectionNo, "{}"));
-                assertEquals(0, repository.claimCollectionSigning(chain, collectionNo, "{}"));
-                assertEquals(1, repository.updateCollectionStatus(
+                assertEquals(1, repository.claimCollectionSigning(null, chain, collectionNo, "{}"));
+                assertEquals(0, repository.claimCollectionSigning(null, chain, collectionNo, "{}"));
+                assertEquals(1, repository.updateCollectionStatus(null,
                         chain, collectionNo, "FAILED", null, "expected failure", "{}"));
-                assertEquals(0, repository.claimCollectionSigning(chain, collectionNo, "{}"),
+                assertEquals(0, repository.claimCollectionSigning(null, chain, collectionNo, "{}"),
                         "FAILED collection must not be retried automatically");
-                assertEquals(1, repository.updateCollectionStatus(
+                assertEquals(1, repository.updateCollectionStatus(null,
                         chain, collectionNo, "RETRYING", null, null, "{}"));
-                assertEquals(1, repository.claimCollectionSigning(chain, collectionNo, "{}"),
+                assertEquals(1, repository.claimCollectionSigning(null, chain, collectionNo, "{}"),
                         "explicit RETRYING transition must allow one recovery attempt");
-                assertEquals(0, repository.claimCollectionSigning(chain, collectionNo, "{}"));
+                assertEquals(0, repository.claimCollectionSigning(null, chain, collectionNo, "{}"));
 
                 String scannerName = chain.toLowerCase() + "-scanner-" + UUID.randomUUID();
                 repository.updateScanHeight(chain, scannerName, 10L, 9L);

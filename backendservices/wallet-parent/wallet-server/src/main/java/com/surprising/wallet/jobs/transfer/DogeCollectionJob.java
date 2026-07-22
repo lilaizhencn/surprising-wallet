@@ -120,7 +120,7 @@ public class DogeCollectionJob {
                 collectionId, CHAIN, CHAIN,
                 inputAddresses.get(0).getAddress(), hotAddress.getAddress(),
                 outputAmount, feeAmount, rawPayload);
-        if (chainRepository.claimCollectionSigning(CHAIN, collectionId, rawPayload) != 1) {
+        if (chainRepository.claimCollectionSigning(null, CHAIN, collectionId, rawPayload) != 1) {
             return;
         }
 

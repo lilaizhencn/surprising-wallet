@@ -97,11 +97,11 @@ class SuiLiveTokenFlowIntegrationTest {
                 withdrawalNo, SYMBOL, owner.getAccountId(), withdrawAmount));
 
         String collectionNo = "sui-usdc-collection-" + UUID.randomUUID();
-        String collectionDigest = transactions.collectCoin(collectionNo, owner, coinType,
+        String collectionDigest = transactions.collectCoin(null, collectionNo, owner, coinType,
                 hot.getAddress(), BigDecimal.valueOf(COLLECTION_ATOMIC));
-        assertEquals(collectionDigest, transactions.collectCoin(collectionNo, owner, coinType,
+        assertEquals(collectionDigest, transactions.collectCoin(null, collectionNo, owner, coinType,
                 hot.getAddress(), BigDecimal.valueOf(COLLECTION_ATOMIC)));
-        assertTrue(transactions.confirmCollection(collectionNo));
+        assertTrue(transactions.confirmCollection(null, collectionNo));
 
         assertAmountEquals(depositAmount.subtract(withdrawAmount),
                 ledger(repository, owner.getAccountId()).getTotalBalance());

@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,7 +40,7 @@ class PolkadotTransactionServiceTest {
                 .active(true)
                 .build();
 
-        String txHash = service.collectAsset("COLL-DOT-USDC-test", user, token, hot.getAddress(),
+        String txHash = service.collectAsset(null, "COLL-DOT-USDC-test", user, token, hot.getAddress(),
                 new BigDecimal("2.5"));
 
         assertEquals("asset-tx", txHash);
@@ -147,18 +148,20 @@ class PolkadotTransactionServiceTest {
         }
 
         @Override
-        public Optional<String> findCollectionTxHash(String chain, String collectionNo) {
+        public Optional<String> findCollectionTxHash(UUID tenantId, String chain, String collectionNo) {
             return Optional.empty();
         }
 
         @Override
-        public int claimCollectionSigning(String chain, String collectionNo, String rawPayload) {
+        public int claimCollectionSigning(UUID tenantId, String chain,
+                                          String collectionNo, String rawPayload) {
             return 1;
         }
 
         @Override
-        public int updateCollectionStatus(String chain, String collectionNo, String status,
-                                          String txHash, String errorMessage, String rawPayload) {
+        public int updateCollectionStatus(UUID tenantId, String chain, String collectionNo,
+                                          String status, String txHash,
+                                          String errorMessage, String rawPayload) {
             this.status = status;
             return 1;
         }

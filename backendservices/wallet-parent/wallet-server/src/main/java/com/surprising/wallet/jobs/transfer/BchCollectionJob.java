@@ -133,7 +133,7 @@ public class BchCollectionJob {
                 outputAmount,
                 feeAmount,
                 rawPayload);
-        if (repository.claimCollectionSigning(CHAIN, collectionId, rawPayload) != 1) {
+        if (repository.claimCollectionSigning(null, CHAIN, collectionId, rawPayload) != 1) {
             return;
         }
 

@@ -1246,8 +1246,9 @@ public class ChainJdbcRepository {
                 chain, status, limit);
     }
 
-    public int updateCollectionStatus(String chain, String collectionNo, String status, String txHash,
-                                      String errorMessage, String rawPayload) {
+    public int updateCollectionStatus(UUID tenantId, String chain, String collectionNo,
+                                      String status, String txHash, String errorMessage,
+                                      String rawPayload) {
         return jdbcTemplate.update("""
                         update collection_record
                         set status = ?,
@@ -1255,9 +1256,11 @@ public class ChainJdbcRepository {
                             error_message = ?,
                             raw_payload = coalesce(?, raw_payload),
                             updated_at = ?
-                        where chain = ? and collection_no = ?
+                        where tenant_id is not distinct from ?
+                          and chain = ? and collection_no = ?
                         """,
-                status, txHash, errorMessage, rawPayload, toTs(now()), chain, collectionNo);
+                status, txHash, errorMessage, rawPayload, toTs(now()),
+                tenantId, chain, collectionNo);
     }
 
     /**
@@ -1265,40 +1268,47 @@ public class ChainJdbcRepository {
      * transaction is created. FAILED is intentionally terminal until an operator
      * or recovery workflow moves it to RETRYING.
      */
-    public int claimCollectionSigning(String chain, String collectionNo, String rawPayload) {
+    public int claimCollectionSigning(UUID tenantId, String chain,
+                                      String collectionNo, String rawPayload) {
         return jdbcTemplate.update("""
                         update collection_record
                         set status = 'SIGNING',
                             error_message = null,
                             raw_payload = coalesce(?, raw_payload),
                             updated_at = ?
-                        where chain = ? and collection_no = ?
+                        where tenant_id is not distinct from ?
+                          and chain = ? and collection_no = ?
                           and status in ('CREATED', 'RETRYING')
                         """,
-                rawPayload, toTs(now()), chain, collectionNo);
+                rawPayload, toTs(now()), tenantId, chain, collectionNo);
     }
 
-    public int markCollectionConfirmed(String chain, String collectionNo, String txHash) {
+    public int markCollectionConfirmed(UUID tenantId, String chain,
+                                       String collectionNo, String txHash) {
         return jdbcTemplate.update("""
                         update collection_record
                         set status = 'CONFIRMED', tx_hash = ?, error_message = null, updated_at = ?
-                        where chain = ? and collection_no = ? and status <> 'CONFIRMED'
+                        where tenant_id is not distinct from ?
+                          and chain = ? and collection_no = ? and status <> 'CONFIRMED'
                         """,
-                txHash, toTs(now()), chain, collectionNo);
+                txHash, toTs(now()), tenantId, chain, collectionNo);
     }
 
-    public Optional<String> findCollectionStatus(String chain, String collectionNo) {
+    public Optional<String> findCollectionStatus(UUID tenantId, String chain, String collectionNo) {
         List<String> results = jdbcTemplate.queryForList("""
-                        select status from collection_record where chain = ? and collection_no = ?
-                        """, String.class, chain, collectionNo);
+                        select status from collection_record
+                         where tenant_id is not distinct from ?
+                           and chain = ? and collection_no = ?
+                        """, String.class, tenantId, chain, collectionNo);
         return results.stream().findFirst();
     }
 
-    public Optional<String> findCollectionTxHash(String chain, String collectionNo) {
+    public Optional<String> findCollectionTxHash(UUID tenantId, String chain, String collectionNo) {
         List<String> results = jdbcTemplate.queryForList("""
                         select tx_hash from collection_record
-                        where chain = ? and collection_no = ? and tx_hash is not null
-                        """, String.class, chain, collectionNo);
+                         where tenant_id is not distinct from ?
+                           and chain = ? and collection_no = ? and tx_hash is not null
+                        """, String.class, tenantId, chain, collectionNo);
         return results.stream().findFirst();
     }
 

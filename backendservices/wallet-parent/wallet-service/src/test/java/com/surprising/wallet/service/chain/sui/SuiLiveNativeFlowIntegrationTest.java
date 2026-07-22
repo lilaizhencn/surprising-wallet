@@ -78,11 +78,11 @@ class SuiLiveNativeFlowIntegrationTest {
 
         String collectionNo = "sui-live-collection-" + UUID.randomUUID();
         BigDecimal collectionAmount = new BigDecimal("100000000");
-        String collectionDigest = transactions.collectNative(collectionNo, owner, hot.getAddress(),
+        String collectionDigest = transactions.collectNative(null, collectionNo, owner, hot.getAddress(),
                 collectionAmount);
-        assertEquals(collectionDigest, transactions.collectNative(collectionNo, owner, hot.getAddress(),
+        assertEquals(collectionDigest, transactions.collectNative(null, collectionNo, owner, hot.getAddress(),
                 collectionAmount));
-        assertTrue(transactions.confirmCollection(collectionNo));
+        assertTrue(transactions.confirmCollection(null, collectionNo));
 
         assertEquals(0L, jdbc.queryForObject("""
                 select count(*) from ledger_balance

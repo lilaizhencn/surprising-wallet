@@ -96,12 +96,12 @@ class TonLiveMockJettonFlowIntegrationTest {
         long nativeCollectionSeqno = rpc.seqno(owner.getAddress());
         String nativeCollectionNo = "ton-live-collection-" + UUID.randomUUID();
         BigDecimal nativeCollectionAmount = new BigDecimal("0.05");
-        String nativeCollection = transactions.collectNative(nativeCollectionNo, owner, hot.getAddress(),
+        String nativeCollection = transactions.collectNative(null, nativeCollectionNo, owner, hot.getAddress(),
                 nativeCollectionAmount, "TON collection gate");
-        assertEquals(nativeCollection, transactions.collectNative(nativeCollectionNo, owner, hot.getAddress(),
+        assertEquals(nativeCollection, transactions.collectNative(null, nativeCollectionNo, owner, hot.getAddress(),
                 nativeCollectionAmount, "TON collection gate"));
         waitForSeqnoGreaterThan(rpc, owner.getAddress(), nativeCollectionSeqno, FLOW_TIMEOUT);
-        assertTrue(transactions.confirmCollection(nativeCollectionNo, owner.getAddress()));
+        assertTrue(transactions.confirmCollection(null, nativeCollectionNo, owner.getAddress()));
 
         TokenTx usdtTx = withdrawAndCollectJetton("USDT", usdt, external, hot, rpc, transactions, repository);
         TokenTx usdcTx = withdrawAndCollectJetton("USDC", usdc, external, hot, rpc, transactions, repository);
@@ -223,13 +223,13 @@ class TonLiveMockJettonFlowIntegrationTest {
         long collectionSeqno = rpc.seqno(jetton.userJettonWallet().getOwnerAddress());
         String collectionNo = "ton-" + symbol.toLowerCase() + "-collection-" + UUID.randomUUID();
         BigDecimal collectionAmount = new BigDecimal("100");
-        String collection = transactions.collectJetton(collectionNo, jetton.userJettonWallet(),
+        String collection = transactions.collectJetton(null, collectionNo, jetton.userJettonWallet(),
                 jetton.masterAddress(), hot.getAddress(), collectionAmount, symbol + " collection gate");
-        assertEquals(collection, transactions.collectJetton(collectionNo, jetton.userJettonWallet(),
+        assertEquals(collection, transactions.collectJetton(null, collectionNo, jetton.userJettonWallet(),
                 jetton.masterAddress(), hot.getAddress(), collectionAmount, symbol + " collection gate"));
         waitForSeqnoGreaterThan(rpc, jetton.userJettonWallet().getOwnerAddress(), collectionSeqno,
                 FLOW_TIMEOUT);
-        assertTrue(transactions.confirmCollection(collectionNo, jetton.userJettonWallet().getOwnerAddress()));
+        assertTrue(transactions.confirmCollection(null, collectionNo, jetton.userJettonWallet().getOwnerAddress()));
         assertTrue(repository.findLedgerBalance("TON", symbol, jetton.userJettonWallet().getAccountId())
                 .orElseThrow().getLockedBalance().signum() == 0);
         return new TokenTx(withdraw, collection);

@@ -44,6 +44,7 @@ public class BitcoinLikeSettlementService {
 
         if ("collection".equals(signature.getString("type"))) {
             chainRepository.markCollectionConfirmed(
+                    null,
                     chain, signature.getString("collectionId"), txId);
             chainRepository.markUtxosSpent(chain, transaction.getId().toString(), txId);
             return;

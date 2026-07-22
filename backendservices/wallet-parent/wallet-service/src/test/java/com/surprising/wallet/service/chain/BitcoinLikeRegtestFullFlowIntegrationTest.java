@@ -332,8 +332,8 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         assertEquals(0, repository.createCollectionRecord(
                 collectionNo, chainName, chainName, collectionSource, hotAddress,
                 collectionOutputAmount, chain.collectionFee(), "{}"));
-        assertEquals(1, repository.claimCollectionSigning(chainName, collectionNo, "{}"));
-        assertEquals(0, repository.claimCollectionSigning(chainName, collectionNo, "{}"));
+        assertEquals(1, repository.claimCollectionSigning(null, chainName, collectionNo, "{}"));
+        assertEquals(0, repository.claimCollectionSigning(null, chainName, collectionNo, "{}"));
         WithdrawTransaction collectionSigning = repository.createBitcoinLikeSigningTransaction(
                 currency,
                 "COLLECTION",
@@ -356,14 +356,15 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         collectionSigning.setStatus(Constants.SENT);
         collectionSigning.setSignature(collectionTx.raw().toString());
         assertEquals(1, repository.updateBitcoinLikeSigningTransaction(currency, collectionSigning));
-        assertEquals(1, repository.updateCollectionStatus(
+        assertEquals(1, repository.updateCollectionStatus(null,
                 chainName, collectionNo, "SENT", collectionTx.txid(), null, collectionTx.raw().toString()));
-        assertEquals(1, repository.markCollectionConfirmed(chainName, collectionNo, collectionTx.txid()));
-        assertEquals(0, repository.markCollectionConfirmed(chainName, collectionNo, collectionTx.txid()));
+        assertEquals(1, repository.markCollectionConfirmed(null, chainName, collectionNo, collectionTx.txid()));
+        assertEquals(0, repository.markCollectionConfirmed(null, chainName, collectionNo, collectionTx.txid()));
         assertEquals(1, repository.markUtxosSpent(chainName, collectionLockRef, collectionTx.txid()));
         assertEquals(0, repository.releaseUtxos(chainName, collectionLockRef));
-        assertEquals(Optional.of("CONFIRMED"), repository.findCollectionStatus(chainName, collectionNo));
-        assertEquals(Optional.of(collectionTx.txid()), repository.findCollectionTxHash(chainName, collectionNo));
+        assertEquals(Optional.of("CONFIRMED"), repository.findCollectionStatus(null, chainName, collectionNo));
+        assertEquals(Optional.of(collectionTx.txid()),
+                repository.findCollectionTxHash(null, chainName, collectionNo));
         assertLedger(jdbc, chainName, accountId, afterCollectionDeposit, BigDecimal.ZERO, afterCollectionDeposit);
         assertNoNegativeLedger(jdbc, chainName);
 
@@ -456,9 +457,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 runId + "-" + chainName + "-collection-to",
                 new BigDecimal("0.10000000"), BigDecimal.ZERO, "{}"));
         List<Integer> collectionClaims = runConcurrently(16,
-                index -> repository.claimCollectionSigning(chainName, collectionNo, "{\"worker\":" + index + "}"));
+                index -> repository.claimCollectionSigning(null, chainName, collectionNo, "{\"worker\":" + index + "}"));
         assertEquals(1L, sumUpdates(collectionClaims), chainName + " collection claim winner");
-        assertEquals(Optional.of("SIGNING"), repository.findCollectionStatus(chainName, collectionNo));
+        assertEquals(Optional.of("SIGNING"), repository.findCollectionStatus(null, chainName, collectionNo));
 
         String scannerName = runId + "-" + chainName + "-scanner";
         runConcurrently(32, index -> {

@@ -155,45 +155,47 @@ public class NearTransactionService {
         return confirmWithdrawal(profile, orderNo, txHash, SYMBOL, debitAccountId, debitAmount);
     }
 
-    public String collectNative(String collectionNo, ChainAddressRecord from,
+    public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigInteger amountYocto) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "near collectNative");
-        Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
+        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("NEAR collection is not retryable"));
         }
         try {
             String txHash = sendNative(from, hotAddress, amountYocto);
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", txHash, null, null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
             return txHash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
 
-    public String collectToken(String collectionNo, ChainAddressRecord from,
+    public String collectToken(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                TokenDefinition token, String hotAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "near collectToken");
-        Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
+        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("NEAR token collection is not retryable"));
         }
         try {
             ensureTokenStorageRegistered(token, hotAddress);
             String txHash = sendToken(from, token, hotAddress, amount);
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", txHash, null, null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
             return txHash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -231,10 +233,11 @@ public class NearTransactionService {
         return tokenStorageRegistered(token, accountId);
     }
 
-    public boolean confirmCollection(AccountChainProfile profile, String collectionNo) {
-        String txHash = repository.findCollectionTxHash(CHAIN, collectionNo).orElseThrow();
+    public boolean confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
+                                     String collectionNo) {
+        String txHash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         JsonNode status = requireSuccessfulConfirmation(txHash, null, Duration.ofMinutes(2));
-        if (repository.markCollectionConfirmed(CHAIN, collectionNo, txHash) == 1) {
+        if (repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, txHash) == 1) {
             repository.markNearTransactionConfirmed(CHAIN, txHash, blockHeight(status), gasBurnt(status),
                     status.toString());
             return true;

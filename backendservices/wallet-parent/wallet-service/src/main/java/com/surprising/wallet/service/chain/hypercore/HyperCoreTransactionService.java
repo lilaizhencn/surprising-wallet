@@ -63,9 +63,10 @@ public class HyperCoreTransactionService {
                 assetSymbol, debitAccountId, debitAmount);
     }
 
-    public boolean confirmCollection(String collectionNo, String actionId) {
+    public boolean confirmCollection(java.util.UUID tenantId, String collectionNo, String actionId) {
         return hyperCoreRepository.actionAccepted(actionId)
-                && chainRepository.markCollectionConfirmed(CHAIN, collectionNo, actionId) == 1;
+                && chainRepository.markCollectionConfirmed(
+                        tenantId, CHAIN, collectionNo, actionId) == 1;
     }
 
     private String submit(String actionType, String symbol, String fromAddress, String destination,

@@ -129,7 +129,7 @@ public class BtcCollectionJob {
                 outputAmount,
                 feeAmount,
                 rawPayload);
-        if (chainJdbcRepository.claimCollectionSigning(CHAIN, collectionId, rawPayload) != 1) {
+        if (chainJdbcRepository.claimCollectionSigning(null, CHAIN, collectionId, rawPayload) != 1) {
             return;
         }
 

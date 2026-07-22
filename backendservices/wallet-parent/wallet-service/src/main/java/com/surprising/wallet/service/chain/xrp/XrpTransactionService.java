@@ -108,25 +108,26 @@ public class XrpTransactionService {
         return false;
     }
 
-    public String collectNative(String collectionNo, ChainAddressRecord from,
+    public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "xrp collectNative");
-        Optional<String> previous = repository.findCollectionTxHash(CHAIN, collectionNo);
+        Optional<String> previous = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
         }
         repository.createCollectionRecord(collectionNo, CHAIN, NATIVE_SYMBOL, from.getAddress(), hotAddress,
                 amount, feeAsXrp(), null);
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
         }
         try {
             String txHash = sendNativeInternal(from, hotAddress, amount);
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", txHash, null, null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
             return txHash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -185,26 +186,28 @@ public class XrpTransactionService {
         return missing;
     }
 
-    public String collectIssuedCurrency(String collectionNo, ChainAddressRecord from,
+    public String collectIssuedCurrency(java.util.UUID tenantId, String collectionNo,
+                                        ChainAddressRecord from,
                                         TokenDefinition token, String hotAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "xrp collectIssuedCurrency");
-        Optional<String> previous = repository.findCollectionTxHash(CHAIN, collectionNo);
+        Optional<String> previous = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
         }
         ensureCollectionDestinationTrustLine(token, hotAddress);
         repository.createCollectionRecord(collectionNo, CHAIN, token.getSymbol(), from.getAddress(), hotAddress,
                 amount, feeAsXrp(), null);
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
         }
         try {
             String txHash = sendIssuedCurrencyInternal(from, token, hotAddress, amount);
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", txHash, null, null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
             return txHash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -224,13 +227,14 @@ public class XrpTransactionService {
                 issued.currencyCode(), confirmation);
     }
 
-    public boolean confirmCollection(AccountChainProfile profile, String collectionNo) {
-        String txHash = repository.findCollectionTxHash(CHAIN, collectionNo).orElseThrow();
+    public boolean confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
+                                     String collectionNo) {
+        String txHash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         Confirmation confirmation = confirmation(profile, txHash);
         if (!confirmation.confirmed()) {
             return false;
         }
-        boolean updated = repository.markCollectionConfirmed(CHAIN, collectionNo, txHash) == 1;
+        boolean updated = repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, txHash) == 1;
         updateConfirmedTransaction(txHash, confirmation);
         return updated;
     }

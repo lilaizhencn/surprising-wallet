@@ -241,36 +241,38 @@ public class SolanaTransactionService {
         }
     }
 
-    public String collectNative(String collectionNo, ChainAddressRecord from,
+    public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountLamports) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "solana collectNative");
-        Optional<String> previous = repository.findCollectionTxHash(CHAIN, collectionNo);
+        Optional<String> previous = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
         }
         long fee = profile().getDefaultFee();
         repository.createCollectionRecord(collectionNo, CHAIN, "SOL", from.getAddress(), hotAddress,
                 amountLamports, BigDecimal.valueOf(fee), null);
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
         }
         try {
             String signature = sendNative(from, hotAddress, amountLamports.longValueExact());
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", signature, null, null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", signature, null, null);
             recordTransaction(signature, from.getAddress(), hotAddress, "SOL", null,
                     amountLamports, fee, "SENT");
             return signature;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
 
-    public String collectToken(String collectionNo, ChainAddressRecord from, String mintAddress,
+    public String collectToken(java.util.UUID tenantId, String collectionNo,
+                               ChainAddressRecord from, String mintAddress,
                                String hotOwnerAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "solana collectToken");
-        Optional<String> previous = repository.findCollectionTxHash(CHAIN, collectionNo);
+        Optional<String> previous = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
         }
@@ -278,8 +280,8 @@ public class SolanaTransactionService {
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Solana mint " + mintAddress));
         repository.createCollectionRecord(collectionNo, CHAIN, token.getSymbol(), from.getAddress(),
                 hotOwnerAddress, amount, BigDecimal.valueOf(profile().getDefaultFee()), null);
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
         }
         try {
@@ -290,12 +292,13 @@ public class SolanaTransactionService {
             Account feePayer = keyService.account(hot.getUserId(), hot.getBiz(), hot.getAddressIndex());
             String signature = sendTokenWithFeePayer(sourceOwner, feePayer, mintAddress, hotOwnerAddress,
                     toAtomicAmount(amount, token.getDecimals()), token.getDecimals());
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", signature, null, null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", signature, null, null);
             recordTransaction(signature, from.getAddress(), hotOwnerAddress, token.getSymbol(), mintAddress,
                     amount, profile().getDefaultFee(), "SENT");
             return signature;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -310,10 +313,10 @@ public class SolanaTransactionService {
         return false;
     }
 
-    public boolean confirmCollection(String collectionNo) {
-        String signature = repository.findCollectionTxHash(CHAIN, collectionNo).orElseThrow();
+    public boolean confirmCollection(java.util.UUID tenantId, String collectionNo) {
+        String signature = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         JsonNode status = requireSuccessfulConfirmation(signature, Duration.ofMinutes(2));
-        boolean updated = repository.markCollectionConfirmed(CHAIN, collectionNo, signature) == 1;
+        boolean updated = repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, signature) == 1;
         updateConfirmedTransaction(signature, status);
         return updated;
     }

@@ -20,11 +20,15 @@ public class CustodyAssetDashboardRepository {
     public List<AssetBalance> balances(UUID tenantId) {
         return jdbc.query("""
                 with tenant_accounts as (
-                    select distinct c.id as custody_address_id, related.chain, related.account_id
+                    select distinct c.id as custody_address_id, c.tenant_id,
+                           related.chain, related.account_id
                       from custody_address c
-                      join chain_address base on base.id = c.chain_address_id
+                      join chain_address base
+                        on base.tenant_id = c.tenant_id
+                       and base.id = c.chain_address_id
                       join chain_address related
-                        on related.chain = base.chain
+                        on related.tenant_id = c.tenant_id
+                       and related.chain = base.chain
                        and related.user_id = base.user_id
                        and related.biz = base.biz
                        and related.address_index = base.address_index
@@ -32,14 +36,18 @@ public class CustodyAssetDashboardRepository {
                        and related.enabled = true
                      where c.tenant_id = ?
                        and not exists (select 1 from custody_gas_account g
-                                        where g.custody_address_id = c.id)
+                                        where g.tenant_id = c.tenant_id
+                                          and g.custody_address_id = c.id)
                     union
-                    select distinct c.id, base.chain, base.account_id
+                    select distinct c.id, c.tenant_id, base.chain, base.account_id
                       from custody_address c
-                      join chain_address base on base.id = c.chain_address_id
+                      join chain_address base
+                        on base.tenant_id = c.tenant_id
+                       and base.id = c.chain_address_id
                      where c.tenant_id = ?
                        and not exists (select 1 from custody_gas_account g
-                                        where g.custody_address_id = c.id)
+                                        where g.tenant_id = c.tenant_id
+                                          and g.custody_address_id = c.id)
                 ), configured_assets as (
                     select tc.chain, a.symbol as asset_symbol, true as native_asset
                       from custody_tenant_chain tc
@@ -70,7 +78,8 @@ public class CustodyAssetDashboardRepository {
                   from configured_assets ca
                   left join tenant_accounts ta on ta.chain = ca.chain
                   left join ledger_balance lb
-                    on lb.chain = ta.chain and lower(lb.account_id) = lower(ta.account_id)
+                    on lb.tenant_id = ta.tenant_id
+                   and lb.chain = ta.chain and lower(lb.account_id) = lower(ta.account_id)
                    and lb.asset_symbol = ca.asset_symbol
                   left join custody_asset_price p on p.asset_symbol = ca.asset_symbol
                  group by ca.chain, ca.asset_symbol, ca.native_asset,

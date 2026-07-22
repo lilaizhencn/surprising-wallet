@@ -81,11 +81,11 @@ class NearSandboxFullFlowIntegrationTest {
         String nativeCollection = runId + "-NEAR-COLLECT";
         assertEquals(1, repository.createCollectionRecord(nativeCollection, CHAIN, CHAIN,
                 user.getAddress(), hot.getAddress(), new BigDecimal("10"), BigDecimal.ZERO, null));
-        String nativeCollectionHash = transactions.collectNative(nativeCollection, user, hot.getAddress(),
+        String nativeCollectionHash = transactions.collectNative(null, nativeCollection, user, hot.getAddress(),
                 NearTransactionService.toYocto(new BigDecimal("10")));
-        assertEquals(nativeCollectionHash, transactions.collectNative(nativeCollection, user, hot.getAddress(),
+        assertEquals(nativeCollectionHash, transactions.collectNative(null, nativeCollection, user, hot.getAddress(),
                 NearTransactionService.toYocto(new BigDecimal("10"))));
-        assertTrue(transactions.confirmCollection(repository.findProfileByChain(CHAIN).orElseThrow(),
+        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
                 nativeCollection));
 
         byte[] contractCode = Files.readAllBytes(Path.of(System.getProperty("near.nep141.wasm")));
@@ -170,11 +170,11 @@ class NearSandboxFullFlowIntegrationTest {
         String collectionNo = runId + "-" + symbol + "-COLLECT";
         assertEquals(1, repository.createCollectionRecord(collectionNo, CHAIN, symbol,
                 user.getAddress(), hot.getAddress(), new BigDecimal("30"), BigDecimal.ZERO, null));
-        String collectionHash = transactions.collectToken(collectionNo, user, token, hot.getAddress(),
+        String collectionHash = transactions.collectToken(null, collectionNo, user, token, hot.getAddress(),
                 new BigDecimal("30"));
-        assertEquals(collectionHash, transactions.collectToken(collectionNo, user, token, hot.getAddress(),
+        assertEquals(collectionHash, transactions.collectToken(null, collectionNo, user, token, hot.getAddress(),
                 new BigDecimal("30")));
-        assertTrue(transactions.confirmCollection(repository.findProfileByChain(CHAIN).orElseThrow(),
+        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
                 collectionNo));
         assertTokenBalance(rpc, token, user.getAddress(), new BigDecimal("50"));
         assertTokenBalance(rpc, token, external.getAddress(), new BigDecimal("20"));

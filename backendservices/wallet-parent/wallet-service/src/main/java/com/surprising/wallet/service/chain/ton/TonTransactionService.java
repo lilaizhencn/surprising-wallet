@@ -299,10 +299,10 @@ public class TonTransactionService {
         return false;
     }
 
-    public String collectNative(String collectionNo, ChainAddressRecord from,
+    public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amount, String memo) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "ton collectNative");
-        Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
+        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
@@ -310,27 +310,30 @@ public class TonTransactionService {
         BigDecimal fee = displayAmount(feeNano, 9);
         repository.createCollectionRecord(collectionNo, CHAIN, "TON", from.getAddress(), hotAddress,
                 amount, fee, null);
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("TON collection is not retryable"));
         }
         try {
             PreparedTransfer prepared = prepareNative(from, hotAddress, atomicAmount(amount, 9), memo);
             String hash = broadcast(prepared);
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", hash, null, prepared.bocBase64());
+            repository.updateCollectionStatus(
+                    tenantId, CHAIN, collectionNo, "SENT", hash, null, prepared.bocBase64());
             record(hash, from.getAddress(), hotAddress, "TON", null, amount, feeNano,
                     null, "SENT", prepared.bocBase64());
             return hash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
 
-    public String collectJetton(String collectionNo, ChainAddressRecord from, String jettonMaster,
+    public String collectJetton(java.util.UUID tenantId, String collectionNo,
+                                ChainAddressRecord from, String jettonMaster,
                                 String hotOwnerAddress, BigDecimal amount, String memo) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "ton collectJetton");
-        Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
+        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
@@ -338,30 +341,32 @@ public class TonTransactionService {
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Jetton " + jettonMaster));
         repository.createCollectionRecord(collectionNo, CHAIN, token.getSymbol(), from.getAddress(),
                 hotOwnerAddress, amount, displayAmount(JETTON_GAS_TON.longValue(), 9), null);
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("TON Jetton collection is not retryable"));
         }
         try {
             PreparedTransfer prepared = prepareJetton(from, from.getAddress(),
                     hotOwnerAddress, atomicAmount(amount, token.getDecimals()), from.getOwnerAddress(), memo);
             String hash = broadcast(prepared);
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", hash, null, prepared.bocBase64());
+            repository.updateCollectionStatus(
+                    tenantId, CHAIN, collectionNo, "SENT", hash, null, prepared.bocBase64());
             record(hash, from.getAddress(), hotOwnerAddress, token.getSymbol(), jettonMaster,
                     amount, JETTON_GAS_TON.longValue(), null, "SENT", prepared.bocBase64());
             return hash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
 
-    public boolean confirmCollection(String collectionNo, String senderAddress) {
-        String hash = repository.findCollectionTxHash(CHAIN, collectionNo).orElseThrow();
+    public boolean confirmCollection(java.util.UUID tenantId, String collectionNo, String senderAddress) {
+        String hash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         if (!confirmSentMessage(hash, senderAddress)) {
             return false;
         }
-        if (repository.markCollectionConfirmed(CHAIN, collectionNo, hash) == 1) {
+        if (repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, hash) == 1) {
             return true;
         }
         return false;

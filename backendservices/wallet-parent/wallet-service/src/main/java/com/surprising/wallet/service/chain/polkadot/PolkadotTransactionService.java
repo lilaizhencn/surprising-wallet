@@ -92,22 +92,23 @@ public class PolkadotTransactionService {
                 assetSymbol, debitAccountId, debitAmount);
     }
 
-    public String collectNative(String collectionNo, ChainAddressRecord from,
+    public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigInteger amountPlanck) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "polkadot collectNative");
-        return collect(collectionNo, () -> sendNative(from, hotAddress, amountPlanck, false));
+        return collect(tenantId, collectionNo, () -> sendNative(from, hotAddress, amountPlanck, false));
     }
 
-    public String collectAsset(String collectionNo, ChainAddressRecord from,
+    public String collectAsset(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                TokenDefinition token, String hotAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "polkadot collectAsset");
-        return collect(collectionNo, () -> sendAsset(from, token, hotAddress, amount, false));
+        return collect(tenantId, collectionNo, () -> sendAsset(from, token, hotAddress, amount, false));
     }
 
-    public boolean confirmCollection(AccountChainProfile profile, String collectionNo, String assetSymbol) {
-        String txHash = repository.findCollectionTxHash(CHAIN, collectionNo).orElseThrow();
+    public boolean confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
+                                     String collectionNo, String assetSymbol) {
+        String txHash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         if (transactionFinalized(assetSymbol, txHash, confirmationLookback(profile))) {
-            return repository.markCollectionConfirmed(CHAIN, collectionNo, txHash) == 1;
+            return repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, txHash) == 1;
         }
         return false;
     }
@@ -121,21 +122,22 @@ public class PolkadotTransactionService {
                 .stripTrailingZeros();
     }
 
-    private String collect(String collectionNo, TxSubmitter submitter) {
-        Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
+    private String collect(java.util.UUID tenantId, String collectionNo, TxSubmitter submitter) {
+        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("DOT collection is not retryable"));
         }
         try {
             String txHash = submitter.submit();
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", txHash, null, null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
             return txHash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }

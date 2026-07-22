@@ -128,11 +128,11 @@ class MoneroRegtestFullFlowIntegrationTest {
                 String collectionNo = "xmr-regtest-collection-" + UUID.randomUUID();
                 repository.createCollectionRecord(collectionNo, CHAIN, SYMBOL, userAddress.address(), hotAddress,
                         COLLECTION_AMOUNT, BigDecimal.ZERO, null);
-                transactionService.collectNative(profile, collectionNo, userRecord, hotAddress, COLLECTION_AMOUNT);
+                transactionService.collectNative(null, profile, collectionNo, userRecord, hotAddress, COLLECTION_AMOUNT);
                 runScript(root, "mine", "12");
                 walletRpc.refresh();
-                transactionService.confirmCollection(profile, collectionNo);
-                assertEquals("CONFIRMED", repository.findCollectionStatus(CHAIN, collectionNo).orElseThrow());
+                transactionService.confirmCollection(null, profile, collectionNo);
+                assertEquals("CONFIRMED", repository.findCollectionStatus(null, CHAIN, collectionNo).orElseThrow());
                 assertBalance(repository, userAccount,
                         userBalanceBeforeCollection, BigDecimal.ZERO, userBalanceBeforeCollection);
             } finally {

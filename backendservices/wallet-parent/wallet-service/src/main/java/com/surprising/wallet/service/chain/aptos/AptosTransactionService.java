@@ -189,37 +189,39 @@ public class AptosTransactionService {
         }
     }
 
-    public String collectNative(String collectionNo, ChainAddressRecord from,
+    public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountOctas) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "aptos collectNative");
-        Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
+        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
         long feeReserve = profile().getDefaultFee();
         repository.createCollectionRecord(collectionNo, CHAIN, "APT", from.getAddress(), hotAddress,
                 amountOctas, BigDecimal.valueOf(feeReserve), null);
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("Aptos collection is not retryable"));
         }
         try {
             long sequenceBefore = rpc.sequenceNumber(from.getAddress());
             String hash = sendNative(from, hotAddress, amountOctas.longValueExact());
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", hash, null, null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", hash, null, null);
             record(hash, from.getAddress(), hotAddress, "APT", AptosRpcClient.aptCoinType(), amountOctas,
                     feeReserve, sequenceBefore, "SENT", null);
             return hash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
 
-    public String collectToken(String collectionNo, ChainAddressRecord from, String contractAddress,
+    public String collectToken(java.util.UUID tenantId, String collectionNo,
+                               ChainAddressRecord from, String contractAddress,
                                String hotAddress, BigDecimal atomicAmount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "aptos collectToken");
-        Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
+        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
@@ -227,19 +229,20 @@ public class AptosTransactionService {
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Aptos token " + contractAddress));
         repository.createCollectionRecord(collectionNo, CHAIN, token.getSymbol(), from.getAddress(),
                 hotAddress, atomicAmount, BigDecimal.valueOf(profile().getDefaultFee()), null);
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("Aptos token collection is not retryable"));
         }
         try {
             long sequenceBefore = rpc.sequenceNumber(from.getAddress());
             String hash = sendToken(from, token, hotAddress, atomicAmount.longValueExact());
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", hash, null, null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", hash, null, null);
             record(hash, from.getAddress(), hotAddress, token.getSymbol(), contractAddress, atomicAmount,
                     profile().getDefaultFee(), sequenceBefore, "SENT", null);
             return hash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -254,10 +257,10 @@ public class AptosTransactionService {
         return false;
     }
 
-    public boolean confirmCollection(String collectionNo) {
-        String hash = repository.findCollectionTxHash(CHAIN, collectionNo).orElseThrow();
+    public boolean confirmCollection(java.util.UUID tenantId, String collectionNo) {
+        String hash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(hash, Duration.ofMinutes(2));
-        if (repository.markCollectionConfirmed(CHAIN, collectionNo, hash) == 1) {
+        if (repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, hash) == 1) {
             markConfirmed(hash, transaction);
             return true;
         }

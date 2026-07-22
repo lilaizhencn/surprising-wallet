@@ -39,15 +39,19 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
                                c.address, c.memo, c.source,
                                case when exists (
                                    select 1 from custody_gas_account g
-                                    where g.custody_address_id = c.id
+                                    where g.tenant_id = c.tenant_id
+                                      and g.custody_address_id = c.id
                                ) then 'GAS_FUNDING' else 'CUSTOMER' end as purpose
                           from custody_address c
-                          join chain_address base on base.id = c.chain_address_id
+                          join chain_address base
+                            on base.tenant_id = c.tenant_id
+                           and base.id = c.chain_address_id
                          where c.chain = ?
                            and exists (
                                select 1
                                  from chain_address related
-                                where related.chain = base.chain
+                                where related.tenant_id = c.tenant_id
+                                  and related.chain = base.chain
                                   and related.user_id = base.user_id
                                   and related.biz = base.biz
                                   and related.address_index = base.address_index

@@ -77,11 +77,11 @@ class PolkadotDevnetFullFlowIntegrationTest {
         String nativeCollection = runId + "-DOT-COLLECT";
         assertEquals(1, repository.createCollectionRecord(nativeCollection, CHAIN, CHAIN,
                 user.getAddress(), hot.getAddress(), new BigDecimal("10"), BigDecimal.ZERO, null));
-        String nativeCollectionHash = transactions.collectNative(nativeCollection, user, hot.getAddress(),
+        String nativeCollectionHash = transactions.collectNative(null, nativeCollection, user, hot.getAddress(),
                 PolkadotTransactionService.toPlanck(new BigDecimal("10")));
-        assertEquals(nativeCollectionHash, transactions.collectNative(nativeCollection, user, hot.getAddress(),
+        assertEquals(nativeCollectionHash, transactions.collectNative(null, nativeCollection, user, hot.getAddress(),
                 PolkadotTransactionService.toPlanck(new BigDecimal("10"))));
-        assertTrue(transactions.confirmCollection(repository.findProfileByChain(CHAIN).orElseThrow(),
+        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
                 nativeCollection, CHAIN));
 
         tokenFlow(jdbc, repository, keys, runtime, transactions, scanner,
@@ -153,11 +153,11 @@ class PolkadotDevnetFullFlowIntegrationTest {
         String collectionNo = runId + "-" + symbol + "-COLLECT";
         assertEquals(1, repository.createCollectionRecord(collectionNo, CHAIN, symbol,
                 user.getAddress(), hot.getAddress(), new BigDecimal("30"), BigDecimal.ZERO, null));
-        String collectionHash = transactions.collectAsset(collectionNo, user, token, hot.getAddress(),
+        String collectionHash = transactions.collectAsset(null, collectionNo, user, token, hot.getAddress(),
                 new BigDecimal("30"));
-        assertEquals(collectionHash, transactions.collectAsset(collectionNo, user, token, hot.getAddress(),
+        assertEquals(collectionHash, transactions.collectAsset(null, collectionNo, user, token, hot.getAddress(),
                 new BigDecimal("30")));
-        assertTrue(transactions.confirmCollection(repository.findProfileByChain(CHAIN).orElseThrow(),
+        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
                 collectionNo, symbol));
 
         assertAssetBalance(runtime, assetId, user.getAddress(), new BigDecimal("50"));

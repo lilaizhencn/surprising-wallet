@@ -57,22 +57,23 @@ public class CardanoTransactionService {
                 assetSymbol, debitAccountId, debitAmount);
     }
 
-    public String collectNative(String collectionNo, ChainAddressRecord from,
+    public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigInteger lovelace) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "cardano collectNative");
-        return collect(collectionNo, () -> sendNative(from, hotAddress, lovelace));
+        return collect(tenantId, collectionNo, () -> sendNative(from, hotAddress, lovelace));
     }
 
-    public String collectToken(String collectionNo, ChainAddressRecord from,
+    public String collectToken(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                TokenDefinition token, String hotAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "cardano collectToken");
-        return collect(collectionNo, () -> sendToken(from, token, hotAddress, amount));
+        return collect(tenantId, collectionNo, () -> sendToken(from, token, hotAddress, amount));
     }
 
-    public boolean confirmCollection(AccountChainProfile profile, String collectionNo) {
-        String txHash = repository.findCollectionTxHash(CHAIN, collectionNo).orElseThrow();
+    public boolean confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
+                                     String collectionNo) {
+        String txHash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         if (confirmed(profile, txHash)) {
-            return repository.markCollectionConfirmed(CHAIN, collectionNo, txHash) == 1;
+            return repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, txHash) == 1;
         }
         return false;
     }
@@ -113,21 +114,22 @@ public class CardanoTransactionService {
         });
     }
 
-    private String collect(String collectionNo, TxSubmitter submitter) {
-        Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
+    private String collect(java.util.UUID tenantId, String collectionNo, TxSubmitter submitter) {
+        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("Cardano collection is not retryable"));
         }
         try {
             String txHash = submitter.submit();
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", txHash, null, null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
             return txHash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }

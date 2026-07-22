@@ -450,6 +450,7 @@ public class BitcoinLikeChainRuntime {
         String chain = chainType.name();
         if ("collection".equals(signature.getString("type"))) {
             chainRepository.updateCollectionStatus(
+                    null,
                     chain, signature.getString("collectionId"), "CONFIRMING", txId, null,
                     signature.toJSONString());
             return;

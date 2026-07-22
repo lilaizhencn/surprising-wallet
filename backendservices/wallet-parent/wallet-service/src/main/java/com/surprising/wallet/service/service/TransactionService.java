@@ -198,6 +198,7 @@ public class TransactionService {
         });
         if (isUnifiedBitcoinLike(currency) && "collection".equals(signature.getString("type"))) {
             chainJdbcRepository.updateCollectionStatus(
+                    null,
                     chainName(currency),
                     signature.getString("collectionId"),
                     "SENT",
@@ -215,6 +216,7 @@ public class TransactionService {
         chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
         if ("collection".equals(signature.getString("type"))) {
             chainJdbcRepository.updateCollectionStatus(
+                    null,
                     chain, signature.getString("collectionId"), "RETRYING", null, error,
                     transaction.getSignature());
             return;
@@ -236,6 +238,7 @@ public class TransactionService {
 
         if ("collection".equals(signature.getString("type"))) {
             chainJdbcRepository.updateCollectionStatus(
+                    null,
                     chain, signature.getString("collectionId"), "FAILED", null, error,
                     transaction.getSignature());
             return;

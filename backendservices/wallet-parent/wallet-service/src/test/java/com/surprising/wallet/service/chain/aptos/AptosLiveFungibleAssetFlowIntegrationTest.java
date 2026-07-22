@@ -98,11 +98,11 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
         String collectionNo = "aptos-fa-collection-" + UUID.randomUUID();
         assertEquals(1, repository.createCollectionRecord(collectionNo, "APTOS", symbol,
                 owner.getAddress(), hot.getAddress(), operationAmount, BigDecimal.ZERO, null));
-        assertEquals(1, repository.claimCollectionSigning("APTOS", collectionNo, null));
+        assertEquals(1, repository.claimCollectionSigning(null, "APTOS", collectionNo, null));
         String collectionHash = transactions.sendFungibleAsset(
                 owner, metadataAddress, hot.getAddress(), operationAtomic);
-        repository.updateCollectionStatus("APTOS", collectionNo, "SENT", collectionHash, null, null);
-        assertTrue(transactions.confirmCollection(collectionNo));
+        repository.updateCollectionStatus(null, "APTOS", collectionNo, "SENT", collectionHash, null, null);
+        assertTrue(transactions.confirmCollection(null, collectionNo));
 
         assertEquals(0L, jdbc.queryForObject("""
                 select count(*) from ledger_balance

@@ -162,36 +162,38 @@ public class SuiTransactionService {
         }
     }
 
-    public String collectNative(String collectionNo, ChainAddressRecord from,
+    public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountMist) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "sui collectNative");
-        Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
+        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
         long feeReserve = profile().getDefaultFee();
         repository.createCollectionRecord(collectionNo, CHAIN, "SUI", from.getAddress(), hotAddress,
                 amountMist, BigDecimal.valueOf(feeReserve), null);
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("Sui collection is not retryable"));
         }
         try {
             String digest = sendNative(from, hotAddress, amountMist.longValueExact());
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", digest, null, null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", digest, null, null);
             record(digest, from.getAddress(), hotAddress, "SUI", SuiRpcClient.SUI_COIN_TYPE, amountMist,
                     feeReserve, "SENT", null);
             return digest;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
 
-    public String collectCoin(String collectionNo, ChainAddressRecord from, String coinType,
+    public String collectCoin(java.util.UUID tenantId, String collectionNo,
+                              ChainAddressRecord from, String coinType,
                               String hotAddress, BigDecimal amountAtomic) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "sui collectCoin");
-        Optional<String> existing = repository.findCollectionTxHash(CHAIN, collectionNo);
+        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
@@ -199,18 +201,19 @@ public class SuiTransactionService {
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Sui coin " + coinType));
         repository.createCollectionRecord(collectionNo, CHAIN, token.getSymbol(), from.getAddress(),
                 hotAddress, amountAtomic, BigDecimal.valueOf(profile().getDefaultFee()), null);
-        if (repository.claimCollectionSigning(CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(CHAIN, collectionNo)
+        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("Sui coin collection is not retryable"));
         }
         try {
             String digest = sendCoin(from, coinType, hotAddress, amountAtomic.longValueExact());
-            repository.updateCollectionStatus(CHAIN, collectionNo, "SENT", digest, null, null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", digest, null, null);
             record(digest, from.getAddress(), hotAddress, token.getSymbol(), coinType, amountAtomic,
                     profile().getDefaultFee(), "SENT", null);
             return digest;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
+            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
+                    "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -225,10 +228,10 @@ public class SuiTransactionService {
         return false;
     }
 
-    public boolean confirmCollection(String collectionNo) {
-        String digest = repository.findCollectionTxHash(CHAIN, collectionNo).orElseThrow();
+    public boolean confirmCollection(java.util.UUID tenantId, String collectionNo) {
+        String digest = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(digest, Duration.ofMinutes(2));
-        if (repository.markCollectionConfirmed(CHAIN, collectionNo, digest) == 1) {
+        if (repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, digest) == 1) {
             markConfirmed(digest, transaction);
             return true;
         }

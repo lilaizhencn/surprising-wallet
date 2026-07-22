@@ -90,8 +90,8 @@ public class EvmAccountTransactionService {
         return false;
     }
 
-    public boolean confirmCollection(String chain, String collectionNo) {
-        String txHash = repository.findCollectionTxHash(chain, collectionNo).orElseThrow();
+    public boolean confirmCollection(java.util.UUID tenantId, String chain, String collectionNo) {
+        String txHash = repository.findCollectionTxHash(tenantId, chain, collectionNo).orElseThrow();
         TransactionReceipt receipt = confirmedReceipt(chain, txHash).orElse(null);
         if (receipt == null) {
             return false;
@@ -100,7 +100,7 @@ public class EvmAccountTransactionService {
             throw new IllegalStateException("EVM collection transaction failed: " + txHash);
         }
         markConfirmed(chain, txHash, receipt);
-        if (repository.markCollectionConfirmed(chain, collectionNo, txHash) == 1) {
+        if (repository.markCollectionConfirmed(tenantId, chain, collectionNo, txHash) == 1) {
             return true;
         }
         return false;

@@ -258,7 +258,7 @@ public class AccountChainWorkflowService {
             try {
                 processCollection(profile, record);
             } catch (Exception e) {
-                repository.updateCollectionStatus(record.getChain(), record.getCollectionNo(),
+                repository.updateCollectionStatus(record.getTenantId(), record.getChain(), record.getCollectionNo(),
                         "FAILED", null, e.getMessage(), null);
                 log.warn("account-chain collection failed: chain={} collectionNo={} error={}",
                         record.getChain(), record.getCollectionNo(), e.getMessage(), e);
@@ -445,103 +445,108 @@ public class AccountChainWorkflowService {
         }
         ChainAddressRecord from = requireAddress(record.getChain(), record.getAssetSymbol(), record.getFromAddress());
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
-            if (repository.claimCollectionSigning(record.getChain(), record.getCollectionNo(), null) != 1) {
+            if (repository.claimCollectionSigning(
+                    record.getTenantId(), record.getChain(), record.getCollectionNo(), null) != 1) {
                 return;
             }
             String txHash = isNative(profile, record.getAssetSymbol())
                     ? evmTransactionService.sendNative(record.getChain(), from, record.getToAddress(), record.getAmount())
                     : evmTransactionService.sendToken(record.getChain(), from, requireToken(record.getChain(),
                     record.getAssetSymbol()), record.getToAddress(), record.getAmount());
-            repository.updateCollectionStatus(record.getChain(), record.getCollectionNo(), "SENT", txHash, null, null);
+            repository.updateCollectionStatus(record.getTenantId(), record.getChain(),
+                    record.getCollectionNo(), "SENT", txHash, null, null);
             return;
         }
         switch (profile.getChain()) {
             case "SOLANA" -> {
                 if (isNative(profile, record.getAssetSymbol())) {
-                    solanaTransactionService.collectNative(record.getCollectionNo(), from,
+                    solanaTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
                             record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)));
                 } else {
                     TokenDefinition token = requireToken(record.getChain(), record.getAssetSymbol());
-                    solanaTransactionService.collectToken(record.getCollectionNo(), from,
+                    solanaTransactionService.collectToken(record.getTenantId(), record.getCollectionNo(), from,
                             token.getContractAddress(), record.getToAddress(), record.getAmount());
                 }
             }
             case "APTOS" -> {
                 if (isNative(profile, record.getAssetSymbol())) {
-                    aptosTransactionService.collectNative(record.getCollectionNo(), from,
+                    aptosTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
                             record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)));
                 } else {
-                    aptosTransactionService.collectToken(record.getCollectionNo(), from,
+                    aptosTransactionService.collectToken(record.getTenantId(), record.getCollectionNo(), from,
                             requireToken(record.getChain(), record.getAssetSymbol()).getContractAddress(),
                             record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)));
                 }
             }
             case "SUI" -> {
                 if (isNative(profile, record.getAssetSymbol())) {
-                    suiTransactionService.collectNative(record.getCollectionNo(), from,
+                    suiTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
                             record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)));
                 } else {
-                    suiTransactionService.collectCoin(record.getCollectionNo(), from,
+                    suiTransactionService.collectCoin(record.getTenantId(), record.getCollectionNo(), from,
                             requireToken(record.getChain(), record.getAssetSymbol()).getContractAddress(),
                             record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)));
                 }
             }
             case "TON" -> {
                 if (isNative(profile, record.getAssetSymbol())) {
-                    tonTransactionService.collectNative(record.getCollectionNo(), from,
+                    tonTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
                             record.getToAddress(), record.getAmount(),
                             "collection:" + record.getCollectionNo());
                 } else {
                     TokenDefinition token = requireToken(record.getChain(), record.getAssetSymbol());
-                    tonTransactionService.collectJetton(record.getCollectionNo(), from,
+                    tonTransactionService.collectJetton(record.getTenantId(), record.getCollectionNo(), from,
                             token.getContractAddress(), record.getToAddress(), record.getAmount(),
                             "collection:" + record.getCollectionNo());
                 }
             }
             case "XRP" -> {
                 if (isNative(profile, record.getAssetSymbol())) {
-                    xrpTransactionService.collectNative(record.getCollectionNo(), from,
+                    xrpTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
                             record.getToAddress(), record.getAmount());
                 } else {
-                    xrpTransactionService.collectIssuedCurrency(record.getCollectionNo(), from,
+                    xrpTransactionService.collectIssuedCurrency(
+                            record.getTenantId(), record.getCollectionNo(), from,
                             requireToken(record.getChain(), record.getAssetSymbol()),
                             record.getToAddress(), record.getAmount());
                 }
             }
             case "ADA" -> {
                 if (isNative(profile, record.getAssetSymbol())) {
-                    cardanoTransactionService.collectNative(record.getCollectionNo(), from,
+                    cardanoTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
                             record.getToAddress(), toAtomicBigInteger(record.getAmount(), assetDecimals(record)));
                 } else {
-                    cardanoTransactionService.collectToken(record.getCollectionNo(), from,
+                    cardanoTransactionService.collectToken(record.getTenantId(), record.getCollectionNo(), from,
                             requireToken(record.getChain(), record.getAssetSymbol()),
                             record.getToAddress(), record.getAmount());
                 }
             }
             case "DOT" -> {
                 if (isNative(profile, record.getAssetSymbol())) {
-                    polkadotTransactionService.collectNative(record.getCollectionNo(), from,
+                    polkadotTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
                             record.getToAddress(), toAtomicBigInteger(record.getAmount(), assetDecimals(record)));
                 } else {
-                    polkadotTransactionService.collectAsset(record.getCollectionNo(), from,
+                    polkadotTransactionService.collectAsset(record.getTenantId(), record.getCollectionNo(), from,
                             requireToken(record.getChain(), record.getAssetSymbol()),
                             record.getToAddress(), record.getAmount());
                 }
             }
-            case "XMR" -> moneroTransactionService.collectNative(profile, record.getCollectionNo(), from,
+            case "XMR" -> moneroTransactionService.collectNative(
+                    record.getTenantId(), profile, record.getCollectionNo(), from,
                     record.getToAddress(), record.getAmount());
             case "NEAR" -> {
                 if (isNative(profile, record.getAssetSymbol())) {
-                    nearTransactionService.collectNative(record.getCollectionNo(), from,
+                    nearTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), from,
                             record.getToAddress(), toAtomicBigInteger(record.getAmount(), assetDecimals(record)));
                 } else {
-                    nearTransactionService.collectToken(record.getCollectionNo(), from,
+                    nearTransactionService.collectToken(record.getTenantId(), record.getCollectionNo(), from,
                             requireToken(record.getChain(), record.getAssetSymbol()),
                             record.getToAddress(), record.getAmount());
                 }
             }
             case "HYPERCORE" -> {
-                if (repository.claimCollectionSigning(record.getChain(), record.getCollectionNo(), null) != 1) {
+                if (repository.claimCollectionSigning(
+                        record.getTenantId(), record.getChain(), record.getCollectionNo(), null) != 1) {
                     return;
                 }
                 String actionId = isNative(profile, record.getAssetSymbol())
@@ -549,7 +554,7 @@ public class AccountChainWorkflowService {
                         : hyperCoreTransactionService.sendSpot(profile, from,
                         requireToken(record.getChain(), record.getAssetSymbol()),
                         record.getToAddress(), record.getAmount());
-                repository.updateCollectionStatus(record.getChain(), record.getCollectionNo(),
+                repository.updateCollectionStatus(record.getTenantId(), record.getChain(), record.getCollectionNo(),
                         "SENT", actionId, null, null);
             }
             case "TRON" -> processTronCollection(profile, record, from);
@@ -560,26 +565,35 @@ public class AccountChainWorkflowService {
 
     private void confirmCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
-            evmTransactionService.confirmCollection(record.getChain(), record.getCollectionNo());
+            evmTransactionService.confirmCollection(
+                    record.getTenantId(), record.getChain(), record.getCollectionNo());
             return;
         }
         switch (profile.getChain()) {
-            case "SOLANA" -> solanaTransactionService.confirmCollection(record.getCollectionNo());
-            case "APTOS" -> aptosTransactionService.confirmCollection(record.getCollectionNo());
-            case "SUI" -> suiTransactionService.confirmCollection(record.getCollectionNo());
+            case "SOLANA" -> solanaTransactionService.confirmCollection(
+                    record.getTenantId(), record.getCollectionNo());
+            case "APTOS" -> aptosTransactionService.confirmCollection(
+                    record.getTenantId(), record.getCollectionNo());
+            case "SUI" -> suiTransactionService.confirmCollection(
+                    record.getTenantId(), record.getCollectionNo());
             case "TON" -> {
                 ChainAddressRecord from = requireAddress(
                         record.getChain(), record.getAssetSymbol(), record.getFromAddress());
-                tonTransactionService.confirmCollection(record.getCollectionNo(), tonOwnerAddress(from));
+                tonTransactionService.confirmCollection(
+                        record.getTenantId(), record.getCollectionNo(), tonOwnerAddress(from));
             }
-            case "XRP" -> xrpTransactionService.confirmCollection(profile, record.getCollectionNo());
-            case "ADA" -> cardanoTransactionService.confirmCollection(profile, record.getCollectionNo());
+            case "XRP" -> xrpTransactionService.confirmCollection(
+                    record.getTenantId(), profile, record.getCollectionNo());
+            case "ADA" -> cardanoTransactionService.confirmCollection(
+                    record.getTenantId(), profile, record.getCollectionNo());
             case "DOT" -> polkadotTransactionService.confirmCollection(
-                    profile, record.getCollectionNo(), record.getAssetSymbol());
-            case "XMR" -> moneroTransactionService.confirmCollection(profile, record.getCollectionNo());
-            case "NEAR" -> nearTransactionService.confirmCollection(profile, record.getCollectionNo());
+                    record.getTenantId(), profile, record.getCollectionNo(), record.getAssetSymbol());
+            case "XMR" -> moneroTransactionService.confirmCollection(
+                    record.getTenantId(), profile, record.getCollectionNo());
+            case "NEAR" -> nearTransactionService.confirmCollection(
+                    record.getTenantId(), profile, record.getCollectionNo());
             case "HYPERCORE" -> hyperCoreTransactionService.confirmCollection(
-                    record.getCollectionNo(), record.getTxHash());
+                    record.getTenantId(), record.getCollectionNo(), record.getTxHash());
             case "TRON" -> confirmTronCollection(profile, record);
             default -> {
             }
@@ -700,7 +714,8 @@ public class AccountChainWorkflowService {
 
     private void processTronCollection(AccountChainProfile profile, ChainCollectionRecord record,
                                        ChainAddressRecord from) throws Exception {
-        if (repository.claimCollectionSigning(record.getChain(), record.getCollectionNo(), null) != 1) {
+        if (repository.claimCollectionSigning(
+                record.getTenantId(), record.getChain(), record.getCollectionNo(), null) != 1) {
             return;
         }
         try (TronTridentClient client = tronClientFactory.create()) {
@@ -724,9 +739,10 @@ public class AccountChainWorkflowService {
                 recordTronSent(record.getChain(), txHash, from.getAddress(), record.getToAddress(),
                         token.getSymbol(), token.getContractAddress(), record.getAmount());
             }
-            repository.updateCollectionStatus(record.getChain(), record.getCollectionNo(), "SENT", txHash, null, null);
+            repository.updateCollectionStatus(record.getTenantId(), record.getChain(),
+                    record.getCollectionNo(), "SENT", txHash, null, null);
         } catch (Exception e) {
-            repository.updateCollectionStatus(record.getChain(), record.getCollectionNo(),
+            repository.updateCollectionStatus(record.getTenantId(), record.getChain(), record.getCollectionNo(),
                     "FAILED", null, e.getMessage(), null);
             throw e;
         }
@@ -748,7 +764,8 @@ public class AccountChainWorkflowService {
         if (txInfo != null) {
             recordTronConfirmed(record.getChain(), record.getTxHash(), record.getFromAddress(),
                     record.getToAddress(), record.getAssetSymbol(), record.getAmount(), txInfo);
-            repository.markCollectionConfirmed(record.getChain(), record.getCollectionNo(), record.getTxHash());
+            repository.markCollectionConfirmed(
+                    record.getTenantId(), record.getChain(), record.getCollectionNo(), record.getTxHash());
         }
     }
 

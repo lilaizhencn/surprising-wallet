@@ -723,9 +723,12 @@ public class CustodyRepository {
                             select distinct c.id as custody_address_id, c.tenant_id,
                                    related.chain, related.account_id
                               from custody_address c
-                              join chain_address base on base.id = c.chain_address_id
+                              join chain_address base
+                                on base.tenant_id = c.tenant_id
+                               and base.id = c.chain_address_id
                               join chain_address related
-                                on related.chain = base.chain
+                                on related.tenant_id = c.tenant_id
+                               and related.chain = base.chain
                                and related.user_id = base.user_id
                                and related.biz = base.biz
                                and related.address_index = base.address_index
@@ -734,16 +737,20 @@ public class CustodyRepository {
                              where c.tenant_id = ?
                                and not exists (
                                    select 1 from custody_gas_account g
-                                    where g.custody_address_id = c.id
+                                    where g.tenant_id = c.tenant_id
+                                      and g.custody_address_id = c.id
                                )
                             union
                             select distinct c.id, c.tenant_id, base.chain, base.account_id
                               from custody_address c
-                              join chain_address base on base.id = c.chain_address_id
+                              join chain_address base
+                                on base.tenant_id = c.tenant_id
+                               and base.id = c.chain_address_id
                              where c.tenant_id = ?
                                and not exists (
                                    select 1 from custody_gas_account g
-                                    where g.custody_address_id = c.id
+                                    where g.tenant_id = c.tenant_id
+                                      and g.custody_address_id = c.id
                                )
                         )
                         select lb.chain, lb.asset_symbol,
@@ -753,7 +760,8 @@ public class CustodyRepository {
                                count(distinct ta.custody_address_id) as address_count
                           from tenant_accounts ta
                           join ledger_balance lb
-                            on lb.chain = ta.chain
+                            on lb.tenant_id = ta.tenant_id
+                           and lb.chain = ta.chain
                            and lower(lb.account_id) = lower(ta.account_id)
                          group by lb.chain, lb.asset_symbol
                          order by lb.asset_symbol, lb.chain
@@ -892,13 +900,15 @@ public class CustodyRepository {
                                locked_balance = locked_balance + ?,
                                updated_at = now()
                          where chain = ? and asset_symbol = ? and lower(account_id) = lower(?)
+                           and tenant_id = ?
                            and available_balance >= ?
                            and not exists (
                                select 1 from custody_gas_usage u
-                                where u.gas_account_id = ? and u.status = 'OVERDUE'
+                                where u.tenant_id = ? and u.gas_account_id = ?
+                                  and u.status = 'OVERDUE'
                            )
                         """, reservedAmount, reservedAmount, chain, account.nativeSymbol(),
-                account.accountId(), reservedAmount, account.id()) != 1) {
+                account.accountId(), tenantId, reservedAmount, tenantId, account.id()) != 1) {
             throw new IllegalStateException(
                     "insufficient " + account.nativeSymbol()
                             + " gas balance; fund the gas account and wait for confirmations");
@@ -934,18 +944,19 @@ public class CustodyRepository {
                                locked_balance = locked_balance - ?,
                                updated_at = now()
                          where chain = ? and asset_symbol = ? and lower(account_id) = lower(?)
+                           and tenant_id = ?
                            and locked_balance >= ?
                         """, usage.reservedAmount(), usage.reservedAmount(),
                 usage.chain(), usage.nativeSymbol(), account.accountId(),
-                usage.reservedAmount()) != 1) {
+                usage.tenantId(), usage.reservedAmount()) != 1) {
             throw new IllegalStateException("gas reservation balance is inconsistent");
         }
         jdbc.update("""
                         update custody_gas_usage
                            set status = 'RELEASED', error_message = ?, updated_at = now(),
                                settled_at = now()
-                         where id = ? and status = 'RESERVED'
-                        """, reason, usage.id());
+                         where tenant_id = ? and id = ? and status = 'RESERVED'
+                        """, reason, usage.tenantId(), usage.id());
         return requireGasUsage(tenantId, operationType, operationId);
     }
 
@@ -980,10 +991,11 @@ public class CustodyRepository {
                                    total_balance = total_balance - ?,
                                    updated_at = now()
                              where chain = ? and asset_symbol = ? and lower(account_id) = lower(?)
+                               and tenant_id = ?
                                and locked_balance >= ? and total_balance >= ?
                             """, difference, usage.reservedAmount(), actual,
                     usage.chain(), usage.nativeSymbol(), account.accountId(),
-                    usage.reservedAmount(), actual);
+                    usage.tenantId(), usage.reservedAmount(), actual);
         } else {
             java.math.BigDecimal extra = difference.negate();
             settled = jdbc.update("""
@@ -993,11 +1005,12 @@ public class CustodyRepository {
                                    total_balance = total_balance - ?,
                                    updated_at = now()
                              where chain = ? and asset_symbol = ? and lower(account_id) = lower(?)
+                               and tenant_id = ?
                                and available_balance >= ? and locked_balance >= ?
                                and total_balance >= ?
                             """, extra, usage.reservedAmount(), actual,
                     usage.chain(), usage.nativeSymbol(), account.accountId(),
-                    extra, usage.reservedAmount(), actual);
+                    usage.tenantId(), extra, usage.reservedAmount(), actual);
         }
         if (settled != 1) {
             jdbc.update("""
@@ -1006,8 +1019,9 @@ public class CustodyRepository {
                                    pricing_source = ?, tx_hash = ?,
                                    error_message = 'actual network fee exceeded funded gas balance',
                                    updated_at = now(), settled_at = null
-                             where id = ? and status in ('RESERVED', 'OVERDUE')
-                            """, actual, pricingSource, txHash, usage.id());
+                             where tenant_id = ? and id = ?
+                               and status in ('RESERVED', 'OVERDUE')
+                            """, actual, pricingSource, txHash, usage.tenantId(), usage.id());
             return requireGasUsage(tenantId, operationType, operationId);
         }
         jdbc.update("""
@@ -1015,8 +1029,9 @@ public class CustodyRepository {
                            set status = 'SETTLED', actual_amount = ?,
                                pricing_source = ?, tx_hash = ?, error_message = null,
                                updated_at = now(), settled_at = now()
-                         where id = ? and status in ('RESERVED', 'OVERDUE')
-                        """, actual, pricingSource, txHash, usage.id());
+                         where tenant_id = ? and id = ?
+                           and status in ('RESERVED', 'OVERDUE')
+                        """, actual, pricingSource, txHash, usage.tenantId(), usage.id());
         jdbc.update("""
                         insert into custody_ledger_entry(
                             id, tenant_id, custody_address_id, chain, asset_symbol,
@@ -1333,10 +1348,15 @@ public class CustodyRepository {
                             exists (
                                 select 1
                                   from custody_gas_account g
-                                  join custody_address a on a.id = g.custody_address_id
-                                  join chain_address base on base.id = a.chain_address_id
+                                  join custody_address a
+                                    on a.tenant_id = g.tenant_id
+                                   and a.id = g.custody_address_id
+                                  join chain_address base
+                                    on base.tenant_id = a.tenant_id
+                                   and base.id = a.chain_address_id
                                   join chain_address related
-                                    on related.chain = base.chain
+                                    on related.tenant_id = g.tenant_id
+                                   and related.chain = base.chain
                                    and related.user_id = base.user_id
                                    and related.biz = base.biz
                                    and related.address_index = base.address_index
@@ -1344,7 +1364,8 @@ public class CustodyRepository {
                                    and related.asset_symbol = g.native_symbol
                                    and related.enabled = true
                                   join ledger_balance lb
-                                    on lb.chain = g.chain
+                                    on lb.tenant_id = g.tenant_id
+                                   and lb.chain = g.chain
                                    and lb.asset_symbol = g.native_symbol
                                    and lower(lb.account_id) = lower(related.account_id)
                                  where g.tenant_id = t.id
@@ -1389,8 +1410,12 @@ public class CustodyRepository {
                                coalesce(b.total_balance, 0) as total_balance,
                                g.created_at, g.updated_at
                           from custody_gas_account g
-                          join custody_address a on a.id = g.custody_address_id
-                          join chain_address base on base.id = a.chain_address_id
+                          join custody_address a
+                            on a.tenant_id = g.tenant_id
+                           and a.id = g.custody_address_id
+                          join chain_address base
+                            on base.tenant_id = a.tenant_id
+                           and base.id = a.chain_address_id
                           left join lateral (
                               select coalesce(sum(lb.available_balance), 0) as available_balance,
                                      coalesce(sum(lb.locked_balance), 0) as locked_balance,
@@ -1398,7 +1423,8 @@ public class CustodyRepository {
                                 from (
                                     select distinct related.account_id
                                       from chain_address related
-                                     where related.chain = base.chain
+                                     where related.tenant_id = g.tenant_id
+                                       and related.chain = base.chain
                                        and related.user_id = base.user_id
                                        and related.biz = base.biz
                                        and related.address_index = base.address_index
@@ -1407,7 +1433,8 @@ public class CustodyRepository {
                                        and related.enabled = true
                                 ) account
                                 join ledger_balance lb
-                                  on lb.chain = g.chain
+                                  on lb.tenant_id = g.tenant_id
+                                 and lb.chain = g.chain
                                  and lb.asset_symbol = g.native_symbol
                                  and lower(lb.account_id) = lower(account.account_id)
                           ) b on true

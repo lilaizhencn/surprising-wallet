@@ -94,10 +94,10 @@ class XrpTestnetFullFlowIntegrationTest {
 
         String nativeCollection = runId + "-XRP-COLLECT";
         BigDecimal hotBeforeCollection = xrpBalance(rpc, hot.getAddress());
-        String nativeCollectionHash = transactions.collectNative(nativeCollection, user, hot.getAddress(),
+        String nativeCollectionHash = transactions.collectNative(null, nativeCollection, user, hot.getAddress(),
                 new BigDecimal("3"));
         waitValidated(rpc, nativeCollectionHash);
-        assertTrue(transactions.confirmCollection(repository.findProfileByChain(CHAIN).orElseThrow(),
+        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
                 nativeCollection));
         assertTrue(xrpBalance(rpc, hot.getAddress()).compareTo(hotBeforeCollection) > 0);
 
@@ -130,10 +130,10 @@ class XrpTestnetFullFlowIntegrationTest {
         assertAmount(BigDecimal.ZERO, afterTokenWithdrawal.getLockedBalance());
 
         String tokenCollection = runId + "-USDC-COLLECT";
-        String tokenCollectionHash = transactions.collectIssuedCurrency(tokenCollection, user, token,
+        String tokenCollectionHash = transactions.collectIssuedCurrency(null, tokenCollection, user, token,
                 hot.getAddress(), new BigDecimal("30"));
         waitValidated(rpc, tokenCollectionHash);
-        assertTrue(transactions.confirmCollection(repository.findProfileByChain(CHAIN).orElseThrow(),
+        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
                 tokenCollection));
         assertIssuedBalance(rpc, user.getAddress(), issuerAddress, USDC_CURRENCY, new BigDecimal("50"));
         assertIssuedBalance(rpc, hot.getAddress(), issuerAddress, USDC_CURRENCY, new BigDecimal("30"));
