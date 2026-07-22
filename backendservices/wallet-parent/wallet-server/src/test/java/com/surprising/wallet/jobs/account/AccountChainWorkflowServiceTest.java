@@ -53,6 +53,31 @@ class AccountChainWorkflowServiceTest {
     }
 
     @Test
+    void evmNativeCollectionReservesGasForEveryEnabledToken() throws Exception {
+        EvmCollectionRepository repository = new EvmCollectionRepository();
+        CapturingEvmFeeService evm = new CapturingEvmFeeService();
+        AccountChainWorkflowService service = service(repository, evm);
+        AccountChainProfile profile = AccountChainProfile.builder()
+                .chain("ETH")
+                .network("sepolia")
+                .family("evm")
+                .nativeSymbol("ETH")
+                .defaultFee(1L)
+                .dustThreshold(0L)
+                .enabled(true)
+                .build();
+
+        Method method = AccountChainWorkflowService.class.getDeclaredMethod(
+                "createCollectionCandidates", AccountChainProfile.class);
+        method.setAccessible(true);
+        method.invoke(service, profile);
+
+        assertEquals(2, evm.enabledTokenCount);
+        assertEquals(0, new BigDecimal("4.9995").compareTo(repository.collectionAmount));
+        assertTrue(repository.created);
+    }
+
+    @Test
     void broadcastFailureKeepsFundsLockedForManualAudit() throws Exception {
         ChainAddressRecord address = ChainAddressRecord.builder()
                 .chain("ETH")
@@ -491,6 +516,77 @@ class AccountChainWorkflowServiceTest {
         @Override
         public String sendNative(String chain, ChainAddressRecord from, String toAddress, BigDecimal amount) {
             throw new IllegalStateException("rpc accepted maybe but returned error");
+        }
+    }
+
+    private static final class CapturingEvmFeeService extends EvmAccountTransactionService {
+        private int enabledTokenCount;
+
+        private CapturingEvmFeeService() {
+            super(null, null, null, null);
+        }
+
+        @Override
+        public BigDecimal estimateCollectionFeeReserve(String chain, int enabledTokenCount) {
+            this.enabledTokenCount = enabledTokenCount;
+            return new BigDecimal("0.0005");
+        }
+    }
+
+    private static final class EvmCollectionRepository extends ChainJdbcRepository {
+        private final UUID custodyAddressId = UUID.fromString("77020000-0000-0000-0000-000000000012");
+        private BigDecimal collectionAmount;
+        private boolean created;
+
+        private EvmCollectionRepository() {
+            super(null);
+        }
+
+        @Override
+        public List<CollectionCandidateRecord> listCollectableLedgerBalances(
+                String chain, BigDecimal minimumAmount, int limit) {
+            return List.of(CollectionCandidateRecord.builder()
+                    .tenantId(TENANT_ID)
+                    .custodyAddressId(custodyAddressId)
+                    .chain("ETH")
+                    .assetSymbol("ETH")
+                    .accountId("0xdeposit")
+                    .address("0xdeposit")
+                    .ownerAddress("0xdeposit")
+                    .userId(1L)
+                    .biz(0)
+                    .addressIndex(0L)
+                    .walletRole("DEPOSIT")
+                    .amount(new BigDecimal("5"))
+                    .build());
+        }
+
+        @Override
+        public List<TokenDefinition> listTokens(String chain) {
+            return List.of(
+                    TokenDefinition.builder().chain(chain).symbol("USDC").active(true).build(),
+                    TokenDefinition.builder().chain(chain).symbol("USDT").active(true).build());
+        }
+
+        @Override
+        public Optional<String> findActiveTenantCollectionAddress(UUID tenantId, String chain) {
+            return Optional.of("0xtenant-collection");
+        }
+
+        @Override
+        public Optional<ChainAsset> findAsset(String chain, String symbol) {
+            return Optional.of(ChainAsset.builder()
+                    .chain(chain).symbol(symbol).decimals(18).nativeAsset(true).active(true).build());
+        }
+
+        @Override
+        public int createCollectionRecord(
+                UUID tenantId, UUID custodyAddressId, String collectionNo,
+                String chain, String assetSymbol, String fromAddress, String toAddress,
+                BigDecimal amount, BigDecimal fee, String rawPayload) {
+            this.collectionAmount = amount;
+            this.created = true;
+            return 1;
         }
     }
 

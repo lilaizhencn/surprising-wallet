@@ -2,9 +2,9 @@
 set -euo pipefail
 
 EVM_MATRIX_ROOT=$(git rev-parse --show-toplevel)
+source "$EVM_MATRIX_ROOT/scripts/regtest/local-postgres.sh"
 EVM_MATRIX_TMP=$(mktemp -d -t surprising-evm-matrix.XXXXXX)
-EVM_MATRIX_DB="wallet_evm_it_$$"
-EVM_MATRIX_DB_USER=$(id -un)
+EVM_MATRIX_DB="surprising_wallet_test_evm_matrix_$$"
 EVM_MATRIX_NODE_PID=""
 
 EVM_CHAINS=(
@@ -45,7 +45,7 @@ cleanup() {
   local status=$?
   trap - EXIT INT TERM
   stop_node
-  dropdb -h 127.0.0.1 --if-exists "$EVM_MATRIX_DB" >/dev/null 2>&1 || true
+  local_pg_drop "$EVM_MATRIX_DB" >/dev/null 2>&1 || true
   if [[ "$EVM_MATRIX_TMP" == *"/surprising-evm-matrix."* ]] && [[ -d "$EVM_MATRIX_TMP" ]]; then
     trash "$EVM_MATRIX_TMP"
   fi
@@ -53,12 +53,13 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-for command in createdb curl dropdb git jq mvn node npm psql trash; do
+for command in curl git jq mvn node npm psql trash; do
   command -v "$command" >/dev/null || {
     printf 'missing required command: %s\n' "$command" >&2
     exit 1
   }
 done
+local_pg_require
 
 if curl -fsS -m 1 \
     -H 'content-type: application/json' \
@@ -72,7 +73,7 @@ if [[ ! -d "$EVM_MATRIX_ROOT/evm-fork/node_modules" ]]; then
   npm --prefix "$EVM_MATRIX_ROOT/evm-fork" ci
 fi
 
-createdb -h 127.0.0.1 "$EVM_MATRIX_DB"
+local_pg_create "$EVM_MATRIX_DB"
 
 wait_for_rpc() {
   local expected_chain_id=$1
@@ -102,11 +103,11 @@ wait_for_rpc() {
 for definition in "${EVM_CHAINS[@]}"; do
   IFS='|' read -r chain native_symbol chain_id token_symbols <<<"$definition"
 
-  psql -h 127.0.0.1 -d "$EVM_MATRIX_DB" -q -v ON_ERROR_STOP=1 \
+  local_pg_psql "$EVM_MATRIX_DB" -q -v ON_ERROR_STOP=1 \
     -f "$EVM_MATRIX_ROOT/docs/db/surprising-wallet-init-pgsql.sql" \
     >"$EVM_MATRIX_TMP/$chain.schema.log"
 
-  configured_tokens=$(psql -h 127.0.0.1 -d "$EVM_MATRIX_DB" -Atqc \
+  configured_tokens=$(local_pg_psql "$EVM_MATRIX_DB" -Atqc \
     "select coalesce(string_agg(symbol, ',' order by symbol), '') from token_config where chain='$chain' and enabled=true")
   expected_tokens=$(tr ',' '\n' <<<"$token_symbols" | sed '/^$/d' | sort | paste -sd, -)
   if [[ "$configured_tokens" != "$expected_tokens" ]]; then
@@ -126,7 +127,7 @@ for definition in "${EVM_CHAINS[@]}"; do
 
   EVM_CHAIN="$chain" \
   TOKEN_SYMBOLS="$token_symbols" \
-  PG_URL="postgresql://$EVM_MATRIX_DB_USER@127.0.0.1:5432/$EVM_MATRIX_DB" \
+  PG_URL="$(local_pg_uri "$EVM_MATRIX_DB")" \
   DEPLOYMENT_OUT_DIR="$EVM_MATRIX_TMP/deployments" \
     npm --prefix "$EVM_MATRIX_ROOT/evm-fork" run deploy:mock >/dev/null
 
@@ -140,14 +141,14 @@ for definition in "${EVM_CHAINS[@]}"; do
     -Devm.native.symbol="$native_symbol" \
     -Devm.expected.chainId="$chain_id" \
     -Devm.confirmations=1 \
-    -Devm.db.url="jdbc:postgresql://127.0.0.1:5432/$EVM_MATRIX_DB" \
-    -Devm.db.user="$EVM_MATRIX_DB_USER" \
-    -Devm.db.password= \
+    -Devm.db.url="$(local_pg_jdbc_url "$EVM_MATRIX_DB")" \
+    -Devm.db.user="$REGTEST_PG_USER" \
+    -Devm.db.password="$REGTEST_PG_PASSWORD" \
     test
 
-  negative_balances=$(psql -h 127.0.0.1 -d "$EVM_MATRIX_DB" -Atqc \
+  negative_balances=$(local_pg_psql "$EVM_MATRIX_DB" -Atqc \
     "select count(*) from ledger_balance where chain='$chain' and (available_balance < 0 or locked_balance < 0 or total_balance < 0)")
-  nonterminal_orders=$(psql -h 127.0.0.1 -d "$EVM_MATRIX_DB" -Atqc \
+  nonterminal_orders=$(local_pg_psql "$EVM_MATRIX_DB" -Atqc \
     "select count(*) from withdrawal_order where chain='$chain' and status not in ('CONFIRMED','FAILED','CANCELLED')")
   if [[ "$negative_balances" != 0 || "$nonterminal_orders" != 0 ]]; then
     printf '%s post-test audit failed: negative_balances=%s nonterminal_orders=%s\n' \

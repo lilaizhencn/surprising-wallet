@@ -32,6 +32,7 @@ public class EvmAccountTransactionService {
     private static final BigInteger WEI_PER_NATIVE = new BigInteger("1000000000000000000");
     private static final BigInteger NATIVE_GAS_LIMIT = BigInteger.valueOf(21_000L);
     private static final BigInteger TOKEN_GAS_LIMIT = BigInteger.valueOf(65_000L);
+    private static final BigInteger COLLECTION_FEE_SAFETY_MULTIPLIER = BigInteger.TWO;
 
     private final ChainJdbcRepository repository;
     private final ChainRpcNodeService rpcNodeService;
@@ -70,6 +71,16 @@ public class EvmAccountTransactionService {
             record(chain, txHash, from.getAddress(), toAddress, token.getSymbol(), token.getContractAddress(),
                     amount, fee(gasPrice, TOKEN_GAS_LIMIT), nonce.longValue(), "SENT", data);
             return txHash;
+        });
+    }
+
+    public BigDecimal estimateCollectionFeeReserve(String chain, int enabledTokenCount) {
+        AccountChainProfile profile = profile(chain);
+        int tokenCount = Math.max(0, enabledTokenCount);
+        return withWeb3(profile, web3j -> {
+            BigInteger totalGas = NATIVE_GAS_LIMIT.add(
+                    TOKEN_GAS_LIMIT.multiply(BigInteger.valueOf(tokenCount)));
+            return fee(gasPrice(web3j), totalGas.multiply(COLLECTION_FEE_SAFETY_MULTIPLIER));
         });
     }
 

@@ -423,9 +423,14 @@ public class AccountChainWorkflowService {
     }
 
     private void createCollectionCandidates(AccountChainProfile profile) {
-        for (CollectionCandidateRecord candidate : repository.listCollectableLedgerBalances(
-                profile.getChain(), BigDecimal.ZERO, COLLECTION_LIMIT)) {
-            BigDecimal amount = collectionAmount(profile, candidate);
+        List<CollectionCandidateRecord> candidates = repository.listCollectableLedgerBalances(
+                profile.getChain(), BigDecimal.ZERO, COLLECTION_LIMIT);
+        BigDecimal evmFeeReserve = "evm".equalsIgnoreCase(profile.getFamily())
+                ? evmTransactionService.estimateCollectionFeeReserve(
+                        profile.getChain(), repository.listTokens(profile.getChain()).size())
+                : BigDecimal.ZERO;
+        for (CollectionCandidateRecord candidate : candidates) {
+            BigDecimal amount = collectionAmount(profile, candidate, evmFeeReserve);
             if (amount.signum() <= 0) {
                 continue;
             }
@@ -839,7 +844,8 @@ public class AccountChainWorkflowService {
                 .build());
     }
 
-    private BigDecimal collectionAmount(AccountChainProfile profile, CollectionCandidateRecord candidate) {
+    private BigDecimal collectionAmount(AccountChainProfile profile, CollectionCandidateRecord candidate,
+                                        BigDecimal evmFeeReserve) {
         BigDecimal amount = candidate.getAmount() == null ? BigDecimal.ZERO : candidate.getAmount();
         if (!isNative(profile, candidate.getAssetSymbol())) {
             return amount;
@@ -847,18 +853,19 @@ public class AccountChainWorkflowService {
         if ("XRP".equals(profile.getChain())) {
             return xrpTransactionService.collectableNativeAmount(candidate.getAddress(), amount);
         }
-        BigDecimal reserve = nativeCollectionFeeReserve(profile, candidate);
+        BigDecimal reserve = nativeCollectionFeeReserve(profile, candidate, evmFeeReserve);
         return amount.subtract(reserve).max(BigDecimal.ZERO);
     }
 
-    private BigDecimal nativeCollectionFeeReserve(AccountChainProfile profile, CollectionCandidateRecord candidate) {
+    private BigDecimal nativeCollectionFeeReserve(AccountChainProfile profile, CollectionCandidateRecord candidate,
+                                                   BigDecimal evmFeeReserve) {
         int decimals = assetDecimals(candidate.getChain(), candidate.getAssetSymbol());
         BigDecimal configured = profile.getDefaultFee() == null
                 ? BigDecimal.ZERO
                 : BigDecimal.valueOf(profile.getDefaultFee()).movePointLeft(decimals);
         BigDecimal feeReserve;
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
-            feeReserve = configured.max(new BigDecimal("0.0001"));
+            feeReserve = configured.max(evmFeeReserve).max(new BigDecimal("0.0001"));
         } else {
             feeReserve = switch (profile.getChain()) {
                 case "SOLANA" -> configured.max(new BigDecimal("0.00002"));
