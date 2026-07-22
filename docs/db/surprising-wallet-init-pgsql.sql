@@ -71,6 +71,8 @@ ALTER TABLE IF EXISTS ONLY public.custody_gas_account DROP CONSTRAINT IF EXISTS 
 ALTER TABLE IF EXISTS ONLY public.custody_gas_account DROP CONSTRAINT IF EXISTS custody_gas_account_address_fk;
 ALTER TABLE IF EXISTS ONLY public.custody_event DROP CONSTRAINT IF EXISTS custody_event_tenant_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.custody_derivation_subject DROP CONSTRAINT IF EXISTS custody_derivation_subject_tenant_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.custody_dev_faucet_funding DROP CONSTRAINT IF EXISTS custody_dev_faucet_funding_tenant_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.custody_dev_faucet_funding DROP CONSTRAINT IF EXISTS custody_dev_faucet_funding_address_fk;
 ALTER TABLE IF EXISTS ONLY public.custody_deposit DROP CONSTRAINT IF EXISTS custody_deposit_tenant_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.custody_deposit DROP CONSTRAINT IF EXISTS custody_deposit_record_fk;
 ALTER TABLE IF EXISTS ONLY public.custody_deposit DROP CONSTRAINT IF EXISTS custody_deposit_deposit_record_id_fkey;
@@ -124,6 +126,8 @@ DROP INDEX IF EXISTS public.custody_gas_usage_account_time_idx;
 DROP INDEX IF EXISTS public.custody_gas_account_tenant_status_idx;
 DROP INDEX IF EXISTS public.custody_event_tenant_time_idx;
 DROP INDEX IF EXISTS public.custody_event_pending_idx;
+DROP INDEX IF EXISTS public.custody_dev_faucet_funding_tenant_time_idx;
+DROP INDEX IF EXISTS public.custody_dev_faucet_funding_due_idx;
 DROP INDEX IF EXISTS public.custody_deposit_tenant_time_idx;
 DROP INDEX IF EXISTS public.custody_audit_log_tenant_time_idx;
 DROP INDEX IF EXISTS public.custody_api_nonce_expiry_idx;
@@ -233,6 +237,8 @@ ALTER TABLE IF EXISTS ONLY public.custody_event DROP CONSTRAINT IF EXISTS custod
 ALTER TABLE IF EXISTS ONLY public.custody_event DROP CONSTRAINT IF EXISTS custody_event_business_key;
 ALTER TABLE IF EXISTS ONLY public.custody_derivation_subject DROP CONSTRAINT IF EXISTS custody_derivation_subject_pkey;
 ALTER TABLE IF EXISTS ONLY public.custody_derivation_subject DROP CONSTRAINT IF EXISTS custody_derivation_subject_path_key;
+ALTER TABLE IF EXISTS ONLY public.custody_dev_faucet_funding DROP CONSTRAINT IF EXISTS custody_dev_faucet_funding_address_asset_key;
+ALTER TABLE IF EXISTS ONLY public.custody_dev_faucet_funding DROP CONSTRAINT IF EXISTS custody_dev_faucet_funding_pkey;
 ALTER TABLE IF EXISTS ONLY public.custody_deposit DROP CONSTRAINT IF EXISTS custody_deposit_tenant_record_key;
 ALTER TABLE IF EXISTS ONLY public.custody_deposit DROP CONSTRAINT IF EXISTS custody_deposit_pkey;
 ALTER TABLE IF EXISTS ONLY public.custody_audit_log DROP CONSTRAINT IF EXISTS custody_audit_log_pkey;
@@ -348,6 +354,7 @@ DROP SEQUENCE IF EXISTS public.evm_nonce_id_seq;
 DROP TABLE IF EXISTS public.evm_nonce;
 DROP SEQUENCE IF EXISTS public.deposit_record_id_seq;
 DROP TABLE IF EXISTS public.deposit_record;
+DROP TABLE IF EXISTS public.custody_dev_faucet_funding;
 DROP TABLE IF EXISTS public.custody_withdrawal;
 DROP TABLE IF EXISTS public.custody_webhook_endpoint;
 DROP TABLE IF EXISTS public.custody_webhook_delivery_attempt;
@@ -958,6 +965,39 @@ CREATE TABLE public.custody_deposit (
     credited_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: custody_dev_faucet_funding; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.custody_dev_faucet_funding (
+    id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    custody_address_id uuid NOT NULL,
+    chain character varying(32) NOT NULL,
+    network character varying(64) NOT NULL,
+    asset_symbol character varying(32) NOT NULL,
+    purpose character varying(32) NOT NULL,
+    address character varying(160) NOT NULL,
+    contract_address character varying(128),
+    decimals integer NOT NULL,
+    requested_amount numeric(78,24) NOT NULL,
+    tx_hash character varying(128),
+    status character varying(24) DEFAULT 'PENDING'::character varying NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    last_error text,
+    next_attempt_at timestamp with time zone DEFAULT now() NOT NULL,
+    sent_at timestamp with time zone,
+    confirmed_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT custody_dev_faucet_amount_check CHECK ((requested_amount > (0)::numeric)),
+    CONSTRAINT custody_dev_faucet_attempts_check CHECK ((attempts >= 0)),
+    CONSTRAINT custody_dev_faucet_decimals_check CHECK (((decimals >= 0) AND (decimals <= 24))),
+    CONSTRAINT custody_dev_faucet_purpose_check CHECK (((purpose)::text = ANY ((ARRAY['CUSTOMER_DEPOSIT'::character varying, 'TENANT_GAS'::character varying])::text[]))),
+    CONSTRAINT custody_dev_faucet_status_check CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'SENDING'::character varying, 'SENT'::character varying, 'CONFIRMED'::character varying, 'FAILED'::character varying, 'UNKNOWN'::character varying])::text[])))
 );
 
 
@@ -2904,6 +2944,22 @@ ALTER TABLE ONLY public.custody_deposit
 
 
 --
+-- Name: custody_dev_faucet_funding custody_dev_faucet_funding_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.custody_dev_faucet_funding
+    ADD CONSTRAINT custody_dev_faucet_funding_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: custody_dev_faucet_funding custody_dev_faucet_funding_address_asset_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.custody_dev_faucet_funding
+    ADD CONSTRAINT custody_dev_faucet_funding_address_asset_key UNIQUE (custody_address_id, asset_symbol, purpose);
+
+
+--
 -- Name: custody_derivation_subject custody_derivation_subject_path_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3749,6 +3805,20 @@ CREATE INDEX custody_deposit_tenant_time_idx ON public.custody_deposit USING btr
 
 
 --
+-- Name: custody_dev_faucet_funding_due_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX custody_dev_faucet_funding_due_idx ON public.custody_dev_faucet_funding USING btree (status, next_attempt_at) WHERE ((status)::text = ANY ((ARRAY['PENDING'::character varying, 'FAILED'::character varying])::text[]));
+
+
+--
+-- Name: custody_dev_faucet_funding_tenant_time_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX custody_dev_faucet_funding_tenant_time_idx ON public.custody_dev_faucet_funding USING btree (tenant_id, created_at DESC);
+
+
+--
 -- Name: custody_event_pending_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4133,6 +4203,22 @@ ALTER TABLE ONLY public.custody_deposit
 
 ALTER TABLE ONLY public.custody_deposit
     ADD CONSTRAINT custody_deposit_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.custody_tenant(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: custody_dev_faucet_funding custody_dev_faucet_funding_address_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.custody_dev_faucet_funding
+    ADD CONSTRAINT custody_dev_faucet_funding_address_fk FOREIGN KEY (tenant_id, custody_address_id) REFERENCES public.custody_address(tenant_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: custody_dev_faucet_funding custody_dev_faucet_funding_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.custody_dev_faucet_funding
+    ADD CONSTRAINT custody_dev_faucet_funding_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.custody_tenant(id) ON DELETE RESTRICT;
 
 
 --

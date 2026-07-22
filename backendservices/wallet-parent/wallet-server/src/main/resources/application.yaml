@@ -54,6 +54,42 @@ sw:
       username: ${SW_WALLET_ADMIN_USERNAME:admin}
       password: ${SW_WALLET_ADMIN_PASSWORD:}
     network: test
+    # Local-chain transaction simulator. It is disabled by default and refuses
+    # non-loopback RPC endpoints or production-like environments when enabled.
+    dev-faucet:
+      enabled: ${SW_WALLET_DEV_FAUCET_ENABLED:false}
+      delay: ${SW_WALLET_DEV_FAUCET_DELAY:PT10S}
+      retry-delay: ${SW_WALLET_DEV_FAUCET_RETRY_DELAY:PT30S}
+      request-timeout: ${SW_WALLET_DEV_FAUCET_REQUEST_TIMEOUT:PT10S}
+      batch-size: ${SW_WALLET_DEV_FAUCET_BATCH_SIZE:20}
+      max-attempts: ${SW_WALLET_DEV_FAUCET_MAX_ATTEMPTS:3}
+      bitcoin:
+        rpc-url: ${SW_WALLET_DEV_FAUCET_BTC_RPC_URL:http://127.0.0.1:18444}
+        rpc-username: ${SW_WALLET_DEV_FAUCET_BTC_RPC_USERNAME:}
+        rpc-password: ${SW_WALLET_DEV_FAUCET_BTC_RPC_PASSWORD:}
+        wallet: ${SW_WALLET_DEV_FAUCET_BTC_WALLET:regtest-funder}
+        confirmation-blocks: ${SW_WALLET_DEV_FAUCET_BTC_CONFIRMATION_BLOCKS:6}
+        gas-amount: ${SW_WALLET_DEV_FAUCET_BTC_GAS_AMOUNT:0.10000000}
+        customer:
+          min: ${SW_WALLET_DEV_FAUCET_BTC_CUSTOMER_MIN:0.01000000}
+          max: ${SW_WALLET_DEV_FAUCET_BTC_CUSTOMER_MAX:0.10000000}
+          scale: 8
+      evm:
+        rpc-url: ${SW_WALLET_DEV_FAUCET_EVM_RPC_URL:http://127.0.0.1:8545}
+        from-address: ${SW_WALLET_DEV_FAUCET_EVM_FROM_ADDRESS:}
+        gas-amount: ${SW_WALLET_DEV_FAUCET_ETH_GAS_AMOUNT:1.000000}
+        customer:
+          min: ${SW_WALLET_DEV_FAUCET_ETH_CUSTOMER_MIN:0.100000}
+          max: ${SW_WALLET_DEV_FAUCET_ETH_CUSTOMER_MAX:1.000000}
+          scale: 6
+        usdt:
+          min: ${SW_WALLET_DEV_FAUCET_USDT_CUSTOMER_MIN:10.00}
+          max: ${SW_WALLET_DEV_FAUCET_USDT_CUSTOMER_MAX:100.00}
+          scale: 2
+        usdc:
+          min: ${SW_WALLET_DEV_FAUCET_USDC_CUSTOMER_MIN:10.00}
+          max: ${SW_WALLET_DEV_FAUCET_USDC_CUSTOMER_MAX:100.00}
+          scale: 2
     custody:
       secret-master-key: 339c28dcd013766105fe1c470b03b9e5637d99c4c260d04bbf2ead36f763b944
       session-ttl: ${SW_CUSTODY_SESSION_TTL:PT12H}

@@ -5,6 +5,7 @@ const solc = require("solc");
 const hre = require("hardhat");
 
 const CHAIN = process.env.EVM_CHAIN || "ETH";
+const NETWORK = process.env.EVM_NETWORK?.trim() || null;
 const DB_URL = process.env.PG_URL || "postgresql://wallet:wallet123@127.0.0.1:5432/wallet";
 const TOKEN_SYMBOLS = (process.env.TOKEN_SYMBOLS ?? "USDC,USDT")
   .split(",")
@@ -23,10 +24,11 @@ async function upsertTokenConfig(client, chain, token) {
             decimals = $4,
             standard = 'ERC20',
             token_standard = 'ERC20',
+            network = coalesce($5, network),
             collect_enabled = true,
             updated_at = now()
       where chain = $1 and symbol = $2 and enabled = true`,
-    [chain, token.symbol, token.address, token.decimals]
+    [chain, token.symbol, token.address, token.decimals, NETWORK]
   );
   if (updated.rowCount !== 1) {
     throw new Error(`${chain}/${token.symbol} must have exactly one enabled token configuration`);
@@ -82,6 +84,7 @@ async function main() {
 
   const deployment = {
     chain: CHAIN,
+    network: NETWORK,
     deployer: deployer.address,
     tokens,
   };
