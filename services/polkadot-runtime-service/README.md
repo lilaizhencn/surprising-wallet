@@ -61,3 +61,6 @@ Production notes:
   one bad WebSocket node does not pin the runtime service.
 - Do not enable the DOT chain profile until deposit, withdrawal, collection,
   and any selected Asset Hub token have passed end-to-end tests.
+- `POLKADOT_RUNTIME_DEV_MODE=true` enables the authenticated `/dev-fund`
+  endpoint for isolated development chains only. Never enable it outside a
+  disposable local test environment.

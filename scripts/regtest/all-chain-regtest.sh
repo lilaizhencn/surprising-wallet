@@ -46,6 +46,7 @@ commands:
   test-xrp      Run isolated XRPL Testnet XRP/USDC full flow with automatic faucet funding
   test-near     Run isolated NEAR sandbox NEAR/USDC/USDT full flow and reconciliation test
   test-cardano  Run isolated Cardano Yaci devnet ADA/USDC/USDT full flow and reconciliation test
+  test-dot      Run isolated Polkadot + Asset Hub DOT/USDC/USDT full flow and reconciliation test
   dot-runtime-up    Start the local Polkadot runtime companion service
   dot-runtime-down  Stop the local Polkadot runtime companion service
   test-evm      Run ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C fork regression
@@ -63,8 +64,8 @@ notes:
   - TON uses MyLocalTon; start it and fund the deterministic source shown by test-ton.
   - NEAR uses an isolated official sandbox with mock USDC/USDT and PostgreSQL.
   - ADA uses an isolated Yaci devnet with mock native-asset USDC/USDT and PostgreSQL.
-  - TRON/XRP/APTOS/DOT use DB mocks, external testnet/devnet RPC, or a managed runtime service.
-  - DOT token tests also need a separate Asset Hub WebSocket RPC configured as purpose=asset_rpc.
+  - DOT uses isolated official Polkadot and Asset Hub dev nodes plus the runtime companion service.
+  - TRON/XRP/APTOS use DB mocks or external testnet/devnet RPC.
 USAGE
 }
 
@@ -91,7 +92,7 @@ TON                                  MyLocalTon + mock USDT/USDC full flow
 APTOS                                DB mock + external testnet/devnet live flow
 SUI                                  local Sui node + gRPC + mock USDC full flow
 ADA                                  local Yaci devnet + mock USDC/USDT full flow
-DOT                                  external Westend/Asset Hub + polkadot-runtime-service
+DOT                                  local Polkadot + Asset Hub + polkadot-runtime-service
 NEAR                                 local official sandbox + mock USDC/USDT full flow
 MATRIX
 }
@@ -177,6 +178,10 @@ test_near() {
 
 test_cardano() {
   "${ROOT_DIR}/scripts/regtest/run-cardano-flow.sh"
+}
+
+test_dot() {
+  "${ROOT_DIR}/scripts/regtest/run-polkadot-flow.sh"
 }
 
 test_db() {
@@ -275,6 +280,9 @@ case "${1:-matrix}" in
     ;;
   test-cardano)
     test_cardano
+    ;;
+  test-dot)
+    test_dot
     ;;
   dot-runtime-up)
     dot_runtime_up

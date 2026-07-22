@@ -35,7 +35,11 @@ USAGE
 }
 
 docker_cmd() {
-  "${DOCKER_PREFIX[@]}" "${DOCKER_BIN}" "$@"
+  if [[ ${#DOCKER_PREFIX[@]} -gt 0 ]]; then
+    "${DOCKER_PREFIX[@]}" "${DOCKER_BIN}" "$@"
+    return
+  fi
+  "${DOCKER_BIN}" "$@"
 }
 
 build() {
@@ -50,6 +54,7 @@ up() {
     --name "${CONTAINER}" \
     --restart unless-stopped \
     -e POLKADOT_RUNTIME_API_KEY="${POLKADOT_RUNTIME_API_KEY}" \
+    -e POLKADOT_RUNTIME_DEV_MODE="${POLKADOT_RUNTIME_DEV_MODE:-false}" \
     -e POLKADOT_RUNTIME_HOST=0.0.0.0 \
     -e POLKADOT_RUNTIME_PORT="${PORT}" \
     -p "${BIND_HOST}:${PORT}:${PORT}" \

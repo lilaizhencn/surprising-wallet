@@ -5,6 +5,7 @@ services:
     restart: unless-stopped
     environment:
       POLKADOT_RUNTIME_API_KEY: ${POLKADOT_RUNTIME_API_KEY:?set POLKADOT_RUNTIME_API_KEY}
+      POLKADOT_RUNTIME_DEV_MODE: ${POLKADOT_RUNTIME_DEV_MODE:-false}
       POLKADOT_RUNTIME_HOST: 0.0.0.0
       POLKADOT_RUNTIME_PORT: 8787
     ports:

@@ -5563,7 +5563,7 @@ INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_a
                                     "created_at", "updated_at")
 VALUES
     ('ADA', 'ADA', 'NATIVE', NULL, 6, true, false, 0.001, 0.001, now(), now()),
-    ('DOT', 'DOT', 'NATIVE', NULL, 12, true, false, 0.01, 0.01, now(), now()),
+    ('DOT', 'DOT', 'NATIVE', NULL, 10, true, false, 0.01, 0.01, now(), now()),
     ('NEAR', 'NEAR', 'NATIVE', NULL, 24, true, false, 0.001, 0.001, now(), now()),
     ('XMR', 'XMR', 'NATIVE', NULL, 12, true, false, 0.0001, 0.0001, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET

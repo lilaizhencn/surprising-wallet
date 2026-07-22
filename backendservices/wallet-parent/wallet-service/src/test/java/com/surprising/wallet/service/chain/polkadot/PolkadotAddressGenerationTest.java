@@ -47,4 +47,18 @@ class PolkadotAddressGenerationTest {
         assertFalse(Arrays.equals(provider.derive(Ed25519Chain.POLKADOT, 9).publicKey(),
                 provider.derive(Ed25519Chain.NEAR, 9).publicKey()));
     }
+
+    @Test
+    void keepsDevnetActorAddressesStable() {
+        PolkadotKeyService service = new PolkadotKeyService(MASTER_SEED);
+
+        assertEquals("5HiW9iboC5iL7eD95tMffYwwtxnunwNP7UaX5tjDWMQHW1xv",
+                service.address(0, 0, 0, 42));
+        assertEquals("5G2juBuArdx3uL6QvQEvuMdbu6JE93eoRQE2yw2c9cQijkeW",
+                service.address(900_001, 9, 0, 42));
+        assertEquals("5GWcyCUmgVc8MRSZMF1CikX3bm5wbzuwe8gxN3LM7vfvdsQe",
+                service.address(100_001, 1, 0, 42));
+        assertEquals("5DxwtdZkatUKsjMUafscZ1yKLTksRfD74nH3GGBbM8WCEYuB",
+                service.address(100_002, 1, 0, 42));
+    }
 }

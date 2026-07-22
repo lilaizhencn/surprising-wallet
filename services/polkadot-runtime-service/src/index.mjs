@@ -7,6 +7,7 @@ import { cryptoWaitReady, decodeAddress, encodeAddress } from '@polkadot/util-cr
 const PORT = Number(process.env.PORT || process.env.POLKADOT_RUNTIME_PORT || 8787);
 const HOST = process.env.HOST || process.env.POLKADOT_RUNTIME_HOST || '127.0.0.1';
 const API_KEY = (process.env.POLKADOT_RUNTIME_API_KEY || '').trim();
+const DEV_MODE = String(process.env.POLKADOT_RUNTIME_DEV_MODE || '').toLowerCase() === 'true';
 const API_CONNECT_TIMEOUT_MS = Number(process.env.POLKADOT_RUNTIME_CONNECT_TIMEOUT_MS || 20000);
 const apiCache = new Map();
 
@@ -190,6 +191,19 @@ app.post('/v1/polkadot/transfer', handler(async (req) => {
     ? api.tx.balances.transferKeepAlive(requireString(req.body.to, 'to'), requireString(req.body.amountPlanck, 'amountPlanck'))
     : transferAllowDeath(api, requireString(req.body.to, 'to'), requireString(req.body.amountPlanck, 'amountPlanck'));
   return submitAndWait(api, tx, pair, req.body.waitFinalized !== false);
+}));
+
+app.post('/v1/polkadot/dev-fund', handler(async (req) => {
+  if (!DEV_MODE) {
+    throw new Error('dev funding is disabled');
+  }
+  const api = await apiFor(requireString(req.body.rpcUrl, 'rpcUrl'));
+  const ss58Prefix = Number(req.body.ss58Prefix ?? 42);
+  const alice = new Keyring({ type: 'sr25519', ss58Format: ss58Prefix }).addFromUri('//Alice');
+  const to = requireString(req.body.to, 'to');
+  const amountPlanck = requireString(req.body.amountPlanck, 'amountPlanck');
+  const tx = transferAllowDeath(api, to, amountPlanck);
+  return submitAndWait(api, tx, alice, true);
 }));
 
 app.post('/v1/polkadot/asset-transfer', handler(async (req) => {
