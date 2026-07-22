@@ -4,6 +4,7 @@ set -euo pipefail
 EVM_MATRIX_ROOT=$(git rev-parse --show-toplevel)
 source "$EVM_MATRIX_ROOT/scripts/regtest/local-postgres.sh"
 EVM_MATRIX_TMP=$(mktemp -d -t surprising-evm-matrix.XXXXXX)
+EVM_MATRIX_BUILD_ROOT=$(mktemp -d /tmp/surprising-wallet-evm-matrix-build.XXXXXX)
 EVM_MATRIX_DB="surprising_wallet_test_evm_matrix_$$"
 EVM_MATRIX_NODE_PID=""
 
@@ -49,11 +50,15 @@ cleanup() {
   if [[ "$EVM_MATRIX_TMP" == *"/surprising-evm-matrix."* ]] && [[ -d "$EVM_MATRIX_TMP" ]]; then
     trash "$EVM_MATRIX_TMP"
   fi
+  if [[ "$EVM_MATRIX_BUILD_ROOT" == /tmp/surprising-wallet-evm-matrix-build.* ]] \
+      && [[ -d "$EVM_MATRIX_BUILD_ROOT" ]]; then
+    trash "$EVM_MATRIX_BUILD_ROOT"
+  fi
   exit "$status"
 }
 trap cleanup EXIT INT TERM
 
-for command in curl git jq mvn node npm psql trash; do
+for command in curl git jq ln mvn node npm psql rsync trash; do
   command -v "$command" >/dev/null || {
     printf 'missing required command: %s\n' "$command" >&2
     exit 1
@@ -72,6 +77,16 @@ fi
 if [[ ! -d "$EVM_MATRIX_ROOT/evm-fork/node_modules" ]]; then
   npm --prefix "$EVM_MATRIX_ROOT/evm-fork" ci
 fi
+
+rsync -a \
+  --exclude .git \
+  --exclude .codegraph \
+  --exclude target \
+  --exclude node_modules \
+  --exclude artifacts \
+  --exclude logs \
+  "$EVM_MATRIX_ROOT/" "$EVM_MATRIX_BUILD_ROOT/"
+ln -s "$EVM_MATRIX_ROOT/evm-fork/node_modules" "$EVM_MATRIX_BUILD_ROOT/evm-fork/node_modules"
 
 local_pg_create "$EVM_MATRIX_DB"
 
@@ -104,7 +119,7 @@ for definition in "${EVM_CHAINS[@]}"; do
   IFS='|' read -r chain native_symbol chain_id token_symbols <<<"$definition"
 
   local_pg_psql "$EVM_MATRIX_DB" -q -v ON_ERROR_STOP=1 \
-    -f "$EVM_MATRIX_ROOT/docs/db/surprising-wallet-init-pgsql.sql" \
+    -f "$EVM_MATRIX_BUILD_ROOT/docs/db/surprising-wallet-init-pgsql.sql" \
     >"$EVM_MATRIX_TMP/$chain.schema.log"
 
   configured_tokens=$(local_pg_psql "$EVM_MATRIX_DB" -Atqc \
@@ -118,7 +133,7 @@ for definition in "${EVM_CHAINS[@]}"; do
 
   hardhat_log="$EVM_MATRIX_TMP/$chain.hardhat.log"
   (
-    cd "$EVM_MATRIX_ROOT/evm-fork"
+    cd "$EVM_MATRIX_BUILD_ROOT/evm-fork"
     exec env HARDHAT_CHAIN_ID="$chain_id" HARDHAT_DISABLE_TELEMETRY_PROMPT=true \
       ./node_modules/.bin/hardhat node --hostname 127.0.0.1 --port 8545
   ) >"$hardhat_log" 2>&1 &
@@ -129,9 +144,9 @@ for definition in "${EVM_CHAINS[@]}"; do
   TOKEN_SYMBOLS="$token_symbols" \
   PG_URL="$(local_pg_uri "$EVM_MATRIX_DB")" \
   DEPLOYMENT_OUT_DIR="$EVM_MATRIX_TMP/deployments" \
-    npm --prefix "$EVM_MATRIX_ROOT/evm-fork" run deploy:mock >/dev/null
+    npm --prefix "$EVM_MATRIX_BUILD_ROOT/evm-fork" run deploy:mock >/dev/null
 
-  mvn -q -f "$EVM_MATRIX_ROOT/pom.xml" \
+  mvn -q -f "$EVM_MATRIX_BUILD_ROOT/pom.xml" \
     -pl backendservices/wallet-parent/wallet-service -am \
     -Dtest=EvmForkFullChainIntegrationTest,EvmForkMultiUserBusinessFlowIntegrationTest \
     -Dsurefire.failIfNoSpecifiedTests=false \

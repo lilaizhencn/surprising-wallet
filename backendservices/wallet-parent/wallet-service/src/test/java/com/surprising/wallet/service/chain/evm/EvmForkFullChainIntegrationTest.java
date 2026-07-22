@@ -38,12 +38,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EvmForkFullChainIntegrationTest {
+    private static final UUID TEST_TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000001");
     private static final String LOCAL_RPC = "http://127.0.0.1:8545";
     private static final BigDecimal WEI_PER_ETH = new BigDecimal("1000000000000000000");
     private static final BigDecimal TOKEN_DECIMAL = new BigDecimal("1000000");
@@ -152,6 +154,11 @@ class EvmForkFullChainIntegrationTest {
     private static void prepareDatabase(JdbcTemplate jdbcTemplate, ChainType chain, String nativeSymbol,
                                         String walletAddress, String derivationPath) {
         String account = walletAddress.toLowerCase(Locale.ROOT);
+        jdbcTemplate.update("""
+                        insert into custody_tenant(id, slug, name)
+                        values (?, 'evm-fork-test', 'EVM Fork Test')
+                        on conflict (id) do update set name = excluded.name, updated_at = now()
+                        """, TEST_TENANT_ID);
         jdbcTemplate.update("delete from deposit_record where chain = ? and lower(to_address) = lower(?)", chain.name(), account);
         jdbcTemplate.update("delete from evm_tx where chain = ? and (lower(to_address) = lower(?) or lower(from_address) = lower(?))",
                 chain.name(), account, account);
@@ -159,10 +166,11 @@ class EvmForkFullChainIntegrationTest {
                 chain.name(), account, account);
         jdbcTemplate.update("delete from ledger_balance where chain = ? and lower(account_id) = lower(?)", chain.name(), account);
         jdbcTemplate.update("""
-                        insert into chain_address(chain, asset_symbol, account_id, user_id, biz, address_index,
+                        insert into chain_address(tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                                                   address, owner_address, derivation_path, wallet_role, enabled)
-                        values (?, ?, ?, ?, 1, 0, ?, ?, ?, 'FORK_TEST', true)
+                        values (?, ?, ?, ?, ?, 1, 0, ?, ?, ?, 'FORK_TEST', true)
                         on conflict (chain, asset_symbol, address) do update set
+                            tenant_id = excluded.tenant_id,
                             account_id = excluded.account_id,
                             user_id = excluded.user_id,
                             biz = excluded.biz,
@@ -172,7 +180,7 @@ class EvmForkFullChainIntegrationTest {
                             wallet_role = excluded.wallet_role,
                             enabled = true,
                             updated_at = now()
-                        """, chain.name(), nativeSymbol, account, derivationIndex(chain), account, account,
+                        """, TEST_TENANT_ID, chain.name(), nativeSymbol, account, derivationIndex(chain), account, account,
                 derivationPath);
     }
 
