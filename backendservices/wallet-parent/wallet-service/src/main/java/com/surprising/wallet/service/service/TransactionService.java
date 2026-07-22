@@ -196,16 +196,6 @@ public class TransactionService {
             String val = JSONObject.toJSONString(record);
             REDIS.lPush(key, val);
         });
-        if (isUnifiedBitcoinLike(currency) && "collection".equals(signature.getString("type"))) {
-            chainJdbcRepository.updateCollectionStatus(
-                    null,
-                    chainName(currency),
-                    signature.getString("collectionId"),
-                    "SENT",
-                    txId,
-                    null,
-                    transaction.getSignature());
-        }
         log.info("广播签名后的交易 成功 更新数据库完成 币种id:{} 交易id:{}", currency.getName(), transaction.getTxId());
         return true;
     }
@@ -214,13 +204,6 @@ public class TransactionService {
                                                  JSONObject signature, String error) {
         String chain = chainName(currency);
         chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
-        if ("collection".equals(signature.getString("type"))) {
-            chainJdbcRepository.updateCollectionStatus(
-                    null,
-                    chain, signature.getString("collectionId"), "RETRYING", null, error,
-                    transaction.getSignature());
-            return;
-        }
         List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
         records.forEach(record -> chainJdbcRepository.updateWithdrawalStatus(
                 chain, record.getWithdrawId(), "BROADCAST_UNKNOWN", null, null, error));
@@ -236,13 +219,6 @@ public class TransactionService {
         chainJdbcRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
         chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
 
-        if ("collection".equals(signature.getString("type"))) {
-            chainJdbcRepository.updateCollectionStatus(
-                    null,
-                    chain, signature.getString("collectionId"), "FAILED", null, error,
-                    transaction.getSignature());
-            return;
-        }
         List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
         records.forEach(record -> {
             BigDecimal amount = withdrawFrozenAmount(record);

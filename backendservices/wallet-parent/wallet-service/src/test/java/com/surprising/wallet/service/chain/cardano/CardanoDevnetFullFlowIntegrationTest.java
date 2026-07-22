@@ -84,16 +84,6 @@ class CardanoDevnetFullFlowIntegrationTest {
                 new BigDecimal("20"));
         assertAmount(new BigDecimal("80"), ledger(repository, CHAIN, user.getAccountId()).getTotalBalance());
 
-        String nativeCollection = runId + "-ADA-COLLECT";
-        assertEquals(1, repository.createCollectionRecord(nativeCollection, CHAIN, CHAIN,
-                user.getAddress(), hot.getAddress(), new BigDecimal("10"), BigDecimal.ZERO, null));
-        String nativeCollectionHash = transactions.collectNative(null, nativeCollection, user, hot.getAddress(),
-                CardanoTransactionService.toLovelace(new BigDecimal("10")));
-        assertEquals(nativeCollectionHash, transactions.collectNative(null, nativeCollection, user, hot.getAddress(),
-                CardanoTransactionService.toLovelace(new BigDecimal("10"))));
-        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
-                nativeCollection));
-
         BigDecimal attachedAda = tokenFlow(jdbc, repository, keys, backend, transactions, scanner,
                 source, user, external, hot, "USDC", runId);
         attachedAda = attachedAda.add(tokenFlow(jdbc, repository, keys, backend, transactions, scanner,
@@ -149,19 +139,8 @@ class CardanoDevnetFullFlowIntegrationTest {
                 new BigDecimal("20"));
         assertAmount(new BigDecimal("80"), ledger(repository, symbol, user.getAccountId()).getTotalBalance());
 
-        String collectionNo = runId + "-" + symbol + "-COLLECT";
-        assertEquals(1, repository.createCollectionRecord(collectionNo, CHAIN, symbol,
-                user.getAddress(), hot.getAddress(), new BigDecimal("30"), BigDecimal.ZERO, null));
-        String collectionHash = transactions.collectToken(null, collectionNo, user, token, hot.getAddress(),
-                new BigDecimal("30"));
-        assertEquals(collectionHash, transactions.collectToken(null, collectionNo, user, token, hot.getAddress(),
-                new BigDecimal("30")));
-        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
-                collectionNo));
-
-        assertTokenBalance(backend, unit, user.getAddress(), new BigDecimal("50"));
+        assertTokenBalance(backend, unit, user.getAddress(), new BigDecimal("80"));
         assertTokenBalance(backend, unit, external.getAddress(), new BigDecimal("20"));
-        assertTokenBalance(backend, unit, hot.getAddress(), new BigDecimal("30"));
         return deposits.stream()
                 .filter(event -> depositHash.equals(event.txId()) && CHAIN.equals(event.assetSymbol()))
                 .map(DepositEvent::amount)

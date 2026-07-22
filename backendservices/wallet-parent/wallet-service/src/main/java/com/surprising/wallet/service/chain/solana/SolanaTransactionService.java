@@ -249,8 +249,6 @@ public class SolanaTransactionService {
             return previous.get();
         }
         long fee = profile().getDefaultFee();
-        repository.createCollectionRecord(collectionNo, CHAIN, "SOL", from.getAddress(), hotAddress,
-                amountLamports, BigDecimal.valueOf(fee), null);
         if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
             return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
@@ -278,8 +276,6 @@ public class SolanaTransactionService {
         }
         TokenDefinition token = repository.findTokenByContract(CHAIN, mintAddress)
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Solana mint " + mintAddress));
-        repository.createCollectionRecord(collectionNo, CHAIN, token.getSymbol(), from.getAddress(),
-                hotOwnerAddress, amount, BigDecimal.valueOf(profile().getDefaultFee()), null);
         if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
             return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));

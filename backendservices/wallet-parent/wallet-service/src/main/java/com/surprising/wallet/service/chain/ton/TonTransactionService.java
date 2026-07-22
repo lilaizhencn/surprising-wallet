@@ -308,8 +308,6 @@ public class TonTransactionService {
         }
         long feeNano = profile().getDefaultFee();
         BigDecimal fee = displayAmount(feeNano, 9);
-        repository.createCollectionRecord(collectionNo, CHAIN, "TON", from.getAddress(), hotAddress,
-                amount, fee, null);
         if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
             return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("TON collection is not retryable"));
@@ -339,8 +337,6 @@ public class TonTransactionService {
         }
         TokenDefinition token = repository.findTokenByContract(CHAIN, jettonMaster)
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Jetton " + jettonMaster));
-        repository.createCollectionRecord(collectionNo, CHAIN, token.getSymbol(), from.getAddress(),
-                hotOwnerAddress, amount, displayAmount(JETTON_GAS_TON.longValue(), 9), null);
         if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
             return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("TON Jetton collection is not retryable"));

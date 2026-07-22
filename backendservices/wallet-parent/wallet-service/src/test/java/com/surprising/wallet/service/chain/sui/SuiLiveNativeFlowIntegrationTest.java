@@ -31,7 +31,7 @@ class SuiLiveNativeFlowIntegrationTest {
     private static final long ONE_SUI = 1_000_000_000L;
 
     @Test
-    void liveSuiDepositWithdrawCollectionAreIdempotent() {
+    void liveSuiDepositWithdrawAreIdempotent() {
         Assumptions.assumeTrue(Boolean.getBoolean("sui.live.enabled"),
                 "set -Dsui.live.enabled=true and SW_ED25519_SEED for Sui testnet live validation");
         String masterSeed = System.getenv("SW_ED25519_SEED");
@@ -76,14 +76,6 @@ class SuiLiveNativeFlowIntegrationTest {
         assertTrue(transactions.confirmWithdrawal(withdrawOrder, "SUI", owner.getAccountId(),
                 withdrawAmount.add(new BigDecimal("0.01"))));
 
-        String collectionNo = "sui-live-collection-" + UUID.randomUUID();
-        BigDecimal collectionAmount = new BigDecimal("100000000");
-        String collectionDigest = transactions.collectNative(null, collectionNo, owner, hot.getAddress(),
-                collectionAmount);
-        assertEquals(collectionDigest, transactions.collectNative(null, collectionNo, owner, hot.getAddress(),
-                collectionAmount));
-        assertTrue(transactions.confirmCollection(null, collectionNo));
-
         assertEquals(0L, jdbc.queryForObject("""
                 select count(*) from ledger_balance
                 where chain='SUI'
@@ -95,7 +87,6 @@ class SuiLiveNativeFlowIntegrationTest {
         System.out.println("SUI_HOT=" + hot.getAddress());
         System.out.println("SUI_FAUCET_TX=" + faucetDigest);
         System.out.println("SUI_WITHDRAW_TX=" + withdrawDigest);
-        System.out.println("SUI_COLLECTION_TX=" + collectionDigest);
     }
 
     private static String fund(String address) {

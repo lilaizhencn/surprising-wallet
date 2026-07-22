@@ -92,15 +92,6 @@ class XrpTestnetFullFlowIntegrationTest {
         assertAmount(faucetDeposit.subtract(new BigDecimal("5")), afterNativeWithdrawal.getTotalBalance());
         assertAmount(BigDecimal.ZERO, afterNativeWithdrawal.getLockedBalance());
 
-        String nativeCollection = runId + "-XRP-COLLECT";
-        BigDecimal hotBeforeCollection = xrpBalance(rpc, hot.getAddress());
-        String nativeCollectionHash = transactions.collectNative(null, nativeCollection, user, hot.getAddress(),
-                new BigDecimal("3"));
-        waitValidated(rpc, nativeCollectionHash);
-        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
-                nativeCollection));
-        assertTrue(xrpBalance(rpc, hot.getAddress()).compareTo(hotBeforeCollection) > 0);
-
         Seed issuerSeed = Seed.secp256k1Seed();
         KeyPair issuer = issuerSeed.deriveKeyPair();
         issuerSeed.destroy();
@@ -129,22 +120,13 @@ class XrpTestnetFullFlowIntegrationTest {
         assertAmount(new BigDecimal("80"), afterTokenWithdrawal.getTotalBalance());
         assertAmount(BigDecimal.ZERO, afterTokenWithdrawal.getLockedBalance());
 
-        String tokenCollection = runId + "-USDC-COLLECT";
-        String tokenCollectionHash = transactions.collectIssuedCurrency(null, tokenCollection, user, token,
-                hot.getAddress(), new BigDecimal("30"));
-        waitValidated(rpc, tokenCollectionHash);
-        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
-                tokenCollection));
-        assertIssuedBalance(rpc, user.getAddress(), issuerAddress, USDC_CURRENCY, new BigDecimal("50"));
-        assertIssuedBalance(rpc, hot.getAddress(), issuerAddress, USDC_CURRENCY, new BigDecimal("30"));
+        assertIssuedBalance(rpc, user.getAddress(), issuerAddress, USDC_CURRENCY, new BigDecimal("80"));
         assertIssuedBalance(rpc, external.getAddress(), issuerAddress, USDC_CURRENCY, new BigDecimal("20"));
 
         assertFalse(repository.freezeLedgerBalance(CHAIN, USDC, user.getAccountId(), new BigDecimal("1000")));
         assertEquals(0, jdbc.queryForObject("select count(*) from ledger_balance where available_balance < 0 "
                 + "or locked_balance < 0 or total_balance < 0", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from withdrawal_order where chain='XRP' "
-                + "and status <> 'CONFIRMED'", Integer.class));
-        assertEquals(0, jdbc.queryForObject("select count(*) from collection_record where chain='XRP' "
                 + "and status <> 'CONFIRMED'", Integer.class));
         issuer.privateKey().destroy();
     }

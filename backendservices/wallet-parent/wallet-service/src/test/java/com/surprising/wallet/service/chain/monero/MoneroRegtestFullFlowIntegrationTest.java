@@ -38,12 +38,10 @@ class MoneroRegtestFullFlowIntegrationTest {
     private static final String SYMBOL = "XMR";
     private static final int CONFIRMATIONS = 1;
     private static final BigDecimal DEPOSIT_AMOUNT = new BigDecimal("0.500000000000");
-    private static final BigDecimal COLLECTION_FUND_AMOUNT = new BigDecimal("0.200000000000");
-    private static final BigDecimal COLLECTION_AMOUNT = new BigDecimal("0.050000000000");
     private static final BigDecimal WITHDRAW_AMOUNT = new BigDecimal("0.050000000000");
 
     @Test
-    void moneroRegtestMustScanCollectWithdrawAndAvoidInternalDoubleCredit() throws Exception {
+    void moneroRegtestMustScanWithdrawAndAvoidInternalDoubleCredit() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("monero.regtest.enabled"),
                 "set -Dmonero.regtest.enabled=true to run real XMR regtest flow validation");
         Path root = repoRoot();
@@ -116,25 +114,6 @@ class MoneroRegtestFullFlowIntegrationTest {
                 scanner.scanAndCredit(profile);
                 assertBalance(repository, recipientAccount, WITHDRAW_AMOUNT, BigDecimal.ZERO, WITHDRAW_AMOUNT);
 
-                runScript(root, "fund", userAddress.address(), COLLECTION_FUND_AMOUNT.toPlainString());
-                runScript(root, "mine", "12");
-                scanner.scanAndCredit(profile);
-                BigDecimal userBalanceBeforeCollection = DEPOSIT_AMOUNT.subtract(WITHDRAW_AMOUNT)
-                        .add(COLLECTION_FUND_AMOUNT);
-                assertBalance(repository, userAccount,
-                        userBalanceBeforeCollection, BigDecimal.ZERO, userBalanceBeforeCollection);
-
-                String hotAddress = walletRpc.primaryAddress().address();
-                String collectionNo = "xmr-regtest-collection-" + UUID.randomUUID();
-                repository.createCollectionRecord(collectionNo, CHAIN, SYMBOL, userAddress.address(), hotAddress,
-                        COLLECTION_AMOUNT, BigDecimal.ZERO, null);
-                transactionService.collectNative(null, profile, collectionNo, userRecord, hotAddress, COLLECTION_AMOUNT);
-                runScript(root, "mine", "12");
-                walletRpc.refresh();
-                transactionService.confirmCollection(null, profile, collectionNo);
-                assertEquals("CONFIRMED", repository.findCollectionStatus(null, CHAIN, collectionNo).orElseThrow());
-                assertBalance(repository, userAccount,
-                        userBalanceBeforeCollection, BigDecimal.ZERO, userBalanceBeforeCollection);
             } finally {
                 connection.rollback();
             }

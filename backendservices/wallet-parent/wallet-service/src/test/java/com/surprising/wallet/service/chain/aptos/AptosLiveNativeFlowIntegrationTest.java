@@ -24,7 +24,7 @@ class AptosLiveNativeFlowIntegrationTest {
     private static final long ONE_APT = 100_000_000L;
 
     @Test
-    void liveAptDepositWithdrawCollectionAreIdempotent() {
+    void liveAptDepositWithdrawAreIdempotent() {
         Assumptions.assumeTrue(Boolean.getBoolean("aptos.live.enabled"),
                 "set -Daptos.live.enabled=true and SW_ED25519_SEED for Aptos devnet live validation");
         String masterSeed = System.getenv("SW_ED25519_SEED");
@@ -66,13 +66,6 @@ class AptosLiveNativeFlowIntegrationTest {
         assertTrue(transactions.confirmWithdrawal(withdrawOrder, "APT", owner.getAccountId(),
                 withdrawAmount.add(new BigDecimal("5000000"))));
 
-        String collectionNo = "aptos-live-collection-" + UUID.randomUUID();
-        BigDecimal collectionAmount = new BigDecimal("10000000");
-        String collectionHash = transactions.collectNative(null, collectionNo, owner, hot.getAddress(), collectionAmount);
-        assertEquals(collectionHash, transactions.collectNative(null, collectionNo, owner, hot.getAddress(),
-                collectionAmount));
-        assertTrue(transactions.confirmCollection(null, collectionNo));
-
         assertEquals(0L, jdbc.queryForObject("""
                 select count(*) from ledger_balance
                 where chain='APTOS'
@@ -84,7 +77,6 @@ class AptosLiveNativeFlowIntegrationTest {
         System.out.println("APTOS_HOT=" + hot.getAddress());
         System.out.println("APTOS_NATIVE_DEPOSIT_BALANCE_OCTAS=" + beforeReplay.toPlainString());
         System.out.println("APTOS_NATIVE_WITHDRAW_TX=" + withdrawHash);
-        System.out.println("APTOS_NATIVE_COLLECTION_TX=" + collectionHash);
     }
 
     private static void waitForBalanceAtLeast(AptosRpcClient rpc, String address, long amount, Duration timeout) {

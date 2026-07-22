@@ -115,8 +115,6 @@ public class XrpTransactionService {
         if (previous.isPresent()) {
             return previous.get();
         }
-        repository.createCollectionRecord(collectionNo, CHAIN, NATIVE_SYMBOL, from.getAddress(), hotAddress,
-                amount, feeAsXrp(), null);
         if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
             return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
@@ -195,8 +193,6 @@ public class XrpTransactionService {
             return previous.get();
         }
         ensureCollectionDestinationTrustLine(token, hotAddress);
-        repository.createCollectionRecord(collectionNo, CHAIN, token.getSymbol(), from.getAddress(), hotAddress,
-                amount, feeAsXrp(), null);
         if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
             return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));

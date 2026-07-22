@@ -29,7 +29,7 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
     private static final long HOT_INDEX = 1_310_010L;
 
     @Test
-    void liveFaDepositWithdrawCollectionAndReplayAreSafe() {
+    void liveFaDepositWithdrawAndReplayAreSafe() {
         Assumptions.assumeTrue(Boolean.getBoolean("aptos.fa.live.enabled"),
                 "set -Daptos.fa.live.enabled=true after funding the derived Testnet accounts");
         String symbol = env("APTOS_FA_SYMBOL", "USDC").toUpperCase();
@@ -94,15 +94,6 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
         assertEquals(withdrawalHash, repository.findWithdrawalTxHash("APTOS", withdrawalNo).orElseThrow());
         assertTrue(transactions.confirmWithdrawal(
                 withdrawalNo, symbol, owner.getAccountId(), operationAmount));
-
-        String collectionNo = "aptos-fa-collection-" + UUID.randomUUID();
-        assertEquals(1, repository.createCollectionRecord(collectionNo, "APTOS", symbol,
-                owner.getAddress(), hot.getAddress(), operationAmount, BigDecimal.ZERO, null));
-        assertEquals(1, repository.claimCollectionSigning(null, "APTOS", collectionNo, null));
-        String collectionHash = transactions.sendFungibleAsset(
-                owner, metadataAddress, hot.getAddress(), operationAtomic);
-        repository.updateCollectionStatus(null, "APTOS", collectionNo, "SENT", collectionHash, null, null);
-        assertTrue(transactions.confirmCollection(null, collectionNo));
 
         assertEquals(0L, jdbc.queryForObject("""
                 select count(*) from ledger_balance

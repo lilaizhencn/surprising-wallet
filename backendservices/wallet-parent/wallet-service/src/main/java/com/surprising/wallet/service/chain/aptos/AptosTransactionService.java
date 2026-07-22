@@ -197,8 +197,6 @@ public class AptosTransactionService {
             return existing.get();
         }
         long feeReserve = profile().getDefaultFee();
-        repository.createCollectionRecord(collectionNo, CHAIN, "APT", from.getAddress(), hotAddress,
-                amountOctas, BigDecimal.valueOf(feeReserve), null);
         if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
             return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("Aptos collection is not retryable"));
@@ -227,8 +225,6 @@ public class AptosTransactionService {
         }
         TokenDefinition token = repository.findTokenByContract(CHAIN, contractAddress)
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Aptos token " + contractAddress));
-        repository.createCollectionRecord(collectionNo, CHAIN, token.getSymbol(), from.getAddress(),
-                hotAddress, atomicAmount, BigDecimal.valueOf(profile().getDefaultFee()), null);
         if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
             return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("Aptos token collection is not retryable"));

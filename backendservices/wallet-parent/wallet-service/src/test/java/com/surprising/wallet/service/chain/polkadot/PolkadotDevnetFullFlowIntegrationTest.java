@@ -74,16 +74,6 @@ class PolkadotDevnetFullFlowIntegrationTest {
                 new BigDecimal("20"));
         assertAmount(new BigDecimal("80"), ledger(repository, CHAIN, user.getAccountId()).getTotalBalance());
 
-        String nativeCollection = runId + "-DOT-COLLECT";
-        assertEquals(1, repository.createCollectionRecord(nativeCollection, CHAIN, CHAIN,
-                user.getAddress(), hot.getAddress(), new BigDecimal("10"), BigDecimal.ZERO, null));
-        String nativeCollectionHash = transactions.collectNative(null, nativeCollection, user, hot.getAddress(),
-                PolkadotTransactionService.toPlanck(new BigDecimal("10")));
-        assertEquals(nativeCollectionHash, transactions.collectNative(null, nativeCollection, user, hot.getAddress(),
-                PolkadotTransactionService.toPlanck(new BigDecimal("10"))));
-        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
-                nativeCollection, CHAIN));
-
         tokenFlow(jdbc, repository, keys, runtime, transactions, scanner,
                 source, user, external, hot, "USDC", "31337", true, runId);
         tokenFlow(jdbc, repository, keys, runtime, transactions, scanner,
@@ -96,8 +86,6 @@ class PolkadotDevnetFullFlowIntegrationTest {
         assertEquals(0, jdbc.queryForObject("select count(*) from ledger_balance where chain='DOT' "
                 + "and locked_balance <> 0", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from withdrawal_order where chain='DOT' "
-                + "and status <> 'CONFIRMED'", Integer.class));
-        assertEquals(0, jdbc.queryForObject("select count(*) from collection_record where chain='DOT' "
                 + "and status <> 'CONFIRMED'", Integer.class));
         assertAmount(new BigDecimal("80"), ledger(repository, CHAIN, user.getAccountId()).getTotalBalance());
     }
@@ -150,19 +138,8 @@ class PolkadotDevnetFullFlowIntegrationTest {
                 "unexpected Asset Hub gas top-up result; before=" + gasBefore + ", after=" + gasAfter);
         assertAmount(new BigDecimal("80"), ledger(repository, symbol, user.getAccountId()).getTotalBalance());
 
-        String collectionNo = runId + "-" + symbol + "-COLLECT";
-        assertEquals(1, repository.createCollectionRecord(collectionNo, CHAIN, symbol,
-                user.getAddress(), hot.getAddress(), new BigDecimal("30"), BigDecimal.ZERO, null));
-        String collectionHash = transactions.collectAsset(null, collectionNo, user, token, hot.getAddress(),
-                new BigDecimal("30"));
-        assertEquals(collectionHash, transactions.collectAsset(null, collectionNo, user, token, hot.getAddress(),
-                new BigDecimal("30")));
-        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
-                collectionNo, symbol));
-
-        assertAssetBalance(runtime, assetId, user.getAddress(), new BigDecimal("50"));
+        assertAssetBalance(runtime, assetId, user.getAddress(), new BigDecimal("80"));
         assertAssetBalance(runtime, assetId, external.getAddress(), new BigDecimal("20"));
-        assertAssetBalance(runtime, assetId, hot.getAddress(), new BigDecimal("30"));
         assertAmount(new BigDecimal("80"), ledger(repository, symbol, user.getAccountId()).getTotalBalance());
     }
 

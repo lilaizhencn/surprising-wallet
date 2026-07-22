@@ -448,13 +448,6 @@ public class BitcoinLikeChainRuntime {
 
     private void markConfirming(ChainType chainType, JSONObject signature, String txId) {
         String chain = chainType.name();
-        if ("collection".equals(signature.getString("type"))) {
-            chainRepository.updateCollectionStatus(
-                    null,
-                    chain, signature.getString("collectionId"), "CONFIRMING", txId, null,
-                    signature.toJSONString());
-            return;
-        }
         List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
         records.forEach(record -> chainRepository.updateWithdrawalStatus(
                 chain, record.getWithdrawId(), "CONFIRMING", null, txId, null));

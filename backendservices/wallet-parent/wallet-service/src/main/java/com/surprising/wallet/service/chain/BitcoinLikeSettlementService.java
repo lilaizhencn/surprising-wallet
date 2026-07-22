@@ -42,14 +42,6 @@ public class BitcoinLikeSettlementService {
         transaction.setUpdateDate(Date.from(Instant.now()));
         chainRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
 
-        if ("collection".equals(signature.getString("type"))) {
-            chainRepository.markCollectionConfirmed(
-                    null,
-                    chain, signature.getString("collectionId"), txId);
-            chainRepository.markUtxosSpent(chain, transaction.getId().toString(), txId);
-            return;
-        }
-
         List<WithdrawRecord> records = signature.getJSONArray("withdraw") == null
                 ? List.of()
                 : signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);

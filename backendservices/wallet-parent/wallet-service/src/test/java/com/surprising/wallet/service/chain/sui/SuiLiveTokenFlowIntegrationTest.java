@@ -27,7 +27,6 @@ class SuiLiveTokenFlowIntegrationTest {
     private static final int DECIMALS = 6;
     private static final long MINT_ATOMIC = 10_000_000L;
     private static final long WITHDRAW_ATOMIC = 1_250_000L;
-    private static final long COLLECTION_ATOMIC = 2_000_000L;
     private static final long RUN_INDEX = 1_700_000L
             + Math.floorMod(UUID.randomUUID().getLeastSignificantBits(), 100_000L) * 3L;
     private static final long OWNER_INDEX = RUN_INDEX + 1L;
@@ -35,7 +34,7 @@ class SuiLiveTokenFlowIntegrationTest {
     private static final long HOT_INDEX = RUN_INDEX;
 
     @Test
-    void liveUsdcDepositWithdrawCollectionAndReplayAreExact() {
+    void liveUsdcDepositWithdrawAndReplayAreExact() {
         Assumptions.assumeTrue(Boolean.getBoolean("sui.token.live.enabled"),
                 "set -Dsui.token.live.enabled=true with local package and treasury IDs");
         String masterSeed = requiredEnv("SW_ED25519_SEED");
@@ -96,22 +95,13 @@ class SuiLiveTokenFlowIntegrationTest {
         assertTrue(transactions.confirmWithdrawal(
                 withdrawalNo, SYMBOL, owner.getAccountId(), withdrawAmount));
 
-        String collectionNo = "sui-usdc-collection-" + UUID.randomUUID();
-        String collectionDigest = transactions.collectCoin(null, collectionNo, owner, coinType,
-                hot.getAddress(), BigDecimal.valueOf(COLLECTION_ATOMIC));
-        assertEquals(collectionDigest, transactions.collectCoin(null, collectionNo, owner, coinType,
-                hot.getAddress(), BigDecimal.valueOf(COLLECTION_ATOMIC)));
-        assertTrue(transactions.confirmCollection(null, collectionNo));
-
         assertAmountEquals(depositAmount.subtract(withdrawAmount),
                 ledger(repository, owner.getAccountId()).getTotalBalance());
         assertAmountEquals(BigDecimal.ZERO, ledger(repository, owner.getAccountId()).getLockedBalance());
-        assertAmountEquals(BigDecimal.valueOf(MINT_ATOMIC - WITHDRAW_ATOMIC - COLLECTION_ATOMIC),
+        assertAmountEquals(BigDecimal.valueOf(MINT_ATOMIC - WITHDRAW_ATOMIC),
                 rpc.balance(owner.getAddress(), coinType));
         assertAmountEquals(BigDecimal.valueOf(WITHDRAW_ATOMIC),
                 rpc.balance(external.getAddress(), coinType));
-        assertAmountEquals(BigDecimal.valueOf(COLLECTION_ATOMIC),
-                rpc.balance(hot.getAddress(), coinType));
         assertEquals(0L, jdbc.queryForObject("""
                 select count(*) from ledger_balance
                  where chain='SUI'
@@ -122,7 +112,6 @@ class SuiLiveTokenFlowIntegrationTest {
         System.out.println("SUI_USDC_OWNER=" + owner.getAddress());
         System.out.println("SUI_USDC_MINT_TX=" + mintDigest);
         System.out.println("SUI_USDC_WITHDRAW_TX=" + withdrawalDigest);
-        System.out.println("SUI_USDC_COLLECTION_TX=" + collectionDigest);
     }
 
     private static void configureToken(JdbcTemplate jdbc, String coinType) {

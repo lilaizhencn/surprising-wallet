@@ -61,6 +61,19 @@ class CustodyTenantIsolationIntegrationTest {
     }
 
     @Test
+    void collectionApiRejectsMissingTenantContext() {
+        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+
+        assertThrows(NullPointerException.class, () -> repository.createCollectionRecord(
+                null, null, "missing-tenant", "ETH", "ETH",
+                "0x0000000000000000000000000000000000000001",
+                "0x0000000000000000000000000000000000000002",
+                BigDecimal.ONE, BigDecimal.ZERO, null));
+        assertThrows(NullPointerException.class,
+                () -> repository.findCollectionStatus(null, "ETH", "missing-tenant"));
+    }
+
+    @Test
     void gasReservationCannotUseLedgerBalanceOwnedByAnotherTenant() {
         UUID gasTenant = createTenant();
         UUID balanceTenant = createTenant();

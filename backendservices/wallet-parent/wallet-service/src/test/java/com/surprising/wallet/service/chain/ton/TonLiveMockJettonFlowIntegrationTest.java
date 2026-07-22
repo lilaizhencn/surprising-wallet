@@ -32,7 +32,7 @@ class TonLiveMockJettonFlowIntegrationTest {
     private static final Duration FLOW_TIMEOUT = Duration.ofMinutes(10);
 
     @Test
-    void liveNativeAndMockJettonDepositWithdrawCollectionAreIdempotent() {
+    void liveNativeAndMockJettonDepositWithdrawAreIdempotent() {
         Assumptions.assumeTrue(Boolean.getBoolean("ton.live.enabled"),
                 "set -Dton.live.enabled=true and SW_ED25519_SEED for TON live validation");
         String masterSeed = System.getenv("SW_ED25519_SEED");
@@ -93,16 +93,6 @@ class TonLiveMockJettonFlowIntegrationTest {
         assertTrue(transactions.confirmWithdrawal(nativeWithdrawOrder, "TON", owner.getAccountId(),
                 new BigDecimal("0.055")));
 
-        long nativeCollectionSeqno = rpc.seqno(owner.getAddress());
-        String nativeCollectionNo = "ton-live-collection-" + UUID.randomUUID();
-        BigDecimal nativeCollectionAmount = new BigDecimal("0.05");
-        String nativeCollection = transactions.collectNative(null, nativeCollectionNo, owner, hot.getAddress(),
-                nativeCollectionAmount, "TON collection gate");
-        assertEquals(nativeCollection, transactions.collectNative(null, nativeCollectionNo, owner, hot.getAddress(),
-                nativeCollectionAmount, "TON collection gate"));
-        waitForSeqnoGreaterThan(rpc, owner.getAddress(), nativeCollectionSeqno, FLOW_TIMEOUT);
-        assertTrue(transactions.confirmCollection(null, nativeCollectionNo, owner.getAddress()));
-
         TokenTx usdtTx = withdrawAndCollectJetton("USDT", usdt, external, hot, rpc, transactions, repository);
         TokenTx usdcTx = withdrawAndCollectJetton("USDC", usdc, external, hot, rpc, transactions, repository);
 
@@ -117,19 +107,16 @@ class TonLiveMockJettonFlowIntegrationTest {
         System.out.println("TON_HOT=" + hot.getAddress());
         System.out.println("TON_WALLET_DEPLOY_TX=" + walletDeployHash);
         System.out.println("TON_NATIVE_WITHDRAW_TX=" + nativeWithdraw);
-        System.out.println("TON_NATIVE_COLLECTION_TX=" + nativeCollection);
         System.out.println("TON_USDT_MASTER=" + usdt.masterAddress());
         System.out.println("TON_USDT_USER_JETTON_WALLET=" + usdt.userJettonWallet().getAddress());
         System.out.println("TON_USDT_MASTER_DEPLOY_TX=" + usdt.deployHash());
         System.out.println("TON_USDT_MINT_TX=" + usdt.mintHash());
         System.out.println("TON_USDT_WITHDRAW_TX=" + usdtTx.withdrawHash());
-        System.out.println("TON_USDT_COLLECTION_TX=" + usdtTx.collectionHash());
         System.out.println("TON_USDC_MASTER=" + usdc.masterAddress());
         System.out.println("TON_USDC_USER_JETTON_WALLET=" + usdc.userJettonWallet().getAddress());
         System.out.println("TON_USDC_MASTER_DEPLOY_TX=" + usdc.deployHash());
         System.out.println("TON_USDC_MINT_TX=" + usdc.mintHash());
         System.out.println("TON_USDC_WITHDRAW_TX=" + usdcTx.withdrawHash());
-        System.out.println("TON_USDC_COLLECTION_TX=" + usdcTx.collectionHash());
     }
 
     private static String deployWalletIfNeeded(ChainAddressRecord owner,
@@ -220,19 +207,9 @@ class TonLiveMockJettonFlowIntegrationTest {
         assertTrue(transactions.confirmWithdrawal(orderNo, symbol, jetton.userJettonWallet().getAccountId(),
                 withdrawAmount));
 
-        long collectionSeqno = rpc.seqno(jetton.userJettonWallet().getOwnerAddress());
-        String collectionNo = "ton-" + symbol.toLowerCase() + "-collection-" + UUID.randomUUID();
-        BigDecimal collectionAmount = new BigDecimal("100");
-        String collection = transactions.collectJetton(null, collectionNo, jetton.userJettonWallet(),
-                jetton.masterAddress(), hot.getAddress(), collectionAmount, symbol + " collection gate");
-        assertEquals(collection, transactions.collectJetton(null, collectionNo, jetton.userJettonWallet(),
-                jetton.masterAddress(), hot.getAddress(), collectionAmount, symbol + " collection gate"));
-        waitForSeqnoGreaterThan(rpc, jetton.userJettonWallet().getOwnerAddress(), collectionSeqno,
-                FLOW_TIMEOUT);
-        assertTrue(transactions.confirmCollection(null, collectionNo, jetton.userJettonWallet().getOwnerAddress()));
         assertTrue(repository.findLedgerBalance("TON", symbol, jetton.userJettonWallet().getAccountId())
                 .orElseThrow().getLockedBalance().signum() == 0);
-        return new TokenTx(withdraw, collection);
+        return new TokenTx(withdraw);
     }
 
     private static void waitForJettonLedger(TonDepositScanner scanner, ChainJdbcRepository repository, String symbol,
@@ -336,6 +313,6 @@ class TonLiveMockJettonFlowIntegrationTest {
                               String deployHash, String mintHash) {
     }
 
-    private record TokenTx(String withdrawHash, String collectionHash) {
+    private record TokenTx(String withdrawHash) {
     }
 }

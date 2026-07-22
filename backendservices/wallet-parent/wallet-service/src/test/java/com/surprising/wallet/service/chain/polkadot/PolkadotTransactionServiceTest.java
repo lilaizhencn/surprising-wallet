@@ -40,7 +40,8 @@ class PolkadotTransactionServiceTest {
                 .active(true)
                 .build();
 
-        String txHash = service.collectAsset(null, "COLL-DOT-USDC-test", user, token, hot.getAddress(),
+        String txHash = service.collectAsset(UUID.randomUUID(), "COLL-DOT-USDC-test",
+                user, token, hot.getAddress(),
                 new BigDecimal("2.5"));
 
         assertEquals("asset-tx", txHash);

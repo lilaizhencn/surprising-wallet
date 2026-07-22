@@ -42,6 +42,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -1194,20 +1195,12 @@ public class ChainJdbcRepository {
                 .build();
     }
 
-    public int createCollectionRecord(String collectionNo, String chain, String assetSymbol,
-                                      String fromAddress, String toAddress, BigDecimal amount, BigDecimal fee,
-                                      String rawPayload) {
-        return createCollectionRecord(null, null, collectionNo, chain, assetSymbol,
-                fromAddress, toAddress, amount, fee, rawPayload);
-    }
-
     public int createCollectionRecord(UUID tenantId, UUID custodyAddressId,
                                       String collectionNo, String chain, String assetSymbol,
                                       String fromAddress, String toAddress, BigDecimal amount, BigDecimal fee,
                                       String rawPayload) {
-        if ((tenantId == null) != (custodyAddressId == null)) {
-            throw new IllegalArgumentException("tenantId and custodyAddressId must be supplied together");
-        }
+        Objects.requireNonNull(tenantId, "tenantId is required");
+        Objects.requireNonNull(custodyAddressId, "custodyAddressId is required");
         return jdbcTemplate.update("""
                         insert into collection_record(collection_no, chain, asset_symbol, from_address, to_address,
                                                       amount, fee, status, raw_payload, tenant_id,
@@ -1225,7 +1218,8 @@ public class ChainJdbcRepository {
                         select id, tenant_id, custody_address_id, collection_no, chain, asset_symbol, from_address, to_address,
                                amount, fee, tx_hash, status, error_message, raw_payload, created_at, updated_at
                         from collection_record
-                        where chain = ? and status in ('CREATED', 'RETRYING')
+                        where tenant_id is not null and custody_address_id is not null
+                          and chain = ? and status in ('CREATED', 'RETRYING')
                         order by id
                         limit ?
                         """,
@@ -1238,7 +1232,8 @@ public class ChainJdbcRepository {
                         select id, tenant_id, custody_address_id, collection_no, chain, asset_symbol, from_address, to_address,
                                amount, fee, tx_hash, status, error_message, raw_payload, created_at, updated_at
                         from collection_record
-                        where chain = ? and status = ?
+                        where tenant_id is not null and custody_address_id is not null
+                          and chain = ? and status = ?
                         order by id
                         limit ?
                         """,
@@ -1249,6 +1244,7 @@ public class ChainJdbcRepository {
     public int updateCollectionStatus(UUID tenantId, String chain, String collectionNo,
                                       String status, String txHash, String errorMessage,
                                       String rawPayload) {
+        Objects.requireNonNull(tenantId, "tenantId is required");
         return jdbcTemplate.update("""
                         update collection_record
                         set status = ?,
@@ -1256,7 +1252,7 @@ public class ChainJdbcRepository {
                             error_message = ?,
                             raw_payload = coalesce(?, raw_payload),
                             updated_at = ?
-                        where tenant_id is not distinct from ?
+                        where tenant_id = ?
                           and chain = ? and collection_no = ?
                         """,
                 status, txHash, errorMessage, rawPayload, toTs(now()),
@@ -1270,13 +1266,14 @@ public class ChainJdbcRepository {
      */
     public int claimCollectionSigning(UUID tenantId, String chain,
                                       String collectionNo, String rawPayload) {
+        Objects.requireNonNull(tenantId, "tenantId is required");
         return jdbcTemplate.update("""
                         update collection_record
                         set status = 'SIGNING',
                             error_message = null,
                             raw_payload = coalesce(?, raw_payload),
                             updated_at = ?
-                        where tenant_id is not distinct from ?
+                        where tenant_id = ?
                           and chain = ? and collection_no = ?
                           and status in ('CREATED', 'RETRYING')
                         """,
@@ -1285,28 +1282,31 @@ public class ChainJdbcRepository {
 
     public int markCollectionConfirmed(UUID tenantId, String chain,
                                        String collectionNo, String txHash) {
+        Objects.requireNonNull(tenantId, "tenantId is required");
         return jdbcTemplate.update("""
                         update collection_record
                         set status = 'CONFIRMED', tx_hash = ?, error_message = null, updated_at = ?
-                        where tenant_id is not distinct from ?
+                        where tenant_id = ?
                           and chain = ? and collection_no = ? and status <> 'CONFIRMED'
                         """,
                 txHash, toTs(now()), tenantId, chain, collectionNo);
     }
 
     public Optional<String> findCollectionStatus(UUID tenantId, String chain, String collectionNo) {
+        Objects.requireNonNull(tenantId, "tenantId is required");
         List<String> results = jdbcTemplate.queryForList("""
                         select status from collection_record
-                         where tenant_id is not distinct from ?
+                         where tenant_id = ?
                            and chain = ? and collection_no = ?
                         """, String.class, tenantId, chain, collectionNo);
         return results.stream().findFirst();
     }
 
     public Optional<String> findCollectionTxHash(UUID tenantId, String chain, String collectionNo) {
+        Objects.requireNonNull(tenantId, "tenantId is required");
         List<String> results = jdbcTemplate.queryForList("""
                         select tx_hash from collection_record
-                         where tenant_id is not distinct from ?
+                         where tenant_id = ?
                            and chain = ? and collection_no = ? and tx_hash is not null
                         """, String.class, tenantId, chain, collectionNo);
         return results.stream().findFirst();

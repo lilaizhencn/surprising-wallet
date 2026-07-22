@@ -78,16 +78,6 @@ class NearSandboxFullFlowIntegrationTest {
                 new BigDecimal("20"));
         assertAmount(new BigDecimal("80"), ledger(repository, CHAIN, user.getAccountId()).getTotalBalance());
 
-        String nativeCollection = runId + "-NEAR-COLLECT";
-        assertEquals(1, repository.createCollectionRecord(nativeCollection, CHAIN, CHAIN,
-                user.getAddress(), hot.getAddress(), new BigDecimal("10"), BigDecimal.ZERO, null));
-        String nativeCollectionHash = transactions.collectNative(null, nativeCollection, user, hot.getAddress(),
-                NearTransactionService.toYocto(new BigDecimal("10")));
-        assertEquals(nativeCollectionHash, transactions.collectNative(null, nativeCollection, user, hot.getAddress(),
-                NearTransactionService.toYocto(new BigDecimal("10"))));
-        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
-                nativeCollection));
-
         byte[] contractCode = Files.readAllBytes(Path.of(System.getProperty("near.nep141.wasm")));
         tokenFlow(jdbc, repository, keys, rpc, transactions, scanner, contractCode,
                 "USDC", 900_002L, runId);
@@ -101,8 +91,6 @@ class NearSandboxFullFlowIntegrationTest {
         assertEquals(0, jdbc.queryForObject("select count(*) from ledger_balance where chain='NEAR' "
                 + "and locked_balance <> 0", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from withdrawal_order where chain='NEAR' "
-                + "and status <> 'CONFIRMED'", Integer.class));
-        assertEquals(0, jdbc.queryForObject("select count(*) from collection_record where chain='NEAR' "
                 + "and status <> 'CONFIRMED'", Integer.class));
     }
 
@@ -167,18 +155,8 @@ class NearSandboxFullFlowIntegrationTest {
                 new BigDecimal("20"));
         assertAmount(new BigDecimal("80"), ledger(repository, symbol, user.getAccountId()).getTotalBalance());
 
-        String collectionNo = runId + "-" + symbol + "-COLLECT";
-        assertEquals(1, repository.createCollectionRecord(collectionNo, CHAIN, symbol,
-                user.getAddress(), hot.getAddress(), new BigDecimal("30"), BigDecimal.ZERO, null));
-        String collectionHash = transactions.collectToken(null, collectionNo, user, token, hot.getAddress(),
-                new BigDecimal("30"));
-        assertEquals(collectionHash, transactions.collectToken(null, collectionNo, user, token, hot.getAddress(),
-                new BigDecimal("30")));
-        assertTrue(transactions.confirmCollection(null, repository.findProfileByChain(CHAIN).orElseThrow(),
-                collectionNo));
-        assertTokenBalance(rpc, token, user.getAddress(), new BigDecimal("50"));
+        assertTokenBalance(rpc, token, user.getAddress(), new BigDecimal("80"));
         assertTokenBalance(rpc, token, external.getAddress(), new BigDecimal("20"));
-        assertTokenBalance(rpc, token, hot.getAddress(), new BigDecimal("30"));
     }
 
     private static void withdraw(ChainJdbcRepository repository, NearTransactionService transactions,

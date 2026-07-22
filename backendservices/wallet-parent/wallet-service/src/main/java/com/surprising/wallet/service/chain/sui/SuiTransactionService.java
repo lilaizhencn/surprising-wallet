@@ -170,8 +170,6 @@ public class SuiTransactionService {
             return existing.get();
         }
         long feeReserve = profile().getDefaultFee();
-        repository.createCollectionRecord(collectionNo, CHAIN, "SUI", from.getAddress(), hotAddress,
-                amountMist, BigDecimal.valueOf(feeReserve), null);
         if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
             return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("Sui collection is not retryable"));
@@ -199,8 +197,6 @@ public class SuiTransactionService {
         }
         TokenDefinition token = repository.findTokenByContract(CHAIN, coinType)
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Sui coin " + coinType));
-        repository.createCollectionRecord(collectionNo, CHAIN, token.getSymbol(), from.getAddress(),
-                hotAddress, amountAtomic, BigDecimal.valueOf(profile().getDefaultFee()), null);
         if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
             return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("Sui coin collection is not retryable"));

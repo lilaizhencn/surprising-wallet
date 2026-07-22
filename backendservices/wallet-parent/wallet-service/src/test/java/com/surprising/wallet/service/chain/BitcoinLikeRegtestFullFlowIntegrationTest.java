@@ -71,8 +71,6 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
             "cli",
             new BigDecimal("1.00000000"),
             new BigDecimal("0.10000000"),
-            new BigDecimal("0.00001000"),
-            new BigDecimal("0.25000000"),
             new BigDecimal("0.00001000"));
 
     private static final RegtestChain LTC = new RegtestChain(
@@ -82,8 +80,6 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
             "cli",
             new BigDecimal("1.00000000"),
             new BigDecimal("0.10000000"),
-            new BigDecimal("0.00001000"),
-            new BigDecimal("0.25000000"),
             new BigDecimal("0.00001000"));
 
     private static final RegtestChain DOGE = new RegtestChain(
@@ -93,8 +89,6 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
             "cli",
             new BigDecimal("100.00000000"),
             new BigDecimal("10.00000000"),
-            new BigDecimal("1.00000000"),
-            new BigDecimal("25.00000000"),
             new BigDecimal("1.00000000"));
 
     private static final RegtestChain BCH = new RegtestChain(
@@ -104,8 +98,6 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
             "cli",
             new BigDecimal("1.00000000"),
             new BigDecimal("0.10000000"),
-            new BigDecimal("0.00001000"),
-            new BigDecimal("0.25000000"),
             new BigDecimal("0.00001000"));
 
     @Test
@@ -303,83 +295,18 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 """, chainName, depositTx.txid(), depositOutput.vout()));
         assertNoNegativeLedger(jdbc, chainName);
 
-        String collectionSource = walletRpc(root, chain, "getnewaddress").trim();
-        String hotAddress = walletRpc(root, chain, "getnewaddress").trim();
-        RealTx collectionDeposit = sendAndMine(root, chain, collectionSource, chain.collectionDepositAmount());
-        Output collectionOutput = findOutput(
-                collectionDeposit.raw(), collectionSource, chain.collectionDepositAmount());
-        repository.upsertUtxo(
-                chainName, chainName, collectionDeposit.txid(), collectionOutput.vout(),
-                collectionSource, chain.collectionDepositAmount(), collectionDeposit.blockHeight(),
-                collectionDeposit.confirmations(), false);
-        DepositEvent collectionDepositEvent = new DepositEvent(
-                chain.chainType(), chainName, collectionDeposit.txid(), null, collectionSource,
-                chain.collectionDepositAmount(), collectionDeposit.blockHeight(),
-                collectionDeposit.confirmations(), null, collectionDeposit.raw().toString());
-        assertTrue(repository.recordAndCreditDeposit(
-                collectionDepositEvent, collectionOutput.vout(), REQUIRED_CONFIRMATIONS, accountId));
-        assertFalse(repository.recordAndCreditDeposit(
-                collectionDepositEvent, collectionOutput.vout(), REQUIRED_CONFIRMATIONS, accountId));
-        BigDecimal afterCollectionDeposit = afterWithdraw.add(chain.collectionDepositAmount());
-        assertLedger(jdbc, chainName, accountId, afterCollectionDeposit, BigDecimal.ZERO, afterCollectionDeposit);
-
-        String collectionNo = chainName.toLowerCase(Locale.ROOT) + "-regtest-collection-" + UUID.randomUUID();
-        BigDecimal collectionOutputAmount = chain.collectionDepositAmount().subtract(chain.collectionFee());
-        assertTrue(collectionOutputAmount.compareTo(BigDecimal.ZERO) > 0);
-        assertEquals(1, repository.createCollectionRecord(
-                collectionNo, chainName, chainName, collectionSource, hotAddress,
-                collectionOutputAmount, chain.collectionFee(), "{}"));
-        assertEquals(0, repository.createCollectionRecord(
-                collectionNo, chainName, chainName, collectionSource, hotAddress,
-                collectionOutputAmount, chain.collectionFee(), "{}"));
-        assertEquals(1, repository.claimCollectionSigning(null, chainName, collectionNo, "{}"));
-        assertEquals(0, repository.claimCollectionSigning(null, chainName, collectionNo, "{}"));
-        WithdrawTransaction collectionSigning = repository.createBitcoinLikeSigningTransaction(
-                currency,
-                "COLLECTION",
-                collectionNo,
-                WithdrawTransaction.builder()
-                        .txId("signing")
-                        .balance(chain.collectionDepositAmount())
-                        .signature("{}")
-                        .currency(currency.getIndex())
-                        .status(Constants.SIGNING)
-                        .build());
-        String collectionLockRef = collectionSigning.getId().toString();
-        assertEquals(1, repository.lockUtxo(
-                chainName, collectionDeposit.txid(), collectionOutput.vout(), collectionLockRef));
-        assertEquals(0, repository.releaseUtxos(chainName, "unknown-" + collectionNo));
-
-        RealTx collectionTx = sendAndMine(root, chain, hotAddress, collectionOutputAmount);
-        findOutput(collectionTx.raw(), hotAddress, collectionOutputAmount);
-        collectionSigning.setTxId(collectionTx.txid());
-        collectionSigning.setStatus(Constants.SENT);
-        collectionSigning.setSignature(collectionTx.raw().toString());
-        assertEquals(1, repository.updateBitcoinLikeSigningTransaction(currency, collectionSigning));
-        assertEquals(1, repository.updateCollectionStatus(null,
-                chainName, collectionNo, "SENT", collectionTx.txid(), null, collectionTx.raw().toString()));
-        assertEquals(1, repository.markCollectionConfirmed(null, chainName, collectionNo, collectionTx.txid()));
-        assertEquals(0, repository.markCollectionConfirmed(null, chainName, collectionNo, collectionTx.txid()));
-        assertEquals(1, repository.markUtxosSpent(chainName, collectionLockRef, collectionTx.txid()));
-        assertEquals(0, repository.releaseUtxos(chainName, collectionLockRef));
-        assertEquals(Optional.of("CONFIRMED"), repository.findCollectionStatus(null, chainName, collectionNo));
-        assertEquals(Optional.of(collectionTx.txid()),
-                repository.findCollectionTxHash(null, chainName, collectionNo));
-        assertLedger(jdbc, chainName, accountId, afterCollectionDeposit, BigDecimal.ZERO, afterCollectionDeposit);
-        assertNoNegativeLedger(jdbc, chainName);
-
         String scannerName = chainName.toLowerCase(Locale.ROOT) + "-regtest-scanner-" + UUID.randomUUID();
-        repository.updateScanHeight(chainName, scannerName, collectionTx.blockHeight(), collectionTx.blockHeight() - 1);
-        repository.updateScanHeight(chainName, scannerName, collectionTx.blockHeight() - 1, 0);
-        assertEquals(collectionTx.blockHeight() - 1, scalarLong(jdbc, """
+        repository.updateScanHeight(chainName, scannerName, withdrawTx.blockHeight(), withdrawTx.blockHeight() - 1);
+        repository.updateScanHeight(chainName, scannerName, withdrawTx.blockHeight() - 1, 0);
+        assertEquals(withdrawTx.blockHeight() - 1, scalarLong(jdbc, """
                 select safe_height from chain_scan_height
                 where chain = ? and scanner_name = ?
                 """, chainName, scannerName));
 
         System.out.printf("""
-                %s_REGTEST_FLOW deposit=%s withdraw=%s collection=%s depositAddress=%s withdrawAddress=%s hotAddress=%s ledger=%s%n""",
-                chainName, depositTx.txid(), withdrawTx.txid(), collectionTx.txid(),
-                depositAddress, withdrawAddress, hotAddress, afterCollectionDeposit.toPlainString());
+                %s_REGTEST_FLOW deposit=%s withdraw=%s depositAddress=%s withdrawAddress=%s ledger=%s%n""",
+                chainName, depositTx.txid(), withdrawTx.txid(),
+                depositAddress, withdrawAddress, afterWithdraw.toPlainString());
     }
 
     private void runConcurrencyGuards(RegtestChain chain, JdbcTemplate jdbc,
@@ -451,16 +378,6 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         assertEquals(1L, sumUpdates(withdrawalClaims), chainName + " withdrawal claim winner");
         assertEquals(Optional.of("SIGNING"), repository.findWithdrawalStatus(chainName, withdrawalOrder));
 
-        String collectionNo = runId + "-" + chainName + "-collection-claim";
-        assertEquals(1, repository.createCollectionRecord(collectionNo, chainName, chainName,
-                runId + "-" + chainName + "-collection-from",
-                runId + "-" + chainName + "-collection-to",
-                new BigDecimal("0.10000000"), BigDecimal.ZERO, "{}"));
-        List<Integer> collectionClaims = runConcurrently(16,
-                index -> repository.claimCollectionSigning(null, chainName, collectionNo, "{\"worker\":" + index + "}"));
-        assertEquals(1L, sumUpdates(collectionClaims), chainName + " collection claim winner");
-        assertEquals(Optional.of("SIGNING"), repository.findCollectionStatus(null, chainName, collectionNo));
-
         String scannerName = runId + "-" + chainName + "-scanner";
         runConcurrently(32, index -> {
             repository.updateScanHeight(chainName, scannerName, 100L + index, 90L + index);
@@ -476,14 +393,13 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 """, chainName, scannerName));
 
         System.out.printf("""
-                %s_CONCURRENCY_GUARD duplicateCredits=%d fanoutCredits=%d freezeWinners=%d utxoLockWinners=%d withdrawalClaims=%d collectionClaims=%d%n""",
+                %s_CONCURRENCY_GUARD duplicateCredits=%d fanoutCredits=%d freezeWinners=%d utxoLockWinners=%d withdrawalClaims=%d%n""",
                 chainName,
                 countTrue(duplicateCredits),
                 countTrue(fanoutCredits),
                 countTrue(freezeResults),
                 sumUpdates(lockResults),
-                sumUpdates(withdrawalClaims),
-                sumUpdates(collectionClaims));
+                sumUpdates(withdrawalClaims));
     }
 
     private static DepositEvent syntheticDeposit(RegtestChain chain, String txHash, String toAddress,
@@ -930,9 +846,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
             String chainRpc,
             BigDecimal depositAmount,
             BigDecimal withdrawAmount,
-            BigDecimal withdrawFee,
-            BigDecimal collectionDepositAmount,
-            BigDecimal collectionFee) {
+            BigDecimal withdrawFee) {
     }
 
     private record RealTx(String txid, JsonNode raw, long blockHeight, int confirmations) {
