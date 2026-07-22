@@ -139,8 +139,11 @@ public class CardanoTransactionService {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(30));
         while (Instant.now().isBefore(deadline)) {
             boolean confirmed = backendClient.withBackend((backend, node, activeProfile) -> {
-                var tx = CardanoBackendClient.requireSuccess(
-                        backend.getTransactionService().getTransaction(txHash), "transaction content");
+                var txResult = backend.getTransactionService().getTransaction(txHash);
+                if (CardanoBackendClient.isNotFound(txResult)) {
+                    return false;
+                }
+                var tx = CardanoBackendClient.requireSuccess(txResult, "transaction content");
                 var latest = CardanoBackendClient.requireSuccess(
                         backend.getBlockService().getLatestBlock(), "latest block");
                 long confirmations = Math.max(0L, latest.getHeight() - tx.getBlockHeight() + 1L);

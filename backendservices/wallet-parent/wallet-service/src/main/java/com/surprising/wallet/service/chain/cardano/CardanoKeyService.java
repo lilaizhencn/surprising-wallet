@@ -5,11 +5,9 @@ import com.surprising.wallet.common.key.Ed25519DerivedKey;
 import com.surprising.wallet.common.key.Ed25519KeyProvider;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import org.bitcoinj.base.Bech32;
-import org.bouncycastle.jcajce.provider.digest.Blake2b;
+import org.bouncycastle.crypto.digests.Blake2bDigest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import java.util.Arrays;
 
 @Component
 public class CardanoKeyService {
@@ -82,8 +80,11 @@ public class CardanoKeyService {
     }
 
     private static byte[] paymentKeyHash(byte[] publicKey) {
-        byte[] digest = new Blake2b.Blake2b256().digest(publicKey);
-        return Arrays.copyOf(digest, PAYMENT_KEY_HASH_LENGTH);
+        Blake2bDigest digest = new Blake2bDigest(PAYMENT_KEY_HASH_LENGTH * Byte.SIZE);
+        digest.update(publicKey, 0, publicKey.length);
+        byte[] hash = new byte[PAYMENT_KEY_HASH_LENGTH];
+        digest.doFinal(hash, 0);
+        return hash;
     }
 
     private Ed25519KeyProvider provider() {

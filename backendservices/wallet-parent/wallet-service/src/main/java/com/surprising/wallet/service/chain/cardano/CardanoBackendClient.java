@@ -45,6 +45,10 @@ public class CardanoBackendClient {
         return result.getValue();
     }
 
+    static boolean isNotFound(Result<?> result) {
+        return result != null && !result.isSuccessful() && result.code() == 404;
+    }
+
     private BackendService backend(ChainRpcNode node, String network) {
         String apiKey = node.getApiKey() == null ? "" : node.getApiKey().trim();
         if (apiKey.isBlank()) {

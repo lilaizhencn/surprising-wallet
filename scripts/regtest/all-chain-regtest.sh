@@ -45,6 +45,7 @@ commands:
   test-ton      Run TON/USDT/USDC full flow against an isolated MyLocalTon v2 RPC
   test-xrp      Run isolated XRPL Testnet XRP/USDC full flow with automatic faucet funding
   test-near     Run isolated NEAR sandbox NEAR/USDC/USDT full flow and reconciliation test
+  test-cardano  Run isolated Cardano Yaci devnet ADA/USDC/USDT full flow and reconciliation test
   dot-runtime-up    Start the local Polkadot runtime companion service
   dot-runtime-down  Stop the local Polkadot runtime companion service
   test-evm      Run ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C fork regression
@@ -61,7 +62,8 @@ notes:
   - SOLANA has an isolated local validator, mock USDT/USDC, and PostgreSQL full-flow test.
   - TON uses MyLocalTon; start it and fund the deterministic source shown by test-ton.
   - NEAR uses an isolated official sandbox with mock USDC/USDT and PostgreSQL.
-  - TRON/XRP/APTOS/ADA/DOT use DB mocks, external testnet/devnet RPC, or a managed runtime service.
+  - ADA uses an isolated Yaci devnet with mock native-asset USDC/USDT and PostgreSQL.
+  - TRON/XRP/APTOS/DOT use DB mocks, external testnet/devnet RPC, or a managed runtime service.
   - DOT token tests also need a separate Asset Hub WebSocket RPC configured as purpose=asset_rpc.
 USAGE
 }
@@ -88,7 +90,7 @@ SOLANA                               local validator + mock USDT/USDC full flow
 TON                                  MyLocalTon + mock USDT/USDC full flow
 APTOS                                DB mock + external testnet/devnet live flow
 SUI                                  local Sui node + gRPC + mock USDC full flow
-ADA                                  external preprod Blockfrost-compatible flow
+ADA                                  local Yaci devnet + mock USDC/USDT full flow
 DOT                                  external Westend/Asset Hub + polkadot-runtime-service
 NEAR                                 local official sandbox + mock USDC/USDT full flow
 MATRIX
@@ -171,6 +173,10 @@ test_xrp() {
 
 test_near() {
   "${ROOT_DIR}/scripts/regtest/run-near-flow.sh"
+}
+
+test_cardano() {
+  "${ROOT_DIR}/scripts/regtest/run-cardano-flow.sh"
 }
 
 test_db() {
@@ -266,6 +272,9 @@ case "${1:-matrix}" in
     ;;
   test-near)
     test_near
+    ;;
+  test-cardano)
+    test_cardano
     ;;
   dot-runtime-up)
     dot_runtime_up

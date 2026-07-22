@@ -69,4 +69,18 @@ class CardanoAddressGenerationTest {
         assertTrue(CardanoKeyService.isValidAddress(
                 CardanoKeyService.enterpriseAddress(signerPublicKey, false)));
     }
+
+    @Test
+    void keepsDevnetActorAddressesStable() {
+        CardanoKeyService service = new CardanoKeyService(MASTER_SEED);
+
+        assertEquals("addr_test1vr6g5egw5ceyghrer7ms737v7tmngmnl50ttd2rmdv7n98qtx4x08",
+                service.address(0, 0, 0, false));
+        assertEquals("addr_test1vqsrxplxdjgghsycjeshnw0eyhuw5p0tdg5hmy8r79p2hmcsv6z9j",
+                service.address(900_001, 9, 0, false));
+        assertEquals("addr_test1vq08mk82vfy2zm3k6y4xw2hmjgnv7rsahvmxjfhyeeyg2wcnudzw2",
+                service.address(100_001, 1, 0, false));
+        assertEquals("addr_test1vrllceszs5vp90kn60e6fu8g5xzaz6f5snnwu5n6qdtxhdqjqv933",
+                service.address(100_002, 1, 0, false));
+    }
 }

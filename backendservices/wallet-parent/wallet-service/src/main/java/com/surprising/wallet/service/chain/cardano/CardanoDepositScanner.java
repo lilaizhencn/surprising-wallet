@@ -24,6 +24,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -46,6 +48,10 @@ public class CardanoDepositScanner {
         if (addresses.isEmpty()) {
             return List.of();
         }
+        Set<String> managedAddresses = repository.listChainAddresses(CHAIN).stream()
+                .map(ChainAddressRecord::getAddress)
+                .map(CardanoDepositScanner::normalize)
+                .collect(Collectors.toSet());
         return backendClient.withBackend((backend, node, profile) -> {
             long latest = CardanoBackendClient.requireSuccess(
                     backend.getBlockService().getLatestBlock(), "latest block").getHeight();
@@ -53,15 +59,16 @@ public class CardanoDepositScanner {
             List<DepositEvent> events = new ArrayList<>();
             for (TrackedCardanoAddress address : addresses.values()) {
                 List<AddressTransactionContent> txs = CardanoBackendClient.requireSuccess(
-                        backend.getAddressService().getTransactions(address.address(), 1,
-                                scanLimit(profile), OrderEnum.desc),
+                        backend.getAddressService().getTransactions(address.address(),
+                                scanLimit(profile), 1, OrderEnum.desc),
                         "address transactions");
                 for (AddressTransactionContent tx : txs) {
                     int confirmations = confirmations(latest, tx.getBlockHeight());
                     TxContentUtxo utxo = CardanoBackendClient.requireSuccess(
                             backend.getTransactionService().getTransactionUtxos(tx.getTxHash()),
                             "transaction utxos");
-                    scanOutputs(address, utxo, tokensByUnit, tx, confirmations, requiredConfirmations, events);
+                    scanOutputs(address, utxo, tokensByUnit, managedAddresses,
+                            tx, confirmations, requiredConfirmations, events);
                 }
             }
             long safeHeight = Math.max(0L, latest - requiredConfirmations + 1L);
@@ -72,11 +79,17 @@ public class CardanoDepositScanner {
 
     private void scanOutputs(TrackedCardanoAddress tracked, TxContentUtxo utxo,
                              Map<String, TokenDefinition> tokensByUnit,
+                             Set<String> managedAddresses,
                              AddressTransactionContent tx, int confirmations, int requiredConfirmations,
                              List<DepositEvent> events) {
         String fromAddress = firstInputAddress(utxo);
+        Set<String> inputAddresses = inputAddresses(utxo);
+        boolean managedInput = inputAddresses.stream().anyMatch(managedAddresses::contains);
         for (TxContentUtxoOutputs output : safeOutputs(utxo)) {
             if (!tracked.normalizedAddress().equals(normalize(output.getAddress()))) {
+                continue;
+            }
+            if (inputAddresses.contains(tracked.normalizedAddress())) {
                 continue;
             }
             int assetIndex = 0;
@@ -90,6 +103,10 @@ public class CardanoDepositScanner {
                 CreditableDeposit deposit = depositForAmount(unit, atomic, tokensByUnit, tx, tracked,
                         output.getOutputIndex(), assetIndex, confirmations, fromAddress, output);
                 if (deposit == null) {
+                    assetIndex++;
+                    continue;
+                }
+                if (managedInput && reservedHotAddress(deposit.addressRecord())) {
                     assetIndex++;
                     continue;
                 }
@@ -183,6 +200,21 @@ public class CardanoDepositScanner {
             }
         }
         return "";
+    }
+
+    private static Set<String> inputAddresses(TxContentUtxo utxo) {
+        if (utxo == null || utxo.getInputs() == null) {
+            return Set.of();
+        }
+        return utxo.getInputs().stream()
+                .map(TxContentUtxoInputs::getAddress)
+                .map(CardanoDepositScanner::normalize)
+                .filter(address -> !address.isBlank())
+                .collect(Collectors.toSet());
+    }
+
+    private static boolean reservedHotAddress(ChainAddressRecord address) {
+        return address.getUserId() == 0L && address.getBiz() == 0 && address.getAddressIndex() == 0L;
     }
 
     private static int confirmations(long latest, long blockHeight) {
