@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 /**
  * Ledger-backed account address with remaining on-chain funds to collect.
@@ -15,6 +16,8 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CollectionCandidateRecord {
+    private UUID tenantId;
+    private UUID custodyAddressId;
     private String chain;
     private String assetSymbol;
     private String accountId;

@@ -422,14 +422,27 @@ public class AccountChainWorkflowService {
             if (amount.signum() <= 0) {
                 continue;
             }
-            String hotAddress = hotAddress(profile, candidate.getAssetSymbol());
-            repository.createCollectionRecord(collectionNo(candidate, amount), candidate.getChain(),
+            String hotAddress = "evm".equalsIgnoreCase(profile.getFamily())
+                    && !isNative(profile, candidate.getAssetSymbol())
+                    ? repository.findActiveTenantCollectionAddress(
+                                    candidate.getTenantId(), candidate.getChain())
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "active tenant collection/gas address is required for "
+                                            + candidate.getChain() + " token collection"))
+                    : hotAddress(profile, candidate.getAssetSymbol());
+            repository.createCollectionRecord(candidate.getTenantId(), candidate.getCustodyAddressId(),
+                    collectionNo(candidate, amount), candidate.getChain(),
                     candidate.getAssetSymbol(), candidate.getAddress(), hotAddress,
                     amount, BigDecimal.ZERO, null);
         }
     }
 
     private void processCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {
+        if ("evm".equalsIgnoreCase(profile.getFamily())
+                && !isNative(profile, record.getAssetSymbol())
+                && repository.isEvm7702CollectionActive(profile.getChain(), profile.getNetwork())) {
+            return;
+        }
         ChainAddressRecord from = requireAddress(record.getChain(), record.getAssetSymbol(), record.getFromAddress());
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
             if (repository.claimCollectionSigning(record.getChain(), record.getCollectionNo(), null) != 1) {

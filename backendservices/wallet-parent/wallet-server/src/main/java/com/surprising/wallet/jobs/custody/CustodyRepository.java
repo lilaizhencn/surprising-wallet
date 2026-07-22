@@ -873,6 +873,15 @@ public class CustodyRepository {
     public GasUsageRecord reserveGasUsage(
             UUID tenantId, UUID custodyWithdrawalId, String orderNo, String chain,
             java.math.BigDecimal reservedAmount) {
+        return reserveGasUsage(tenantId, "WITHDRAWAL", custodyWithdrawalId,
+                orderNo, chain, reservedAmount);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public GasUsageRecord reserveGasUsage(
+            UUID tenantId, String operationType, UUID operationId, String referenceNo,
+            String chain, java.math.BigDecimal reservedAmount) {
+        requireGasOperation(tenantId, operationType, operationId, chain);
         GasAccountRecord account = findGasAccount(tenantId, chain)
                 .filter(candidate -> "ACTIVE".equals(candidate.status()))
                 .orElseThrow(() -> new IllegalStateException(
@@ -897,17 +906,24 @@ public class CustodyRepository {
         UUID usageId = UUID.randomUUID();
         jdbc.update("""
                         insert into custody_gas_usage(
-                            id, tenant_id, gas_account_id, custody_withdrawal_id,
-                            order_no, chain, native_symbol, reserved_amount)
-                        values (?, ?, ?, ?, ?, ?, ?, ?)
-                        """, usageId, tenantId, account.id(), custodyWithdrawalId,
-                orderNo, chain, account.nativeSymbol(), reservedAmount);
-        return requireGasUsage(custodyWithdrawalId);
+                            id, tenant_id, gas_account_id, operation_type,
+                            operation_id, reference_no, chain, native_symbol, reserved_amount)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, usageId, tenantId, account.id(), operationType,
+                operationId, referenceNo, chain, account.nativeSymbol(), reservedAmount);
+        return requireGasUsage(tenantId, operationType, operationId);
     }
 
     @Transactional(rollbackFor = Throwable.class)
     public GasUsageRecord releaseGasUsage(UUID custodyWithdrawalId, String reason) {
-        GasUsageRecord usage = requireGasUsageForUpdate(custodyWithdrawalId);
+        GasUsageRecord usage = requireWithdrawalGasUsage(custodyWithdrawalId);
+        return releaseGasUsage(usage.tenantId(), usage.operationType(), usage.operationId(), reason);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public GasUsageRecord releaseGasUsage(UUID tenantId, String operationType,
+                                          UUID operationId, String reason) {
+        GasUsageRecord usage = requireGasUsageForUpdate(tenantId, operationType, operationId);
         if (!"RESERVED".equals(usage.status())) {
             return usage;
         }
@@ -930,14 +946,23 @@ public class CustodyRepository {
                                settled_at = now()
                          where id = ? and status = 'RESERVED'
                         """, reason, usage.id());
-        return requireGasUsage(custodyWithdrawalId);
+        return requireGasUsage(tenantId, operationType, operationId);
     }
 
     @Transactional(rollbackFor = Throwable.class)
     public GasUsageRecord settleGasUsage(
             UUID custodyWithdrawalId, java.math.BigDecimal actualAmount,
             String pricingSource, String txHash) {
-        GasUsageRecord usage = requireGasUsageForUpdate(custodyWithdrawalId);
+        GasUsageRecord usage = requireWithdrawalGasUsage(custodyWithdrawalId);
+        return settleGasUsage(usage.tenantId(), usage.operationType(), usage.operationId(),
+                actualAmount, pricingSource, txHash);
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public GasUsageRecord settleGasUsage(
+            UUID tenantId, String operationType, UUID operationId,
+            java.math.BigDecimal actualAmount, String pricingSource, String txHash) {
+        GasUsageRecord usage = requireGasUsageForUpdate(tenantId, operationType, operationId);
         if (!Set.of("RESERVED", "OVERDUE").contains(usage.status())) {
             return usage;
         }
@@ -983,7 +1008,7 @@ public class CustodyRepository {
                                    updated_at = now(), settled_at = null
                              where id = ? and status in ('RESERVED', 'OVERDUE')
                             """, actual, pricingSource, txHash, usage.id());
-            return requireGasUsage(custodyWithdrawalId);
+            return requireGasUsage(tenantId, operationType, operationId);
         }
         jdbc.update("""
                         update custody_gas_usage
@@ -998,18 +1023,19 @@ public class CustodyRepository {
                             account_id, entry_type, direction, amount,
                             reference_type, reference_id)
                         values (?, ?, ?, ?, ?, ?, 'NETWORK_FEE', 'DEBIT', ?,
-                                'WITHDRAWAL', ?)
+                                ?, ?)
                         on conflict (tenant_id, entry_type, reference_type, reference_id)
                         do nothing
                         """, UUID.randomUUID(), usage.tenantId(), account.custodyAddressId(),
-                usage.chain(), usage.nativeSymbol(), account.accountId(), actual, usage.orderNo());
-        return requireGasUsage(custodyWithdrawalId);
+                usage.chain(), usage.nativeSymbol(), account.accountId(), actual,
+                usage.operationType(), usage.referenceNo());
+        return requireGasUsage(tenantId, operationType, operationId);
     }
 
     public List<Map<String, Object>> listGasUsage(
             UUID tenantId, UUID gasAccountId, int limit, int offset) {
         return jdbc.query("""
-                        select u.id, u.custody_withdrawal_id, u.order_no, u.chain,
+                        select u.id, u.operation_type, u.operation_id, u.reference_no, u.chain,
                                u.native_symbol, u.reserved_amount, u.actual_amount,
                                u.status, u.pricing_source, u.tx_hash, u.error_message,
                                u.created_at, u.updated_at, u.settled_at
@@ -1020,9 +1046,9 @@ public class CustodyRepository {
                         """, (rs, rowNum) -> {
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("id", rs.getObject("id", UUID.class));
-                    row.put("custodyWithdrawalId",
-                            rs.getObject("custody_withdrawal_id", UUID.class));
-                    row.put("orderNo", rs.getString("order_no"));
+                    row.put("operationType", rs.getString("operation_type"));
+                    row.put("operationId", rs.getObject("operation_id", UUID.class));
+                    row.put("referenceNo", rs.getString("reference_no"));
                     row.put("chain", rs.getString("chain"));
                     row.put("nativeSymbol", rs.getString("native_symbol"));
                     row.put("reservedAmount", rs.getBigDecimal("reserved_amount"));
@@ -1041,8 +1067,8 @@ public class CustodyRepository {
 
     public List<GasUsageRecord> listOverdueGasUsage(int limit) {
         return jdbc.query("""
-                        select id, tenant_id, gas_account_id, custody_withdrawal_id,
-                               order_no, chain, native_symbol, reserved_amount,
+                        select id, tenant_id, gas_account_id, operation_type, operation_id,
+                               reference_no, chain, native_symbol, reserved_amount,
                                actual_amount, status, pricing_source, tx_hash,
                                error_message, created_at, updated_at, settled_at
                           from custody_gas_usage
@@ -1053,8 +1079,9 @@ public class CustodyRepository {
                         rs.getObject("id", UUID.class),
                         rs.getObject("tenant_id", UUID.class),
                         rs.getObject("gas_account_id", UUID.class),
-                        rs.getObject("custody_withdrawal_id", UUID.class),
-                        rs.getString("order_no"),
+                        rs.getString("operation_type"),
+                        rs.getObject("operation_id", UUID.class),
+                        rs.getString("reference_no"),
                         rs.getString("chain"),
                         rs.getString("native_symbol"),
                         rs.getBigDecimal("reserved_amount"),
@@ -1069,26 +1096,28 @@ public class CustodyRepository {
                 Math.min(Math.max(limit, 1), 200));
     }
 
-    private GasUsageRecord requireGasUsage(UUID custodyWithdrawalId) {
-        return findGasUsage(custodyWithdrawalId)
+    private GasUsageRecord requireGasUsage(UUID tenantId, String operationType, UUID operationId) {
+        return findGasUsage(tenantId, operationType, operationId)
                 .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
     }
 
-    private GasUsageRecord requireGasUsageForUpdate(UUID custodyWithdrawalId) {
+    private GasUsageRecord requireGasUsageForUpdate(
+            UUID tenantId, String operationType, UUID operationId) {
         return jdbc.query("""
-                        select id, tenant_id, gas_account_id, custody_withdrawal_id,
-                               order_no, chain, native_symbol, reserved_amount,
+                        select id, tenant_id, gas_account_id, operation_type, operation_id,
+                               reference_no, chain, native_symbol, reserved_amount,
                                actual_amount, status, pricing_source, tx_hash,
                                error_message, created_at, updated_at, settled_at
                           from custody_gas_usage
-                         where custody_withdrawal_id = ?
+                         where tenant_id = ? and operation_type = ? and operation_id = ?
                            for update
                         """, (rs, rowNum) -> new GasUsageRecord(
                         rs.getObject("id", UUID.class),
                         rs.getObject("tenant_id", UUID.class),
                         rs.getObject("gas_account_id", UUID.class),
-                        rs.getObject("custody_withdrawal_id", UUID.class),
-                        rs.getString("order_no"),
+                        rs.getString("operation_type"),
+                        rs.getObject("operation_id", UUID.class),
+                        rs.getString("reference_no"),
                         rs.getString("chain"),
                         rs.getString("native_symbol"),
                         rs.getBigDecimal("reserved_amount"),
@@ -1100,24 +1129,35 @@ public class CustodyRepository {
                         rs.getTimestamp("created_at").toInstant(),
                         rs.getTimestamp("updated_at").toInstant(),
                         instantOrNull(rs.getTimestamp("settled_at"))),
-                custodyWithdrawalId).stream().findFirst()
+                tenantId, operationType, operationId).stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
     }
 
     public Optional<GasUsageRecord> findGasUsage(UUID custodyWithdrawalId) {
         return jdbc.query("""
-                        select id, tenant_id, gas_account_id, custody_withdrawal_id,
-                               order_no, chain, native_symbol, reserved_amount,
+                        select tenant_id from custody_gas_usage
+                         where operation_type = 'WITHDRAWAL' and operation_id = ?
+                        """, (rs, rowNum) -> rs.getObject("tenant_id", UUID.class), custodyWithdrawalId)
+                .stream().findFirst()
+                .flatMap(tenantId -> findGasUsage(tenantId, "WITHDRAWAL", custodyWithdrawalId));
+    }
+
+    public Optional<GasUsageRecord> findGasUsage(
+            UUID tenantId, String operationType, UUID operationId) {
+        return jdbc.query("""
+                        select id, tenant_id, gas_account_id, operation_type, operation_id,
+                               reference_no, chain, native_symbol, reserved_amount,
                                actual_amount, status, pricing_source, tx_hash,
                                error_message, created_at, updated_at, settled_at
                           from custody_gas_usage
-                         where custody_withdrawal_id = ?
+                         where tenant_id = ? and operation_type = ? and operation_id = ?
                         """, (rs, rowNum) -> new GasUsageRecord(
                         rs.getObject("id", UUID.class),
                         rs.getObject("tenant_id", UUID.class),
                         rs.getObject("gas_account_id", UUID.class),
-                        rs.getObject("custody_withdrawal_id", UUID.class),
-                        rs.getString("order_no"),
+                        rs.getString("operation_type"),
+                        rs.getObject("operation_id", UUID.class),
+                        rs.getString("reference_no"),
                         rs.getString("chain"),
                         rs.getString("native_symbol"),
                         rs.getBigDecimal("reserved_amount"),
@@ -1129,7 +1169,31 @@ public class CustodyRepository {
                         rs.getTimestamp("created_at").toInstant(),
                         rs.getTimestamp("updated_at").toInstant(),
                         instantOrNull(rs.getTimestamp("settled_at"))),
-                custodyWithdrawalId).stream().findFirst();
+                tenantId, operationType, operationId).stream().findFirst();
+    }
+
+    private GasUsageRecord requireWithdrawalGasUsage(UUID custodyWithdrawalId) {
+        return findGasUsage(custodyWithdrawalId)
+                .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
+    }
+
+    private void requireGasOperation(UUID tenantId, String operationType,
+                                     UUID operationId, String chain) {
+        String type = operationType == null ? "" : operationType.trim().toUpperCase(java.util.Locale.ROOT);
+        Boolean valid = switch (type) {
+            case "WITHDRAWAL" -> jdbc.queryForObject("""
+                    select exists(select 1 from custody_withdrawal
+                                   where tenant_id = ? and id = ? and chain = ?)
+                    """, Boolean.class, tenantId, operationId, chain);
+            case "COLLECTION_BATCH" -> jdbc.queryForObject("""
+                    select exists(select 1 from evm_collection_batch
+                                   where tenant_id = ? and id = ? and chain = ?)
+                    """, Boolean.class, tenantId, operationId, chain);
+            default -> throw new IllegalArgumentException("unsupported gas operation type");
+        };
+        if (!Boolean.TRUE.equals(valid)) {
+            throw new IllegalArgumentException("gas operation does not belong to tenant and chain");
+        }
     }
 
     public Optional<NetworkFee> confirmedNetworkFee(
@@ -2289,8 +2353,9 @@ public class CustodyRepository {
             UUID id,
             UUID tenantId,
             UUID gasAccountId,
-            UUID custodyWithdrawalId,
-            String orderNo,
+            String operationType,
+            UUID operationId,
+            String referenceNo,
             String chain,
             String nativeSymbol,
             java.math.BigDecimal reservedAmount,

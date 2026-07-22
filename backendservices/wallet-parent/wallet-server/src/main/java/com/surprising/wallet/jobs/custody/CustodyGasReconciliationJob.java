@@ -29,7 +29,9 @@ public class CustodyGasReconciliationJob {
                     : repository.listOverdueGasUsage(100)) {
                 try {
                     repository.settleGasUsage(
-                            usage.custodyWithdrawalId(),
+                            usage.tenantId(),
+                            usage.operationType(),
+                            usage.operationId(),
                             usage.actualAmount(),
                             usage.pricingSource(),
                             usage.txHash());

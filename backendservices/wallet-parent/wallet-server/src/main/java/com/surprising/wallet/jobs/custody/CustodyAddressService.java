@@ -6,9 +6,11 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.jobs.custody.CustodyRepository.AddressRecord;
 import com.surprising.wallet.jobs.custody.CustodyRepository.TenantRecord;
+import com.surprising.wallet.jobs.account.Evm7702CollectionRepository;
 import com.surprising.wallet.service.chain.BlockchainRuntimeService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -29,6 +31,9 @@ public class CustodyAddressService {
     private final BlockchainRuntimeService runtime;
     private final CustodyTenantChainService tenantChains;
     private final ObjectMapper objectMapper;
+
+    @Autowired(required = false)
+    private Evm7702CollectionRepository evm7702Repository;
 
     public CustodyAddressService(CustodyRepository custodyRepository,
                                  ChainJdbcRepository chainRepository,
@@ -110,6 +115,12 @@ public class CustodyAddressService {
                 addressVersion,
                 generated.getIndex(),
                 "CONSOLE".equals(normalizedSource) ? principal.actorId() : null);
+        if ("evm".equalsIgnoreCase(runtimeChain.family())) {
+            if (evm7702Repository != null) {
+                evm7702Repository.createAccountProjection(
+                        tenant.id(), addressId, chain, runtimeChain.network(), chainAddress.getAddress());
+            }
+        }
         AddressView result = toView(saved);
         custodyRepository.audit(
                 tenant.id(),

@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Runtime collection transaction stored in collection_record.
@@ -17,6 +18,8 @@ import java.time.Instant;
 @AllArgsConstructor
 public class ChainCollectionRecord {
     private Long id;
+    private UUID tenantId;
+    private UUID custodyAddressId;
     private String collectionNo;
     private String chain;
     private String assetSymbol;

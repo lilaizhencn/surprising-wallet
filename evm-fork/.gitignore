@@ -1,3 +1,5 @@
 node_modules/
 cache/
 logs/
+artifacts/
+deployments/*-EIP7702-local.json

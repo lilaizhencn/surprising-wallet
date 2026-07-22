@@ -35,6 +35,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -194,18 +195,27 @@ public class ChainJdbcRepository {
 
     @Transactional(rollbackFor = Throwable.class)
     public long reserveEvmNonce(String chain, String address, long chainNonce) {
+        return reserveEvmNonce(chain, address, BigInteger.valueOf(chainNonce)).longValueExact();
+    }
+
+    @Transactional(rollbackFor = Throwable.class)
+    public BigInteger reserveEvmNonce(String chain, String address, BigInteger chainNonce) {
+        if (chainNonce == null || chainNonce.signum() < 0 || chainNonce.bitLength() > 256) {
+            throw new IllegalArgumentException("EVM nonce must be a valid uint256");
+        }
         jdbcTemplate.update("""
                         insert into evm_nonce(chain, address, chain_nonce, reserved_nonce, status, created_at, updated_at)
                         values (?, ?, ?, ?, 'ACTIVE', ?, ?)
                         on conflict (chain, address) do nothing
                         """,
                 chain, address, chainNonce, chainNonce, toTs(now()), toTs(now()));
-        Long next = jdbcTemplate.queryForObject("""
+        BigDecimal nextValue = jdbcTemplate.queryForObject("""
                         select reserved_nonce from evm_nonce
                         where chain = ? and address = ?
                         for update
-                        """, Long.class, chain, address);
-        long reserved = Math.max(chainNonce, next == null ? chainNonce : next);
+                        """, BigDecimal.class, chain, address);
+        BigInteger next = nextValue == null ? chainNonce : nextValue.toBigIntegerExact();
+        BigInteger reserved = chainNonce.max(next);
         jdbcTemplate.update("""
                         update evm_nonce
                         set chain_nonce = greatest(chain_nonce, ?),
@@ -214,7 +224,7 @@ public class ChainJdbcRepository {
                             updated_at = ?
                         where chain = ? and address = ?
                         """,
-                chainNonce, reserved + 1, toTs(now()), chain, address);
+                chainNonce, reserved.add(BigInteger.ONE), toTs(now()), chain, address);
         return reserved;
     }
 
@@ -1187,19 +1197,32 @@ public class ChainJdbcRepository {
     public int createCollectionRecord(String collectionNo, String chain, String assetSymbol,
                                       String fromAddress, String toAddress, BigDecimal amount, BigDecimal fee,
                                       String rawPayload) {
+        return createCollectionRecord(null, null, collectionNo, chain, assetSymbol,
+                fromAddress, toAddress, amount, fee, rawPayload);
+    }
+
+    public int createCollectionRecord(UUID tenantId, UUID custodyAddressId,
+                                      String collectionNo, String chain, String assetSymbol,
+                                      String fromAddress, String toAddress, BigDecimal amount, BigDecimal fee,
+                                      String rawPayload) {
+        if ((tenantId == null) != (custodyAddressId == null)) {
+            throw new IllegalArgumentException("tenantId and custodyAddressId must be supplied together");
+        }
         return jdbcTemplate.update("""
                         insert into collection_record(collection_no, chain, asset_symbol, from_address, to_address,
-                                                      amount, fee, status, raw_payload, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?, ?)
+                                                      amount, fee, status, raw_payload, tenant_id,
+                                                      custody_address_id, created_at, updated_at)
+                        values (?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?, ?, ?, ?)
                         on conflict (chain, collection_no) do nothing
                         """,
                 collectionNo, chain, assetSymbol, fromAddress, toAddress, amount, fee, rawPayload,
+                tenantId, custodyAddressId,
                 toTs(now()), toTs(now()));
     }
 
     public List<ChainCollectionRecord> listCollectionsForSigning(String chain, int limit) {
         return jdbcTemplate.query("""
-                        select id, collection_no, chain, asset_symbol, from_address, to_address,
+                        select id, tenant_id, custody_address_id, collection_no, chain, asset_symbol, from_address, to_address,
                                amount, fee, tx_hash, status, error_message, raw_payload, created_at, updated_at
                         from collection_record
                         where chain = ? and status in ('CREATED', 'RETRYING')
@@ -1212,7 +1235,7 @@ public class ChainJdbcRepository {
 
     public List<ChainCollectionRecord> listCollectionsByStatus(String chain, String status, int limit) {
         return jdbcTemplate.query("""
-                        select id, collection_no, chain, asset_symbol, from_address, to_address,
+                        select id, tenant_id, custody_address_id, collection_no, chain, asset_symbol, from_address, to_address,
                                amount, fee, tx_hash, status, error_message, raw_payload, created_at, updated_at
                         from collection_record
                         where chain = ? and status = ?
@@ -1282,6 +1305,8 @@ public class ChainJdbcRepository {
     private ChainCollectionRecord mapCollectionRecord(java.sql.ResultSet rs) throws java.sql.SQLException {
         return ChainCollectionRecord.builder()
                 .id(rs.getLong("id"))
+                .tenantId(rs.getObject("tenant_id", UUID.class))
+                .custodyAddressId(rs.getObject("custody_address_id", UUID.class))
                 .collectionNo(rs.getString("collection_no"))
                 .chain(rs.getString("chain"))
                 .assetSymbol(rs.getString("asset_symbol"))
@@ -1675,71 +1700,86 @@ public class ChainJdbcRepository {
                                                                          int limit) {
         return jdbcTemplate.query("""
                         with collected as (
-                            select chain, asset_symbol, lower(from_address) as from_address, coalesce(sum(amount), 0) amount
+                            select tenant_id, chain, asset_symbol, lower(from_address) as from_address,
+                                   coalesce(sum(amount), 0) amount
                             from collection_record
                             where chain = ?
+                              and tenant_id is not null
                               and status <> 'FAILED'
-                            group by chain, asset_symbol, lower(from_address)
+                            group by tenant_id, chain, asset_symbol, lower(from_address)
                         ),
                         deposited as (
-                            select chain, asset_symbol, lower(to_address) as to_address, coalesce(sum(amount), 0) amount
+                            select tenant_id, chain, asset_symbol, lower(to_address) as to_address,
+                                   coalesce(sum(amount), 0) amount
                             from deposit_record
                             where chain = ?
+                              and tenant_id is not null
                               and credited = true
-                            group by chain, asset_symbol, lower(to_address)
+                            group by tenant_id, chain, asset_symbol, lower(to_address)
                         ),
                         pending as (
-                            select distinct chain, asset_symbol, lower(from_address) as from_address
+                            select distinct tenant_id, chain, asset_symbol, lower(from_address) as from_address
                             from collection_record
                             where chain = ?
+                              and tenant_id is not null
                               and status in ('CREATED', 'RETRYING', 'SIGNING', 'SENT')
                         ),
                         candidates as (
-                            select ca.chain, ca.asset_symbol, ca.account_id, ca.address, ca.owner_address,
+                            select deposited.tenant_id, custody.id as custody_address_id,
+                                   ca.chain, deposited.asset_symbol, ca.account_id, ca.address, ca.owner_address,
                                    ca.user_id, ca.biz, ca.address_index, ca.wallet_role,
                                    greatest(deposited.amount - coalesce(collected.amount, 0), 0) as amount,
                                    greatest(coalesce(a.min_transfer, 0), ?) as minimum_amount
                             from deposited
                             join chain_address ca
-                              on ca.chain = deposited.chain
-                             and ca.asset_symbol = deposited.asset_symbol
+                              on ca.tenant_id = deposited.tenant_id
+                             and ca.chain = deposited.chain
                              and lower(ca.address) = deposited.to_address
                              and ca.enabled = true
                              and ca.wallet_role = 'DEPOSIT'
                              and ca.user_id <> ?
-                            left join ledger_balance lb
-                              on lb.chain = ca.chain
-                             and lb.asset_symbol = ca.asset_symbol
-                             and lower(lb.account_id) = lower(ca.account_id)
+                            join chain_asset native_asset
+                              on native_asset.chain = ca.chain
+                             and native_asset.symbol = ca.asset_symbol
+                             and native_asset.native_asset = true
+                             and native_asset.active = true
+                            join custody_address custody
+                              on custody.tenant_id = deposited.tenant_id
+                             and custody.chain_address_id = ca.id
+                             and custody.status = 'ACTIVE'
                             join chain_asset a
-                              on a.chain = ca.chain
-                             and a.symbol = ca.asset_symbol
+                              on a.chain = deposited.chain
+                             and a.symbol = deposited.asset_symbol
                              and a.active = true
                             left join collected
-                              on collected.chain = ca.chain
-                             and collected.asset_symbol = ca.asset_symbol
+                              on collected.tenant_id = deposited.tenant_id
+                             and collected.chain = ca.chain
+                             and collected.asset_symbol = deposited.asset_symbol
                              and collected.from_address = lower(ca.address)
                             left join pending
-                              on pending.chain = ca.chain
-                             and pending.asset_symbol = ca.asset_symbol
+                              on pending.tenant_id = deposited.tenant_id
+                             and pending.chain = ca.chain
+                             and pending.asset_symbol = deposited.asset_symbol
                              and pending.from_address = lower(ca.address)
                             where deposited.chain = ?
                               and pending.from_address is null
                         ),
                         positive_candidates as (
-                            select chain, asset_symbol, account_id, address, owner_address,
+                            select tenant_id, custody_address_id, chain, asset_symbol, account_id, address, owner_address,
                                    user_id, biz, address_index, wallet_role, amount, minimum_amount
                             from candidates
                             where amount > 0
                               and amount >= minimum_amount
                         )
-                        select chain, asset_symbol, account_id, address, owner_address,
+                        select tenant_id, custody_address_id, chain, asset_symbol, account_id, address, owner_address,
                                user_id, biz, address_index, wallet_role, amount
                         from positive_candidates
                         order by amount desc, address_index
                         limit ?
                         """,
                 (rs, rowNum) -> CollectionCandidateRecord.builder()
+                        .tenantId(rs.getObject("tenant_id", UUID.class))
+                        .custodyAddressId(rs.getObject("custody_address_id", UUID.class))
                         .chain(rs.getString("chain"))
                         .assetSymbol(rs.getString("asset_symbol"))
                         .accountId(rs.getString("account_id"))
@@ -1752,6 +1792,30 @@ public class ChainJdbcRepository {
                         .amount(rs.getBigDecimal("amount"))
                         .build(),
                 chain, chain, chain, minimumAmount, HotWalletRules.DEFAULT_HOT_USER_ID, chain, limit);
+    }
+
+    public Optional<String> findActiveTenantCollectionAddress(UUID tenantId, String chain) {
+        if (tenantId == null) {
+            return Optional.empty();
+        }
+        return jdbcTemplate.queryForList("""
+                        select a.address
+                          from custody_gas_account g
+                          join custody_address a
+                            on a.tenant_id = g.tenant_id
+                           and a.id = g.custody_address_id
+                         where g.tenant_id = ? and g.chain = ?
+                           and g.status = 'ACTIVE' and a.status = 'ACTIVE'
+                        """, String.class, tenantId, chain)
+                .stream().findFirst();
+    }
+
+    public boolean isEvm7702CollectionActive(String chain, String network) {
+        Boolean active = jdbcTemplate.queryForObject("""
+                select exists(select 1 from evm_7702_config
+                               where chain = ? and network = ? and status = 'ACTIVE')
+                """, Boolean.class, chain, network);
+        return Boolean.TRUE.equals(active);
     }
 
     public void updateScanHeight(String chain, String scannerName, long bestHeight, long safeHeight) {

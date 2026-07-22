@@ -18,6 +18,15 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+DROP TABLE IF EXISTS public.evm_collection_batch_attempt;
+DROP TABLE IF EXISTS public.evm_collection_batch_item;
+DROP TABLE IF EXISTS public.evm_collection_batch;
+DROP TABLE IF EXISTS public.evm_7702_account;
+DROP TABLE IF EXISTS public.evm_7702_config;
+ALTER TABLE IF EXISTS ONLY public.collection_record DROP CONSTRAINT IF EXISTS collection_record_custody_fk;
+ALTER TABLE IF EXISTS ONLY public.collection_record DROP CONSTRAINT IF EXISTS collection_record_tenant_fk;
+ALTER TABLE IF EXISTS ONLY public.collection_record DROP CONSTRAINT IF EXISTS collection_record_tenant_id_key;
+
 ALTER TABLE IF EXISTS ONLY public.withdrawal_order DROP CONSTRAINT IF EXISTS withdrawal_order_tenant_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.ledger_balance DROP CONSTRAINT IF EXISTS ledger_balance_tenant_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.deposit_record DROP CONSTRAINT IF EXISTS deposit_record_tenant_id_fkey;
@@ -739,8 +748,11 @@ CREATE TABLE public.collection_record (
     status character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
     error_message text,
     raw_payload text,
+    tenant_id uuid,
+    custody_address_id uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT collection_record_tenant_id_key UNIQUE (tenant_id, id)
 );
 
 
@@ -1036,8 +1048,9 @@ CREATE TABLE public.custody_gas_usage (
     id uuid NOT NULL,
     tenant_id uuid NOT NULL,
     gas_account_id uuid NOT NULL,
-    custody_withdrawal_id uuid NOT NULL,
-    order_no character varying(96) NOT NULL,
+    operation_type character varying(32) NOT NULL,
+    operation_id uuid NOT NULL,
+    reference_no character varying(96) NOT NULL,
     chain character varying(32) NOT NULL,
     native_symbol character varying(32) NOT NULL,
     reserved_amount numeric(78,24) NOT NULL,
@@ -1051,6 +1064,7 @@ CREATE TABLE public.custody_gas_usage (
     settled_at timestamp with time zone,
     CONSTRAINT custody_gas_usage_actual_check CHECK (((actual_amount IS NULL) OR (actual_amount >= (0)::numeric))),
     CONSTRAINT custody_gas_usage_reserved_check CHECK ((reserved_amount > (0)::numeric)),
+    CONSTRAINT custody_gas_usage_operation_type_check CHECK (((operation_type)::text = ANY ((ARRAY['WITHDRAWAL'::character varying, 'COLLECTION_BATCH'::character varying])::text[]))),
     CONSTRAINT custody_gas_usage_status_check CHECK (((status)::text = ANY ((ARRAY['RESERVED'::character varying, 'SETTLED'::character varying, 'RELEASED'::character varying, 'OVERDUE'::character varying])::text[])))
 );
 
@@ -1342,8 +1356,8 @@ CREATE TABLE public.evm_nonce (
     id bigint NOT NULL,
     chain character varying(32) NOT NULL,
     address character varying(128) NOT NULL,
-    chain_nonce bigint DEFAULT 0 NOT NULL,
-    reserved_nonce bigint DEFAULT 0 NOT NULL,
+    chain_nonce numeric(78,0) DEFAULT 0 NOT NULL,
+    reserved_nonce numeric(78,0) DEFAULT 0 NOT NULL,
     status character varying(32) DEFAULT 'ACTIVE'::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
@@ -2970,19 +2984,11 @@ ALTER TABLE ONLY public.custody_gas_usage
 
 
 --
--- Name: custody_gas_usage custody_gas_usage_tenant_order_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: custody_gas_usage custody_gas_usage_operation_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.custody_gas_usage
-    ADD CONSTRAINT custody_gas_usage_tenant_order_key UNIQUE (tenant_id, order_no);
-
-
---
--- Name: custody_gas_usage custody_gas_usage_withdrawal_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.custody_gas_usage
-    ADD CONSTRAINT custody_gas_usage_withdrawal_key UNIQUE (custody_withdrawal_id);
+    ADD CONSTRAINT custody_gas_usage_operation_key UNIQUE (tenant_id, operation_type, operation_id);
 
 
 --
@@ -4194,14 +4200,6 @@ ALTER TABLE ONLY public.custody_gas_usage
 
 
 --
--- Name: custody_gas_usage custody_gas_usage_custody_withdrawal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.custody_gas_usage
-    ADD CONSTRAINT custody_gas_usage_custody_withdrawal_id_fkey FOREIGN KEY (custody_withdrawal_id) REFERENCES public.custody_withdrawal(id) ON DELETE RESTRICT;
-
-
---
 -- Name: custody_gas_usage custody_gas_usage_gas_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4215,14 +4213,6 @@ ALTER TABLE ONLY public.custody_gas_usage
 
 ALTER TABLE ONLY public.custody_gas_usage
     ADD CONSTRAINT custody_gas_usage_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.custody_tenant(id) ON DELETE RESTRICT;
-
-
---
--- Name: custody_gas_usage custody_gas_usage_withdrawal_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.custody_gas_usage
-    ADD CONSTRAINT custody_gas_usage_withdrawal_fk FOREIGN KEY (tenant_id, custody_withdrawal_id) REFERENCES public.custody_withdrawal(tenant_id, id) ON DELETE RESTRICT;
 
 
 --
@@ -4482,6 +4472,223 @@ ALTER TABLE ONLY public.withdrawal_order
 
 
 --
+-- EIP-7702 is opt-in per concrete chain/network/version. No network is seeded ACTIVE.
+CREATE TABLE public.evm_7702_config (
+    id uuid NOT NULL PRIMARY KEY,
+    chain character varying(32) NOT NULL,
+    network character varying(64) NOT NULL,
+    chain_id numeric(78,0) NOT NULL,
+    version integer NOT NULL,
+    delegate_address character varying(42) NOT NULL,
+    delegate_code_hash character varying(66) NOT NULL,
+    collector_address character varying(42) NOT NULL,
+    collector_code_hash character varying(66) NOT NULL,
+    relayer_chain_address_id bigint NOT NULL,
+    relayer_address character varying(42) NOT NULL,
+    status character varying(24) DEFAULT 'DISABLED'::character varying NOT NULL,
+    max_batch_items integer DEFAULT 20 NOT NULL,
+    max_batch_gas bigint DEFAULT 5000000 NOT NULL,
+    block_gas_ratio numeric(5,4) DEFAULT 0.3000 NOT NULL,
+    gas_limit_multiplier numeric(5,4) DEFAULT 1.2000 NOT NULL,
+    signature_ttl_seconds integer DEFAULT 900 NOT NULL,
+    required_confirmations integer DEFAULT 2 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT evm_7702_config_status_check CHECK ((status)::text = ANY ((ARRAY[
+        'DISABLED'::character varying, 'SHADOW'::character varying,
+        'ACTIVE'::character varying, 'PAUSED'::character varying])::text[])),
+    CONSTRAINT evm_7702_config_chain_id_check CHECK (chain_id > 0),
+    CONSTRAINT evm_7702_config_version_check CHECK (version > 0),
+    CONSTRAINT evm_7702_config_batch_check CHECK (max_batch_items BETWEEN 1 AND 100),
+    CONSTRAINT evm_7702_config_gas_check CHECK (max_batch_gas > 0),
+    CONSTRAINT evm_7702_config_block_ratio_check CHECK (block_gas_ratio > 0 AND block_gas_ratio <= 0.5),
+    CONSTRAINT evm_7702_config_multiplier_check CHECK (gas_limit_multiplier >= 1.0 AND gas_limit_multiplier <= 2.0),
+    CONSTRAINT evm_7702_config_ttl_check CHECK (signature_ttl_seconds BETWEEN 30 AND 1800),
+    CONSTRAINT evm_7702_config_confirmations_check CHECK (required_confirmations > 0),
+    CONSTRAINT evm_7702_config_network_version_key UNIQUE (chain, network, version),
+    CONSTRAINT evm_7702_config_relayer_fk FOREIGN KEY (relayer_chain_address_id)
+        REFERENCES public.chain_address(id) ON DELETE RESTRICT
+);
+
+CREATE UNIQUE INDEX evm_7702_config_one_active_version
+    ON public.evm_7702_config USING btree (chain, network)
+    WHERE status = 'ACTIVE';
+
+CREATE UNIQUE INDEX evm_7702_config_one_shadow_version
+    ON public.evm_7702_config USING btree (chain, network)
+    WHERE status = 'SHADOW';
+
+CREATE TABLE public.evm_7702_account (
+    id uuid NOT NULL PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    custody_address_id uuid NOT NULL,
+    chain character varying(32) NOT NULL,
+    network character varying(64) NOT NULL,
+    authority_address character varying(42) NOT NULL,
+    delegate_address character varying(42),
+    delegate_version integer,
+    delegation_status character varying(24) DEFAULT 'NOT_DELEGATED'::character varying NOT NULL,
+    observed_authority_nonce numeric(78,0),
+    observed_operation_nonce numeric(78,0),
+    activation_tx_hash character varying(128),
+    revocation_tx_hash character varying(128),
+    last_code_hash character varying(66),
+    last_observed_block bigint,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT evm_7702_account_tenant_authority_key UNIQUE (tenant_id, chain, authority_address),
+    CONSTRAINT evm_7702_account_tenant_custody_key UNIQUE (tenant_id, custody_address_id, chain),
+    CONSTRAINT evm_7702_account_status_check CHECK ((delegation_status)::text = ANY ((ARRAY[
+        'NOT_DELEGATED'::character varying, 'DELEGATING'::character varying,
+        'ACTIVE'::character varying, 'REVOKING'::character varying,
+        'REVOKED'::character varying, 'UNKNOWN'::character varying,
+        'MANUAL_REVIEW'::character varying])::text[])),
+    CONSTRAINT evm_7702_account_tenant_fk FOREIGN KEY (tenant_id)
+        REFERENCES public.custody_tenant(id) ON DELETE RESTRICT,
+    CONSTRAINT evm_7702_account_custody_fk FOREIGN KEY (tenant_id, custody_address_id)
+        REFERENCES public.custody_address(tenant_id, id) ON DELETE RESTRICT
+);
+
+CREATE TABLE public.evm_collection_batch (
+    id uuid NOT NULL PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    chain character varying(32) NOT NULL,
+    network character varying(64) NOT NULL,
+    asset_symbol character varying(32) NOT NULL,
+    token_contract character varying(42) NOT NULL,
+    token_decimals integer NOT NULL,
+    hot_wallet character varying(42) NOT NULL,
+    relayer_address character varying(42) NOT NULL,
+    delegate_version integer NOT NULL,
+    batch_hash character varying(66) NOT NULL,
+    status character varying(32) NOT NULL,
+    item_count integer NOT NULL,
+    estimated_gas bigint,
+    gas_limit bigint,
+    max_fee_per_gas numeric(78,0),
+    max_priority_fee_per_gas numeric(78,0),
+    canonical_tx_hash character varying(128),
+    actual_gas_used bigint,
+    effective_gas_price numeric(78,0),
+    actual_fee numeric(78,24),
+    confirmed_block_number bigint,
+    confirmed_block_hash character varying(128),
+    error_code character varying(64),
+    error_message text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    submitted_at timestamp with time zone,
+    confirmed_at timestamp with time zone,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT evm_collection_batch_tenant_id_key UNIQUE (tenant_id, id),
+    CONSTRAINT evm_collection_batch_hash_key UNIQUE (chain, batch_hash),
+    CONSTRAINT evm_collection_batch_item_count_check CHECK (item_count BETWEEN 1 AND 100),
+    CONSTRAINT evm_collection_batch_status_check CHECK ((status)::text = ANY ((ARRAY[
+        'CREATED'::character varying, 'LOCKED'::character varying,
+        'SIMULATED'::character varying, 'SIGNING'::character varying,
+        'SUBMITTED'::character varying, 'BROADCAST_UNKNOWN'::character varying,
+        'CONFIRMING'::character varying, 'CONFIRMED'::character varying,
+        'PARTIAL_FAILED'::character varying, 'FAILED'::character varying,
+        'REORGED'::character varying, 'MANUAL_REVIEW'::character varying])::text[])),
+    CONSTRAINT evm_collection_batch_tenant_fk FOREIGN KEY (tenant_id)
+        REFERENCES public.custody_tenant(id) ON DELETE RESTRICT
+);
+
+CREATE UNIQUE INDEX evm_collection_batch_tx_key
+    ON public.evm_collection_batch USING btree (chain, canonical_tx_hash)
+    WHERE canonical_tx_hash IS NOT NULL;
+
+CREATE INDEX evm_collection_batch_work_idx
+    ON public.evm_collection_batch USING btree (chain, network, status, updated_at);
+
+CREATE TABLE public.evm_collection_batch_item (
+    id uuid NOT NULL PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    batch_id uuid NOT NULL,
+    item_index integer NOT NULL,
+    collection_record_id bigint NOT NULL,
+    custody_address_id uuid NOT NULL,
+    authority_address character varying(42) NOT NULL,
+    token_contract character varying(42) NOT NULL,
+    recipient character varying(42) NOT NULL,
+    requested_amount_atomic numeric(78,0) NOT NULL,
+    actual_received_atomic numeric(78,0),
+    authorization_included boolean DEFAULT false NOT NULL,
+    authorization_nonce numeric(78,0),
+    operation_nonce numeric(78,0) NOT NULL,
+    signature_deadline timestamp with time zone NOT NULL,
+    call_gas_limit bigint NOT NULL,
+    status character varying(32) NOT NULL,
+    log_index integer,
+    error_code character varying(64),
+    error_hash character varying(66),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT evm_collection_batch_item_position_key UNIQUE (batch_id, item_index),
+    CONSTRAINT evm_collection_batch_item_authority_key UNIQUE (batch_id, authority_address),
+    CONSTRAINT evm_collection_batch_item_amount_check CHECK (requested_amount_atomic > 0),
+    CONSTRAINT evm_collection_batch_item_received_check CHECK (actual_received_atomic IS NULL OR actual_received_atomic >= 0),
+    CONSTRAINT evm_collection_batch_item_status_check CHECK ((status)::text = ANY ((ARRAY[
+        'CREATED'::character varying, 'SIGNED'::character varying,
+        'SUBMITTED'::character varying, 'CONFIRMED'::character varying,
+        'FAILED'::character varying, 'RETRYABLE'::character varying,
+        'REORGED'::character varying, 'MANUAL_REVIEW'::character varying])::text[])),
+    CONSTRAINT evm_collection_batch_item_batch_fk FOREIGN KEY (tenant_id, batch_id)
+        REFERENCES public.evm_collection_batch(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT evm_collection_batch_item_custody_fk FOREIGN KEY (tenant_id, custody_address_id)
+        REFERENCES public.custody_address(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT evm_collection_batch_item_collection_fk FOREIGN KEY (tenant_id, collection_record_id)
+        REFERENCES public.collection_record(tenant_id, id) ON DELETE RESTRICT
+);
+
+CREATE UNIQUE INDEX evm_collection_batch_item_active_collection_key
+    ON public.evm_collection_batch_item USING btree (collection_record_id)
+    WHERE status IN ('CREATED', 'SIGNED', 'SUBMITTED');
+
+CREATE TABLE public.evm_collection_batch_attempt (
+    id uuid NOT NULL PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    batch_id uuid NOT NULL,
+    attempt_no integer NOT NULL,
+    relayer_nonce numeric(78,0) NOT NULL,
+    tx_hash character varying(128) NOT NULL,
+    max_fee_per_gas numeric(78,0) NOT NULL,
+    max_priority_fee_per_gas numeric(78,0) NOT NULL,
+    gas_limit bigint NOT NULL,
+    rpc_node_id bigint,
+    calldata_hash character varying(66) NOT NULL,
+    signed_tx_ciphertext text NOT NULL,
+    encryption_key_version character varying(64) NOT NULL,
+    status character varying(32) NOT NULL,
+    error_code character varying(64),
+    error_message text,
+    replaced_by_tx_hash character varying(128),
+    rebroadcast_count integer DEFAULT 0 NOT NULL,
+    last_rebroadcast_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    submitted_at timestamp with time zone,
+    observed_at timestamp with time zone,
+    CONSTRAINT evm_collection_batch_attempt_number_key UNIQUE (batch_id, attempt_no),
+    CONSTRAINT evm_collection_batch_attempt_tx_key UNIQUE (tx_hash),
+    CONSTRAINT evm_collection_batch_attempt_rebroadcast_count_check CHECK (rebroadcast_count >= 0),
+    CONSTRAINT evm_collection_batch_attempt_status_check CHECK ((status)::text = ANY ((ARRAY[
+        'CREATED'::character varying, 'SUBMITTED'::character varying,
+        'PENDING'::character varying, 'CONFIRMED'::character varying,
+        'DROPPED'::character varying, 'REPLACED'::character varying,
+        'FAILED'::character varying, 'UNKNOWN'::character varying])::text[])),
+    CONSTRAINT evm_collection_batch_attempt_batch_fk FOREIGN KEY (tenant_id, batch_id)
+        REFERENCES public.evm_collection_batch(tenant_id, id) ON DELETE RESTRICT,
+    CONSTRAINT evm_collection_batch_attempt_rpc_fk FOREIGN KEY (rpc_node_id)
+        REFERENCES public.chain_rpc_node(id) ON DELETE RESTRICT
+);
+
+ALTER TABLE ONLY public.collection_record
+    ADD CONSTRAINT collection_record_tenant_fk FOREIGN KEY (tenant_id)
+        REFERENCES public.custody_tenant(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.collection_record
+    ADD CONSTRAINT collection_record_custody_fk FOREIGN KEY (tenant_id, custody_address_id)
+        REFERENCES public.custody_address(tenant_id, id) ON DELETE RESTRICT;
+
 -- PostgreSQL database dump complete
 --
 

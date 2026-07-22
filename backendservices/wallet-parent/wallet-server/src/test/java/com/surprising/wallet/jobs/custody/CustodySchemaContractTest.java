@@ -49,7 +49,8 @@ class CustodySchemaContractTest {
         assertTrue(sql.contains("total_attempt_count integer DEFAULT 0 NOT NULL"));
         assertTrue(sql.contains("manual_retry_count integer DEFAULT 0 NOT NULL"));
         assertTrue(sql.contains("UNIQUE (delivery_id, attempt_number)"));
-        assertTrue(sql.contains("UNIQUE (custody_withdrawal_id)"));
+        assertTrue(sql.contains("UNIQUE (tenant_id, operation_type, operation_id)"));
+        assertTrue(sql.contains("'WITHDRAWAL'::character varying, 'COLLECTION_BATCH'::character varying"));
         assertTrue(sql.contains("custody_gas_usage_status_check"));
         assertTrue(sql.contains("'RESERVED'::character varying, 'SETTLED'::character varying, 'RELEASED'::character varying, 'OVERDUE'::character varying"));
         assertTrue(sql.contains("chain_profile_one_enabled_network_idx"));
