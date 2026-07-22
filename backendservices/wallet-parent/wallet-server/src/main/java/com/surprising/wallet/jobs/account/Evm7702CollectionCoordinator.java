@@ -46,15 +46,14 @@ public class Evm7702CollectionCoordinator {
     @Transactional(rollbackFor = Throwable.class)
     public void complete(Evm7702CollectionRepository.PendingBatch batch,
                          String txHash, BigInteger gasUsed, BigInteger effectiveGasPrice,
-                         BigInteger l1Fee, BigInteger operatorFee,
+                         BigInteger l2Fee, BigInteger l1Fee, BigInteger operatorFee,
                          BigInteger blockNumber, String blockHash,
                          List<Evm7702ReceiptParser.ItemResult> results) {
         repository.completeBatch(
                 batch.tenantId(), batch.batchId(), txHash, gasUsed, effectiveGasPrice,
-                l1Fee, operatorFee,
+                l2Fee, l1Fee, operatorFee,
                 blockNumber, blockHash, results);
-        BigDecimal actualFee = new BigDecimal(gasUsed.multiply(effectiveGasPrice)
-                        .add(l1Fee).add(operatorFee))
+        BigDecimal actualFee = new BigDecimal(l2Fee.add(l1Fee).add(operatorFee))
                 .movePointLeft(18).stripTrailingZeros();
         custodyRepository.settleGasUsage(
                 batch.tenantId(), "COLLECTION_BATCH", batch.batchId(),

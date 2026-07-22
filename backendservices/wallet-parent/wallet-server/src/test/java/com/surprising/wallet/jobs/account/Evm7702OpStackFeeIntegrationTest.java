@@ -44,7 +44,7 @@ class Evm7702OpStackFeeIntegrationTest {
         try {
             assertEquals(expectedChainId, web3j.ethChainId().send().getChainId());
             BigInteger height = web3j.ethBlockNumber().send().getBlockNumber();
-            Evm7702CollectionWorkflowService.OpStackTransactionReceipt receipt = null;
+            Evm7702CollectionWorkflowService.EvmTransactionReceipt receipt = null;
             for (int offset = 0; offset < 20 && receipt == null; offset++) {
                 EthBlock block = web3j.ethGetBlockByNumber(DefaultBlockParameter.valueOf(
                         height.subtract(BigInteger.valueOf(offset))), true).send();
@@ -53,9 +53,9 @@ class Evm7702OpStackFeeIntegrationTest {
                     org.web3j.protocol.core.methods.response.Transaction transaction =
                             (org.web3j.protocol.core.methods.response.Transaction) result.get();
                     if ("0x7e".equalsIgnoreCase(transaction.getType())) continue;
-                    Evm7702CollectionWorkflowService.OpStackReceiptResponse response = new Request<>(
+                    Evm7702CollectionWorkflowService.EvmReceiptResponse response = new Request<>(
                             "eth_getTransactionReceipt", List.of(transaction.getHash()),
-                            http, Evm7702CollectionWorkflowService.OpStackReceiptResponse.class).send();
+                            http, Evm7702CollectionWorkflowService.EvmReceiptResponse.class).send();
                     assertFalse(response.hasError(),
                             response.hasError() ? response.getError().getMessage() : "");
                     receipt = response.getResult();

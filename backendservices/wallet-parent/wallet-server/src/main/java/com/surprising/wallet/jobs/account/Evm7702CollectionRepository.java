@@ -394,7 +394,7 @@ public class Evm7702CollectionRepository {
     @Transactional(rollbackFor = Throwable.class)
     public void completeBatch(UUID tenantId, UUID batchId, String txHash,
                               BigInteger gasUsed, BigInteger effectiveGasPrice,
-                              BigInteger l1Fee, BigInteger operatorFee,
+                              BigInteger l2Fee, BigInteger l1Fee, BigInteger operatorFee,
                               BigInteger blockNumber, String blockHash,
                               List<com.surprising.wallet.service.chain.evm.Evm7702ReceiptParser.ItemResult> results) {
         List<BatchItemIdentity> expected = listBatchItemIdentities(tenantId, batchId);
@@ -461,7 +461,6 @@ public class Evm7702CollectionRepository {
                 throw new IllegalStateException("EIP-7702 account projection completion failed");
             }
         }
-        BigInteger l2Fee = gasUsed.multiply(effectiveGasPrice);
         BigInteger totalFee = l2Fee.add(l1Fee).add(operatorFee);
         BigDecimal actualFee = new BigDecimal(totalFee)
                 .movePointLeft(18).stripTrailingZeros();

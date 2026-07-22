@@ -218,12 +218,12 @@ public class Evm7702CollectionWorkflowService {
             BigInteger latest = send(() -> web3j.ethBlockNumber().send().getBlockNumber());
             for (Evm7702CollectionRepository.PendingBatch batch
                     : repository.listPendingBatches(profile.getChain(), profile.getNetwork(), 100)) {
-                Optional<OpStackTransactionReceipt> receipt = send(
+                Optional<EvmTransactionReceipt> receipt = send(
                         () -> transactionReceipt(http(node), batch.txHash()));
                 if (receipt.isEmpty() || receipt.get().getBlockNumber() == null) continue;
                 BigInteger confirmations = latest.subtract(receipt.get().getBlockNumber()).add(BigInteger.ONE);
                 if (confirmations.compareTo(BigInteger.valueOf(batch.requiredConfirmations())) < 0) continue;
-                OpStackTransactionReceipt value = receipt.get();
+                EvmTransactionReceipt value = receipt.get();
                 EthBlock canonical = send(() -> web3j.ethGetBlockByHash(value.getBlockHash(), false).send());
                 if (canonical.getBlock() == null
                         || !canonical.getBlock().getHash().equalsIgnoreCase(value.getBlockHash())) {
@@ -239,11 +239,15 @@ public class Evm7702CollectionWorkflowService {
                                 .toList());
                 BigInteger effectiveGasPrice = value.getEffectiveGasPrice() == null
                         ? BigInteger.ZERO : Numeric.decodeQuantity(value.getEffectiveGasPrice());
-                BigInteger l1Fee = opStackL1Fee(profile, value);
+                BigInteger arbitrumL1Gas = arbitrumL1Gas(profile, value);
+                BigInteger l2Fee = value.getGasUsed().subtract(arbitrumL1Gas)
+                        .multiply(effectiveGasPrice);
+                BigInteger l1Fee = opStackL1Fee(profile, value)
+                        .add(arbitrumL1Gas.multiply(effectiveGasPrice));
                 BigInteger operatorFee = send(() -> opStackOperatorFee(web3j, profile, value));
                 coordinator.complete(
                         batch, batch.txHash(), value.getGasUsed(), effectiveGasPrice,
-                        l1Fee, operatorFee,
+                        l2Fee, l1Fee, operatorFee,
                         value.getBlockNumber(), value.getBlockHash(), parsed.items());
             }
         } finally {
@@ -251,11 +255,11 @@ public class Evm7702CollectionWorkflowService {
         }
     }
 
-    private Optional<OpStackTransactionReceipt> transactionReceipt(
+    private Optional<EvmTransactionReceipt> transactionReceipt(
             HttpService http, String txHash) throws Exception {
-        OpStackReceiptResponse response = new Request<>(
+        EvmReceiptResponse response = new Request<>(
                 "eth_getTransactionReceipt", List.of(txHash), http,
-                OpStackReceiptResponse.class).send();
+                EvmReceiptResponse.class).send();
         if (response.hasError()) {
             throw new IllegalStateException("eth_getTransactionReceipt failed: "
                     + response.getError().getMessage());
@@ -264,7 +268,7 @@ public class Evm7702CollectionWorkflowService {
     }
 
     private BigInteger opStackL1Fee(
-            AccountChainProfile profile, OpStackTransactionReceipt receipt) {
+            AccountChainProfile profile, EvmTransactionReceipt receipt) {
         if (!isOpStackL2(profile)) return BigInteger.ZERO;
         if (receipt.getL1Fee() == null || receipt.getL1Fee().isBlank()) {
             if ("local".equalsIgnoreCase(profile.getNetwork())) return BigInteger.ZERO;
@@ -275,7 +279,7 @@ public class Evm7702CollectionWorkflowService {
 
     private BigInteger opStackOperatorFee(
             Web3j web3j, AccountChainProfile profile,
-            OpStackTransactionReceipt receipt) throws Exception {
+            EvmTransactionReceipt receipt) throws Exception {
         if (!isOpStackL2(profile) || (!positiveQuantity(receipt.getOperatorFeeScalar())
                 && !positiveQuantity(receipt.getOperatorFeeConstant()))) {
             return BigInteger.ZERO;
@@ -304,6 +308,20 @@ public class Evm7702CollectionWorkflowService {
         return "eip1559-l2".equalsIgnoreCase(profile.getGasPolicy())
                 && ("BASE".equalsIgnoreCase(profile.getChain())
                 || "OPTIMISM".equalsIgnoreCase(profile.getChain()));
+    }
+
+    private BigInteger arbitrumL1Gas(
+            AccountChainProfile profile, EvmTransactionReceipt receipt) {
+        if (!"ARBITRUM".equalsIgnoreCase(profile.getChain())) return BigInteger.ZERO;
+        if (receipt.getGasUsedForL1() == null || receipt.getGasUsedForL1().isBlank()) {
+            if ("local".equalsIgnoreCase(profile.getNetwork())) return BigInteger.ZERO;
+            throw new IllegalStateException("Arbitrum receipt is missing gasUsedForL1");
+        }
+        BigInteger value = Numeric.decodeQuantity(receipt.getGasUsedForL1());
+        if (value.signum() < 0 || value.compareTo(receipt.getGasUsed()) > 0) {
+            throw new IllegalStateException("Arbitrum gasUsedForL1 exceeds total gasUsed");
+        }
+        return value;
     }
 
     private boolean positiveQuantity(String value) {
@@ -580,16 +598,19 @@ public class Evm7702CollectionWorkflowService {
     public static class QuantityResponse extends Response<String> {
     }
 
-    public static class OpStackReceiptResponse extends Response<OpStackTransactionReceipt> {
+    public static class EvmReceiptResponse extends Response<EvmTransactionReceipt> {
     }
 
-    public static class OpStackTransactionReceipt extends TransactionReceipt {
+    public static class EvmTransactionReceipt extends TransactionReceipt {
         private String l1Fee;
+        private String gasUsedForL1;
         private String operatorFeeScalar;
         private String operatorFeeConstant;
 
         public String getL1Fee() { return l1Fee; }
         public void setL1Fee(String l1Fee) { this.l1Fee = l1Fee; }
+        public String getGasUsedForL1() { return gasUsedForL1; }
+        public void setGasUsedForL1(String gasUsedForL1) { this.gasUsedForL1 = gasUsedForL1; }
         public String getOperatorFeeScalar() { return operatorFeeScalar; }
         public void setOperatorFeeScalar(String operatorFeeScalar) {
             this.operatorFeeScalar = operatorFeeScalar;
