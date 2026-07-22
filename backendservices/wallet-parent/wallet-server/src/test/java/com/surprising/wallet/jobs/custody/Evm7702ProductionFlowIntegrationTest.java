@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.key.WalletKeyConfig;
 import com.surprising.wallet.common.key.WalletKeyConfigStore;
@@ -14,13 +15,17 @@ import com.surprising.wallet.jobs.account.Evm7702CollectionWorkflowService;
 import com.surprising.wallet.jobs.account.Evm7702WithdrawalCoordinator;
 import com.surprising.wallet.jobs.account.Evm7702WithdrawalRepository;
 import com.surprising.wallet.jobs.account.Evm7702WithdrawalWorkflowService;
+import com.surprising.wallet.service.chain.evm.EvmDepositScanner;
+import com.surprising.wallet.service.chain.evm.EvmLogScanner;
 import com.surprising.wallet.service.config.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.config.ChainRpcNodeService;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
+import com.surprising.wallet.service.dao.DepositCreditObserver;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.web3j.abi.FunctionEncoder;
@@ -56,6 +61,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -78,6 +84,8 @@ class Evm7702ProductionFlowIntegrationTest {
     private Evm7702CollectionRepository collectionRepository;
     private Evm7702CollectionWorkflowService workflow;
     private CustodyRepository custodyRepository;
+    private EvmDepositScanner depositScanner;
+    private CustodyWithdrawalService withdrawalService;
     private Evm7702WithdrawalWorkflowService withdrawalWorkflow;
     private CustodyWithdrawalReconciliationJob reconciliationJob;
     private String chain;
@@ -93,7 +101,16 @@ class Evm7702ProductionFlowIntegrationTest {
         DriverManagerDataSource dataSource = CustodyIntegrationDatabase.dataSource();
         CustodyIntegrationDatabase.reset(dataSource);
         jdbc = new JdbcTemplate(dataSource);
-        chainRepository = new ChainJdbcRepository(jdbc);
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+        custodyRepository = new CustodyRepository(jdbc);
+        CustodyTenantChainRepository tenantChainRepository =
+                new CustodyTenantChainRepository(jdbc);
+        CustodyDepositCreditObserver depositObserver = new CustodyDepositCreditObserver(
+                jdbc, objectMapper, custodyRepository, tenantChainRepository);
+        StaticListableBeanFactory observers = new StaticListableBeanFactory();
+        observers.addBean("custodyDepositCreditObserver", depositObserver);
+        chainRepository = new ChainJdbcRepository(
+                jdbc, observers.getBeanProvider(DepositCreditObserver.class));
         jdbc.update("update chain_profile set network = 'local', chain_id = ?, withdraw_confirmations = 1 where chain = ? and enabled = true",
                 chainId, chain);
         jdbc.update("update token_config set network = 'local' where chain = ? and enabled = true", chain);
@@ -109,6 +126,8 @@ class Evm7702ProductionFlowIntegrationTest {
                 new WalletKeyConfigStore(jdbc), WalletKeyMaterialProvider.Mode.WALLET_SERVER));
         profile = chainRepository.findProfileByChain(chain).orElseThrow();
         nativeSymbol = profile.getNativeSymbol();
+        depositScanner = new EvmDepositScanner(
+                chainRepository, new EvmLogScanner(), RPC, 1);
 
         ChainRpcNodeService rpcNodes = new ChainRpcNodeService(chainRepository);
         setField(rpcNodes, "environmentName", "eip7702-test");
@@ -116,22 +135,31 @@ class Evm7702ProductionFlowIntegrationTest {
         CustodySecurityProperties security = new CustodySecurityProperties();
         security.setSecretMasterKey("11".repeat(32));
         CustodyCryptoService crypto = new CustodyCryptoService(security);
-        custodyRepository = new CustodyRepository(jdbc);
+        WalletRuntimeConfigService runtimeConfig =
+                new WalletRuntimeConfigService(chainRepository);
+        CustodyTenantChainService tenantChainService = new CustodyTenantChainService(
+                tenantChainRepository, custodyRepository, null);
+        CustodyWithdrawalExecutionService withdrawalExecution =
+                new CustodyWithdrawalExecutionService(jdbc, chainRepository, runtimeConfig);
+        withdrawalService = new CustodyWithdrawalService(
+                custodyRepository, withdrawalExecution,
+                new CustodyGasService(custodyRepository, null, null),
+                tenantChainService, crypto, objectMapper);
         collectionRepository = new Evm7702CollectionRepository(jdbc);
         Evm7702CollectionCoordinator coordinator = new Evm7702CollectionCoordinator(
                 collectionRepository, custodyRepository, chainRepository);
         workflow = new Evm7702CollectionWorkflowService(
                 collectionRepository, coordinator, chainRepository, rpcNodes, keyService, crypto,
-                new WalletRuntimeConfigService(chainRepository));
+                runtimeConfig);
         Evm7702WithdrawalRepository withdrawalRepository =
                 new Evm7702WithdrawalRepository(jdbc, collectionRepository);
         Evm7702WithdrawalCoordinator withdrawalCoordinator = new Evm7702WithdrawalCoordinator(
                 withdrawalRepository, custodyRepository, chainRepository);
         withdrawalWorkflow = new Evm7702WithdrawalWorkflowService(
                 withdrawalRepository, withdrawalCoordinator, chainRepository,
-                rpcNodes, keyService, crypto, new WalletRuntimeConfigService(chainRepository));
+                rpcNodes, keyService, crypto, runtimeConfig);
         reconciliationJob = new CustodyWithdrawalReconciliationJob(
-                custodyRepository, new ObjectMapper().findAndRegisterModules());
+                custodyRepository, objectMapper);
     }
 
     @Test
@@ -142,7 +170,9 @@ class Evm7702ProductionFlowIntegrationTest {
         try {
             BigInteger adminNonce = web3j.ethGetTransactionCount(
                     HARDHAT_ADMIN.getAddress(), DefaultBlockParameterName.PENDING).send().getTransactionCount();
-            Deployment token = deployMockToken(web3j, adminNonce);
+            Deployment usdt = deployMockToken(web3j, adminNonce, "USDT");
+            adminNonce = adminNonce.add(BigInteger.ONE);
+            Deployment usdc = deployMockToken(web3j, adminNonce, "USDC");
             adminNonce = adminNonce.add(BigInteger.ONE);
 
             ChainAddressRecord relayerRecord = keyRecord(null, 9_000_001L, 7702, 0L, "EIP7702_RELAYER");
@@ -182,25 +212,22 @@ class Evm7702ProductionFlowIntegrationTest {
                     relayerChainAddressId, relayer.getAddress());
             assertEquals(List.of(new Evm7702CollectionRepository.RuntimeTarget(chain, "local", true)),
                     collectionRepository.listRuntimeTargets());
-            jdbc.update("""
-                    update token_config set contract_address = ?, contract_address_hex = ?,
-                           decimals = 6, standard = 'ERC20', token_standard = 'ERC20',
-                           collect_enabled = true
-                     where chain = ? and symbol = 'USDT' and network = 'local'
-                    """, token.address(), token.address(), chain);
-            jdbc.update("update chain_asset set contract_address = ?, decimals = 6 where chain = ? and symbol = 'USDT'",
-                    token.address(), chain);
+            configureToken("USDT", usdt.address());
+            configureToken("USDC", usdc.address());
 
             TenantFixture tenantA = createTenant("tenant-7702-a", 8101, 3, 1000L);
             TenantFixture tenantB = createTenant("tenant-7702-b", 8102, 2, 2000L);
             for (AuthorityFixture authority : concat(tenantA.authorities(), tenantB.authorities())) {
-                TransactionReceipt mint = sendLegacyCall(web3j, adminNonce, token.address(),
+                TransactionReceipt mint = sendLegacyCall(web3j, adminNonce, usdt.address(),
                         encodeMint(authority.credentials().getAddress(), authority.amountAtomic()));
                 adminNonce = adminNonce.add(BigInteger.ONE);
                 assertEquals("0x1", mint.getStatus());
-                recordDeposit(authority, token.address(), mint.getTransactionHash());
+                assertEquals(1, depositScanner.scanAndCreditErc20(
+                        ChainType.valueOf(chain), RPC, 1,
+                        mint.getBlockNumber().longValueExact()).size());
             }
-            createCollectionCandidates();
+            assertCreditedDeposits("USDT", 5);
+            createCollectionCandidates("USDT", 5);
 
             jdbc.update("update evm_7702_config set delegate_code_hash = ? where chain = ? and network = 'local'",
                     "0x" + "00".repeat(32), chain);
@@ -262,9 +289,13 @@ class Evm7702ProductionFlowIntegrationTest {
                 TransactionReceipt deposit = sendLegacyNative(
                         web3j, adminNonce, authority.credentials().getAddress(), nativeAmounts[index]);
                 adminNonce = adminNonce.add(BigInteger.ONE);
-                recordNativeDeposit(authority, nativeAmounts[index], deposit.getTransactionHash(), index);
-                createNativeCollection(authority, nativeAmounts[index]);
+                assertEquals("0x1", deposit.getStatus());
+                assertEquals(1, depositScanner.scanAndCreditNative(
+                        ChainType.valueOf(chain), nativeSymbol, RPC, 1,
+                        deposit.getBlockNumber().longValueExact()).size());
             }
+            assertCreditedDeposits(nativeSymbol, 3);
+            createCollectionCandidates(nativeSymbol, 3);
             String tenantANativeCollectionTx = workflow.processOne(profile).orElseThrow();
             workflow.confirm(profile);
             String tenantBNativeCollectionTx = workflow.processOne(profile).orElseThrow();
@@ -339,6 +370,76 @@ class Evm7702ProductionFlowIntegrationTest {
             assertNotEquals(tokenPayoutTx, tenantBPayoutTx);
             assertSharedConfirmedPayout(
                     tenantBPayoutTx, tenantBTokenOne, tenantBTokenTwo);
+
+            List<AuthorityFixture> usdcAuthorities = List.of(
+                    tenantA.authorities().get(0), tenantA.authorities().get(1),
+                    tenantB.authorities().get(0), tenantB.authorities().get(1));
+            for (AuthorityFixture authority : usdcAuthorities) {
+                TransactionReceipt mint = sendLegacyCall(web3j, adminNonce, usdc.address(),
+                        encodeMint(authority.credentials().getAddress(), authority.amountAtomic()));
+                adminNonce = adminNonce.add(BigInteger.ONE);
+                assertEquals("0x1", mint.getStatus());
+                assertEquals(1, depositScanner.scanAndCreditErc20(
+                        ChainType.valueOf(chain), RPC, 1,
+                        mint.getBlockNumber().longValueExact()).size());
+            }
+            assertCreditedDeposits("USDC", 4);
+            createCollectionCandidates("USDC", 4);
+            String firstUsdcCollectionTx = workflow.processOne(profile).orElseThrow();
+            workflow.confirm(profile);
+            String secondUsdcCollectionTx = workflow.processOne(profile).orElseThrow();
+            workflow.confirm(profile);
+            assertNotEquals(firstUsdcCollectionTx, secondUsdcCollectionTx);
+            String tenantAUsdcCollectionTx = collectionTx(tenantA.tenantId(), "USDC");
+            String tenantBUsdcCollectionTx = collectionTx(tenantB.tenantId(), "USDC");
+            assertNotEquals(tenantAUsdcCollectionTx, tenantBUsdcCollectionTx);
+            assertAssetCollectionBatch(
+                    web3j, tenantA, "USDC", tenantAUsdcCollectionTx,
+                    tenantA.authorities().subList(0, 2));
+            assertAssetCollectionBatch(
+                    web3j, tenantB, "USDC", tenantBUsdcCollectionTx,
+                    tenantB.authorities());
+
+            WithdrawalFixture tenantAUsdcOne = createWithdrawal(
+                    tenantA, tenantA.authorities().get(0), "USDC",
+                    "0x6000000000000000000000000000000000000006",
+                    new BigDecimal("1"), "usdc-a-1");
+            WithdrawalFixture tenantAUsdcTwo = createWithdrawal(
+                    tenantA, tenantA.authorities().get(1), "USDC",
+                    "0x6000000000000000000000000000000000000007",
+                    new BigDecimal("2"), "usdc-a-2");
+            String tenantAUsdcPayoutTx = withdrawalWorkflow.processOne(profile).orElseThrow();
+            withdrawalWorkflow.confirm(profile);
+            reconciliationJob.reconcile();
+            assertSharedConfirmedPayout(
+                    tenantAUsdcPayoutTx, tenantAUsdcOne, tenantAUsdcTwo);
+
+            WithdrawalFixture tenantBUsdcOne = createWithdrawal(
+                    tenantB, tenantB.authorities().get(0), "USDC",
+                    "0x6000000000000000000000000000000000000008",
+                    new BigDecimal("1"), "usdc-b-1");
+            assertEquals(BigInteger.ZERO, web3j.ethGetBalance(
+                    tenantB.authorities().get(1).credentials().getAddress(),
+                    DefaultBlockParameterName.LATEST).send().getBalance());
+            WithdrawalFixture tenantBUsdcTwo = createWithdrawal(
+                    tenantB, tenantB.authorities().get(1), "USDC",
+                    "0x6000000000000000000000000000000000000009",
+                    new BigDecimal("2"), "usdc-b-2");
+            String tenantBUsdcPayoutTx = withdrawalWorkflow.processOne(profile).orElseThrow();
+            withdrawalWorkflow.confirm(profile);
+            reconciliationJob.reconcile();
+            assertNotEquals(tenantAUsdcPayoutTx, tenantBUsdcPayoutTx);
+            assertSharedConfirmedPayout(
+                    tenantBUsdcPayoutTx, tenantBUsdcOne, tenantBUsdcTwo);
+            assertEquals(new BigInteger("1000000"), tokenBalance(
+                    web3j, tenantAUsdcOne.recipient(), "USDC"));
+            assertEquals(new BigInteger("2000000"), tokenBalance(
+                    web3j, tenantAUsdcTwo.recipient(), "USDC"));
+            assertEquals(new BigInteger("1000000"), tokenBalance(
+                    web3j, tenantBUsdcOne.recipient(), "USDC"));
+            assertEquals(new BigInteger("2000000"), tokenBalance(
+                    web3j, tenantBUsdcTwo.recipient(), "USDC"));
+
             assertEquals(0, jdbc.queryForObject("""
                     select count(*) from evm_withdrawal_batch_item item
                     join evm_withdrawal_batch batch on batch.id = item.batch_id
@@ -346,13 +447,27 @@ class Evm7702ProductionFlowIntegrationTest {
                     where item.tenant_id <> batch.tenant_id
                        or item.tenant_id <> withdrawal.tenant_id
                     """, Integer.class));
-            assertEquals(4, jdbc.queryForObject("""
+            assertEquals(6, jdbc.queryForObject("""
                     select count(*) from custody_gas_usage
                      where operation_type = 'WITHDRAWAL_BATCH' and status = 'SETTLED'
                     """, Integer.class));
             assertEquals(0, jdbc.queryForObject("""
                     select count(*) from custody_gas_usage
                      where operation_type = 'WITHDRAWAL' and status <> 'RELEASED'
+                    """, Integer.class));
+            assertEquals(0, jdbc.queryForObject("""
+                    select count(*)
+                      from custody_ledger_entry entry
+                      join custody_gas_account gas
+                        on gas.tenant_id = entry.tenant_id and gas.chain = entry.chain
+                      join custody_address address
+                        on address.tenant_id = gas.tenant_id
+                       and address.id = gas.custody_address_id
+                      join chain_address base
+                        on base.tenant_id = address.tenant_id
+                       and base.id = address.chain_address_id
+                     where entry.entry_type = 'NETWORK_FEE'
+                       and lower(entry.account_id) <> lower(base.account_id)
                     """, Integer.class));
         } finally {
             web3j.shutdown();
@@ -410,70 +525,59 @@ class Evm7702ProductionFlowIntegrationTest {
                 """, tenantId, tenantId);
     }
 
-    private void recordNativeDeposit(AuthorityFixture authority, BigInteger amountAtomic,
-                                     String txHash, int logIndex) {
-        BigDecimal amount = new BigDecimal(amountAtomic).movePointLeft(18);
-        jdbc.update("""
-                insert into deposit_record(
-                    chain, asset_symbol, tx_hash, log_index, from_address, to_address,
-                    amount, block_height, confirmations, status, credited, credited_at, tenant_id)
-                values (?, ?, ?, ?, ?, ?, ?, 1, 1, 'CREDITED', true, now(), ?)
-                """, chain, nativeSymbol, txHash, logIndex,
-                HARDHAT_ADMIN.getAddress(), authority.credentials().getAddress(),
-                amount, authority.tenantId());
-        jdbc.update("""
-                insert into ledger_balance(
-                    chain, asset_symbol, account_id, available_balance,
-                    locked_balance, total_balance, tenant_id)
-                values (?, ?, ?, ?, 0, ?, ?)
-                """, chain, nativeSymbol, authority.credentials().getAddress().toLowerCase(),
-                amount, amount, authority.tenantId());
+    private void configureToken(String symbol, String contractAddress) {
+        assertEquals(1, jdbc.update("""
+                update token_config set contract_address = ?, contract_address_hex = ?,
+                       decimals = 6, standard = 'ERC20', token_standard = 'ERC20',
+                       collect_enabled = true
+                 where chain = ? and symbol = ? and network = 'local'
+                """, contractAddress, contractAddress, chain, symbol));
+        assertEquals(1, jdbc.update("""
+                update chain_asset set contract_address = ?, decimals = 6
+                 where chain = ? and symbol = ?
+                """, contractAddress, chain, symbol));
     }
 
-    private void createNativeCollection(AuthorityFixture authority, BigInteger amountAtomic) {
-        BigDecimal amount = new BigDecimal(amountAtomic).movePointLeft(18);
-        assertEquals(1, chainRepository.createCollectionRecord(
-                authority.tenantId(), authority.custodyAddressId(),
-                "7702-native:" + authority.tenantId() + ":" + authority.credentials().getAddress(),
-                chain, nativeSymbol, authority.credentials().getAddress(), authority.hotWallet(),
-                amount, BigDecimal.ZERO, null));
+    private void assertCreditedDeposits(String symbol, int expected) {
+        assertEquals(expected, jdbc.queryForObject("""
+                select count(*) from deposit_record
+                 where chain = ? and asset_symbol = ? and credited = true
+                """, Integer.class, chain, symbol));
+        assertEquals(expected, jdbc.queryForObject("""
+                select count(*) from custody_deposit
+                 where chain = ? and asset_symbol = ? and status = 'CONFIRMED'
+                """, Integer.class, chain, symbol));
+        assertEquals(expected, jdbc.queryForObject("""
+                select count(*) from custody_ledger_entry
+                 where chain = ? and asset_symbol = ? and entry_type = 'DEPOSIT'
+                """, Integer.class, chain, symbol));
     }
 
     private WithdrawalFixture createWithdrawal(
             TenantFixture tenant, AuthorityFixture source, String symbol,
             String recipient, BigDecimal amount, String suffix) {
-        String orderNo = "7702-withdraw:" + tenant.tenantId() + ":" + suffix;
-        int locked = jdbc.update("""
-                update ledger_balance
-                   set available_balance = available_balance - ?,
-                       locked_balance = locked_balance + ?, updated_at = now()
-                 where tenant_id = ? and chain = ? and asset_symbol = ?
-                   and lower(account_id) = lower(?) and available_balance >= ?
-                """, amount, amount, tenant.tenantId(), chain, symbol,
-                source.credentials().getAddress(), amount);
-        assertEquals(1, locked);
+        String idempotencyKey = "e2e-7702-" + suffix;
+        CustodyPrincipal principal = new CustodyPrincipal(
+                CustodyPrincipal.ActorType.API_KEY, UUID.nameUUIDFromBytes(
+                        (tenant.tenantId() + ":" + suffix).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                tenant.tenantId(), "e2e", "API_KEY", Set.of("withdrawals:write"));
+        CustodyWithdrawalService.CreateWithdrawalCommand command =
+                new CustodyWithdrawalService.CreateWithdrawalCommand(
+                        source.custodyAddressId(), chain, symbol, recipient,
+                        amount.toPlainString(), suffix, true);
+        CustodyWithdrawalService.WithdrawalView created = withdrawalService.create(
+                principal, command, "API", idempotencyKey, "127.0.0.1");
+        CustodyWithdrawalService.WithdrawalView replay = withdrawalService.create(
+                principal, command, "API", idempotencyKey, "127.0.0.1");
+        assertEquals(created.id(), replay.id());
+        assertEquals("FROZEN", created.status());
         Long orderId = jdbc.queryForObject("""
-                insert into withdrawal_order(
-                    order_no, user_id, chain, asset_symbol, from_address,
-                    debit_account_id, to_address, amount, fee, status, tenant_id)
-                values (?, ?, ?, ?, ?, ?, ?, ?, 0, 'FROZEN', ?)
-                returning id
-                """, Long.class, orderNo, source.record().getUserId(), chain, symbol,
-                tenant.hotWallet(), source.credentials().getAddress().toLowerCase(),
-                recipient, amount, tenant.tenantId());
-        UUID withdrawalId = UUID.randomUUID();
-        jdbc.update("""
-                insert into custody_withdrawal(
-                    id, tenant_id, custody_address_id, order_no, chain, asset_symbol,
-                    to_address, amount, fee, status, created_by_type, created_by_id,
-                    withdrawal_order_id)
-                values (?, ?, ?, ?, ?, ?, ?, ?, 0, 'FROZEN', 'CONSOLE', 'integration', ?)
-                """, withdrawalId, tenant.tenantId(), source.custodyAddressId(), orderNo,
-                chain, symbol, recipient, amount, orderId);
-        custodyRepository.reserveGasUsage(
-                tenant.tenantId(), withdrawalId, orderNo, chain, new BigDecimal("0.0001"));
+                select id from withdrawal_order
+                 where tenant_id = ? and chain = ? and order_no = ?
+                """, Long.class, tenant.tenantId(), chain, created.orderNo());
         return new WithdrawalFixture(
-                tenant.tenantId(), withdrawalId, orderId, orderNo, symbol, recipient, amount);
+                tenant.tenantId(), created.id(), orderId, created.orderNo(),
+                symbol, recipient, amount);
     }
 
     private void assertSharedConfirmedPayout(
@@ -513,6 +617,17 @@ class Evm7702ProductionFlowIntegrationTest {
         UUID tenantId = UUID.randomUUID();
         jdbc.update("insert into custody_tenant(id, slug, name, derivation_namespace) values (?, ?, ?, ?)",
                 tenantId, slug, slug, namespace);
+        UUID tenantAdminId = UUID.randomUUID();
+        jdbc.update("""
+                insert into custody_tenant_user(
+                    id, tenant_id, email, display_name, password_hash, role, status)
+                values (?, ?, ?, ?, 'integration-only', 'TENANT_ADMIN', 'ACTIVE')
+                """, tenantAdminId, tenantId, slug + "@example.invalid", slug + " admin");
+        jdbc.update("""
+                insert into custody_tenant_chain(
+                    tenant_id, chain, status, opened_by, opened_at)
+                values (?, ?, 'ACTIVE', ?, now())
+                """, tenantId, chain, tenantAdminId);
         ChainAddressRecord hotRecord = keyRecord(tenantId, userBase, namespace, 999L, "COLLECTION_GAS");
         long hotChainAddressId = insertChainAddress(hotRecord, tenantId);
         UUID hotCustodyId = insertCustodyAddress(
@@ -548,36 +663,19 @@ class Evm7702ProductionFlowIntegrationTest {
         return new TenantFixture(tenantId, hotRecord.getAddress(), List.copyOf(authorities));
     }
 
-    private void recordDeposit(AuthorityFixture authority, String token, String txHash) {
-        jdbc.update("""
-                insert into deposit_record(
-                    chain, asset_symbol, tx_hash, log_index, from_address, to_address,
-                    contract_address, amount, block_height, confirmations, status,
-                    credited, credited_at, tenant_id)
-                values (?, 'USDT', ?, 0, ?, ?, ?, ?, 1, 1, 'CREDITED', true, now(), ?)
-                """, chain, txHash, "0x0000000000000000000000000000000000000000",
-                authority.credentials().getAddress(), token, authority.amount(), authority.tenantId());
-        jdbc.update("""
-                insert into ledger_balance(
-                    chain, asset_symbol, account_id, available_balance,
-                    locked_balance, total_balance, tenant_id)
-                values (?, 'USDT', ?, ?, 0, ?, ?)
-                """, chain, authority.credentials().getAddress().toLowerCase(), authority.amount(),
-                authority.amount(), authority.tenantId());
-    }
-
-    private void createCollectionCandidates() {
+    private void createCollectionCandidates(String symbol, int expected) {
         List<CollectionCandidateRecord> candidates = chainRepository.listCollectableLedgerBalances(
                 chain, BigDecimal.ZERO, 20);
-        assertEquals(5, candidates.size());
-        assertTrue(candidates.stream().allMatch(candidate -> "USDT".equals(candidate.getAssetSymbol())));
+        assertEquals(expected, candidates.size());
+        assertTrue(candidates.stream().allMatch(
+                candidate -> symbol.equals(candidate.getAssetSymbol())));
         assertEquals(2, candidates.stream().map(CollectionCandidateRecord::getTenantId).distinct().count());
         for (CollectionCandidateRecord candidate : candidates) {
             String hotWallet = chainRepository.findActiveTenantCollectionAddress(
                     candidate.getTenantId(), candidate.getChain()).orElseThrow();
             assertEquals(1, chainRepository.createCollectionRecord(
                     candidate.getTenantId(), candidate.getCustodyAddressId(),
-                    "7702:" + candidate.getTenantId() + ":" + candidate.getAddress(),
+                    "7702:" + symbol + ":" + candidate.getTenantId() + ":" + candidate.getAddress(),
                     candidate.getChain(), candidate.getAssetSymbol(), candidate.getAddress(), hotWallet,
                     candidate.getAmount(), BigDecimal.ZERO, null));
         }
@@ -628,6 +726,38 @@ class Evm7702ProductionFlowIntegrationTest {
                 ((BigDecimal) fees.get("operator_fee_atomic")).toBigIntegerExact());
         assertEquals(l2Fee, ((BigDecimal) fees.get("total_fee_atomic")).toBigIntegerExact());
         assertEquals(0, actualFee.compareTo((BigDecimal) fees.get("actual_fee")));
+    }
+
+    private String collectionTx(UUID tenantId, String symbol) {
+        return jdbc.queryForObject("""
+                select canonical_tx_hash from evm_collection_batch
+                 where tenant_id = ? and asset_symbol = ? and status = 'CONFIRMED'
+                """, String.class, tenantId, symbol);
+    }
+
+    private void assertAssetCollectionBatch(
+            Web3j web3j, TenantFixture tenant, String symbol, String txHash,
+            List<AuthorityFixture> authorities) throws Exception {
+        assertEquals(1, jdbc.queryForObject("""
+                select count(*) from evm_collection_batch
+                 where tenant_id = ? and asset_symbol = ? and canonical_tx_hash = ?
+                   and status = 'CONFIRMED'
+                """, Integer.class, tenant.tenantId(), symbol, txHash));
+        assertEquals(authorities.size(), jdbc.queryForObject("""
+                select count(*)
+                  from evm_collection_batch_item item
+                  join evm_collection_batch batch
+                    on batch.tenant_id = item.tenant_id and batch.id = item.batch_id
+                 where batch.tenant_id = ? and batch.asset_symbol = ?
+                   and batch.canonical_tx_hash = ? and item.status = 'CONFIRMED'
+                """, Integer.class, tenant.tenantId(), symbol, txHash));
+        BigInteger expected = authorities.stream()
+                .map(AuthorityFixture::amountAtomic).reduce(BigInteger.ZERO, BigInteger::add);
+        assertEquals(expected, tokenBalance(web3j, tenant.hotWallet(), symbol));
+        for (AuthorityFixture authority : authorities) {
+            assertEquals(BigInteger.ZERO,
+                    tokenBalance(web3j, authority.credentials().getAddress(), symbol));
+        }
     }
 
     private int batchCount(UUID tenantId) {
@@ -691,12 +821,12 @@ class Evm7702ProductionFlowIntegrationTest {
         return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(key.getPrivKey(), 64));
     }
 
-    private Deployment deployMockToken(Web3j web3j, BigInteger nonce) throws Exception {
+    private Deployment deployMockToken(Web3j web3j, BigInteger nonce, String symbol) throws Exception {
         JsonNode artifact = new ObjectMapper().readTree(Files.readString(projectRoot().resolve(
                 "evm-fork/artifacts/contracts/MockERC20.sol/MockERC20.json")));
         String bytecode = artifact.path("bytecode").asText();
         String constructor = FunctionEncoder.encodeConstructor(List.of(
-                new Utf8String("Test USD"), new Utf8String("USDT"), new Uint8(6)));
+                new Utf8String("Test " + symbol), new Utf8String(symbol), new Uint8(6)));
         RawTransaction raw = RawTransaction.createContractTransaction(
                 nonce, GAS_PRICE, BigInteger.valueOf(5_000_000L), BigInteger.ZERO,
                 bytecode + Numeric.cleanHexPrefix(constructor));
@@ -750,9 +880,13 @@ class Evm7702ProductionFlowIntegrationTest {
     }
 
     private BigInteger tokenBalance(Web3j web3j, String owner) throws Exception {
+        return tokenBalance(web3j, owner, "USDT");
+    }
+
+    private BigInteger tokenBalance(Web3j web3j, String owner, String symbol) throws Exception {
         String token = jdbc.queryForObject(
-                "select contract_address from token_config where chain = ? and symbol = 'USDT' and network = 'local'",
-                String.class, chain);
+                "select contract_address from token_config where chain = ? and symbol = ? and network = 'local'",
+                String.class, chain, symbol);
         Function function = new Function(
                 "balanceOf", List.of(new Address(owner)), List.of(new TypeReferenceUint256()));
         EthCall call = web3j.ethCall(Transaction.createEthCallTransaction(

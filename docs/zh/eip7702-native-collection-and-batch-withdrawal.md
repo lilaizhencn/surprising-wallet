@@ -75,7 +75,8 @@
 
 ### 4.2 批量提币
 
-1. API/Console 创建 `custody_withdrawal` 和 `withdrawal_order`，冻结客户资产并预留单笔 Gas。
+1. API/Console 创建 `custody_withdrawal` 和 `withdrawal_order`，冻结客户资产，并从租户链级 Gas 账户预留单笔 Gas；
+   客户充值地址不需要持有原生币。
 2. worker 等待 `withdrawal_max_wait_ms`，或发现同组已有两笔订单后立即组批。
 3. 按 `tenant + chain + asset + hot_wallet` 锁定最多 `withdrawal_max_batch_items` 笔订单。
 4. 检查租户热钱包真实链上余额足以覆盖批次总额。
@@ -185,10 +186,13 @@ VALUES (
 
 本地 Hardhat Prague + PostgreSQL 测试覆盖：
 
-- Token 和原生币真实充值；
+- ETH、USDT、USDC 真实链上充值，并由 `EvmDepositScanner` 扫描、
+  `CustodyDepositCreditObserver` 生成租户充值记录、账本流水和事件；
 - 委托前后继续接收原生币；
-- 多充值地址原生币/Token 批量归集；
-- 多笔 Token 提币共享一个 tx hash；
+- 多充值地址 ETH、USDT、USDC 批量归集；
+- 通过 `CustodyWithdrawalService` 的 API 幂等业务路径创建提现；
+- 多笔 USDT、USDC 提币分别共享一个 tx hash；
+- 只有 Token、没有 ETH 的客户充值地址也能正常申请提现，网络费始终由租户链级 Gas 账户预留和结算；
 - 原生币某个 item 失败、其他 item 继续成功；
 - 修复收款条件后只重试失败订单；
 - 广播响应丢失后解密并重发完全相同的 raw transaction；

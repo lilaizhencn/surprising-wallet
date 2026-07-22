@@ -312,7 +312,7 @@ class CustodyOperationsIntegrationTest {
     }
 
     @Test
-    void gasReservationSettlesConfirmedFeeAndPreservesAuditTrail() {
+    void gasReservationUsesTenantGasAccountAndPreservesAuditTrail() {
         transactions.executeWithoutResult(status -> {
             CustodyRepository repository = new CustodyRepository(jdbc);
             UUID tenantId = createTenant();
@@ -354,19 +354,45 @@ class CustodyOperationsIntegrationTest {
                         available_balance, locked_balance, total_balance)
                     values (?, 'ETH', 'ETH', ?, 1, 0, 1)
                     """, tenantId, accountId);
+            UUID customerAddressId = UUID.randomUUID();
+            String customerAccountId = "0x" + UUID.randomUUID().toString().replace("-", "")
+                    + "87654321";
+            Long customerChainAddressId = jdbc.queryForObject("""
+                    insert into chain_address(
+                        tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                        address, derivation_path, wallet_role, enabled)
+                    values (?, 'ETH', 'ETH', ?, ?, ?, 1, ?, ?, 'DEPOSIT', true)
+                    returning id
+                    """, Long.class, tenantId, customerAccountId,
+                    Integer.toUnsignedLong(subject + 1), namespace, customerAccountId,
+                    "m/44'/60'/" + namespace + "'/" + (subject + 1) + "/1");
+            jdbc.update("""
+                    insert into custody_address(
+                        id, tenant_id, chain_address_id, chain, network, address,
+                        subject, source, derivation_subject, derivation_child)
+                    values (?, ?, ?, 'ETH', 'qa', ?, 'customer-without-eth',
+                            'CONSOLE', ?, 1)
+                    """, customerAddressId, tenantId, customerChainAddressId,
+                    customerAccountId, subject + 1);
+            jdbc.update("""
+                    insert into ledger_balance(
+                        tenant_id, chain, asset_symbol, account_id,
+                        available_balance, locked_balance, total_balance)
+                    values (?, 'ETH', 'USDT', ?, 0, 0.25, 0.25)
+                    """, tenantId, customerAccountId);
             String orderNo = "CW-QA-" + UUID.randomUUID().toString().substring(0, 8);
             String txHash = "0x" + UUID.randomUUID().toString().replace("-", "");
             jdbc.update("""
                     insert into withdrawal_order(
                         tenant_id, order_no, user_id, chain, asset_symbol, from_address,
                         debit_account_id, to_address, amount, fee, status, tx_hash)
-                    values (?, ?, ?, 'ETH', 'ETH', ?, ?, ?, 0.25, 0,
+                    values (?, ?, ?, 'ETH', 'USDT', ?, ?, ?, 0.25, 0,
                             'CONFIRMED', ?)
                     """, tenantId, orderNo, Integer.toUnsignedLong(subject), accountId,
-                    accountId, accountId, txHash);
+                    customerAccountId, accountId, txHash);
             repository.insertCustodyWithdrawal(
-                    withdrawalId, tenantId, addressId, orderNo, null, null,
-                    "ETH", "ETH", accountId, new BigDecimal("0.25"),
+                    withdrawalId, tenantId, customerAddressId, orderNo, null, null,
+                    "ETH", "USDT", accountId, new BigDecimal("0.25"),
                     BigDecimal.ZERO, "FROZEN", "CONSOLE", "qa");
             repository.reserveGasUsage(
                     tenantId, withdrawalId, orderNo, "ETH", new BigDecimal("0.1"));
@@ -374,7 +400,7 @@ class CustodyOperationsIntegrationTest {
                     insert into evm_tx(
                         chain, tx_hash, from_address, to_address, asset_symbol,
                         amount, fee, confirmations, status)
-                    values ('ETH', ?, ?, ?, 'ETH', 0.25, 0.04, 12, 'CONFIRMED')
+                    values ('ETH', ?, ?, ?, 'USDT', 0.25, 0.04, 12, 'CONFIRMED')
                     """, txHash, accountId, accountId);
 
             var change = repository.findWithdrawalStatusChanges(10).stream()
@@ -395,6 +421,10 @@ class CustodyOperationsIntegrationTest {
                     select count(*) from custody_ledger_entry
                      where tenant_id = ? and entry_type = 'NETWORK_FEE'
                     """, Integer.class, tenantId));
+            assertEquals(accountId, jdbc.queryForObject("""
+                    select account_id from custody_ledger_entry
+                     where tenant_id = ? and entry_type = 'NETWORK_FEE'
+                    """, String.class, tenantId));
             status.setRollbackOnly();
         });
     }
