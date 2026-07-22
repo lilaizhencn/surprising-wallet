@@ -62,7 +62,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Hardhat Prague + PostgreSQL production-path test with two isolated tenants. */
 class Evm7702ProductionFlowIntegrationTest {
     private static final String RPC = "http://127.0.0.1:8545";
-    private static final long CHAIN_ID = 31337L;
     private static final BigInteger GAS_PRICE = BigInteger.valueOf(2_000_000_000L);
     private static final Credentials HARDHAT_ADMIN = Credentials.create(
             "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
@@ -73,29 +72,35 @@ class Evm7702ProductionFlowIntegrationTest {
     private AccountChainProfile profile;
     private Evm7702CollectionRepository collectionRepository;
     private Evm7702CollectionWorkflowService workflow;
+    private String chain;
+    private String nativeSymbol;
+    private long chainId;
 
     @BeforeEach
     void setUp() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("evm.7702.production.enabled"),
                 "start Hardhat Prague, deploy the 7702 contracts, and set the integration properties");
+        chain = System.getProperty("evm.7702.test.chain", "ETH").trim().toUpperCase(java.util.Locale.ROOT);
+        chainId = Long.parseLong(System.getProperty("evm.7702.test.chain-id", "31337"));
         DriverManagerDataSource dataSource = CustodyIntegrationDatabase.dataSource();
         CustodyIntegrationDatabase.reset(dataSource);
         jdbc = new JdbcTemplate(dataSource);
         chainRepository = new ChainJdbcRepository(jdbc);
-        jdbc.update("update chain_profile set network = 'local', chain_id = ?, withdraw_confirmations = 1 where chain = 'ETH' and enabled = true",
-                CHAIN_ID);
-        jdbc.update("update token_config set network = 'local' where chain = 'ETH' and enabled = true");
+        jdbc.update("update chain_profile set network = 'local', chain_id = ?, withdraw_confirmations = 1 where chain = ? and enabled = true",
+                chainId, chain);
+        jdbc.update("update token_config set network = 'local' where chain = ? and enabled = true", chain);
         jdbc.update("""
                 insert into chain_rpc_node(
                     id, chain, network, environment, node_label, purpose,
                     connection_type, rpc_url, priority, min_request_interval_ms, enabled)
-                values (9901, 'ETH', 'local', 'eip7702-test', 'hardhat-prague',
+                values (9901, ?, 'local', 'eip7702-test', 'hardhat-prague',
                         'rpc', 'HTTP_JSON_RPC', ?, 1, 0, true)
-                """, RPC);
+                """, chain, RPC);
         saveTestKeyset(jdbc);
         keyService = new AccountSecp256k1KeyService(new WalletKeyMaterialProvider(
                 new WalletKeyConfigStore(jdbc), WalletKeyMaterialProvider.Mode.WALLET_SERVER));
-        profile = chainRepository.findProfileByChain("ETH").orElseThrow();
+        profile = chainRepository.findProfileByChain(chain).orElseThrow();
+        nativeSymbol = profile.getNativeSymbol();
 
         ChainRpcNodeService rpcNodes = new ChainRpcNodeService(chainRepository);
         setField(rpcNodes, "environmentName", "eip7702-test");
@@ -143,18 +148,20 @@ class Evm7702ProductionFlowIntegrationTest {
                         relayer_chain_address_id, relayer_address, status,
                         max_batch_items, max_batch_gas, block_gas_ratio,
                         gas_limit_multiplier, signature_ttl_seconds, required_confirmations)
-                    values (?, 'ETH', 'local', ?, 1, ?, ?, ?, ?, ?, ?, 'ACTIVE',
+                    values (?, ?, 'local', ?, 1, ?, ?, ?, ?, ?, ?, 'ACTIVE',
                             10, 5000000, 0.5000, 1.2000, 900, 1)
-                    """, UUID.randomUUID(), CHAIN_ID, delegate, delegateHash,
+                    """, UUID.randomUUID(), chain, chainId, delegate, delegateHash,
                     collector, collectorHash, relayerChainAddressId, relayer.getAddress());
+            assertEquals(List.of(new Evm7702CollectionRepository.RuntimeTarget(chain, "local", true)),
+                    collectionRepository.listRuntimeTargets());
             jdbc.update("""
                     update token_config set contract_address = ?, contract_address_hex = ?,
                            decimals = 6, standard = 'ERC20', token_standard = 'ERC20',
                            collect_enabled = true
-                     where chain = 'ETH' and symbol = 'USDT' and network = 'local'
-                    """, token.address(), token.address());
-            jdbc.update("update chain_asset set contract_address = ?, decimals = 6 where chain = 'ETH' and symbol = 'USDT'",
-                    token.address());
+                     where chain = ? and symbol = 'USDT' and network = 'local'
+                    """, token.address(), token.address(), chain);
+            jdbc.update("update chain_asset set contract_address = ?, decimals = 6 where chain = ? and symbol = 'USDT'",
+                    token.address(), chain);
 
             TenantFixture tenantA = createTenant("tenant-7702-a", 8101, 3, 1000L);
             TenantFixture tenantB = createTenant("tenant-7702-b", 8102, 2, 2000L);
@@ -167,8 +174,8 @@ class Evm7702ProductionFlowIntegrationTest {
             }
             createCollectionCandidates();
 
-            jdbc.update("update evm_7702_config set delegate_code_hash = ? where chain = 'ETH' and network = 'local'",
-                    "0x" + "00".repeat(32));
+            jdbc.update("update evm_7702_config set delegate_code_hash = ? where chain = ? and network = 'local'",
+                    "0x" + "00".repeat(32), chain);
             assertThrows(IllegalStateException.class, () -> workflow.processOne(profile));
             assertEquals(1, jdbc.queryForObject("""
                     select count(*) from evm_collection_batch
@@ -178,8 +185,8 @@ class Evm7702ProductionFlowIntegrationTest {
                     select count(*) from evm_collection_batch_item
                      where tenant_id = ? and status = 'RETRYABLE'
                     """, Integer.class, tenantA.tenantId()));
-            jdbc.update("update evm_7702_config set delegate_code_hash = ? where chain = 'ETH' and network = 'local'",
-                    delegateHash);
+            jdbc.update("update evm_7702_config set delegate_code_hash = ? where chain = ? and network = 'local'",
+                    delegateHash, chain);
 
             String tenantATx = workflow.processOne(profile).orElseThrow();
             assertEquals(2, batchCount(tenantA.tenantId()));
@@ -245,14 +252,14 @@ class Evm7702ProductionFlowIntegrationTest {
         jdbc.update("""
                 insert into custody_gas_account(
                     id, tenant_id, custody_address_id, chain, network, native_symbol, status)
-                values (?, ?, ?, 'ETH', 'local', 'ETH', 'ACTIVE')
-                """, gasAccountId, tenantId, hotCustodyId);
+                values (?, ?, ?, ?, 'local', ?, 'ACTIVE')
+                """, gasAccountId, tenantId, hotCustodyId, chain, nativeSymbol);
         jdbc.update("""
                 insert into ledger_balance(
                     chain, asset_symbol, account_id, available_balance,
                     locked_balance, total_balance, tenant_id)
-                values ('ETH', 'ETH', ?, 1, 0, 1, ?)
-                """, hotRecord.getAddress().toLowerCase(), tenantId);
+                values (?, ?, ?, 1, 0, 1, ?)
+                """, chain, nativeSymbol, hotRecord.getAddress().toLowerCase(), tenantId);
 
         ArrayList<AuthorityFixture> authorities = new ArrayList<>();
         for (int index = 0; index < itemCount; index++) {
@@ -263,7 +270,7 @@ class Evm7702ProductionFlowIntegrationTest {
             UUID custodyId = insertCustodyAddress(
                     tenantId, chainAddressId, credentials.getAddress(), slug + "-user-" + index, index);
             collectionRepository.createAccountProjection(
-                    tenantId, custodyId, "ETH", "local", credentials.getAddress());
+                    tenantId, custodyId, chain, "local", credentials.getAddress());
             BigInteger amount = BigInteger.valueOf((index + 1L) * 10_000_000L);
             authorities.add(new AuthorityFixture(
                     tenantId, custodyId, record, credentials, amount,
@@ -278,21 +285,21 @@ class Evm7702ProductionFlowIntegrationTest {
                     chain, asset_symbol, tx_hash, log_index, from_address, to_address,
                     contract_address, amount, block_height, confirmations, status,
                     credited, credited_at, tenant_id)
-                values ('ETH', 'USDT', ?, 0, ?, ?, ?, ?, 1, 1, 'CREDITED', true, now(), ?)
-                """, txHash, "0x0000000000000000000000000000000000000000",
+                values (?, 'USDT', ?, 0, ?, ?, ?, ?, 1, 1, 'CREDITED', true, now(), ?)
+                """, chain, txHash, "0x0000000000000000000000000000000000000000",
                 authority.credentials().getAddress(), token, authority.amount(), authority.tenantId());
         jdbc.update("""
                 insert into ledger_balance(
                     chain, asset_symbol, account_id, available_balance,
                     locked_balance, total_balance, tenant_id)
-                values ('ETH', 'USDT', ?, ?, 0, ?, ?)
-                """, authority.credentials().getAddress().toLowerCase(), authority.amount(),
+                values (?, 'USDT', ?, ?, 0, ?, ?)
+                """, chain, authority.credentials().getAddress().toLowerCase(), authority.amount(),
                 authority.amount(), authority.tenantId());
     }
 
     private void createCollectionCandidates() {
         List<CollectionCandidateRecord> candidates = chainRepository.listCollectableLedgerBalances(
-                "ETH", BigDecimal.ZERO, 20);
+                chain, BigDecimal.ZERO, 20);
         assertEquals(5, candidates.size());
         assertTrue(candidates.stream().allMatch(candidate -> "USDT".equals(candidate.getAssetSymbol())));
         assertEquals(2, candidates.stream().map(CollectionCandidateRecord::getTenantId).distinct().count());
@@ -356,9 +363,10 @@ class Evm7702ProductionFlowIntegrationTest {
                 insert into chain_address(
                     chain, asset_symbol, account_id, user_id, biz, address_index,
                     address, owner_address, derivation_path, wallet_role, enabled, tenant_id)
-                values ('ETH', 'ETH', ?, ?, ?, ?, ?, ?, ?, ?, true, ?)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, ?)
                 returning id
-                """, Long.class, record.getAddress().toLowerCase(), record.getUserId(), record.getBiz(),
+                """, Long.class, chain, nativeSymbol, record.getAddress().toLowerCase(),
+                record.getUserId(), record.getBiz(),
                 record.getAddressIndex(), record.getAddress(), record.getAddress(), record.getDerivationPath(),
                 record.getWalletRole(), tenantId);
     }
@@ -370,8 +378,8 @@ class Evm7702ProductionFlowIntegrationTest {
                 insert into custody_address(
                     id, tenant_id, chain_address_id, chain, network, address,
                     subject, source, derivation_subject, derivation_child)
-                values (?, ?, ?, 'ETH', 'local', ?, ?, 'CONSOLE', ?, ?)
-                """, id, tenantId, chainAddressId, address, subject,
+                values (?, ?, ?, ?, 'local', ?, ?, 'CONSOLE', ?, ?)
+                """, id, tenantId, chainAddressId, chain, address, subject,
                 Math.toIntExact(100_000L + child + Math.abs(subject.hashCode() % 10_000)), child);
         return id;
     }
@@ -379,7 +387,7 @@ class Evm7702ProductionFlowIntegrationTest {
     private ChainAddressRecord keyRecord(UUID tenantId, long userId, int biz,
                                          long index, String role) {
         ChainAddressRecord template = ChainAddressRecord.builder()
-                .chain("ETH").assetSymbol("ETH").userId(userId).biz(biz)
+                .chain(chain).assetSymbol(nativeSymbol).userId(userId).biz(biz)
                 .addressIndex(index).walletRole(role).enabled(true)
                 .derivationPath("m/44/60/" + biz + "/" + userId + "/" + index).build();
         Credentials credentials = credentials(template);
@@ -394,7 +402,7 @@ class Evm7702ProductionFlowIntegrationTest {
         return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(key.getPrivKey(), 64));
     }
 
-    private static Deployment deployMockToken(Web3j web3j, BigInteger nonce) throws Exception {
+    private Deployment deployMockToken(Web3j web3j, BigInteger nonce) throws Exception {
         JsonNode artifact = new ObjectMapper().readTree(Files.readString(projectRoot().resolve(
                 "evm-fork/artifacts/contracts/MockERC20.sol/MockERC20.json")));
         String bytecode = artifact.path("bytecode").asText();
@@ -407,20 +415,20 @@ class Evm7702ProductionFlowIntegrationTest {
         return new Deployment(receipt.getContractAddress());
     }
 
-    private static TransactionReceipt sendLegacyCall(
+    private TransactionReceipt sendLegacyCall(
             Web3j web3j, BigInteger nonce, String to, String data) throws Exception {
         return sendRaw(web3j, RawTransaction.createTransaction(
                 nonce, GAS_PRICE, BigInteger.valueOf(800_000L), to, BigInteger.ZERO, data));
     }
 
-    private static TransactionReceipt sendLegacyNative(
+    private TransactionReceipt sendLegacyNative(
             Web3j web3j, BigInteger nonce, String to, BigInteger value) throws Exception {
         return sendRaw(web3j, RawTransaction.createEtherTransaction(
                 nonce, GAS_PRICE, BigInteger.valueOf(21_000L), to, value));
     }
 
-    private static TransactionReceipt sendRaw(Web3j web3j, RawTransaction raw) throws Exception {
-        byte[] signed = TransactionEncoder.signMessage(raw, CHAIN_ID, HARDHAT_ADMIN);
+    private TransactionReceipt sendRaw(Web3j web3j, RawTransaction raw) throws Exception {
+        byte[] signed = TransactionEncoder.signMessage(raw, chainId, HARDHAT_ADMIN);
         EthSendTransaction response = web3j.ethSendRawTransaction(Numeric.toHexString(signed)).send();
         assertFalse(response.hasError(), response.hasError() ? response.getError().getMessage() : "");
         return waitReceipt(web3j, response.getTransactionHash());
@@ -432,8 +440,9 @@ class Evm7702ProductionFlowIntegrationTest {
     }
 
     private BigInteger tokenBalance(Web3j web3j, String owner) throws Exception {
-        String token = jdbc.queryForObject("select contract_address from token_config where chain = 'ETH' and symbol = 'USDT' and network = 'local'",
-                String.class);
+        String token = jdbc.queryForObject(
+                "select contract_address from token_config where chain = ? and symbol = 'USDT' and network = 'local'",
+                String.class, chain);
         Function function = new Function(
                 "balanceOf", List.of(new Address(owner)), List.of(new TypeReferenceUint256()));
         EthCall call = web3j.ethCall(Transaction.createEthCallTransaction(

@@ -48,7 +48,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class Evm7702Type4IntegrationTest {
     private static final String RPC = "http://127.0.0.1:8545";
-    private static final long CHAIN_ID = 31337L;
     private static final Credentials RELAYER = Credentials.create(
             "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
     private static final BigInteger GAS_PRICE = BigInteger.valueOf(2_000_000_000L);
@@ -59,16 +58,17 @@ class Evm7702Type4IntegrationTest {
                 "set -Devm.7702.enabled=true and start the Hardhat Prague node");
         String collector = requiredProperty("evm.7702.collector");
         String delegate = requiredProperty("evm.7702.delegate");
+        long chainId = Long.parseLong(System.getProperty("evm.7702.chain-id", "31337"));
 
         Web3j web3j = Web3j.build(new HttpService(RPC));
         try {
-            assertEquals(BigInteger.valueOf(CHAIN_ID), web3j.ethChainId().send().getChainId());
+            assertEquals(BigInteger.valueOf(chainId), web3j.ethChainId().send().getChainId());
             assertFalse(web3j.ethGetCode(collector, DefaultBlockParameterName.LATEST).send().getCode().equals("0x"));
             assertFalse(web3j.ethGetCode(delegate, DefaultBlockParameterName.LATEST).send().getCode().equals("0x"));
 
             BigInteger relayerNonce = web3j.ethGetTransactionCount(
                     RELAYER.getAddress(), DefaultBlockParameterName.PENDING).send().getTransactionCount();
-            Deployment token = deployMockToken(web3j, relayerNonce);
+            Deployment token = deployMockToken(web3j, relayerNonce, chainId);
             relayerNonce = relayerNonce.add(BigInteger.ONE);
 
             List<Credentials> authorities = List.of(
@@ -79,7 +79,8 @@ class Evm7702Type4IntegrationTest {
                     BigInteger.valueOf(33_000_000L));
             for (int i = 0; i < authorities.size(); i++) {
                 TransactionReceipt mint = sendLegacyCall(
-                        web3j, relayerNonce, token.address(), encodeMint(authorities.get(i).getAddress(), amounts.get(i)));
+                        web3j, relayerNonce, token.address(),
+                        encodeMint(authorities.get(i).getAddress(), amounts.get(i)), chainId);
                 assertEquals("0x1", mint.getStatus());
                 relayerNonce = relayerNonce.add(BigInteger.ONE);
                 assertEquals(BigInteger.ZERO, web3j.ethGetBalance(
@@ -102,18 +103,18 @@ class Evm7702Type4IntegrationTest {
                         token.address(), RELAYER.getAddress(), amounts.get(i), BigInteger.ZERO,
                         deadline, BigInteger.valueOf(180_000L));
                 requests.add(request);
-                signatures.add(operationSigner.sign(BigInteger.valueOf(CHAIN_ID), request, authority));
+                signatures.add(operationSigner.sign(BigInteger.valueOf(chainId), request, authority));
                 BigInteger authorityNonce = web3j.ethGetTransactionCount(
                         authority.getAddress(), DefaultBlockParameterName.PENDING).send().getTransactionCount();
                 assertEquals(BigInteger.ZERO, authorityNonce);
                 authorizations.add(authorizationService.authorize(
-                        BigInteger.valueOf(CHAIN_ID), delegate, authorityNonce, authority));
+                        BigInteger.valueOf(chainId), delegate, authorityNonce, authority));
             }
 
             String calldata = new Evm7702ContractCodec().encodeCollectBatch(requests, signatures);
             Evm7702BatchTransactionService.SignedType4Transaction signed =
                     new Evm7702BatchTransactionService().sign(
-                            CHAIN_ID, relayerNonce, BigInteger.valueOf(1_000_000_000L),
+                            chainId, relayerNonce, BigInteger.valueOf(1_000_000_000L),
                             BigInteger.valueOf(4_000_000_000L), BigInteger.valueOf(1_500_000L),
                             collector, calldata, authorizations, RELAYER);
             EthSendTransaction response = web3j.ethSendRawTransaction(signed.rawTransaction()).send();
@@ -146,7 +147,8 @@ class Evm7702Type4IntegrationTest {
         }
     }
 
-    private static Deployment deployMockToken(Web3j web3j, BigInteger nonce) throws Exception {
+    private static Deployment deployMockToken(
+            Web3j web3j, BigInteger nonce, long chainId) throws Exception {
         Path artifact = projectRoot().resolve(
                 "evm-fork/artifacts/contracts/MockERC20.sol/MockERC20.json");
         JsonNode json = new ObjectMapper().readTree(Files.readString(artifact));
@@ -157,7 +159,7 @@ class Evm7702Type4IntegrationTest {
         RawTransaction raw = RawTransaction.createContractTransaction(
                 nonce, GAS_PRICE, BigInteger.valueOf(5_000_000L), BigInteger.ZERO,
                 bytecode + Numeric.cleanHexPrefix(constructor));
-        byte[] signed = TransactionEncoder.signMessage(raw, CHAIN_ID, RELAYER);
+        byte[] signed = TransactionEncoder.signMessage(raw, chainId, RELAYER);
         EthSendTransaction response = web3j.ethSendRawTransaction(Numeric.toHexString(signed)).send();
         assertFalse(response.hasError(), response.hasError() ? response.getError().getMessage() : "");
         TransactionReceipt receipt = waitReceipt(web3j, response.getTransactionHash());
@@ -166,11 +168,12 @@ class Evm7702Type4IntegrationTest {
         return new Deployment(receipt.getContractAddress());
     }
 
-    private static TransactionReceipt sendLegacyCall(Web3j web3j, BigInteger nonce, String to, String data)
+    private static TransactionReceipt sendLegacyCall(
+            Web3j web3j, BigInteger nonce, String to, String data, long chainId)
             throws Exception {
         RawTransaction raw = RawTransaction.createTransaction(
                 nonce, GAS_PRICE, BigInteger.valueOf(500_000L), to, BigInteger.ZERO, data);
-        byte[] signed = TransactionEncoder.signMessage(raw, CHAIN_ID, RELAYER);
+        byte[] signed = TransactionEncoder.signMessage(raw, chainId, RELAYER);
         EthSendTransaction response = web3j.ethSendRawTransaction(Numeric.toHexString(signed)).send();
         assertFalse(response.hasError(), response.hasError() ? response.getError().getMessage() : "");
         return waitReceipt(web3j, response.getTransactionHash());

@@ -64,6 +64,27 @@ public class Evm7702CollectionRepository {
                         "EIP-7702 ACTIVE configuration is missing for " + chain + "/" + network));
     }
 
+    public List<RuntimeTarget> listRuntimeTargets() {
+        return jdbc.query("""
+                select p.chain, p.network,
+                       exists(select 1 from evm_7702_config active
+                               where active.chain = p.chain and active.network = p.network
+                                 and active.status = 'ACTIVE') active
+                  from chain_profile p
+                 where p.enabled = true and lower(p.family) = 'evm'
+                   and (
+                     exists(select 1 from evm_7702_config c
+                             where c.chain = p.chain and c.network = p.network
+                               and c.status in ('ACTIVE', 'PAUSED'))
+                     or exists(select 1 from evm_collection_batch b
+                                where b.chain = p.chain and b.network = p.network
+                                  and b.status in ('BROADCAST_UNKNOWN', 'SUBMITTED', 'CONFIRMING'))
+                   )
+                 order by p.chain, p.network
+                """, (rs, rowNum) -> new RuntimeTarget(
+                rs.getString("chain"), rs.getString("network"), rs.getBoolean("active")));
+    }
+
     public List<UnknownAttempt> listUnknownAttempts(String chain, String network, int limit) {
         return jdbc.query("""
                 select b.tenant_id, b.id batch_id, a.tx_hash,
@@ -159,6 +180,7 @@ public class Evm7702CollectionRepository {
                                cr.tenant_id, cr.custody_address_id, cr.from_address,
                                cr.to_address, cr.amount,
                                chain_address.id chain_address_id,
+                               chain_address.chain native_chain,
                                chain_address.asset_symbol native_symbol,
                                chain_address.account_id, chain_address.user_id,
                                chain_address.biz, chain_address.address_index,
@@ -537,7 +559,7 @@ public class Evm7702CollectionRepository {
         }
         ChainAddressRecord authority = ChainAddressRecord.builder()
                 .id(rs.getLong("chain_address_id"))
-                .chain("ETH")
+                .chain(rs.getString("native_chain"))
                 .assetSymbol(rs.getString("native_symbol"))
                 .accountId(rs.getString("account_id"))
                 .userId(rs.getLong("user_id"))
@@ -608,6 +630,9 @@ public class Evm7702CollectionRepository {
     public record UnknownAttempt(
             UUID tenantId, UUID batchId, String txHash,
             String signedTxCiphertext, int rebroadcastCount) {
+    }
+
+    public record RuntimeTarget(String chain, String network, boolean active) {
     }
 
     public record BatchItemIdentity(

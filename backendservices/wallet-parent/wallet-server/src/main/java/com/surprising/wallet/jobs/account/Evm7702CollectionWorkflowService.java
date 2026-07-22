@@ -50,15 +50,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Production ETH EIP-7702 token collection worker. */
+/** Production multi-network EVM EIP-7702 token collection worker. */
 @Service
 public class Evm7702CollectionWorkflowService {
     private static final Logger log = LoggerFactory.getLogger(Evm7702CollectionWorkflowService.class);
-    private static final String CHAIN = "ETH";
     private static final BigInteger MIN_ITEM_GAS = BigInteger.valueOf(60_000L);
     private static final BigInteger DEFAULT_ITEM_GAS = BigInteger.valueOf(180_000L);
     private static final BigInteger ONE_GWEI = BigInteger.valueOf(1_000_000_000L);
-    private static final BigDecimal WEI_PER_ETH = new BigDecimal("1000000000000000000");
+    private static final BigDecimal WEI_PER_NATIVE = new BigDecimal("1000000000000000000");
 
     private final Evm7702CollectionRepository repository;
     private final Evm7702CollectionCoordinator coordinator;
@@ -92,15 +91,23 @@ public class Evm7702CollectionWorkflowService {
     public void run() {
         if (!running.compareAndSet(false, true)) return;
         try {
-            AccountChainProfile profile = chainRepository.findProfileByChain(CHAIN).orElse(null);
-            if (profile == null || !"evm".equalsIgnoreCase(profile.getFamily())) return;
-            recoverUnknown(profile);
-            confirm(profile);
-            if (repository.findRuntimeConfig(CHAIN, profile.getNetwork(), "ACTIVE").isPresent()) {
-                processOne(profile);
+            for (Evm7702CollectionRepository.RuntimeTarget target : repository.listRuntimeTargets()) {
+                try {
+                    AccountChainProfile profile = chainRepository.findProfileByChain(target.chain())
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "enabled EVM profile is missing for " + target.chain()));
+                    if (!"evm".equalsIgnoreCase(profile.getFamily())
+                            || !profile.getNetwork().equalsIgnoreCase(target.network())) {
+                        throw new IllegalStateException("EIP-7702 target/profile network mismatch");
+                    }
+                    recoverUnknown(profile);
+                    confirm(profile);
+                    if (target.active()) processOne(profile);
+                } catch (RuntimeException e) {
+                    log.error("EIP-7702 collection cycle failed for {}/{}: {}",
+                            target.chain(), target.network(), e.getMessage(), e);
+                }
             }
-        } catch (RuntimeException e) {
-            log.error("ETH EIP-7702 collection cycle failed: {}", e.getMessage(), e);
         } finally {
             running.set(false);
         }
@@ -169,7 +176,7 @@ public class Evm7702CollectionWorkflowService {
                 Prepared prepared = prepare(web3j, http, profile, batch);
                 BigDecimal reservedFee = new BigDecimal(
                         prepared.gasLimit().multiply(prepared.maxFeePerGas()))
-                        .divide(WEI_PER_ETH, 18, RoundingMode.UP).stripTrailingZeros();
+                        .divide(WEI_PER_NATIVE, 18, RoundingMode.UP).stripTrailingZeros();
                 Evm7702BatchTransactionService.SignedBatchTransaction signed =
                         coordinator.persistSignedAttempt(
                                 batch, prepared.relayer().getAddress(), prepared.rpcPendingNonce(),
@@ -422,7 +429,10 @@ public class Evm7702CollectionWorkflowService {
 
     private ChainRpcNode requireRpcNode(AccountChainProfile profile) {
         List<ChainRpcNode> nodes = rpcNodes.enabledNodes(profile.getChain(), profile.getNetwork(), "rpc");
-        if (nodes.isEmpty()) throw new IllegalStateException("no enabled ETH RPC node");
+        if (nodes.isEmpty()) {
+            throw new IllegalStateException("no enabled RPC node for "
+                    + profile.getChain() + "/" + profile.getNetwork());
+        }
         return nodes.getFirst();
     }
 
