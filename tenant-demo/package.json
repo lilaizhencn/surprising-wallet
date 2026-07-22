@@ -5,12 +5,16 @@
   "type": "module",
   "description": "A small exchange-style tenant application for end-to-end Surprising Wallet validation.",
   "scripts": {
-    "start": "node --disable-warning=ExperimentalWarning src/server.js",
-    "test": "node --disable-warning=ExperimentalWarning --test",
+    "start": "node src/server.js",
+    "test": "bash scripts/test-local-pg.sh",
+    "test:node": "node --test",
     "bootstrap:tenant": "node scripts/bootstrap-tenant.js",
     "verify:running": "node scripts/verify-running.js"
   },
   "engines": {
-    "node": ">=22.5"
+    "node": ">=18"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
   }
 }

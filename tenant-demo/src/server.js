@@ -11,8 +11,7 @@ const moduleDir = dirname(fileURLToPath(import.meta.url));
 const projectDir = dirname(moduleDir);
 const publicDir = join(projectDir, "public");
 const port = Number(process.env.TENANT_DEMO_PORT ?? 9300);
-const databaseFile = process.env.TENANT_DEMO_DB ?? join(projectDir, "data", "tenant-demo.db");
-const store = new DemoStore(databaseFile);
+const store = await DemoStore.open();
 
 function json(response, status, value) {
   const body = JSON.stringify(value);
@@ -45,8 +44,8 @@ async function jsonBody(request) {
   }
 }
 
-function walletClient() {
-  const config = store.configuration();
+async function walletClient() {
+  const config = await store.configuration();
   return new WalletClient({
     baseUrl: config.walletBaseUrl,
     keyId: config.walletKeyId,
@@ -54,8 +53,8 @@ function walletClient() {
   });
 }
 
-function publicConfiguration() {
-  const config = store.configuration();
+async function publicConfiguration() {
+  const config = await store.configuration();
   const mask = value => value ? `${value.slice(0, 7)}••••${value.slice(-4)}` : "";
   return {
     walletBaseUrl: config.walletBaseUrl ?? "http://127.0.0.1:8002",
@@ -69,16 +68,19 @@ function publicConfiguration() {
 
 async function api(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/status") {
+    const [configuration, users, addresses, events] = await Promise.all([
+      publicConfiguration(), store.users(), store.addresses(), store.webhookEvents()
+    ]);
     return json(response, 200, {
-      ...publicConfiguration(),
-      users: store.users().length,
-      addresses: store.addresses().length,
-      events: store.webhookEvents().length
+      ...configuration,
+      users: users.length,
+      addresses: addresses.length,
+      events: events.length
     });
   }
   if (request.method === "PUT" && url.pathname === "/api/config") {
     const input = await jsonBody(request);
-    const current = store.configuration();
+    const current = await store.configuration();
     const update = {
       walletBaseUrl: input.walletBaseUrl ?? current.walletBaseUrl ?? "http://127.0.0.1:8002",
       walletKeyId: input.walletKeyId ?? current.walletKeyId,
@@ -92,50 +94,50 @@ async function api(request, response, url) {
     if (!update.walletBaseUrl || !update.walletKeyId || !update.walletApiSecret) {
       throw new Error("walletBaseUrl, walletKeyId and walletApiSecret are required");
     }
-    store.saveConfiguration(update);
-    return json(response, 200, publicConfiguration());
+    await store.saveConfiguration(update);
+    return json(response, 200, await publicConfiguration());
   }
   if (request.method === "GET" && url.pathname === "/api/users") {
-    return json(response, 200, store.users());
+    return json(response, 200, await store.users());
   }
   if (request.method === "POST" && url.pathname === "/api/users") {
-    return json(response, 201, store.createUser(await jsonBody(request)));
+    return json(response, 201, await store.createUser(await jsonBody(request)));
   }
   if (request.method === "GET" && url.pathname === "/api/addresses") {
-    return json(response, 200, store.addresses());
+    return json(response, 200, await store.addresses());
   }
   const addressMatch = /^\/api\/users\/([^/]+)\/addresses$/.exec(url.pathname);
   if (request.method === "POST" && addressMatch) {
-    const user = store.user(decodeURIComponent(addressMatch[1]));
+    const user = await store.user(decodeURIComponent(addressMatch[1]));
     const input = await jsonBody(request);
-    const remote = await walletClient().createAddress(
+    const remote = await (await walletClient()).createAddress(
       String(input.chain ?? "").toUpperCase(), user.externalId, Number(input.addressVersion ?? 0)
     );
-    return json(response, 201, store.saveAddress(user.id, remote));
+    return json(response, 201, await store.saveAddress(user.id, remote));
   }
   if (request.method === "GET" && url.pathname === "/api/chains") {
-    return json(response, 200, await walletClient().chains());
+    return json(response, 200, await (await walletClient()).chains());
   }
   if (request.method === "GET" && url.pathname === "/api/assets") {
-    return json(response, 200, store.balances());
+    return json(response, 200, await store.balances());
   }
   if (request.method === "GET" && url.pathname === "/api/ledger") {
-    return json(response, 200, store.ledger());
+    return json(response, 200, await store.ledger());
   }
   if (request.method === "GET" && url.pathname === "/api/wallet/assets") {
-    return json(response, 200, await walletClient().assets());
+    return json(response, 200, await (await walletClient()).assets());
   }
   if (request.method === "GET" && url.pathname === "/api/wallet/deposits") {
-    return json(response, 200, await walletClient().deposits());
+    return json(response, 200, await (await walletClient()).deposits());
   }
   if (request.method === "GET" && url.pathname === "/api/withdrawals") {
-    return json(response, 200, store.withdrawals());
+    return json(response, 200, await store.withdrawals());
   }
   const withdrawalMatch = /^\/api\/users\/([^/]+)\/withdrawals$/.exec(url.pathname);
   if (request.method === "POST" && withdrawalMatch) {
     const userId = decodeURIComponent(withdrawalMatch[1]);
     const input = await jsonBody(request);
-    const reserved = store.reserveWithdrawal({
+    const reserved = await store.reserveWithdrawal({
       userId,
       custodyAddressId: input.custodyAddressId,
       chain: String(input.chain ?? "").toUpperCase(),
@@ -144,7 +146,7 @@ async function api(request, response, url) {
       amount: input.amount
     });
     try {
-      const remote = await walletClient().createWithdrawal({
+      const remote = await (await walletClient()).createWithdrawal({
         custodyAddressId: reserved.custodyAddressId,
         chain: reserved.chain,
         assetSymbol: reserved.asset,
@@ -153,22 +155,21 @@ async function api(request, response, url) {
         externalReference: reserved.externalReference,
         confirmed: true
       }, reserved.idempotencyKey);
-      return json(response, 201, store.acceptWithdrawal(reserved.id, remote));
+      return json(response, 201, await store.acceptWithdrawal(reserved.id, remote));
     } catch (error) {
-      store.releaseWithdrawal(reserved.id, error.message);
+      await store.releaseWithdrawal(reserved.id, error.message);
       throw error;
     }
   }
   if (request.method === "GET" && url.pathname === "/api/events") {
-    return json(response, 200, store.webhookEvents());
+    return json(response, 200, await store.webhookEvents());
   }
   if (request.method === "GET" && url.pathname === "/api/snapshot") {
+    const [users, addresses, balances, withdrawals, events] = await Promise.all([
+      store.users(), store.addresses(), store.balances(), store.withdrawals(), store.webhookEvents()
+    ]);
     return json(response, 200, {
-      users: store.users(),
-      addresses: store.addresses(),
-      balances: store.balances(),
-      withdrawals: store.withdrawals(),
-      events: store.webhookEvents()
+      users, addresses, balances, withdrawals, events
     });
   }
   json(response, 404, { error: "NOT_FOUND", message: "API route not found" });
@@ -176,7 +177,7 @@ async function api(request, response, url) {
 
 async function webhook(request, response) {
   const raw = await body(request);
-  const config = store.configuration();
+  const config = await store.configuration();
   const verified = verifyWebhook({
     secret: config.webhookSecret,
     timestamp: request.headers["x-custody-timestamp"],
@@ -193,7 +194,7 @@ async function webhook(request, response) {
   if (event.type === "WEBHOOK.VERIFICATION") {
     return json(response, 200, { challenge: event.data?.challenge });
   }
-  store.receiveWebhook(event, raw);
+  await store.receiveWebhook(event, raw);
   return json(response, 200, { received: true, eventId: event.id });
 }
 
@@ -250,8 +251,8 @@ server.listen(port, "127.0.0.1", () => {
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
-    server.close(() => {
-      store.close();
+    server.close(async () => {
+      await store.close();
       process.exit(0);
     });
   });

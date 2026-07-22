@@ -14,10 +14,11 @@
 
 ## 启动
 
-要求 Node.js 22.5 或更高版本，无第三方 NPM 依赖。
+要求 Node.js 18 或更高版本，并复用钱包开发环境正在使用的本机 PostgreSQL 18。Demo 默认在同一个 `wallet` 数据库的 `tenant_demo` Schema 中保存数据，不启动或嵌入其他数据库。
 
 ```bash
 cd tenant-demo
+npm install
 npm test
 npm start
 ```
@@ -56,17 +57,24 @@ http://127.0.0.1:9300/webhooks/custody
 4. 将创建 Webhook 时只展示一次的 `whsec_...` 填入 Demo；
 5. 在 Console 验证并启用 Webhook。
 
-Demo 数据保存在 `data/tenant-demo.db`。API Secret 和 Webhook Secret 仅保存在此开发机的本地数据库，该文件已被 Git 忽略。不要使用生产凭证。
+Demo 数据保存在本机 PostgreSQL 18 的 `wallet.tenant_demo` Schema。API Secret 和 Webhook Secret 仅保存在该开发库，不要使用生产凭证。
 
 ## 环境参数
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
 | `TENANT_DEMO_PORT` | `9300` | Demo HTTP 端口 |
-| `TENANT_DEMO_DB` | `tenant-demo/data/tenant-demo.db` | SQLite 文件路径，测试可使用 `:memory:` |
+| `TENANT_DEMO_PG_HOST` | `127.0.0.1` | 必须指向本机 PostgreSQL 18 |
+| `TENANT_DEMO_PG_PORT` | `5432` | PostgreSQL 端口 |
+| `TENANT_DEMO_PG_DATABASE` | `wallet` | 与钱包后端复用的开发数据库 |
+| `TENANT_DEMO_PG_USER` | `wallet` | PostgreSQL 用户 |
+| `TENANT_DEMO_PG_PASSWORD` | 空 | PostgreSQL 密码 |
+| `TENANT_DEMO_PG_SCHEMA` | `tenant_demo` | Demo 隔离 Schema |
+
+`npm test` 只会在上述本机 PostgreSQL 18 实例内创建 `surprising_wallet_test_tenant_demo_*` 临时测试库，结束后自动删除；不会启动 Docker、Testcontainers、SQLite、嵌入式或其他独立数据库实例。
 
 ## 资金核对规则
 
-用户充值确认后，Demo 增加用户可用余额。发起提现时，同额资金从可用转入冻结；`WITHDRAWAL.CONFIRMED` 后冻结余额扣除，`WITHDRAWAL.FAILED` 后退回可用余额。所有 Webhook 使用事件 ID 幂等，余额和流水在同一个 SQLite 事务内更新。
+用户充值确认后，Demo 增加用户可用余额。发起提现时，同额资金从可用转入冻结；`WITHDRAWAL.CONFIRMED` 后冻结余额扣除，`WITHDRAWAL.FAILED` 后退回可用余额。所有 Webhook 使用事件 ID 幂等，余额和流水在同一个 PostgreSQL 事务内更新，并通过事务级余额锁避免并发丢失更新。
 
 钱包 `/custody/api/v1/assets` 是租户链上总资产，Demo 资产是交易所内部用户负债。逐链验收报告会分别核对两者与 Gas/手续费/归集差额，不将二者错误地视为永远相等。
