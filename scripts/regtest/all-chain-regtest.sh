@@ -20,7 +20,6 @@ LIVE_CONNECTIVITY_TESTS=(
   "com.surprising.wallet.service.chain.polkadot.PolkadotRuntimeConnectivityIntegrationTest"
 )
 LIVE_SPENDING_TESTS=(
-  "com.surprising.wallet.service.chain.tron.TronLiveFullFlowIntegrationTest"
   "com.surprising.wallet.service.chain.solana.SolanaDevnetLiveFlowIntegrationTest"
   "com.surprising.wallet.service.chain.ton.TonLiveMockJettonFlowIntegrationTest"
   "com.surprising.wallet.service.chain.aptos.AptosLiveNativeFlowIntegrationTest"
@@ -47,12 +46,13 @@ commands:
   test-near     Run isolated NEAR sandbox NEAR/USDC/USDT full flow and reconciliation test
   test-cardano  Run isolated Cardano Yaci devnet ADA/USDC/USDT full flow and reconciliation test
   test-dot      Run isolated Polkadot + Asset Hub DOT/USDC/USDT full flow and reconciliation test
+  test-tron     Run isolated TRON TRE TRX/USDT/USDC full flow and reconciliation test
   dot-runtime-up    Start the local Polkadot runtime companion service
   dot-runtime-down  Stop the local Polkadot runtime companion service
   test-evm      Run ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C fork regression
   test-db       Run DB-only flow tests for SOL/TON/APTOS/SUI/DOGE plus UTXO migration
   test-live     Run external testnet connectivity checks; spending tests require RUN_LIVE_SPENDING=true
-  test-local    Run local UTXO, XMR, EVM, Sui, and Solana full-flow tests
+  test-local    Run local UTXO, XMR, EVM, TRON, Sui, Solana, and NEAR full-flow tests
   test-all      Run test-local and test-db; add RUN_LIVE=true to include test-live
 
 notes:
@@ -65,7 +65,7 @@ notes:
   - NEAR uses an isolated official sandbox with mock USDC/USDT and PostgreSQL.
   - ADA uses an isolated Yaci devnet with mock native-asset USDC/USDT and PostgreSQL.
   - DOT uses isolated official Polkadot and Asset Hub dev nodes plus the runtime companion service.
-  - TRON/XRP/APTOS use DB mocks or external testnet/devnet RPC.
+  - TRON uses isolated TRE with mock USDT/USDC; XRP/APTOS use external testnet/devnet RPC.
 USAGE
 }
 
@@ -85,7 +85,7 @@ BTC/LTC/DOGE/BCH                     local Docker regtest nodes
 XMR                                  local monerod regtest + monero-wallet-rpc
 ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/
 BASE/AVAX_C                          Hardhat fork, one chain per run on 127.0.0.1:8545
-TRON                                 external Nile live/testnet flow
+TRON                                 local TRE + mock USDT/USDC full flow
 XRP                                  external Testnet XRP + issued USDC full flow
 SOLANA                               local validator + mock USDT/USDC full flow
 TON                                  MyLocalTon + mock USDT/USDC full flow
@@ -121,7 +121,8 @@ status() {
   echo "==> sui: isolated local flow is available through test-sui"
   echo "==> solana: isolated local flow is available through test-solana"
   echo "==> ton: MyLocalTon flow is available through test-ton"
-  echo "==> tron/aptos/ada/dot/near: use test-db/test-live or the DOT runtime service"
+  echo "==> tron: isolated local TRE flow is available through test-tron"
+  echo "==> aptos/ada/dot/near: use their local runner, test-db/test-live, or DOT runtime service"
   if curl -fsS -m 2 \
       "${dot_runtime_headers[@]}" \
       http://127.0.0.1:8787/health >/dev/null 2>&1; then
@@ -182,6 +183,10 @@ test_cardano() {
 
 test_dot() {
   "${ROOT_DIR}/scripts/regtest/run-polkadot-flow.sh"
+}
+
+test_tron() {
+  "${ROOT_DIR}/scripts/regtest/run-tron-flow.sh"
 }
 
 test_db() {
@@ -284,6 +289,9 @@ case "${1:-matrix}" in
   test-dot)
     test_dot
     ;;
+  test-tron)
+    test_tron
+    ;;
   dot-runtime-up)
     dot_runtime_up
     ;;
@@ -300,6 +308,7 @@ case "${1:-matrix}" in
     test_utxo
     test_xmr
     test_evm
+    test_tron
     test_sui
     test_solana
     test_near
@@ -308,6 +317,7 @@ case "${1:-matrix}" in
     test_utxo
     test_xmr
     test_evm
+    test_tron
     test_sui
     test_solana
     test_near

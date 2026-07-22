@@ -14,5 +14,9 @@ class Trc20DepositScanIntegrationTest {
                 report.get("userB"), "USDT", new BigDecimal("30"));
         TronLiveFlowTestSupport.assertCreditedDeposit(jdbc, report.get("usdtDepositCTxid"),
                 report.get("userC"), "USDT", new BigDecimal("20"));
+        TronLiveFlowTestSupport.assertCreditedDeposit(jdbc, report.get("usdcDepositBTxid"),
+                report.get("userD"), "USDC", new BigDecimal("30"));
+        TronLiveFlowTestSupport.assertCreditedDeposit(jdbc, report.get("usdcDepositCTxid"),
+                report.get("userE"), "USDC", new BigDecimal("20"));
     }
 }

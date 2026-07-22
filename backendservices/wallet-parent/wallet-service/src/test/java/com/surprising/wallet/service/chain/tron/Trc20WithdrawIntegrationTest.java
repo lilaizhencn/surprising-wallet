@@ -15,6 +15,9 @@ class Trc20WithdrawIntegrationTest {
         TronLiveFlowTestSupport.assertConfirmedWithdrawal(jdbc, report.get("usdtWithdrawTxid"), "USDT");
         assertEquals(0, new BigDecimal("15").compareTo(
                 TronLiveFlowTestSupport.ledger(jdbc, "USDT", report.get("userC"))));
-        TronLiveFlowTestSupport.assertNoLockedOrNegativeLedger(jdbc, report.get("userC"));
+        TronLiveFlowTestSupport.assertConfirmedWithdrawal(jdbc, report.get("usdcWithdrawTxid"), "USDC");
+        assertEquals(0, new BigDecimal("15").compareTo(
+                TronLiveFlowTestSupport.ledger(jdbc, "USDC", report.get("userE"))));
+        TronLiveFlowTestSupport.assertNoLockedOrNegativeLedger(jdbc, report.get("userC"), report.get("userE"));
     }
 }

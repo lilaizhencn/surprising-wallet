@@ -19,6 +19,14 @@ class Trc20CollectionIntegrationTest {
                 TronLiveFlowTestSupport.ledger(jdbc, "USDT", report.get("userB"))));
         assertEquals(0, new BigDecimal("30").compareTo(
                 TronLiveFlowTestSupport.ledger(jdbc, "USDT", report.get("hot"))));
-        TronLiveFlowTestSupport.assertNoLockedOrNegativeLedger(jdbc, report.get("userB"), report.get("hot"));
+        TronLiveFlowTestSupport.assertConfirmedCollection(jdbc, report.get("usdcCollectionTxid"));
+        TronLiveFlowTestSupport.assertCreditedDeposit(jdbc, report.get("usdcCollectionTxid"),
+                report.get("hot"), "USDC", new BigDecimal("30"));
+        assertEquals(0, BigDecimal.ZERO.compareTo(
+                TronLiveFlowTestSupport.ledger(jdbc, "USDC", report.get("userD"))));
+        assertEquals(0, new BigDecimal("30").compareTo(
+                TronLiveFlowTestSupport.ledger(jdbc, "USDC", report.get("hot"))));
+        TronLiveFlowTestSupport.assertNoLockedOrNegativeLedger(jdbc, report.get("userB"), report.get("userD"),
+                report.get("hot"));
     }
 }

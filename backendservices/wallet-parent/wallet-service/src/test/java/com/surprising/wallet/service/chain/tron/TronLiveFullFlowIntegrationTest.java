@@ -42,17 +42,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TronLiveFullFlowIntegrationTest {
     private static final String CHAIN = ChainType.TRON.name();
-    private static final String NETWORK = "NILE";
-    private static final String NILE_USDT_CONTRACT = "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf";
     private static final int TRX_DECIMALS = 6;
-    private static final int USDT_DECIMALS = 6;
+    private static final int TOKEN_DECIMALS = 6;
     private static final BigDecimal SUN = new BigDecimal("1000000");
     private static final long FEE_LIMIT_SUN = 100_000_000L;
 
     @Test
-    void shouldExecuteNileTrxAndTrc20FullFlow() throws Exception {
+    void shouldExecuteLocalTrxAndTrc20FullFlow() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("tron.live.flow.enabled"),
-                "set -Dtron.live.flow.enabled=true to broadcast Nile TRX/TRC20 transactions");
+                "run scripts/regtest/run-tron-flow.sh for isolated TRX/TRC20 transactions");
 
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource());
         WalletKeyMaterialProvider keyMaterial = new WalletKeyMaterialProvider(
@@ -64,9 +62,13 @@ class TronLiveFullFlowIntegrationTest {
         TronGasEstimator gasEstimator = new TronGasEstimator();
         TronWaitingGasStateService waitingGasStateService = new TronWaitingGasStateService();
 
-        String fullNode = System.getProperty("tron.fullnode", "grpc.nile.trongrid.io:50051");
-        String solidityNode = System.getProperty("tron.soliditynode", "grpc.nile.trongrid.io:50061");
+        String fullNode = System.getProperty("tron.fullnode", "127.0.0.1:50051");
+        String solidityNode = System.getProperty("tron.soliditynode", "127.0.0.1:50052");
         String apiKey = System.getProperty("tron.apiKey", "");
+        String network = requiredProperty("tron.live.network");
+        String sourcePrivateKey = requiredEnvironment("TRON_LOCAL_SOURCE_KEY");
+        TokenSpec usdt = new TokenSpec("USDT", requiredProperty("tron.live.usdt.contract"), TOKEN_DECIMALS);
+        TokenSpec usdc = new TokenSpec("USDC", requiredProperty("tron.live.usdc.contract"), TOKEN_DECIMALS);
         int requiredConfirmations = Integer.getInteger("tron.confirmations", 1);
         String runId = "TRON-LIVE-" + System.currentTimeMillis();
         int userBase = Integer.getInteger("tron.live.userBase",
@@ -74,22 +76,28 @@ class TronLiveFullFlowIntegrationTest {
 
         try (TronTridentClient client = new TronTridentClient(fullNode, solidityNode, apiKey)) {
             Bip32Node sig2Root = keyMaterial.sig2Root();
-            Actor source = actor(sig2Root, "source", 91001);
+            Actor source = actorFromPrivateKey("source", 91001, sourcePrivateKey);
             Actor userA = actor(sig2Root, "userA", userBase);
             Actor userB = actor(sig2Root, "userB", userBase + 1);
             Actor userC = actor(sig2Root, "userC", userBase + 2);
-            Actor hot = actor(sig2Root, "hot", userBase + 3);
-            Actor external = actor(sig2Root, "external", userBase + 4);
+            Actor userD = actor(sig2Root, "userD", userBase + 3);
+            Actor userE = actor(sig2Root, "userE", userBase + 4);
+            Actor hot = actor(sig2Root, "hot", userBase + 5);
+            Actor external = actor(sig2Root, "external", userBase + 6);
 
-            prepareDatabase(jdbcTemplate, source, userA, userB, userC, hot, external, runId);
-            upsertNileUsdt(jdbcTemplate);
+            prepareDatabase(jdbcTemplate, List.of(source, userA, userB, userC, userD, userE, hot, external), runId);
+            upsertToken(jdbcTemplate, network, usdt);
+            upsertToken(jdbcTemplate, network, usdc);
 
             BigDecimal sourceTrx = trxBalance(client, source.address());
-            BigDecimal sourceUsdt = trc20Balance(client, source.address(), NILE_USDT_CONTRACT, USDT_DECIMALS);
-            assertTrue(sourceTrx.compareTo(new BigDecimal("120")) > 0,
-                    "fund Nile source " + source.address() + " with TRX; current=" + sourceTrx);
-            assertTrue(sourceUsdt.compareTo(new BigDecimal("80")) > 0,
-                    "fund Nile source " + source.address() + " with USDT; current=" + sourceUsdt);
+            assertTrue(sourceTrx.compareTo(new BigDecimal("200")) > 0,
+                    "fund TRON test source " + source.address() + " with TRX; current=" + sourceTrx);
+            for (TokenSpec token : List.of(usdt, usdc)) {
+                BigDecimal balance = trc20Balance(client, source.address(), token.contract(), token.decimals());
+                assertTrue(balance.compareTo(new BigDecimal("80")) > 0,
+                        "fund TRON test source " + source.address() + " with " + token.symbol()
+                                + "; current=" + balance);
+            }
 
             Response.AccountResourceMessage sourceResources = client.getResources(source.address());
             Response.AccountNetMessage sourceBandwidth = client.getBandwidth(source.address());
@@ -113,101 +121,138 @@ class TronLiveFullFlowIntegrationTest {
                     userA, external.address(), new BigDecimal("0.5"));
             assertNotEquals(trxWithdraw1.txId(), trxWithdraw2.txId());
             assertChainLedgerTrx(client, jdbcTemplate, userA);
-            assertFalse(repository.freezeLedgerBalance(CHAIN, "TRX", userA.address(), new BigDecimal("1000")),
+            assertFalse(repository.freezeLedgerBalance(CHAIN, "TRX", ledgerAccount(userA), new BigDecimal("1000")),
                     "overspend guard must reject impossible TRX withdrawal before broadcast");
-
-            // TRC20 deposit scan: source -> user B and source -> user C.
-            TxResult usdtDepositB = sendTrc20(client, trc20Service, source, NILE_USDT_CONTRACT,
-                    userB.address(), new BigDecimal("30"), USDT_DECIMALS);
-            scanAndAssertUsdtDeposit(depositScanner, client, jdbcTemplate, usdtDepositB, userB,
-                    new BigDecimal("30"), requiredConfirmations);
-            TxResult usdtDepositC = sendTrc20(client, trc20Service, source, NILE_USDT_CONTRACT,
-                    userC.address(), new BigDecimal("20"), USDT_DECIMALS);
-            scanAndAssertUsdtDeposit(depositScanner, client, jdbcTemplate, usdtDepositC, userC,
-                    new BigDecimal("20"), requiredConfirmations);
-
-            // WAITING_GAS + gas top-up + collection: user B has token but no TRX.
-            BigDecimal userBTrxBeforeTopup = trxBalance(client, userB.address());
-            var waitDecision = waitingGasStateService.evaluate(CHAIN, runId + "-COLLECT-USDT", userB.address(),
-                    userBTrxBeforeTopup, new BigDecimal("8"), TronGasPolicy.nileDefault());
-            assertTrue(waitDecision.waitingGas(), "token collection must wait for gas before top-up");
-            insertGasTask(jdbcTemplate, waitDecision.gasTaskNo(), userB.address(), source.address(),
-                    waitDecision.topupAmount(), "WAITING_GAS");
-            TxResult gasTopupB = sendTrx(client, trxService, source, userB.address(), waitDecision.topupAmount());
-            updateGasTaskConfirmed(jdbcTemplate, waitDecision.gasTaskNo(), gasTopupB.txId());
-            repository.incrementLedgerBalance(CHAIN, "TRX", userB.address().toLowerCase(Locale.ROOT),
-                    waitDecision.topupAmount());
-
-            long estimatedEnergy = estimateTransferEnergy(client, userB, hot.address(), new BigDecimal("30"));
-            BigDecimal estimatedFee = gasEstimator.estimateTrc20FeeTrx(Math.max(estimatedEnergy, 1L), 420L,
-                    TronGasPolicy.nileDefault());
-            assertTrue(estimatedFee.compareTo(BigDecimal.ZERO) > 0);
-
-            TxResult usdtCollection = collectTrc20(jdbcTemplate, repository, client, trc20Service,
-                    runId + "-COLLECT-USDT", userB, hot, new BigDecimal("30"));
-            depositScanner.scanAndCreditTrc20(client, usdtCollection.blockHeight(), tokenMap(), platform(hot),
+            TxResult trxCollection = collectTrx(jdbcTemplate, repository, client, trxService,
+                    runId + "-TRX-COLLECT", userA, hot, new BigDecimal("1"));
+            depositScanner.scanAndCreditTrx(client, trxCollection.blockHeight(), platform(hot),
                     requiredConfirmations);
-            assertBalanceEquals(BigDecimal.ZERO, ledger(jdbcTemplate, "USDT", userB.address()),
-                    "collected user token ledger must be zero");
-            assertBalanceEquals(new BigDecimal("30"), ledger(jdbcTemplate, "USDT", hot.address()),
-                    "hot wallet token ledger must increase through collection scan");
-            assertChainLedgerTrx(client, jdbcTemplate, userB);
-            assertTokenLedger(client, jdbcTemplate, userB, BigDecimal.ZERO);
-            assertTokenLedger(client, jdbcTemplate, hot, new BigDecimal("30"));
+            assertDepositCount(jdbcTemplate, trxCollection.txId(), hot.address(), 1);
+            assertChainLedgerTrx(client, jdbcTemplate, userA);
+            assertChainLedgerTrx(client, jdbcTemplate, hot);
 
-            // TRC20 withdrawal with gas already topped up.
-            var gasDecisionC = waitingGasStateService.evaluate(CHAIN, runId + "-USDT-WD", userC.address(),
-                    trxBalance(client, userC.address()), new BigDecimal("8"), TronGasPolicy.nileDefault());
-            assertTrue(gasDecisionC.waitingGas());
-            insertGasTask(jdbcTemplate, gasDecisionC.gasTaskNo(), userC.address(), source.address(),
-                    gasDecisionC.topupAmount(), "WAITING_GAS");
-            TxResult gasTopupC = sendTrx(client, trxService, source, userC.address(), gasDecisionC.topupAmount());
-            updateGasTaskConfirmed(jdbcTemplate, gasDecisionC.gasTaskNo(), gasTopupC.txId());
-            repository.incrementLedgerBalance(CHAIN, "TRX", userC.address().toLowerCase(Locale.ROOT),
-                    gasDecisionC.topupAmount());
+            TokenFlowResult usdtFlow = executeTokenFlow(jdbcTemplate, repository, depositScanner, client,
+                    trxService, trc20Service, gasEstimator, waitingGasStateService, runId, source,
+                    userB, userC, hot, external, usdt, requiredConfirmations);
+            TokenFlowResult usdcFlow = executeTokenFlow(jdbcTemplate, repository, depositScanner, client,
+                    trxService, trc20Service, gasEstimator, waitingGasStateService, runId, source,
+                    userD, userE, hot, external, usdc, requiredConfirmations);
 
-            TxResult trc20Withdraw = withdrawTrc20(jdbcTemplate, repository, client, trc20Service,
-                    runId + "-USDT-WD", userC, external.address(), new BigDecimal("5"));
-            assertTrue(trc20Withdraw.fee().compareTo(BigDecimal.ZERO) >= 0);
-            assertTokenLedger(client, jdbcTemplate, userC, new BigDecimal("15"));
-            assertChainLedgerTrx(client, jdbcTemplate, userC);
-
-            assertNoNegativeOrLockedLedger(jdbcTemplate, userA, userB, userC, hot);
-            assertDepositCount(jdbcTemplate, usdtDepositB.txId(), userB.address(), 1);
-            assertDepositCount(jdbcTemplate, usdtDepositC.txId(), userC.address(), 1);
-            assertDepositCount(jdbcTemplate, usdtCollection.txId(), hot.address(), 1);
-            writeReport(runId, Map.ofEntries(
-                    Map.entry("source", source.address()),
-                    Map.entry("userA", userA.address()),
-                    Map.entry("userB", userB.address()),
-                    Map.entry("userC", userC.address()),
-                    Map.entry("hot", hot.address()),
-                    Map.entry("external", external.address()),
-                    Map.entry("trxDepositTxid", trxDeposit.txId()),
-                    Map.entry("trxWithdraw1Txid", trxWithdraw1.txId()),
-                    Map.entry("trxWithdraw2Txid", trxWithdraw2.txId()),
-                    Map.entry("usdtDepositBTxid", usdtDepositB.txId()),
-                    Map.entry("usdtDepositCTxid", usdtDepositC.txId()),
-                    Map.entry("gasTopupBTxid", gasTopupB.txId()),
-                    Map.entry("usdtCollectionTxid", usdtCollection.txId()),
-                    Map.entry("gasTopupCTxid", gasTopupC.txId()),
-                    Map.entry("usdtWithdrawTxid", trc20Withdraw.txId()),
-                    Map.entry("estimatedEnergy", String.valueOf(estimatedEnergy)),
-                    Map.entry("estimatedFeeTrx", estimatedFee.toPlainString())
-            ));
+            assertNoNegativeOrLockedLedger(jdbcTemplate, userA, userB, userC, userD, userE, hot);
+            Map<String, String> report = new LinkedHashMap<>();
+            report.put("source", source.address());
+            report.put("userA", userA.address());
+            report.put("userB", userB.address());
+            report.put("userC", userC.address());
+            report.put("userD", userD.address());
+            report.put("userE", userE.address());
+            report.put("hot", hot.address());
+            report.put("external", external.address());
+            report.put("trxDepositTxid", trxDeposit.txId());
+            report.put("trxWithdraw1Txid", trxWithdraw1.txId());
+            report.put("trxWithdraw2Txid", trxWithdraw2.txId());
+            report.put("trxCollectionTxid", trxCollection.txId());
+            appendTokenReport(report, "usdt", usdtFlow);
+            appendTokenReport(report, "usdc", usdcFlow);
+            writeReport(runId, report);
         }
     }
 
-    private static void scanAndAssertUsdtDeposit(TronDepositScanner scanner, TronTridentClient client,
-                                                 JdbcTemplate jdbcTemplate, TxResult tx, Actor actor,
-                                                 BigDecimal expectedAmount, int confirmations) throws Exception {
-        List<DepositEvent> deposits = scanner.scanAndCreditTrc20(client, tx.blockHeight(), tokenMap(), platform(actor),
+    private static TokenFlowResult executeTokenFlow(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
+                                                    TronDepositScanner depositScanner, TronTridentClient client,
+                                                    TronTransactionService trxService, TronTrc20Service trc20Service,
+                                                    TronGasEstimator gasEstimator,
+                                                    TronWaitingGasStateService waitingGasStateService,
+                                                    String runId, Actor source, Actor collectionUser,
+                                                    Actor withdrawalUser, Actor hot, Actor external,
+                                                    TokenSpec token, int requiredConfirmations) throws Exception {
+        String flowId = runId + "-" + token.symbol();
+        TxResult depositForCollection = sendTrc20(client, trc20Service, source, token.contract(),
+                collectionUser.address(), new BigDecimal("30"), token.decimals());
+        scanAndAssertTokenDeposit(depositScanner, client, jdbcTemplate, depositForCollection, collectionUser,
+                token, new BigDecimal("30"), requiredConfirmations);
+        TxResult depositForWithdrawal = sendTrc20(client, trc20Service, source, token.contract(),
+                withdrawalUser.address(), new BigDecimal("20"), token.decimals());
+        scanAndAssertTokenDeposit(depositScanner, client, jdbcTemplate, depositForWithdrawal, withdrawalUser,
+                token, new BigDecimal("20"), requiredConfirmations);
+
+        var collectionGas = waitingGasStateService.evaluate(CHAIN, flowId + "-COLLECT", collectionUser.address(),
+                trxBalance(client, collectionUser.address()), new BigDecimal("8"), TronGasPolicy.nileDefault());
+        assertTrue(collectionGas.waitingGas(), token.symbol() + " collection must wait for gas before top-up");
+        insertGasTask(jdbcTemplate, collectionGas.gasTaskNo(), collectionUser.address(), source.address(),
+                collectionGas.topupAmount(), "WAITING_GAS");
+        TxResult collectionGasTopup = sendTrx(client, trxService, source, collectionUser.address(),
+                collectionGas.topupAmount());
+        updateGasTaskConfirmed(jdbcTemplate, collectionGas.gasTaskNo(), collectionGasTopup.txId());
+        repository.incrementLedgerBalance(CHAIN, "TRX", collectionUser.address().toLowerCase(Locale.ROOT),
+                collectionGas.topupAmount());
+
+        long estimatedEnergy = estimateTransferEnergy(client, collectionUser, hot.address(),
+                new BigDecimal("30"), token);
+        BigDecimal estimatedFee = gasEstimator.estimateTrc20FeeTrx(Math.max(estimatedEnergy, 1L), 420L,
+                TronGasPolicy.nileDefault());
+        assertTrue(estimatedFee.compareTo(BigDecimal.ZERO) > 0);
+
+        TxResult collection = collectTrc20(jdbcTemplate, repository, client, trc20Service,
+                flowId + "-COLLECT", collectionUser, hot, new BigDecimal("30"), token);
+        depositScanner.scanAndCreditTrc20(client, collection.blockHeight(), tokenMap(token), platform(hot),
+                requiredConfirmations);
+        assertBalanceEquals(BigDecimal.ZERO, ledger(jdbcTemplate, token.symbol(), collectionUser.address()),
+                "collected user token ledger must be zero");
+        assertBalanceEquals(new BigDecimal("30"), ledger(jdbcTemplate, token.symbol(), hot.address()),
+                "hot wallet token ledger must increase through collection scan");
+        assertChainLedgerTrx(client, jdbcTemplate, collectionUser);
+        assertTokenLedger(client, jdbcTemplate, collectionUser, token, BigDecimal.ZERO);
+        assertTokenLedger(client, jdbcTemplate, hot, token, new BigDecimal("30"));
+
+        var withdrawalGas = waitingGasStateService.evaluate(CHAIN, flowId + "-WITHDRAW", withdrawalUser.address(),
+                trxBalance(client, withdrawalUser.address()), new BigDecimal("8"), TronGasPolicy.nileDefault());
+        assertTrue(withdrawalGas.waitingGas());
+        insertGasTask(jdbcTemplate, withdrawalGas.gasTaskNo(), withdrawalUser.address(), source.address(),
+                withdrawalGas.topupAmount(), "WAITING_GAS");
+        TxResult withdrawalGasTopup = sendTrx(client, trxService, source, withdrawalUser.address(),
+                withdrawalGas.topupAmount());
+        updateGasTaskConfirmed(jdbcTemplate, withdrawalGas.gasTaskNo(), withdrawalGasTopup.txId());
+        repository.incrementLedgerBalance(CHAIN, "TRX", withdrawalUser.address().toLowerCase(Locale.ROOT),
+                withdrawalGas.topupAmount());
+
+        TxResult withdrawal = withdrawTrc20(jdbcTemplate, repository, client, trc20Service,
+                flowId + "-WITHDRAW", withdrawalUser, external.address(), new BigDecimal("5"), token);
+        assertTrue(withdrawal.fee().compareTo(BigDecimal.ZERO) >= 0);
+        assertTokenLedger(client, jdbcTemplate, withdrawalUser, token, new BigDecimal("15"));
+        assertChainLedgerTrx(client, jdbcTemplate, withdrawalUser);
+
+        assertDepositCount(jdbcTemplate, depositForCollection.txId(), collectionUser.address(), 1);
+        assertDepositCount(jdbcTemplate, depositForWithdrawal.txId(), withdrawalUser.address(), 1);
+        assertDepositCount(jdbcTemplate, collection.txId(), hot.address(), 1);
+        return new TokenFlowResult(depositForCollection.txId(), depositForWithdrawal.txId(),
+                collectionGasTopup.txId(), collection.txId(), withdrawalGasTopup.txId(), withdrawal.txId(),
+                estimatedEnergy, estimatedFee);
+    }
+
+    private static void appendTokenReport(Map<String, String> report, String prefix, TokenFlowResult result) {
+        report.put(prefix + "DepositBTxid", result.depositForCollectionTxId());
+        report.put(prefix + "DepositCTxid", result.depositForWithdrawalTxId());
+        report.put(prefix + "GasTopupBTxid", result.collectionGasTopupTxId());
+        report.put(prefix + "CollectionTxid", result.collectionTxId());
+        report.put(prefix + "GasTopupCTxid", result.withdrawalGasTopupTxId());
+        report.put(prefix + "WithdrawTxid", result.withdrawalTxId());
+        report.put(prefix + "EstimatedEnergy", String.valueOf(result.estimatedEnergy()));
+        report.put(prefix + "EstimatedFeeTrx", result.estimatedFee().toPlainString());
+    }
+
+    private static void scanAndAssertTokenDeposit(TronDepositScanner scanner, TronTridentClient client,
+                                                  JdbcTemplate jdbcTemplate, TxResult tx, Actor actor,
+                                                  TokenSpec token, BigDecimal expectedAmount,
+                                                  int confirmations) throws Exception {
+        List<DepositEvent> deposits = scanner.scanAndCreditTrc20(client, tx.blockHeight(), tokenMap(token),
+                platform(actor),
                 confirmations);
         assertTrue(deposits.stream().anyMatch(event -> tx.txId().equalsIgnoreCase(event.txId())));
-        assertBalanceEquals(expectedAmount, ledger(jdbcTemplate, "USDT", actor.address()),
+        assertBalanceEquals(expectedAmount, ledger(jdbcTemplate, token.symbol(), actor.address()),
                 "TRC20 deposit ledger must match amount");
-        scanner.scanAndCreditTrc20(client, tx.blockHeight(), tokenMap(), platform(actor), confirmations);
-        assertBalanceEquals(expectedAmount, ledger(jdbcTemplate, "USDT", actor.address()),
+        scanner.scanAndCreditTrc20(client, tx.blockHeight(), tokenMap(token), platform(actor), confirmations);
+        assertBalanceEquals(expectedAmount, ledger(jdbcTemplate, token.symbol(), actor.address()),
                 "TRC20 duplicate scan must not double credit");
     }
 
@@ -215,31 +260,63 @@ class TronLiveFullFlowIntegrationTest {
                                         TronTridentClient client, TronTransactionService service,
                                         String orderNo, Actor from, String to, BigDecimal amount) throws Exception {
         insertWithdrawal(jdbcTemplate, orderNo, from, to, "TRX", amount, "CREATED");
-        assertTrue(repository.freezeLedgerBalance(CHAIN, "TRX", from.address(), amount));
+        assertTrue(repository.freezeLedgerBalance(CHAIN, "TRX", ledgerAccount(from), amount));
         updateWithdrawal(jdbcTemplate, orderNo, "FROZEN", null, BigDecimal.ZERO);
         updateWithdrawal(jdbcTemplate, orderNo, "SIGNING", null, BigDecimal.ZERO);
         TxResult tx = sendTrx(client, service, from, to, amount);
         updateWithdrawal(jdbcTemplate, orderNo, "SENT", tx.txId(), tx.fee());
-        assertTrue(repository.settleLockedDebit(CHAIN, "TRX", from.address(), amount));
+        assertTrue(repository.settleLockedDebit(CHAIN, "TRX", ledgerAccount(from), amount));
         if (tx.fee().signum() > 0) {
-            assertTrue(repository.debitLedgerBalance(CHAIN, "TRX", from.address(), tx.fee()));
+            assertTrue(repository.debitLedgerBalance(CHAIN, "TRX", ledgerAccount(from), tx.fee()));
         }
         updateWithdrawal(jdbcTemplate, orderNo, "CONFIRMED", tx.txId(), tx.fee());
         return tx;
     }
 
+    private static TxResult collectTrx(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
+                                       TronTridentClient client, TronTransactionService service,
+                                       String collectionNo, Actor from, Actor to, BigDecimal amount) throws Exception {
+        jdbcTemplate.update("""
+                        insert into collection_record(collection_no, chain, asset_symbol, from_address, to_address,
+                                                      amount, fee, status)
+                        values (?, ?, 'TRX', ?, ?, ?, 0, 'CREATED')
+                        on conflict (chain, collection_no) do update
+                        set status = 'CREATED', updated_at = now()
+                        """, collectionNo, CHAIN, from.address(), to.address(), amount);
+        assertTrue(repository.freezeLedgerBalance(CHAIN, "TRX", ledgerAccount(from), amount));
+        jdbcTemplate.update("update collection_record set status = 'SIGNING', updated_at = now() where collection_no = ?",
+                collectionNo);
+        TxResult tx = sendTrx(client, service, from, to.address(), amount);
+        jdbcTemplate.update("""
+                        update collection_record
+                        set status = 'SENT', tx_hash = ?, fee = ?, updated_at = now()
+                        where collection_no = ?
+                        """, tx.txId(), tx.fee(), collectionNo);
+        assertTrue(repository.settleLockedDebit(CHAIN, "TRX", ledgerAccount(from), amount));
+        if (tx.fee().signum() > 0) {
+            assertTrue(repository.debitLedgerBalance(CHAIN, "TRX", ledgerAccount(from), tx.fee()));
+        }
+        jdbcTemplate.update("""
+                        update collection_record
+                        set status = 'CONFIRMED', tx_hash = ?, fee = ?, updated_at = now()
+                        where collection_no = ?
+                        """, tx.txId(), tx.fee(), collectionNo);
+        return tx;
+    }
+
     private static TxResult withdrawTrc20(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
                                           TronTridentClient client, TronTrc20Service service,
-                                          String orderNo, Actor from, String to, BigDecimal amount) throws Exception {
-        insertWithdrawal(jdbcTemplate, orderNo, from, to, "USDT", amount, "CREATED");
-        assertTrue(repository.freezeLedgerBalance(CHAIN, "USDT", from.address(), amount));
+                                          String orderNo, Actor from, String to, BigDecimal amount,
+                                          TokenSpec token) throws Exception {
+        insertWithdrawal(jdbcTemplate, orderNo, from, to, token.symbol(), amount, "CREATED");
+        assertTrue(repository.freezeLedgerBalance(CHAIN, token.symbol(), ledgerAccount(from), amount));
         updateWithdrawal(jdbcTemplate, orderNo, "FROZEN", null, BigDecimal.ZERO);
         updateWithdrawal(jdbcTemplate, orderNo, "SIGNING", null, BigDecimal.ZERO);
-        TxResult tx = sendTrc20(client, service, from, NILE_USDT_CONTRACT, to, amount, USDT_DECIMALS);
+        TxResult tx = sendTrc20(client, service, from, token.contract(), to, amount, token.decimals());
         updateWithdrawal(jdbcTemplate, orderNo, "SENT", tx.txId(), tx.fee());
-        assertTrue(repository.settleLockedDebit(CHAIN, "USDT", from.address(), amount));
+        assertTrue(repository.settleLockedDebit(CHAIN, token.symbol(), ledgerAccount(from), amount));
         if (tx.fee().signum() > 0) {
-            assertTrue(repository.debitLedgerBalance(CHAIN, "TRX", from.address(), tx.fee()));
+            assertTrue(repository.debitLedgerBalance(CHAIN, "TRX", ledgerAccount(from), tx.fee()));
         }
         updateWithdrawal(jdbcTemplate, orderNo, "CONFIRMED", tx.txId(), tx.fee());
         return tx;
@@ -247,25 +324,27 @@ class TronLiveFullFlowIntegrationTest {
 
     private static TxResult collectTrc20(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
                                          TronTridentClient client, TronTrc20Service service,
-                                         String collectionNo, Actor from, Actor to, BigDecimal amount) throws Exception {
+                                         String collectionNo, Actor from, Actor to, BigDecimal amount,
+                                         TokenSpec token) throws Exception {
         jdbcTemplate.update("""
                         insert into collection_record(collection_no, chain, asset_symbol, from_address, to_address,
                                                       amount, fee, status)
-                        values (?, ?, 'USDT', ?, ?, ?, 0, 'CREATED')
-                        on conflict (collection_no) do update set status = 'CREATED', updated_at = now()
-                        """, collectionNo, CHAIN, from.address(), to.address(), amount);
-        assertTrue(repository.freezeLedgerBalance(CHAIN, "USDT", from.address(), amount));
+                        values (?, ?, ?, ?, ?, ?, 0, 'CREATED')
+                        on conflict (chain, collection_no) do update
+                        set status = 'CREATED', updated_at = now()
+                        """, collectionNo, CHAIN, token.symbol(), from.address(), to.address(), amount);
+        assertTrue(repository.freezeLedgerBalance(CHAIN, token.symbol(), ledgerAccount(from), amount));
         jdbcTemplate.update("update collection_record set status = 'SIGNING', updated_at = now() where collection_no = ?",
                 collectionNo);
-        TxResult tx = sendTrc20(client, service, from, NILE_USDT_CONTRACT, to.address(), amount, USDT_DECIMALS);
+        TxResult tx = sendTrc20(client, service, from, token.contract(), to.address(), amount, token.decimals());
         jdbcTemplate.update("""
                         update collection_record
                         set status = 'SENT', tx_hash = ?, fee = ?, updated_at = now()
                         where collection_no = ?
                         """, tx.txId(), tx.fee(), collectionNo);
-        assertTrue(repository.settleLockedDebit(CHAIN, "USDT", from.address(), amount));
+        assertTrue(repository.settleLockedDebit(CHAIN, token.symbol(), ledgerAccount(from), amount));
         if (tx.fee().signum() > 0) {
-            assertTrue(repository.debitLedgerBalance(CHAIN, "TRX", from.address(), tx.fee()));
+            assertTrue(repository.debitLedgerBalance(CHAIN, "TRX", ledgerAccount(from), tx.fee()));
         }
         jdbcTemplate.update("""
                         update collection_record
@@ -326,19 +405,19 @@ class TronLiveFullFlowIntegrationTest {
         return Trc20AbiCodec.fromRawAmount(raw, decimals);
     }
 
-    private static long estimateTransferEnergy(TronTridentClient client, Actor owner, String to, BigDecimal amount) {
+    private static long estimateTransferEnergy(TronTridentClient client, Actor owner, String to, BigDecimal amount,
+                                               TokenSpec token) {
         Function transfer = new Function("transfer",
-                List.of(new Address(to), new Uint256(Trc20AbiCodec.toRawAmount(amount, USDT_DECIMALS))),
+                List.of(new Address(to), new Uint256(Trc20AbiCodec.toRawAmount(amount, token.decimals()))),
                 List.of(new TypeReference<org.tron.trident.abi.datatypes.Bool>() {
                 }));
-        Response.EstimateEnergyMessage estimate = client.api().estimateEnergy(owner.address(), NILE_USDT_CONTRACT,
+        Response.EstimateEnergyMessage estimate = client.api().estimateEnergy(owner.address(), token.contract(),
                 transfer, NodeType.FULL_NODE);
         return estimate.getEnergyRequired();
     }
 
-    private static void prepareDatabase(JdbcTemplate jdbcTemplate, Actor source, Actor userA, Actor userB,
-                                        Actor userC, Actor hot, Actor external, String runId) {
-        for (Actor actor : List.of(userA, userB, userC, hot, external)) {
+    private static void prepareDatabase(JdbcTemplate jdbcTemplate, List<Actor> actors, String runId) {
+        for (Actor actor : actors) {
             jdbcTemplate.update("delete from ledger_balance where chain = ? and lower(account_id) = lower(?)",
                     CHAIN, actor.address());
             jdbcTemplate.update("delete from deposit_record where chain = ? and lower(to_address) = lower(?)",
@@ -349,7 +428,6 @@ class TronLiveFullFlowIntegrationTest {
                     CHAIN, actor.address());
             insertAddress(jdbcTemplate, actor, "LIVE_" + actor.name().toUpperCase(Locale.ROOT));
         }
-        insertAddress(jdbcTemplate, source, "LIVE_SOURCE");
         jdbcTemplate.update("delete from withdrawal_order where order_no like ?", runId + "%");
         jdbcTemplate.update("delete from collection_record where collection_no like ?", runId + "%");
         jdbcTemplate.update("delete from gas_topup_task where task_no like ?", runId + "%");
@@ -374,14 +452,14 @@ class TronLiveFullFlowIntegrationTest {
                 actor.path(), role);
     }
 
-    private static void upsertNileUsdt(JdbcTemplate jdbcTemplate) {
-        String contractHex = TronAddressCodec.base58ToHex(NILE_USDT_CONTRACT);
+    private static void upsertToken(JdbcTemplate jdbcTemplate, String network, TokenSpec token) {
+        String contractHex = TronAddressCodec.base58ToHex(token.contract());
         jdbcTemplate.update("""
                         insert into token_config(chain, network, symbol, standard, token_standard, contract_address,
                                                  contract_address_base58, contract_address_hex, decimals, enabled,
                                                  min_deposit, min_withdraw, min_deposit_amount, min_withdraw_amount,
                                                  collect_threshold, gas_strategy, confirmation_required, updated_at)
-                        values (?, ?, 'USDT', 'TRC20', 'TRC20', ?, ?, ?, ?, true,
+                        values (?, ?, ?, 'TRC20', 'TRC20', ?, ?, ?, ?, true,
                                 0.000001, 0.000001, 0.000001, 0.000001, 1, 'energy-bandwidth', 1, now())
                         on conflict (chain, network, symbol) do update set
                             standard = excluded.standard,
@@ -397,7 +475,8 @@ class TronLiveFullFlowIntegrationTest {
                             gas_strategy = excluded.gas_strategy,
                             confirmation_required = excluded.confirmation_required,
                             updated_at = now()
-                        """, CHAIN, NETWORK, NILE_USDT_CONTRACT, NILE_USDT_CONTRACT, contractHex, USDT_DECIMALS);
+                        """, CHAIN, network, token.symbol(), token.contract(), token.contract(), contractHex,
+                token.decimals());
     }
 
     private static void insertWithdrawal(JdbcTemplate jdbcTemplate, String orderNo, Actor from, String to,
@@ -406,7 +485,8 @@ class TronLiveFullFlowIntegrationTest {
                         insert into withdrawal_order(order_no, user_id, chain, asset_symbol, from_address,
                                                      to_address, amount, fee, status)
                         values (?, ?, ?, ?, ?, ?, ?, 0, ?)
-                        on conflict (order_no) do update set status = excluded.status, updated_at = now()
+                        on conflict (chain, order_no) do update
+                        set status = excluded.status, updated_at = now()
                         """, orderNo, from.userId(), CHAIN, asset, from.address(), to, amount, status);
     }
 
@@ -445,11 +525,12 @@ class TronLiveFullFlowIntegrationTest {
     }
 
     private static void assertTokenLedger(TronTridentClient client, JdbcTemplate jdbcTemplate, Actor actor,
-                                          BigDecimal expected) {
-        assertBalanceEquals(expected, ledger(jdbcTemplate, "USDT", actor.address()),
-                actor.name() + " USDT ledger expected");
-        assertBalanceEquals(trc20Balance(client, actor.address(), NILE_USDT_CONTRACT, USDT_DECIMALS),
-                ledger(jdbcTemplate, "USDT", actor.address()), actor.name() + " USDT ledger must match chain");
+                                          TokenSpec token, BigDecimal expected) {
+        assertBalanceEquals(expected, ledger(jdbcTemplate, token.symbol(), actor.address()),
+                actor.name() + " " + token.symbol() + " ledger expected");
+        assertBalanceEquals(trc20Balance(client, actor.address(), token.contract(), token.decimals()),
+                ledger(jdbcTemplate, token.symbol(), actor.address()),
+                actor.name() + " " + token.symbol() + " ledger must match chain");
     }
 
     private static void assertNoNegativeOrLockedLedger(JdbcTemplate jdbcTemplate, Actor... actors) {
@@ -493,13 +574,17 @@ class TronLiveFullFlowIntegrationTest {
         return trx.movePointRight(TRX_DECIMALS).toBigIntegerExact().longValueExact();
     }
 
-    private static Map<String, TronScanner.TokenConfig> tokenMap() {
-        String contractHex = TronAddressCodec.base58ToHex(NILE_USDT_CONTRACT);
-        return Map.of(contractHex, new TronScanner.TokenConfig("USDT", contractHex, USDT_DECIMALS));
+    private static Map<String, TronScanner.TokenConfig> tokenMap(TokenSpec token) {
+        String contractHex = TronAddressCodec.base58ToHex(token.contract());
+        return Map.of(contractHex, new TronScanner.TokenConfig(token.symbol(), contractHex, token.decimals()));
     }
 
     private static Set<String> platform(Actor actor) {
         return Set.of(actor.address().toLowerCase(Locale.ROOT));
+    }
+
+    private static String ledgerAccount(Actor actor) {
+        return actor.address().toLowerCase(Locale.ROOT);
     }
 
     private static void assertBalanceEquals(BigDecimal expected, BigDecimal actual, String message) {
@@ -512,6 +597,27 @@ class TronLiveFullFlowIntegrationTest {
         ECKey ecKey = deriveEcKey(sig2Root, path);
         KeyPair keyPair = TronTridentKeyFactory.fromBitcoinEcKey(ecKey);
         return new Actor(name, userId, path, keyPair, keyPair.toBase58CheckAddress());
+    }
+
+    private static Actor actorFromPrivateKey(String name, int userId, String privateKey) {
+        KeyPair keyPair = new KeyPair(privateKey);
+        return new Actor(name, userId, "local-test-source", keyPair, keyPair.toBase58CheckAddress());
+    }
+
+    private static String requiredProperty(String name) {
+        String value = System.getProperty(name, "").trim();
+        if (value.isEmpty()) {
+            throw new IllegalStateException("missing required test property: " + name);
+        }
+        return value;
+    }
+
+    private static String requiredEnvironment(String name) {
+        String value = System.getenv().getOrDefault(name, "").trim();
+        if (value.isEmpty()) {
+            throw new IllegalStateException("missing required test environment variable: " + name);
+        }
+        return value;
     }
 
     private static ECKey deriveEcKey(Bip32Node sig2Root, String path) {
@@ -546,6 +652,15 @@ class TronLiveFullFlowIntegrationTest {
     }
 
     private record Actor(String name, int userId, String path, KeyPair keyPair, String address) {
+    }
+
+    private record TokenSpec(String symbol, String contract, int decimals) {
+    }
+
+    private record TokenFlowResult(String depositForCollectionTxId, String depositForWithdrawalTxId,
+                                   String collectionGasTopupTxId, String collectionTxId,
+                                   String withdrawalGasTopupTxId, String withdrawalTxId,
+                                   long estimatedEnergy, BigDecimal estimatedFee) {
     }
 
     private record TxResult(String txId, long blockHeight, BigDecimal fee) {

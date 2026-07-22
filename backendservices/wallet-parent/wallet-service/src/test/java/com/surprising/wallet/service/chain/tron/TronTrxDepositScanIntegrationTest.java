@@ -12,5 +12,8 @@ class TronTrxDepositScanIntegrationTest {
         var jdbc = TronLiveFlowTestSupport.jdbcTemplate();
         TronLiveFlowTestSupport.assertCreditedDeposit(jdbc, report.get("trxDepositTxid"),
                 report.get("userA"), "TRX", new BigDecimal("5"));
+        TronLiveFlowTestSupport.assertConfirmedCollection(jdbc, report.get("trxCollectionTxid"));
+        TronLiveFlowTestSupport.assertCreditedDeposit(jdbc, report.get("trxCollectionTxid"),
+                report.get("hot"), "TRX", new BigDecimal("1"));
     }
 }
