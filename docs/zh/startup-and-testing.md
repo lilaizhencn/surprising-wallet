@@ -217,18 +217,14 @@ scripts/regtest/all-chain-regtest.sh test-db
 
 这些测试不需要本地区块链节点，但需要本地 PostgreSQL。
 
-使用隔离的 PostgreSQL 数据库验证托管充值投影和事务回滚边界：
+使用本机 PostgreSQL 18 中自动创建并清理的临时数据库，验证托管充值投影和事务回滚边界：
 
 ```bash
-SW_TEST_CUSTODY_DB_URL=jdbc:postgresql://127.0.0.1:5432/wallet_test \
-SW_TEST_CUSTODY_DB_USERNAME=wallet \
-SW_TEST_CUSTODY_DB_PASSWORD=wallet \
-mvn -pl backendservices/wallet-parent/wallet-server -am \
-  -Dtest=CustodyDepositProjectionIntegrationTest \
-  -Dsurefire.failIfNoSpecifiedTests=false test
+scripts/regtest/run-custody-db-tests.sh
 ```
 
-测试会创建并回滚自己的租户和地址数据。它会验证已禁用的托管地址收到
+脚本不会启动独立数据库实例，只会复用 `127.0.0.1:5432`，且拒绝 PostgreSQL 18
+以外的服务。测试会创建并回滚自己的租户和地址数据。它会验证已禁用的托管地址收到
 确认充值后，租户充值投影、托管账本和持久化事件仍在同一事务中更新；
 任一观察器失败时，原始充值记录和余额也会一起回滚。
 

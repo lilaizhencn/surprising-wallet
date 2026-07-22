@@ -113,18 +113,17 @@ operation nonce 都为 `1`。
 
 ## 6. 验证数据库、两租户和生产状态机
 
-确认 `wallet_custody_test` 是可丢弃测试库，再执行：
+通过统一脚本复用本机 PostgreSQL 18。脚本只会在 `127.0.0.1:5432` 内创建
+`surprising_wallet_test_*` 临时库，执行结束后自动删除，不会启动独立数据库实例：
 
 ```bash
-mvn -pl backendservices/wallet-parent/wallet-server -am \
-  -Dtest=Evm7702ProductionFlowIntegrationTest \
-  -Dsurefire.failIfNoSpecifiedTests=false \
+CUSTODY_DB_TESTS=Evm7702ProductionFlowIntegrationTest \
+scripts/regtest/run-custody-db-tests.sh \
   -Devm.7702.production.enabled=true \
   -Devm.7702.test.chain=BNB \
   -Devm.7702.test.chain-id=97 \
   -Devm.7702.collector='<COLLECTOR_ADDRESS>' \
-  -Devm.7702.delegate='<DELEGATE_ADDRESS>' \
-  test
+  -Devm.7702.delegate='<DELEGATE_ADDRESS>'
 ```
 
 固定验收事实：租户 A 三地址、租户 B 两地址；所有 Authority 为 `0 BNB`；每租户独立批次和 txid；不存在跨租户 item；

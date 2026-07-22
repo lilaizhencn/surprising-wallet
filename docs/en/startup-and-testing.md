@@ -219,19 +219,16 @@ scripts/regtest/all-chain-regtest.sh test-db
 
 These tests do not need local chain nodes. They do need the local PostgreSQL database.
 
-To verify the custody deposit projection and rollback boundary against an isolated
-PostgreSQL database:
+To verify the custody deposit projection and rollback boundary against a temporary
+database created and cleaned up inside the installed local PostgreSQL 18 instance:
 
 ```bash
-SW_TEST_CUSTODY_DB_URL=jdbc:postgresql://127.0.0.1:5432/wallet_test \
-SW_TEST_CUSTODY_DB_USERNAME=wallet \
-SW_TEST_CUSTODY_DB_PASSWORD=wallet \
-mvn -pl backendservices/wallet-parent/wallet-server -am \
-  -Dtest=CustodyDepositProjectionIntegrationTest \
-  -Dsurefire.failIfNoSpecifiedTests=false test
+scripts/regtest/run-custody-db-tests.sh
 ```
 
-The test creates and rolls back its own tenant/address fixtures. It proves that
+The script never starts a separate database server. It only reuses `127.0.0.1:5432`
+and refuses a server other than PostgreSQL 18. The test creates and rolls back its
+own tenant/address fixtures. It proves that
 confirmed deposits for disabled custody addresses still update the tenant
 deposit projection, custody ledger, and durable event in the same transaction,
 and that an observer failure rolls the original deposit and balance back.
