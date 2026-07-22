@@ -94,12 +94,6 @@ public class XrpTransactionService {
         return txHash;
     }
 
-    public boolean confirmWithdrawal(AccountChainProfile profile, String orderNo, String assetSymbol,
-                                     String accountId, BigDecimal debitAmount) {
-        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
-                profile, orderNo, assetSymbol, accountId, debitAmount);
-    }
-
     public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
                                      String orderNo, String assetSymbol,
                                      String accountId, BigDecimal debitAmount) {

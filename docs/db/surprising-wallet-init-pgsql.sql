@@ -5086,6 +5086,8 @@ WITH token_data(chain, symbol, standard, network, token_standard, contract_addre
         ('SUI', 'USDC', 'SUI_COIN', 'testnet', 'COIN', '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC', 6, NULL, NULL, 'SUI_GAS_OBJECT'),
         ('TON', 'USDC', 'JETTON', 'testnet', 'JETTON', 'kQCzPT6908-8TR862TQo1S43-2kEme8UKRCRSWkaxNLD7H_2', 6, NULL, NULL, 'TON_FORWARD_FEE'),
         ('XRP', 'USDC', 'XRPL_ISSUED', 'testnet', 'ISSUED_CURRENCY', 'rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt:5553444300000000000000000000000000000000', 6, NULL, '5553444300000000000000000000000000000000', 'XRP_TRUSTLINE'),
+        -- Testnet issued-currency template; the live flow replaces the issuer with its funded test issuer.
+        ('XRP', 'USDT', 'XRPL_ISSUED', 'testnet', 'ISSUED_CURRENCY', 'rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt:5553445400000000000000000000000000000000', 6, NULL, '5553445400000000000000000000000000000000', 'XRP_TRUSTLINE'),
         ('ETH', 'USDT', 'ERC20', 'sepolia', 'ERC20', '0x01a6810727db185bbf7f30ec158c3ac8b8112627', 6, NULL, NULL, 'native-gas'),
         ('POLYGON', 'USDT', 'ERC20', 'amoy', 'ERC20', '0xb5F6211f94FCC162D5c8cebba4f656c965577392', 6, NULL, NULL, 'native-gas'),
         ('ARBITRUM', 'USDT', 'ERC20', 'sepolia', 'ERC20', '0xEf54C221Fc94517877F0F40eCd71E0A3866D66C2', 6, NULL, NULL, 'native-gas'),
@@ -5180,7 +5182,7 @@ UPDATE "public"."chain_asset"
  WHERE "chain" = 'XRP' AND "symbol" = 'XRP';
 UPDATE "public"."chain_asset"
    SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
- WHERE "chain" = 'XRP' AND "symbol" = 'USDC';
+ WHERE "chain" = 'XRP' AND "symbol" IN ('USDC', 'USDT');
 
 -- HyperEVM is an EVM-compatible chain; HyperCore exchange-account flows are intentionally
 -- not modeled here. The seeded USDC row is Circle Native USDC on HyperEVM testnet.

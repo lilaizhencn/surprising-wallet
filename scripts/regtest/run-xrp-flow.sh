@@ -53,16 +53,16 @@ local_pg_psql "$XRP_FLOW_DB" -v ON_ERROR_STOP=1 -Atqc "
 do \$\$
 begin
   if (select count(*) from deposit_record where chain='XRP' and status='CREDITED'
-      and asset_symbol in ('XRP','USDC')) <> 2 then
-    raise exception 'expected credited XRP and USDC deposits';
+      and asset_symbol in ('XRP','USDC','USDT')) <> 3 then
+    raise exception 'expected credited XRP, USDC, and USDT deposits';
   end if;
   if (select count(*) from withdrawal_order where chain='XRP' and status='CONFIRMED'
-      and asset_symbol in ('XRP','USDC')) <> 2 then
-    raise exception 'expected confirmed XRP and USDC withdrawals';
+      and asset_symbol in ('XRP','USDC','USDT')) <> 3 then
+    raise exception 'expected confirmed XRP, USDC, and USDT withdrawals';
   end if;
   if (select count(*) from collection_record where chain='XRP' and status='CONFIRMED'
-      and asset_symbol in ('XRP','USDC')) <> 2 then
-    raise exception 'expected confirmed XRP and USDC collections';
+      and asset_symbol in ('XRP','USDC','USDT')) <> 3 then
+    raise exception 'expected confirmed XRP, USDC, and USDT collections';
   end if;
   if exists (select 1 from ledger_balance where chain='XRP'
       and (available_balance < 0 or locked_balance < 0 or total_balance < 0)) then
@@ -80,4 +80,4 @@ begin
 end
 \$\$;"
 
-printf 'XRP PASS Testnet XRP/USDC deposit, replay, withdrawal, collection, trustline, and ledger audit\n'
+printf 'XRP PASS Testnet XRP/USDC/USDT deposit, replay, withdrawal, collection, trustline, and ledger audit\n'
