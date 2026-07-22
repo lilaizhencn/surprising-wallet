@@ -242,8 +242,8 @@ public class TonDepositScanner {
                 }
                 try {
                     String wallet = tonApi.resolveJettonWallet(owner.getAddress(), token.getContractAddress());
-                    addressService.registerJettonWallet(token.getSymbol(), wallet, owner.getUserId(), owner.getBiz(),
-                            owner.getAddressIndex(), owner.getWalletRole());
+                    addressService.registerJettonWallet(owner.getTenantId(), token.getSymbol(), wallet,
+                            owner.getUserId(), owner.getBiz(), owner.getAddressIndex(), owner.getWalletRole());
                 } catch (RuntimeException e) {
                     log.warn("TON Jetton wallet materialization failed: owner={} symbol={} error={}",
                             owner.getAddress(), token.getSymbol(), e.getMessage());

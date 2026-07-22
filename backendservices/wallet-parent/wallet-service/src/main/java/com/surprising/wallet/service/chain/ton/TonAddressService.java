@@ -8,6 +8,9 @@ import org.springframework.stereotype.Service;
 import org.ton.ton4j.address.Address;
 import org.ton.ton4j.smartcontract.wallet.v4.WalletV4R2;
 
+import java.util.Objects;
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class TonAddressService {
@@ -16,13 +19,16 @@ public class TonAddressService {
     private final TonKeyService keyService;
     private final ChainJdbcRepository repository;
 
-    public ChainAddressRecord createNativeAddress(long userId, int biz, long derivationIndex, String walletRole) {
+    public ChainAddressRecord createNativeAddress(UUID tenantId, long userId, int biz,
+                                                  long derivationIndex, String walletRole) {
+        Objects.requireNonNull(tenantId, "tenantId is required");
         HotWalletRules.requireAllowedReservedAddress(CHAIN, "TON", "TON", userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, "TON", userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     WalletV4R2 wallet = keyService.wallet(userId, biz, derivationIndex);
                     String address = friendly(wallet.getAddress(), false);
                     ChainAddressRecord record = ChainAddressRecord.builder()
+                            .tenantId(tenantId)
                             .chain(CHAIN)
                             .assetSymbol("TON")
                             .accountId(address)
@@ -41,15 +47,17 @@ public class TonAddressService {
                 });
     }
 
-    public ChainAddressRecord registerJettonWallet(String symbol, String jettonWalletAddress,
+    public ChainAddressRecord registerJettonWallet(UUID tenantId, String symbol, String jettonWalletAddress,
                                                    long userId, int biz, long derivationIndex,
                                                    String walletRole) {
+        Objects.requireNonNull(tenantId, "tenantId is required");
         HotWalletRules.requireAllowedReservedAddress(CHAIN, symbol, "TON", userId, biz, derivationIndex, walletRole);
-        ChainAddressRecord owner = createNativeAddress(userId, biz, derivationIndex, walletRole);
+        ChainAddressRecord owner = createNativeAddress(tenantId, userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     String address = friendly(Address.of(jettonWalletAddress), true);
                     ChainAddressRecord record = ChainAddressRecord.builder()
+                            .tenantId(tenantId)
                             .chain(CHAIN)
                             .assetSymbol(symbol)
                             .accountId(owner.getAddress())

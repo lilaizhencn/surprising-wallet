@@ -24,6 +24,7 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -206,74 +207,79 @@ public class TonTransactionService {
         });
     }
 
-    public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
+    public String withdrawNative(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amount, String memo) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "ton withdrawNative");
-        Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
+        Optional<String> existing = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo);
         if (existing.isPresent()) {
             return existing.get();
         }
         long feeNano = profile().getDefaultFee();
         BigDecimal fee = displayAmount(feeNano, 9);
-        if (repository.createWithdrawalOrder(orderNo, userId, CHAIN, "TON", toAddress,
-                amount, fee) == 0) {
-            return repository.findWithdrawalTxHash(CHAIN, orderNo)
+        if (repository.createTenantWithdrawalOrder(tenantId, orderNo, userId, CHAIN, "TON",
+                from.getAddress(), from.getAccountId(), toAddress, amount, fee) == 0) {
+            return repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo)
                     .orElseThrow(() -> new IllegalStateException("TON withdrawal already claimed"));
         }
         BigDecimal debit = amount.add(fee);
-        if (!repository.freezeLedgerBalance(CHAIN, "TON", from.getAccountId(), debit)) {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null,
+        if (!repository.freezeLedgerBalance(tenantId, CHAIN, "TON", from.getAccountId(), debit)) {
+            repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FAILED", from.getAddress(), null,
                     "insufficient TON ledger balance");
             throw new IllegalStateException("insufficient TON ledger balance");
         }
-        repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
+        repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
-            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
+            if (repository.claimWithdrawalSigning(tenantId, CHAIN, orderNo, from.getAddress()) != 1) {
                 throw new IllegalStateException("TON withdrawal is not signable: " + orderNo);
             }
             PreparedTransfer prepared = prepareNative(from, toAddress, atomicAmount(amount, 9), memo);
             String hash = broadcast(prepared);
-            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), hash) != 1) {
+            if (repository.markWithdrawalSent(tenantId, CHAIN, orderNo, from.getAddress(), hash) != 1) {
                 throw new IllegalStateException("TON withdrawal state changed before SENT: " + orderNo);
             }
             record(hash, from.getAddress(), toAddress, "TON", null, amount, feeNano,
                     null, "SENT", prepared.bocBase64());
             return hash;
         } catch (RuntimeException e) {
-            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(
+                    tenantId, CHAIN, orderNo, from.getAddress(), e.getMessage());
             throw e;
         }
     }
 
-    public String withdrawJetton(String orderNo, long userId, ChainAddressRecord from,
+    public String withdrawJetton(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                  String jettonMaster, String destinationOwner,
                                  BigDecimal amount, String memo) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "ton withdrawJetton");
-        Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
+        Optional<String> existing = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo);
         if (existing.isPresent()) {
             return existing.get();
         }
         TokenDefinition token = repository.findTokenByContract(CHAIN, jettonMaster)
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Jetton " + jettonMaster));
-        if (repository.createWithdrawalOrder(orderNo, userId, CHAIN, token.getSymbol(), destinationOwner,
+        if (repository.createTenantWithdrawalOrder(tenantId, orderNo, userId, CHAIN, token.getSymbol(),
+                from.getOwnerAddress(), from.getAccountId(), destinationOwner,
                 amount, BigDecimal.ZERO) == 0) {
-            return repository.findWithdrawalTxHash(CHAIN, orderNo)
+            return repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo)
                     .orElseThrow(() -> new IllegalStateException("Jetton withdrawal already claimed"));
         }
-        if (!repository.freezeLedgerBalance(CHAIN, token.getSymbol(), from.getAccountId(), amount)) {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getOwnerAddress(), null,
+        if (!repository.freezeLedgerBalance(
+                tenantId, CHAIN, token.getSymbol(), from.getAccountId(), amount)) {
+            repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FAILED", from.getOwnerAddress(), null,
                     "insufficient Jetton ledger balance");
             throw new IllegalStateException("insufficient Jetton ledger balance");
         }
-        repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getOwnerAddress(), null, null);
+        repository.updateWithdrawalStatus(
+                tenantId, CHAIN, orderNo, "FROZEN", from.getOwnerAddress(), null, null);
         try {
-            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getOwnerAddress()) != 1) {
+            if (repository.claimWithdrawalSigning(tenantId, CHAIN, orderNo, from.getOwnerAddress()) != 1) {
                 throw new IllegalStateException("Jetton withdrawal is not signable: " + orderNo);
             }
             PreparedTransfer prepared = prepareJetton(from, from.getAddress(),
                     destinationOwner, atomicAmount(amount, token.getDecimals()), from.getOwnerAddress(), memo);
             String hash = broadcast(prepared);
-            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getOwnerAddress(), hash) != 1) {
+            if (repository.markWithdrawalSent(
+                    tenantId, CHAIN, orderNo, from.getOwnerAddress(), hash) != 1) {
                 throw new IllegalStateException("Jetton withdrawal state changed before SENT: " + orderNo);
             }
             record(hash, from.getAddress(), destinationOwner, token.getSymbol(), jettonMaster,
@@ -281,18 +287,20 @@ public class TonTransactionService {
                     "SENT", prepared.bocBase64());
             return hash;
         } catch (RuntimeException e) {
-            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getOwnerAddress(), e.getMessage());
+            repository.markWithdrawalBroadcastUnknown(
+                    tenantId, CHAIN, orderNo, from.getOwnerAddress(), e.getMessage());
             throw e;
         }
     }
 
-    public boolean confirmWithdrawal(String orderNo, String symbol, String accountId,
+    public boolean confirmWithdrawal(UUID tenantId, String orderNo, String symbol, String accountId,
                                      BigDecimal debitAmount) {
-        String hash = repository.findWithdrawalTxHash(CHAIN, orderNo).orElseThrow();
+        String hash = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo).orElseThrow();
         if (!confirmSentMessage(hash, accountId)) {
             return false;
         }
-        if (repository.confirmWithdrawalAndSettle(CHAIN, orderNo, hash, symbol, accountId, debitAmount)) {
+        if (repository.confirmWithdrawalAndSettle(
+                tenantId, CHAIN, orderNo, hash, symbol, accountId, debitAmount)) {
             repository.markTonTransactionConfirmed(CHAIN, hash);
             return true;
         }

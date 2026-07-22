@@ -49,13 +49,16 @@ class TonDatabaseFlowIntegrationTest {
             ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
             TonKeyService keys = new TonKeyService(MASTER_SEED);
             TonAddressService addresses = new TonAddressService(keys, repository);
+            UUID tenantId = TonTenantIntegrationFixture.ensureTenant(jdbc);
             long baseIndex = 900_000L + Math.abs(UUID.randomUUID().getLeastSignificantBits() % 100_000L);
 
-            ChainAddressRecord userA = addresses.createNativeAddress(3001, 0, baseIndex, "DEPOSIT");
+            ChainAddressRecord userA = addresses.createNativeAddress(
+                    tenantId, 3001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userAAfterRestart = new TonAddressService(
                     new TonKeyService(MASTER_SEED), repository)
-                    .createNativeAddress(3001, 0, baseIndex, "DEPOSIT");
-            ChainAddressRecord userB = addresses.createNativeAddress(3002, 0, baseIndex + 1, "DEPOSIT");
+                    .createNativeAddress(tenantId, 3001, 0, baseIndex, "DEPOSIT");
+            ChainAddressRecord userB = addresses.createNativeAddress(
+                    tenantId, 3002, 0, baseIndex + 1, "DEPOSIT");
             assertEquals(userA.getAddress(), userAAfterRestart.getAddress());
             assertNotEquals(userA.getAddress(), userB.getAddress());
 
