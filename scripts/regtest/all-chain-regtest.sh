@@ -23,7 +23,6 @@ LIVE_SPENDING_TESTS=(
   "com.surprising.wallet.service.chain.solana.SolanaDevnetLiveFlowIntegrationTest"
   "com.surprising.wallet.service.chain.ton.TonLiveMockJettonFlowIntegrationTest"
   "com.surprising.wallet.service.chain.aptos.AptosLiveNativeFlowIntegrationTest"
-  "com.surprising.wallet.service.chain.aptos.AptosLiveTokenFlowIntegrationTest"
   "com.surprising.wallet.service.chain.sui.SuiLiveNativeFlowIntegrationTest"
 )
 
@@ -47,6 +46,7 @@ commands:
   test-cardano  Run isolated Cardano Yaci devnet ADA/USDC/USDT full flow and reconciliation test
   test-dot      Run isolated Polkadot + Asset Hub DOT/USDC/USDT full flow and reconciliation test
   test-tron     Run isolated TRON TRE TRX/USDT/USDC full flow and reconciliation test
+  test-aptos    Run isolated Aptos localnet APT/FA USDC/USDT full flow and reconciliation test
   test-load     Run 1000-user ETH/TRON/SOLANA/SUI ledger and webhook concurrency load
   test-system   Run TRON/NEAR/Cardano flows and the 1000-user load simultaneously
   dot-runtime-up    Start the local Polkadot runtime companion service
@@ -67,7 +67,8 @@ notes:
   - NEAR uses an isolated official sandbox with mock USDC/USDT and PostgreSQL.
   - ADA uses an isolated Yaci devnet with mock native-asset USDC/USDT and PostgreSQL.
   - DOT uses isolated official Polkadot and Asset Hub dev nodes plus the runtime companion service.
-  - TRON uses isolated TRE with mock USDT/USDC; XRP/APTOS use external testnet/devnet RPC.
+  - APTOS uses an isolated localnet with mock FA USDT/USDC and PostgreSQL.
+  - TRON uses isolated TRE with mock USDT/USDC; XRP uses external Testnet RPC.
 USAGE
 }
 
@@ -91,7 +92,7 @@ TRON                                 local TRE + mock USDT/USDC full flow
 XRP                                  external Testnet XRP + issued USDC full flow
 SOLANA                               local validator + mock USDT/USDC full flow
 TON                                  MyLocalTon + mock USDT/USDC full flow
-APTOS                                DB mock + external testnet/devnet live flow
+APTOS                                localnet + mock FA USDT/USDC full flow
 SUI                                  local Sui node + gRPC + mock USDC full flow
 ADA                                  local Yaci devnet + mock USDC/USDT full flow
 DOT                                  local Polkadot + Asset Hub + polkadot-runtime-service
@@ -189,6 +190,10 @@ test_dot() {
 
 test_tron() {
   "${ROOT_DIR}/scripts/regtest/run-tron-flow.sh"
+}
+
+test_aptos() {
+  "${ROOT_DIR}/infra/aptos/run-fa-flow.sh"
 }
 
 test_load() {
@@ -302,6 +307,9 @@ case "${1:-matrix}" in
   test-tron)
     test_tron
     ;;
+  test-aptos)
+    test_aptos
+    ;;
   test-load)
     test_load
     ;;
@@ -325,6 +333,7 @@ case "${1:-matrix}" in
     test_xmr
     test_evm
     test_tron
+    test_aptos
     test_sui
     test_solana
     test_near
@@ -334,6 +343,7 @@ case "${1:-matrix}" in
     test_xmr
     test_evm
     test_tron
+    test_aptos
     test_sui
     test_solana
     test_near

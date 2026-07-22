@@ -1,6 +1,6 @@
 # 逐链全流程验收记录
 
-更新时间：2026-07-21
+更新时间：2026-07-22
 
 ## 通过标准
 
@@ -23,7 +23,7 @@
 | 链 | 验收网络 | Token 范围 | 当前状态 | 已有证据 / 待完成 |
 |---|---|---|---|---|
 | ADA | preprod | 待核对 | 待测试 | Profile 当前关闭 |
-| APTOS | testnet 配置 + localnet 资金流 | USDC、USDT（FA） | 进行中 | 官方 Testnet 配置、API/Webhook、地址幂等已通过；USDC/USDT 本地真实链上充值、提现、归集和对账已通过；待补 APT 与 Demo 实际回调资金流 |
+| APTOS | testnet 配置 + localnet 资金流 | APT、USDC、USDT（FA） | 钱包资金流通过 | APT 与 USDC/USDT 本地真实链上充值、提现、归集、交易审计和对账已通过；待租户 Demo 通过正式 API/Webhook 完成实际资金流 |
 | ARBITRUM | sepolia 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | AVAX_C | fuji 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
 | BASE | sepolia 配置 + Hardhat | USDC、USDT | 钱包资金流通过 | 原生币与全部 Token 全流程、恢复、nonce、对账通过；待租户 API/Webhook 实际资金流 |
@@ -61,10 +61,11 @@
 - 官方 Testnet USDC 元数据验证通过；USDT 使用明确标记为测试用途的 FA 地址；
 - 公共 Testnet Faucet 需要外部账户凭证，因此资金广播验收使用隔离 Aptos Localnet；
 - Localnet 部署的 USDC、USDT 均为 Aptos FA、6 位精度，不包含 MUSD 或 `APTOS_COIN`；
-- USDC、USDT 分别完成真实链上充值、扫描入账、重复扫描幂等、提现确认、归集确认；
+- APT、USDC、USDT 分别完成真实链上充值、扫描入账、重复扫描幂等、提现确认、归集确认；
+- 三种资产的广播交易均写入 `aptos_transaction`，确认后包含真实 gas、版本、状态和原始交易载荷；
 - 隔离库中的用户账本与平台控制地址链上余额逐币相等，锁定余额和负余额均为 0；
-- `infra/aptos/run-fa-flow.sh` 可从空 Localnet 和临时数据库重复执行并自动清理；
-- Aptos 整链仍需补 APT 原生币资金流，以及通过正式 API/Webhook 驱动 Demo 的实际回调验收。
+- `infra/aptos/run-fa-flow.sh` 可从空 Localnet 和本机 PostgreSQL 18 的 `surprising_wallet_test_aptos_*` 临时库重复执行并自动清理；
+- Aptos 整链仍需通过正式 API/Webhook 驱动 Demo 的实际回调验收。
 
 ## EVM 当前证据
 

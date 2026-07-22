@@ -46,7 +46,12 @@ public class AptosTransactionService {
         AptosTransactionSigner.SignedTransaction tx = signer.nativeTransfer(
                 userId, biz, derivationIndex, fromAddress, sequence, toAddress, amountOctas,
                 gas.maxGasAmount(), gas.gasUnitPrice(), rpc.chainId());
-        return rpc.submitTransaction(tx.json());
+        String hash = rpc.submitTransaction(tx.json());
+        record(hash, fromAddress, toAddress, "APT", AptosRpcClient.aptCoinType(),
+                BigDecimal.valueOf(amountOctas).movePointLeft(8),
+                0L, gas.gasUnitPrice(),
+                sequence, "SENT", tx.json().toString());
+        return hash;
     }
 
     public String sendToken(ChainAddressRecord from, TokenDefinition token,
@@ -56,6 +61,9 @@ public class AptosTransactionService {
 
     public String sendFungibleAsset(ChainAddressRecord from, String metadataAddress,
                                     String toAddress, long amountAtomic) {
+        TokenDefinition token = repository.findTokenByContract(CHAIN, metadataAddress)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "unconfigured Aptos fungible asset " + metadataAddress));
         GasPlan gas = gasPlan();
         long chainSequence = rpc.sequenceNumber(from.getAddress());
         long sequence = repository.reserveAccountSequence(
@@ -64,7 +72,13 @@ public class AptosTransactionService {
                 from.getUserId(), from.getBiz(), from.getAddressIndex(), from.getAddress(), sequence,
                 metadataAddress, toAddress, amountAtomic,
                 gas.maxGasAmount(), gas.gasUnitPrice(), rpc.chainId());
-        return rpc.submitTransaction(tx.json());
+        String hash = rpc.submitTransaction(tx.json());
+        record(hash, from.getAddress(), toAddress, token.getSymbol(),
+                AptosFungibleAsset.requireMetadata(token),
+                BigDecimal.valueOf(amountAtomic).movePointLeft(token.getDecimals()),
+                0L, gas.gasUnitPrice(),
+                sequence, "SENT", tx.json().toString());
+        return hash;
     }
 
     public String runEntryFunction(long derivationIndex, String fromAddress,
@@ -108,7 +122,7 @@ public class AptosTransactionService {
         String hash = rpc.submitTransaction(tx.json());
         record(hash, publisher.getAddress(), publisher.getAddress(), "APT_CONTRACT",
                 AptosRpcClient.aptCoinType(), BigDecimal.ZERO,
-                Math.multiplyExact(maxGasAmount, gasUnitPrice), sequence, "SENT", tx.json().toString());
+                0L, gasUnitPrice, sequence, "SENT", tx.json().toString());
         return new DeployPackageResult(hash, sequence);
     }
 
@@ -137,13 +151,10 @@ public class AptosTransactionService {
             if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
                 throw new IllegalStateException("Aptos withdrawal is not signable: " + orderNo);
             }
-            long sequenceBefore = rpc.sequenceNumber(from.getAddress());
             String hash = sendNative(from, toAddress, amount);
             if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), hash) != 1) {
                 throw new IllegalStateException("Aptos withdrawal state changed before SENT: " + orderNo);
             }
-            record(hash, from.getAddress(), toAddress, "APT", AptosRpcClient.aptCoinType(), amountOctas,
-                    feeReserve, sequenceBefore, "SENT", null);
             return hash;
         } catch (RuntimeException e) {
             repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
@@ -175,13 +186,10 @@ public class AptosTransactionService {
             if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
                 throw new IllegalStateException("Aptos token withdrawal is not signable: " + orderNo);
             }
-            long sequenceBefore = rpc.sequenceNumber(from.getAddress());
             String hash = sendToken(from, token, toAddress, atomicAmount.longValueExact());
             if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), hash) != 1) {
                 throw new IllegalStateException("Aptos token withdrawal state changed before SENT: " + orderNo);
             }
-            record(hash, from.getAddress(), toAddress, token.getSymbol(), contractAddress, atomicAmount,
-                    profile().getDefaultFee(), sequenceBefore, "SENT", null);
             return hash;
         } catch (RuntimeException e) {
             repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
@@ -196,17 +204,13 @@ public class AptosTransactionService {
         if (existing.isPresent()) {
             return existing.get();
         }
-        long feeReserve = profile().getDefaultFee();
         if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
             return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("Aptos collection is not retryable"));
         }
         try {
-            long sequenceBefore = rpc.sequenceNumber(from.getAddress());
             String hash = sendNative(from, hotAddress, amountOctas.longValueExact());
             repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", hash, null, null);
-            record(hash, from.getAddress(), hotAddress, "APT", AptosRpcClient.aptCoinType(), amountOctas,
-                    feeReserve, sequenceBefore, "SENT", null);
             return hash;
         } catch (RuntimeException e) {
             repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
@@ -230,11 +234,8 @@ public class AptosTransactionService {
                     .orElseThrow(() -> new IllegalStateException("Aptos token collection is not retryable"));
         }
         try {
-            long sequenceBefore = rpc.sequenceNumber(from.getAddress());
             String hash = sendToken(from, token, hotAddress, atomicAmount.longValueExact());
             repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", hash, null, null);
-            record(hash, from.getAddress(), hotAddress, token.getSymbol(), contractAddress, atomicAmount,
-                    profile().getDefaultFee(), sequenceBefore, "SENT", null);
             return hash;
         } catch (RuntimeException e) {
             repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
@@ -308,7 +309,7 @@ public class AptosTransactionService {
     }
 
     private void record(String hash, String sender, String receiver, String symbol, String coinType,
-                        BigDecimal amount, long feeReserve, long sequenceNumber,
+                        BigDecimal amount, long gasUsed, long gasUnitPrice, long sequenceNumber,
                         String status, String rawPayload) {
         repository.recordAptosTransaction(AptosTransactionRecord.builder()
                 .chain(CHAIN)
@@ -318,8 +319,8 @@ public class AptosTransactionService {
                 .assetSymbol(symbol)
                 .coinType(coinType)
                 .amount(amount)
-                .gasUsed(feeReserve)
-                .gasUnitPrice(0L)
+                .gasUsed(gasUsed)
+                .gasUnitPrice(gasUnitPrice)
                 .sequenceNumber(sequenceNumber)
                 .confirmations(0)
                 .status(status)

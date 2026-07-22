@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APTOS_FLOW_ROOT=$(git rev-parse --show-toplevel)
+APTOS_FLOW_SOURCE_ROOT=$(git rev-parse --show-toplevel)
+source "$APTOS_FLOW_SOURCE_ROOT/scripts/regtest/local-postgres.sh"
+APTOS_FLOW_BUILD_ROOT=$(mktemp -d /tmp/surprising-wallet-aptos-build.XXXXXX)
+APTOS_FLOW_ROOT="$APTOS_FLOW_BUILD_ROOT"
 APTOS_FLOW_TMP=$(mktemp -d -t surprising-aptos-fa.XXXXXX)
-APTOS_FLOW_DB="wallet_aptos_it_$$"
-APTOS_FLOW_DB_USER=$(id -un)
+APTOS_FLOW_DB="surprising_wallet_test_aptos_$$"
 APTOS_FLOW_NODE_PID=""
 APTOS_TEST_MASTER_SEED=${APTOS_TEST_MASTER_SEED:-000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f}
 
@@ -15,20 +17,34 @@ cleanup() {
     kill "$APTOS_FLOW_NODE_PID" 2>/dev/null || true
     wait "$APTOS_FLOW_NODE_PID" 2>/dev/null || true
   fi
-  dropdb -h 127.0.0.1 --if-exists "$APTOS_FLOW_DB" >/dev/null 2>&1 || true
+  local_pg_drop "$APTOS_FLOW_DB" >/dev/null 2>&1 || true
   if [[ "$APTOS_FLOW_TMP" == *"/surprising-aptos-fa."* ]] && [[ -d "$APTOS_FLOW_TMP" ]]; then
     trash "$APTOS_FLOW_TMP"
+  fi
+  if [[ "$APTOS_FLOW_BUILD_ROOT" == /tmp/surprising-wallet-aptos-build.* ]] && [[ -d "$APTOS_FLOW_BUILD_ROOT" ]]; then
+    trash "$APTOS_FLOW_BUILD_ROOT"
   fi
   exit "$status"
 }
 trap cleanup EXIT INT TERM
 
-for command in aptos createdb dropdb jq mvn node openssl psql curl trash; do
+for command in aptos jq mvn node openssl curl rsync trash; do
   command -v "$command" >/dev/null || {
     printf 'missing required command: %s\n' "$command" >&2
     exit 1
   }
 done
+
+local_pg_require
+
+rsync -a \
+  --exclude .git \
+  --exclude .codegraph \
+  --exclude target \
+  --exclude node_modules \
+  --exclude artifacts \
+  --exclude logs \
+  "$APTOS_FLOW_SOURCE_ROOT/" "$APTOS_FLOW_BUILD_ROOT/"
 
 if curl -fsS http://127.0.0.1:8080/v1 >/dev/null 2>&1; then
   printf 'port 8080 is already serving an Aptos node; stop it before running this isolated test\n' >&2
@@ -128,10 +144,11 @@ for symbol in usdc usdt; do
   )
 done
 
-createdb -h 127.0.0.1 "$APTOS_FLOW_DB"
-psql -h 127.0.0.1 -d "$APTOS_FLOW_DB" -q -v ON_ERROR_STOP=1 \
+local_pg_create "$APTOS_FLOW_DB"
+APTOS_FLOW_DB_URL=$(local_pg_jdbc_url "$APTOS_FLOW_DB")
+local_pg_psql "$APTOS_FLOW_DB" -q -v ON_ERROR_STOP=1 \
   -f "$APTOS_FLOW_ROOT/docs/db/surprising-wallet-init-pgsql.sql"
-psql -h 127.0.0.1 -d "$APTOS_FLOW_DB" -q -v ON_ERROR_STOP=1 \
+local_pg_psql "$APTOS_FLOW_DB" -q -v ON_ERROR_STOP=1 \
   -v usdc="$APTOS_FLOW_USDC" -v usdt="$APTOS_FLOW_USDT" <<'SQL'
 update chain_profile
    set rpc_url='http://127.0.0.1:8080/v1', chain_id=4,
@@ -154,8 +171,9 @@ SQL
 run_asset_test() {
   local symbol=$1
   local metadata=$2
-  APTOS_DB_URL="jdbc:postgresql://127.0.0.1:5432/$APTOS_FLOW_DB" \
-  APTOS_DB_USER="$APTOS_FLOW_DB_USER" \
+  APTOS_DB_URL="$APTOS_FLOW_DB_URL" \
+  APTOS_DB_USER="$REGTEST_PG_USER" \
+  APTOS_DB_PASSWORD="$REGTEST_PG_PASSWORD" \
   APTOS_RPC_URL=http://127.0.0.1:8080/v1 \
   SW_ED25519_SEED="$APTOS_TEST_MASTER_SEED" \
   APTOS_FA_SYMBOL="$symbol" \
@@ -167,13 +185,25 @@ run_asset_test() {
     -Daptos.fa.live.enabled=true test
 }
 
+APTOS_DB_URL="$APTOS_FLOW_DB_URL" \
+APTOS_DB_USER="$REGTEST_PG_USER" \
+APTOS_DB_PASSWORD="$REGTEST_PG_PASSWORD" \
+APTOS_RPC_URL=http://127.0.0.1:8080/v1 \
+APTOS_FAUCET_URL=http://127.0.0.1:18081 \
+SW_ED25519_SEED="$APTOS_TEST_MASTER_SEED" \
+mvn -q -f "$APTOS_FLOW_ROOT/pom.xml" \
+  -pl backendservices/wallet-parent/wallet-service -am \
+  -Dtest=AptosLiveNativeFlowIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  -Daptos.live.enabled=true test
+
 run_asset_test USDC "$APTOS_FLOW_USDC"
 run_asset_test USDT "$APTOS_FLOW_USDT"
 
 for item in "USDC|$APTOS_FLOW_USDC" "USDT|$APTOS_FLOW_USDT"; do
   symbol=${item%%|*}
   metadata=${item#*|}
-  ledger_atomic=$(psql -h 127.0.0.1 -d "$APTOS_FLOW_DB" -Atqc \
+  ledger_atomic=$(local_pg_psql "$APTOS_FLOW_DB" -Atqc \
     "select (sum(total_balance) * 1000000)::numeric(78,0) from ledger_balance where chain='APTOS' and asset_symbol='$symbol'")
   owner_atomic=$(curl -fsS "http://127.0.0.1:8080/v1/accounts/$APTOS_FLOW_OWNER/balance/$metadata")
   hot_atomic=$(curl -fsS "http://127.0.0.1:8080/v1/accounts/$APTOS_FLOW_HOT/balance/$metadata")
@@ -185,20 +215,34 @@ for item in "USDC|$APTOS_FLOW_USDC" "USDT|$APTOS_FLOW_USDT"; do
   fi
 done
 
-psql -h 127.0.0.1 -d "$APTOS_FLOW_DB" -v ON_ERROR_STOP=1 -Atqc "
+local_pg_psql "$APTOS_FLOW_DB" -v ON_ERROR_STOP=1 -Atqc "
 do \$\$
 begin
   if exists (select 1 from token_config where chain='APTOS' and (symbol='MUSD' or standard='APTOS_COIN')) then
     raise exception 'legacy Aptos MUSD/APTOS_COIN configuration remains';
   end if;
+  if (select count(*) from deposit_record where chain='APTOS' and status='CREDITED' and asset_symbol='APT') <> 1 then
+    raise exception 'expected one credited APT deposit';
+  end if;
   if (select count(*) from deposit_record where chain='APTOS' and status='CREDITED' and asset_symbol in ('USDC','USDT')) <> 2 then
     raise exception 'expected one credited deposit for each FA';
+  end if;
+  if (select count(*) from withdrawal_order where chain='APTOS' and status='CONFIRMED' and asset_symbol='APT') <> 1 then
+    raise exception 'expected one confirmed APT withdrawal';
   end if;
   if (select count(*) from withdrawal_order where chain='APTOS' and status='CONFIRMED' and asset_symbol in ('USDC','USDT')) <> 2 then
     raise exception 'expected one confirmed withdrawal for each FA';
   end if;
+  if (select count(*) from collection_record where chain='APTOS' and status='CONFIRMED' and asset_symbol='APT') <> 1 then
+    raise exception 'expected one confirmed APT collection';
+  end if;
   if (select count(*) from collection_record where chain='APTOS' and status='CONFIRMED' and asset_symbol in ('USDC','USDT')) <> 2 then
     raise exception 'expected one confirmed collection for each FA';
+  end if;
+  if exists (select 1 from deposit_record where chain='APTOS' and tenant_id is null)
+     or exists (select 1 from withdrawal_order where chain='APTOS' and tenant_id is null)
+     or exists (select 1 from collection_record where chain='APTOS' and tenant_id is null) then
+    raise exception 'tenantless Aptos financial record detected';
   end if;
   if exists (select 1 from ledger_balance where chain='APTOS' and (available_balance < 0 or locked_balance < 0 or total_balance < 0)) then
     raise exception 'negative Aptos ledger balance detected';
@@ -206,4 +250,4 @@ begin
 end
 \$\$;"
 
-printf 'Aptos FA flow passed: USDC and USDT deposit, replay, withdrawal, collection, and reconciliation\n'
+printf 'Aptos localnet passed: APT/FA USDC/USDT deposit, replay, withdrawal, collection, and reconciliation\n'

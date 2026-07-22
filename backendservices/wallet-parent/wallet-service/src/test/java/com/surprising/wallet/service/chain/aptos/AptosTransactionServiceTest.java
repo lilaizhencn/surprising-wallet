@@ -3,6 +3,7 @@ package com.surprising.wallet.service.chain.aptos;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.AptosTransactionRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
@@ -21,10 +22,11 @@ class AptosTransactionServiceTest {
     void sendsFungibleAssetThroughPrimaryStoreTransfer() {
         AptosKeyService keys = new AptosKeyService(MASTER_SEED);
         CapturingRpc rpc = new CapturingRpc();
-        AptosTransactionService service = new AptosTransactionService(
-                rpc, new AptosTransactionSigner(keys), new FakeRepository());
-        ChainAddressRecord from = address(keys, 21);
         String metadata = keys.address(22);
+        FakeRepository repository = new FakeRepository(token("APTOS_FA", metadata));
+        AptosTransactionService service = new AptosTransactionService(
+                rpc, new AptosTransactionSigner(keys), repository);
+        ChainAddressRecord from = address(keys, 21);
         String recipient = keys.address(23);
 
         String hash = service.sendToken(from, token("APTOS_FA", metadata), recipient, 1_500_000L);
@@ -36,6 +38,36 @@ class AptosTransactionServiceTest {
         assertEquals(metadata, payload.path("arguments").get(0).asText());
         assertEquals(recipient, payload.path("arguments").get(1).asText());
         assertEquals("1500000", payload.path("arguments").get(2).asText());
+        assertEquals("0xfungible", repository.recorded.getTxHash());
+        assertEquals("USDC", repository.recorded.getAssetSymbol());
+        assertEquals(metadata, repository.recorded.getCoinType());
+        assertEquals("1.500000", repository.recorded.getAmount().toPlainString());
+        assertEquals(0L, repository.recorded.getGasUsed());
+        assertEquals(100L, repository.recorded.getGasUnitPrice());
+        assertEquals("SENT", repository.recorded.getStatus());
+        assertEquals(7L, repository.recorded.getSequenceNumber());
+    }
+
+    @Test
+    void recordsNativeSubmissionBeforeReturningHash() {
+        AptosKeyService keys = new AptosKeyService(MASTER_SEED);
+        CapturingRpc rpc = new CapturingRpc();
+        FakeRepository repository = new FakeRepository();
+        AptosTransactionService service = new AptosTransactionService(
+                rpc, new AptosTransactionSigner(keys), repository);
+        ChainAddressRecord from = address(keys, 24);
+        String recipient = keys.address(25);
+
+        assertEquals("0xfungible", service.sendNative(from, recipient, 20_000_000L));
+        assertEquals("0xfungible", repository.recorded.getTxHash());
+        assertEquals("APT", repository.recorded.getAssetSymbol());
+        assertEquals(from.getAddress(), repository.recorded.getSender());
+        assertEquals(recipient, repository.recorded.getReceiver());
+        assertEquals("0.20000000", repository.recorded.getAmount().toPlainString());
+        assertEquals(0L, repository.recorded.getGasUsed());
+        assertEquals(100L, repository.recorded.getGasUnitPrice());
+        assertEquals("SENT", repository.recorded.getStatus());
+        assertEquals(7L, repository.recorded.getSequenceNumber());
     }
 
     @Test
@@ -107,13 +139,34 @@ class AptosTransactionServiceTest {
     }
 
     private static final class FakeRepository extends ChainJdbcRepository {
+        private final TokenDefinition token;
+        private AptosTransactionRecord recorded;
+
         private FakeRepository() {
+            this(null);
+        }
+
+        private FakeRepository(TokenDefinition token) {
             super(null);
+            this.token = token;
         }
 
         @Override
         public long reserveAccountSequence(String chain, String address, long chainSequence) {
             return chainSequence;
+        }
+
+        @Override
+        public Optional<TokenDefinition> findTokenByContract(String chain, String contractAddress) {
+            return token != null && token.getContractAddress().equals(contractAddress)
+                    ? Optional.of(token)
+                    : Optional.empty();
+        }
+
+        @Override
+        public int recordAptosTransaction(AptosTransactionRecord transaction) {
+            recorded = transaction;
+            return 1;
         }
 
         @Override

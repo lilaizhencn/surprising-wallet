@@ -3,7 +3,6 @@ package com.surprising.wallet.service.chain.aptos;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.LedgerBalanceRecord;
 import com.surprising.wallet.common.key.Ed25519DerivedKey;
 import com.surprising.wallet.common.key.WalletKeyConfigStore;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
@@ -29,7 +28,7 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
     private static final long HOT_INDEX = 1_310_010L;
 
     @Test
-    void liveFaDepositWithdrawAndReplayAreSafe() {
+    void liveFaDepositWithdrawCollectionAndReplayAreSafe() {
         Assumptions.assumeTrue(Boolean.getBoolean("aptos.fa.live.enabled"),
                 "set -Daptos.fa.live.enabled=true after funding the derived Testnet accounts");
         String symbol = env("APTOS_FA_SYMBOL", "USDC").toUpperCase();
@@ -37,8 +36,10 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
         int decimals = Integer.parseInt(env("APTOS_FA_DECIMALS", "6"));
         long depositAtomic = 10L * pow10(decimals);
         long operationAtomic = pow10(decimals);
+        long collectionAtomic = 2L * pow10(decimals);
         BigDecimal depositAmount = BigDecimal.TEN;
         BigDecimal operationAmount = BigDecimal.ONE;
+        BigDecimal collectionAmount = new BigDecimal("2");
 
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 env("APTOS_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
@@ -68,37 +69,92 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
         ChainAddressRecord owner = addresses.createTokenAddress(symbol, 6111, 0, OWNER_INDEX, "DEPOSIT");
         ChainAddressRecord hot = addresses.createTokenAddress(
                 symbol, HOT_USER_ID, 0, HOT_INDEX, "DEPOSIT");
+        AptosTenantIntegrationFixture.TenantAddress tenantAddress =
+                AptosTenantIntegrationFixture.attachDepositAddress(jdbc, owner);
+        AptosTenantIntegrationFixture.attachPlatformAddress(jdbc, hot);
 
         long checkpoint = rpc.ledgerVersion();
         repository.updateScanHeight("APTOS", AptosDepositScanner.SCANNER, checkpoint, checkpoint);
-        BigDecimal ledgerBefore = ledger(repository, symbol, owner.getAccountId());
+        BigDecimal ledgerBefore = ledger(jdbc, tenantAddress.tenantId(), symbol, owner.getAccountId());
 
         String depositHash = transactions.sendFungibleAsset(
                 external, metadataAddress, owner.getAddress(), depositAtomic);
         transactions.requireSuccessfulConfirmation(depositHash, Duration.ofMinutes(2));
         scanner.scanAndCredit();
-        BigDecimal ledgerAfterDeposit = ledger(repository, symbol, owner.getAccountId());
+        BigDecimal ledgerAfterDeposit = ledger(
+                jdbc, tenantAddress.tenantId(), symbol, owner.getAccountId());
         assertAmountEquals(ledgerBefore.add(depositAmount), ledgerAfterDeposit);
         scanner.scanAndCredit();
-        assertAmountEquals(ledgerAfterDeposit, ledger(repository, symbol, owner.getAccountId()));
+        assertAmountEquals(ledgerAfterDeposit,
+                ledger(jdbc, tenantAddress.tenantId(), symbol, owner.getAccountId()));
 
         String withdrawalNo = "aptos-fa-withdraw-" + UUID.randomUUID();
-        assertEquals(1, repository.createWithdrawalOrder(withdrawalNo, owner.getUserId(), "APTOS", symbol,
-                external.getAddress(), operationAmount, BigDecimal.ZERO));
-        assertTrue(repository.freezeLedgerBalance("APTOS", symbol, owner.getAccountId(), operationAmount));
-        repository.updateWithdrawalStatus("APTOS", withdrawalNo, "FROZEN", owner.getAddress(), null, null);
-        assertEquals(1, repository.claimWithdrawalSigning("APTOS", withdrawalNo, owner.getAddress()));
+        assertEquals(1, repository.createTenantWithdrawalOrder(
+                tenantAddress.tenantId(), withdrawalNo, owner.getUserId(), "APTOS", symbol,
+                owner.getAddress(), owner.getAccountId(), external.getAddress(),
+                operationAmount, BigDecimal.ZERO));
+        assertTrue(repository.freezeLedgerBalance(
+                tenantAddress.tenantId(), "APTOS", symbol, owner.getAccountId(), operationAmount));
+        repository.updateWithdrawalStatus(
+                tenantAddress.tenantId(), "APTOS", withdrawalNo,
+                "FROZEN", owner.getAddress(), null, null);
+        assertEquals(1, repository.claimWithdrawalSigning(
+                tenantAddress.tenantId(), "APTOS", withdrawalNo, owner.getAddress()));
         String withdrawalHash = transactions.sendFungibleAsset(
                 owner, metadataAddress, external.getAddress(), operationAtomic);
-        assertEquals(1, repository.markWithdrawalSent("APTOS", withdrawalNo, owner.getAddress(), withdrawalHash));
-        assertEquals(withdrawalHash, repository.findWithdrawalTxHash("APTOS", withdrawalNo).orElseThrow());
+        assertEquals(1, repository.markWithdrawalSent(
+                tenantAddress.tenantId(), "APTOS", withdrawalNo, owner.getAddress(), withdrawalHash));
+        assertEquals(withdrawalHash, repository.findWithdrawalTxHash(
+                tenantAddress.tenantId(), "APTOS", withdrawalNo).orElseThrow());
         assertTrue(transactions.confirmWithdrawal(
-                withdrawalNo, symbol, owner.getAccountId(), operationAmount));
+                tenantAddress.tenantId(), withdrawalNo, symbol,
+                owner.getAccountId(), operationAmount));
+
+        String collectionNo = "aptos-fa-collection-" + UUID.randomUUID();
+        assertEquals(1, repository.createCollectionRecord(
+                tenantAddress.tenantId(), tenantAddress.custodyAddressId(), collectionNo,
+                "APTOS", symbol, owner.getAddress(), hot.getAddress(),
+                collectionAmount, BigDecimal.ZERO, null));
+        String collectionHash = transactions.collectToken(
+                tenantAddress.tenantId(), collectionNo, owner, metadataAddress,
+                hot.getAddress(), BigDecimal.valueOf(collectionAtomic));
+        assertEquals(collectionHash, transactions.collectToken(
+                tenantAddress.tenantId(), collectionNo, owner, metadataAddress,
+                hot.getAddress(), BigDecimal.valueOf(collectionAtomic)));
+        assertTrue(transactions.confirmCollection(tenantAddress.tenantId(), collectionNo));
+
+        assertAmountEquals(depositAmount.subtract(operationAmount),
+                ledger(jdbc, tenantAddress.tenantId(), symbol, owner.getAccountId()));
+        assertEquals(collectionAtomic, rpc.fungibleAssetBalance(hot.getAddress(), metadataAddress));
+        assertEquals(depositAtomic - operationAtomic - collectionAtomic,
+                rpc.fungibleAssetBalance(owner.getAddress(), metadataAddress));
+
+        assertEquals(2L, jdbc.queryForObject("""
+                select count(*) from aptos_transaction
+                 where tx_hash in (?, ?) and status = 'CONFIRMED'
+                   and asset_symbol = ? and raw_payload is not null
+                """, Long.class, withdrawalHash, collectionHash, symbol));
+        assertEquals(1L, jdbc.queryForObject("""
+                select count(*) from aptos_transaction
+                 where tx_hash = ? and status = 'CONFIRMED'
+                   and asset_symbol = ? and raw_payload is not null
+                """, Long.class, depositHash, symbol));
+        assertEquals(3L, jdbc.queryForObject("""
+                select count(*) from aptos_transaction
+                 where asset_symbol = ?
+                   and ((tx_hash = ? and amount = 10)
+                     or (tx_hash = ? and amount = 1)
+                     or (tx_hash = ? and amount = 2))
+                """, Long.class, symbol, depositHash, withdrawalHash, collectionHash));
 
         assertEquals(0L, jdbc.queryForObject("""
                 select count(*) from ledger_balance
                  where chain='APTOS'
                    and (available_balance < 0 or locked_balance < 0 or total_balance < 0)
+                """, Long.class));
+        assertEquals(0L, jdbc.queryForObject("""
+                select count(*) from collection_record
+                 where chain='APTOS' and tenant_id is null
                 """, Long.class));
     }
 
@@ -134,10 +190,14 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
                 "external Testnet account needs FA test funds: " + external);
     }
 
-    private static BigDecimal ledger(ChainJdbcRepository repository, String symbol, String accountId) {
-        return repository.findLedgerBalance("APTOS", symbol, accountId)
-                .map(LedgerBalanceRecord::getTotalBalance)
-                .orElse(BigDecimal.ZERO);
+    private static BigDecimal ledger(JdbcTemplate jdbc, UUID tenantId,
+                                     String symbol, String accountId) {
+        BigDecimal balance = jdbc.queryForObject("""
+                select coalesce(sum(total_balance), 0) from ledger_balance
+                 where tenant_id = ? and chain = 'APTOS'
+                   and asset_symbol = ? and account_id = ?
+                """, BigDecimal.class, tenantId, symbol, accountId);
+        return balance == null ? BigDecimal.ZERO : balance;
     }
 
     private static void assertAmountEquals(BigDecimal expected, BigDecimal actual) {
