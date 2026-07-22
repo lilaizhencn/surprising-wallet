@@ -62,6 +62,7 @@ import static com.surprising.wallet.common.utils.Constants.UNSPENT_TX_ID;
 
 @Service
 public class BitcoinLikeChainRuntime {
+    private static final int FINALITY_AUDIT_DEPTH = 256;
     private final ChainJdbcRepository chainRepository;
     private final PubKeyConfig pubKeyConfig;
     private final AddressService addressService;
@@ -166,6 +167,8 @@ public class BitcoinLikeChainRuntime {
         if (block == null) {
             return null;
         }
+        chainRepository.observeCanonicalBlock(chainType.name(), "utxo-canonical", height,
+                hash, block.getPreviousblockhash());
         long bestHeight = bestHeight(chainType);
         List<UtxoTransaction> results = block.getTx().parallelStream()
                 .map(txid -> {
@@ -178,6 +181,7 @@ public class BitcoinLikeChainRuntime {
                 })
                 .filter(utxos -> !CollectionUtils.isEmpty(utxos))
                 .collect(LinkedList::new, LinkedList::addAll, LinkedList::addAll);
+        results.forEach(utxo -> utxo.setBlockHash(hash));
         if (CollectionUtils.isEmpty(results)) {
             return List.of();
         }
@@ -187,8 +191,29 @@ public class BitcoinLikeChainRuntime {
 
     public void updateTransactionConfirmations(ChainType chainType) {
         AssetRuntimeMetadata asset = assetMetadata(chainType);
+        reconcileCreditedDeposits(chainType);
         updateUnifiedUtxoConfirmations(chainType, asset);
         updatePendingWithdrawConfirmations(chainType, asset);
+    }
+
+    private void reconcileCreditedDeposits(ChainType chainType) {
+        long latest = bestHeight(chainType);
+        long minimumHeight = Math.max(0L, latest - FINALITY_AUDIT_DEPTH + 1L);
+        for (Long height : chainRepository.listCanonicalDepositBlockHeights(
+                chainType.name(), minimumHeight)) {
+            String hash = command(chainType).getBlockHash(height);
+            BtcLikeBlock block = command(chainType).getBlock(hash);
+            if (block == null) {
+                throw new IllegalStateException("canonical UTXO block not found at height " + height);
+            }
+            var observation = chainRepository.observeCanonicalBlock(
+                    chainType.name(), "utxo-canonical", height,
+                    hash, block.getPreviousblockhash());
+            if (observation.reorg()) {
+                // The main cursor has already passed this height; ingest the replacement block now.
+                findRelatedTransactions(chainType, height);
+            }
+        }
     }
 
     public void updateTotalBalance(ChainType chainType) {
@@ -478,6 +503,7 @@ public class BitcoinLikeChainRuntime {
                     utxo.getAddress(),
                     utxo.getBalance(),
                     utxo.getBlockHeight(),
+                    utxo.getBlockHash(),
                     utxo.getConfirmNum().intValue(),
                     Boolean.TRUE.equals(utxo.getCredited()));
         }
@@ -488,6 +514,7 @@ public class BitcoinLikeChainRuntime {
                 .address(utxo.getAddress())
                 .balance(utxo.getBalance())
                 .blockHeight(utxo.getBlockHeight())
+                .blockHash(utxo.getBlockHash())
                 .confirmNum(utxo.getConfirmNum())
                 .txId(utxo.getTxId() + "-" + utxo.getSeq())
                 .currency(utxo.getCurrency())

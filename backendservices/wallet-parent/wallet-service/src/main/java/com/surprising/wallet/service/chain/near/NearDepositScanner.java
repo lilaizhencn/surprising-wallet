@@ -108,7 +108,7 @@ public class NearDepositScanner {
                 }
                 DepositEvent event = new DepositEvent(ChainType.NEAR, SYMBOL, transfer.txHash(),
                         transfer.sender(), address.getAddress(), transfer.amount(), transfer.blockHeight(),
-                        transfer.confirmations(), null, transfer.rawPayload());
+                        transfer.txHash(), transfer.confirmations(), null, transfer.rawPayload());
                 repository.recordNearTransaction(NearTransactionRecord.builder()
                         .chain(CHAIN)
                         .txHash(transfer.txHash())
@@ -137,7 +137,7 @@ public class NearDepositScanner {
                 }
                 DepositEvent event = new DepositEvent(ChainType.NEAR, transfer.symbol(), transfer.txHash(),
                         transfer.sender(), address.getAddress(), transfer.amount(), transfer.blockHeight(),
-                        transfer.confirmations(), transfer.contractId(), transfer.rawPayload());
+                        transfer.txHash(), transfer.confirmations(), transfer.contractId(), transfer.rawPayload());
                 repository.recordNearTransaction(NearTransactionRecord.builder()
                         .chain(CHAIN)
                         .txHash(transfer.txHash())

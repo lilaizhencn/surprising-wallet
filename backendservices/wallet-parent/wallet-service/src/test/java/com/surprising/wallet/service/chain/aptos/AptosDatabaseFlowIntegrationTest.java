@@ -52,7 +52,7 @@ class AptosDatabaseFlowIntegrationTest {
                     + UUID.randomUUID().toString().replace("-", "");
             DepositEvent deposit = new DepositEvent(ChainType.APTOS, "APT", txHash,
                     "0x1", userA.getAddress(), new BigDecimal("100000000"),
-                    123L, 1, null, "{}");
+                    123L, txHash, 1, null, "{}");
             assertTrue(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
             assertFalse(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
             assertTrue(repository.freezeLedgerBalance("APTOS", "APT", userA.getAccountId(),

@@ -41,13 +41,13 @@ class DogecoinDatabaseFlowIntegrationTest {
                 String account = chain.toLowerCase() + "-test-" + UUID.randomUUID();
                 DepositEvent event = new DepositEvent(
                         chainType, chain, txid, null, "synthetic",
-                        new BigDecimal("25.00000000"), 1L, 6, null, "{}");
+                        new BigDecimal("25.00000000"), 1L, txid, 6, null, "{}");
 
                 assertTrue(repository.recordAndCreditDeposit(event, 0, 6, account));
                 assertFalse(repository.recordAndCreditDeposit(event, 0, 6, account));
                 repository.upsertUtxo(
                         chain, chain, txid, 0, "synthetic",
-                        new BigDecimal("25.00000000"), 1L, 6, true);
+                        new BigDecimal("25.00000000"), 1L, txid, 6, true);
                 assertEquals(1, repository.lockUtxo(chain, txid, 0, "lock-1"));
                 assertEquals(0, repository.lockUtxo(chain, txid, 0, "lock-2"));
                 assertEquals(1, repository.releaseUtxos(chain, "lock-1"));

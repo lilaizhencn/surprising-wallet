@@ -59,6 +59,7 @@ public class HyperCoreRepository {
                 address.getAddress(),
                 delta,
                 System.currentTimeMillis(),
+                txHash,
                 1,
                 null,
                 rawPayload);

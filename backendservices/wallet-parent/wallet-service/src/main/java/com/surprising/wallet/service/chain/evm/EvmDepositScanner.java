@@ -37,6 +37,7 @@ import java.util.Set;
 @Slf4j
 @Component
 public class EvmDepositScanner {
+    private static final int FINALITY_AUDIT_DEPTH = 256;
     private static final BigDecimal WEI_PER_ETH = new BigDecimal("1000000000000000000");
     private static final String TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
@@ -157,6 +158,34 @@ public class EvmDepositScanner {
         return withDefaultRpc(chainType, rpcUrl -> scanAndCreditErc20(chainType, rpcUrl, confirmations, blockHeight));
     }
 
+    public void reconcileCreditedDeposits(ChainType chainType, long latestHeight) throws IOException {
+        long minimumHeight = Math.max(0L, latestHeight - FINALITY_AUDIT_DEPTH + 1L);
+        List<Long> heights = repository.listCanonicalDepositBlockHeights(
+                chainType.name(), minimumHeight);
+        if (heights.isEmpty()) {
+            return;
+        }
+        List<Long> reorgedHeights = withDefaultRpc(chainType, rpcUrl -> {
+            Web3j web3j = web3j(rpcUrl);
+            try {
+                List<Long> reorged = new ArrayList<>();
+                for (Long height : heights) {
+                    if (observeBlock(web3j, chainType, height).reorg()) {
+                        reorged.add(height);
+                    }
+                }
+                return reorged;
+            } finally {
+                web3j.shutdown();
+            }
+        });
+        for (Long height : reorgedHeights) {
+            // The normal scan cursor is monotonic, so replacement blocks must be processed here.
+            scanAndCreditNative(chainType, height);
+            scanAndCreditErc20(chainType, height);
+        }
+    }
+
     public List<DepositEvent> scanNativeDeposits(ChainType chainType, String nativeSymbol,
                                                  String rpcUrl, long blockHeight) throws IOException {
         Web3j web3j = web3j(rpcUrl);
@@ -199,6 +228,7 @@ public class EvmDepositScanner {
         requireTaskEnabled(chainType, WalletRuntimeConfigService.TASK_SCAN, "evm scanAndCreditErc20");
         Web3j web3j = web3j(rpcUrl);
         try {
+            observeBlock(web3j, chainType, blockHeight);
             BigInteger latest = web3j.ethBlockNumber().send().getBlockNumber();
             int confirmations = confirmations(latest, blockHeight);
             Set<String> trackedAddresses = repository.listEnabledChainScanAddresses(chainType.name());
@@ -242,6 +272,7 @@ public class EvmDepositScanner {
 
     private List<DepositEvent> scanNativeDeposits(Web3j web3j, ChainType chainType,
                                                   String nativeSymbol, long blockHeight) throws IOException {
+        observeBlock(web3j, chainType, blockHeight);
         Set<String> trackedAddresses = repository.listEnabledChainScanAddresses(chainType.name());
         if (trackedAddresses.isEmpty()) {
             log.warn("EVM native scanner skipped: no enabled {} chain_address rows", chainType.name());
@@ -255,7 +286,6 @@ public class EvmDepositScanner {
         if (block == null) {
             throw new IllegalStateException("ETH block not found: " + blockHeight);
         }
-
         ArrayList<DepositEvent> events = new ArrayList<>();
         for (EthBlock.TransactionResult<?> result : block.getTransactions()) {
             Object value = result.get();
@@ -271,9 +301,20 @@ public class EvmDepositScanner {
                 continue;
             }
             events.add(new DepositEvent(chainType, nativeSymbol, tx.getHash(), from, to,
-                    weiToEth(tx.getValue()), blockHeight, confirmations, null, tx.toString()));
+                    weiToEth(tx.getValue()), blockHeight, block.getHash(), confirmations, null, tx.toString()));
         }
         return events;
+    }
+
+    private ChainJdbcRepository.BlockObservation observeBlock(
+            Web3j web3j, ChainType chainType, long blockHeight) throws IOException {
+        EthBlock.Block block = web3j.ethGetBlockByNumber(
+                DefaultBlockParameter.valueOf(BigInteger.valueOf(blockHeight)), false).send().getBlock();
+        if (block == null) {
+            throw new IllegalStateException("EVM block not found: " + blockHeight);
+        }
+        return repository.observeCanonicalBlock(chainType.name(), "evm-canonical", blockHeight,
+                block.getHash(), block.getParentHash());
     }
 
     private Web3j web3j(String rpcUrl) {

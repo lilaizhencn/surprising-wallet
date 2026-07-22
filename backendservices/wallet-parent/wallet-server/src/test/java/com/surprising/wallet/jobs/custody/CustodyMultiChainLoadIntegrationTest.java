@@ -241,7 +241,8 @@ class CustodyMultiChainLoadIntegrationTest {
         return new DepositEvent(
                 account.chain(), account.symbol(), String.format("%064x", account.index() + 1L),
                 address(account.chain(), account.index() + 10_000), account.address(), DEPOSIT_AMOUNT,
-                1_000_000L + account.index(), 12, null, "{\"load\":true}");
+                1_000_000L + account.index(), "load-block-" + account.index(),
+                12, null, "{\"load\":true}");
     }
 
     private static void createAndConfirmWithdrawal(JdbcTemplate jdbc, ChainJdbcRepository chains,

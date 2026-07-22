@@ -131,7 +131,8 @@ public class CardanoDepositScanner {
             }
             BigDecimal amount = new BigDecimal(atomic).movePointLeft(ADA_DECIMALS).stripTrailingZeros();
             DepositEvent event = new DepositEvent(ChainType.ADA, SYMBOL, tx.getTxHash(), fromAddress,
-                    addressRecord.getAddress(), amount, tx.getBlockHeight(), confirmations, null, output.toString());
+                    addressRecord.getAddress(), amount, tx.getBlockHeight(), tx.getTxHash(), confirmations,
+                    null, output.toString());
             return new CreditableDeposit(event, addressRecord);
         }
         TokenDefinition token = tokensByUnit.get(unit);
@@ -144,7 +145,8 @@ public class CardanoDepositScanner {
         }
         BigDecimal amount = new BigDecimal(atomic).movePointLeft(token.getDecimals()).stripTrailingZeros();
         DepositEvent event = new DepositEvent(ChainType.ADA, token.getSymbol(), tx.getTxHash(), fromAddress,
-                addressRecord.getAddress(), amount, tx.getBlockHeight(), confirmations, unit, output.toString());
+                addressRecord.getAddress(), amount, tx.getBlockHeight(), tx.getTxHash(), confirmations,
+                unit, output.toString());
         return new CreditableDeposit(event, addressRecord);
     }
 

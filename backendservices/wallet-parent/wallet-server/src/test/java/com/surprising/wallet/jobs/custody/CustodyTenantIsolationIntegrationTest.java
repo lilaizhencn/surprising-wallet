@@ -206,9 +206,9 @@ class CustodyTenantIsolationIntegrationTest {
         assertEquals(firstTenant, batch.getFirst().getTenantId());
 
         repository.upsertUtxo("BTC", "BTC", "first-utxo", 0,
-                firstAddress, BigDecimal.ONE, 100L, 12, true);
+                firstAddress, BigDecimal.ONE, 100L, "first-block", 12, true);
         repository.upsertUtxo("BTC", "BTC", "second-utxo", 0,
-                secondAddress, new BigDecimal("2"), 100L, 12, true);
+                secondAddress, new BigDecimal("2"), 100L, "second-block", 12, true);
         var firstUtxos = repository.listSpendableUtxos(
                 firstTenant, "BTC", "BTC", 6, 10, 0);
         assertEquals(1, firstUtxos.size());

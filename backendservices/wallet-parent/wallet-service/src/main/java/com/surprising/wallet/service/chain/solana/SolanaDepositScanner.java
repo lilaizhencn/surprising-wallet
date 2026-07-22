@@ -171,7 +171,7 @@ public class SolanaDepositScanner {
         }
         BigDecimal displayAmount = new BigDecimal(info.path("lamports").asText()).movePointLeft(SOL_DECIMALS);
         return new DepositEvent(ChainType.SOLANA, "SOL", signature, info.path("source").asText(),
-                tracked.getAddress(), displayAmount, slot, confirmations,
+                tracked.getAddress(), displayAmount, slot, signature, confirmations,
                 null, transaction.toString());
     }
 
@@ -195,7 +195,7 @@ public class SolanaDepositScanner {
         }
         BigDecimal displayAmount = new BigDecimal(amount).movePointLeft(token.getDecimals());
         return new DepositEvent(ChainType.SOLANA, token.getSymbol(), signature,
-                info.path("source").asText(), tracked.getAddress(), displayAmount, slot, confirmations,
+                info.path("source").asText(), tracked.getAddress(), displayAmount, slot, signature, confirmations,
                 token.getContractAddress(), transaction.toString());
     }
 

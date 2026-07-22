@@ -93,7 +93,7 @@ public class SuiDepositScanner {
             }
             BigDecimal amount = rawAmount.movePointLeft(decimals(symbol));
             DepositEvent event = new DepositEvent(ChainType.SUI, symbol, digest, sender,
-                    address.getAddress(), amount, checkpoint, confirmations,
+                    address.getAddress(), amount, checkpoint, digest, confirmations,
                     SuiRpcClient.SUI_COIN_TYPE.equals(coinType) ? null : coinType,
                     transaction.toString());
             repository.recordSuiTransaction(SuiTransactionRecord.builder()

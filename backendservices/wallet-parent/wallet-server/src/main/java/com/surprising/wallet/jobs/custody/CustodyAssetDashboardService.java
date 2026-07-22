@@ -60,7 +60,13 @@ public class CustodyAssetDashboardService {
                 Instant.now(), "USD", totalValueUsd, unpricedAssetCount, oldestPriceAt,
                 assets,
                 symbols.values().stream().map(MutableAggregate::view).toList(),
-                chains.values().stream().map(MutableChain::view).toList());
+                chains.values().stream().map(MutableChain::view).toList(),
+                repository.openReorgDeficits(principal.tenantId()).stream()
+                        .map(row -> new ReorgDeficit(
+                                row.id(), row.custodyAddressId(), row.chain(), row.assetSymbol(),
+                                row.deficitAmount(), row.recoveredAmount(), row.outstandingAmount(),
+                                row.createdAt()))
+                        .toList());
     }
 
     public List<CustodyAssetDashboardRepository.AssetPrice> prices(CustodyPrincipal principal) {
@@ -175,7 +181,8 @@ public class CustodyAssetDashboardService {
             Instant oldestPriceObservedAt,
             List<AssetRow> assets,
             List<SymbolAggregate> bySymbol,
-            List<ChainAggregate> byChain
+            List<ChainAggregate> byChain,
+            List<ReorgDeficit> reorgDeficits
     ) {
     }
 
@@ -205,6 +212,18 @@ public class CustodyAssetDashboardService {
     }
 
     public record ChainAggregate(String chain, BigDecimal valueUsd, List<AssetRow> assets) {
+    }
+
+    public record ReorgDeficit(
+            java.util.UUID id,
+            java.util.UUID custodyAddressId,
+            String chain,
+            String assetSymbol,
+            BigDecimal deficitAmount,
+            BigDecimal recoveredAmount,
+            BigDecimal outstandingAmount,
+            Instant createdAt
+    ) {
     }
 
     public record SetPriceCommand(BigDecimal usdPrice, String source, Instant observedAt) {

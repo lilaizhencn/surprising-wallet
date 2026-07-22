@@ -70,18 +70,18 @@ class CustodyDepositProjectionIntegrationTest {
                     select count(*) from custody_ledger_entry
                      where tenant_id = ? and direction = 'CREDIT'
                        and reference_id = ?
-                    """, Integer.class, fixture.tenantId(), "ETH:" + event.txId() + ":0"));
+                    """, Integer.class, fixture.tenantId(), "ETH:" + event.txId() + ":0:credit:1"));
             assertEquals("user_10086", jdbc.queryForObject("""
                     select payload #>> '{data,subject}'
                       from custody_event
                      where tenant_id = ? and event_type = 'DEPOSIT.CONFIRMED'
                        and aggregate_id = ?
-                    """, String.class, fixture.tenantId(), "ETH:" + event.txId() + ":0"));
+                    """, String.class, fixture.tenantId(), "ETH:" + event.txId() + ":0:credit:1"));
             assertEquals("PUBLISHED", jdbc.queryForObject("""
                     select status from custody_event
                      where tenant_id = ? and event_type = 'DEPOSIT.CONFIRMED'
                        and aggregate_id = ?
-                    """, String.class, fixture.tenantId(), "ETH:" + event.txId() + ":0"));
+                    """, String.class, fixture.tenantId(), "ETH:" + event.txId() + ":0:credit:1"));
             status.setRollbackOnly();
         });
     }
@@ -126,7 +126,7 @@ class CustodyDepositProjectionIntegrationTest {
                     "0x" + UUID.randomUUID().toString().replace("-", ""),
                     "0x2222222222222222222222222222222222222222",
                     fixture.address(), new BigDecimal("1.25"),
-                    123_456L, 1, null, "{\"integration\":true}");
+                    123_456L, "0xpending-block", 1, null, "{\"integration\":true}");
 
             assertFalse(repository.recordAndCreditDeposit(
                     event, 0L, 12, fixture.accountId()));
@@ -169,6 +169,34 @@ class CustodyDepositProjectionIntegrationTest {
                      where tenant_id = ? and chain = 'ETH' and asset_symbol = 'ETH'
                        and account_id = ?
                     """, Integer.class, fixture.tenantId(), fixture.accountId()));
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
+    void withdrawalToAnotherSystemAddressIsCreditedToTheRecipient() {
+        transactions.executeWithoutResult(status -> {
+            DepositFixture sender = createFixture("internal-sender", "ACTIVE");
+            DepositFixture recipient = createFixture("internal-recipient", "ACTIVE");
+            ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+            DepositEvent event = new DepositEvent(
+                    ChainType.ETH, "ETH",
+                    "0x" + UUID.randomUUID().toString().replace("-", ""),
+                    sender.address(), recipient.address(), new BigDecimal("4.20"),
+                    123_456L, "0xinternal-transfer-block", 12, null,
+                    "{\"integration\":true}");
+
+            assertTrue(repository.recordAndCreditDeposit(
+                    event, 0L, 12, recipient.accountId()));
+            assertEquals(recipient.tenantId(), jdbc.queryForObject("""
+                    select tenant_id from deposit_record
+                     where chain = 'ETH' and tx_hash = ? and log_index = 0
+                    """, UUID.class, event.txId()));
+            assertEquals(0, new BigDecimal("4.20").compareTo(jdbc.queryForObject("""
+                    select available_balance from ledger_balance
+                     where tenant_id = ? and chain = 'ETH' and asset_symbol = 'ETH'
+                       and account_id = ?
+                    """, BigDecimal.class, recipient.tenantId(), recipient.accountId())));
             status.setRollbackOnly();
         });
     }
@@ -301,6 +329,7 @@ class CustodyDepositProjectionIntegrationTest {
                 address,
                 amount,
                 123_456L,
+                "0xintegration-block",
                 12,
                 null,
                 "{\"integration\":true}");

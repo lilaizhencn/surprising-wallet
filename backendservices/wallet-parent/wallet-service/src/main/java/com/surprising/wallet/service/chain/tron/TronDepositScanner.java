@@ -60,7 +60,7 @@ public class TronDepositScanner {
                 }
                 BigDecimal amount = new BigDecimal(transfer.getAmount()).divide(SUN_PER_TRX);
                 DepositEvent event = new DepositEvent(ChainType.TRON, "TRX", txId, from, to, amount,
-                        blockHeight, confirmations, null, tx.toString());
+                        blockHeight, txId, confirmations, null, tx.toString());
                 repository.recordTronTransaction(TronTransactionRecord.builder()
                         .chain(ChainType.TRON.name())
                         .txHash(txId)
@@ -98,7 +98,7 @@ public class TronDepositScanner {
                     continue;
                 }
                 DepositEvent event = new DepositEvent(ChainType.TRON, transfer.symbol(), txId, transfer.fromAddress(),
-                        transfer.toAddress(), transfer.amount(), transfer.blockHeight(), confirmations,
+                        transfer.toAddress(), transfer.amount(), transfer.blockHeight(), txId, confirmations,
                         transfer.contractAddress(), txInfo.toString());
                 repository.recordTronTokenTransfer(event, transfer.logIndex(),
                         confirmations >= requiredConfirmations ? "CONFIRMED" : "CONFIRMING");

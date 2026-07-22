@@ -892,10 +892,12 @@ class CustodyOperationsIntegrationTest {
         Long depositRecordId = jdbc.queryForObject("""
                 insert into deposit_record(
                     tenant_id, chain, asset_symbol, tx_hash, to_address,
-                    amount, block_height, confirmations, status, credited, credited_at)
-                values (?, 'ETH', ?, ?, ?, 12.5, 100, 12, ?, true, now())
+                    amount, block_height, block_hash, confirmations, status,
+                    credited, credit_generation, account_id, credited_at)
+                values (?, 'ETH', ?, ?, ?, 12.5, 100, ?, 12, ?, true, 1, ?, now())
                 returning id
-                """, Long.class, tenantId, assetSymbol, txHash, address.address(), status);
+                """, Long.class, tenantId, assetSymbol, txHash, address.address(), txHash,
+                status, address.address());
         jdbc.update("""
                 insert into custody_deposit(
                     id, tenant_id, custody_address_id, deposit_record_id,

@@ -53,7 +53,7 @@ class SolanaDatabaseFlowIntegrationTest {
             String signature = UUID.randomUUID().toString().replace("-", "");
             DepositEvent deposit = new DepositEvent(ChainType.SOLANA, "SOL", signature,
                     "external", userA.getAddress(), new BigDecimal("10000000"),
-                    123L, 2, null, "{}");
+                    123L, signature, 2, null, "{}");
             assertTrue(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
             assertFalse(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
             assertTrue(repository.freezeLedgerBalance(tenantId, "SOLANA", "SOL", userA.getAccountId(),

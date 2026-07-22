@@ -161,7 +161,7 @@ public class TonDepositScanner {
                 tx.path("transaction_id").path("hash").asText(),
                 source, destination, amount,
                 tx.path("transaction_id").path("lt").asLong(),
-                1, master, tx.toString());
+                tx.path("transaction_id").path("hash").asText(), 1, master, tx.toString());
     }
 
     private void persist(DepositEvent event, JsonNode tx, String master,

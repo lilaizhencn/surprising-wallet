@@ -671,6 +671,27 @@ public class CustodyRepository {
         return Boolean.TRUE.equals(result);
     }
 
+    public boolean hasOpenReorgDeficit(UUID tenantId, UUID custodyAddressId,
+                                       String chain, String assetSymbol) {
+        Boolean result = jdbc.queryForObject("""
+                        select exists (
+                            select 1
+                              from custody_reorg_deficit deficit
+                              join custody_address custody
+                                on custody.tenant_id = deficit.tenant_id
+                               and custody.id = ?
+                              join chain_address address
+                                on address.tenant_id = custody.tenant_id
+                               and address.id = custody.chain_address_id
+                             where deficit.tenant_id = ? and deficit.chain = ?
+                               and deficit.asset_symbol = ? and deficit.status = 'OPEN'
+                               and deficit.account_id = address.account_id
+                               and deficit.recovered_amount < deficit.deficit_amount
+                        )
+                        """, Boolean.class, custodyAddressId, tenantId, chain, assetSymbol);
+        return Boolean.TRUE.equals(result);
+    }
+
     public AddressRecord updateAddress(UUID tenantId, UUID addressId, String label,
                                        String metadataJson, String status) {
         if (jdbc.update("""

@@ -631,6 +631,7 @@ public class AccountChainWorkflowService {
     private void scanEvm(AccountChainProfile profile) throws IOException {
         ChainType chainType = ChainType.valueOf(profile.getChain());
         long latest = evmDepositScanner.getLatestBlockNumber(chainType).longValueExact();
+        evmDepositScanner.reconcileCreditedDeposits(chainType, latest);
         long start = scanStart(profile, latest, "native-evm", "erc20-evm");
         long end = Math.min(latest, start + scanBatch(profile) - 1L);
         for (long height = start; height <= end; height++) {

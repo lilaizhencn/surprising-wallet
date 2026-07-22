@@ -252,6 +252,7 @@ public class TransactionService {
                     dto.getAddress(),
                     dto.getBalance(),
                     dto.getBlockHeight(),
+                    dto.getBlockHash(),
                     dto.getConfirmNum().intValue(),
                     null,
                     null);

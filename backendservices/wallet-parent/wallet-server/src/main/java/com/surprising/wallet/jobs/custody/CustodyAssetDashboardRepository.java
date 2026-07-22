@@ -105,6 +105,21 @@ public class CustodyAssetDashboardRepository {
                 rs.getTimestamp("updated_at").toInstant()));
     }
 
+    public List<ReorgDeficit> openReorgDeficits(UUID tenantId) {
+        return jdbc.query("""
+                select id, custody_address_id, chain, asset_symbol,
+                       deficit_amount, recovered_amount, created_at
+                  from custody_reorg_deficit
+                 where tenant_id = ? and status = 'OPEN'
+                 order by created_at desc
+                """, (rs, rowNum) -> new ReorgDeficit(
+                rs.getObject("id", UUID.class),
+                rs.getObject("custody_address_id", UUID.class),
+                rs.getString("chain"), rs.getString("asset_symbol"),
+                rs.getBigDecimal("deficit_amount"), rs.getBigDecimal("recovered_amount"),
+                rs.getTimestamp("created_at").toInstant()), tenantId);
+    }
+
     public AssetPrice upsertPrice(String symbol, BigDecimal price, String source, Instant observedAt) {
         return jdbc.queryForObject("""
                 insert into custody_asset_price(asset_symbol, usd_price, source, observed_at, updated_at)
@@ -147,5 +162,19 @@ public class CustodyAssetDashboardRepository {
             Instant observedAt,
             Instant updatedAt
     ) {
+    }
+
+    public record ReorgDeficit(
+            UUID id,
+            UUID custodyAddressId,
+            String chain,
+            String assetSymbol,
+            BigDecimal deficitAmount,
+            BigDecimal recoveredAmount,
+            Instant createdAt
+    ) {
+        public BigDecimal outstandingAmount() {
+            return deficitAmount.subtract(recoveredAmount);
+        }
     }
 }

@@ -7,6 +7,7 @@ import com.surprising.wallet.service.dao.DepositCreditObserver;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -81,13 +82,16 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
                 owner.tenantId(), chain, event.assetSymbol())) {
             return;
         }
-        Long depositRecordId = jdbc.queryForObject("""
-                        select id from deposit_record
+        DepositProjection depositProjection = jdbc.queryForObject("""
+                        select id, credit_generation from deposit_record
                          where chain = ? and tx_hash = ? and log_index = ?
-                        """, Long.class, chain, event.txId(), logIndex);
-        if (depositRecordId == null) {
+                        """, (rs, rowNum) -> new DepositProjection(
+                        rs.getLong("id"), rs.getInt("credit_generation")),
+                chain, event.txId(), logIndex);
+        if (depositProjection == null) {
             throw new IllegalStateException("credited deposit record is missing");
         }
+        long depositRecordId = depositProjection.id();
         if (jdbc.update("""
                         update deposit_record
                            set tenant_id = ?, updated_at = now()
@@ -113,7 +117,7 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
                         values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'CONFIRMED', now())
                         on conflict (tenant_id, deposit_record_id) do update set
                             status = excluded.status,
-                            credited_at = coalesce(custody_deposit.credited_at, excluded.credited_at),
+                            credited_at = excluded.credited_at,
                             updated_at = now()
                         returning id
                         """, UUID.class, UUID.randomUUID(), owner.tenantId(), owner.addressId(), depositRecordId,
@@ -122,7 +126,8 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
             throw new IllegalStateException("failed to persist custody deposit");
         }
 
-        String referenceId = chain + ":" + event.txId() + ":" + logIndex;
+        String referenceId = chain + ":" + event.txId() + ":" + logIndex
+                + ":credit:" + depositProjection.creditGeneration();
         jdbc.update("""
                         insert into custody_ledger_entry(
                             id, tenant_id, custody_address_id, chain, asset_symbol, account_id,
@@ -131,6 +136,9 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
                         on conflict (tenant_id, entry_type, reference_type, reference_id) do nothing
                         """, UUID.randomUUID(), owner.tenantId(), owner.addressId(), chain,
                 event.assetSymbol(), accountId, event.amount(), referenceId);
+
+        BigDecimal deficitApplied = applyOpenDeficits(
+                owner, event, accountId, referenceId, event.amount());
 
         UUID eventId = UUID.randomUUID();
         Map<String, Object> data = new LinkedHashMap<>();
@@ -145,7 +153,11 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
         data.put("txHash", event.txId());
         data.put("logIndex", logIndex);
         data.put("blockHeight", event.blockHeight());
+        data.put("blockHash", event.blockHash());
         data.put("confirmations", event.confirmations());
+        data.put("creditGeneration", depositProjection.creditGeneration());
+        data.put("appliedToReorgDeficit", deficitApplied);
+        data.put("availableAmount", event.amount().subtract(deficitApplied));
         data.put("confirmedAt", Instant.now());
         String payload = json(Map.of(
                 "id", eventId,
@@ -156,6 +168,63 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
         repository.insertEventWithDeliveries(
                 eventId, owner.tenantId(), EVENT_TYPE, "DEPOSIT", referenceId, payload,
                 "API".equals(owner.source()));
+    }
+
+    private BigDecimal applyOpenDeficits(AddressOwner owner, DepositEvent event, String accountId,
+                                         String creditReference, BigDecimal creditAmount) {
+        List<Deficit> deficits = jdbc.query("""
+                        select id, deficit_amount, recovered_amount
+                          from custody_reorg_deficit
+                         where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
+                           and status = 'OPEN'
+                         order by created_at, id
+                         for update
+                        """, (rs, rowNum) -> new Deficit(
+                        rs.getObject("id", UUID.class), rs.getBigDecimal("deficit_amount"),
+                        rs.getBigDecimal("recovered_amount")),
+                owner.tenantId(), event.chainType().name(), event.assetSymbol(), accountId);
+        BigDecimal remaining = creditAmount;
+        BigDecimal appliedTotal = BigDecimal.ZERO;
+        for (Deficit deficit : deficits) {
+            if (remaining.signum() <= 0) {
+                break;
+            }
+            BigDecimal outstanding = deficit.amount().subtract(deficit.recovered());
+            BigDecimal applied = outstanding.min(remaining);
+            if (applied.signum() <= 0) {
+                continue;
+            }
+            if (jdbc.update("""
+                            update ledger_balance
+                               set available_balance = available_balance - ?,
+                                   total_balance = total_balance - ?, updated_at = now()
+                             where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
+                               and available_balance >= ? and total_balance >= ?
+                            """, applied, applied, owner.tenantId(), event.chainType().name(),
+                    event.assetSymbol(), accountId, applied, applied) != 1) {
+                throw new IllegalStateException("unable to apply deposit to reorg deficit");
+            }
+            jdbc.update("""
+                            update custody_reorg_deficit
+                               set recovered_amount = recovered_amount + ?,
+                                   status = case when recovered_amount + ? >= deficit_amount
+                                       then 'RECOVERED' else 'OPEN' end,
+                                   updated_at = now()
+                             where id = ? and tenant_id = ?
+                            """, applied, applied, deficit.id(), owner.tenantId());
+            jdbc.update("""
+                            insert into custody_ledger_entry(
+                                id, tenant_id, custody_address_id, chain, asset_symbol, account_id,
+                                entry_type, direction, amount, reference_type, reference_id)
+                            values (?, ?, ?, ?, ?, ?, 'REORG_DEFICIT_RECOVERY', 'DEBIT', ?, 'REORG_DEFICIT', ?)
+                            on conflict (tenant_id, entry_type, reference_type, reference_id) do nothing
+                            """, UUID.randomUUID(), owner.tenantId(), owner.addressId(),
+                    event.chainType().name(), event.assetSymbol(), accountId, applied,
+                    creditReference + ":deficit:" + deficit.id());
+            remaining = remaining.subtract(applied);
+            appliedTotal = appliedTotal.add(applied);
+        }
+        return appliedTotal;
     }
 
     private String json(Object value) {
@@ -175,5 +244,11 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
             String source,
             String purpose
     ) {
+    }
+
+    private record DepositProjection(long id, int creditGeneration) {
+    }
+
+    private record Deficit(UUID id, BigDecimal amount, BigDecimal recovered) {
     }
 }

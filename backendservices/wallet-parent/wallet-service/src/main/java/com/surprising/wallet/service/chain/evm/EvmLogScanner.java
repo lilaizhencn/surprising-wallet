@@ -32,8 +32,8 @@ public class EvmLogScanner {
             String to = topicToAddress(log.getTopics().get(2));
             BigDecimal amount = new BigDecimal(new BigInteger(stripHex(log.getData()), 16));
             events.add(new DepositEvent(chainType, tokenDefinition.getSymbol(), txId, from, to,
-                    amount.movePointLeft(decimals), blockHeight, confirmations, tokenDefinition.getContractAddress(),
-                    log.toString()));
+                    amount.movePointLeft(decimals), blockHeight, log.getBlockHash(), confirmations,
+                    tokenDefinition.getContractAddress(), log.toString()));
         }
         return events;
     }

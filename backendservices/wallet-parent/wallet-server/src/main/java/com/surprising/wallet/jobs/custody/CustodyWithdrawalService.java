@@ -66,6 +66,11 @@ public class CustodyWithdrawalService {
         }
         tenantChains.requireActive(principal.tenantId(), chain);
         tenantChains.requireWithdrawalEnabled(principal.tenantId(), chain, symbol);
+        if (repository.hasOpenReorgDeficit(
+                principal.tenantId(), address.id(), chain, symbol)) {
+            throw new IllegalStateException(
+                    "withdrawals are paused because this account has an unresolved deposit reorg deficit");
+        }
         String toAddress = required(command.toAddress(), "toAddress", 160);
         String amount = required(command.amount(), "amount", 120);
         String externalReference = optional(command.externalReference(), 160);

@@ -223,10 +223,10 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         repository.upsertUtxo(
                 chainName, chainName, depositTx.txid(), depositOutput.vout(),
                 depositAddress, chain.depositAmount(), depositTx.blockHeight(),
-                depositTx.confirmations(), false);
+                depositTx.txid(), depositTx.confirmations(), false);
         DepositEvent depositEvent = new DepositEvent(
                 chain.chainType(), chainName, depositTx.txid(), null, depositAddress,
-                chain.depositAmount(), depositTx.blockHeight(), depositTx.confirmations(),
+                chain.depositAmount(), depositTx.blockHeight(), depositTx.txid(), depositTx.confirmations(),
                 null, depositTx.raw().toString());
         assertTrue(repository.recordAndCreditDeposit(
                 depositEvent, depositOutput.vout(), REQUIRED_CONFIRMATIONS, accountId));
@@ -363,7 +363,8 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
 
         String utxoTx = runId + "-" + chainName + "-utxo";
         repository.upsertUtxo(chainName, chainName, utxoTx, 0,
-                runId + "-" + chainName + "-utxo-address", one, 100L, REQUIRED_CONFIRMATIONS, true);
+                runId + "-" + chainName + "-utxo-address", one, 100L, utxoTx,
+                REQUIRED_CONFIRMATIONS, true);
         List<Integer> lockResults = runConcurrently(16,
                 index -> repository.lockUtxo(chainName, utxoTx, 0, runId + "-" + chainName + "-lock-" + index));
         assertEquals(1L, sumUpdates(lockResults), chainName + " single UTXO lock winner");
@@ -417,7 +418,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         String chainName = chain.chainType().name();
         return new DepositEvent(
                 chain.chainType(), chainName, txHash,
-                "regtest-faucet", toAddress, amount, 100L, REQUIRED_CONFIRMATIONS,
+                "regtest-faucet", toAddress, amount, 100L, txHash, REQUIRED_CONFIRMATIONS,
                 null, "{\"synthetic\":true}");
     }
 
@@ -460,11 +461,11 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
             Output output = findOutput(tx.raw(), broadcast.address(), broadcast.amount());
             repository.upsertUtxo(
                     chainName, chainName, tx.txid(), output.vout(), broadcast.address(), broadcast.amount(),
-                    tx.blockHeight(), tx.confirmations(), false);
+                    tx.blockHeight(), tx.txid(), tx.confirmations(), false);
             DepositEvent event = new DepositEvent(
                     chain.chainType(), chainName, tx.txid(),
                     runId + "-" + chainName + "-bulk-faucet", broadcast.address(), broadcast.amount(),
-                    tx.blockHeight(), tx.confirmations(), null,
+                    tx.blockHeight(), tx.txid(), tx.confirmations(), null,
                     "{\"runId\":\"" + runId + "\",\"type\":\"bulk-deposit\"}");
             return repository.recordAndCreditDeposit(event, output.vout(), REQUIRED_CONFIRMATIONS, accountId);
         });

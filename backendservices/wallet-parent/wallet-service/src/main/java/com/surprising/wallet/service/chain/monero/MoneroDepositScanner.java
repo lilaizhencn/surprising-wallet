@@ -71,6 +71,7 @@ public class MoneroDepositScanner {
                             transfer.toAddress(),
                             transfer.amount(),
                             transfer.blockHeight(),
+                            transfer.txHash(),
                             transfer.confirmations(),
                             null,
                             transfer.rawPayload()),

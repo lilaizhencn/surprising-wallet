@@ -98,6 +98,7 @@ public class MoneroTransactionService {
                                 toAddress,
                                 amount,
                                 transfer.blockHeight(),
+                                transfer.txHash(),
                                 transfer.confirmations(),
                                 null,
                                 transfer.rawPayload()),

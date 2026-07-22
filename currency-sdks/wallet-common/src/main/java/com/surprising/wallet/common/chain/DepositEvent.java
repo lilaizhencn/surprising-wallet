@@ -13,6 +13,7 @@ public record DepositEvent(
         String toAddress,
         BigDecimal amount,
         long blockHeight,
+        String blockHash,
         int confirmations,
         String tokenAddress,
         String rawPayload

@@ -110,7 +110,7 @@ public class AptosDepositScanner {
             String hash = transaction.path("hash").asText(Long.toString(version));
             int confirmations = (int) Math.min(Integer.MAX_VALUE, Math.max(1, ledgerVersion - version + 1));
             DepositEvent event = new DepositEvent(ChainType.APTOS, asset.symbol(), hash, sender,
-                    asset.address().getAddress(), amount, version, confirmations,
+                    asset.address().getAddress(), amount, version, hash, confirmations,
                     asset.tokenAddress(), transaction.toString());
             repository.recordAptosTransaction(AptosTransactionRecord.builder()
                     .chain(CHAIN)

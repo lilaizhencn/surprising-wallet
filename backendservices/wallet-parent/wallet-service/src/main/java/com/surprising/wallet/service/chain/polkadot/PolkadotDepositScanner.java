@@ -136,7 +136,7 @@ public class PolkadotDepositScanner {
         BigDecimal amount = fromAtomic(transfer.amountPlanck(), nativeDecimals());
         return new DepositEvent(ChainType.DOT, SYMBOL, transfer.txHash(),
                 transfer.fromAddress(), tracked.getAddress(), amount, transfer.blockHeight(),
-                confirmations, null, transfer.rawPayload());
+                transfer.txHash(), confirmations, null, transfer.rawPayload());
     }
 
     private DepositEvent toAssetDepositEvent(PolkadotRuntimeClient.TransferEvent transfer,
@@ -155,7 +155,7 @@ public class PolkadotDepositScanner {
         BigDecimal amount = fromAtomic(transfer.amountPlanck(), token.getDecimals());
         return new DepositEvent(ChainType.DOT, token.getSymbol(), transfer.txHash(),
                 transfer.fromAddress(), tracked.getAddress(), amount, transfer.blockHeight(),
-                confirmations, assetId, transfer.rawPayload());
+                transfer.txHash(), confirmations, assetId, transfer.rawPayload());
     }
 
     private Map<String, ChainAddressRecord> trackedDepositAddresses(String assetSymbol) {

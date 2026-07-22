@@ -28,7 +28,8 @@ class CustodySchemaContractTest {
                 "custody_tenant", "custody_tenant_user", "custody_session", "custody_api_key",
                 "custody_api_nonce", "custody_ip_rule", "custody_webhook_endpoint",
                 "custody_derivation_subject", "custody_address", "custody_gas_account",
-                "custody_deposit", "custody_withdrawal",
+                "custody_deposit", "custody_withdrawal", "custody_asset_recovery",
+                "custody_reorg_deficit", "chain_scan_block",
                 "custody_gas_usage", "custody_ledger_entry", "custody_event", "custody_webhook_delivery",
                 "custody_webhook_delivery_attempt",
                 "custody_idempotency_key", "custody_audit_log", "custody_tenant_chain",
@@ -90,6 +91,15 @@ class CustodySchemaContractTest {
         assertTrue(sql.contains("FOREIGN KEY (tenant_id, chain_address_id) REFERENCES public.chain_address(tenant_id, id)"));
         assertTrue(sql.contains("FOREIGN KEY (tenant_id, deposit_record_id) REFERENCES public.deposit_record(tenant_id, id)"));
         assertTrue(sql.contains("FOREIGN KEY (tenant_id, withdrawal_order_id) REFERENCES public.withdrawal_order(tenant_id, id)"));
+        assertTrue(sql.contains("block_hash character varying(128)"));
+        assertTrue(sql.contains("credit_generation integer DEFAULT 0 NOT NULL"));
+        assertTrue(sql.contains("requested_log_index bigint"));
+        assertTrue(sql.contains("canonical_status character varying(24) DEFAULT 'CANONICAL'"));
+        assertTrue(sql.contains("'EXECUTING'::character varying"));
+        assertTrue(sql.contains("'BROADCAST'::character varying"));
+        assertTrue(sql.contains("'RECOVERED'::character varying"));
+        assertTrue(sql.contains("custody_reorg_deficit_deposit_key UNIQUE (tenant_id, deposit_record_id)"));
+        assertTrue(sql.contains("custody_reorg_deficit_deposit_record_fkey FOREIGN KEY (tenant_id, deposit_record_id)"));
         assertFalse(sql.contains("subscribed_events"));
         assertFalse(sql.contains("scopes text[]"));
         assertTrue(sql.contains("token_config_chain_network_contract_address_key"));

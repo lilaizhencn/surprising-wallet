@@ -39,7 +39,7 @@ class SuiDatabaseFlowIntegrationTest {
         String digest = "sui-db-" + UUID.randomUUID();
         DepositEvent event = new DepositEvent(ChainType.SUI, "SUI", digest,
                 keys.address(derivationIndex + 1), user.getAddress(), new BigDecimal("100000000"),
-                11L, 1, null, "{}");
+                11L, digest, 1, null, "{}");
 
         assertTrue(repository.recordAndCreditDeposit(event, 0, 1, user.getAccountId()));
         assertFalse(repository.recordAndCreditDeposit(event, 0, 1, user.getAccountId()));

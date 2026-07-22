@@ -48,7 +48,8 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                     String accountId = "migration-account-" + chain.toLowerCase() + "-" + UUID.randomUUID();
                     BigDecimal amount = new BigDecimal("1.25000000");
 
-                    repository.upsertUtxo(chain, chain, txHash, 0, address, amount, 100L, 6, false);
+                    repository.upsertUtxo(
+                            chain, chain, txHash, 0, address, amount, 100L, txHash, 6, false);
 
                     List<UtxoTransaction> spendable = repository.listSpendableUtxos(chain, chain, 1, 10, 0);
                     UtxoTransaction selected = spendable.stream()
@@ -69,7 +70,7 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                     String depositTx = "deposit" + UUID.randomUUID().toString().replace("-", "");
                     DepositEvent event = new DepositEvent(
                             chainType, chain, depositTx, null, address,
-                            amount, 101L, 6, null, "{}");
+                            amount, 101L, depositTx, 6, null, "{}");
                     assertTrue(repository.recordAndCreditDeposit(event, 0, 6, accountId));
                     assertFalse(repository.recordAndCreditDeposit(event, 0, 6, accountId));
                     assertTrue(repository.depositRecordExists(chain, depositTx, 0));

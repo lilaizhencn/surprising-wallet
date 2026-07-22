@@ -22,6 +22,7 @@ public class TransactionDTO implements Serializable {
      *
      */
     private Long blockHeight;
+    private String blockHash;
     /**
      *
      */

@@ -34,6 +34,11 @@ ALTER TABLE IF EXISTS ONLY public.collection_record DROP CONSTRAINT IF EXISTS co
 ALTER TABLE IF EXISTS ONLY public.withdrawal_order DROP CONSTRAINT IF EXISTS withdrawal_order_tenant_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.ledger_balance DROP CONSTRAINT IF EXISTS ledger_balance_tenant_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.deposit_record DROP CONSTRAINT IF EXISTS deposit_record_tenant_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.custody_asset_recovery DROP CONSTRAINT IF EXISTS custody_asset_recovery_tenant_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.custody_asset_recovery DROP CONSTRAINT IF EXISTS custody_asset_recovery_address_fk;
+ALTER TABLE IF EXISTS ONLY public.custody_reorg_deficit DROP CONSTRAINT IF EXISTS custody_reorg_deficit_tenant_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.custody_reorg_deficit DROP CONSTRAINT IF EXISTS custody_reorg_deficit_address_fk;
+ALTER TABLE IF EXISTS ONLY public.custody_reorg_deficit DROP CONSTRAINT IF EXISTS custody_reorg_deficit_deposit_record_fkey;
 ALTER TABLE IF EXISTS ONLY public.custody_withdrawal DROP CONSTRAINT IF EXISTS custody_withdrawal_tenant_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.custody_withdrawal DROP CONSTRAINT IF EXISTS custody_withdrawal_order_fk;
 ALTER TABLE IF EXISTS ONLY public.custody_withdrawal DROP CONSTRAINT IF EXISTS custody_withdrawal_custody_address_id_fkey;
@@ -357,6 +362,9 @@ DROP TABLE IF EXISTS public.evm_token_transfer;
 DROP SEQUENCE IF EXISTS public.evm_nonce_id_seq;
 DROP TABLE IF EXISTS public.evm_nonce;
 DROP SEQUENCE IF EXISTS public.deposit_record_id_seq;
+DROP TABLE IF EXISTS public.chain_scan_block;
+DROP TABLE IF EXISTS public.custody_asset_recovery;
+DROP TABLE IF EXISTS public.custody_reorg_deficit;
 DROP TABLE IF EXISTS public.deposit_record;
 DROP TABLE IF EXISTS public.custody_dev_faucet_funding;
 DROP TABLE IF EXISTS public.custody_withdrawal;
@@ -689,6 +697,21 @@ CREATE TABLE public.chain_scan_height (
 
 
 --
+-- Name: chain_scan_block; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.chain_scan_block (
+    chain character varying(32) NOT NULL,
+    scanner_name character varying(64) NOT NULL,
+    block_height bigint NOT NULL,
+    block_hash character varying(128) NOT NULL,
+    parent_hash character varying(128),
+    observed_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chain_scan_block_pkey PRIMARY KEY (chain, scanner_name, block_height)
+);
+
+
+--
 -- Name: chain_scan_height_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -969,6 +992,79 @@ CREATE TABLE public.custody_deposit (
     credited_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: custody_asset_recovery; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.custody_asset_recovery (
+    id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    custody_address_id uuid,
+    actual_chain character varying(32) NOT NULL,
+    expected_chain character varying(32),
+    asset_symbol character varying(32) NOT NULL,
+    token_contract character varying(128),
+    token_decimals integer,
+    tx_hash character varying(128) NOT NULL,
+    log_index bigint DEFAULT 0 NOT NULL,
+    requested_log_index bigint,
+    destination_address character varying(160) NOT NULL,
+    recovery_address character varying(160),
+    claimed_amount numeric(78,24),
+    verified_amount numeric(78,24),
+    block_height bigint,
+    block_hash character varying(128),
+    confirmations integer DEFAULT 0 NOT NULL,
+    status character varying(32) DEFAULT 'SUBMITTED'::character varying NOT NULL,
+    verification_details jsonb DEFAULT '{}'::jsonb NOT NULL,
+    failure_reason text,
+    recovery_tx_hash character varying(128),
+    requested_by uuid NOT NULL,
+    reviewed_by uuid,
+    executed_by uuid,
+    approved_at timestamp with time zone,
+    executed_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT custody_asset_recovery_pkey PRIMARY KEY (id),
+    CONSTRAINT custody_asset_recovery_tenant_id_key UNIQUE (tenant_id, id),
+    CONSTRAINT custody_asset_recovery_business_key UNIQUE (actual_chain, tx_hash, log_index),
+    CONSTRAINT custody_asset_recovery_status_check CHECK (((status)::text = ANY ((ARRAY[
+        'SUBMITTED'::character varying, 'VERIFIED'::character varying,
+        'APPROVED'::character varying, 'EXECUTING'::character varying,
+        'BROADCAST'::character varying, 'RECOVERED'::character varying, 'REJECTED'::character varying,
+        'CANCELLED'::character varying])::text[]))),
+    CONSTRAINT custody_asset_recovery_decimals_check CHECK (((token_decimals IS NULL) OR ((token_decimals >= 0) AND (token_decimals <= 36)))),
+    CONSTRAINT custody_asset_recovery_requested_log_index_check CHECK (((requested_log_index IS NULL) OR (requested_log_index >= 0)))
+);
+
+
+--
+-- Name: custody_reorg_deficit; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.custody_reorg_deficit (
+    id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    custody_address_id uuid NOT NULL,
+    deposit_record_id bigint NOT NULL,
+    chain character varying(32) NOT NULL,
+    asset_symbol character varying(32) NOT NULL,
+    account_id character varying(160) NOT NULL,
+    original_amount numeric(78,24) NOT NULL,
+    deficit_amount numeric(78,24) NOT NULL,
+    recovered_amount numeric(78,24) DEFAULT 0 NOT NULL,
+    status character varying(24) DEFAULT 'OPEN'::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT custody_reorg_deficit_pkey PRIMARY KEY (id),
+    CONSTRAINT custody_reorg_deficit_tenant_id_key UNIQUE (tenant_id, id),
+    CONSTRAINT custody_reorg_deficit_deposit_key UNIQUE (tenant_id, deposit_record_id),
+    CONSTRAINT custody_reorg_deficit_status_check CHECK (((status)::text = ANY ((ARRAY['OPEN'::character varying, 'RECOVERED'::character varying])::text[]))),
+    CONSTRAINT custody_reorg_deficit_amount_check CHECK (((deficit_amount > (0)::numeric) AND (recovered_amount >= (0)::numeric) AND (recovered_amount <= deficit_amount)))
 );
 
 
@@ -1362,14 +1458,22 @@ CREATE TABLE public.deposit_record (
     contract_address character varying(128),
     amount numeric(78,18) NOT NULL,
     block_height bigint NOT NULL,
+    block_hash character varying(128),
     confirmations integer DEFAULT 0 NOT NULL,
     status character varying(32) DEFAULT 'DETECTED'::character varying NOT NULL,
     credited boolean DEFAULT false NOT NULL,
+    credit_generation integer DEFAULT 0 NOT NULL,
+    canonical_status character varying(24) DEFAULT 'CANONICAL'::character varying NOT NULL,
+    account_id character varying(160) NOT NULL,
     credited_at timestamp with time zone,
+    reorged_at timestamp with time zone,
+    reorg_reason text,
     raw_payload text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     tenant_id uuid
+    ,CONSTRAINT deposit_record_canonical_status_check CHECK (((canonical_status)::text = ANY ((ARRAY['CANONICAL'::character varying, 'REORGED'::character varying])::text[])))
+    ,CONSTRAINT deposit_record_credit_generation_check CHECK ((credit_generation >= 0))
 );
 
 
@@ -2174,6 +2278,7 @@ CREATE TABLE public.utxo_record (
     address character varying(160) NOT NULL,
     amount numeric(78,18) NOT NULL,
     block_height bigint NOT NULL,
+    block_hash character varying(128) NOT NULL,
     confirmations integer DEFAULT 0 NOT NULL,
     state character varying(32) DEFAULT 'AVAILABLE'::character varying NOT NULL,
     lock_ref character varying(128),
@@ -4959,6 +5064,37 @@ ALTER TABLE ONLY public.collection_record
 --
 
 
+
+
+-- Name: custody_asset_recovery custody_asset_recovery_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.custody_asset_recovery
+    ADD CONSTRAINT custody_asset_recovery_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.custody_tenant(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.custody_asset_recovery
+    ADD CONSTRAINT custody_asset_recovery_address_fk FOREIGN KEY (tenant_id, custody_address_id) REFERENCES public.custody_address(tenant_id, id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.custody_reorg_deficit
+    ADD CONSTRAINT custody_reorg_deficit_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.custody_tenant(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.custody_reorg_deficit
+    ADD CONSTRAINT custody_reorg_deficit_address_fk FOREIGN KEY (tenant_id, custody_address_id) REFERENCES public.custody_address(tenant_id, id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.custody_reorg_deficit
+    ADD CONSTRAINT custody_reorg_deficit_deposit_record_fkey FOREIGN KEY (tenant_id, deposit_record_id) REFERENCES public.deposit_record(tenant_id, id) ON DELETE RESTRICT;
+
+CREATE INDEX custody_asset_recovery_tenant_status_idx
+    ON public.custody_asset_recovery USING btree (tenant_id, status, created_at DESC);
+
+CREATE INDEX custody_asset_recovery_platform_status_idx
+    ON public.custody_asset_recovery USING btree (status, created_at DESC);
+
+CREATE INDEX custody_reorg_deficit_account_idx
+    ON public.custody_reorg_deficit USING btree (tenant_id, chain, asset_symbol, account_id, status);
+
+CREATE INDEX chain_scan_block_recent_idx
+    ON public.chain_scan_block USING btree (chain, scanner_name, block_height DESC);
 
 
 -- Data for Name: chain_asset; Type: TABLE DATA; Schema: public; Owner: -

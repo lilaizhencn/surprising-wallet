@@ -52,17 +52,28 @@ import java.util.stream.Collectors;
 public class ChainJdbcRepository {
     private final JdbcTemplate jdbcTemplate;
     private final List<DepositCreditObserver> depositCreditObservers;
+    private final List<DepositReorgObserver> depositReorgObservers;
 
     public ChainJdbcRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
         this.depositCreditObservers = List.of();
+        this.depositReorgObservers = List.of();
     }
 
-    @Autowired
     public ChainJdbcRepository(JdbcTemplate jdbcTemplate,
                                ObjectProvider<DepositCreditObserver> depositCreditObservers) {
         this.jdbcTemplate = jdbcTemplate;
         this.depositCreditObservers = depositCreditObservers.orderedStream().toList();
+        this.depositReorgObservers = List.of();
+    }
+
+    @Autowired
+    public ChainJdbcRepository(JdbcTemplate jdbcTemplate,
+                               ObjectProvider<DepositCreditObserver> depositCreditObservers,
+                               ObjectProvider<DepositReorgObserver> depositReorgObservers) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.depositCreditObservers = depositCreditObservers.orderedStream().toList();
+        this.depositReorgObservers = depositReorgObservers.orderedStream().toList();
     }
 
     public int upsertChainAsset(ChainAsset asset) {
@@ -758,20 +769,31 @@ public class ChainJdbcRepository {
                 : event.confirmations() < requiredConfirmations ? "CONFIRMING" : "CONFIRMED";
         int recorded = jdbcTemplate.update("""
                         insert into deposit_record(tenant_id, chain, asset_symbol, tx_hash, log_index, from_address, to_address,
-                                                   contract_address, amount, block_height, confirmations, status,
-                                                   credited, raw_payload, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?, ?, ?)
+                                                   contract_address, amount, block_height, block_hash, confirmations, status,
+                                                   credited, credit_generation, canonical_status, account_id,
+                                                   raw_payload, created_at, updated_at)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, 0, 'CANONICAL', ?, ?, ?, ?)
                         on conflict (chain, tx_hash, log_index) do update set
-                            confirmations = greatest(deposit_record.confirmations, excluded.confirmations),
+                            block_height = excluded.block_height,
+                            block_hash = excluded.block_hash,
+                            confirmations = case
+                                when deposit_record.canonical_status = 'REORGED' then excluded.confirmations
+                                else greatest(deposit_record.confirmations, excluded.confirmations)
+                            end,
                             status = case when deposit_record.credited then 'CREDITED' else excluded.status end,
+                            canonical_status = 'CANONICAL',
+                            reorged_at = null,
+                            reorg_reason = null,
                             tenant_id = coalesce(deposit_record.tenant_id, excluded.tenant_id),
+                            account_id = excluded.account_id,
                             raw_payload = excluded.raw_payload,
                             updated_at = excluded.updated_at
                         where deposit_record.tenant_id is null
                            or deposit_record.tenant_id = excluded.tenant_id
                         """,
                 tenantId, chain, event.assetSymbol(), event.txId(), logIndex, event.fromAddress(), event.toAddress(),
-                event.tokenAddress(), event.amount(), event.blockHeight(), event.confirmations(), status,
+                event.tokenAddress(), event.amount(), event.blockHeight(), event.blockHash(), event.confirmations(), status,
+                accountId,
                 event.rawPayload(), toTs(now()), toTs(now()));
         if (recorded != 1) {
             throw new IllegalStateException("deposit record belongs to another tenant");
@@ -783,8 +805,10 @@ public class ChainJdbcRepository {
 
         int credited = jdbcTemplate.update("""
                         update deposit_record
-                        set credited = true, credited_at = ?, status = 'CREDITED', updated_at = ?
-                        where chain = ? and tx_hash = ? and log_index = ? and credited = false
+                        set credited = true, credited_at = ?, status = 'CREDITED',
+                            credit_generation = credit_generation + 1, updated_at = ?
+                        where chain = ? and tx_hash = ? and log_index = ?
+                          and credited = false and canonical_status = 'CANONICAL'
                         """,
                 toTs(now()), toTs(now()), chain, event.txId(), logIndex);
         if (credited == 1) {
@@ -795,6 +819,146 @@ public class ChainJdbcRepository {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Records the canonical identity of a scanned block. Replacing the hash at an already
+     * observed height atomically reverses every credited deposit from the orphaned block.
+     */
+    @Transactional(rollbackFor = Throwable.class)
+    public BlockObservation observeCanonicalBlock(String chain, String scannerName,
+                                                   long blockHeight, String blockHash,
+                                                   String parentHash) {
+        String normalizedChain = requireText(chain, "chain").toUpperCase(java.util.Locale.ROOT);
+        String normalizedScanner = requireText(scannerName, "scannerName");
+        String normalizedHash = requireText(blockHash, "blockHash");
+        List<String> existing = jdbcTemplate.queryForList("""
+                        select block_hash from chain_scan_block
+                         where chain = ? and scanner_name = ? and block_height = ?
+                         for update
+                        """, String.class, normalizedChain, normalizedScanner, blockHeight);
+        if (existing.isEmpty()) {
+            jdbcTemplate.update("""
+                            insert into chain_scan_block(
+                                chain, scanner_name, block_height, block_hash, parent_hash, observed_at)
+                            values (?, ?, ?, ?, ?, ?)
+                            """, normalizedChain, normalizedScanner, blockHeight,
+                    normalizedHash, parentHash, toTs(now()));
+            return new BlockObservation(false, null, normalizedHash, 0);
+        }
+        String previousHash = existing.getFirst();
+        if (previousHash.equalsIgnoreCase(normalizedHash)) {
+            jdbcTemplate.update("""
+                            update chain_scan_block
+                               set parent_hash = ?, observed_at = ?
+                             where chain = ? and scanner_name = ? and block_height = ?
+                            """, parentHash, toTs(now()), normalizedChain, normalizedScanner, blockHeight);
+            return new BlockObservation(false, previousHash, normalizedHash, 0);
+        }
+
+        List<DepositForReorg> deposits = jdbcTemplate.query("""
+                        select id, tenant_id, chain, asset_symbol, tx_hash, log_index,
+                               account_id, to_address, amount, credited, credit_generation,
+                               block_height, block_hash
+                          from deposit_record
+                         where chain = ? and block_height = ? and canonical_status = 'CANONICAL'
+                           and block_hash is not null and lower(block_hash) <> lower(?)
+                         order by id
+                         for update
+                        """, (rs, rowNum) -> new DepositForReorg(
+                        rs.getLong("id"), rs.getObject("tenant_id", UUID.class),
+                        rs.getString("chain"), rs.getString("asset_symbol"),
+                        rs.getString("tx_hash"), rs.getLong("log_index"),
+                        rs.getString("account_id"), rs.getString("to_address"),
+                        rs.getBigDecimal("amount"), rs.getBoolean("credited"),
+                        rs.getInt("credit_generation"), rs.getLong("block_height"),
+                        rs.getString("block_hash")),
+                normalizedChain, blockHeight, normalizedHash);
+        jdbcTemplate.update("""
+                        update utxo_record
+                           set state = 'ORPHANED', confirmations = 0, credited = false, updated_at = ?
+                         where chain = ? and block_height = ?
+                           and lower(block_hash) <> lower(?) and state <> 'SPENT'
+                        """, toTs(now()), normalizedChain, blockHeight, normalizedHash);
+        int reversed = 0;
+        for (DepositForReorg deposit : deposits) {
+            reverseDeposit(deposit, normalizedHash,
+                    "canonical block changed from " + previousHash + " to " + normalizedHash);
+            reversed++;
+        }
+        jdbcTemplate.update("""
+                        update chain_scan_block
+                           set block_hash = ?, parent_hash = ?, observed_at = ?
+                         where chain = ? and scanner_name = ? and block_height = ?
+                        """, normalizedHash, parentHash, toTs(now()),
+                normalizedChain, normalizedScanner, blockHeight);
+        return new BlockObservation(true, previousHash, normalizedHash, reversed);
+    }
+
+    private void reverseDeposit(DepositForReorg deposit, String replacementBlockHash, String reason) {
+        BigDecimal reversedAmount = BigDecimal.ZERO;
+        BigDecimal deficitAmount = BigDecimal.ZERO;
+        if (deposit.credited()) {
+            BigDecimal available = jdbcTemplate.query("""
+                            select available_balance from ledger_balance
+                             where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
+                             for update
+                            """, (rs, rowNum) -> rs.getBigDecimal(1),
+                    deposit.tenantId(), deposit.chain(), deposit.assetSymbol(), deposit.accountId())
+                    .stream().findFirst().orElse(BigDecimal.ZERO);
+            reversedAmount = available.min(deposit.amount()).max(BigDecimal.ZERO);
+            deficitAmount = deposit.amount().subtract(reversedAmount);
+            if (reversedAmount.signum() > 0) {
+                int updated = jdbcTemplate.update("""
+                                update ledger_balance
+                                   set available_balance = available_balance - ?,
+                                       total_balance = total_balance - ?, updated_at = ?
+                                 where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
+                                   and available_balance >= ? and total_balance >= ?
+                                """, reversedAmount, reversedAmount, toTs(now()),
+                        deposit.tenantId(), deposit.chain(), deposit.assetSymbol(), deposit.accountId(),
+                        reversedAmount, reversedAmount);
+                if (updated != 1) {
+                    throw new IllegalStateException("unable to reverse orphaned deposit balance");
+                }
+            }
+        }
+        int updated = jdbcTemplate.update("""
+                        update deposit_record
+                           set credited = false, status = 'REORGED', canonical_status = 'REORGED',
+                               confirmations = 0, reorged_at = ?, reorg_reason = ?, updated_at = ?
+                         where id = ? and canonical_status = 'CANONICAL'
+                        """, toTs(now()), reason, toTs(now()), deposit.id());
+        if (updated != 1) {
+            throw new IllegalStateException("unable to mark deposit reorged: " + deposit.id());
+        }
+        if (deposit.credited()) {
+            DepositReorgObserver.ReorgedDeposit event = new DepositReorgObserver.ReorgedDeposit(
+                    deposit.id(), deposit.tenantId(), deposit.chain(), deposit.assetSymbol(),
+                    deposit.txHash(), deposit.logIndex(), deposit.accountId(), deposit.toAddress(),
+                    deposit.amount(), reversedAmount, deficitAmount, deposit.creditGeneration(),
+                    deposit.blockHeight(), deposit.blockHash(), replacementBlockHash, reason);
+            for (DepositReorgObserver observer : depositReorgObservers) {
+                observer.onDepositReorged(event);
+            }
+        }
+    }
+
+    private static String requireText(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(field + " is required");
+        }
+        return value.trim();
+    }
+
+    public record BlockObservation(boolean reorg, String previousBlockHash,
+                                   String blockHash, int reversedDepositCount) {
+    }
+
+    private record DepositForReorg(
+            long id, UUID tenantId, String chain, String assetSymbol, String txHash,
+            long logIndex, String accountId, String toAddress, BigDecimal amount,
+            boolean credited, int creditGeneration, long blockHeight, String blockHash) {
     }
 
     private boolean isInternalCollectionTransfer(UUID tenantId, String chain,
@@ -828,15 +992,17 @@ public class ChainJdbcRepository {
     }
 
     public void upsertUtxo(String chain, String assetSymbol, String txHash, int vout, String address,
-                           BigDecimal amount, long blockHeight, int confirmations, boolean credited) {
+                           BigDecimal amount, long blockHeight, String blockHash,
+                           int confirmations, boolean credited) {
         jdbcTemplate.update("""
                         insert into utxo_record(chain, asset_symbol, tx_hash, vout, address, amount, block_height,
-                                                confirmations, state, credited, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE', ?, ?, ?)
+                                                block_hash, confirmations, state, credited, created_at, updated_at)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE', ?, ?, ?)
                         on conflict (chain, tx_hash, vout) do update set
                             address = excluded.address,
                             amount = excluded.amount,
                             block_height = excluded.block_height,
+                            block_hash = excluded.block_hash,
                             confirmations = greatest(utxo_record.confirmations, excluded.confirmations),
                             state = case
                                 when utxo_record.state in ('LOCKED', 'SPENT') then utxo_record.state
@@ -845,7 +1011,7 @@ public class ChainJdbcRepository {
                             credited = utxo_record.credited or excluded.credited,
                             updated_at = excluded.updated_at
                         """,
-                chain, assetSymbol, txHash, vout, address, amount, blockHeight, confirmations, credited,
+                chain, assetSymbol, txHash, vout, address, amount, blockHeight, blockHash, confirmations, credited,
                 toTs(now()), toTs(now()));
     }
 
@@ -904,8 +1070,8 @@ public class ChainJdbcRepository {
     public int updateUtxoConfirmations(String chain, String txHash, int vout, int confirmations) {
         return jdbcTemplate.update("""
                         update utxo_record
-                        set confirmations = greatest(confirmations, ?), updated_at = ?
-                        where chain = ? and tx_hash = ? and vout = ?
+                        set confirmations = ?, updated_at = ?
+                        where chain = ? and tx_hash = ? and vout = ? and state = 'AVAILABLE'
                         """,
                 confirmations, toTs(now()), chain, txHash, vout);
     }
@@ -914,7 +1080,7 @@ public class ChainJdbcRepository {
                                                     long requiredConfirmations,
                                                     int limit, int offset) {
         return jdbcTemplate.query("""
-                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height,
+                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
                                ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
                                (
                                    select cp.runtime_currency_id
@@ -945,7 +1111,7 @@ public class ChainJdbcRepository {
     public List<UtxoTransaction> listSpendableUtxos(UUID tenantId, String chain, String assetSymbol,
                                                     long requiredConfirmations, int limit, int offset) {
         return jdbcTemplate.query("""
-                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height,
+                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
                                ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
                                (
                                    select cp.runtime_currency_id
@@ -980,7 +1146,7 @@ public class ChainJdbcRepository {
                                                                       long maxConfirmations,
                                                                       int limit, int offset) {
         return jdbcTemplate.query("""
-                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height,
+                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
                                ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
                                (
                                    select cp.runtime_currency_id
@@ -1022,7 +1188,7 @@ public class ChainJdbcRepository {
 
     public List<UtxoTransaction> listUtxosByAddress(String chain, String address, int limit) {
         return jdbcTemplate.query("""
-                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height,
+                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
                                ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
                                (
                                    select cp.runtime_currency_id
@@ -1072,6 +1238,7 @@ public class ChainJdbcRepository {
                 .address(rs.getString("address"))
                 .balance(rs.getBigDecimal("amount"))
                 .blockHeight(rs.getLong("block_height"))
+                .blockHash(rs.getString("block_hash"))
                 .confirmNum(rs.getLong("confirmations"))
                 .spent((byte) 0)
                 .spentTxId(Constants.UNSPENT_TX_ID)
@@ -1204,6 +1371,13 @@ public class ChainJdbcRepository {
                             error_message = null,
                             updated_at = ?
                         where chain = ? and order_no = ? and status in ('FROZEN', 'RETRYING')
+                          and not exists (
+                              select 1 from custody_reorg_deficit deficit
+                               where deficit.tenant_id = withdrawal_order.tenant_id
+                                 and deficit.chain = withdrawal_order.chain
+                                 and deficit.asset_symbol = withdrawal_order.asset_symbol
+                                 and deficit.account_id = withdrawal_order.debit_account_id
+                                 and deficit.status = 'OPEN')
                         """,
                 fromAddress, toTs(now()), chain, orderNo);
     }
@@ -1217,6 +1391,13 @@ public class ChainJdbcRepository {
                             updated_at = ?
                         where tenant_id = ? and chain = ? and order_no = ?
                           and status in ('FROZEN', 'RETRYING')
+                          and not exists (
+                              select 1 from custody_reorg_deficit deficit
+                               where deficit.tenant_id = withdrawal_order.tenant_id
+                                 and deficit.chain = withdrawal_order.chain
+                                 and deficit.asset_symbol = withdrawal_order.asset_symbol
+                                 and deficit.account_id = withdrawal_order.debit_account_id
+                                 and deficit.status = 'OPEN')
                         """,
                 fromAddress, toTs(now()), tenantId, chain, orderNo);
     }
@@ -2217,6 +2398,16 @@ public class ChainJdbcRepository {
                         where chain = ? and scanner_name = ?
                         """, Long.class, chain, scannerName);
         return results.stream().findFirst();
+    }
+
+    public List<Long> listCanonicalDepositBlockHeights(String chain, long minimumHeight) {
+        return jdbcTemplate.queryForList("""
+                        select distinct block_height
+                          from deposit_record
+                         where chain = ? and block_height >= ? and credited = true
+                           and canonical_status = 'CANONICAL' and block_hash is not null
+                         order by block_height
+                        """, Long.class, chain, minimumHeight);
     }
 
     public List<ChainScanHeightRecord> listActiveScanHeights() {

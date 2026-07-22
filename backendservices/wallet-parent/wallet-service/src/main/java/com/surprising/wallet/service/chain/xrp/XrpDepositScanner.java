@@ -121,7 +121,7 @@ public class XrpDepositScanner {
             }
             BigDecimal amount = new BigDecimal(amountNode.asText()).movePointLeft(XRP_DECIMALS);
             DepositEvent event = new DepositEvent(ChainType.XRP, NATIVE_SYMBOL, txHash,
-                    tx.path("Account").asText(""), destination, amount, ledgerIndex, confirmations,
+                    tx.path("Account").asText(""), destination, amount, ledgerIndex, txHash, confirmations,
                     null, entry.toString());
             recordTransaction(event, tx, ledgerIndex, confirmations, null, null, profile);
             repository.recordAndCreditDeposit(event, 0L, profile.getDepositConfirmations(), address.getAccountId());
@@ -145,7 +145,7 @@ public class XrpDepositScanner {
         }
         BigDecimal amount = new BigDecimal(amountNode.path("value").asText("0"));
         DepositEvent event = new DepositEvent(ChainType.XRP, token.getSymbol(), txHash,
-                tx.path("Account").asText(""), destination, amount, ledgerIndex, confirmations,
+                tx.path("Account").asText(""), destination, amount, ledgerIndex, txHash, confirmations,
                 token.getContractAddress(), entry.toString());
         recordTransaction(event, tx, ledgerIndex, confirmations, issuer, currency, profile);
         repository.recordAndCreditDeposit(event, token.getId() == null ? 0L : token.getId(),

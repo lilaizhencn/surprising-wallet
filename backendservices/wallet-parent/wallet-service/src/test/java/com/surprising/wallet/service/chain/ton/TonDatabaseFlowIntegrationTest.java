@@ -65,7 +65,7 @@ class TonDatabaseFlowIntegrationTest {
             String txHash = UUID.randomUUID().toString().replace("-", "");
             DepositEvent deposit = new DepositEvent(ChainType.TON, "TON", txHash,
                     "external", userA.getAddress(), BigDecimal.ONE,
-                    123L, 1, null, "{}");
+                    123L, txHash, 1, null, "{}");
             assertTrue(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
             assertFalse(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
             assertTrue(repository.freezeLedgerBalance("TON", "TON", userA.getAccountId(),
