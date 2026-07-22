@@ -133,7 +133,7 @@ public class EvmChainAdapter implements BlockchainAdapter {
         // with application.yaml so signed EVM payloads never mix mainnet IDs with
         // testnet RPC endpoints during fork and integration tests.
         registerProfile(ChainType.BNB, "BNB", 97L, 1L);
-        registerProfile(ChainType.POLYGON, "MATIC", 80002L, 1L);
+        registerProfile(ChainType.POLYGON, "POL", 80002L, 1L);
         registerProfile(ChainType.ARBITRUM, "ETH_ARB", 421614L, 1L);
         registerProfile(ChainType.OPTIMISM, "ETH_OP", 11155420L, 1L);
         registerProfile(ChainType.BASE, "ETH_BASE", 84532L, 1L);

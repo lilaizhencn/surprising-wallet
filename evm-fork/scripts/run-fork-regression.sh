@@ -202,7 +202,7 @@ run_chain ETH ETH 11155111 \
 run_chain BNB BNB 97 \
   ${BNB_RPC_URL:+"${BNB_RPC_URL}"}
 
-run_chain POLYGON MATIC 80002 \
+run_chain POLYGON POL 80002 \
   ${POLYGON_RPC_URL:+"${POLYGON_RPC_URL}"}
 
 run_chain ARBITRUM ETH_ARB 421614 \

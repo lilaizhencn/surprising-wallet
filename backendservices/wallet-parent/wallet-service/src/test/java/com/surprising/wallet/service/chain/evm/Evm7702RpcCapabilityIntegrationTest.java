@@ -62,7 +62,7 @@ class Evm7702RpcCapabilityIntegrationTest {
             assertFalse(response.hasError(), response.hasError() ? response.getError().getMessage() : "");
             BigInteger estimate = Numeric.decodeQuantity(response.getResult());
             assertTrue(estimate.compareTo(BigInteger.valueOf(21_000L)) > 0,
-                    "type-4 estimate must include authorization intrinsic gas");
+                    "type-4 estimate must include authorization intrinsic gas, actual=" + estimate);
         } finally {
             web3j.shutdown();
         }
