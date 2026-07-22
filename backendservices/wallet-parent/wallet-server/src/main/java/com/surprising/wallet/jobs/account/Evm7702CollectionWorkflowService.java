@@ -21,6 +21,7 @@ import org.web3j.abi.FunctionEncoder;
 import org.web3j.abi.FunctionReturnDecoder;
 import org.web3j.abi.TypeReference;
 import org.web3j.abi.datatypes.Address;
+import org.web3j.abi.datatypes.DynamicBytes;
 import org.web3j.abi.datatypes.Function;
 import org.web3j.abi.datatypes.Type;
 import org.web3j.abi.datatypes.generated.Uint256;
@@ -28,6 +29,7 @@ import org.web3j.crypto.AuthorizationTuple;
 import org.web3j.crypto.Credentials;
 import org.web3j.crypto.Hash;
 import org.web3j.protocol.Web3j;
+import org.web3j.protocol.core.DefaultBlockParameter;
 import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.Request;
 import org.web3j.protocol.core.Response;
@@ -58,6 +60,8 @@ public class Evm7702CollectionWorkflowService {
     private static final BigInteger DEFAULT_ITEM_GAS = BigInteger.valueOf(180_000L);
     private static final BigInteger ONE_GWEI = BigInteger.valueOf(1_000_000_000L);
     private static final BigDecimal WEI_PER_NATIVE = new BigDecimal("1000000000000000000");
+    private static final String OP_STACK_GAS_PRICE_ORACLE =
+            "0x420000000000000000000000000000000000000F";
 
     private final Evm7702CollectionRepository repository;
     private final Evm7702CollectionCoordinator coordinator;
@@ -174,13 +178,11 @@ public class Evm7702CollectionWorkflowService {
             Web3j web3j = Web3j.build(http);
             try {
                 Prepared prepared = prepare(web3j, http, profile, batch);
-                BigDecimal reservedFee = new BigDecimal(
-                        prepared.gasLimit().multiply(prepared.maxFeePerGas()))
-                        .divide(WEI_PER_NATIVE, 18, RoundingMode.UP).stripTrailingZeros();
                 Evm7702BatchTransactionService.SignedBatchTransaction signed =
                         coordinator.persistSignedAttempt(
                                 batch, prepared.relayer().getAddress(), prepared.rpcPendingNonce(),
-                                reservedFee, reservedNonce -> signPrepared(batch, prepared, reservedNonce));
+                                reservedNonce -> signPrepared(
+                                        web3j, profile, batch, prepared, reservedNonce));
                 outboxPersisted = true;
                 EthSendTransaction sent = web3j.ethSendRawTransaction(
                         signed.rawTransaction()).send();
@@ -216,12 +218,12 @@ public class Evm7702CollectionWorkflowService {
             BigInteger latest = send(() -> web3j.ethBlockNumber().send().getBlockNumber());
             for (Evm7702CollectionRepository.PendingBatch batch
                     : repository.listPendingBatches(profile.getChain(), profile.getNetwork(), 100)) {
-                Optional<TransactionReceipt> receipt = send(() -> web3j
-                        .ethGetTransactionReceipt(batch.txHash()).send().getTransactionReceipt());
+                Optional<OpStackTransactionReceipt> receipt = send(
+                        () -> transactionReceipt(http(node), batch.txHash()));
                 if (receipt.isEmpty() || receipt.get().getBlockNumber() == null) continue;
                 BigInteger confirmations = latest.subtract(receipt.get().getBlockNumber()).add(BigInteger.ONE);
                 if (confirmations.compareTo(BigInteger.valueOf(batch.requiredConfirmations())) < 0) continue;
-                TransactionReceipt value = receipt.get();
+                OpStackTransactionReceipt value = receipt.get();
                 EthBlock canonical = send(() -> web3j.ethGetBlockByHash(value.getBlockHash(), false).send());
                 if (canonical.getBlock() == null
                         || !canonical.getBlock().getHash().equalsIgnoreCase(value.getBlockHash())) {
@@ -237,13 +239,75 @@ public class Evm7702CollectionWorkflowService {
                                 .toList());
                 BigInteger effectiveGasPrice = value.getEffectiveGasPrice() == null
                         ? BigInteger.ZERO : Numeric.decodeQuantity(value.getEffectiveGasPrice());
+                BigInteger l1Fee = opStackL1Fee(profile, value);
+                BigInteger operatorFee = send(() -> opStackOperatorFee(web3j, profile, value));
                 coordinator.complete(
                         batch, batch.txHash(), value.getGasUsed(), effectiveGasPrice,
+                        l1Fee, operatorFee,
                         value.getBlockNumber(), value.getBlockHash(), parsed.items());
             }
         } finally {
             web3j.shutdown();
         }
+    }
+
+    private Optional<OpStackTransactionReceipt> transactionReceipt(
+            HttpService http, String txHash) throws Exception {
+        OpStackReceiptResponse response = new Request<>(
+                "eth_getTransactionReceipt", List.of(txHash), http,
+                OpStackReceiptResponse.class).send();
+        if (response.hasError()) {
+            throw new IllegalStateException("eth_getTransactionReceipt failed: "
+                    + response.getError().getMessage());
+        }
+        return Optional.ofNullable(response.getResult());
+    }
+
+    private BigInteger opStackL1Fee(
+            AccountChainProfile profile, OpStackTransactionReceipt receipt) {
+        if (!isOpStackL2(profile)) return BigInteger.ZERO;
+        if (receipt.getL1Fee() == null || receipt.getL1Fee().isBlank()) {
+            if ("local".equalsIgnoreCase(profile.getNetwork())) return BigInteger.ZERO;
+            throw new IllegalStateException("OP Stack receipt is missing l1Fee");
+        }
+        return Numeric.decodeQuantity(receipt.getL1Fee());
+    }
+
+    private BigInteger opStackOperatorFee(
+            Web3j web3j, AccountChainProfile profile,
+            OpStackTransactionReceipt receipt) throws Exception {
+        if (!isOpStackL2(profile) || (!positiveQuantity(receipt.getOperatorFeeScalar())
+                && !positiveQuantity(receipt.getOperatorFeeConstant()))) {
+            return BigInteger.ZERO;
+        }
+        Function function = new Function(
+                "getOperatorFee", List.of(new Uint256(receipt.getGasUsed())),
+                List.of(new TypeReference<Uint256>() { }));
+        EthCall response = web3j.ethCall(
+                Transaction.createEthCallTransaction(
+                        receipt.getFrom(), OP_STACK_GAS_PRICE_ORACLE,
+                        FunctionEncoder.encode(function)),
+                DefaultBlockParameter.valueOf(receipt.getBlockNumber())).send();
+        if (response.hasError()) {
+            throw new IllegalStateException("OP Stack getOperatorFee failed: "
+                    + response.getError().getMessage());
+        }
+        List<Type> values = FunctionReturnDecoder.decode(
+                response.getValue(), function.getOutputParameters());
+        if (values.size() != 1) {
+            throw new IllegalStateException("OP Stack getOperatorFee returned malformed data");
+        }
+        return (BigInteger) values.getFirst().getValue();
+    }
+
+    private boolean isOpStackL2(AccountChainProfile profile) {
+        return "eip1559-l2".equalsIgnoreCase(profile.getGasPolicy())
+                && ("BASE".equalsIgnoreCase(profile.getChain())
+                || "OPTIMISM".equalsIgnoreCase(profile.getChain()));
+    }
+
+    private boolean positiveQuantity(String value) {
+        return value != null && !value.isBlank() && Numeric.decodeQuantity(value).signum() > 0;
     }
 
     private Prepared prepare(Web3j web3j, HttpService http, AccountChainProfile profile,
@@ -331,6 +395,7 @@ public class Evm7702CollectionWorkflowService {
     }
 
     private Evm7702CollectionCoordinator.SignedAttempt signPrepared(
+            Web3j web3j, AccountChainProfile profile,
             Evm7702CollectionRepository.Batch batch, Prepared prepared, BigInteger reservedNonce) {
         var signed = transactionService.signBatch(
                 prepared.chainId().longValueExact(), reservedNonce,
@@ -343,7 +408,55 @@ public class Evm7702CollectionWorkflowService {
                 prepared.gasLimit().longValueExact(), prepared.maxFeePerGas(),
                 prepared.maxPriorityFeePerGas(), reservedNonce, signed.transactionHash(),
                 Hash.sha3(prepared.calldata()), encrypted, "custody-v1", prepared.items());
-        return new Evm7702CollectionCoordinator.SignedAttempt(signed, attempt);
+        BigInteger reservedFeeAtomic = prepared.gasLimit().multiply(prepared.maxFeePerGas())
+                .add(opStackL1FeeEstimate(web3j, profile, prepared.relayer().getAddress(),
+                        signed.rawTransaction()))
+                .add(opStackOperatorFeeEstimate(
+                        web3j, profile, prepared.relayer().getAddress(), prepared.gasLimit()));
+        BigDecimal reservedFee = new BigDecimal(reservedFeeAtomic)
+                .divide(WEI_PER_NATIVE, 18, RoundingMode.UP).stripTrailingZeros();
+        return new Evm7702CollectionCoordinator.SignedAttempt(signed, attempt, reservedFee);
+    }
+
+    private BigInteger opStackL1FeeEstimate(
+            Web3j web3j, AccountChainProfile profile, String from, String signedTransaction) {
+        if (!isOpStackL2(profile) || "local".equalsIgnoreCase(profile.getNetwork())) {
+            return BigInteger.ZERO;
+        }
+        Function function = new Function(
+                "getL1Fee",
+                List.of(new DynamicBytes(Numeric.hexStringToByteArray(signedTransaction))),
+                List.of(new TypeReference<Uint256>() { }));
+        return opStackOracleUint256(web3j, from, function, "getL1Fee");
+    }
+
+    private BigInteger opStackOperatorFeeEstimate(
+            Web3j web3j, AccountChainProfile profile, String from, BigInteger gasLimit) {
+        if (!isOpStackL2(profile) || "local".equalsIgnoreCase(profile.getNetwork())) {
+            return BigInteger.ZERO;
+        }
+        Function function = new Function(
+                "getOperatorFee", List.of(new Uint256(gasLimit)),
+                List.of(new TypeReference<Uint256>() { }));
+        return opStackOracleUint256(web3j, from, function, "getOperatorFee");
+    }
+
+    private BigInteger opStackOracleUint256(
+            Web3j web3j, String from, Function function, String operation) {
+        EthCall response = send(() -> web3j.ethCall(
+                Transaction.createEthCallTransaction(
+                        from, OP_STACK_GAS_PRICE_ORACLE, FunctionEncoder.encode(function)),
+                DefaultBlockParameterName.LATEST).send());
+        if (response.hasError()) {
+            throw new IllegalStateException("OP Stack " + operation + " failed: "
+                    + response.getError().getMessage());
+        }
+        List<Type> values = FunctionReturnDecoder.decode(
+                response.getValue(), function.getOutputParameters());
+        if (values.size() != 1) {
+            throw new IllegalStateException("OP Stack " + operation + " returned malformed data");
+        }
+        return (BigInteger) values.getFirst().getValue();
     }
 
     private BigInteger estimateGas(HttpService http, String from, String to, String data,
@@ -465,6 +578,26 @@ public class Evm7702CollectionWorkflowService {
     }
 
     public static class QuantityResponse extends Response<String> {
+    }
+
+    public static class OpStackReceiptResponse extends Response<OpStackTransactionReceipt> {
+    }
+
+    public static class OpStackTransactionReceipt extends TransactionReceipt {
+        private String l1Fee;
+        private String operatorFeeScalar;
+        private String operatorFeeConstant;
+
+        public String getL1Fee() { return l1Fee; }
+        public void setL1Fee(String l1Fee) { this.l1Fee = l1Fee; }
+        public String getOperatorFeeScalar() { return operatorFeeScalar; }
+        public void setOperatorFeeScalar(String operatorFeeScalar) {
+            this.operatorFeeScalar = operatorFeeScalar;
+        }
+        public String getOperatorFeeConstant() { return operatorFeeConstant; }
+        public void setOperatorFeeConstant(String operatorFeeConstant) {
+            this.operatorFeeConstant = operatorFeeConstant;
+        }
     }
 
     private record Prepared(

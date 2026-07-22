@@ -394,6 +394,7 @@ public class Evm7702CollectionRepository {
     @Transactional(rollbackFor = Throwable.class)
     public void completeBatch(UUID tenantId, UUID batchId, String txHash,
                               BigInteger gasUsed, BigInteger effectiveGasPrice,
+                              BigInteger l1Fee, BigInteger operatorFee,
                               BigInteger blockNumber, String blockHash,
                               List<com.surprising.wallet.service.chain.evm.Evm7702ReceiptParser.ItemResult> results) {
         List<BatchItemIdentity> expected = listBatchItemIdentities(tenantId, batchId);
@@ -460,18 +461,23 @@ public class Evm7702CollectionRepository {
                 throw new IllegalStateException("EIP-7702 account projection completion failed");
             }
         }
-        BigDecimal actualFee = new BigDecimal(gasUsed.multiply(effectiveGasPrice))
+        BigInteger l2Fee = gasUsed.multiply(effectiveGasPrice);
+        BigInteger totalFee = l2Fee.add(l1Fee).add(operatorFee);
+        BigDecimal actualFee = new BigDecimal(totalFee)
                 .movePointLeft(18).stripTrailingZeros();
         String batchStatus = failures == 0 ? "CONFIRMED"
                 : failures == results.size() ? "FAILED" : "PARTIAL_FAILED";
         if (jdbc.update("""
                 update evm_collection_batch
-                   set status = ?, actual_gas_used = ?, effective_gas_price = ?, actual_fee = ?,
+                   set status = ?, actual_gas_used = ?, effective_gas_price = ?,
+                       l2_fee_atomic = ?, l1_fee_atomic = ?, operator_fee_atomic = ?,
+                       total_fee_atomic = ?, actual_fee = ?,
                        confirmed_block_number = ?, confirmed_block_hash = ?,
                        confirmed_at = now(), updated_at = now()
                  where tenant_id = ? and id = ? and canonical_tx_hash = ?
                    and status in ('SUBMITTED', 'CONFIRMING')
-                """, batchStatus, gasUsed, effectiveGasPrice, actualFee,
+                """, batchStatus, gasUsed, effectiveGasPrice,
+                l2Fee, l1Fee, operatorFee, totalFee, actualFee,
                 blockNumber, blockHash, tenantId, batchId, txHash) != 1) {
             throw new IllegalStateException("batch completion transition failed");
         }

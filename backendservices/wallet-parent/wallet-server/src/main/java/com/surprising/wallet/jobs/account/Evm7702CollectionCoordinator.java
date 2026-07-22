@@ -29,8 +29,7 @@ public class Evm7702CollectionCoordinator {
     @Transactional(rollbackFor = Throwable.class)
     public Evm7702BatchTransactionService.SignedBatchTransaction persistSignedAttempt(
             Evm7702CollectionRepository.Batch batch, String relayerAddress,
-            BigInteger rpcPendingNonce, BigDecimal reservedFee,
-            SignedAttemptFactory factory) {
+            BigInteger rpcPendingNonce, SignedAttemptFactory factory) {
         BigInteger reservedNonce = chainRepository.reserveEvmNonce(
                 batch.chain(), relayerAddress.toLowerCase(), rpcPendingNonce);
         SignedAttempt signedAttempt = factory.create(reservedNonce);
@@ -40,19 +39,22 @@ public class Evm7702CollectionCoordinator {
         repository.saveSignedAttempt(batch, signedAttempt.attempt());
         custodyRepository.reserveGasUsage(
                 batch.tenantId(), "COLLECTION_BATCH", batch.id(),
-                batch.id().toString(), batch.chain(), reservedFee);
+                batch.id().toString(), batch.chain(), signedAttempt.reservedFee());
         return signedAttempt.signedTransaction();
     }
 
     @Transactional(rollbackFor = Throwable.class)
     public void complete(Evm7702CollectionRepository.PendingBatch batch,
                          String txHash, BigInteger gasUsed, BigInteger effectiveGasPrice,
+                         BigInteger l1Fee, BigInteger operatorFee,
                          BigInteger blockNumber, String blockHash,
                          List<Evm7702ReceiptParser.ItemResult> results) {
         repository.completeBatch(
                 batch.tenantId(), batch.batchId(), txHash, gasUsed, effectiveGasPrice,
+                l1Fee, operatorFee,
                 blockNumber, blockHash, results);
-        BigDecimal actualFee = new BigDecimal(gasUsed.multiply(effectiveGasPrice))
+        BigDecimal actualFee = new BigDecimal(gasUsed.multiply(effectiveGasPrice)
+                        .add(l1Fee).add(operatorFee))
                 .movePointLeft(18).stripTrailingZeros();
         custodyRepository.settleGasUsage(
                 batch.tenantId(), "COLLECTION_BATCH", batch.batchId(),
@@ -66,6 +68,7 @@ public class Evm7702CollectionCoordinator {
 
     public record SignedAttempt(
             Evm7702BatchTransactionService.SignedBatchTransaction signedTransaction,
-            Evm7702CollectionRepository.PreparedAttempt attempt) {
+            Evm7702CollectionRepository.PreparedAttempt attempt,
+            BigDecimal reservedFee) {
     }
 }

@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -346,6 +347,19 @@ class Evm7702ProductionFlowIntegrationTest {
                  where tenant_id = ? and operation_type = 'COLLECTION_BATCH'
                 """, BigDecimal.class, tenant.tenantId());
         assertTrue(actualFee.signum() > 0);
+        Map<String, Object> fees = jdbc.queryForMap("""
+                select l2_fee_atomic, l1_fee_atomic, operator_fee_atomic,
+                       total_fee_atomic, actual_fee
+                  from evm_collection_batch
+                 where tenant_id = ? and canonical_tx_hash = ?
+                """, tenant.tenantId(), txHash);
+        BigInteger l2Fee = ((BigDecimal) fees.get("l2_fee_atomic")).toBigIntegerExact();
+        assertEquals(BigInteger.ZERO,
+                ((BigDecimal) fees.get("l1_fee_atomic")).toBigIntegerExact());
+        assertEquals(BigInteger.ZERO,
+                ((BigDecimal) fees.get("operator_fee_atomic")).toBigIntegerExact());
+        assertEquals(l2Fee, ((BigDecimal) fees.get("total_fee_atomic")).toBigIntegerExact());
+        assertEquals(0, actualFee.compareTo((BigDecimal) fees.get("actual_fee")));
     }
 
     private int batchCount(UUID tenantId) {
