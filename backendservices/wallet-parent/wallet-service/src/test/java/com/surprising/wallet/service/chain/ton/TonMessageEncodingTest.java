@@ -12,6 +12,7 @@ import java.math.BigInteger;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -87,6 +88,14 @@ class TonMessageEncodingTest {
         assertEquals(Address.of(sender).toRaw(), Address.of(parsed.sender()).toRaw());
     }
 
+    @Test
+    void duplicatePendingBocIsAStillPendingConfirmation() {
+        TonTransactionService service = new TonTransactionService(
+                new DuplicateTonCenterClient(), new TonKeyService(MASTER_SEED), new PendingRepository());
+
+        assertFalse(service.confirmSentMessage("message-hash", "sender"));
+    }
+
     private static final class FakeTonCenterClient extends TonCenterClient {
         FakeTonCenterClient() {
             super(new ObjectMapper(), "http://127.0.0.1", "");
@@ -124,6 +133,34 @@ class TonMessageEncodingTest {
                     .chain(chain)
                     .network("testnet")
                     .build());
+        }
+    }
+
+    private static final class DuplicateTonCenterClient extends TonCenterClient {
+        private DuplicateTonCenterClient() {
+            super(new ObjectMapper(), "http://127.0.0.1", "");
+        }
+
+        @Override
+        public Optional<com.fasterxml.jackson.databind.JsonNode> findExternalMessageTransaction(
+                String address, String messageHash, int limit) {
+            return Optional.empty();
+        }
+
+        @Override
+        public String sendBoc(byte[] boc) {
+            throw new IllegalStateException("Duplicate msg_seqno 7");
+        }
+    }
+
+    private static final class PendingRepository extends ChainJdbcRepository {
+        private PendingRepository() {
+            super(null);
+        }
+
+        @Override
+        public Optional<String> findTonTransactionRawPayload(String chain, String txHash) {
+            return Optional.of("AQ==");
         }
     }
 }

@@ -16,6 +16,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.HexFormat;
+import java.util.Optional;
 
 @Component
 public class TonCenterClient {
@@ -78,6 +82,21 @@ public class TonCenterClient {
         body.put("boc", java.util.Base64.getEncoder().encodeToString(boc));
         JsonNode result = post("/sendBocReturnHash", body);
         return result.path("hash").asText();
+    }
+
+    public Optional<JsonNode> findExternalMessageTransaction(String address, String messageHash, int limit) {
+        JsonNode transactions = transactions(address, limit);
+        if (!transactions.isArray()) {
+            return Optional.empty();
+        }
+        for (JsonNode transaction : transactions) {
+            JsonNode incoming = transaction.path("in_msg");
+            if (incoming.path("source").asText().isBlank()
+                    && sameHash(messageHash, incoming.path("hash").asText())) {
+                return Optional.of(transaction);
+            }
+        }
+        return Optional.empty();
     }
 
     public JsonNode runGetMethod(String address, String method, JsonNode stack) {
@@ -200,6 +219,31 @@ public class TonCenterClient {
 
     private static String trim(String value) {
         return value == null ? "" : value.replaceAll("/+$", "");
+    }
+
+    static boolean sameHash(String first, String second) {
+        byte[] firstBytes = decodeHash(first);
+        byte[] secondBytes = decodeHash(second);
+        return firstBytes != null && secondBytes != null && Arrays.equals(firstBytes, secondBytes);
+    }
+
+    private static byte[] decodeHash(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim();
+        try {
+            if (normalized.matches("(?i)[0-9a-f]{64}")) {
+                return HexFormat.of().parseHex(normalized);
+            }
+            try {
+                return Base64.getDecoder().decode(normalized);
+            } catch (IllegalArgumentException ignored) {
+                return Base64.getUrlDecoder().decode(normalized);
+            }
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     private static HttpClient buildHttpClient() {

@@ -501,6 +501,14 @@ public class ChainJdbcRepository {
                 toTs(now()), chain, txHash);
     }
 
+    public Optional<String> findTonTransactionRawPayload(String chain, String txHash) {
+        List<String> results = jdbcTemplate.queryForList("""
+                        select raw_payload from ton_transaction
+                        where chain = ? and tx_hash = ? and raw_payload is not null
+                        """, String.class, chain, txHash);
+        return results.stream().findFirst();
+    }
+
     public int recordAptosTransaction(AptosTransactionRecord tx) {
         return jdbcTemplate.update("""
                         insert into aptos_transaction(

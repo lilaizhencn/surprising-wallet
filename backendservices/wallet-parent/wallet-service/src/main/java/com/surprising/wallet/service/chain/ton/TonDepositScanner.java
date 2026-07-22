@@ -5,11 +5,12 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
+import com.surprising.wallet.common.chain.HotWalletRules;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TonTransactionRecord;
 import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.ton.ton4j.cell.Cell;
@@ -18,10 +19,12 @@ import org.ton.ton4j.cell.CellSlice;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
-@RequiredArgsConstructor
+@Slf4j
 public class TonDepositScanner {
     private static final String CHAIN = "TON";
     private static final String SCANNER = "ton-account-message-scanner";
@@ -36,6 +39,21 @@ public class TonDepositScanner {
     private final TonCenterClient rpc;
     private final TonAddressService addressService;
     private final ChainJdbcRepository repository;
+    private final TonApiClient tonApi;
+
+    @Autowired
+    public TonDepositScanner(TonCenterClient rpc, TonAddressService addressService,
+                             ChainJdbcRepository repository, TonApiClient tonApi) {
+        this.rpc = rpc;
+        this.addressService = addressService;
+        this.repository = repository;
+        this.tonApi = tonApi;
+    }
+
+    TonDepositScanner(TonCenterClient rpc, TonAddressService addressService,
+                      ChainJdbcRepository repository) {
+        this(rpc, addressService, repository, null);
+    }
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
@@ -44,15 +62,19 @@ public class TonDepositScanner {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "ton scanAndCredit");
         AccountChainProfile profile = profile();
         List<DepositEvent> events = new ArrayList<>();
-        for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, "TON")) {
+        List<ChainAddressRecord> nativeAddresses = repository.listChainAddresses(CHAIN, "TON");
+        List<TokenDefinition> tokens = repository.listTokens(CHAIN);
+        Set<String> platformAddresses = platformAddresses();
+        for (ChainAddressRecord address : nativeAddresses) {
             if (isNativeScanRole(address)) {
-                scanNative(address, profile, events);
+                scanNative(address, profile, platformAddresses, events);
             }
         }
-        for (TokenDefinition token : repository.listTokens(CHAIN)) {
+        materializeJettonWallets(nativeAddresses, tokens);
+        for (TokenDefinition token : tokens) {
             for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, token.getSymbol())) {
                 if (WALLET_ROLE_DEPOSIT.equals(address.getWalletRole())) {
-                    scanJetton(address, token, profile, events);
+                    scanJetton(address, token, profile, platformAddresses, events);
                 }
             }
         }
@@ -61,7 +83,8 @@ public class TonDepositScanner {
         return events;
     }
 
-    private void scanNative(ChainAddressRecord tracked, AccountChainProfile profile, List<DepositEvent> events) {
+    private void scanNative(ChainAddressRecord tracked, AccountChainProfile profile,
+                            Set<String> platformAddresses, List<DepositEvent> events) {
         JsonNode transactions = rpc.transactions(tracked.getAddress(), scanLimit(profile));
         for (JsonNode tx : transactions) {
             JsonNode in = tx.path("in_msg");
@@ -70,7 +93,7 @@ public class TonDepositScanner {
             BigDecimal amount = displayAmount(decimal(in.path("value").asText()), TON_DECIMALS);
             if (destination.isBlank() || source.isBlank() || amount.signum() <= 0
                     || !sameAddress(destination, tracked.getAddress())
-                    || isPlatformAddress(source)
+                    || isPlatformAddress(source, platformAddresses)
                     || isOperationalNativeMessage(in.path("msg_data").path("body").asText())) {
                 continue;
             }
@@ -81,7 +104,8 @@ public class TonDepositScanner {
     }
 
     private void scanJetton(ChainAddressRecord tracked, TokenDefinition token,
-                            AccountChainProfile profile, List<DepositEvent> events) {
+                            AccountChainProfile profile, Set<String> platformAddresses,
+                            List<DepositEvent> events) {
         JsonNode transactions = rpc.transactions(tracked.getAddress(), scanLimit(profile));
         for (JsonNode tx : transactions) {
             JsonNode in = tx.path("in_msg");
@@ -90,7 +114,8 @@ public class TonDepositScanner {
             }
             JettonNotification notification = parseJettonDepositBody(
                     in.path("msg_data").path("body").asText());
-            if (notification == null || notification.amount().signum() <= 0) {
+            if (notification == null || notification.amount().signum() <= 0
+                    || isPlatformAddress(notification.sender(), platformAddresses)) {
                 continue;
             }
             DepositEvent event = event(tx, tracked, token.getSymbol(), notification.sender(),
@@ -169,16 +194,62 @@ public class TonDepositScanner {
         }
     }
 
-    private boolean isPlatformAddress(String address) {
+    private boolean isPlatformAddress(String address, Set<String> platformAddresses) {
         if (address == null || address.isBlank()) {
             return false;
         }
+        try {
+            return platformAddresses.contains(addressService.normalizeRaw(address));
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private Set<String> platformAddresses() {
+        Set<String> addresses = new HashSet<>();
         for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
-            if (sameAddress(address, tracked.getAddress()) || sameAddress(address, tracked.getOwnerAddress())) {
-                return true;
+            addNormalized(addresses, tracked.getAddress());
+            addNormalized(addresses, tracked.getOwnerAddress());
+        }
+        return addresses;
+    }
+
+    private void addNormalized(Set<String> addresses, String address) {
+        if (address == null || address.isBlank()) {
+            return;
+        }
+        try {
+            addresses.add(addressService.normalizeRaw(address));
+        } catch (RuntimeException ignored) {
+            // Ignore malformed historical rows; valid tracked addresses are still scanned.
+        }
+    }
+
+    private void materializeJettonWallets(List<ChainAddressRecord> nativeAddresses,
+                                          List<TokenDefinition> tokens) {
+        if (tonApi == null) {
+            return;
+        }
+        for (ChainAddressRecord owner : nativeAddresses) {
+            if (!WALLET_ROLE_DEPOSIT.equals(owner.getWalletRole())
+                    || HotWalletRules.isDefaultHotUser(owner.getUserId(), owner.getBiz())) {
+                continue;
+            }
+            for (TokenDefinition token : tokens) {
+                if (repository.findChainAddress(CHAIN, token.getSymbol(), owner.getUserId(), owner.getBiz(),
+                        owner.getAddressIndex(), owner.getWalletRole()).isPresent()) {
+                    continue;
+                }
+                try {
+                    String wallet = tonApi.resolveJettonWallet(owner.getAddress(), token.getContractAddress());
+                    addressService.registerJettonWallet(token.getSymbol(), wallet, owner.getUserId(), owner.getBiz(),
+                            owner.getAddressIndex(), owner.getWalletRole());
+                } catch (RuntimeException e) {
+                    log.warn("TON Jetton wallet materialization failed: owner={} symbol={} error={}",
+                            owner.getAddress(), token.getSymbol(), e.getMessage());
+                }
             }
         }
-        return false;
     }
 
     private boolean isOperationalNativeMessage(String bodyBase64) {

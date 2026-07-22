@@ -7,12 +7,14 @@ import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.service.chain.aptos.AptosTransactionService;
 import com.surprising.wallet.service.chain.evm.EvmAccountTransactionService;
+import com.surprising.wallet.service.chain.ton.TonTransactionService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -96,6 +98,55 @@ class AccountChainWorkflowServiceTest {
         assertEquals(1_250_000L, aptos.atomicAmount);
     }
 
+    @Test
+    void tonJettonWithdrawalUsesMaterializedWalletAndAtomicAmount() throws Exception {
+        ChainAddressRecord owner = ChainAddressRecord.builder()
+                .chain("TON").assetSymbol("TON").accountId("owner").userId(1L).biz(0).addressIndex(7L)
+                .address("owner").ownerAddress("owner").walletRole("DEPOSIT").enabled(true).build();
+        ChainAddressRecord jettonWallet = ChainAddressRecord.builder()
+                .chain("TON").assetSymbol("USDT").accountId("owner").userId(1L).biz(0).addressIndex(7L)
+                .address("jetton-wallet").ownerAddress("owner").walletRole("DEPOSIT").enabled(true).build();
+        TokenDefinition token = TokenDefinition.builder()
+                .chain("TON").symbol("USDT").standard("JETTON").contractAddress("jetton-master")
+                .decimals(6).active(true).build();
+        FakeRepository repository = new FakeRepository(owner, token, jettonWallet);
+        CapturingTonService ton = new CapturingTonService();
+        AccountChainWorkflowService service = service(repository, ton);
+        AccountChainProfile profile = AccountChainProfile.builder()
+                .chain("TON").network("testnet").family("ton").nativeSymbol("TON").enabled(true).build();
+        WithdrawalOrderRecord order = WithdrawalOrderRecord.builder()
+                .orderNo("ton-usdt-withdrawal").userId(1L).chain("TON").assetSymbol("USDT")
+                .fromAddress("owner").toAddress("destination").amount(new BigDecimal("1.25"))
+                .status("FROZEN").build();
+
+        assertEquals("ton-hash", dispatchWithdrawal(service, profile, order, owner));
+        assertEquals(jettonWallet, ton.from);
+        assertEquals("jetton-wallet", ton.sourceJettonWallet);
+        assertEquals(BigInteger.valueOf(1_250_000L), ton.atomicAmount);
+    }
+
+    @Test
+    void tonWithdrawalSettlesOnlyAfterExternalMessageIsOnChain() throws Exception {
+        ChainAddressRecord owner = ChainAddressRecord.builder()
+                .chain("TON").assetSymbol("TON").accountId("owner").userId(1L).biz(0).addressIndex(7L)
+                .address("owner").ownerAddress("owner").walletRole("DEPOSIT").enabled(true).build();
+        FakeRepository repository = new FakeRepository(owner);
+        CapturingTonService ton = new CapturingTonService();
+        AccountChainWorkflowService service = service(repository, ton);
+        WithdrawalOrderRecord order = WithdrawalOrderRecord.builder()
+                .orderNo("ton-confirm").chain("TON").assetSymbol("TON").fromAddress("owner")
+                .debitAccountId("owner").toAddress("destination").amount(BigDecimal.ONE)
+                .fee(BigDecimal.ZERO).txHash("ton-message-hash").status("SENT").build();
+
+        ton.messageConfirmed = false;
+        confirmTonWithdrawal(service, order, owner);
+        assertEquals(0, repository.withdrawalSettlements);
+
+        ton.messageConfirmed = true;
+        confirmTonWithdrawal(service, order, owner);
+        assertEquals(1, repository.withdrawalSettlements);
+    }
+
     private static void processWithdrawal(AccountChainWorkflowService service,
                                           AccountChainProfile profile,
                                           WithdrawalOrderRecord order) throws Exception {
@@ -114,6 +165,15 @@ class AccountChainWorkflowServiceTest {
                 WithdrawalOrderRecord.class, ChainAddressRecord.class);
         method.setAccessible(true);
         return (String) method.invoke(service, profile, order, address);
+    }
+
+    private static void confirmTonWithdrawal(AccountChainWorkflowService service,
+                                             WithdrawalOrderRecord order,
+                                             ChainAddressRecord address) throws Exception {
+        Method method = AccountChainWorkflowService.class.getDeclaredMethod(
+                "confirmTonWithdrawal", WithdrawalOrderRecord.class, ChainAddressRecord.class);
+        method.setAccessible(true);
+        method.invoke(service, order, address);
     }
 
     private static AccountChainProfile profile() {
@@ -212,6 +272,15 @@ class AccountChainWorkflowServiceTest {
                 null);
     }
 
+    private static AccountChainWorkflowService service(ChainJdbcRepository repository,
+                                                       TonTransactionService tonService) {
+        return new AccountChainWorkflowService(
+                repository,
+                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, tonService, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null);
+    }
+
     private static final class FakeRepository extends ChainJdbcRepository {
         private final ChainAddressRecord address;
         private int signingClaims;
@@ -219,15 +288,29 @@ class AccountChainWorkflowServiceTest {
         private int lockReleases;
         private String broadcastError;
         private final TokenDefinition token;
+        private final ChainAddressRecord tokenAddress;
+        private int withdrawalSettlements;
 
         private FakeRepository(ChainAddressRecord address) {
             this(address, null);
         }
 
         private FakeRepository(ChainAddressRecord address, TokenDefinition token) {
+            this(address, token, null);
+        }
+
+        private FakeRepository(ChainAddressRecord address, TokenDefinition token,
+                               ChainAddressRecord tokenAddress) {
             super(null);
             this.address = address;
             this.token = token;
+            this.tokenAddress = tokenAddress;
+        }
+
+        @Override
+        public Optional<ChainAddressRecord> findChainAddress(String chain, String assetSymbol, long userId,
+                                                             int biz, long addressIndex, String walletRole) {
+            return Optional.ofNullable(tokenAddress);
         }
 
         @Override
@@ -269,6 +352,13 @@ class AccountChainWorkflowServiceTest {
             lockReleases++;
             return true;
         }
+
+        @Override
+        public boolean confirmWithdrawalAndSettle(String chain, String orderNo, String txHash,
+                                                  String assetSymbol, String accountId, BigDecimal amount) {
+            withdrawalSettlements++;
+            return true;
+        }
     }
 
     private static final class FailingEvmService extends EvmAccountTransactionService {
@@ -296,6 +386,38 @@ class AccountChainWorkflowServiceTest {
             this.token = token;
             this.atomicAmount = amountAtomic;
             return "0xaptos-fa";
+        }
+    }
+
+    private static final class CapturingTonService extends TonTransactionService {
+        private ChainAddressRecord from;
+        private String sourceJettonWallet;
+        private BigInteger atomicAmount;
+        private boolean messageConfirmed;
+
+        private CapturingTonService() {
+            super(null, null, null);
+        }
+
+        @Override
+        public PreparedTransfer prepareJetton(ChainAddressRecord from, String sourceJettonWallet,
+                                              String destinationOwner, BigInteger tokenAmount,
+                                              String responseAddress, String comment) {
+            this.from = from;
+            this.sourceJettonWallet = sourceJettonWallet;
+            this.atomicAmount = tokenAmount;
+            return new PreparedTransfer(1L, new byte[]{1}, "AQ==", "message-hash");
+        }
+
+        @Override
+        public String broadcastAndRecord(PreparedTransfer transfer, String from, String to,
+                                         String symbol, String master, BigDecimal amount) {
+            return "ton-hash";
+        }
+
+        @Override
+        public boolean confirmSentMessage(String messageHash, String senderAddress) {
+            return messageConfirmed;
         }
     }
 }

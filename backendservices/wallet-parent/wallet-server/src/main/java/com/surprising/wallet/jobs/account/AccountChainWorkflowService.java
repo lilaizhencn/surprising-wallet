@@ -418,9 +418,6 @@ public class AccountChainWorkflowService {
     private void createCollectionCandidates(AccountChainProfile profile) {
         for (CollectionCandidateRecord candidate : repository.listCollectableLedgerBalances(
                 profile.getChain(), BigDecimal.ZERO, COLLECTION_LIMIT)) {
-            if (!canCollect(profile, candidate)) {
-                continue;
-            }
             BigDecimal amount = collectionAmount(profile, candidate);
             if (amount.signum() <= 0) {
                 continue;
@@ -479,11 +476,13 @@ public class AccountChainWorkflowService {
             case "TON" -> {
                 if (isNative(profile, record.getAssetSymbol())) {
                     tonTransactionService.collectNative(record.getCollectionNo(), from,
-                            record.getToAddress(), toAtomicDecimal(record.getAmount(), assetDecimals(record)),
+                            record.getToAddress(), record.getAmount(),
                             "collection:" + record.getCollectionNo());
                 } else {
-                    log.warn("TON Jetton collection skipped until jetton wallet addresses are materialized: collectionNo={}",
-                            record.getCollectionNo());
+                    TokenDefinition token = requireToken(record.getChain(), record.getAssetSymbol());
+                    tonTransactionService.collectJetton(record.getCollectionNo(), from,
+                            token.getContractAddress(), record.getToAddress(), record.getAmount(),
+                            "collection:" + record.getCollectionNo());
                 }
             }
             case "XRP" -> {
@@ -555,7 +554,11 @@ public class AccountChainWorkflowService {
             case "SOLANA" -> solanaTransactionService.confirmCollection(record.getCollectionNo());
             case "APTOS" -> aptosTransactionService.confirmCollection(record.getCollectionNo());
             case "SUI" -> suiTransactionService.confirmCollection(record.getCollectionNo());
-            case "TON" -> tonTransactionService.confirmCollection(record.getCollectionNo());
+            case "TON" -> {
+                ChainAddressRecord from = requireAddress(
+                        record.getChain(), record.getAssetSymbol(), record.getFromAddress());
+                tonTransactionService.confirmCollection(record.getCollectionNo(), tonOwnerAddress(from));
+            }
             case "XRP" -> xrpTransactionService.confirmCollection(profile, record.getCollectionNo());
             case "ADA" -> cardanoTransactionService.confirmCollection(profile, record.getCollectionNo());
             case "DOT" -> polkadotTransactionService.confirmCollection(
@@ -640,17 +643,22 @@ public class AccountChainWorkflowService {
         TonTransactionService.PreparedTransfer prepared = tonTransactionService.prepareNative(
                 from, order.getToAddress(), toAtomicBigInteger(order.getAmount(), assetDecimals(order)),
                 "withdraw:" + order.getOrderNo());
-        String hash = tonTransactionService.broadcast(prepared);
-        return hash == null || hash.isBlank() ? prepared.messageHashHex() : hash;
+        return tonTransactionService.broadcastAndRecord(prepared, from.getAddress(), order.getToAddress(),
+                order.getAssetSymbol(), null, order.getAmount());
     }
 
     private String broadcastTonJetton(WithdrawalOrderRecord order, ChainAddressRecord from, TokenDefinition token) {
+        ChainAddressRecord jettonWallet = repository.findChainAddress(
+                        order.getChain(), token.getSymbol(), from.getUserId(), from.getBiz(),
+                        from.getAddressIndex(), from.getWalletRole())
+                .orElseThrow(() -> new IllegalStateException("missing materialized TON Jetton wallet for "
+                        + token.getSymbol() + " owner=" + from.getAddress()));
         TonTransactionService.PreparedTransfer prepared = tonTransactionService.prepareJetton(
-                from, from.getAddress(), order.getToAddress(),
+                jettonWallet, jettonWallet.getAddress(), order.getToAddress(),
                 toAtomicBigInteger(order.getAmount(), token.getDecimals()),
-                from.getOwnerAddress(), "withdraw:" + order.getOrderNo());
-        String hash = tonTransactionService.broadcast(prepared);
-        return hash == null || hash.isBlank() ? prepared.messageHashHex() : hash;
+                jettonWallet.getOwnerAddress(), "withdraw:" + order.getOrderNo());
+        return tonTransactionService.broadcastAndRecord(prepared, jettonWallet.getOwnerAddress(),
+                order.getToAddress(), token.getSymbol(), token.getContractAddress(), order.getAmount());
     }
 
     private String broadcastTron(AccountChainProfile profile, WithdrawalOrderRecord order,
@@ -770,8 +778,15 @@ public class AccountChainWorkflowService {
         if (order.getTxHash() == null || order.getTxHash().isBlank()) {
             return;
         }
-        repository.confirmWithdrawalAndSettle(order.getChain(), order.getOrderNo(), order.getTxHash(),
-                order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
+        if (tonTransactionService.confirmSentMessage(order.getTxHash(), tonOwnerAddress(from))) {
+            repository.confirmWithdrawalAndSettle(order.getChain(), order.getOrderNo(), order.getTxHash(),
+                    order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
+        }
+    }
+
+    private static String tonOwnerAddress(ChainAddressRecord address) {
+        return address.getOwnerAddress() == null || address.getOwnerAddress().isBlank()
+                ? address.getAddress() : address.getOwnerAddress();
     }
 
     private void recordTronSent(String chain, String txHash, String from, String to,
@@ -788,13 +803,6 @@ public class AccountChainWorkflowService {
                 .confirmations(0)
                 .status("SENT")
                 .build());
-    }
-
-    private boolean canCollect(AccountChainProfile profile, CollectionCandidateRecord candidate) {
-        if ("TON".equals(profile.getChain()) && !isNative(profile, candidate.getAssetSymbol())) {
-            return false;
-        }
-        return true;
     }
 
     private BigDecimal collectionAmount(AccountChainProfile profile, CollectionCandidateRecord candidate) {

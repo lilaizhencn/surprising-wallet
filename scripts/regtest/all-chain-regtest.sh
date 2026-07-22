@@ -42,6 +42,7 @@ commands:
   test-xmr      Run XMR local regtest deposit/withdraw/collection integration test
   test-sui      Run isolated local Sui gRPC SUI/USDC full-flow and reconciliation test
   test-solana   Run isolated local Solana SOL/USDT/USDC full-flow and reconciliation test
+  test-ton      Run TON/USDT/USDC full flow against an isolated MyLocalTon v2 RPC
   dot-runtime-up    Start the local Polkadot runtime companion service
   dot-runtime-down  Stop the local Polkadot runtime companion service
   test-evm      Run ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C fork regression
@@ -56,7 +57,8 @@ notes:
   - EVM chains run as one-at-a-time Hardhat forks on 127.0.0.1:8545.
   - SUI has an isolated local node, gRPC, mock USDC, and PostgreSQL full-flow test.
   - SOLANA has an isolated local validator, mock USDT/USDC, and PostgreSQL full-flow test.
-  - TRON/TON/APTOS/ADA/DOT/NEAR use DB mocks, external testnet/devnet RPC, or a managed runtime service.
+  - TON uses MyLocalTon; start it and fund the deterministic source shown by test-ton.
+  - TRON/APTOS/ADA/DOT/NEAR use DB mocks, external testnet/devnet RPC, or a managed runtime service.
   - DOT token tests also need a separate Asset Hub WebSocket RPC configured as purpose=asset_rpc.
 USAGE
 }
@@ -79,7 +81,7 @@ ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/
 BASE/AVAX_C                          Hardhat fork, one chain per run on 127.0.0.1:8545
 TRON                                 external Nile live/testnet flow
 SOLANA                               local validator + mock USDT/USDC full flow
-TON                                  DB mock + external testnet live flow
+TON                                  MyLocalTon + mock USDT/USDC full flow
 APTOS                                DB mock + external testnet/devnet live flow
 SUI                                  local Sui node + gRPC + mock USDC full flow
 ADA                                  external preprod Blockfrost-compatible flow
@@ -111,7 +113,8 @@ status() {
   fi
   echo "==> sui: isolated local flow is available through test-sui"
   echo "==> solana: isolated local flow is available through test-solana"
-  echo "==> tron/ton/aptos/ada/dot/near: use test-db/test-live or the DOT runtime service"
+  echo "==> ton: MyLocalTon flow is available through test-ton"
+  echo "==> tron/aptos/ada/dot/near: use test-db/test-live or the DOT runtime service"
   if curl -fsS -m 2 \
       "${dot_runtime_headers[@]}" \
       http://127.0.0.1:8787/health >/dev/null 2>&1; then
@@ -152,6 +155,10 @@ test_sui() {
 
 test_solana() {
   "${ROOT_DIR}/scripts/regtest/run-solana-flow.sh"
+}
+
+test_ton() {
+  "${ROOT_DIR}/scripts/regtest/run-ton-flow.sh"
 }
 
 test_db() {
@@ -238,6 +245,9 @@ case "${1:-matrix}" in
     ;;
   test-solana)
     test_solana
+    ;;
+  test-ton)
+    test_ton
     ;;
   dot-runtime-up)
     dot_runtime_up
