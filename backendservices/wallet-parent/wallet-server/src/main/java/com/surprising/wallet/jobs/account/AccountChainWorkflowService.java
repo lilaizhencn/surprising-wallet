@@ -221,6 +221,11 @@ public class AccountChainWorkflowService {
         if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_WITHDRAW)) {
             return;
         }
+        if ("evm".equalsIgnoreCase(profile.getFamily())
+                && repository.isEvm7702BatchWithdrawalActive(
+                        profile.getChain(), profile.getNetwork())) {
+            return;
+        }
         int stale = repository.markStaleSigningWithdrawalsUnknown(
                 profile.getChain(), Instant.now().minus(SIGNING_STALE_TIMEOUT));
         if (stale > 0) {
@@ -238,6 +243,11 @@ public class AccountChainWorkflowService {
     }
 
     private void confirmWithdrawals(AccountChainProfile profile) {
+        if ("evm".equalsIgnoreCase(profile.getFamily())
+                && repository.isEvm7702BatchWithdrawalActive(
+                        profile.getChain(), profile.getNetwork())) {
+            return;
+        }
         for (WithdrawalOrderRecord order : repository.listWithdrawalsByStatus(
                 profile.getChain(), "SENT", CONFIRM_LIMIT)) {
             try {
@@ -384,6 +394,10 @@ public class AccountChainWorkflowService {
 
     private void confirmWithdrawal(AccountChainProfile profile, WithdrawalOrderRecord order) throws Exception {
         UUID tenantId = Objects.requireNonNull(order.getTenantId(), "withdrawal tenantId is required");
+        if ("evm".equalsIgnoreCase(profile.getFamily())
+                && repository.isWithdrawalInPendingEvm7702Batch(tenantId, order.getId())) {
+            return;
+        }
         ChainAddressRecord from = requireAddress(
                 tenantId, order.getChain(), order.getAssetSymbol(), order.getFromAddress());
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
@@ -448,8 +462,9 @@ public class AccountChainWorkflowService {
 
     private void processCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {
         if ("evm".equalsIgnoreCase(profile.getFamily())
-                && !isNative(profile, record.getAssetSymbol())
-                && repository.isEvm7702CollectionActive(profile.getChain(), profile.getNetwork())) {
+                && repository.isEvm7702CollectionActive(profile.getChain(), profile.getNetwork())
+                && (!isNative(profile, record.getAssetSymbol())
+                || repository.isEvm7702NativeCollectionActive(profile.getChain(), profile.getNetwork()))) {
             return;
         }
         ChainAddressRecord from = requireAddress(record.getChain(), record.getAssetSymbol(), record.getFromAddress());
@@ -574,6 +589,10 @@ public class AccountChainWorkflowService {
 
     private void confirmCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
+            if (repository.isCollectionInPendingEvm7702Batch(
+                    record.getTenantId(), record.getId())) {
+                return;
+            }
             evmTransactionService.confirmCollection(
                     record.getTenantId(), record.getChain(), record.getCollectionNo());
             return;
@@ -848,6 +867,10 @@ public class AccountChainWorkflowService {
                                         BigDecimal evmFeeReserve) {
         BigDecimal amount = candidate.getAmount() == null ? BigDecimal.ZERO : candidate.getAmount();
         if (!isNative(profile, candidate.getAssetSymbol())) {
+            return amount;
+        }
+        if ("evm".equalsIgnoreCase(profile.getFamily())
+                && repository.isEvm7702NativeCollectionActive(profile.getChain(), profile.getNetwork())) {
             return amount;
         }
         if ("XRP".equals(profile.getChain())) {

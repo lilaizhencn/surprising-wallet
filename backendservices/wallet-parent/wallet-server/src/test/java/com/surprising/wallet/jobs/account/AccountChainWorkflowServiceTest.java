@@ -399,6 +399,16 @@ class AccountChainWorkflowServiceTest {
         }
 
         @Override
+        public boolean isWithdrawalInPendingEvm7702Batch(UUID tenantId, long withdrawalOrderId) {
+            return false;
+        }
+
+        @Override
+        public boolean isCollectionInPendingEvm7702Batch(UUID tenantId, long collectionRecordId) {
+            return false;
+        }
+
+        @Override
         public int claimWithdrawalSigning(String chain, String orderNo, String fromAddress) {
             signingClaims++;
             return 1;
@@ -577,6 +587,11 @@ class AccountChainWorkflowServiceTest {
         public Optional<ChainAsset> findAsset(String chain, String symbol) {
             return Optional.of(ChainAsset.builder()
                     .chain(chain).symbol(symbol).decimals(18).nativeAsset(true).active(true).build());
+        }
+
+        @Override
+        public boolean isEvm7702NativeCollectionActive(String chain, String network) {
+            return false;
         }
 
         @Override

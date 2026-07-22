@@ -1210,6 +1210,10 @@ public class CustodyRepository {
                     select exists(select 1 from evm_collection_batch
                                    where tenant_id = ? and id = ? and chain = ?)
                     """, Boolean.class, tenantId, operationId, chain);
+            case "WITHDRAWAL_BATCH" -> jdbc.queryForObject("""
+                    select exists(select 1 from evm_withdrawal_batch
+                                   where tenant_id = ? and id = ? and chain = ?)
+                    """, Boolean.class, tenantId, operationId, chain);
             default -> throw new IllegalArgumentException("unsupported gas operation type");
         };
         if (!Boolean.TRUE.equals(valid)) {

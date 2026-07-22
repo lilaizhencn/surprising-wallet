@@ -44,6 +44,7 @@ contract Eip7702CollectionDelegate is IEip7702CollectionDelegate {
     error InvalidSignature();
     error ReentrantCall();
     error TokenCallFailed();
+    error NativeCallFailed();
     error UnexpectedReceivedAmount();
 
     string public constant NAME = "SurprisingWallet7702Collection";
@@ -70,6 +71,9 @@ contract Eip7702CollectionDelegate is IEip7702CollectionDelegate {
         if (expectedCollector == address(0)) revert InvalidRequest();
         EXPECTED_COLLECTOR = expectedCollector;
     }
+
+    /** Keeps a delegated deposit EOA able to receive native currency. */
+    receive() external payable { }
 
     function operationNonce() external view returns (uint256 value) {
         bytes32 slot = OPERATION_NONCE_SLOT;
@@ -98,8 +102,8 @@ contract Eip7702CollectionDelegate is IEip7702CollectionDelegate {
         if (
             request.authority != address(this)
                 || request.collector != EXPECTED_COLLECTOR
-                || request.token == address(0)
                 || request.recipient == address(0)
+                || request.recipient == address(this)
                 || request.amount == 0
                 || request.callGasLimit == 0
         ) revert InvalidRequest();
@@ -133,13 +137,13 @@ contract Eip7702CollectionDelegate is IEip7702CollectionDelegate {
         _enter();
         _setOperationNonce(currentNonce + 1);
 
-        uint256 balanceBefore = IERC20CollectionToken(request.token).balanceOf(
-            request.recipient
-        );
-        _safeTransfer(request.token, request.recipient, request.amount);
-        uint256 balanceAfter = IERC20CollectionToken(request.token).balanceOf(
-            request.recipient
-        );
+        uint256 balanceBefore = _balanceOf(request.token, request.recipient);
+        if (request.token == address(0)) {
+            _safeNativeTransfer(request.recipient, request.amount);
+        } else {
+            _safeTokenTransfer(request.token, request.recipient, request.amount);
+        }
+        uint256 balanceAfter = _balanceOf(request.token, request.recipient);
         if (balanceAfter < balanceBefore) revert UnexpectedReceivedAmount();
         actualReceived = balanceAfter - balanceBefore;
         if (actualReceived != request.amount) revert UnexpectedReceivedAmount();
@@ -180,7 +184,18 @@ contract Eip7702CollectionDelegate is IEip7702CollectionDelegate {
         }
     }
 
-    function _safeTransfer(address token, address recipient, uint256 amount) private {
+    function _balanceOf(address token, address account) private view returns (uint256) {
+        return token == address(0)
+            ? account.balance
+            : IERC20CollectionToken(token).balanceOf(account);
+    }
+
+    function _safeNativeTransfer(address recipient, uint256 amount) private {
+        (bool success,) = recipient.call{value: amount}("");
+        if (!success) revert NativeCallFailed();
+    }
+
+    function _safeTokenTransfer(address token, address recipient, uint256 amount) private {
         (bool success, bytes memory result) = token.call(
             abi.encodeWithSelector(
                 IERC20CollectionToken.transfer.selector,

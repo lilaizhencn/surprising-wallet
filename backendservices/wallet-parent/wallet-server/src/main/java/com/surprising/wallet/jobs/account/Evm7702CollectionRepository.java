@@ -44,9 +44,12 @@ public class Evm7702CollectionRepository {
                         select c.id, c.chain, c.network, c.chain_id, c.version,
                                c.delegate_address, c.delegate_code_hash,
                                c.collector_address, c.collector_code_hash,
+                               c.payout_delegate_address, c.payout_delegate_code_hash,
                                c.relayer_address, c.status, c.max_batch_items,
                                c.max_batch_gas, c.block_gas_ratio, c.gas_limit_multiplier,
                                c.signature_ttl_seconds, c.required_confirmations,
+                               c.native_collection_enabled, c.batch_withdrawal_enabled,
+                               c.withdrawal_max_wait_ms, c.withdrawal_max_batch_items,
                                ca.id relayer_chain_address_id, ca.asset_symbol,
                                ca.account_id, ca.user_id, ca.biz, ca.address_index,
                                ca.address, ca.owner_address, ca.derivation_path,
@@ -62,6 +65,30 @@ public class Evm7702CollectionRepository {
         return findRuntimeConfig(chain, network, "ACTIVE")
                 .orElseThrow(() -> new IllegalStateException(
                         "EIP-7702 ACTIVE configuration is missing for " + chain + "/" + network));
+    }
+
+    public RuntimeConfig requireRuntimeConfigVersion(String chain, String network, int version) {
+        return jdbc.query("""
+                        select c.id, c.chain, c.network, c.chain_id, c.version,
+                               c.delegate_address, c.delegate_code_hash,
+                               c.collector_address, c.collector_code_hash,
+                               c.payout_delegate_address, c.payout_delegate_code_hash,
+                               c.relayer_address, c.status, c.max_batch_items,
+                               c.max_batch_gas, c.block_gas_ratio, c.gas_limit_multiplier,
+                               c.signature_ttl_seconds, c.required_confirmations,
+                               c.native_collection_enabled, c.batch_withdrawal_enabled,
+                               c.withdrawal_max_wait_ms, c.withdrawal_max_batch_items,
+                               ca.id relayer_chain_address_id, ca.asset_symbol,
+                               ca.account_id, ca.user_id, ca.biz, ca.address_index,
+                               ca.address, ca.owner_address, ca.derivation_path,
+                               ca.wallet_role, ca.enabled
+                          from evm_7702_config c
+                          join chain_address ca on ca.id = c.relayer_chain_address_id
+                         where c.chain = ? and c.network = ? and c.version = ?
+                        """, (rs, rowNum) -> mapConfig(rs), chain, network, version)
+                .stream().findFirst().orElseThrow(() -> new IllegalStateException(
+                        "EIP-7702 configuration version is missing for "
+                                + chain + "/" + network + "/" + version));
     }
 
     public List<RuntimeTarget> listRuntimeTargets() {
@@ -133,7 +160,10 @@ public class Evm7702CollectionRepository {
         RuntimeConfig config = requireActiveConfig(chain, network);
         CandidateGroup group = jdbc.query("""
                         select cr.tenant_id, cr.asset_symbol, cr.to_address,
-                               tc.contract_address, tc.decimals
+                               case when asset.native_asset
+                                   then '0x0000000000000000000000000000000000000000'
+                                   else tc.contract_address end contract_address,
+                               asset.decimals
                           from collection_record cr
                           join custody_address ca
                             on ca.tenant_id = cr.tenant_id
@@ -152,8 +182,13 @@ public class Evm7702CollectionRepository {
                             on hot.tenant_id = ga.tenant_id
                            and hot.id = ga.custody_address_id
                            and hot.status = 'ACTIVE'
-                          join token_config tc
+                          join chain_asset asset
+                            on asset.chain = cr.chain
+                           and asset.symbol = cr.asset_symbol
+                           and asset.active = true
+                          left join token_config tc
                             on tc.chain = cr.chain
+                           and tc.network = ?
                            and tc.symbol = cr.asset_symbol
                            and tc.enabled = true
                            and tc.collect_enabled = true
@@ -162,6 +197,8 @@ public class Evm7702CollectionRepository {
                            and cr.custody_address_id is not null
                            and cr.status in ('CREATED', 'RETRYING')
                            and lower(cr.to_address) = lower(hot.address)
+                           and (asset.native_asset = true or tc.id is not null)
+                           and (asset.native_asset = false or ?)
                          order by cr.id
                          limit 1
                         """, (rs, rowNum) -> new CandidateGroup(
@@ -169,7 +206,8 @@ public class Evm7702CollectionRepository {
                         rs.getString("asset_symbol"),
                         rs.getString("to_address"),
                         rs.getString("contract_address"),
-                        rs.getInt("decimals")), network, chain)
+                        rs.getInt("decimals")), network, network, chain,
+                config.nativeCollectionEnabled())
                 .stream().findFirst().orElse(null);
         if (group == null) {
             return Optional.empty();
@@ -553,10 +591,13 @@ public class Evm7702CollectionRepository {
                 rs.getBigDecimal("chain_id").toBigIntegerExact(), rs.getInt("version"),
                 rs.getString("delegate_address"), rs.getString("delegate_code_hash"),
                 rs.getString("collector_address"), rs.getString("collector_code_hash"),
+                rs.getString("payout_delegate_address"), rs.getString("payout_delegate_code_hash"),
                 configuredRelayer, rs.getString("status"), rs.getInt("max_batch_items"),
                 rs.getLong("max_batch_gas"), rs.getBigDecimal("block_gas_ratio"),
                 rs.getBigDecimal("gas_limit_multiplier"), rs.getInt("signature_ttl_seconds"),
-                rs.getInt("required_confirmations"), relayer);
+                rs.getInt("required_confirmations"), rs.getBoolean("native_collection_enabled"),
+                rs.getBoolean("batch_withdrawal_enabled"), rs.getInt("withdrawal_max_wait_ms"),
+                rs.getInt("withdrawal_max_batch_items"), relayer);
     }
 
     private ClaimedItem mapClaimedItem(ResultSet rs, int decimals) throws SQLException {
@@ -598,10 +639,13 @@ public class Evm7702CollectionRepository {
     public record RuntimeConfig(
             UUID id, String chain, String network, BigInteger chainId, int version,
             String delegateAddress, String delegateCodeHash, String collectorAddress,
-            String collectorCodeHash, String relayerAddress, String status,
+            String collectorCodeHash, String payoutDelegateAddress, String payoutDelegateCodeHash,
+            String relayerAddress, String status,
             int maxBatchItems, long maxBatchGas, BigDecimal blockGasRatio,
             BigDecimal gasLimitMultiplier, int signatureTtlSeconds,
-            int requiredConfirmations, ChainAddressRecord relayerChainAddress) {
+            int requiredConfirmations, boolean nativeCollectionEnabled,
+            boolean batchWithdrawalEnabled, int withdrawalMaxWaitMs,
+            int withdrawalMaxBatchItems, ChainAddressRecord relayerChainAddress) {
     }
 
     private record CandidateGroup(

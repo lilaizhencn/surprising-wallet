@@ -1168,6 +1168,34 @@ public class ChainJdbcRepository {
                 chain, status, limit);
     }
 
+    public boolean isWithdrawalInPendingEvm7702Batch(UUID tenantId, long withdrawalOrderId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                select exists(
+                    select 1
+                      from evm_withdrawal_batch_item item
+                      join evm_withdrawal_batch batch
+                        on batch.tenant_id = item.tenant_id and batch.id = item.batch_id
+                     where item.tenant_id = ? and item.withdrawal_order_id = ?
+                       and item.status = 'SUBMITTED'
+                       and batch.status in ('SUBMITTED', 'CONFIRMING', 'BROADCAST_UNKNOWN')
+                )
+                """, Boolean.class, tenantId, withdrawalOrderId));
+    }
+
+    public boolean isCollectionInPendingEvm7702Batch(UUID tenantId, long collectionRecordId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                select exists(
+                    select 1
+                      from evm_collection_batch_item item
+                      join evm_collection_batch batch
+                        on batch.tenant_id = item.tenant_id and batch.id = item.batch_id
+                     where item.tenant_id = ? and item.collection_record_id = ?
+                       and item.status = 'SUBMITTED'
+                       and batch.status in ('SUBMITTED', 'CONFIRMING', 'BROADCAST_UNKNOWN')
+                )
+                """, Boolean.class, tenantId, collectionRecordId));
+    }
+
     public int claimWithdrawalSigning(String chain, String orderNo, String fromAddress) {
         return jdbcTemplate.update("""
                         update withdrawal_order
@@ -2147,6 +2175,22 @@ public class ChainJdbcRepository {
                                where chain = ? and network = ? and status = 'ACTIVE')
                 """, Boolean.class, chain, network);
         return Boolean.TRUE.equals(active);
+    }
+
+    public boolean isEvm7702NativeCollectionActive(String chain, String network) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                select exists(select 1 from evm_7702_config
+                               where chain = ? and network = ? and status = 'ACTIVE'
+                                 and native_collection_enabled = true)
+                """, Boolean.class, chain, network));
+    }
+
+    public boolean isEvm7702BatchWithdrawalActive(String chain, String network) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                select exists(select 1 from evm_7702_config
+                               where chain = ? and network = ? and status = 'ACTIVE'
+                                 and batch_withdrawal_enabled = true)
+                """, Boolean.class, chain, network));
     }
 
     public void updateScanHeight(String chain, String scannerName, long bestHeight, long safeHeight) {

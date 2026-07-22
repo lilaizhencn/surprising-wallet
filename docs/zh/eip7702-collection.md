@@ -1,5 +1,7 @@
 # EIP-7702 免 Gas 批量归集实施方案
 
+> 当前原生币归集、标准 ERC-20 归集和租户热钱包批量提币的实际部署/启停/回滚/监控步骤，统一以 [EIP-7702 原生币归集与批量提币实施手册](./eip7702-native-collection-and-batch-withdrawal.md) 为准。本文保留协议设计、逐链支持矩阵和官方依据。
+
 > 状态：ETH 第一阶段已实现；通用 worker 已扩展到按 `chain + network` 隔离运行。BNB 阶段已通过 chainId 97 的
 > Hardhat Prague 真实 type-4、PostgreSQL 两租户五地址生产路径，以及 BSC Testnet 官方 RPC 的
 > `eth_estimateGas + authorizationList` 能力门禁。Polygon 阶段已通过 chainId 80002 的同组本地门禁和项目 PublicNode RPC；

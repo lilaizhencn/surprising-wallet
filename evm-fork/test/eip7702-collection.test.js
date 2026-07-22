@@ -20,7 +20,7 @@ function delegationCode(delegateAddress) {
   return `0xef0100${delegateAddress.slice(2).toLowerCase()}`;
 }
 
-describe("EIP-7702 ERC-20 collection", function () {
+describe("EIP-7702 native and ERC-20 collection", function () {
   async function fixture() {
     const [admin, relayer, hotWallet, outsider] = await ethers.getSigners();
     const Collector = await ethers.getContractFactory("Eip7702BatchCollector");
@@ -87,6 +87,57 @@ describe("EIP-7702 ERC-20 collection", function () {
       .map((log) => { try { return collector.interface.parseLog(log); } catch { return null; } })
       .filter((event) => event && event.name === "CollectionItemResult");
     assert.equal(itemEvents.length, authorities.length);
+    assert(itemEvents.every((event) => event.args.success));
+  });
+
+  it("collects native assets from several EOAs while the relayer pays gas", async function () {
+    const { relayer, hotWallet, collector, delegate } = await fixture();
+    const authorities = [ethers.Wallet.createRandom(), ethers.Wallet.createRandom(), ethers.Wallet.createRandom()];
+    const amounts = [ethers.parseEther("1.25"), ethers.parseEther("2.5"), ethers.parseEther("3.75")];
+    const delegateAddress = await delegate.getAddress();
+    const collectorAddress = await collector.getAddress();
+    for (let i = 0; i < authorities.length; i++) {
+      await network.provider.send("hardhat_setBalance", [authorities[i].address, ethers.toBeHex(amounts[i])]);
+      await network.provider.send("hardhat_setCode", [authorities[i].address, delegationCode(delegateAddress)]);
+    }
+
+    const latest = await ethers.provider.getBlock("latest");
+    const batchId = ethers.keccak256(ethers.toUtf8Bytes("tenant-a:native-batch-1"));
+    const deadline = BigInt(latest.timestamp + 600);
+    const chainId = (await ethers.provider.getNetwork()).chainId;
+    const requests = authorities.map((authority, index) => ({
+      batchId,
+      itemIndex: BigInt(index),
+      authority: authority.address,
+      collector: collectorAddress,
+      token: ethers.ZeroAddress,
+      recipient: hotWallet.address,
+      amount: amounts[index],
+      operationNonce: 0n,
+      deadline,
+      callGasLimit: 180_000n
+    }));
+    const signatures = await Promise.all(authorities.map((authority, index) => authority.signTypedData({
+      name: "SurprisingWallet7702Collection",
+      version: "1",
+      chainId,
+      verifyingContract: authority.address
+    }, REQUEST_TYPES, requests[index])));
+
+    const hotBalanceBefore = await ethers.provider.getBalance(hotWallet.address);
+    const receipt = await (await collector.connect(relayer).collectBatch(requests, signatures)).wait();
+    const expected = amounts.reduce((left, right) => left + right, 0n);
+    assert.equal(receipt.status, 1);
+    assert.equal(await ethers.provider.getBalance(hotWallet.address), hotBalanceBefore + expected);
+    for (const authority of authorities) {
+      assert.equal(await ethers.provider.getBalance(authority.address), 0n);
+      assert.equal(await delegate.attach(authority.address).operationNonce(), 1n);
+    }
+    const itemEvents = receipt.logs
+      .map((log) => { try { return collector.interface.parseLog(log); } catch { return null; } })
+      .filter((event) => event && event.name === "CollectionItemResult");
+    assert.equal(itemEvents.length, authorities.length);
+    assert(itemEvents.every((event) => event.args.token === ethers.ZeroAddress));
     assert(itemEvents.every((event) => event.args.success));
   });
 

@@ -26,7 +26,8 @@ async function main() {
 
   const contracts = [
     ["collector", deployment.collectorAddress, deployment.collectorCodeHash],
-    ["delegate", deployment.delegateAddress, deployment.delegateCodeHash]
+    ["delegate", deployment.delegateAddress, deployment.delegateCodeHash],
+    ["payoutDelegate", deployment.payoutDelegateAddress, deployment.payoutDelegateCodeHash]
   ];
   const verified = {};
   for (const [label, address, expectedHashValue] of contracts) {

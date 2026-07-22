@@ -20,6 +20,7 @@ import java.util.Locale;
 
 /** Strictly decodes and validates per-item collector events from a canonical receipt. */
 public class Evm7702ReceiptParser {
+    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
     public static final String ITEM_TOPIC = Hash.sha3String(
             "CollectionItemResult(bytes32,uint256,address,address,address,uint256,uint256,bool,bytes32)");
     public static final String BATCH_TOPIC = Hash.sha3String(
@@ -58,10 +59,14 @@ public class Evm7702ReceiptParser {
             long matchingTransfers = receipt.getLogs().stream()
                     .filter(log -> isExpectedTransfer(log, expected))
                     .count();
+            boolean nativeAsset = NATIVE_TOKEN.equalsIgnoreCase(expected.token());
             if (item.success()) {
-                if (!item.actualReceived().equals(expected.amount()) || matchingTransfers != 1) {
+                if (!item.actualReceived().equals(expected.amount())
+                        || (nativeAsset ? matchingTransfers != 0 : matchingTransfers != 1)) {
                     throw new IllegalStateException(
-                            "successful collection item must have one exact ERC-20 Transfer log");
+                            nativeAsset
+                                    ? "successful native collection item must report the exact received amount"
+                                    : "successful collection item must have one exact ERC-20 Transfer log");
                 }
             } else if (item.actualReceived().signum() != 0 || matchingTransfers != 0) {
                 throw new IllegalStateException(

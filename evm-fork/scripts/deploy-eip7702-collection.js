@@ -34,8 +34,13 @@ async function main() {
   await delegate.waitForDeployment();
   const delegateAddress = await delegate.getAddress();
 
+  const PayoutDelegate = await hre.ethers.getContractFactory("Eip7702PayoutDelegate");
+  const payoutDelegate = await PayoutDelegate.deploy(relayer);
+  await payoutDelegate.waitForDeployment();
+  const payoutDelegateAddress = await payoutDelegate.getAddress();
+
   const deployment = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     chain,
     network,
     chainId: rpcNetwork.chainId.toString(),
@@ -45,7 +50,9 @@ async function main() {
     collectorAddress,
     collectorCodeHash: await runtimeCodeHash(collectorAddress),
     delegateAddress,
-    delegateCodeHash: await runtimeCodeHash(delegateAddress)
+    delegateCodeHash: await runtimeCodeHash(delegateAddress),
+    payoutDelegateAddress,
+    payoutDelegateCodeHash: await runtimeCodeHash(payoutDelegateAddress)
   };
 
   const outDir = path.join(__dirname, "..", "deployments");

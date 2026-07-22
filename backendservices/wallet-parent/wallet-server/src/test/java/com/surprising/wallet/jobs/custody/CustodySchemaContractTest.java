@@ -32,7 +32,10 @@ class CustodySchemaContractTest {
                 "custody_gas_usage", "custody_ledger_entry", "custody_event", "custody_webhook_delivery",
                 "custody_webhook_delivery_attempt",
                 "custody_idempotency_key", "custody_audit_log", "custody_tenant_chain",
-                "custody_asset_price", "custody_dev_faucet_funding"}) {
+                "custody_asset_price", "custody_dev_faucet_funding",
+                "evm_7702_config", "evm_7702_payout_account",
+                "evm_withdrawal_batch", "evm_withdrawal_batch_item",
+                "evm_withdrawal_batch_attempt"}) {
             assertTrue(sql.contains("CREATE TABLE public." + table), table + " is required");
         }
         assertFalse(sql.contains("intentionally additive"));
@@ -52,7 +55,11 @@ class CustodySchemaContractTest {
         assertTrue(sql.contains("UNIQUE (tenant_id, operation_type, operation_id)"));
         assertTrue(sql.contains("UNIQUE (custody_address_id, asset_symbol, purpose)"));
         assertTrue(sql.contains("custody_dev_faucet_funding_address_fk FOREIGN KEY (tenant_id, custody_address_id)"));
-        assertTrue(sql.contains("'WITHDRAWAL'::character varying, 'COLLECTION_BATCH'::character varying"));
+        assertTrue(sql.contains("'WITHDRAWAL'::character varying, 'COLLECTION_BATCH'::character varying, 'WITHDRAWAL_BATCH'::character varying"));
+        assertTrue(sql.contains("payout_delegate_address character varying(42) NOT NULL"));
+        assertTrue(sql.contains("native_collection_enabled boolean DEFAULT false NOT NULL"));
+        assertTrue(sql.contains("batch_withdrawal_enabled boolean DEFAULT false NOT NULL"));
+        assertTrue(sql.contains("evm_withdrawal_batch_item_active_order_key"));
         assertTrue(sql.contains("custody_gas_usage_status_check"));
         assertTrue(sql.contains("'RESERVED'::character varying, 'SETTLED'::character varying, 'RELEASED'::character varying, 'OVERDUE'::character varying"));
         assertTrue(sql.contains("chain_profile_one_enabled_network_idx"));

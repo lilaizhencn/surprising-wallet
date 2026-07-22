@@ -181,15 +181,19 @@ INSERT INTO evm_7702_config(
     id, chain, network, chain_id, version,
     delegate_address, delegate_code_hash,
     collector_address, collector_code_hash,
+    payout_delegate_address, payout_delegate_code_hash,
     relayer_chain_address_id, relayer_address, status,
     max_batch_items, max_batch_gas, block_gas_ratio,
-    gas_limit_multiplier, signature_ttl_seconds, required_confirmations)
+    gas_limit_multiplier, signature_ttl_seconds, required_confirmations,
+    native_collection_enabled, batch_withdrawal_enabled,
+    withdrawal_max_wait_ms, withdrawal_max_batch_items)
 VALUES (
     gen_random_uuid(), 'BASE', 'sepolia', 84532, 1,
     '<DELEGATE_ADDRESS>', '<DELEGATE_CODE_HASH>',
     '<COLLECTOR_ADDRESS>', '<COLLECTOR_CODE_HASH>',
+    '<PAYOUT_DELEGATE_ADDRESS>', '<PAYOUT_DELEGATE_CODE_HASH>',
     <RELAYER_CHAIN_ADDRESS_ID>, '<RELAYER_ADDRESS>', 'SHADOW',
-    10, 5000000, 0.5000, 1.2000, 900, 40);
+    10, 5000000, 0.5000, 1.2000, 900, 40, false, false, 3000, 10);
 COMMIT;
 ```
 

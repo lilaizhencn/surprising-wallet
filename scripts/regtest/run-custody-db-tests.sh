@@ -34,7 +34,6 @@ rsync -a \
   --exclude=.codegraph \
   --exclude=target \
   --exclude=node_modules \
-  --exclude=/evm-fork/artifacts \
   --exclude=logs \
   "$CUSTODY_DB_ROOT/" "$CUSTODY_DB_BUILD_ROOT/"
 

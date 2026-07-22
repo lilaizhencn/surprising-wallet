@@ -11,6 +11,7 @@ import com.surprising.wallet.service.chain.evm.Evm7702OperationSigner;
 import com.surprising.wallet.service.chain.evm.Evm7702ReceiptParser;
 import com.surprising.wallet.service.config.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.config.ChainRpcNodeService;
+import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.bitcoinj.crypto.ECKey;
 import org.slf4j.Logger;
@@ -60,6 +61,7 @@ public class Evm7702CollectionWorkflowService {
     private static final BigInteger DEFAULT_ITEM_GAS = BigInteger.valueOf(180_000L);
     private static final BigInteger ONE_GWEI = BigInteger.valueOf(1_000_000_000L);
     private static final BigDecimal WEI_PER_NATIVE = new BigDecimal("1000000000000000000");
+    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
     private static final String OP_STACK_GAS_PRICE_ORACLE =
             "0x420000000000000000000000000000000000000F";
 
@@ -69,6 +71,7 @@ public class Evm7702CollectionWorkflowService {
     private final ChainRpcNodeService rpcNodes;
     private final AccountSecp256k1KeyService keyService;
     private final CustodyCryptoService crypto;
+    private final WalletRuntimeConfigService runtimeConfig;
     private final Evm7702AuthorizationService authorizationService = new Evm7702AuthorizationService();
     private final Evm7702OperationSigner operationSigner = new Evm7702OperationSigner();
     private final Evm7702ContractCodec contractCodec = new Evm7702ContractCodec();
@@ -82,13 +85,15 @@ public class Evm7702CollectionWorkflowService {
             ChainJdbcRepository chainRepository,
             ChainRpcNodeService rpcNodes,
             AccountSecp256k1KeyService keyService,
-            CustodyCryptoService crypto) {
+            CustodyCryptoService crypto,
+            WalletRuntimeConfigService runtimeConfig) {
         this.repository = repository;
         this.coordinator = coordinator;
         this.chainRepository = chainRepository;
         this.rpcNodes = rpcNodes;
         this.keyService = keyService;
         this.crypto = crypto;
+        this.runtimeConfig = runtimeConfig;
     }
 
     @Scheduled(fixedDelayString = "${sw.wallet.evm7702.collection-delay:5000}")
@@ -106,7 +111,10 @@ public class Evm7702CollectionWorkflowService {
                     }
                     recoverUnknown(profile);
                     confirm(profile);
-                    if (target.active()) processOne(profile);
+                    if (target.active() && runtimeConfig.isTaskEnabled(
+                            profile.getChain(), WalletRuntimeConfigService.TASK_COLLECTION)) {
+                        processOne(profile);
+                    }
                 } catch (RuntimeException e) {
                     log.error("EIP-7702 collection cycle failed for {}/{}: {}",
                             target.chain(), target.network(), e.getMessage(), e);
@@ -353,9 +361,12 @@ public class Evm7702CollectionWorkflowService {
             if (!authority.getAddress().equalsIgnoreCase(item.fromAddress())) {
                 throw new IllegalStateException("derived authority key does not match claimed address");
             }
-            BigInteger tokenBalance = tokenBalance(web3j, batch.tokenContract(), item.fromAddress());
-            if (tokenBalance.compareTo(item.amountAtomic()) < 0) {
-                throw new IllegalStateException("authority token balance is lower than collection amount");
+            BigInteger assetBalance = NATIVE_TOKEN.equalsIgnoreCase(batch.tokenContract())
+                    ? web3j.ethGetBalance(item.fromAddress(), DefaultBlockParameterName.LATEST)
+                            .send().getBalance()
+                    : tokenBalance(web3j, batch.tokenContract(), item.fromAddress());
+            if (assetBalance.compareTo(item.amountAtomic()) < 0) {
+                throw new IllegalStateException("authority asset balance is lower than collection amount");
             }
             String code = web3j.ethGetCode(item.fromAddress(), DefaultBlockParameterName.LATEST).send().getCode();
             BigInteger authorityNonce = web3j.ethGetTransactionCount(

@@ -25,10 +25,10 @@ public record Evm7702CollectionRequest(
         }
         batchId = batchId.clone();
         requireUint(itemIndex, "itemIndex", true);
-        authority = requireAddress(authority, "authority");
-        collector = requireAddress(collector, "collector");
-        token = requireAddress(token, "token");
-        recipient = requireAddress(recipient, "recipient");
+        authority = requireAddress(authority, "authority", false);
+        collector = requireAddress(collector, "collector", false);
+        token = requireAddress(token, "token", true);
+        recipient = requireAddress(recipient, "recipient", false);
         requireUint(amount, "amount", false);
         requireUint(operationNonce, "operationNonce", true);
         requireUint(deadline, "deadline", false);
@@ -53,11 +53,11 @@ public record Evm7702CollectionRequest(
         }
     }
 
-    private static String requireAddress(String value, String field) {
+    private static String requireAddress(String value, String field, boolean allowZero) {
         String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         if (!normalized.matches("^0x[0-9a-f]{40}$")
-                || normalized.equals("0x0000000000000000000000000000000000000000")) {
-            throw new IllegalArgumentException(field + " must be a non-zero EVM address");
+                || (!allowZero && normalized.equals("0x0000000000000000000000000000000000000000"))) {
+            throw new IllegalArgumentException(field + " must be a valid EVM address");
         }
         return Keys.toChecksumAddress(normalized);
     }
