@@ -330,13 +330,14 @@ public class ChainJdbcRepository {
 
     public int upsertChainAddress(ChainAddressRecord address) {
         return jdbcTemplate.update("""
-                        insert into chain_address(
-                            chain, asset_symbol, account_id, user_id, biz, address_index, address,
+                insert into chain_address(
+                            tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
                             owner_address, derivation_path, wallet_role, enabled, created_at, updated_at
                         )
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         on conflict (chain, asset_symbol, user_id, biz, address_index, wallet_role)
                         do update set
+                            tenant_id = excluded.tenant_id,
                             account_id = excluded.account_id,
                             address = excluded.address,
                             owner_address = excluded.owner_address,
@@ -344,7 +345,7 @@ public class ChainJdbcRepository {
                             enabled = excluded.enabled,
                             updated_at = excluded.updated_at
                         """,
-                address.getChain(), address.getAssetSymbol(), address.getAccountId(), address.getUserId(),
+                address.getTenantId(), address.getChain(), address.getAssetSymbol(), address.getAccountId(), address.getUserId(),
                 address.getBiz(), address.getAddressIndex(), address.getAddress(), address.getOwnerAddress(),
                 address.getDerivationPath(), address.getWalletRole(), address.getEnabled(),
                 toTs(now()), toTs(now()));

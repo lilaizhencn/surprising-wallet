@@ -34,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * from docs/db/surprising-wallet-init-pgsql.sql, and the Monero regtest images.</p>
  */
 class MoneroRegtestFullFlowIntegrationTest {
+    private static final UUID TEST_TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000002");
     private static final String CHAIN = "XMR";
     private static final String SYMBOL = "XMR";
     private static final int CONFIRMATIONS = 1;
@@ -62,6 +63,11 @@ class MoneroRegtestFullFlowIntegrationTest {
             try {
                 String environment = env("MONERO_REGTEST_ENVIRONMENT", "dev");
                 String network = env("MONERO_REGTEST_PROFILE_NETWORK", "regtest");
+                jdbc.update("""
+                                insert into custody_tenant(id, slug, name)
+                                values (?, 'xmr-regtest', 'XMR Regtest')
+                                on conflict (id) do update set name = excluded.name, updated_at = now()
+                                """, TEST_TENANT_ID);
                 ensureMoneroConfig(jdbc, environment, network);
 
                 ChainRpcNodeService rpcNodeService = new ChainRpcNodeService(repository);
@@ -95,17 +101,21 @@ class MoneroRegtestFullFlowIntegrationTest {
                 repository.upsertChainAddress(recipientRecord);
 
                 String orderNo = "xmr-regtest-withdraw-" + UUID.randomUUID();
-                repository.createWithdrawalOrder(orderNo, 1001L, CHAIN, SYMBOL, userAddress.address(), userAccount,
-                        recipientAddress.address(), WITHDRAW_AMOUNT, BigDecimal.ZERO);
-                assertTrue(repository.freezeLedgerBalance(CHAIN, SYMBOL, userAccount, WITHDRAW_AMOUNT));
+                repository.createTenantWithdrawalOrder(TEST_TENANT_ID, orderNo, 1001L, CHAIN, SYMBOL,
+                        userAddress.address(), userAccount, recipientAddress.address(),
+                        WITHDRAW_AMOUNT, BigDecimal.ZERO);
+                assertTrue(repository.freezeLedgerBalance(
+                        TEST_TENANT_ID, CHAIN, SYMBOL, userAccount, WITHDRAW_AMOUNT));
                 String txHash = transactionService.sendNative(profile, userRecord, recipientAddress.address(), WITHDRAW_AMOUNT);
-                repository.updateWithdrawalStatus(CHAIN, orderNo, "SENT", userAddress.address(), txHash, null);
+                repository.updateWithdrawalStatus(
+                        TEST_TENANT_ID, CHAIN, orderNo, "SENT", userAddress.address(), txHash, null);
                 runScript(root, "mine", "12");
                 walletRpc.refresh();
 
-                transactionService.confirmWithdrawal(profile, orderNo, txHash, userAccount, WITHDRAW_AMOUNT,
-                        recipientAddress.address(), WITHDRAW_AMOUNT);
-                assertEquals("CONFIRMED", repository.findWithdrawalStatus(CHAIN, orderNo).orElseThrow());
+                transactionService.confirmWithdrawal(TEST_TENANT_ID, profile, orderNo, txHash,
+                        userAccount, WITHDRAW_AMOUNT, recipientAddress.address(), WITHDRAW_AMOUNT);
+                assertEquals("CONFIRMED", repository.findWithdrawalOrder(TEST_TENANT_ID, CHAIN, orderNo)
+                        .orElseThrow().getStatus());
                 assertBalance(repository, userAccount,
                         DEPOSIT_AMOUNT.subtract(WITHDRAW_AMOUNT), BigDecimal.ZERO,
                         DEPOSIT_AMOUNT.subtract(WITHDRAW_AMOUNT));
@@ -142,6 +152,7 @@ class MoneroRegtestFullFlowIntegrationTest {
     private static ChainAddressRecord addressRecord(long userId, String accountId,
                                                     MoneroWalletRpcClient.Subaddress subaddress) {
         return ChainAddressRecord.builder()
+                .tenantId(TEST_TENANT_ID)
                 .chain(CHAIN)
                 .assetSymbol(SYMBOL)
                 .accountId(accountId)
