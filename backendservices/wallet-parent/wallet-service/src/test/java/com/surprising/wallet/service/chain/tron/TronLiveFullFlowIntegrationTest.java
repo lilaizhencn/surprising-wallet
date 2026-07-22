@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -41,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TronLiveFullFlowIntegrationTest {
+    private static final UUID TEST_TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000002");
     private static final String CHAIN = ChainType.TRON.name();
     private static final int TRX_DECIMALS = 6;
     private static final int TOKEN_DECIMALS = 6;
@@ -184,7 +186,8 @@ class TronLiveFullFlowIntegrationTest {
         TxResult collectionGasTopup = sendTrx(client, trxService, source, collectionUser.address(),
                 collectionGas.topupAmount());
         updateGasTaskConfirmed(jdbcTemplate, collectionGas.gasTaskNo(), collectionGasTopup.txId());
-        repository.incrementLedgerBalance(CHAIN, "TRX", collectionUser.address().toLowerCase(Locale.ROOT),
+        repository.incrementLedgerBalance(TEST_TENANT_ID, CHAIN, "TRX",
+                collectionUser.address().toLowerCase(Locale.ROOT),
                 collectionGas.topupAmount());
 
         long estimatedEnergy = estimateTransferEnergy(client, collectionUser, hot.address(),
@@ -213,7 +216,8 @@ class TronLiveFullFlowIntegrationTest {
         TxResult withdrawalGasTopup = sendTrx(client, trxService, source, withdrawalUser.address(),
                 withdrawalGas.topupAmount());
         updateGasTaskConfirmed(jdbcTemplate, withdrawalGas.gasTaskNo(), withdrawalGasTopup.txId());
-        repository.incrementLedgerBalance(CHAIN, "TRX", withdrawalUser.address().toLowerCase(Locale.ROOT),
+        repository.incrementLedgerBalance(TEST_TENANT_ID, CHAIN, "TRX",
+                withdrawalUser.address().toLowerCase(Locale.ROOT),
                 withdrawalGas.topupAmount());
 
         TxResult withdrawal = withdrawTrc20(jdbcTemplate, repository, client, trc20Service,
@@ -417,6 +421,11 @@ class TronLiveFullFlowIntegrationTest {
     }
 
     private static void prepareDatabase(JdbcTemplate jdbcTemplate, List<Actor> actors, String runId) {
+        jdbcTemplate.update("""
+                insert into custody_tenant(id, slug, name)
+                values (?, 'tron-live-integration', 'TRON live integration tenant')
+                on conflict (id) do nothing
+                """, TEST_TENANT_ID);
         for (Actor actor : actors) {
             jdbcTemplate.update("delete from ledger_balance where chain = ? and lower(account_id) = lower(?)",
                     CHAIN, actor.address());
@@ -435,10 +444,11 @@ class TronLiveFullFlowIntegrationTest {
 
     private static void insertAddress(JdbcTemplate jdbcTemplate, Actor actor, String role) {
         jdbcTemplate.update("""
-                        insert into chain_address(chain, asset_symbol, account_id, user_id, biz, address_index,
+                        insert into chain_address(tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                                                   address, owner_address, derivation_path, wallet_role, enabled)
-                        values (?, 'TRX', ?, ?, 1, 0, ?, ?, ?, ?, true)
+                        values (?, ?, 'TRX', ?, ?, 1, 0, ?, ?, ?, ?, true)
                         on conflict (chain, asset_symbol, address) do update set
+                            tenant_id = excluded.tenant_id,
                             account_id = excluded.account_id,
                             user_id = excluded.user_id,
                             biz = excluded.biz,
@@ -448,7 +458,7 @@ class TronLiveFullFlowIntegrationTest {
                             wallet_role = excluded.wallet_role,
                             enabled = true,
                             updated_at = now()
-                        """, CHAIN, actor.address(), actor.userId(), actor.address(), actor.address(),
+                        """, TEST_TENANT_ID, CHAIN, actor.address(), actor.userId(), actor.address(), actor.address(),
                 actor.path(), role);
     }
 
@@ -482,12 +492,13 @@ class TronLiveFullFlowIntegrationTest {
     private static void insertWithdrawal(JdbcTemplate jdbcTemplate, String orderNo, Actor from, String to,
                                          String asset, BigDecimal amount, String status) {
         jdbcTemplate.update("""
-                        insert into withdrawal_order(order_no, user_id, chain, asset_symbol, from_address,
+                        insert into withdrawal_order(tenant_id, order_no, user_id, chain, asset_symbol, from_address,
                                                      to_address, amount, fee, status)
-                        values (?, ?, ?, ?, ?, ?, ?, 0, ?)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
                         on conflict (chain, order_no) do update
                         set status = excluded.status, updated_at = now()
-                        """, orderNo, from.userId(), CHAIN, asset, from.address(), to, amount, status);
+                        """, TEST_TENANT_ID, orderNo, from.userId(), CHAIN, asset,
+                from.address(), to, amount, status);
     }
 
     private static void updateWithdrawal(JdbcTemplate jdbcTemplate, String orderNo, String status,

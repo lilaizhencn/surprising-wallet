@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -113,6 +114,32 @@ class CustodyDepositProjectionIntegrationTest {
                 select count(*) from ledger_balance
                  where chain = 'ETH' and asset_symbol = 'ETH' and account_id = ?
                 """, Integer.class, accountId[0]));
+    }
+
+    @Test
+    void pendingDepositIsAttributedToTenantBeforeCredit() {
+        transactions.executeWithoutResult(status -> {
+            DepositFixture fixture = createFixture("pending-user", "ACTIVE");
+            ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+            DepositEvent event = new DepositEvent(
+                    ChainType.ETH, "ETH",
+                    "0x" + UUID.randomUUID().toString().replace("-", ""),
+                    "0x2222222222222222222222222222222222222222",
+                    fixture.address(), new BigDecimal("1.25"),
+                    123_456L, 1, null, "{\"integration\":true}");
+
+            assertFalse(repository.recordAndCreditDeposit(
+                    event, 0L, 12, fixture.accountId()));
+            assertEquals(fixture.tenantId(), jdbc.queryForObject("""
+                    select tenant_id from deposit_record
+                     where chain = 'ETH' and tx_hash = ? and log_index = 0
+                    """, UUID.class, event.txId()));
+            assertEquals(0, jdbc.queryForObject("""
+                    select count(*) from custody_deposit
+                     where tenant_id = ? and tx_hash = ?
+                    """, Integer.class, fixture.tenantId(), event.txId()));
+            status.setRollbackOnly();
+        });
     }
 
     @Test

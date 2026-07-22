@@ -58,6 +58,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * regtest nodes, and PostgreSQL.</p>
  */
 class BitcoinLikeRegtestFullFlowIntegrationTest {
+    private static final UUID TEST_TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000003");
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final HttpClient RPC_HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -121,6 +122,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
             ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
             try {
+                ensureTestTenant(jdbc);
                 ensureBitcoinLikeProfiles(jdbc);
                 for (RegtestChain chain : chains) {
                     runFullFlow(root, chain, jdbc, repository);
@@ -145,6 +147,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         String runId = "c" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
 
         try {
+            ensureTestTenant(jdbc);
             ensureBitcoinLikeProfiles(jdbc);
             for (RegtestChain chain : selectedChains()) {
                 runConcurrencyGuards(chain, jdbc, repository, runId);
@@ -174,6 +177,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         List<String> cleanupTxids = Collections.synchronizedList(new ArrayList<>());
 
         try {
+            ensureTestTenant(jdbc);
             ensureBitcoinLikeProfiles(jdbc);
             for (RegtestChain chain : selectedChains()) {
                 runBulkBroadcastFlow(
@@ -212,6 +216,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
 
         String accountId = "regtest-" + chainName.toLowerCase(Locale.ROOT) + "-" + UUID.randomUUID();
         String depositAddress = walletRpc(root, chain, "getnewaddress").trim();
+        registerTestAddress(jdbc, chainName, accountId, depositAddress);
         RealTx depositTx = sendAndMine(root, chain, depositAddress, chain.depositAmount());
         Output depositOutput = findOutput(depositTx.raw(), depositAddress, chain.depositAmount());
 
@@ -318,6 +323,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         String duplicateTx = runId + "-" + chainName + "-duplicate-deposit";
         DepositEvent duplicateDeposit = syntheticDeposit(chain, duplicateTx,
                 runId + "-" + chainName + "-duplicate-address", chain.depositAmount());
+        registerTestAddress(jdbc, chainName, duplicateAccount, duplicateDeposit.toAddress());
         List<Boolean> duplicateCredits = runConcurrently(24,
                 ignored -> repository.recordAndCreditDeposit(
                         duplicateDeposit, 0L, REQUIRED_CONFIRMATIONS, duplicateAccount));
@@ -331,6 +337,10 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
 
         String fanoutAccount = runId + "-" + chainName + "-fanout-account";
         BigDecimal fanoutAmount = new BigDecimal("0.01000000");
+        for (int index = 0; index < 32; index++) {
+            registerTestAddress(jdbc, chainName, fanoutAccount,
+                    runId + "-" + chainName + "-fanout-address-" + index);
+        }
         List<Boolean> fanoutCredits = runConcurrently(32, index -> {
             String txHash = runId + "-" + chainName + "-fanout-" + index;
             return repository.recordAndCreditDeposit(
@@ -343,7 +353,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         assertLedger(jdbc, chainName, fanoutAccount, fanoutTotal, BigDecimal.ZERO, fanoutTotal);
 
         String freezeAccount = runId + "-" + chainName + "-freeze-account";
-        repository.incrementLedgerBalance(chainName, chainName, freezeAccount, one);
+        repository.incrementLedgerBalance(TEST_TENANT_ID, chainName, chainName, freezeAccount, one);
         BigDecimal freezeAmount = new BigDecimal("0.20000000");
         List<Boolean> freezeResults = runConcurrently(16,
                 ignored -> repository.freezeLedgerBalance(chainName, chainName, freezeAccount, freezeAmount));
@@ -434,6 +444,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         for (int i = 0; i < depositCount; i++) {
             depositPayments.add(new BroadcastPayment(
                     i, walletRpcHttp(chain, "getnewaddress").asText(), depositAmount));
+        }
+        for (BroadcastPayment payment : depositPayments) {
+            registerTestAddress(jdbc, chainName, accountId, payment.address());
         }
         List<BroadcastResult> depositBroadcasts = broadcastPayments(root, chain, depositPayments, cleanupTxids);
         assertEquals(depositCount, depositBroadcasts.stream().map(BroadcastResult::txid).distinct().count(),
@@ -750,6 +763,33 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         return AssetRuntimeMetadata.fromProfile(profile, asset);
     }
 
+    private static void ensureTestTenant(JdbcTemplate jdbc) {
+        jdbc.update("""
+                insert into custody_tenant(id, slug, name)
+                values (?, 'bitcoinlike-regtest', 'Bitcoin-like regtest tenant')
+                on conflict (id) do nothing
+                """, TEST_TENANT_ID);
+    }
+
+    private static void registerTestAddress(JdbcTemplate jdbc, String chain,
+                                            String accountId, String address) {
+        Long addressIndex = jdbc.queryForObject(
+                "select nextval('chain_address_id_seq')", Long.class);
+        assertNotNull(addressIndex);
+        jdbc.update("""
+                insert into chain_address(
+                    tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                    address, owner_address, derivation_path, wallet_role, enabled)
+                values (?, ?, ?, ?, 9900, 1, ?, ?, ?, ?, 'REGTEST', true)
+                on conflict (chain, asset_symbol, address) do update set
+                    tenant_id = excluded.tenant_id,
+                    account_id = excluded.account_id,
+                    enabled = true,
+                    updated_at = now()
+                """, TEST_TENANT_ID, chain, chain, accountId, addressIndex,
+                address, address, "m/regtest/" + addressIndex);
+    }
+
     private static void ensureBitcoinLikeProfiles(JdbcTemplate jdbc) {
         jdbc.update("""
                 update chain_profile
@@ -804,6 +844,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         jdbc.update("delete from utxo_record where tx_hash like ?", like);
         jdbc.update("delete from deposit_record where tx_hash like ?", like);
         jdbc.update("delete from ledger_balance where account_id like ?", like);
+        jdbc.update("delete from chain_address where account_id like ?", like);
     }
 
     private static void cleanupBroadcastRows(JdbcTemplate jdbc, String runId, List<String> txids) {

@@ -37,6 +37,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -49,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * collection recovery, nonce reservation and ledger-vs-chain reconciliation.
  */
 class EvmForkMultiUserBusinessFlowIntegrationTest {
+    private static final UUID TEST_TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000001");
     private static final String LOCAL_RPC = "http://127.0.0.1:8545";
     private static final BigDecimal WEI_PER_NATIVE = new BigDecimal("1000000000000000000");
     private static final BigDecimal TOKEN_DECIMAL = new BigDecimal("1000000");
@@ -219,7 +221,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         SignedTx tx = sendSignedNative(web3j, user.credentials(), hotWallet.address(), amount, chainId, nonce, BigInteger.valueOf(21_000L));
         updateOrder(jdbcTemplate, orderNo, "SENT", tx.receipt().getTransactionHash(), fee(tx), null);
         settleFrozen(repository, chain.name(), nativeSymbol, user.address(), frozen, amount.add(fee(tx)));
-        repository.incrementLedgerBalance(chain.name(), nativeSymbol, hotWallet.address(), amount);
+        repository.incrementLedgerBalance(TEST_TENANT_ID, chain.name(), nativeSymbol, hotWallet.address(), amount);
         updateOrder(jdbcTemplate, orderNo, "CONFIRMED", tx.receipt().getTransactionHash(), fee(tx), null);
         recordEvmTx(repository, chain, nativeSymbol, null, user.address(), hotWallet.address(), amount, tx);
     }
@@ -261,7 +263,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         updateOrder(jdbcTemplate, orderNo, "SENT", tx.receipt().getTransactionHash(), fee(tx), null);
         assertTrue(repository.settleLockedDebit(chain.name(), tokenSymbol, user.address(), amount));
         settleFrozen(repository, chain.name(), nativeSymbol, user.address(), GAS_BUFFER, fee(tx));
-        repository.incrementLedgerBalance(chain.name(), tokenSymbol, hotWallet.address(), amount);
+        repository.incrementLedgerBalance(TEST_TENANT_ID, chain.name(), tokenSymbol, hotWallet.address(), amount);
         updateOrder(jdbcTemplate, orderNo, "CONFIRMED", tx.receipt().getTransactionHash(), fee(tx), null);
         return tx;
     }
@@ -283,6 +285,11 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     }
 
     private static void prepareDatabase(JdbcTemplate jdbcTemplate, ChainType chain, String nativeSymbol, Actors actors) {
+        jdbcTemplate.update("""
+                insert into custody_tenant(id, slug, name)
+                values (?, 'evm-fork-integration', 'EVM fork integration tenant')
+                on conflict (id) do nothing
+                """, TEST_TENANT_ID);
         List<Actor> all = List.of(actors.userA(), actors.userB(), actors.userC(), actors.userD(), actors.hotWallet());
         jdbcTemplate.update("delete from withdrawal_order where chain = ? and order_no like ?",
                 chain.name(), "EVM-STABILITY-" + chain.name() + "-%");
@@ -299,10 +306,11 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
             jdbcTemplate.update("delete from chain_address where chain = ? and lower(address) = lower(?)",
                     chain.name(), account);
             jdbcTemplate.update("""
-                            insert into chain_address(chain, asset_symbol, account_id, user_id, biz, address_index,
+                            insert into chain_address(tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
                                                       address, owner_address, derivation_path, wallet_role, enabled)
-                            values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, true)
+                            values (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, true)
                             on conflict (chain, asset_symbol, address) do update set
+                                tenant_id = excluded.tenant_id,
                                 account_id = excluded.account_id,
                                 user_id = excluded.user_id,
                                 biz = excluded.biz,
@@ -313,7 +321,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
                                 enabled = true,
                                 updated_at = now()
                             """,
-                    chain.name(), nativeSymbol, account, actor.userId(), actor.derivationIndex(),
+                    TEST_TENANT_ID, chain.name(), nativeSymbol, account, actor.userId(), actor.derivationIndex(),
                     account, account, actor.path(), actor.role());
         }
     }
@@ -370,11 +378,12 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     private static void createOrder(JdbcTemplate jdbcTemplate, String orderNo, long userId, ChainType chain,
                                     String asset, String from, String to, BigDecimal amount) {
         jdbcTemplate.update("""
-                        insert into withdrawal_order(order_no, user_id, chain, asset_symbol, from_address,
+                        insert into withdrawal_order(tenant_id, order_no, user_id, chain, asset_symbol, from_address,
                                                      to_address, amount, fee, status, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, 0, 'CREATED', now(), now())
+                        values (?, ?, ?, ?, ?, ?, ?, ?, 0, 'CREATED', now(), now())
                         """,
-                orderNo, userId, chain.name(), asset, from.toLowerCase(Locale.ROOT), to.toLowerCase(Locale.ROOT), amount);
+                TEST_TENANT_ID, orderNo, userId, chain.name(), asset,
+                from.toLowerCase(Locale.ROOT), to.toLowerCase(Locale.ROOT), amount);
     }
 
     private static void updateOrder(JdbcTemplate jdbcTemplate, String orderNo, String status, String txHash,

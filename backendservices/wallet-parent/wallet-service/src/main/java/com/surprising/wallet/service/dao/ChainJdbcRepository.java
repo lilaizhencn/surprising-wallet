@@ -724,22 +724,29 @@ public class ChainJdbcRepository {
     public boolean recordAndCreditDeposit(DepositEvent event, long logIndex, int requiredConfirmations,
                                           String accountId) {
         String chain = event.chainType().name();
+        UUID tenantId = requireDepositTenant(chain, accountId, event.toAddress());
         String status = event.confirmations() <= 0 ? "DETECTED"
                 : event.confirmations() < requiredConfirmations ? "CONFIRMING" : "CONFIRMED";
-        jdbcTemplate.update("""
-                        insert into deposit_record(chain, asset_symbol, tx_hash, log_index, from_address, to_address,
+        int recorded = jdbcTemplate.update("""
+                        insert into deposit_record(tenant_id, chain, asset_symbol, tx_hash, log_index, from_address, to_address,
                                                    contract_address, amount, block_height, confirmations, status,
                                                    credited, raw_payload, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?, ?, ?)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?, ?, ?)
                         on conflict (chain, tx_hash, log_index) do update set
                             confirmations = greatest(deposit_record.confirmations, excluded.confirmations),
                             status = case when deposit_record.credited then 'CREDITED' else excluded.status end,
+                            tenant_id = coalesce(deposit_record.tenant_id, excluded.tenant_id),
                             raw_payload = excluded.raw_payload,
                             updated_at = excluded.updated_at
+                        where deposit_record.tenant_id is null
+                           or deposit_record.tenant_id = excluded.tenant_id
                         """,
-                chain, event.assetSymbol(), event.txId(), logIndex, event.fromAddress(), event.toAddress(),
+                tenantId, chain, event.assetSymbol(), event.txId(), logIndex, event.fromAddress(), event.toAddress(),
                 event.tokenAddress(), event.amount(), event.blockHeight(), event.confirmations(), status,
                 event.rawPayload(), toTs(now()), toTs(now()));
+        if (recorded != 1) {
+            throw new IllegalStateException("deposit record belongs to another tenant");
+        }
 
         if (event.confirmations() < requiredConfirmations) {
             return false;
@@ -752,13 +759,30 @@ public class ChainJdbcRepository {
                         """,
                 toTs(now()), toTs(now()), chain, event.txId(), logIndex);
         if (credited == 1) {
-            incrementLedgerBalance(chain, event.assetSymbol(), accountId, event.amount());
+            incrementLedgerBalance(tenantId, chain, event.assetSymbol(), accountId, event.amount());
             for (DepositCreditObserver observer : depositCreditObservers) {
                 observer.onDepositCredited(event, logIndex, accountId);
             }
             return true;
         }
         return false;
+    }
+
+    private UUID requireDepositTenant(String chain, String accountId, String address) {
+        List<UUID> tenants = jdbcTemplate.queryForList("""
+                        select distinct tenant_id
+                          from chain_address
+                         where tenant_id is not null and enabled = true and chain = ?
+                           and (lower(account_id) = lower(?) or lower(address) = lower(?))
+                         limit 2
+                        """, UUID.class, chain, accountId, address);
+        if (tenants.isEmpty()) {
+            throw new IllegalStateException("deposit address is not assigned to a tenant");
+        }
+        if (tenants.size() > 1) {
+            throw new IllegalStateException("deposit address maps to more than one tenant");
+        }
+        return tenants.getFirst();
     }
 
     public void upsertUtxo(String chain, String assetSymbol, String txHash, int vout, String address,
@@ -1630,17 +1654,25 @@ public class ChainJdbcRepository {
                 event.confirmations(), status, toTs(now()), toTs(now()));
     }
 
-    public void incrementLedgerBalance(String chain, String assetSymbol, String accountId, BigDecimal amount) {
-        jdbcTemplate.update("""
-                        insert into ledger_balance(chain, asset_symbol, account_id, available_balance, locked_balance,
+    public void incrementLedgerBalance(UUID tenantId, String chain, String assetSymbol,
+                                       String accountId, BigDecimal amount) {
+        Objects.requireNonNull(tenantId, "tenantId is required");
+        int updated = jdbcTemplate.update("""
+                        insert into ledger_balance(tenant_id, chain, asset_symbol, account_id, available_balance, locked_balance,
                                                    total_balance, created_at, updated_at)
-                        values (?, ?, ?, ?, 0, ?, ?, ?)
+                        values (?, ?, ?, ?, ?, 0, ?, ?, ?)
                         on conflict (chain, asset_symbol, account_id) do update set
                             available_balance = ledger_balance.available_balance + excluded.available_balance,
                             total_balance = ledger_balance.total_balance + excluded.total_balance,
+                            tenant_id = coalesce(ledger_balance.tenant_id, excluded.tenant_id),
                             updated_at = excluded.updated_at
+                        where ledger_balance.tenant_id is null
+                           or ledger_balance.tenant_id = excluded.tenant_id
                         """,
-                chain, assetSymbol, accountId, amount, amount, toTs(now()), toTs(now()));
+                tenantId, chain, assetSymbol, accountId, amount, amount, toTs(now()), toTs(now()));
+        if (updated != 1) {
+            throw new IllegalStateException("ledger balance belongs to another tenant");
+        }
     }
 
     public boolean debitLedgerBalance(String chain, String assetSymbol, String accountId, BigDecimal amount) {
