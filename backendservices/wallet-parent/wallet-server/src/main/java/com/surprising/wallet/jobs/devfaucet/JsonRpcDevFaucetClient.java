@@ -36,6 +36,7 @@ final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(properties.getRequestTimeout())
+                .version(HttpClient.Version.HTTP_1_1)
                 .build();
     }
 

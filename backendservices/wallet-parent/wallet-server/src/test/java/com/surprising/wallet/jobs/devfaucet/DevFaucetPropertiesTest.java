@@ -2,7 +2,9 @@ package com.surprising.wallet.jobs.devfaucet;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.net.http.HttpClient;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,6 +45,17 @@ class DevFaucetPropertiesTest {
         assertEquals(138, encoded.length());
         assertTrue(encoded.startsWith("0xa9059cbb"));
         assertTrue(encoded.endsWith("0000000000000000000000000000000000000000000000000000000000bc614e"));
+    }
+
+    @Test
+    void localJsonRpcClientUsesHttp11InsteadOfH2cUpgrade() throws Exception {
+        JsonRpcDevFaucetClient client = new JsonRpcDevFaucetClient(
+                validProperties(), new com.fasterxml.jackson.databind.ObjectMapper());
+        Field field = JsonRpcDevFaucetClient.class.getDeclaredField("httpClient");
+        field.setAccessible(true);
+
+        assertEquals(HttpClient.Version.HTTP_1_1,
+                ((HttpClient) field.get(client)).version());
     }
 
     static DevFaucetProperties validProperties() {
