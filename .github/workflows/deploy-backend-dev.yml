@@ -5,9 +5,13 @@ on:
     branches: [master]
     paths:
       - .github/workflows/deploy-backend-dev.yml
-      - backendservices/**
-      - currency-sdks/**
-      - surprising-parent/**
+      - common/**
+      - bitcoin-sdk/**
+      - tron-sdk/**
+      - wallet-sig1/**
+      - wallet-sig2/**
+      - wallet-service/**
+      - wallet-server/**
       - pom.xml
       - infra/sql/**
       - infra/systemd/surprising-wallet.service
@@ -55,10 +59,10 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres \
             -c 'create database surprising_wallet_test_ci'
-          mvn -B -ntp -pl backendservices/wallet-parent/wallet-server -am test
+          mvn -B -ntp -pl wallet-server -am test
 
       - name: Package backend
-        run: mvn -B -ntp -pl backendservices/wallet-parent/wallet-server -am -DskipTests package
+        run: mvn -B -ntp -pl wallet-server -am -DskipTests package
 
       - name: Configure SSH
         env:
@@ -80,7 +84,7 @@ jobs:
           release="/opt/surprising-wallet-backend/releases/$GITHUB_SHA"
           ssh -i "$HOME/.ssh/backend_deploy" "$remote" "install -d -m 0750 '$release'"
           scp -i "$HOME/.ssh/backend_deploy" \
-            backendservices/wallet-parent/wallet-server/target/wallet-server-1.0.0-SNAPSHOT.jar \
+            wallet-server/target/wallet-server-1.0.0-SNAPSHOT.jar \
             "$remote:$release/wallet-server.jar"
           scp -i "$HOME/.ssh/backend_deploy" infra/sql/*.sql "$remote:$release/"
 

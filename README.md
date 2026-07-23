@@ -1,81 +1,99 @@
 # Surprising Wallet
 
-Multi-tenant blockchain custody infrastructure for exchanges, payment products,
-commerce platforms, and other applications that need one shared wallet service.
+面向交易所、支付、电商等业务的多租户区块链托管基础设施。一套钱包服务可以同时服务多个租户。
 
-[中文说明](README_CN.md) · [Custody model](docs/en/multi-tenant-custody.md) ·
-[API contract](docs/openapi/custody-v1.yaml) · [Documentation](docs/README.md)
+[多租户托管模型](resources/docs/zh/multi-tenant-custody.md) ·
+[API 契约](resources/docs/openapi/custody-v1.yaml) · [文档索引](resources/docs/README_CN.md)
 
-## Product boundary
+## 产品边界
 
-Surprising Wallet owns:
+Surprising Wallet 负责：
 
-- tenant-isolated deterministic deposit addresses;
-- chain scanning, confirmed deposits, balances, withdrawals, and reconciliation;
-- tenant-prefunded native-coin Gas accounts with withdrawal fee reservation and settlement;
-- signed API requests, replay protection, IP allowlists, Console sessions, and audit logs;
-- signed deposit/withdrawal Webhooks with durable per-attempt history, automatic retries,
-  and manual replay.
+- 租户隔离的确定性充值地址；
+- 扫链、确认后充值入账、链上余额、提现和对账；
+- 租户预充值原生币的 Gas 账户，以及提现手续费预留与结算；
+- API 请求签名、防重放、IP 白名单、Console 会话和审计日志；
+- 带签名、完整尝试历史、自动重试和手动重放能力的充提 Webhook。
 
-A tenant owns its customers, merchants, orders, and internal balance rules. It
-passes an opaque `externalReference` when allocating an address. The wallet does
-not create or model that tenant-side user.
+租户自己管理客户、商户、订单和内部余额规则。分配地址时，租户只需传入不透明的
+`externalReference`；钱包基础设施不会创建或建模租户内部用户。
 
 ```text
-tenant credential + chain + externalReference -> one stable deposit address
-on-chain deposit -> tenant + externalReference -> signed Webhook
+租户凭证 + chain + externalReference -> 稳定的唯一充值地址
+链上充值 -> tenant + externalReference -> 签名 Webhook
 ```
 
-Console-created addresses may omit `externalReference`; every such request
-allocates a fresh address. Address creation never emits a Webhook. Only deposit
-and withdrawal lifecycle events are delivered.
+## 仓库
 
-## Repositories
+- 后端：当前仓库
+- React + Ant Design Console：[surprising-wallet-web](https://github.com/lilaizhencn/surprising-wallet-web)
 
-- Backend: this repository
-- React + Ant Design Console: [surprising-wallet-web](https://github.com/lilaizhencn/surprising-wallet-web)
+## 项目结构
 
-## Main modules
+```
+surprising-wallet/
+├── pom.xml              # 父 POM：版本、依赖管理、模块聚合
+├── common/              # 共享基础设施（130 个 Java 文件）
+├── bitcoin-sdk/         # Bitcoin-like 链 SDK
+├── tron-sdk/            # TRON 链 SDK
+├── wallet-sig1/         # 第一签名服务
+├── wallet-sig2/         # 第二签名服务
+├── wallet-service/      # 链适配与业务逻辑
+├── wallet-server/       # HTTP API 与定时任务
+└── resources/docs/      # 文档、OpenAPI、数据库脚本
+```
 
-| Module | Responsibility |
+### 模块职责
+
+| 模块 | 职责 |
 |---|---|
-| `wallet-server` | Custody/Console APIs, jobs, validation, Webhook dispatch |
-| `wallet-service` | Chain adapters, scanning, ledger, withdrawal, collection |
-| `wallet-sig1`, `wallet-sig2` | Isolated signing services |
-| `currency-sdks/*` | Bitcoin-like, TRON, and shared chain/key support |
+| `common` | Redis 封装、链数据模型、钱包密钥配置、Ed25519 密钥派生、Ethereum 密码学工具、Spring 基础设施 |
+| `bitcoin-sdk` | Bitcoin-like 链支持：多签地址生成、SegWit 交易构建、手续费计算、UTXO 选择、BIP32 密钥派生，覆盖 BTC/BCH/LTC/DOGE 网络参数 |
+| `tron-sdk` | TRON 链支持：gRPC 客户端、Protobuf 合约、ECKey 密码学、Keccak 哈希、TRON 钱包 API |
+| `wallet-sig1` | 第一轮签名服务：对 BTC、BCH、LTC、DOGE 提现交易生成部分签名，轮询 Redis 队列获取待签任务 |
+| `wallet-sig2` | 第二轮签名服务：对 BTC、BCH、LTC、DOGE、ETH、ERC20、TRON 交易完成最终签名并广播 |
+| `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
+| `wallet-server` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-The runtime supports Bitcoin-like, EVM, TRON, Solana, TON, Aptos, Sui, XRP,
-Cardano, Polkadot, NEAR, Monero, HyperEVM, and HyperCore configurations. The
-active network and assets are controlled by the database. Existing testnet
-assets and test seeds are intentionally preserved.
+运行模型覆盖 Bitcoin-like、EVM、TRON、Solana、TON、Aptos、Sui、XRP、
+Cardano、Polkadot、NEAR、Monero、HyperEVM 和 HyperCore。实际启用的网络和资产
+由数据库控制。
 
-## Local start
+## 本地启动
 
-Requirements: JDK 21, Maven, PostgreSQL, and Redis.
+依赖 JDK 21、Maven、PostgreSQL 和 Redis。
 
 ```bash
-psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
-mvn -pl backendservices/wallet-parent/wallet-server -am package
-java -jar backendservices/wallet-parent/wallet-server/target/wallet-server-1.0.0-SNAPSHOT.jar
+# 初始化数据库
+# psql -U wallet -d wallet -f resources/docs/db/surprising-wallet-init-pgsql.sql
+
+# 编译并打包
+mvn -pl wallet-server -am package
+
+# 启动
+java -jar wallet-server/target/wallet-server-1.0.0-SNAPSHOT.jar
 ```
 
-Required custody secrets:
+Custody 必需密钥：
 
 ```text
-SW_CUSTODY_SECRET_MASTER_KEY   32-byte Base64 or 64-character hex key
+SW_CUSTODY_SECRET_MASTER_KEY   32 字节 Base64 或 64 位十六进制密钥
 SW_CUSTODY_PLATFORM_ADMIN_EMAIL
 SW_CUSTODY_PLATFORM_ADMIN_PASSWORD
 ```
 
-Database, Redis, HTTP, CORS, chain keys, and production startup requirements are
-listed in [Startup and testing](docs/en/startup-and-testing.md). Never run the
-fresh-database SQL against an existing production database.
+数据库、Redis、HTTP、CORS、链密钥配置和生产启动要求见
+[启动与测试](resources/docs/zh/startup-and-testing.md)。
 
-## Verification
+## 验证
 
 ```bash
-mvn -pl backendservices/wallet-parent/wallet-server -am test
+# 运行测试
+mvn -pl wallet-server -am test
+
+# 编译全部模块
+mvn compile
 ```
 
-Live-chain tests are opt-in because they need funded test addresses and external
-RPC/faucet availability. See [Scripts and regtest](docs/en/scripts-and-regtest.md).
+真实链测试需要有余额的测试地址，并受外部 RPC/Faucet 可用性影响，因此默认不运行。
+参见[脚本与 Regtest](resources/docs/zh/scripts-and-regtest.md)。
