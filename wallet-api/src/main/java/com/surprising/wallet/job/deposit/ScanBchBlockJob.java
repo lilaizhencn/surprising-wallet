@@ -10,7 +10,7 @@ public class ScanBchBlockJob extends AbstractScanUtxoBlockJob {
         return "BCH";
     }
 
-    @Scheduled(cron = "9/59 * * * * ?")
+    @Scheduled(scheduler = "depositTaskScheduler", cron = "9/59 * * * * ?")
     @Override
     public void execute() {
         super.execute();

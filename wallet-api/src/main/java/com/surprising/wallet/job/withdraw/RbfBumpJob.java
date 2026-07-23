@@ -62,7 +62,7 @@ public class RbfBumpJob {
     /**
      * 每 30 秒检查一次 RBF 触发队列
      */
-    @Scheduled(cron = "0/30 * * * * ?")
+    @Scheduled(scheduler = "withdrawTaskScheduler", cron = "0/30 * * * * ?")
     public void execute() {
         if (!runtimeConfigService.isTaskEnabled("BTC", WalletRuntimeConfigService.TASK_WITHDRAW)) {
             log.warn("RBF bump skipped: BTC withdraw switch disabled");

@@ -14,7 +14,7 @@ public class BatchLtcWithdrawJob extends AbstractBatchWithdrawJob {
         return "LTC";
     }
 
-    @Scheduled(cron = "10/30 * * * * ?")
+    @Scheduled(scheduler = "withdrawTaskScheduler", cron = "10/30 * * * * ?")
     @Override
     @Transactional(rollbackFor = Throwable.class)
     public void execute() {

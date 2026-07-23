@@ -57,7 +57,7 @@ public class FeeRateUpdater {
     /**
      * 每 2 分钟更新一次费率
      */
-    @Scheduled(cron = "0 */2 * * * ?")
+    @Scheduled(scheduler = "withdrawTaskScheduler", cron = "0 */2 * * * ?")
     public void updateFeeRate() {
         if (!runtimeConfigService.isTaskEnabled("BTC", WalletRuntimeConfigService.TASK_WITHDRAW)) {
             log.debug("BTC fee-rate update skipped: withdraw switch disabled");

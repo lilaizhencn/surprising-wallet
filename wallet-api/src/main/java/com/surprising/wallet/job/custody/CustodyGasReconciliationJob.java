@@ -21,7 +21,7 @@ public class CustodyGasReconciliationJob {
         this.repository = repository;
     }
 
-    @Scheduled(fixedDelayString = "${sw.wallet.custody.gas-reconcile-delay:2000}")
+    @Scheduled(scheduler = "custodyTaskScheduler", fixedDelayString = "${sw.wallet.custody.gas-reconcile-delay:2000}")
     public void reconcile() {
         if (!running.compareAndSet(false, true)) {
             return;

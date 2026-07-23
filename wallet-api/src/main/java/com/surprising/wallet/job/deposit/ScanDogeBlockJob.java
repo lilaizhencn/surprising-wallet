@@ -13,7 +13,7 @@ public class ScanDogeBlockJob extends AbstractScanUtxoBlockJob {
         return "DOGE";
     }
 
-    @Scheduled(cron = "7/59 * * * * ?")
+    @Scheduled(scheduler = "depositTaskScheduler", cron = "7/59 * * * * ?")
     @Override
     public void execute() {
         super.execute();

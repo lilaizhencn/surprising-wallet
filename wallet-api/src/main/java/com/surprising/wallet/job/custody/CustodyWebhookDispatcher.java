@@ -35,7 +35,7 @@ public class CustodyWebhookDispatcher {
         this.retryPolicy = retryPolicy;
     }
 
-    @Scheduled(fixedDelayString = "${sw.wallet.custody.webhook-dispatch-delay:1000}")
+    @Scheduled(scheduler = "custodyTaskScheduler", fixedDelayString = "${sw.wallet.custody.webhook-dispatch-delay:1000}")
     public void dispatch() {
         if (!running.compareAndSet(false, true)) {
             return;

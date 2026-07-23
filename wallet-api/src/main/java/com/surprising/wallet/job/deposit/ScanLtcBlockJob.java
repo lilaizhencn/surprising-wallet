@@ -15,7 +15,7 @@ public class ScanLtcBlockJob extends AbstractScanUtxoBlockJob {
         return "LTC";
     }
 
-    @Scheduled(cron = "5/59 * * * * ?")
+    @Scheduled(scheduler = "depositTaskScheduler", cron = "5/59 * * * * ?")
     @Override
     public void execute() {
         super.execute();

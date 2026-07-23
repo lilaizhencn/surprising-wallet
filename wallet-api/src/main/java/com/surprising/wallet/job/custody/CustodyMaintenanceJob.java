@@ -15,7 +15,7 @@ public class CustodyMaintenanceJob {
         this.repository = repository;
     }
 
-    @Scheduled(cron = "${sw.wallet.custody.security-cleanup-cron:0 17 3 * * *}")
+    @Scheduled(scheduler = "custodyTaskScheduler", cron = "${sw.wallet.custody.security-cleanup-cron:0 17 3 * * *}")
     public void cleanupExpiredSecurityRows() {
         int deleted = repository.cleanupExpiredSecurityRows();
         if (deleted > 0) {

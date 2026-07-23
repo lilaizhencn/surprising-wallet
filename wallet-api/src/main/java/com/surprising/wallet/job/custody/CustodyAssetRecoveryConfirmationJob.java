@@ -13,7 +13,7 @@ public class CustodyAssetRecoveryConfirmationJob {
         this.recoveries = recoveries;
     }
 
-    @Scheduled(fixedDelayString = "${custody.asset-recovery.confirm-delay-ms:15000}")
+    @Scheduled(scheduler = "custodyTaskScheduler", fixedDelayString = "${custody.asset-recovery.confirm-delay-ms:15000}")
     public void confirmBroadcastRecoveries() {
         recoveries.confirmBroadcastRecoveries();
     }

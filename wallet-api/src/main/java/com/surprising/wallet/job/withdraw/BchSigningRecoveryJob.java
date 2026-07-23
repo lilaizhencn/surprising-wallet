@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
     private final WalletRuntimeConfigService runtimeConfigService;
     private static final long STALE_SECONDS=60;
     public BchSigningRecoveryJob(ChainJdbcRepository repo,BlockchainRuntimeService blockchainRuntimeService,WalletRuntimeConfigService runtimeConfigService){this.repo=repo;this.blockchainRuntimeService=blockchainRuntimeService;this.runtimeConfigService=runtimeConfigService;}
-    @Scheduled(cron="19/30 * * * * ?") public void execute(){
+    @Scheduled(scheduler = "withdrawTaskScheduler", cron="19/30 * * * * ?") public void execute(){
         if(!runtimeConfigService.isTaskEnabled("BCH",WalletRuntimeConfigService.TASK_WITHDRAW))return;
         AssetRuntimeMetadata currency=blockchainRuntimeService.assetMetadata("BCH");
         for(var tx:repo.findStaleBitcoinLikeSigningTransactions(currency,STALE_SECONDS))

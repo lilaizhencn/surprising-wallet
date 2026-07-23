@@ -30,7 +30,7 @@ public class DogeSigningRecoveryJob {
         this.runtimeConfigService = runtimeConfigService;
     }
 
-    @Scheduled(cron = "17/30 * * * * ?")
+    @Scheduled(scheduler = "withdrawTaskScheduler", cron = "17/30 * * * * ?")
     public void execute() {
         if (!isEnabled()) {
             return;

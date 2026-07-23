@@ -16,7 +16,6 @@ import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.bitcoinj.crypto.ECKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.web3j.abi.FunctionEncoder;
 import org.web3j.abi.FunctionReturnDecoder;
@@ -99,7 +98,6 @@ public class Evm7702CollectionWorkflowService {
         this.runtimeConfig = runtimeConfig;
     }
 
-    @Scheduled(fixedDelayString = "${sw.wallet.evm7702.collection-delay:5000}")
     public void run() {
         if (!running.compareAndSet(false, true)) return;
         try {

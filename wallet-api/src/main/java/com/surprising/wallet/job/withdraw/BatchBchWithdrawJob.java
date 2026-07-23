@@ -13,7 +13,7 @@ public class BatchBchWithdrawJob extends AbstractBatchWithdrawJob {
         return "BCH";
     }
 
-    @Scheduled(cron = "14/30 * * * * ?")
+    @Scheduled(scheduler = "withdrawTaskScheduler", cron = "14/30 * * * * ?")
     @Override
     @Transactional(rollbackFor = Throwable.class)
     public void execute() {

@@ -28,7 +28,7 @@ public class CustodyWithdrawalReconciliationJob {
         this.objectMapper = objectMapper;
     }
 
-    @Scheduled(fixedDelayString = "${sw.wallet.custody.withdrawal-reconcile-delay:500}")
+    @Scheduled(scheduler = "custodyTaskScheduler", fixedDelayString = "${sw.wallet.custody.withdrawal-reconcile-delay:500}")
     public void reconcile() {
         if (!running.compareAndSet(false, true)) {
             return;

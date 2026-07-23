@@ -1,0 +1,22 @@
+package com.surprising.wallet.job.collection;
+
+import com.surprising.wallet.account.service.Evm7702WithdrawalWorkflowService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class Evm7702WithdrawalJob {
+
+    private final Evm7702WithdrawalWorkflowService workflowService;
+
+    @Scheduled(scheduler = "evm7702TaskScheduler", fixedDelayString = "${sw.wallet.evm7702.withdrawal-delay:3000}")
+    public void run() {
+        log.debug("EVM 7702 withdrawal job begin");
+        workflowService.run();
+        log.debug("EVM 7702 withdrawal job end");
+    }
+}

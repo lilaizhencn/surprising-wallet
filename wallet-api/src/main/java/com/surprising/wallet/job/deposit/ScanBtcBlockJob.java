@@ -17,7 +17,7 @@ public class ScanBtcBlockJob extends AbstractScanUtxoBlockJob {
         return "BTC";
     }
 
-    @Scheduled(cron = "0/59 * * * * ?")
+    @Scheduled(scheduler = "depositTaskScheduler", cron = "0/59 * * * * ?")
     @Override
     public void execute() {
         super.execute();

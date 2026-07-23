@@ -23,7 +23,7 @@ public class RetryFailedWithdraw {
     @Autowired
     private WalletRuntimeConfigService runtimeConfigService;
 
-    @Scheduled(cron = "1 1/1 * * * ?")
+    @Scheduled(scheduler = "withdrawTaskScheduler", cron = "1 1/1 * * * ?")
     public void execute() {
         if (!runtimeConfigService.isGlobalTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW)) {
             log.warn("失败提现重试任务跳过: global withdraw switch disabled");

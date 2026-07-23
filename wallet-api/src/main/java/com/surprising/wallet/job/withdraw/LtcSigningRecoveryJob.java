@@ -33,7 +33,7 @@ public class LtcSigningRecoveryJob {
         this.runtimeConfigService = runtimeConfigService;
     }
 
-    @Scheduled(cron = "15/30 * * * * ?")
+    @Scheduled(scheduler = "withdrawTaskScheduler", cron = "15/30 * * * * ?")
     public void execute() {
         if (!isEnabled()) {
             return;

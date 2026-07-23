@@ -15,8 +15,8 @@ public class BatchBtcWithdrawJob extends AbstractBatchWithdrawJob {
         return "BTC";
     }
 
-    //    @Scheduled(cron = "1 1/2 * * * ?")
-    @Scheduled(cron = "0/30 * * * * ?")
+    //    @Scheduled(scheduler = "withdrawTaskScheduler", cron = "1 1/2 * * * ?")
+    @Scheduled(scheduler = "withdrawTaskScheduler", cron = "0/30 * * * * ?")
     @Override
     public void execute() {
         super.execute();

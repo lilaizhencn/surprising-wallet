@@ -46,7 +46,6 @@ import com.surprising.wallet.service.wallet.HotWalletAddressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.crypto.ECKey;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.tron.trident.core.NodeType;
 import org.tron.trident.core.key.KeyPair;
@@ -118,29 +117,7 @@ public class AccountChainWorkflowService {
     private final TronTransactionService tronTransactionService;
     private final TronTrc20Service tronTrc20Service;
 
-    @Scheduled(cron = "11/30 * * * * ?")
-    public void scanDepositsJob() {
-        scanDeposits();
-    }
-
-    @Scheduled(cron = "13/30 * * * * ?")
-    public void processWithdrawalsJob() {
-        processWithdrawals();
-    }
-
-    @Scheduled(cron = "15/30 * * * * ?")
-    public void confirmWithdrawalsJob() {
-        confirmWithdrawals();
-    }
-
-    @Scheduled(cron = "17/30 * * * * ?")
-    public void processCollectionsJob() {
-        processCollections();
-        confirmCollections();
-    }
-
-    @Scheduled(cron = "3/10 * * * * ?")
-    public void moneroWorkflowJob() {
+    public void moneroWorkflow() {
         AccountChainProfile profile = repository.findProfileByChain("XMR")
                 .filter(candidate -> Boolean.TRUE.equals(candidate.getEnabled()))
                 .orElse(null);
