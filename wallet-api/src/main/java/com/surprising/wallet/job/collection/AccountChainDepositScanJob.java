@@ -9,14 +9,14 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class AccountChainConfirmWithdrawalsJob {
+public class AccountChainDepositScanJob {
 
     private final AccountChainWorkflowService workflowService;
 
-    @Scheduled(scheduler = "accountTaskScheduler", cron = "15/30 * * * * ?")
+    @Scheduled(scheduler = "accountTaskScheduler", cron = "11/30 * * * * ?")
     public void run() {
-        log.debug("AccountChain confirm withdrawals job begin");
-        workflowService.confirmWithdrawals();
-        log.debug("AccountChain confirm withdrawals job end");
+        log.debug("AccountChain deposit scan job begin");
+        workflowService.scanDeposits();
+        log.debug("AccountChain deposit scan job end");
     }
 }

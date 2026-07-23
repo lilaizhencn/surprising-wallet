@@ -9,14 +9,14 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class AccountChainMoneroWorkflowJob {
+public class AccountChainMoneroJob {
 
     private final AccountChainWorkflowService workflowService;
 
     @Scheduled(scheduler = "accountTaskScheduler", cron = "3/10 * * * * ?")
     public void run() {
-        log.debug("AccountChain Monero workflow job begin");
+        log.debug("AccountChain Monero job begin");
         workflowService.moneroWorkflow();
-        log.debug("AccountChain Monero workflow job end");
+        log.debug("AccountChain Monero job end");
     }
 }
