@@ -2,10 +2,9 @@ package com.surprising.wallet.sig.first;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
-/**
- * @author lilaizhencn
- */
+@EnableScheduling
 @SpringBootApplication(
         scanBasePackages = {
                 "com.surprising"
