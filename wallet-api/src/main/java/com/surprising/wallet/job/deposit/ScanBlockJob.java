@@ -20,7 +20,7 @@ import java.util.Optional;
  * @author atomex
  */
 @Slf4j
-abstract public class AbstractScanBlockJob {
+abstract public class ScanBlockJob {
     protected AssetRuntimeMetadata currency;
     @Autowired
     protected TransactionService txService;

@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @Slf4j
-public class BtcUtxoBatchJob extends AbstractUtxoBatchJob {
+public class BtcUtxoBatchJob extends UtxoBatchJob {
     @Override
     protected String chain() {
         return "BTC";

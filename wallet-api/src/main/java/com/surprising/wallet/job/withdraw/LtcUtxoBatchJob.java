@@ -8,7 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @Slf4j
-public class LtcUtxoBatchJob extends AbstractUtxoBatchJob {
+public class LtcUtxoBatchJob extends UtxoBatchJob {
     @Override
     protected String chain() {
         return "LTC";

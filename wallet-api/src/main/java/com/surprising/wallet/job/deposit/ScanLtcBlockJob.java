@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @Slf4j
-public class ScanLtcBlockJob extends AbstractScanUtxoBlockJob {
+public class ScanLtcBlockJob extends ScanUtxoBlockJob {
     @Override
     protected String chain() {
         return "LTC";

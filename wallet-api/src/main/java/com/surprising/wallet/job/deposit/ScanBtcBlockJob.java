@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @Slf4j
-public class ScanBtcBlockJob extends AbstractScanUtxoBlockJob {
+public class ScanBtcBlockJob extends ScanUtxoBlockJob {
     @Override
     protected String chain() {
         return "BTC";

@@ -27,7 +27,7 @@ import java.util.*;
  * @author atomex
  */
 @Slf4j
-abstract public class AbstractUtxoBatchJob {
+abstract public class UtxoBatchJob {
     //一次处理10笔交易
     private final int COUNT = 10;
     public AssetRuntimeMetadata currency;

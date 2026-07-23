@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
-public class DogeUtxoBatchJob extends AbstractUtxoBatchJob {
+public class DogeUtxoBatchJob extends UtxoBatchJob {
     @Override
     protected String chain() {
         return "DOGE";
