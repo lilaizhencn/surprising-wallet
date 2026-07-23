@@ -5,7 +5,7 @@
   "scripts": {
     "node": "hardhat node",
     "compile": "hardhat compile",
-    "test:7702": "hardhat test test/eip7702-collection.test.js",
+    "test:7702": "hardhat test test/eip7702-collection.test.js test/eip7702-payout.test.js",
     "deploy:mock": "hardhat run --no-compile scripts/deploy-mock-erc20.js --network localhost",
     "deploy:7702": "hardhat run scripts/deploy-eip7702-collection.js --network localhost",
     "configure:7702:devtest": "node scripts/configure-eip7702-devtest.js",

@@ -543,24 +543,37 @@ public class Evm7702CollectionRepository {
         if (attempts != 0) {
             throw new IllegalStateException("signed/outbox batch cannot be released as unbroadcast");
         }
+        if (jdbc.update("""
+                update evm_collection_batch
+                   set status = 'FAILED', error_code = ?, error_message = ?, updated_at = now()
+                 where tenant_id = ? and id = ? and status in ('LOCKED', 'SIGNING')
+                """, errorCode, truncate(errorMessage, 1000), batch.tenantId(), batch.id()) != 1) {
+            throw new IllegalStateException("unbroadcast batch failure transition failed");
+        }
+        jdbc.update("""
+                update evm_collection_batch_item item
+                   set status = case when (
+                         select count(*)
+                           from evm_collection_batch_item history
+                           join evm_collection_batch failed_batch
+                             on failed_batch.tenant_id = history.tenant_id
+                            and failed_batch.id = history.batch_id
+                          where history.tenant_id = item.tenant_id
+                            and history.collection_record_id = item.collection_record_id
+                            and failed_batch.status = 'FAILED'
+                       ) >= 3 then 'FAILED' else 'RETRYABLE' end,
+                       error_code = ?, updated_at = now()
+                 where item.tenant_id = ? and item.batch_id = ? and item.status = 'CREATED'
+                """, errorCode, batch.tenantId(), batch.id());
         jdbc.update("""
                 update collection_record cr
-                   set status = 'RETRYING', error_message = ?, updated_at = now()
+                   set status = case when item.status = 'FAILED' then 'FAILED' else 'RETRYING' end,
+                       error_message = ?, updated_at = now()
                   from evm_collection_batch_item item
                  where item.tenant_id = ? and item.batch_id = ?
                    and cr.tenant_id = item.tenant_id and cr.id = item.collection_record_id
                    and cr.status = 'SIGNING'
                 """, truncate(errorMessage, 1000), batch.tenantId(), batch.id());
-        jdbc.update("""
-                update evm_collection_batch_item
-                   set status = 'RETRYABLE', error_code = ?, updated_at = now()
-                 where tenant_id = ? and batch_id = ? and status = 'CREATED'
-                """, errorCode, batch.tenantId(), batch.id());
-        jdbc.update("""
-                update evm_collection_batch
-                   set status = 'FAILED', error_code = ?, error_message = ?, updated_at = now()
-                 where tenant_id = ? and id = ? and status in ('LOCKED', 'SIGNING')
-                """, errorCode, truncate(errorMessage, 1000), batch.tenantId(), batch.id());
     }
 
     private RuntimeConfig mapConfig(ResultSet rs) throws SQLException {

@@ -78,6 +78,30 @@ class AccountChainWorkflowServiceTest {
     }
 
     @Test
+    void eip7702ManagedNativeCollectionKeepsTheFullAuthorityBalance() throws Exception {
+        EvmCollectionRepository repository = new EvmCollectionRepository(true);
+        CapturingEvmFeeService evm = new CapturingEvmFeeService();
+        AccountChainWorkflowService service = service(repository, evm);
+        AccountChainProfile profile = AccountChainProfile.builder()
+                .chain("ETH")
+                .network("devtest")
+                .family("evm")
+                .nativeSymbol("ETH")
+                .defaultFee(1L)
+                .dustThreshold(0L)
+                .enabled(true)
+                .build();
+
+        Method method = AccountChainWorkflowService.class.getDeclaredMethod(
+                "createCollectionCandidates", AccountChainProfile.class);
+        method.setAccessible(true);
+        method.invoke(service, profile);
+
+        assertEquals(0, new BigDecimal("5").compareTo(repository.collectionAmount));
+        assertTrue(repository.created);
+    }
+
+    @Test
     void broadcastFailureKeepsFundsLockedForManualAudit() throws Exception {
         ChainAddressRecord address = ChainAddressRecord.builder()
                 .chain("ETH")
@@ -547,9 +571,15 @@ class AccountChainWorkflowServiceTest {
         private final UUID custodyAddressId = UUID.fromString("77020000-0000-0000-0000-000000000012");
         private BigDecimal collectionAmount;
         private boolean created;
+        private final boolean eip7702Managed;
 
         private EvmCollectionRepository() {
+            this(false);
+        }
+
+        private EvmCollectionRepository(boolean eip7702Managed) {
             super(null);
+            this.eip7702Managed = eip7702Managed;
         }
 
         @Override
@@ -592,6 +622,11 @@ class AccountChainWorkflowServiceTest {
         @Override
         public boolean isEvm7702NativeCollectionActive(String chain, String network) {
             return false;
+        }
+
+        @Override
+        public boolean isEvm7702Managed(String chain, String network) {
+            return eip7702Managed;
         }
 
         @Override

@@ -222,7 +222,7 @@ public class AccountChainWorkflowService {
             return;
         }
         if ("evm".equalsIgnoreCase(profile.getFamily())
-                && repository.isEvm7702BatchWithdrawalActive(
+                && repository.isEvm7702Managed(
                         profile.getChain(), profile.getNetwork())) {
             return;
         }
@@ -243,11 +243,6 @@ public class AccountChainWorkflowService {
     }
 
     private void confirmWithdrawals(AccountChainProfile profile) {
-        if ("evm".equalsIgnoreCase(profile.getFamily())
-                && repository.isEvm7702BatchWithdrawalActive(
-                        profile.getChain(), profile.getNetwork())) {
-            return;
-        }
         for (WithdrawalOrderRecord order : repository.listWithdrawalsByStatus(
                 profile.getChain(), "SENT", CONFIRM_LIMIT)) {
             try {
@@ -261,6 +256,11 @@ public class AccountChainWorkflowService {
 
     private void processCollections(AccountChainProfile profile) {
         if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_COLLECTION)) {
+            return;
+        }
+        if ("evm".equalsIgnoreCase(profile.getFamily())
+                && repository.isEvm7702Managed(profile.getChain(), profile.getNetwork())
+                && !repository.isEvm7702CollectionActive(profile.getChain(), profile.getNetwork())) {
             return;
         }
         createCollectionCandidates(profile);
@@ -462,9 +462,7 @@ public class AccountChainWorkflowService {
 
     private void processCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {
         if ("evm".equalsIgnoreCase(profile.getFamily())
-                && repository.isEvm7702CollectionActive(profile.getChain(), profile.getNetwork())
-                && (!isNative(profile, record.getAssetSymbol())
-                || repository.isEvm7702NativeCollectionActive(profile.getChain(), profile.getNetwork()))) {
+                && repository.isEvm7702Managed(profile.getChain(), profile.getNetwork())) {
             return;
         }
         ChainAddressRecord from = requireAddress(record.getChain(), record.getAssetSymbol(), record.getFromAddress());
@@ -871,7 +869,7 @@ public class AccountChainWorkflowService {
             return amount;
         }
         if ("evm".equalsIgnoreCase(profile.getFamily())
-                && repository.isEvm7702NativeCollectionActive(profile.getChain(), profile.getNetwork())) {
+                && repository.isEvm7702Managed(profile.getChain(), profile.getNetwork())) {
             return amount;
         }
         if ("XRP".equals(profile.getChain())) {

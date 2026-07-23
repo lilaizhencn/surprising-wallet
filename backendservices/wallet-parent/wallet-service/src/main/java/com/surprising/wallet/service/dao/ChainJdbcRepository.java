@@ -2358,6 +2358,14 @@ public class ChainJdbcRepository {
         return Boolean.TRUE.equals(active);
     }
 
+    public boolean isEvm7702Managed(String chain, String network) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                select exists(select 1 from evm_7702_config
+                               where chain = ? and network = ?
+                                 and status in ('ACTIVE', 'PAUSED'))
+                """, Boolean.class, chain, network));
+    }
+
     public boolean isEvm7702NativeCollectionActive(String chain, String network) {
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
                 select exists(select 1 from evm_7702_config

@@ -215,8 +215,11 @@ class Evm7702ProductionFlowIntegrationTest {
             configureToken("USDT", usdt.address());
             configureToken("USDC", usdc.address());
 
-            TenantFixture tenantA = createTenant("tenant-7702-a", 8101, 3, 1000L);
-            TenantFixture tenantB = createTenant("tenant-7702-b", 8102, 2, 2000L);
+            // The dev node is intentionally persistent. Use a fresh derivation namespace on every
+            // run so a prior test's 7702 delegation and nonce cannot leak into this test fixture.
+            int runNamespace = 10_000 + adminNonce.mod(BigInteger.valueOf(1_000_000)).intValueExact() * 2;
+            TenantFixture tenantA = createTenant("tenant-7702-a", runNamespace, 3, 1000L);
+            TenantFixture tenantB = createTenant("tenant-7702-b", runNamespace + 1, 2, 2000L);
             for (AuthorityFixture authority : concat(tenantA.authorities(), tenantB.authorities())) {
                 TransactionReceipt mint = sendLegacyCall(web3j, adminNonce, usdt.address(),
                         encodeMint(authority.credentials().getAddress(), authority.amountAtomic()));
@@ -232,19 +235,34 @@ class Evm7702ProductionFlowIntegrationTest {
             jdbc.update("update evm_7702_config set delegate_code_hash = ? where chain = ? and network = 'local'",
                     "0x" + "00".repeat(32), chain);
             assertThrows(IllegalStateException.class, () -> workflow.processOne(profile));
-            assertEquals(1, jdbc.queryForObject("""
+            assertThrows(IllegalStateException.class, () -> workflow.processOne(profile));
+            assertThrows(IllegalStateException.class, () -> workflow.processOne(profile));
+            assertEquals(3, jdbc.queryForObject("""
                     select count(*) from evm_collection_batch
                      where tenant_id = ? and status = 'FAILED'
                     """, Integer.class, tenantA.tenantId()));
-            assertEquals(tenantA.authorities().size(), jdbc.queryForObject("""
+            assertEquals(tenantA.authorities().size() * 2, jdbc.queryForObject("""
                     select count(*) from evm_collection_batch_item
                      where tenant_id = ? and status = 'RETRYABLE'
                     """, Integer.class, tenantA.tenantId()));
+            assertEquals(tenantA.authorities().size(), jdbc.queryForObject("""
+                    select count(*) from evm_collection_batch_item
+                     where tenant_id = ? and status = 'FAILED'
+                    """, Integer.class, tenantA.tenantId()));
+            assertEquals(tenantA.authorities().size(), jdbc.queryForObject("""
+                    select count(*) from collection_record
+                     where tenant_id = ? and status = 'FAILED'
+                    """, Integer.class, tenantA.tenantId()));
             jdbc.update("update evm_7702_config set delegate_code_hash = ? where chain = ? and network = 'local'",
                     delegateHash, chain);
+            jdbc.update("""
+                    update collection_record
+                       set status = 'RETRYING', error_message = null, updated_at = now()
+                     where tenant_id = ? and status = 'FAILED'
+                    """, tenantA.tenantId());
 
             String tenantATx = workflow.processOne(profile).orElseThrow();
-            assertEquals(2, batchCount(tenantA.tenantId()));
+            assertEquals(4, batchCount(tenantA.tenantId()));
             assertEquals(0, batchCount(tenantB.tenantId()));
             simulateLostBroadcastResponse(tenantA.tenantId());
             workflow.recoverUnknown(profile);
@@ -267,7 +285,7 @@ class Evm7702ProductionFlowIntegrationTest {
             workflow.confirm(profile);
             assertTenantCompleted(web3j, tenantB, tenantBTx);
 
-            assertEquals(3, jdbc.queryForObject("select count(*) from evm_collection_batch", Integer.class));
+            assertEquals(5, jdbc.queryForObject("select count(*) from evm_collection_batch", Integer.class));
             assertEquals(2, jdbc.queryForObject("select count(*) from custody_gas_usage where operation_type = 'COLLECTION_BATCH' and status = 'SETTLED'", Integer.class));
             assertEquals(2, jdbc.queryForObject("select count(distinct canonical_tx_hash) from evm_collection_batch", Integer.class));
             assertEquals(0, jdbc.queryForObject("""
@@ -284,6 +302,10 @@ class Evm7702ProductionFlowIntegrationTest {
                     new BigInteger("2000000000000000000"),
                     new BigInteger("1500000000000000000")
             };
+            BigInteger tenantANativeBalanceBefore = web3j.ethGetBalance(
+                    tenantA.hotWallet(), DefaultBlockParameterName.LATEST).send().getBalance();
+            BigInteger tenantBNativeBalanceBefore = web3j.ethGetBalance(
+                    tenantB.hotWallet(), DefaultBlockParameterName.LATEST).send().getBalance();
             for (int index = 0; index < nativeAuthorities.size(); index++) {
                 AuthorityFixture authority = nativeAuthorities.get(index);
                 TransactionReceipt deposit = sendLegacyNative(
@@ -301,8 +323,11 @@ class Evm7702ProductionFlowIntegrationTest {
             String tenantBNativeCollectionTx = workflow.processOne(profile).orElseThrow();
             workflow.confirm(profile);
             assertNotEquals(tenantANativeCollectionTx, tenantBNativeCollectionTx);
-            assertEquals(new BigInteger("3000000000000000000"),
+            assertEquals(tenantANativeBalanceBefore.add(new BigInteger("3000000000000000000")),
                     web3j.ethGetBalance(tenantA.hotWallet(), DefaultBlockParameterName.LATEST)
+                            .send().getBalance());
+            assertEquals(tenantBNativeBalanceBefore.add(new BigInteger("1500000000000000000")),
+                    web3j.ethGetBalance(tenantB.hotWallet(), DefaultBlockParameterName.LATEST)
                             .send().getBalance());
 
             String recipientOne = "0x6000000000000000000000000000000000000001";
