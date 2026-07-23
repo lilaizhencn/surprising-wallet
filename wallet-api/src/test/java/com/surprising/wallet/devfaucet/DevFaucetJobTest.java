@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.surprising.wallet.devfaucet.repository.DevFaucetRepository.Candidate;
 import com.surprising.wallet.devfaucet.model.DevFaucetAmountGenerator;
 import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
-import com.surprising.wallet.devfaucet.job.DevFaucetJob;
+import com.surprising.wallet.job.devfaucet.DevFaucetJob;
 import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
 import com.surprising.wallet.devfaucet.repository.DevFaucetRepository;
 import com.surprising.wallet.devfaucet.service.DevFaucetRpcClient;

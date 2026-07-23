@@ -1,5 +1,5 @@
 package com.surprising.wallet.custody;
-import com.surprising.wallet.custody.job.CustodyWithdrawalReconciliationJob;
+import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.service.CustodyCryptoService;
 import com.surprising.wallet.custody.service.CustodyWithdrawalService;

@@ -40,14 +40,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.custody.service.CustodyCryptoService;
 import com.surprising.wallet.custody.observer.CustodyDepositCreditObserver;
-import com.surprising.wallet.custody.config.CustodyJacksonConfiguration;
+import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodySecurityProperties;
 import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
-import com.surprising.wallet.custody.job.CustodyWebhookDispatcher;
+import com.surprising.wallet.job.custody.CustodyWebhookDispatcher;
 import com.surprising.wallet.custody.model.CustodyWebhookRetryPolicy;
 import com.surprising.wallet.custody.service.CustodyWebhookService;
-import com.surprising.wallet.custody.job.CustodyWithdrawalReconciliationJob;
+import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
 
 class CustodyMultiChainLoadIntegrationTest {
     private static final List<ChainAsset> CHAINS = List.of(

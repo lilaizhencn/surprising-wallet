@@ -34,7 +34,7 @@ import com.surprising.wallet.custody.service.CustodyAddressService;
 import com.surprising.wallet.custody.repository.CustodyAssetDashboardRepository;
 import com.surprising.wallet.custody.service.CustodyAssetDashboardService;
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
-import com.surprising.wallet.custody.config.CustodyJacksonConfiguration;
+import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;

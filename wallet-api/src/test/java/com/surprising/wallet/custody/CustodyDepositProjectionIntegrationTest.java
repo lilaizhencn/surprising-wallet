@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.custody.observer.CustodyDepositCreditObserver;
-import com.surprising.wallet.custody.config.CustodyJacksonConfiguration;
+import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
 

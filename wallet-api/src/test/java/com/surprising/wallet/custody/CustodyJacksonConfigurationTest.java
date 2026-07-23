@@ -7,7 +7,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import com.surprising.wallet.custody.config.CustodyJacksonConfiguration;
+import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 
 class CustodyJacksonConfigurationTest {
     @Test

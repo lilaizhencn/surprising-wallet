@@ -20,7 +20,7 @@ import com.surprising.wallet.custody.service.CustodyAssetRecoveryService.Approve
 import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway;
 import com.surprising.wallet.custody.repository.CustodyAssetRecoveryRepository;
 import com.surprising.wallet.custody.service.CustodyAssetRecoveryService;
-import com.surprising.wallet.custody.config.CustodyJacksonConfiguration;
+import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway.ExecutionRequest;

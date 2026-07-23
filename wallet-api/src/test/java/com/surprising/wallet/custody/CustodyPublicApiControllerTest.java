@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.surprising.wallet.custody.controller.api.CustodyPublicApiController.CreatePublicAddressRequest;
-import com.surprising.wallet.custody.config.CustodyJacksonConfiguration;
+import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.custody.controller.api.CustodyPublicApiController;
 
 class CustodyPublicApiControllerTest {
