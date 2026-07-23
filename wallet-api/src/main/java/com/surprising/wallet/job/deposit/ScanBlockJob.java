@@ -9,6 +9,7 @@ import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import com.surprising.wallet.service.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
 
 import java.time.Instant;
@@ -17,34 +18,29 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 区块扫描基类。
+ * UTXO 链区块扫描器。
  * <p>
  * 按区块逐块扫描链上交易，将充值交易写入数据库并推进扫描高度。
- * 子类只需覆写 {@link #chain()} 返回链标识（如 BTC、LTC），其余逻辑由本类统一处理：
- * <ol>
- *   <li>从 DB 读取已扫描高度，与链上最新高度对比</li>
- *   <li>逐块调用链适配器查询相关交易</li>
- *   <li>将交易写入 deposit_record / utxo_record</li>
- *   <li>更新 scan_height 检查点</li>
- *   <li>刷新链上总余额</li>
- * </ol>
+ * 由 {@link UtxoDepositScanJob} 调度，每次传入一条链标识（BTC/BCH/LTC/DOGE）。
  *
  * @author atomex
  */
 @Slf4j
-abstract public class ScanBlockJob {
-    protected AssetRuntimeMetadata currency;
-    @Autowired
-    protected TransactionService txService;
-    @Autowired
-    ChainJdbcRepository chainJdbcRepository;
-    @Autowired
-    BlockchainRuntimeService blockchainRuntimeService;
-    @Autowired
-    WalletRuntimeConfigService runtimeConfigService;
+@Component
+public class ScanBlockJob {
 
-    public void execute() {
-        String chain = chain();
+    private AssetRuntimeMetadata currency;
+
+    @Autowired
+    private TransactionService txService;
+    @Autowired
+    private ChainJdbcRepository chainJdbcRepository;
+    @Autowired
+    private BlockchainRuntimeService blockchainRuntimeService;
+    @Autowired
+    private WalletRuntimeConfigService runtimeConfigService;
+
+    public void scan(String chain) {
         if (!runtimeConfigService.isTaskEnabled(chain, WalletRuntimeConfigService.TASK_SCAN)) {
             log.debug("{} scan skipped: DB scan switch disabled", chain);
             return;
@@ -53,16 +49,10 @@ abstract public class ScanBlockJob {
         log.info("扫描 {} 交易 开始", requireCurrency().getName());
         Long bestHeight = null;
         try {
-            //先更新数据库中已有的交易的确认数
             blockchainRuntimeService.updateTransactionConfirmations(requireCurrency());
-
-            //查询链上的最新区块高度
             bestHeight = blockchainRuntimeService.bestHeight(requireCurrency());
-
-            //查询数据库中已经同步的区块高度
             BestBlockHeight storedHeight = getDbBestBlockHeight();
 
-            //初始化best block height 表
             if (ObjectUtils.isEmpty(storedHeight)) {
                 storedHeight = new BestBlockHeight();
                 boolean insertFlag = initCurrencyBestHeight(storedHeight, bestHeight);
@@ -88,11 +78,7 @@ abstract public class ScanBlockJob {
                 return;
             }
 
-            //循环扫描某个阶段的区块
-            long scanBegin = isDatabaseDrivenUtxo(requireCurrency())
-                    ? Math.max(0L, storedHeight.getHeight() + 1L)
-                    : Math.max(0L, storedHeight.getHeight()
-                            - blockchainRuntimeService.depositConfirmationThreshold(requireCurrency()));
+            long scanBegin = Math.max(0L, storedHeight.getHeight() + 1L);
             long scanEnd = bestHeight;
             long maxBlocksPerRun = runtimeConfigService.scanMaxBlocksPerRun(requireCurrency());
             if (maxBlocksPerRun > 0) {
@@ -100,12 +86,8 @@ abstract public class ScanBlockJob {
             }
             long lastScannedHeight = storedHeight.getHeight();
             for (long begin = scanBegin; begin <= scanEnd; begin++) {
-
-                //具体扫描区块处理逻辑
                 List<TransactionDTO> transactions =
                         blockchainRuntimeService.findRelatedTransactions(requireCurrency(), begin);
-
-                //当前区块没有交易数据 进入下一区块
                 if (transactions == null) {
                     break;
                 }
@@ -113,16 +95,11 @@ abstract public class ScanBlockJob {
                 if (transactions.size() == 0) {
                     continue;
                 }
-
-                //推送查询到的交易数据
                 txService.saveTransaction(transactions);
             }
 
-            //更新数据库最新扫描完的区块
             updateStoreHeight(lastScannedHeight, storedHeight);
             bestHeight = lastScannedHeight;
-
-            //更新币种余额
             blockchainRuntimeService.updateTotalBalance(requireCurrency());
 
         } catch (Throwable e) {
@@ -131,58 +108,37 @@ abstract public class ScanBlockJob {
         log.info("扫描 {} 交易高度结束 当前高度:{}", requireCurrency().getName(), bestHeight);
     }
 
-    protected abstract String chain();
-
-    protected AssetRuntimeMetadata requireCurrency() {
+    private AssetRuntimeMetadata requireCurrency() {
         if (currency == null) {
             throw new IllegalStateException("scan job runtime currency is not configured");
         }
         return currency;
     }
 
-    /**
-     * 更新数据库扫描到的高度
-     *
-     * @param bestHeight   区块上的高度
-     * @param storedHeight 数据库的高度
-     */
-    protected void updateStoreHeight(Long bestHeight, BestBlockHeight storedHeight) {
+    private void updateStoreHeight(Long bestHeight, BestBlockHeight storedHeight) {
         storedHeight.setHeight(bestHeight);
         storedHeight.setUpdateDate(Date.from(Instant.now()));
-        if (isDatabaseDrivenUtxo(requireCurrency())) {
-            String chain = chainName(requireCurrency());
-            // UTXO confirmations are refreshed from stored transactions; this checkpoint is the last scanned block.
-            long safeHeight = Math.max(0L, bestHeight);
-            chainJdbcRepository.updateScanHeight(
-                    chain, scannerName(requireCurrency()), bestHeight, safeHeight);
-            return;
-        }
-        throw new IllegalStateException(
-                "legacy scan-height runtime is disabled for " + requireCurrency().getName());
+        String chain = blockchainRuntimeService.chainName(requireCurrency());
+        long safeHeight = Math.max(0L, bestHeight);
+        chainJdbcRepository.updateScanHeight(
+                chain, blockchainRuntimeService.scannerName(requireCurrency()), bestHeight, safeHeight);
     }
 
-    /**
-     * 查询数据库中已经扫描到的高度
-     */
-    protected BestBlockHeight getDbBestBlockHeight() {
-        if (isDatabaseDrivenUtxo(requireCurrency())) {
-            AssetRuntimeMetadata currency = requireCurrency();
-            String chain = chainName(currency);
-            Optional<Long> scanHeight =
-                    chainJdbcRepository.findScanSafeHeight(chain, scannerName(currency));
-            if (scanHeight.isPresent()) {
-                return checkpoint(currency, scanHeight.get());
-            }
-            return null;
+    private BestBlockHeight getDbBestBlockHeight() {
+        String chain = blockchainRuntimeService.chainName(requireCurrency());
+        Optional<Long> scanHeight =
+                chainJdbcRepository.findScanSafeHeight(chain, blockchainRuntimeService.scannerName(requireCurrency()));
+        if (scanHeight.isPresent()) {
+            BestBlockHeight checkpoint = new BestBlockHeight();
+            checkpoint.setCurrency(requireCurrency().getIndex());
+            checkpoint.setHeight(scanHeight.get());
+            checkpoint.setUpdateDate(Date.from(Instant.now()));
+            return checkpoint;
         }
-        throw new IllegalStateException(
-                "legacy scan-height runtime is disabled for " + requireCurrency().getName());
+        return null;
     }
 
-    /**
-     * 初始化扫描的区块高度
-     */
-    protected boolean initCurrencyBestHeight(BestBlockHeight storedHeight, Long bestHeight) {
+    private boolean initCurrencyBestHeight(BestBlockHeight storedHeight, Long bestHeight) {
         long initialHeight = bestHeight;
         long configuredStartHeight = runtimeConfigService.scanStartHeight(requireCurrency());
         if (configuredStartHeight > 0) {
@@ -190,33 +146,10 @@ abstract public class ScanBlockJob {
         }
         storedHeight.setHeight(initialHeight);
         storedHeight.setCurrency(requireCurrency().getIndex());
-        if (isDatabaseDrivenUtxo(requireCurrency())) {
-            chainJdbcRepository.updateScanHeight(
-                    chainName(requireCurrency()), scannerName(requireCurrency()),
-                    initialHeight, initialHeight);
-            return true;
-        }
-        throw new IllegalStateException(
-                "legacy scan-height runtime is disabled for " + requireCurrency().getName());
-    }
-
-    private boolean isDatabaseDrivenUtxo(AssetRuntimeMetadata currency) {
-        return blockchainRuntimeService.isBitcoinLikeRuntime(currency);
-    }
-
-    private String chainName(AssetRuntimeMetadata currency) {
-        return blockchainRuntimeService.chainName(currency);
-    }
-
-    private String scannerName(AssetRuntimeMetadata currency) {
-        return blockchainRuntimeService.scannerName(currency);
-    }
-
-    private BestBlockHeight checkpoint(AssetRuntimeMetadata currency, Long height) {
-        BestBlockHeight checkpoint = new BestBlockHeight();
-        checkpoint.setCurrency(currency.getIndex());
-        checkpoint.setHeight(height);
-        checkpoint.setUpdateDate(Date.from(Instant.now()));
-        return checkpoint;
+        chainJdbcRepository.updateScanHeight(
+                blockchainRuntimeService.chainName(requireCurrency()),
+                blockchainRuntimeService.scannerName(requireCurrency()),
+                initialHeight, initialHeight);
+        return true;
     }
 }
