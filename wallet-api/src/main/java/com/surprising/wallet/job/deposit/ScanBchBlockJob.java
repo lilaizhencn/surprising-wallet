@@ -4,7 +4,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
-public class ScanBchBlockJob extends ScanUtxoBlockJob {
+public class ScanBchBlockJob extends ScanBlockJob {
     @Override
     protected String chain() {
         return "BCH";
