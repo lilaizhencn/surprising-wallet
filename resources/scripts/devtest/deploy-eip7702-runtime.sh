@@ -52,11 +52,11 @@ EIP7702_DEPLOYMENT_FILE=$DEVTEST_DEPLOYMENT_FILE \
 EIP7702_ALLOW_OVERWRITE=true \
 EVM_CHAIN=ETH \
 EVM_NETWORK=devtest \
-  npm --prefix "$DEVTEST_ROOT/evm-fork" run deploy:7702
+  npm --prefix "$DEVTEST_ROOT/resources/infra/evm-fork" run deploy:7702
 
 EIP7702_DEPLOYMENT_FILE=$DEVTEST_DEPLOYMENT_FILE \
 EVM_VERIFY_RPC_URL=$DEVTEST_RPC_URL \
-  npm --prefix "$DEVTEST_ROOT/evm-fork" run verify:7702
+  npm --prefix "$DEVTEST_ROOT/resources/infra/evm-fork" run verify:7702
 
 curl -fsS --max-time 2 \
   -H 'content-type: application/json' \
@@ -66,4 +66,4 @@ curl -fsS --max-time 2 \
 EIP7702_DEPLOYMENT_FILE=$DEVTEST_DEPLOYMENT_FILE \
 EVM_CHAIN=ETH \
 EVM_NETWORK=devtest \
-  node "$DEVTEST_ROOT/evm-fork/scripts/configure-eip7702-devtest.js"
+  node "$DEVTEST_ROOT/resources/infra/evm-fork/scripts/configure-eip7702-devtest.js"

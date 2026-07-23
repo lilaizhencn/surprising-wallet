@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-SERVICE_DIR="${ROOT_DIR}/services/polkadot-runtime-service"
+SERVICE_DIR="${ROOT_DIR}/infra/polkadot-runtime-service"
 IMAGE="${POLKADOT_RUNTIME_IMAGE:-surprising-wallet/polkadot-runtime-service:latest}"
 CONTAINER="${POLKADOT_RUNTIME_CONTAINER:-surprising-wallet-polkadot-runtime}"
 BIND_HOST="${POLKADOT_RUNTIME_BIND_HOST:-127.0.0.1}"

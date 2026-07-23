@@ -268,7 +268,7 @@ scripts/regtest/all-chain-regtest.sh reset
 安装依赖：
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 npm install
 cd ..
 ```

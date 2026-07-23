@@ -51,7 +51,7 @@ rsync -a \
   --exclude=.codegraph \
   --exclude=target \
   --exclude=node_modules \
-  --exclude=/evm-fork/artifacts \
+  --exclude=/resources/infra/evm-fork/artifacts \
   --exclude=logs \
   "$DOT_FLOW_SOURCE_ROOT/" "$DOT_FLOW_BUILD_ROOT/"
 
@@ -147,7 +147,7 @@ for port in "$DOT_FLOW_NATIVE_PORT" "$DOT_FLOW_ASSET_PORT"; do
 done
 
 docker build -t "$DOT_FLOW_RUNTIME_IMAGE" \
-  "$DOT_FLOW_BUILD_ROOT/services/polkadot-runtime-service" >/dev/null
+  "$DOT_FLOW_BUILD_ROOT/resources/infra/polkadot-runtime-service" >/dev/null
 docker run -d --name "$DOT_FLOW_RUNTIME" \
   --add-host host.docker.internal:host-gateway \
   -e POLKADOT_RUNTIME_API_KEY="$DOT_FLOW_API_KEY" \

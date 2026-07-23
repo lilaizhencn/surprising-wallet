@@ -29,13 +29,13 @@
 
 ### 3.1 合约
 
-- `../../../evm-fork/contracts/Eip7702Collection.sol`
+- `resources/infra/evm-fork/contracts/Eip7702Collection.sol`
   - `Eip7702CollectionDelegate`：充值 EOA 的受限归集逻辑；
   - `Eip7702BatchCollector`：Relayer 调用的批量入口；
   - 仅允许把指定原生币/Token 转到签名请求中的收款地址；
   - 没有任意 `call`、`approve`、`delegatecall` 或升级入口；
   - payable `receive()` 保证委托后的充值地址仍可接收原生币。
-- `../../../evm-fork/contracts/Eip7702Payout.sol`
+- `resources/infra/evm-fork/contracts/Eip7702Payout.sol`
   - `Eip7702PayoutDelegate`：租户热钱包的受限批量提币逻辑；
   - 只有部署时固化的 Relayer 可以执行；
   - 每个 item 在隔离子调用中执行，一个失败不会阻塞后续 item；
@@ -100,7 +100,7 @@
 ### 第 1 步：准备环境
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 npm ci
 npx hardhat compile
 npx hardhat test test/eip7702-collection.test.js test/eip7702-payout.test.js

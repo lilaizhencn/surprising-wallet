@@ -80,8 +80,8 @@ for url in \
   fi
 done
 
-if [[ ! -d "$EVM_SAAS_SOURCE_ROOT/evm-fork/node_modules" ]]; then
-  npm --prefix "$EVM_SAAS_SOURCE_ROOT/evm-fork" ci
+if [[ ! -d "$EVM_SAAS_SOURCE_ROOT/resources/infra/evm-fork/node_modules" ]]; then
+  npm --prefix "$EVM_SAAS_SOURCE_ROOT/resources/infra/evm-fork" ci
 fi
 
 rsync -a \
@@ -105,7 +105,7 @@ if [[ -z "$EVM_SAAS_WALLET_JAR" ]]; then
 fi
 
 (
-  cd "$EVM_SAAS_SOURCE_ROOT/evm-fork"
+  cd "$EVM_SAAS_SOURCE_ROOT/resources/infra/evm-fork"
   exec env HARDHAT_CHAIN_ID="$EVM_SAAS_CHAIN_ID" HARDHAT_DISABLE_TELEMETRY_PROMPT=true \
     ./node_modules/.bin/hardhat node --hostname 127.0.0.1 --port 8545
 ) >"$EVM_SAAS_TMP/hardhat.log" 2>&1 &
@@ -188,7 +188,7 @@ EVM_NETWORK="$EVM_SAAS_NETWORK" \
 TOKEN_SYMBOLS="$EVM_SAAS_TOKEN_SYMBOLS" \
 PG_URL="$(local_pg_uri "$EVM_SAAS_DB")" \
 DEPLOYMENT_OUT_DIR="$EVM_SAAS_TMP/deployments" \
-  npm --prefix "$EVM_SAAS_SOURCE_ROOT/evm-fork" run deploy:mock >/dev/null
+  npm --prefix "$EVM_SAAS_SOURCE_ROOT/resources/infra/evm-fork" run deploy:mock >/dev/null
 EVM_SAAS_DEPLOYMENT="$EVM_SAAS_TMP/deployments/$EVM_SAAS_CHAIN.json"
 
 SW_DB_URL="$EVM_SAAS_DB_URL" \

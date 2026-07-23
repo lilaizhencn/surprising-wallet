@@ -24,7 +24,7 @@ for attempt in $(seq 1 60); do
     --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
     "$DEVTEST_RPC_URL" 2>/dev/null | jq -r '.result // empty' || true)
   if [[ "$chain_id" == "$DEVTEST_EXPECTED_CHAIN_ID" ]]; then
-    exec npm --prefix "$DEVTEST_ROOT/evm-fork" run deploy:mock
+    exec npm --prefix "$DEVTEST_ROOT/resources/infra/evm-fork" run deploy:mock
   fi
   sleep 1
 done

@@ -120,9 +120,9 @@ status() {
       -H 'content-type: application/json' \
       --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
       http://127.0.0.1:8545 >/dev/null 2>&1; then
-    echo "==> evm-fork: running on 127.0.0.1:8545"
+    echo "==> resources/infra/evm-fork: running on 127.0.0.1:8545"
   else
-    echo "==> evm-fork: not running; test-evm starts forks one chain at a time"
+    echo "==> resources/infra/evm-fork: not running; test-evm starts forks one chain at a time"
   fi
   echo "==> sui: isolated local flow is available through test-sui"
   echo "==> solana: isolated local flow is available through test-solana"
@@ -152,7 +152,7 @@ test_utxo() {
 }
 
 test_evm() {
-  "${ROOT_DIR}/evm-fork/scripts/run-local-matrix.sh"
+  "${ROOT_DIR}/resources/infra/evm-fork/scripts/run-local-matrix.sh"
 }
 
 test_xmr() {

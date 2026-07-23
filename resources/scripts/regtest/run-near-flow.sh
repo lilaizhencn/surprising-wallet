@@ -34,7 +34,7 @@ rsync -a \
   --exclude=.codegraph \
   --exclude=target \
   --exclude=node_modules \
-  --exclude=/evm-fork/artifacts \
+  --exclude=/resources/infra/evm-fork/artifacts \
   --exclude=logs \
   "$NEAR_FLOW_SOURCE_ROOT/" "$NEAR_FLOW_BUILD_ROOT/"
 

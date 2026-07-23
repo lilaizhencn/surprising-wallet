@@ -44,7 +44,7 @@ rsync -a \
   --exclude=.codegraph \
   --exclude=target \
   --exclude=node_modules \
-  --exclude=/evm-fork/artifacts \
+  --exclude=/resources/infra/evm-fork/artifacts \
   --exclude=logs \
   "$CARDANO_FLOW_SOURCE_ROOT/" "$CARDANO_FLOW_BUILD_ROOT/"
 

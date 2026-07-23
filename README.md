@@ -5,6 +5,8 @@
 [多租户托管模型](resources/docs/zh/multi-tenant-custody.md) ·
 [API 契约](resources/docs/openapi/custody-v1.yaml) · [文档索引](resources/docs/README_CN.md)
 
+![架构图](resources/docs/assets/architecture-diagram.svg)
+
 ## 产品边界
 
 Surprising Wallet 负责：
@@ -53,9 +55,26 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 Bitcoin-like、EVM、TRON、Solana、TON、Aptos、Sui、XRP、
-Cardano、Polkadot、NEAR、Monero、HyperEVM 和 HyperCore。实际启用的网络和资产
-由数据库控制。
+运行模型覆盖 27 条链、14 个链族：
+
+| 链族 | 链 |
+|------|-----|
+| Bitcoin-like UTXO | BTC, LTC, DOGE, BCH |
+| EVM | ETH, BNB, POLYGON |
+| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM |
+| TRON | TRON |
+| Solana | SOL |
+| TON | TON |
+| Aptos | APT |
+| Sui | SUI |
+| XRP | XRP |
+| Cardano | ADA |
+| Polkadot | DOT |
+| NEAR | NEAR |
+| Monero | XMR |
+| HyperCore | HYPE |
+
+实际启用的网络和资产由数据库控制。
 
 ## 本地启动
 

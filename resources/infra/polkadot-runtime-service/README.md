@@ -23,7 +23,7 @@ Run with plain Docker, including hosts without Docker Compose:
 
 ```bash
 export POLKADOT_RUNTIME_API_KEY=change-me
-scripts/regtest/polkadot-runtime-service.sh up
+resources/scripts/regtest/polkadot-runtime-service.sh up
 ```
 
 The Java service calls this service through `chain_rpc_node` rows with
@@ -37,7 +37,7 @@ Linux private IP and store that private URL in `chain_rpc_node.rpc_url`:
 ```bash
 export POLKADOT_RUNTIME_API_KEY=change-me
 export POLKADOT_RUNTIME_BIND_HOST=172.31.x.x
-scripts/regtest/polkadot-runtime-service.sh up
+resources/scripts/regtest/polkadot-runtime-service.sh up
 ```
 
 Then set the DOT runtime row to `http://172.31.x.x:8787`. The private network or

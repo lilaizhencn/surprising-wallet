@@ -58,15 +58,22 @@
 | 链族 | 链 | 本地测试支持 | live/testnet 支持 |
 |---|---|---|---|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH | Docker regtest 节点 | 外部 RPC 配置 |
-| EVM | ETH, BNB, Polygon, Arbitrum, Optimism, Base, Avalanche, HyperEVM, Mantle, Linea, Scroll, Unichain | Hardhat fork | Sepolia、HyperEVM testnet、Mantle Sepolia、Linea Sepolia、Scroll Sepolia、Unichain Sepolia 和其他配置测试网 |
+| EVM | ETH, BNB, POLYGON | Hardhat fork | Sepolia、BSC testnet、Amoy |
+| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C | Hardhat fork | Sepolia L2、Avalanche Fuji |
+| EVM L2 (新增) | MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM | Hardhat fork | Mantle Sepolia、Linea Sepolia、Scroll Sepolia、Unichain Sepolia、HyperEVM testnet |
 | TRON | TRON | DB 测试 | Nile live flow |
-| Solana | SOL, SPL token | DB 测试 | Devnet live flow |
-| TON | TON, Jetton | DB 测试 | Testnet 连通性和 funded live flow |
-| Aptos | APT、Coin<T>、Fungible Asset | DB 测试 | Testnet live flow |
-| Sui | SUI, coin resource | DB 测试 | Testnet live flow |
-| HyperCore | USDC, HYPE, HIP-1 token | DB/API 测试 | Hyperliquid testnet API |
+| Solana | SOL | DB 测试 | Devnet live flow |
+| TON | TON | DB 测试 | Testnet |
+| Aptos | APT | DB 测试 | Testnet |
+| Sui | SUI | DB 测试 | Testnet |
+| XRP | XRP | DB 测试 | Testnet |
+| Cardano | ADA | DB 测试 | Preprod testnet |
+| Polkadot | DOT | 本地 dev 链 + Node.js Sidecar | Westend + Asset Hub |
+| NEAR | NEAR | DB 测试 | Testnet |
+| Monero | XMR | Docker regtest wallet-rpc | Testnet |
+| HyperCore | HYPE | DB/API 测试 | Hyperliquid testnet API |
 
-HyperEVM 复用 EVM 通用路径处理 HYPE 和 ERC20 token。HyperCore 使用独立的账户层适配器，通过官方 Hyperliquid `/info` 和 `/exchange` API 工作，不是 EVM JSON-RPC 链。参见 [HyperEVM 与 HyperCore 接入说明](hyperevm-hypercore.md)。
+HyperEVM 复用 EVM 通用路径。HyperCore 使用独立的账户层适配器，通过 Hyperliquid `/info` 和 `/exchange` API 工作。Polkadot 通过 `resources/infra/polkadot-runtime-service` Node.js 桥接服务与链交互。参见 [HyperEVM 与 HyperCore 接入说明](hyperevm-hypercore.md)。
 
 ## 签名模型
 
@@ -115,4 +122,4 @@ wallet-api 启动时会检查 `chain_profile`、`chain_rpc_node`、`wallet_key_c
 
 ## 运行目录
 
-`scripts`、`infra` 和 `evm-fork` 保留在仓库根目录 `resources/` 下，测试和脚本直接引用这些路径。
+`resources/` 下集中存放 infra（EVM fork、Polkadot sidecar、regtest、Move 合约、systemd 服务）、docs（文档、SQL）和 scripts（测试启动脚本）。

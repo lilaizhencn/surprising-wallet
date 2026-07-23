@@ -42,8 +42,8 @@ docker info >/dev/null
 local_pg_require
 local_pg_create "$TRON_FLOW_DB"
 TRON_FLOW_DB_URL=$(local_pg_jdbc_url "$TRON_FLOW_DB")
-if [[ ! -d "$TRON_FLOW_SOURCE_ROOT/evm-fork/node_modules/solc" ]]; then
-  npm ci --prefix "$TRON_FLOW_SOURCE_ROOT/evm-fork"
+if [[ ! -d "$TRON_FLOW_SOURCE_ROOT/resources/infra/evm-fork/node_modules/solc" ]]; then
+  npm ci --prefix "$TRON_FLOW_SOURCE_ROOT/resources/infra/evm-fork"
 fi
 
 rsync -a \
@@ -51,7 +51,7 @@ rsync -a \
   --exclude=.codegraph \
   --exclude=target \
   --exclude=node_modules \
-  --exclude=/evm-fork/artifacts \
+  --exclude=/resources/infra/evm-fork/artifacts \
   --exclude=logs \
   "$TRON_FLOW_SOURCE_ROOT/" "$TRON_FLOW_BUILD_ROOT/"
 

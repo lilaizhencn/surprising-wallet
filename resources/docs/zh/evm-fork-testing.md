@@ -1,9 +1,9 @@
 # EVM Fork 测试
 
 
-`../../../evm-fork` 目录包含 ETH、BNB、Polygon、Arbitrum、Optimism、Base、Avalanche C-Chain 和 HyperEVM 回归测试使用的 Hardhat fork 环境。
+`resources/infra/evm-fork` 目录包含 ETH、BNB、Polygon、Arbitrum、Optimism、Base、Avalanche C-Chain 和 HyperEVM 回归测试使用的 Hardhat fork 环境。
 
-该目录保留在仓库根目录，因为 `../../../scripts/regtest/all-chain-regtest.sh` 和 `../../../evm-fork/scripts/run-fork-regression.sh` 按固定路径解析它。
+该目录保留在仓库根目录，因为 `../../../scripts/regtest/all-chain-regtest.sh` 和 `resources/infra/evm-fork/scripts/run-fork-regression.sh` 按固定路径解析它。
 
 ## 依赖
 
@@ -16,7 +16,7 @@
 ## 安装
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 npm install
 cd ..
 ```
@@ -102,8 +102,8 @@ RPC 策略：
 |---|---|
 | `evm-fork/logs/*.hardhat.log` | Hardhat fork 日志 |
 | `evm-fork/deployments/*.json` | Mock token 部署元数据 |
-| `../../../evm-fork/contracts/MockERC20.sol` | 测试 ERC20 合约 |
-| `../../../evm-fork/scripts/deploy-mock-erc20.js` | 部署脚本 |
+| `resources/infra/evm-fork/contracts/MockERC20.sol` | 测试 ERC20 合约 |
+| `resources/infra/evm-fork/scripts/deploy-mock-erc20.js` | 部署脚本 |
 
 ## 常见失败
 

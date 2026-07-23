@@ -22,7 +22,7 @@ Gas；每个租户的 Token 只能归集到该租户自己的 `custody_gas_accou
 8. 达到确认数后，服务核验 canonical block、Collector 事件、逐项身份、精确 ERC-20 `Transfer` 和实际 Gas，一次性更新批次、
    collection、Authority 投影和租户 Gas 账本。
 
-合约源文件是 `../../../evm-fork/contracts/Eip7702Collection.sol`；Java 入口是
+合约源文件是 `resources/infra/evm-fork/contracts/Eip7702Collection.sol`；Java 入口是
 `Evm7702CollectionWorkflowService`。一批只有一个外层 txHash，每个 item 通过 `item_index + log_index` 独立审计。
 
 ## 2. 运行前准备
@@ -49,7 +49,7 @@ Gas；每个租户的 Token 只能归集到该租户自己的 `custody_gas_accou
 在仓库根目录执行：
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 npm ci
 npm run compile
 npm run test:7702
@@ -62,7 +62,7 @@ npm run test:7702
 终端 A：
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 HARDHAT_CHAIN_ID=31337 npm run node
 ```
 
@@ -70,7 +70,7 @@ HARDHAT_CHAIN_ID=31337 npm run node
 实际使用的地址：
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 export EVM_CHAIN=ETH
 export EVM_NETWORK=local
 export EIP7702_ADMIN_ADDRESS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
@@ -131,7 +131,7 @@ scripts/regtest/run-custody-db-tests.sh \
 先在受控终端注入 Sepolia RPC 和一次性部署签名器。不要把真实值写进 shell 脚本：
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 export EVM_DEPLOY_RPC_URL='<SEPOLIA_RPC_URL>'
 export EVM_DEPLOYER_PRIVATE_KEY='<ONE_TIME_TESTNET_DEPLOYER_PRIVATE_KEY>'
 export EVM_CHAIN=ETH
@@ -420,7 +420,7 @@ SHADOW 和灰度；不能原地修改 v1。Authority 在下一次安全批次中
 代码变更后至少执行：
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 npm run compile
 npm run test:7702
 

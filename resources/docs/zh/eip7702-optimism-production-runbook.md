@@ -70,7 +70,7 @@ mvn -pl wallet-api -am \
 ## 3. 本地合约和 chainId 11155420 验证
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 npm ci
 npm run compile
 npm run test:7702
@@ -80,7 +80,7 @@ HARDHAT_CHAIN_ID=11155420 npm run node
 另一个终端：
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 export EVM_CHAIN=OPTIMISM
 export EVM_NETWORK=local
 export EIP7702_ADMIN_ADDRESS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
@@ -139,7 +139,7 @@ totalFee     = executionFee + receipt.l1Fee + operatorFee
 只给部署账户和 Relayer 获取测试 ETH，不给 Authority 补 Gas：
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 export EVM_DEPLOY_RPC_URL='<DEDICATED_OP_SEPOLIA_RPC>'
 export EVM_DEPLOYER_PRIVATE_KEY='<CONTROLLED_TESTNET_DEPLOYER_PRIVATE_KEY>'
 export EVM_CHAIN=OPTIMISM

@@ -60,7 +60,7 @@ scripts/regtest/all-chain-regtest.sh test-utxo
 ## EVM Fork
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 npm install
 cd ..
 scripts/regtest/all-chain-regtest.sh test-evm

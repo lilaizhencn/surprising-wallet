@@ -150,7 +150,7 @@ class Evm7702Type4IntegrationTest {
     private static Deployment deployMockToken(
             Web3j web3j, BigInteger nonce, long chainId) throws Exception {
         Path artifact = projectRoot().resolve(
-                "evm-fork/artifacts/contracts/MockERC20.sol/MockERC20.json");
+                "resources/infra/evm-fork/artifacts/contracts/MockERC20.sol/MockERC20.json");
         JsonNode json = new ObjectMapper().readTree(Files.readString(artifact));
         String bytecode = json.path("bytecode").asText();
         assertTrue(bytecode.startsWith("0x") && bytecode.length() > 100);
@@ -232,7 +232,7 @@ class Evm7702Type4IntegrationTest {
     private static Path projectRoot() {
         Path current = Path.of("").toAbsolutePath();
         while (current != null) {
-            if (Files.exists(current.resolve("pom.xml")) && Files.isDirectory(current.resolve("evm-fork"))) {
+            if (Files.exists(current.resolve("pom.xml")) && Files.isDirectory(current.resolve("resources/infra/evm-fork"))) {
                 return current;
             }
             current = current.getParent();

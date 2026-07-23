@@ -52,7 +52,7 @@ type-4；不能替代第 8 节的有资金公开测试网 E2E。
 ## 3. 编译并测试合约
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 npm ci
 npm run compile
 npm run test:7702
@@ -67,14 +67,14 @@ npm run test:7702
 终端 A：
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 HARDHAT_CHAIN_ID=97 npm run node
 ```
 
 终端 B 使用 Hardhat 公开测试账户；这些地址和私钥只允许本地使用：
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 export EVM_CHAIN=BNB
 export EVM_NETWORK=local
 export EIP7702_ADMIN_ADDRESS=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
@@ -135,7 +135,7 @@ code hash 错误时不广播；广播结果未知时复用同一 raw transaction
 先从官方 faucet 获取最小测试资金，只给部署账户和 Relayer，禁止给 Authority 补 tBNB。通过受控 Secret 注入私钥：
 
 ```bash
-cd evm-fork
+cd resources/infra/evm-fork
 export EVM_DEPLOY_RPC_URL='https://bsc-testnet.bnbchain.org'
 export EVM_DEPLOYER_PRIVATE_KEY='<CONTROLLED_TESTNET_DEPLOYER_PRIVATE_KEY>'
 export EVM_CHAIN=BNB

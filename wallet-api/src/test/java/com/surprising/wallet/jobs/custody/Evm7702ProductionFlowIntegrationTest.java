@@ -349,7 +349,7 @@ class Evm7702ProductionFlowIntegrationTest {
 
             Deployment rejectingReceiver = deployContract(
                     web3j, adminNonce,
-                    "evm-fork/artifacts/contracts/TestPayoutReceiver.sol/TestPayoutReceiver.json");
+                    "resources/infra/evm-fork/artifacts/contracts/TestPayoutReceiver.sol/TestPayoutReceiver.json");
             adminNonce = adminNonce.add(BigInteger.ONE);
             String nativeRecipient = "0x6000000000000000000000000000000000000003";
             WithdrawalFixture retryingNative = createWithdrawal(
@@ -848,7 +848,7 @@ class Evm7702ProductionFlowIntegrationTest {
 
     private Deployment deployMockToken(Web3j web3j, BigInteger nonce, String symbol) throws Exception {
         JsonNode artifact = new ObjectMapper().readTree(Files.readString(projectRoot().resolve(
-                "evm-fork/artifacts/contracts/MockERC20.sol/MockERC20.json")));
+                "resources/infra/evm-fork/artifacts/contracts/MockERC20.sol/MockERC20.json")));
         String bytecode = artifact.path("bytecode").asText();
         String constructor = FunctionEncoder.encodeConstructor(List.of(
                 new Utf8String("Test " + symbol), new Utf8String(symbol), new Uint8(6)));
@@ -872,7 +872,7 @@ class Evm7702ProductionFlowIntegrationTest {
     private Deployment deployPayoutDelegate(
             Web3j web3j, BigInteger nonce, String executor) throws Exception {
         JsonNode artifact = new ObjectMapper().readTree(Files.readString(projectRoot().resolve(
-                "evm-fork/artifacts/contracts/Eip7702Payout.sol/Eip7702PayoutDelegate.json")));
+                "resources/infra/evm-fork/artifacts/contracts/Eip7702Payout.sol/Eip7702PayoutDelegate.json")));
         String constructor = FunctionEncoder.encodeConstructor(List.of(new Address(executor)));
         RawTransaction raw = RawTransaction.createContractTransaction(
                 nonce, GAS_PRICE, BigInteger.valueOf(5_000_000L), BigInteger.ZERO,
@@ -966,7 +966,7 @@ class Evm7702ProductionFlowIntegrationTest {
     private static Path projectRoot() {
         Path current = Path.of("").toAbsolutePath();
         while (current != null) {
-            if (Files.exists(current.resolve("pom.xml")) && Files.isDirectory(current.resolve("evm-fork"))) {
+            if (Files.exists(current.resolve("pom.xml")) && Files.isDirectory(current.resolve("resources/infra/evm-fork"))) {
                 return current;
             }
             current = current.getParent();

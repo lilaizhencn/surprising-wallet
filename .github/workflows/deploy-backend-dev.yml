@@ -12,7 +12,7 @@ on:
       - wallet-service/**
       - wallet-api/**
       - pom.xml
-      - infra/sql/**
+      - resources/docs/db/**
       - infra/systemd/surprising-wallet.service
       - scripts/deploy/backend-activate.sh
   workflow_dispatch:
@@ -85,7 +85,7 @@ jobs:
           scp -i "$HOME/.ssh/backend_deploy" \
             wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar \
             "$remote:$release/wallet-api.jar"
-          scp -i "$HOME/.ssh/backend_deploy" infra/sql/*.sql "$remote:$release/"
+          scp -i "$HOME/.ssh/backend_deploy" resources/docs/db/*.sql "$remote:$release/"
 
       - name: Activate and verify release
         env:

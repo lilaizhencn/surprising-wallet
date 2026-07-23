@@ -36,7 +36,7 @@ rsync -a \
   --exclude=.codegraph \
   --exclude=target \
   --exclude=node_modules \
-  --exclude=/evm-fork/artifacts \
+  --exclude=/resources/infra/evm-fork/artifacts \
   --exclude=logs \
   "$LOAD_ROOT/" "$LOAD_BUILD_ROOT/"
 
