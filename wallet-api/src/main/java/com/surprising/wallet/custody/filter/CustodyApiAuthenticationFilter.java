@@ -12,7 +12,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-import com.surprising.wallet.custody.model.CachedBodyHttpServletRequest;
+import com.surprising.wallet.config.custody.CachedBodyHttpServletRequest;
 import com.surprising.wallet.custody.service.CustodyApiKeyService;
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyHttpErrors;
