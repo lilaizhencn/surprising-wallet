@@ -6,12 +6,12 @@ server:
   port: ${SW_HTTP_PORT:8002}
 
 logging:
-  file:
-    path: ./logs
+  level:
+    default: INFO
 
 spring:
   application:
-    name: wallet-server
+    name: wallet-api
   task:
     scheduling:
       pool:

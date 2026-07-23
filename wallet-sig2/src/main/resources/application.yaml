@@ -1,6 +1,10 @@
 server:
   port: 8081
 
+logging:
+  level:
+    default: INFO
+
 spring:
   application:
     name: wallet-sig2
