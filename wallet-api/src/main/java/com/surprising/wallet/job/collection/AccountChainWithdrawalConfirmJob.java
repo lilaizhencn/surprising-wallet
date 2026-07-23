@@ -13,6 +13,13 @@ public class AccountChainWithdrawalConfirmJob {
 
     private final AccountChainWorkflowService workflowService;
 
+    /**
+ * Account-Chain 提现确认任务。
+ * <p>
+ * 每 30 秒（offset 15s）执行一次：遍历所有启用的 account-chain 链，
+ * 查询状态为 SENT 的 withdrawal_order，通过链上 RPC 确认交易是否
+ * 已打包上链，更新提现状态（CONFIRMED / FAILED）并写入 custody_event。
+ */
     @Scheduled(scheduler = "accountTaskScheduler", cron = "15/30 * * * * ?")
     public void run() {
         log.debug("AccountChain withdrawal confirm job begin");

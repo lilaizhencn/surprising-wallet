@@ -6,6 +6,14 @@ import org.springframework.stereotype.Component;
 
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 托管系统安全维护任务。
+ * <p>
+ * 每天凌晨 3:17 执行一次：清理过期的 session、idempotency key、
+ * API nonce 等安全相关数据，防止表膨胀。
+ *
+ * @author atomex
+ */
 @Slf4j
 @Component
 public class CustodyMaintenanceJob {

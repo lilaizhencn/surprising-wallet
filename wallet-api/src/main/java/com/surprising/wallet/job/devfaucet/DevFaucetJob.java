@@ -22,6 +22,17 @@ import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
 import com.surprising.wallet.devfaucet.repository.DevFaucetRepository;
 import com.surprising.wallet.devfaucet.service.DevFaucetRpcClient;
 
+/**
+ * 开发环境水龙头任务。
+ * <p>
+ * 仅在测试/dev 网络且 {@code sw.wallet.dev-faucet.enabled=true} 时启用。
+ * 定时向配置的测试地址转入测试币（BTC/ETH/USDT/USDC），
+ * 余额低于阈值时自动补充，支持配置单次金额和重试策略。
+ * <p>
+ * 生产环境此任务不会启动。
+ *
+ * @author atomex
+ */
 @Component
 @ConditionalOnProperty(prefix = "sw.wallet.dev-faucet", name = "enabled", havingValue = "true")
 public class DevFaucetJob {

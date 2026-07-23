@@ -13,6 +13,14 @@ public class AccountChainMoneroJob {
 
     private final AccountChainWorkflowService workflowService;
 
+    /**
+ * Monero（XMR）全流程串行任务。
+ * <p>
+ * 每 10 秒（offset 3s）执行一次：Monero 是隐私链，其充值扫描依赖
+ * wallet-rpc 导出 outputs，不能与提现/归集并行——因此 XMR 的
+ * 扫充值 → 处理提现 → 确认提现 → 处理归集 → 确认归集 五个步骤
+ * 在单链单次调用中串行完成，区别于其他链各步骤由独立 Job 并行调度。
+ */
     @Scheduled(scheduler = "accountTaskScheduler", cron = "3/10 * * * * ?")
     public void run() {
         log.debug("AccountChain Monero job begin");

@@ -9,6 +9,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 托管 Gas 费用对账任务。
+ * <p>
+ * 每 2 秒执行一次：扫描 DB 中状态为 OVERDUE 的 Gas 预留记录，
+ * 逐笔调用 settleGasUsage 结算实际 Gas 消耗，确保 Gas 账户余额与链上一致。
+ *
+ * @author atomex
+ */
 @Component
 public class CustodyGasReconciliationJob {
     private static final Logger log =

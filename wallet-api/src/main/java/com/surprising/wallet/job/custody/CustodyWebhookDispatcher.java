@@ -15,6 +15,15 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodyWebhookRetryPolicy;
 import com.surprising.wallet.custody.service.CustodyWebhookService;
 
+/**
+ * 托管 Webhook 派发任务。
+ * <p>
+ * 每 1 秒执行一次：从 DB 拉取待发送的 webhook delivery，
+ * 逐条 HTTP POST 到租户配置的回调 URL。失败时根据重试策略计算
+ * 下次重试时间，达到上限后标记为最终失败。
+ *
+ * @author atomex
+ */
 @Slf4j
 @Component
 public class CustodyWebhookDispatcher {

@@ -18,6 +18,14 @@ import java.util.List;
 @Component
 @Slf4j
 public class SendRawTxJob {
+/**
+ * 链上交易广播任务。
+ * <p>
+ * 每 30 秒执行一次：从 Redis "签名完成队列"（sig:done）拉取已完成两次签名的
+ * 交易，逐笔调用链 RPC 广播上链。广播失败的交易重新推回队列尾部等待重试。
+ *
+ * @author atomex
+ */
 
     private static final long COUNT = 100L;
 

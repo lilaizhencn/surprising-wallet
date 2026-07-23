@@ -15,6 +15,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 托管提现状态对账任务。
+ * <p>
+ * 每 500ms 执行一次：扫描 DB 中状态已变更但尚未生成事件的提现记录，
+ * 写入对应的 custody_event（BROADCAST / CONFIRMED / FAILED），
+ * 确保事件日志与提现实时状态一致，供 Webhook 和审计使用。
+ *
+ * @author atomex
+ */
 @Component
 public class CustodyWithdrawalReconciliationJob {
     private static final Set<String> FAILURE_STATES = Set.of("FAILED", "REJECTED", "CANCELLED");

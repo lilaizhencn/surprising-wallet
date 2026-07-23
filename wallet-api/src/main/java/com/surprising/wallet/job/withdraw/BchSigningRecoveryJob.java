@@ -8,7 +8,17 @@ import com.surprising.wallet.service.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-@Component public class BchSigningRecoveryJob{
+/**
+ * BCH 签名恢复任务。
+ * <p>
+ * 每 30 秒执行一次：扫描 DB 中超过 60 秒仍处于 SIGNING 状态的 BCH 交易，
+ * 将其重新推送到 Redis 一次签名队列（sig:first），防止进程中断导致
+ * 交易卡在中间态。
+ *
+ * @author atomex
+ */
+@Component
+public class BchSigningRecoveryJob{
     private final ChainJdbcRepository repo;
     private final BlockchainRuntimeService blockchainRuntimeService;
     private final WalletRuntimeConfigService runtimeConfigService;

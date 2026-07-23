@@ -17,6 +17,18 @@ import java.util.List;
 import java.util.Optional;
 
 /**
+ * 区块扫描基类。
+ * <p>
+ * 按区块逐块扫描链上交易，将充值交易写入数据库并推进扫描高度。
+ * 子类只需覆写 {@link #chain()} 返回链标识（如 BTC、LTC），其余逻辑由本类统一处理：
+ * <ol>
+ *   <li>从 DB 读取已扫描高度，与链上最新高度对比</li>
+ *   <li>逐块调用链适配器查询相关交易</li>
+ *   <li>将交易写入 deposit_record / utxo_record</li>
+ *   <li>更新 scan_height 检查点</li>
+ *   <li>刷新链上总余额</li>
+ * </ol>
+ *
  * @author atomex
  */
 @Slf4j

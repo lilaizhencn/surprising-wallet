@@ -6,6 +6,19 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/**
+ * EVM EIP-7702 批量提现任务。
+ * <p>
+ * 每 3 秒执行一次：遍历所有启用了 EIP-7702 的 EVM 链，
+ * 将 withdrawal_order 打包为批量提现交易——
+ * 构建 auth 授权、调用合约 batchWithdraw、签名（sig1+sig2）、
+ * 广播上链、确认。
+ * <p>
+ * 与普通 EVM 链的提现不同，7702 提现使用 EOA 委托合约方式，
+ * 通过单笔 batch 交易处理多个地址的提现，节省 Gas。
+ *
+ * @author atomex
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

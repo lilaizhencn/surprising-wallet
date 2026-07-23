@@ -21,6 +21,18 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.HexFormat;
 
+/**
+ * 第二次签名服务（sig2）。
+ * <p>
+ * 每 10 秒执行一次：从 Redis "二次签名队列"（sig:second）拉取已完成一次签名的交易，
+ * 调用对应链的签名算法补充第二次签名，拼装完整签名交易（rawTransaction），
+ * 推送到 Redis "签名完成队列"（sig:done），由 {@code SendRawTxJob} 广播上链。
+ * <p>
+ * sig1 + sig2 双重签名是为了满足多签安全模型：两个进程独立部署、独立持有密钥分片，
+ * 任一进程被攻破都无法单方面签名交易。
+ *
+ * @author atomex
+ */
 @Component
 @Slf4j
 @RequiredArgsConstructor

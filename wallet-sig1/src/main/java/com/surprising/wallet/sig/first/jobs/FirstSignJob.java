@@ -18,6 +18,18 @@ import org.springframework.util.ObjectUtils;
 
 import java.time.Duration;
 
+/**
+ * 第一次签名服务（sig1）。
+ * <p>
+ * 每 10 秒执行一次：从 Redis "一次签名队列"（sig:first）拉取待签名的提现/归集交易，
+ * 调用对应链的签名算法（ECDSA / EdDSA / Schnorr）生成首次签名，
+ * 完成后推送到 Redis "二次签名队列"（sig:second），签名失败则直接推送到完成队列。
+ * <p>
+ * sig1 + sig2 双重签名是为了满足多签安全模型：sig1 持有部分密钥分片，
+ * sig2 持有另一部分，只有两方都签名交易才有效。
+ *
+ * @author atomex
+ */
 @Component
 @Slf4j
 @RequiredArgsConstructor

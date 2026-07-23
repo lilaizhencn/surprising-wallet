@@ -12,6 +12,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
+ * 失败提现重试任务。
+ * <p>
+ * 每分钟执行一次：从 Redis 失败队列（withdraw:fail）拉取之前失败的提现请求，
+ * 逐笔重新走提现流程（构建 withdrawal_order → 入签名队列）。
+ * 若重试失败则推回到 tmp 队列避免死循环。
+ *
  * @author atomex
  */
 @Component

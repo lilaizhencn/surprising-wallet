@@ -24,6 +24,14 @@ import java.time.Instant;
 import java.util.*;
 
 /**
+ * UTXO 链批处理基类（提现 + 归集）。
+ * <p>
+ * UTXO 模型下，提现和归集天然同属一笔多输出交易——本类从 DB 拉取该链所有待签名
+ * withdrawal_order（不分提现/归集），选取可用 UTXO，构建一笔批量交易推送到 Redis
+ * 签名队列，由 sig1/sig2 依次签名后广播上链。
+ * <p>
+ * 子类只需覆写 {@link #chain()} 返回链标识（如 BTC、BCH）。
+ *
  * @author atomex
  */
 @Slf4j
