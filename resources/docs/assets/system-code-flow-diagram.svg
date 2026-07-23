@@ -1,86 +1,242 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="700" viewBox="0 0 1180 700">
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="980" viewBox="0 0 1180 980">
   <style>
-    .box { fill: #f8fafc; stroke: #334155; stroke-width: 2; rx: 10; }
-    .btc { fill: #eff6ff; stroke: #1d4ed8; stroke-width: 3; rx: 10; }
-    .ok { fill: #ecfdf5; stroke: #047857; stroke-width: 2; rx: 10; }
-    .blocked { fill: #fff7ed; stroke: #c2410c; stroke-width: 2; rx: 10; }
-    .text { font: 15px sans-serif; fill: #111827; }
-    .small { font: 12px sans-serif; fill: #374151; }
-    .title { font: 22px sans-serif; font-weight: 700; fill: #111827; }
-    .line { stroke: #475569; stroke-width: 2; marker-end: url(#arrow); }
+    .title { font: 22px sans-serif; font-weight: 700; fill: #0f172a; }
+    .phase-label { font: 15px sans-serif; font-weight: 700; fill: #1e293b; }
+    .box     { fill: #ffffff; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .seed    { fill: #fef2f2; stroke: #dc2626; stroke-width: 2; rx: 8; }
+    .key     { fill: #fff7ed; stroke: #ea580c; stroke-width: 2; rx: 8; }
+    .addr    { fill: #fefce8; stroke: #ca8a04; stroke-width: 2; rx: 8; }
+    .dep     { fill: #f0fdf4; stroke: #16a34a; stroke-width: 2; rx: 8; }
+    .collect { fill: #eff6ff; stroke: #2563eb; stroke-width: 2; rx: 8; }
+    .withdraw { fill: #faf5ff; stroke: #9333ea; stroke-width: 2; rx: 8; }
+    .sig     { fill: #fdf2f8; stroke: #db2777; stroke-width: 2; rx: 8; }
+    .db      { fill: #f8fafc; stroke: #475569; stroke-width: 1.5; rx: 6; stroke-dasharray: 6,3; }
+    .ext     { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1.5; rx: 6; }
+    .arrow   { stroke: #64748b; stroke-width: 1.8; marker-end: url(#arr); fill: none; }
+    .text    { font: 13px sans-serif; fill: #1e293b; }
+    .bold    { font: 13px sans-serif; font-weight: 700; fill: #1e293b; }
+    .small   { font: 11px sans-serif; fill: #64748b; }
+    .phase-bg { fill: #f8fafc; stroke: #e2e8f0; stroke-width: 1; rx: 12; }
   </style>
   <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,6 L9,3 z" fill="#475569"/>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
     </marker>
   </defs>
-  <text x="40" y="40" class="title">System Code Flow</text>
 
-  <rect x="40" y="85" width="190" height="76" class="btc"/>
-  <text x="60" y="118" class="text">ScanBtcBlockJob</text>
-  <text x="60" y="142" class="small">scheduled BTC scan</text>
+  <text x="590" y="34" text-anchor="middle" class="title">Surprising Wallet — 核心流程</text>
 
-  <rect x="280" y="85" width="215" height="76" class="btc"/>
-  <text x="300" y="118" class="text">AbstractScanBlockJob</text>
-  <text x="300" y="142" class="small">height range + confirmations</text>
+  <!-- ====== PHASE 1: 密钥种子管理 ====== -->
+  <rect x="20" y="52" width="1140" height="168" class="phase-bg"/>
+  <text x="40" y="74" class="phase-label">① 密钥种子管理</text>
 
-  <rect x="545" y="85" width="210" height="76" class="btc"/>
-  <text x="565" y="118" class="text">BtcChainAdapter</text>
-  <text x="565" y="142" class="small">UTXO runtime, P2WSH outputs</text>
+  <rect x="40" y="90" width="150" height="58" class="seed"/>
+  <text x="115" y="114" text-anchor="middle" class="bold">4 × 32B Seed</text>
+  <text x="115" y="132" text-anchor="middle" class="small">Base64 · 原子保存</text>
+  <text x="115" y="147" text-anchor="middle" class="small">wallet_key_config</text>
 
-  <rect x="805" y="85" width="210" height="76" class="ok"/>
-  <text x="825" y="118" class="text">Ledger Credit</text>
-  <text x="825" y="142" class="small">UTXO + ledger idempotent</text>
+  <line x1="190" y1="119" x2="220" y2="119" class="arrow"/>
 
-  <rect x="40" y="245" width="205" height="76" class="btc"/>
-  <text x="60" y="278" class="text">BtcCollectionJob</text>
-  <text x="60" y="302" class="small">eligible UTXO collection</text>
+  <rect x="220" y="90" width="150" height="58" class="seed"/>
+  <text x="295" y="114" text-anchor="middle" class="bold">Ed25519 Seed</text>
+  <text x="295" y="132" text-anchor="middle" class="small">SOL · TON · APT · SUI</text>
+  <text x="295" y="147" text-anchor="middle" class="small">SLIP-0010 派生</text>
 
-  <rect x="295" y="245" width="205" height="76" class="btc"/>
-  <text x="315" y="278" class="text">wallet-sig1</text>
-  <text x="315" y="302" class="small">first P2WSH signature</text>
+  <line x1="370" y1="119" x2="400" y2="119" class="arrow"/>
 
-  <rect x="550" y="245" width="205" height="76" class="btc"/>
-  <text x="570" y="278" class="text">wallet-sig2</text>
-  <text x="570" y="302" class="small">second signature + validation</text>
+  <rect x="400" y="90" width="220" height="58" class="key"/>
+  <text x="510" y="112" text-anchor="middle" class="bold">BIP32 Root #1 (sig1)</text>
+  <text x="510" y="132" text-anchor="middle" class="small">在线 · 第一签私钥 · wallet-sig1</text>
 
-  <rect x="805" y="245" width="220" height="76" class="ok"/>
-  <text x="825" y="278" class="text">SendRawTxJob</text>
-  <text x="825" y="302" class="small">broadcast and DB status update</text>
+  <line x1="620" y1="119" x2="645" y2="119" class="arrow"/>
 
-  <rect x="40" y="405" width="210" height="76" class="box"/>
-  <text x="60" y="438" class="text">EvmChainAdapter</text>
-  <text x="60" y="462" class="small">quote native/ERC20 transfers</text>
+  <rect x="645" y="90" width="220" height="58" class="key"/>
+  <text x="755" y="112" text-anchor="middle" class="bold">BIP32 Root #2 (sig2)</text>
+  <text x="755" y="132" text-anchor="middle" class="small">在线 · 第二签私钥 · wallet-sig2</text>
 
-  <rect x="300" y="405" width="210" height="76" class="box"/>
-  <text x="320" y="438" class="text">JdbcTokenRegistry</text>
-  <text x="320" y="462" class="small">token_config first</text>
+  <line x1="865" y1="119" x2="890" y2="119" class="arrow"/>
 
-  <rect x="560" y="405" width="210" height="76" class="blocked"/>
-  <text x="580" y="438" class="text">EVM/TRON Scan</text>
-  <text x="580" y="462" class="small">fail-fast until RPC scanners wired</text>
+  <rect x="890" y="90" width="220" height="58" class="key"/>
+  <text x="1000" y="112" text-anchor="middle" class="bold">BIP32 Root #3 (recovery)</text>
+  <text x="1000" y="132" text-anchor="middle" class="small">离线 · 恢复私钥 · 灾难恢复</text>
 
-  <rect x="820" y="405" width="220" height="76" class="blocked"/>
-  <text x="840" y="438" class="text">SOL / TON</text>
-  <text x="840" y="462" class="small">runtime connectors blocked</text>
+  <!-- 3 roots → BIP44 derivation + 2-of-3 -->
+  <rect x="260" y="162" width="340" height="44" class="key"/>
+  <text x="430" y="182" text-anchor="middle" class="bold">BIP44 路径派生  m/44&apos;/coin_type&apos;/0&apos;/0/index</text>
+  <text x="430" y="198" text-anchor="middle" class="small">user_id · biz · address_index  →  确定性 key pair</text>
 
-  <rect x="300" y="565" width="210" height="76" class="ok"/>
-  <text x="320" y="598" class="text">PostgreSQL</text>
-  <text x="320" y="622" class="small">ledger and chain tables</text>
+  <line x1="510" y1="148" x2="430" y2="162" class="arrow"/>
+  <line x1="755" y1="148" x2="430" y2="162" class="arrow"/>
+  <line x1="1000" y1="148" x2="430" y2="162" class="arrow"/>
 
-  <rect x="560" y="565" width="210" height="76" class="ok"/>
-  <text x="580" y="598" class="text">Redis</text>
-  <text x="580" y="622" class="small">signing and send queues</text>
+  <rect x="650" y="162" width="260" height="44" class="addr"/>
+  <text x="780" y="182" text-anchor="middle" class="bold">2-of-3 多签公钥 → P2WSH 地址</text>
+  <text x="780" y="198" text-anchor="middle" class="small">pub1 + pub2 + pub3  →  SegWit 脚本哈希</text>
 
-  <line x1="230" y1="123" x2="280" y2="123" class="line"/>
-  <line x1="495" y1="123" x2="545" y2="123" class="line"/>
-  <line x1="755" y1="123" x2="805" y2="123" class="line"/>
-  <line x1="245" y1="283" x2="295" y2="283" class="line"/>
-  <line x1="500" y1="283" x2="550" y2="283" class="line"/>
-  <line x1="755" y1="283" x2="805" y2="283" class="line"/>
-  <line x1="250" y1="443" x2="300" y2="443" class="line"/>
-  <line x1="510" y1="443" x2="560" y2="443" class="line"/>
-  <line x1="665" y1="321" x2="665" y2="565" class="line"/>
-  <line x1="910" y1="321" x2="665" y2="565" class="line"/>
-  <line x1="910" y1="161" x2="405" y2="565" class="line"/>
+  <line x1="600" y1="184" x2="650" y2="184" class="arrow"/>
+
+  <!-- ====== PHASE 2: 创建地址 ====== -->
+  <rect x="20" y="236" width="1140" height="120" class="phase-bg"/>
+  <text x="40" y="258" class="phase-label">② 创建充值地址</text>
+
+  <rect x="40" y="274" width="200" height="52" class="addr"/>
+  <text x="140" y="298" text-anchor="middle" class="bold">租户请求分配地址</text>
+  <text x="140" y="315" text-anchor="middle" class="small">chain + externalReference + version</text>
+
+  <line x1="240" y1="300" x2="275" y2="300" class="arrow"/>
+
+  <rect x="275" y="274" width="220" height="52" class="addr"/>
+  <text x="385" y="298" text-anchor="middle" class="bold">确定性派生 &amp; 幂等</text>
+  <text x="385" y="315" text-anchor="middle" class="small">同链同 subject 返回同一地址</text>
+
+  <line x1="495" y1="300" x2="530" y2="300" class="arrow"/>
+
+  <rect x="530" y="274" width="200" height="52" class="addr"/>
+  <text x="630" y="298" text-anchor="middle" class="bold">chain_address 写入</text>
+  <text x="630" y="315" text-anchor="middle" class="small">tenant · chain · address · role</text>
+
+  <line x1="730" y1="300" x2="765" y2="300" class="arrow"/>
+
+  <rect x="765" y="274" width="190" height="52" class="ext"/>
+  <text x="860" y="298" text-anchor="middle" class="bold">返回地址给租户</text>
+  <text x="860" y="315" text-anchor="middle" class="small">不发送 Webhook</text>
+
+  <line x1="955" y1="300" x2="990" y2="300" class="arrow"/>
+
+  <rect x="990" y="274" width="145" height="52" class="ext"/>
+  <text x="1062" y="298" text-anchor="middle" class="bold">租户使用</text>
+  <text x="1062" y="315" text-anchor="middle" class="small">展示给用户充值</text>
+
+  <!-- ====== PHASE 3: 充值 ====== -->
+  <rect x="20" y="372" width="1140" height="130" class="phase-bg"/>
+  <text x="40" y="394" class="phase-label">③ 充值入账</text>
+
+  <rect x="40" y="410" width="170" height="56" class="dep"/>
+  <text x="125" y="434" text-anchor="middle" class="bold">链上转入</text>
+  <text x="125" y="452" text-anchor="middle" class="small">Scanner 扫块发现</text>
+
+  <line x1="210" y1="438" x2="245" y2="438" class="arrow"/>
+
+  <rect x="245" y="410" width="190" height="56" class="dep"/>
+  <text x="340" y="434" text-anchor="middle" class="bold">确认 &amp; 幂等入账</text>
+  <text x="340" y="452" text-anchor="middle" class="small">deposit_record + ledger_balance</text>
+
+  <line x1="435" y1="438" x2="470" y2="438" class="arrow"/>
+
+  <rect x="470" y="410" width="200" height="56" class="dep"/>
+  <text x="570" y="434" text-anchor="middle" class="bold">Custody 投影（同事务）</text>
+  <text x="570" y="452" text-anchor="middle" class="small">tenant → externalReference 映射</text>
+
+  <line x1="670" y1="438" x2="705" y2="438" class="arrow"/>
+
+  <rect x="705" y="410" width="200" height="56" class="dep"/>
+  <text x="805" y="434" text-anchor="middle" class="bold">签名 Webhook 事件</text>
+  <text x="805" y="452" text-anchor="middle" class="small">持久化 · 签名 · 自动重试</text>
+
+  <line x1="905" y1="438" x2="940" y2="438" class="arrow"/>
+
+  <rect x="940" y="410" width="195" height="56" class="ext"/>
+  <text x="1037" y="434" text-anchor="middle" class="bold">租户接收通知</text>
+  <text x="1037" y="452" text-anchor="middle" class="small">匹配 externalReference 入账</text>
+
+  <!-- PHASE 3 bottom dotted feedback: reorg detection -->
+  <rect x="380" y="476" width="380" height="24" class="db"/>
+  <text x="570" y="493" text-anchor="middle" class="small">chain_scan_block 高度追踪 · 重组检测 · canonical_status 状态机 (CANONICAL / REORGED)</text>
+
+  <!-- ====== PHASE 4: 归集 ====== -->
+  <rect x="20" y="518" width="1140" height="130" class="phase-bg"/>
+  <text x="40" y="540" class="phase-label">④ 归集（UTXO / EVM EIP-7702）</text>
+
+  <rect x="40" y="556" width="210" height="56" class="collect"/>
+  <text x="145" y="580" text-anchor="middle" class="bold">扫描可归集余额</text>
+  <text x="145" y="598" text-anchor="middle" class="small">UTXO 未花费 · EVM 账户余额</text>
+
+  <line x1="250" y1="584" x2="285" y2="584" class="arrow"/>
+
+  <rect x="285" y="556" width="210" height="56" class="collect"/>
+  <text x="390" y="580" text-anchor="middle" class="bold">构建归集交易</text>
+  <text x="390" y="598" text-anchor="middle" class="small">UTXO → 2-of-3 多签</text>
+
+  <line x1="495" y1="584" x2="530" y2="584" class="arrow"/>
+
+  <rect x="530" y="556" width="200" height="56" class="sig"/>
+  <text x="630" y="580" text-anchor="middle" class="bold">签名管道</text>
+  <text x="630" y="598" text-anchor="middle" class="small">sig1 → Redis → sig2</text>
+
+  <line x1="730" y1="584" x2="765" y2="584" class="arrow"/>
+
+  <rect x="765" y="556" width="190" height="56" class="collect"/>
+  <text x="860" y="580" text-anchor="middle" class="bold">广播 &amp; 确认</text>
+  <text x="860" y="598" text-anchor="middle" class="small">归集到热钱包</text>
+
+  <line x1="955" y1="584" x2="990" y2="584" class="arrow"/>
+
+  <rect x="990" y="556" width="145" height="56" class="ext"/>
+  <text x="1062" y="580" text-anchor="middle" class="bold">确认完成</text>
+  <text x="1062" y="598" text-anchor="middle" class="small">ledger 更新</text>
+
+  <!-- EIP-7702 note -->
+  <rect x="285" y="620" width="680" height="22" class="db"/>
+  <text x="625" y="635" text-anchor="middle" class="small">EIP-7702 委托归集 (ETH/BNB/ARB/OP/BASE/POLYGON): 单笔交易批量归集 N 个用户地址 · 免 Gas 垫付 · 签约委托</text>
+
+  <!-- ====== PHASE 5: 提现 ====== -->
+  <rect x="20" y="664" width="1140" height="148" class="phase-bg"/>
+  <text x="40" y="686" class="phase-label">⑤ 提现</text>
+
+  <rect x="40" y="702" width="180" height="56" class="withdraw"/>
+  <text x="130" y="726" text-anchor="middle" class="bold">租户发起提现</text>
+  <text x="130" y="744" text-anchor="middle" class="small">API: chain · to · amount</text>
+
+  <line x1="220" y1="730" x2="255" y2="730" class="arrow"/>
+
+  <rect x="255" y="702" width="190" height="56" class="withdraw"/>
+  <text x="350" y="726" text-anchor="middle" class="bold">Gas &amp; 费用预留</text>
+  <text x="350" y="744" text-anchor="middle" class="small">估算 · fee · dust 校验</text>
+
+  <line x1="445" y1="730" x2="480" y2="730" class="arrow"/>
+
+  <rect x="480" y="702" width="190" height="56" class="withdraw"/>
+  <text x="575" y="726" text-anchor="middle" class="bold">构建 &amp; 签名交易</text>
+  <text x="575" y="744" text-anchor="middle" class="small">UTXO: sig1→sig2 管道</text>
+
+  <line x1="670" y1="730" x2="705" y2="730" class="arrow"/>
+
+  <rect x="705" y="702" width="200" height="56" class="withdraw"/>
+  <text x="805" y="726" text-anchor="middle" class="bold">广播 &amp; 等待确认</text>
+  <text x="805" y="744" text-anchor="middle" class="small">nonce · 替换加速 · RBF</text>
+
+  <line x1="905" y1="730" x2="940" y2="730" class="arrow"/>
+
+  <rect x="940" y="702" width="195" height="56" class="withdraw"/>
+  <text x="1037" y="726" text-anchor="middle" class="bold">Webhook 通知</text>
+  <text x="1037" y="744" text-anchor="middle" class="small">生命周期事件 · 确认/失败</text>
+
+  <!-- TRON gas / EIP-7702 batch withdrawal notes -->
+  <rect x="255" y="766" width="400" height="20" class="db"/>
+  <text x="455" y="780" text-anchor="middle" class="small">TRON: 带宽/能量估算 · Gas 预充值 · waiting_gas 状态</text>
+
+  <rect x="705" y="766" width="430" height="20" class="db"/>
+  <text x="920" y="780" text-anchor="middle" class="small">EIP-7702 批量提现: 单笔交易批量提现 · authorization 签名 · 非托管</text>
+
+  <!-- ====== BOTTOM INFRA ====== -->
+  <rect x="20" y="830" width="1140" height="46" class="phase-bg"/>
+
+  <rect x="40" y="840" width="200" height="26" class="db"/>
+  <text x="140" y="858" text-anchor="middle" class="small">PostgreSQL · 账本 · 链配置 · 审计</text>
+
+  <rect x="260" y="840" width="200" height="26" class="db"/>
+  <text x="360" y="858" text-anchor="middle" class="small">Redis · sig1 queue · sig2 queue</text>
+
+  <rect x="480" y="840" width="200" height="26" class="db"/>
+  <text x="580" y="858" text-anchor="middle" class="small">API · HMAC 签名 · IP 白名单</text>
+
+  <rect x="700" y="840" width="215" height="26" class="db"/>
+  <text x="807" y="858" text-anchor="middle" class="small">Webhook · 签名 · 持久化 · 重试</text>
+
+  <rect x="935" y="840" width="200" height="26" class="db"/>
+  <text x="1035" y="858" text-anchor="middle" class="small">Console · React · 平台 / 租户</text>
+
+  <!-- ====== LEGEND ====== -->
+  <text x="590" y="910" text-anchor="middle" class="small" fill="#94a3b8">签名隔离：sig1 只持有 Root #1 私钥 · sig2 只持有 Root #2 私钥 · 恢复私钥离线保管 · 任两方即可签名</text>
+  <text x="590" y="930" text-anchor="middle" class="small" fill="#94a3b8">数据库驱动：链 · 网络 · RPC · token · 开关 均在 PostgreSQL，不硬编码 · Scanner 从 DB checkpoint 增量扫块</text>
 </svg>

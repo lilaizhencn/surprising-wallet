@@ -7,6 +7,10 @@
 
 ![架构图](resources/docs/assets/architecture-diagram.svg)
 
+## 核心流程
+
+![核心流程](resources/docs/assets/system-code-flow-diagram.svg)
+
 ## 产品边界
 
 Surprising Wallet 负责：
