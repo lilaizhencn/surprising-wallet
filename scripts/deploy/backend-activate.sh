@@ -29,6 +29,8 @@ if [[ ! -f $DEPLOY_ENV ]]; then
   exit 1
 fi
 
+chown root:wallet "$DEPLOY_RELEASE"
+chmod 0750 "$DEPLOY_RELEASE"
 chown wallet:wallet "$DEPLOY_JAR"
 chmod 0640 "$DEPLOY_JAR"
 chown root:wallet "$DEPLOY_MIGRATION"
