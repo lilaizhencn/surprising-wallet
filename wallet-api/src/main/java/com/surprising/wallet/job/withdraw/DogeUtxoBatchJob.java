@@ -1,19 +1,19 @@
 package com.surprising.wallet.job.withdraw;
 
-import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashFeePolicy;
 import com.surprising.wallet.sdk.bitcoinj.core.P2shMultisigFeeCalculator;
+import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinFeePolicy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
-public class BatchBchWithdrawJob extends AbstractBatchWithdrawJob {
+public class DogeUtxoBatchJob extends AbstractUtxoBatchJob {
     @Override
     protected String chain() {
-        return "BCH";
+        return "DOGE";
     }
 
-    @Scheduled(scheduler = "withdrawTaskScheduler", cron = "14/30 * * * * ?")
+    @Scheduled(scheduler = "withdrawTaskScheduler", cron = "12/30 * * * * ?")
     @Override
     @Transactional(rollbackFor = Throwable.class)
     public void execute() {
@@ -22,11 +22,12 @@ public class BatchBchWithdrawJob extends AbstractBatchWithdrawJob {
 
     @Override
     protected int defaultFeeRate() {
-        return (int) BitcoinCashFeePolicy.DEFAULT_SAT_PER_BYTE;
+        return (int) DogecoinFeePolicy.DEFAULT_FEE_RATE_KOINU_PER_BYTE;
     }
 
     @Override
-    protected long estimateNetworkFeeAtomic(int inputs, int outputs, int feeRate) {
-        return P2shMultisigFeeCalculator.estimateBytes(inputs, outputs, 2, 3) * feeRate;
+    protected long estimateNetworkFeeAtomic(int inputCount, int outputCount, int feeRate) {
+        long bytes = P2shMultisigFeeCalculator.estimateBytes(inputCount, outputCount, 2, 3);
+        return DogecoinFeePolicy.feeForBytes(bytes, feeRate);
     }
 }

@@ -27,7 +27,7 @@ import java.util.*;
  * @author atomex
  */
 @Slf4j
-abstract public class AbstractBatchWithdrawJob {
+abstract public class AbstractUtxoBatchJob {
     //一次处理10笔交易
     private final int COUNT = 10;
     public AssetRuntimeMetadata currency;
@@ -44,11 +44,11 @@ abstract public class AbstractBatchWithdrawJob {
     public void execute() {
         String chain = chain();
         if (!runtimeConfigService.isTaskEnabled(chain, WalletRuntimeConfigService.TASK_WITHDRAW)) {
-            log.debug("提现任务跳过 币种:{} DB withdraw switch disabled", chain);
+            log.debug("UTXO批处理跳过 币种:{} DB withdraw switch disabled", chain);
             return;
         }
         currency = blockchainRuntimeService.assetMetadata(chain);
-        log.info("提现任务开始 币种:{}", currency.getName());
+        log.info("UTXO批处理（提现+归集）开始 币种:{}", currency.getName());
 
         try {
             while (true) {
@@ -67,7 +67,7 @@ abstract public class AbstractBatchWithdrawJob {
                 }
                 WithdrawTransaction transaction = buildTransaction(tenantId, records);
                 if (transaction == null) {
-                    log.error("提现任务异常 交易创建失败 币种:{}", currency.getName());
+                    log.error("UTXO批处理异常 交易创建失败 币种:{}", currency.getName());
                     break;
                 }
                 //把交易推送到待签名队列
@@ -88,11 +88,11 @@ abstract public class AbstractBatchWithdrawJob {
                 }
             }
         } catch (Throwable e) {
-            log.error("提现任务扫描数据,构建交易,发送到redis队列出现异常 币种id:{}", currency.getName(), e);
+            log.error("UTXO批处理扫描数据,构建交易,发送到redis队列出现异常 币种id:{}", currency.getName(), e);
         }
 
 
-        log.info("提现任务结束 币种:{}", currency.getName());
+        log.info("UTXO批处理结束 币种:{}", currency.getName());
 
     }
 

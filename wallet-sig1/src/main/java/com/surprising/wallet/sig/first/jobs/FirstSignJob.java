@@ -7,22 +7,36 @@ import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sig.first.service.ISignService;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
-import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
 
+import java.time.Duration;
+
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class FirstSignJob {
+
+    private static final Duration DELAY = Duration.ofSeconds(10);
+
+    private final TaskScheduler taskScheduler;
 
     @Autowired
     SignContent signContent;
 
-    @Scheduled(fixedDelay = 10_000)
-    public void run() {
+    @PostConstruct
+    void schedule() {
+        taskScheduler.scheduleWithFixedDelay(this::execute, DELAY);
+        log.info("FirstSignJob scheduled with fixed delay {}ms", DELAY.toMillis());
+    }
+
+    void execute() {
         String key = Constants.WALLET_WITHDRAW_SIG_FIRST_KEY;
         String tmp = Constants.WALLET_WITHDRAW_SIG_FIRST_TMP_KEY;
 

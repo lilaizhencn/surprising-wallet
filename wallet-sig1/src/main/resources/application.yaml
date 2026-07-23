@@ -1,11 +1,12 @@
 server:
   port: 8004
 
-logging:
-  level:
-    default: INFO
-
 spring:
+  task:
+    scheduling:
+      pool:
+        size: 4
+      thread-name-prefix: sig1-scheduler-
   application:
     name: wallet-sig1
   datasource:
@@ -18,6 +19,10 @@ spring:
       host: 127.0.0.1
       port: 6379
       password:
+
+logging:
+  level:
+    default: INFO
 
 sw:
   wallet:
