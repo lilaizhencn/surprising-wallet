@@ -56,7 +56,7 @@ mvn -pl wallet-service -am \
 再执行只读费用门禁，确认 receipt 暴露 `l1Fee`：
 
 ```bash
-mvn -pl wallet-server -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702OpStackFeeIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.op-stack-fee.enabled=true \
@@ -103,7 +103,7 @@ mvn -pl wallet-service -am \
   -Devm.7702.delegate='<DELEGATE_ADDRESS>' \
   test
 
-mvn -pl wallet-server -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702ProductionFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.production.enabled=true \
@@ -165,7 +165,7 @@ EVM_VERIFY_RPC_URL='<BACKUP_BASE_SEPOLIA_RPC>' npm run verify:7702
 
 ## 7. 数据库 SHADOW 配置
 
-先确认链级 Relayer 可由 wallet-server 密钥派生，且结果恰好一行并等于合约 allowlist：
+先确认链级 Relayer 可由 wallet-api 密钥派生，且结果恰好一行并等于合约 allowlist：
 
 ```sql
 SELECT id, address, derivation_path, wallet_role, enabled

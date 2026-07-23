@@ -33,13 +33,12 @@ Surprising Wallet 负责：
 ```
 surprising-wallet/
 ├── pom.xml              # 父 POM：版本、依赖管理、模块聚合
-├── common/              # 共享基础设施（130 个 Java 文件）
-├── bitcoin-sdk/         # Bitcoin-like 链 SDK
-├── tron-sdk/            # TRON 链 SDK
-├── wallet-sig1/         # 第一签名服务
-├── wallet-sig2/         # 第二签名服务
-├── wallet-service/      # 链适配与业务逻辑
-├── wallet-server/       # HTTP API 与定时任务
+├── common/              # 共享基础设施
+├── chain-sdks/           # Bitcoin-like 和 TRON 链 SDK
+├── wallet-sig1/          # 第一签名服务
+├── wallet-sig2/          # 第二签名服务
+├── wallet-service/       # 链适配与业务逻辑
+├── wallet-api/           # HTTP API 与定时任务
 └── resources/docs/      # 文档、OpenAPI、数据库脚本
 ```
 
@@ -48,12 +47,11 @@ surprising-wallet/
 | 模块 | 职责 |
 |---|---|
 | `common` | Redis 封装、链数据模型、钱包密钥配置、Ed25519 密钥派生、Ethereum 密码学工具、Spring 基础设施 |
-| `bitcoin-sdk` | Bitcoin-like 链支持：多签地址生成、SegWit 交易构建、手续费计算、UTXO 选择、BIP32 密钥派生，覆盖 BTC/BCH/LTC/DOGE 网络参数 |
-| `tron-sdk` | TRON 链支持：gRPC 客户端、Protobuf 合约、ECKey 密码学、Keccak 哈希、TRON 钱包 API |
+| `chain-sdks` | Bitcoin-like 链和 TRON 链 SDK：多签地址、SegWit 交易、UTXO 选择、BIP32、gRPC 客户端、Protobuf 合约、ECKey 密码学 |
 | `wallet-sig1` | 第一轮签名服务：对 BTC、BCH、LTC、DOGE 提现交易生成部分签名，轮询 Redis 队列获取待签任务 |
 | `wallet-sig2` | 第二轮签名服务：对 BTC、BCH、LTC、DOGE、ETH、ERC20、TRON 交易完成最终签名并广播 |
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
-| `wallet-server` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
+| `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
 运行模型覆盖 Bitcoin-like、EVM、TRON、Solana、TON、Aptos、Sui、XRP、
 Cardano、Polkadot、NEAR、Monero、HyperEVM 和 HyperCore。实际启用的网络和资产
@@ -68,10 +66,10 @@ Cardano、Polkadot、NEAR、Monero、HyperEVM 和 HyperCore。实际启用的网
 # psql -U wallet -d wallet -f resources/docs/db/surprising-wallet-init-pgsql.sql
 
 # 编译并打包
-mvn -pl wallet-server -am package
+mvn -pl wallet-api -am package
 
 # 启动
-java -jar wallet-server/target/wallet-server-1.0.0-SNAPSHOT.jar
+java -jar wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar
 ```
 
 Custody 必需密钥：
@@ -89,7 +87,7 @@ SW_CUSTODY_PLATFORM_ADMIN_PASSWORD
 
 ```bash
 # 运行测试
-mvn -pl wallet-server -am test
+mvn -pl wallet-api -am test
 
 # 编译全部模块
 mvn compile

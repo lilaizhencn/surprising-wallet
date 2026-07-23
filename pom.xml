@@ -67,12 +67,7 @@
             <!-- Internal modules -->
             <dependency>
                 <groupId>com.surprising</groupId>
-                <artifactId>bitcoin-sdk</artifactId>
-                <version>${surprising.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.surprising</groupId>
-                <artifactId>tron-sdk</artifactId>
+                <artifactId>chain-sdks</artifactId>
                 <version>${surprising.version}</version>
             </dependency>
             <dependency>
@@ -340,11 +335,10 @@
 
     <modules>
         <module>common</module>
-        <module>bitcoin-sdk</module>
-        <module>tron-sdk</module>
+        <module>chain-sdks</module>
         <module>wallet-sig1</module>
         <module>wallet-sig2</module>
         <module>wallet-service</module>
-        <module>wallet-server</module>
+        <module>wallet-api</module>
     </modules>
 </project>

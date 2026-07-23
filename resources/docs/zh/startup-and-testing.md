@@ -76,9 +76,9 @@ mvn -pl wallet-service -am test -DskipTests
 
 四个根 Seed 统一保存在单行 `wallet_key_config`：sig1、sig2、recovery 三个 BIP32 Seed，以及一个 Ed25519 Seed。四个值必须互不相同，统一使用 Base64 编码的 32 字节数据，并通过平台超级管理员的 Wallet keys 页面原子保存。当前阶段数据库明文存储，页面允许查看原文。
 
-wallet-server 从 Keyset 派生三组 public root；sig1/sig2 分别使用各自需要的 private root。已有派生地址后，管理接口禁止变更整套 Keyset。
+wallet-api 从 Keyset 派生三组 public root；sig1/sig2 分别使用各自需要的 private root。已有派生地址后，管理接口禁止变更整套 Keyset。
 
-wallet-server 常用环境变量：
+wallet-api 常用环境变量：
 
 ```bash
 export SW_HTTP_PORT='8002'
@@ -117,7 +117,7 @@ export SW_CUSTODY_CORS_ORIGINS='https://console.example.com'
 
 当前运行时代码已接入 `global.all.enabled`、扫描、提现和归集开关。`transfer_enabled` 保留给后续内部划转入口；新增划转入口时必须调用 `WalletRuntimeConfigService.requireTaskEnabled(chain, TASK_TRANSFER, ...)`，不要把该开关套用到创建地址或提现流程。
 
-TokDou 钱包页面读取 wallet-server：
+TokDou 钱包页面读取 wallet-api：
 
 | 场景 | API Base |
 |---|---|
@@ -131,9 +131,9 @@ TokDou 钱包页面读取 wallet-server：
 
 | 文件 | 用途 |
 |---|---|
-| `wallet-server/src/main/resources/application.yaml` | 本地 wallet-server 配置 |
-| `wallet-server/src/main/resources/application-test.yaml` | 测试 profile 配置 |
-| `wallet-server/src/main/resources/application-prod.yaml` | 生产占位配置 |
+| `wallet-api/src/main/resources/application.yaml` | 本地 wallet-api 配置 |
+| `wallet-api/src/main/resources/application-test.yaml` | 测试 profile 配置 |
+| `wallet-api/src/main/resources/application-prod.yaml` | 生产占位配置 |
 | `wallet-sig1/src/main/resources/application.yaml` | 第一签服务配置 |
 | `wallet-sig2/src/main/resources/application.yaml` | 第二签服务配置 |
 
@@ -149,7 +149,7 @@ TokDou 钱包页面读取 wallet-server：
 - Keyset 配置完成后再启动 sig1 和 sig2
 - 钱包后台配置页使用的 `SW_WALLET_ADMIN_USERNAME`、`SW_WALLET_ADMIN_PASSWORD`
 
-启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量。Keyset 已配置时，wallet-server 会从它推导每条启用链的 `0/0/0` 默认热提地址并和 `chain_address` 比对；缺失、重复或地址/path 不一致会直接启动失败。Keyset 未配置时只开放管理能力，地址派生和签名不可用。启用的 RPC 节点如果仍包含占位符 URL 或认证信息，也会直接启动失败。
+启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量。Keyset 已配置时，wallet-api 会从它推导每条启用链的 `0/0/0` 默认热提地址并和 `chain_address` 比对；缺失、重复或地址/path 不一致会直接启动失败。Keyset 未配置时只开放管理能力，地址派生和签名不可用。启用的 RPC 节点如果仍包含占位符 URL 或认证信息，也会直接启动失败。
 
 ## 7. 启动服务
 
@@ -170,14 +170,14 @@ mvn -pl wallet-sig2 -am spring-boot:run
 终端 3：
 
 ```bash
-mvn -pl wallet-server -am spring-boot:run
+mvn -pl wallet-api -am spring-boot:run
 ```
 
 默认端口：
 
 | 服务 | 端口 |
 |---|---:|
-| `wallet-server` | 8002 |
+| `wallet-api` | 8002 |
 | `wallet-sig1` | 8004 |
 | `wallet-sig2` | 8081 |
 
@@ -206,7 +206,7 @@ scripts/regtest/all-chain-regtest.sh matrix
 - `test-xmr` 会启动 XMR regtest wallet-rpc，创建真实子地址，充值并扫描入账，广播项目内提现，验证扫描幂等，并确认归集流程。
 - `test-evm` 会在 Hardhat fork 中模拟 EVM 原生币/ERC20 充值、提现、归集和确认流程。
 - `test-live` 默认验证外部 testnet/devnet 连通性；真实花费广播需要 `RUN_LIVE_SPENDING=true`、测试币余额、签名私钥和 Ed25519 seed。
-- 生产级全链端到端演练还需要同时启动 `wallet-sig1`、`wallet-sig2`、`wallet-server`，并由前端或 API 触发真实业务请求。
+- 生产级全链端到端演练还需要同时启动 `wallet-sig1`、`wallet-sig2`、`wallet-api`，并由前端或 API 触发真实业务请求。
 
 ## 9. 运行 DB-only 测试
 

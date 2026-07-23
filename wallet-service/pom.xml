@@ -50,7 +50,7 @@
         </dependency>
         <dependency>
             <groupId>com.surprising</groupId>
-            <artifactId>bitcoin-sdk</artifactId>
+            <artifactId>chain-sdks</artifactId>
         </dependency>
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>
@@ -71,10 +71,6 @@
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcprov-jdk18on</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.surprising</groupId>
-            <artifactId>tron-sdk</artifactId>
         </dependency>
         <dependency>
             <groupId>io.github.tronprotocol</groupId>

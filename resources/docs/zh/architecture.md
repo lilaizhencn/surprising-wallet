@@ -44,13 +44,12 @@
 
 | 模块 | 职责 |
 |---|---|
-| `wallet-server` | Custody/Console REST API、充值扫描任务、提现批处理、归集协调、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
+| `wallet-api` | Custody/Console REST API、充值扫描任务、提现批处理、归集协调、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-sig1` | BTC-like 2-of-3 第一签服务：对 BTC、BCH、LTC、DOGE 提现交易生成部分签名，轮询 Redis 队列 |
 | `wallet-sig2` | 第二签服务：对 BTC、BCH、LTC、DOGE、ETH、ERC20、TRON 交易完成最终签名并广播 |
 | `common` | 共享基础设施：Redis 封装、链数据模型、钱包密钥管理、Ed25519 密钥派生、Ethereum 密码学工具 |
-| `bitcoin-sdk` | Bitcoin-like 链 SDK：多签地址、SegWit 交易、手续费、UTXO 选择、BIP32 |
-| `tron-sdk` | TRON 链 SDK：gRPC 客户端、Protobuf 合约、ECKey 密码学、Keccak 哈希 |
+| `chain-sdks` | Bitcoin-like 链和 TRON 链 SDK：多签地址、SegWit 交易、UTXO 选择、BIP32、gRPC 客户端、Protobuf 合约、ECKey 密码学 |
 
 所有模块的 parent POM 为根目录 `pom.xml`，继承 Spring Boot starter parent 并提供统一的版本和依赖管理。
 
@@ -112,7 +111,7 @@ Collection：
 
 ## 启动配置校验
 
-wallet-server 启动时会检查 `chain_profile`、`chain_rpc_node`、`wallet_key_config`、默认热提钱包和 `wallet_system_config`。Keyset 尚未配置时，wallet-server 保持可启动，以便平台超级管理员完成首次配置；依赖密钥的运行路径不可用。Keyset 已配置时，默认热提钱包会通过代码推导后与 `chain_address` 比对，缺失或不一致会启动失败。同一链同一时刻只能启用一个网络；非生产环境可以同时保存 devnet/testnet profile 并切换启用，生产环境只允许启用生产网络。启用 profile 必须至少有一个匹配当前环境的 RPC 节点。校验结果会按链打印状态，缺失配置或关闭开关会输出 WARN。
+wallet-api 启动时会检查 `chain_profile`、`chain_rpc_node`、`wallet_key_config`、默认热提钱包和 `wallet_system_config`。Keyset 尚未配置时，wallet-api 保持可启动，以便平台超级管理员完成首次配置；依赖密钥的运行路径不可用。Keyset 已配置时，默认热提钱包会通过代码推导后与 `chain_address` 比对，缺失或不一致会启动失败。同一链同一时刻只能启用一个网络；非生产环境可以同时保存 devnet/testnet profile 并切换启用，生产环境只允许启用生产网络。启用 profile 必须至少有一个匹配当前环境的 RPC 节点。校验结果会按链打印状态，缺失配置或关闭开关会输出 WARN。
 
 ## 运行目录
 

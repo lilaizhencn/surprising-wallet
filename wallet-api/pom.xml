@@ -9,8 +9,8 @@
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>wallet-server</artifactId>
-    <name>wallet-server</name>
+    <artifactId>wallet-api</artifactId>
+    <name>wallet-api</name>
     <description>Wallet backend service: REST API, scheduled jobs, signature orchestration</description>
 
     <properties>

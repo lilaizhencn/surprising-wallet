@@ -85,7 +85,7 @@ mvn -pl wallet-service -am \
   -Devm.7702.delegate='<DELEGATE_ADDRESS>' \
   test
 
-mvn -pl wallet-server -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702ProductionFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.production.enabled=true \
@@ -127,7 +127,7 @@ allowlist。dRPC 当前不能用于部署、估算、广播或灾备。
 
 ## 6. 数据库 SHADOW 配置
 
-先确认 Relayer 可由 wallet-server 根密钥派生：
+先确认 Relayer 可由 wallet-api 根密钥派生：
 
 ```sql
 SELECT id, address, derivation_path, wallet_role, enabled

@@ -55,7 +55,7 @@ mvn -pl wallet-service -am \
 只读费用门禁：
 
 ```bash
-mvn -pl wallet-server -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702OpStackFeeIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.op-stack-fee.enabled=true \
@@ -105,7 +105,7 @@ mvn -pl wallet-service -am \
   -Devm.7702.delegate='<DELEGATE_ADDRESS>' \
   test
 
-mvn -pl wallet-server -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702ProductionFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.production.enabled=true \
@@ -155,7 +155,7 @@ unset EVM_DEPLOYER_PRIVATE_KEY
 
 ## 7. 数据库 SHADOW 配置
 
-先确认链级 Relayer 可由 wallet-server 密钥派生，结果恰好一行且等于合约 allowlist：
+先确认链级 Relayer 可由 wallet-api 密钥派生，结果恰好一行且等于合约 allowlist：
 
 ```sql
 SELECT id, address, derivation_path, wallet_role, enabled

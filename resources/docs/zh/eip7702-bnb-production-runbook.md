@@ -159,7 +159,7 @@ admin 多签确认测试网 Relayer 已在 allowlist。
 
 ## 8. 数据库先录入 SHADOW
 
-先确认 Relayer 是 wallet-server 能从受控根密钥派生的 BNB 链地址：
+先确认 Relayer 是 wallet-api 能从受控根密钥派生的 BNB 链地址：
 
 ```sql
 SELECT id, address, derivation_path, wallet_role, enabled

@@ -63,7 +63,7 @@
         </dependency>
         <dependency>
             <groupId>com.surprising</groupId>
-            <artifactId>tron-sdk</artifactId>
+            <artifactId>chain-sdks</artifactId>
         </dependency>
     </dependencies>
 
