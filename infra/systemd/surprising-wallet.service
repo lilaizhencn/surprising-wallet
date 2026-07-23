@@ -1,0 +1,26 @@
+[Unit]
+Description=Surprising Wallet API
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=wallet
+Group=wallet
+WorkingDirectory=/opt/surprising-wallet
+EnvironmentFile=/etc/surprising-wallet/wallet.env
+ExecStart=/usr/bin/java -Xms512m -Xmx3g -XX:+ExitOnOutOfMemoryError -jar /opt/surprising-wallet-backend/current/wallet-server.jar
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=30
+SuccessExitStatus=143
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/surprising-wallet/logs
+
+[Install]
+WantedBy=multi-user.target

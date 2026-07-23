@@ -90,6 +90,10 @@ sw:
           min: ${SW_WALLET_DEV_FAUCET_USDC_CUSTOMER_MIN:10.00}
           max: ${SW_WALLET_DEV_FAUCET_USDC_CUSTOMER_MAX:100.00}
           scale: 2
+    dev-eip7702-bootstrap:
+      enabled: ${SW_WALLET_DEV_EIP7702_BOOTSTRAP_ENABLED:false}
+      chain: ${SW_WALLET_DEV_EIP7702_CHAIN:ETH}
+      network: ${SW_WALLET_DEV_EIP7702_NETWORK:devtest}
     custody:
       secret-master-key: 339c28dcd013766105fe1c470b03b9e5637d99c4c260d04bbf2ead36f763b944
       session-ttl: ${SW_CUSTODY_SESSION_TTL:PT12H}

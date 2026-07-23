@@ -55,10 +55,19 @@ async function main() {
     payoutDelegateCodeHash: await runtimeCodeHash(payoutDelegateAddress)
   };
 
-  const outDir = path.join(__dirname, "..", "deployments");
-  fs.mkdirSync(outDir, { recursive: true });
-  const out = path.join(outDir, `${chain}-EIP7702-${network}.json`);
-  fs.writeFileSync(out, `${JSON.stringify(deployment, null, 2)}\n`, { flag: "wx" });
+  const configuredOutput = (process.env.EIP7702_DEPLOYMENT_FILE || "").trim();
+  const out = configuredOutput
+    ? path.resolve(configuredOutput)
+    : path.join(__dirname, "..", "deployments", `${chain}-EIP7702-${network}.json`);
+  const allowOverwrite = process.env.EIP7702_ALLOW_OVERWRITE === "true";
+  if (allowOverwrite && network !== "devtest" && network !== "local") {
+    throw new Error("EIP7702_ALLOW_OVERWRITE is restricted to devtest/local deployments");
+  }
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, `${JSON.stringify(deployment, null, 2)}\n`, {
+    flag: allowOverwrite ? "w" : "wx",
+    mode: 0o640
+  });
   process.stdout.write(`${JSON.stringify(deployment, null, 2)}\n`);
 }
 

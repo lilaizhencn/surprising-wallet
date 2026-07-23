@@ -1,0 +1,95 @@
+name: Deploy backend dev
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/deploy-backend-dev.yml
+      - backendservices/**
+      - currency-sdks/**
+      - surprising-parent/**
+      - pom.xml
+      - infra/sql/**
+      - infra/systemd/surprising-wallet.service
+      - scripts/deploy/backend-activate.sh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend-dev
+  cancel-in-progress: false
+
+jobs:
+  test-build-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Test backend
+        env:
+          PGPASSWORD: postgres
+          SW_TEST_CUSTODY_DB_URL: jdbc:postgresql://127.0.0.1:5432/surprising_wallet_test_ci
+          SW_TEST_CUSTODY_DB_USERNAME: postgres
+          SW_TEST_CUSTODY_DB_PASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres \
+            -c 'create database surprising_wallet_test_ci'
+          mvn -B -ntp -pl backendservices/wallet-parent/wallet-server -am test
+
+      - name: Package backend
+        run: mvn -B -ntp -pl backendservices/wallet-parent/wallet-server -am -DskipTests package
+
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.BACKEND_DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.BACKEND_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/backend_deploy"
+          chmod 0600 "$HOME/.ssh/backend_deploy"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0644 "$HOME/.ssh/known_hosts"
+
+      - name: Upload immutable release
+        env:
+          DEPLOY_HOST: ${{ secrets.BACKEND_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.BACKEND_DEPLOY_USER }}
+        run: |
+          remote="$DEPLOY_USER@$DEPLOY_HOST"
+          release="/opt/surprising-wallet-backend/releases/$GITHUB_SHA"
+          ssh -i "$HOME/.ssh/backend_deploy" "$remote" "install -d -m 0750 '$release'"
+          scp -i "$HOME/.ssh/backend_deploy" \
+            backendservices/wallet-parent/wallet-server/target/wallet-server-1.0.0-SNAPSHOT.jar \
+            "$remote:$release/wallet-server.jar"
+          scp -i "$HOME/.ssh/backend_deploy" \
+            infra/sql/20260723_eip7702_native_collection_and_batch_withdrawal.sql \
+            "$remote:$release/20260723_eip7702_native_collection_and_batch_withdrawal.sql"
+
+      - name: Activate and verify release
+        env:
+          DEPLOY_HOST: ${{ secrets.BACKEND_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.BACKEND_DEPLOY_USER }}
+        run: |
+          ssh -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "sudo /usr/local/sbin/surprising-wallet-backend-activate '$GITHUB_SHA'"
