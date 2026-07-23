@@ -82,9 +82,7 @@ jobs:
           scp -i "$HOME/.ssh/backend_deploy" \
             backendservices/wallet-parent/wallet-server/target/wallet-server-1.0.0-SNAPSHOT.jar \
             "$remote:$release/wallet-server.jar"
-          scp -i "$HOME/.ssh/backend_deploy" \
-            infra/sql/20260723_eip7702_native_collection_and_batch_withdrawal.sql \
-            "$remote:$release/20260723_eip7702_native_collection_and_batch_withdrawal.sql"
+          scp -i "$HOME/.ssh/backend_deploy" infra/sql/*.sql "$remote:$release/"
 
       - name: Activate and verify release
         env:

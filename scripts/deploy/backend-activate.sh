@@ -16,11 +16,10 @@ DEPLOY_ROOT=/opt/surprising-wallet-backend
 DEPLOY_RELEASE="$DEPLOY_ROOT/releases/$DEPLOY_SHA"
 DEPLOY_CURRENT="$DEPLOY_ROOT/current"
 DEPLOY_JAR="$DEPLOY_RELEASE/wallet-server.jar"
-DEPLOY_MIGRATION="$DEPLOY_RELEASE/20260723_eip7702_native_collection_and_batch_withdrawal.sql"
 DEPLOY_ENV=/etc/surprising-wallet/wallet.env
 DEPLOY_HEALTH_URL=http://127.0.0.1:8002/actuator/health
 
-if [[ ! -f $DEPLOY_JAR || ! -s $DEPLOY_JAR || ! -f $DEPLOY_MIGRATION ]]; then
+if [[ ! -f $DEPLOY_JAR || ! -s $DEPLOY_JAR ]]; then
   printf 'release %s is incomplete\n' "$DEPLOY_SHA" >&2
   exit 1
 fi
@@ -33,8 +32,18 @@ chown root:wallet "$DEPLOY_RELEASE"
 chmod 0750 "$DEPLOY_RELEASE"
 chown wallet:wallet "$DEPLOY_JAR"
 chmod 0640 "$DEPLOY_JAR"
-chown root:wallet "$DEPLOY_MIGRATION"
-chmod 0640 "$DEPLOY_MIGRATION"
+
+mapfile -t DEPLOY_MIGRATIONS < <(
+  find "$DEPLOY_RELEASE" -maxdepth 1 -type f -name '*.sql' -print | sort
+)
+if [[ ${#DEPLOY_MIGRATIONS[@]} -eq 0 ]]; then
+  printf 'release %s contains no database migrations\n' "$DEPLOY_SHA" >&2
+  exit 1
+fi
+for migration in "${DEPLOY_MIGRATIONS[@]}"; do
+  chown root:wallet "$migration"
+  chmod 0640 "$migration"
+done
 
 set -a
 # shellcheck disable=SC1090
@@ -47,9 +56,11 @@ if [[ $DB_URL != postgresql://127.0.0.1:* && $DB_URL != postgresql://localhost:*
   exit 1
 fi
 
-PGUSER=${SW_DB_USERNAME:?SW_DB_USERNAME is required} \
-PGPASSWORD=${SW_DB_PASSWORD:?SW_DB_PASSWORD is required} \
-  psql --set=ON_ERROR_STOP=1 "$DB_URL" --file="$DEPLOY_MIGRATION"
+for migration in "${DEPLOY_MIGRATIONS[@]}"; do
+  PGUSER=${SW_DB_USERNAME:?SW_DB_USERNAME is required} \
+  PGPASSWORD=${SW_DB_PASSWORD:?SW_DB_PASSWORD is required} \
+    psql --set=ON_ERROR_STOP=1 "$DB_URL" --file="$migration"
+done
 
 PREVIOUS_TARGET=
 if [[ -L $DEPLOY_CURRENT ]]; then
