@@ -6487,7 +6487,7 @@ BEGIN
             ADD CONSTRAINT deposit_record_credit_generation_check
             CHECK (credit_generation >= 0);
     END IF;
-END
+END;
 $$;
 
 ALTER TABLE public.utxo_record
@@ -6508,7 +6508,7 @@ BEGIN
         RAISE EXCEPTION
             'utxo_record has rows without canonical block hashes; backfill them from the chain before deployment';
     END IF;
-END
+END;
 $$;
 
 ALTER TABLE public.utxo_record
@@ -6641,7 +6641,7 @@ BEGIN
             ADD CONSTRAINT evm_7702_config_withdraw_batch_check
             CHECK (withdrawal_max_batch_items BETWEEN 1 AND 100);
     END IF;
-END
+END;
 $$;
 
 ALTER TABLE public.custody_gas_usage
