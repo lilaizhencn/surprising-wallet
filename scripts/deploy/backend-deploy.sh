@@ -4,8 +4,7 @@ set -euo pipefail
 # surprising-wallet backend deploy script
 # Server-side: git pull → mvn package → migrate → switch → verify.
 # Invoked by GitHub Actions via SSH (command= restricted key).
-# Steps: pull → build → deploy EIP-7702 → migrate → switch → health check → rollback on failure.
-# This script is self-contained: git pull → build → migrate → switch → verify.
+# Migrations are idempotent: each SQL file runs at most once (tracked in _deploy_migrations).
 
 if [[ ${EUID} -ne 0 ]]; then
   printf 'deploy must run as root\n' >&2
@@ -66,7 +65,7 @@ printf 'staged %d sql file(s)\n' "$SQL_COUNT"
 chown root:wallet "$DEPLOY_RELEASE"
 chmod 0750 "$DEPLOY_RELEASE"
 
-# ── 4. migrate ───────────────────────────────────────────────────────
+# ── 4. migrate (idempotent: each file runs at most once) ─────────────
 if [[ ! -f $ENV_FILE ]]; then
   printf 'env file %s is missing\n' "$ENV_FILE" >&2
   exit 1
@@ -81,12 +80,28 @@ if [[ $DB_URL != postgresql://127.0.0.1:* && $DB_URL != postgresql://localhost:*
   exit 1
 fi
 
+PGUSER=${SW_DB_USERNAME:?SW_DB_USERNAME is required}
+PGPASSWORD=${SW_DB_PASSWORD:?SW_DB_PASSWORD is required}
+export PGUSER PGPASSWORD
+
+# ensure migration tracking table (idempotent)
+psql --set=ON_ERROR_STOP=1 "$DB_URL" -c "
+  CREATE TABLE IF NOT EXISTS _deploy_migrations (
+    filename text PRIMARY KEY,
+    applied_at timestamptz NOT NULL DEFAULT now()
+  )"
+
 for migration in "$DEPLOY_RELEASE"/*.sql; do
   [[ -f $migration ]] || continue
-  printf 'running migration: %s\n' "$(basename "$migration")"
-  PGUSER=${SW_DB_USERNAME:?SW_DB_USERNAME is required} \
-  PGPASSWORD=${SW_DB_PASSWORD:?SW_DB_PASSWORD is required} \
-    psql --set=ON_ERROR_STOP=1 "$DB_URL" --file="$migration"
+  name=$(basename "$migration")
+  already=$(psql -tA "$DB_URL" -c "COPY (SELECT 1 FROM _deploy_migrations WHERE filename='$name') TO STDOUT" 2>/dev/null)
+  if [[ -n $already ]]; then
+    printf 'skipped (already applied): %s\n' "$name"
+    continue
+  fi
+  printf 'running migration: %s\n' "$name"
+  psql --set=ON_ERROR_STOP=1 "$DB_URL" --file="$migration"
+  psql "$DB_URL" -c "INSERT INTO _deploy_migrations(filename) VALUES('$name') ON CONFLICT DO NOTHING"
 done
 
 # ── 5. switch ────────────────────────────────────────────────────────
