@@ -58,7 +58,7 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres \
             -c 'create database surprising_wallet_test_ci'
-          mvn -B -ntp -pl wallet-api -am -DskipTests test
+          mvn -B -ntp -pl wallet-api -am test
 
       - name: Package backend
         run: mvn -B -ntp -pl wallet-api -am -DskipTests package

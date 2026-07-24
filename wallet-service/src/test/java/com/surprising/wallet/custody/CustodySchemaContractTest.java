@@ -22,7 +22,7 @@ class CustodySchemaContractTest {
     void cleanBaselineContainsTenantIsolationAndReliableEvents() throws Exception {
         Path root = projectRoot();
         String sql = Files.readString(root.resolve(
-                "docs/db/surprising-wallet-init-pgsql.sql"));
+                "resources/docs/db/surprising-wallet-init-pgsql.sql"));
 
         for (String table : new String[]{
                 "custody_tenant", "custody_tenant_user", "custody_session", "custody_api_key",
@@ -124,7 +124,8 @@ class CustodySchemaContractTest {
     private static Path projectRoot() throws IOException {
         Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath();
         while (current != null) {
-            if (Files.exists(current.resolve("docs/db/surprising-wallet-init-pgsql.sql"))) {
+            if (Files.exists(current.resolve("resources/docs/db/surprising-wallet-init-pgsql.sql"))
+                    || Files.exists(current.resolve("docs/db/surprising-wallet-init-pgsql.sql"))) {
                 return current;
             }
             current = current.getParent();
