@@ -13,49 +13,41 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 @Component
-public class PolkadotKeyService {
+public
+class PolkadotKeyService {
     private static final byte[] SS58_PREFIX = "SS58PRE".getBytes(StandardCharsets.US_ASCII);
-
-    private final WalletKeyMaterialProvider keyMaterial;
-    private final Ed25519KeyProvider testProvider;
+    private final WalletKeyMaterialProvider keyMaterial;    private final Ed25519KeyProvider testProvider;
 
     @Autowired
     public PolkadotKeyService(WalletKeyMaterialProvider keyMaterial) {
         this.keyMaterial = keyMaterial;
         this.testProvider = null;
     }
-
     public PolkadotKeyService(String encodedMasterSeed) {
         this.keyMaterial = null;
         this.testProvider = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(encodedMasterSeed));
     }
-
     public boolean isConfigured() {
         return testProvider != null || keyMaterial.isConfigured();
     }
-
     public Ed25519DerivedKey derive(long derivationIndex) {
         return provider().derive(Ed25519Chain.POLKADOT, derivationIndex);
     }
-
     public Ed25519DerivedKey derive(long userId, int biz, long derivationIndex) {
         if (userId == 0 && biz == 0) {
             return derive(derivationIndex);
         }
         return provider().derive(Ed25519Chain.POLKADOT, biz, userId, derivationIndex);
     }
-
     public String address(long userId, int biz, long derivationIndex, int ss58Prefix) {
         return ss58Address(derive(userId, biz, derivationIndex).publicKey(), ss58Prefix);
     }
-
     public byte[] sign(long userId, int biz, long derivationIndex, byte[] message) {
         if (userId == 0 && biz == 0) {
             return provider().sign(Ed25519Chain.POLKADOT, derivationIndex, message);
         }
         return provider().sign(Ed25519Chain.POLKADOT, biz, userId, derivationIndex, message);
     }
-
     public static String ss58Address(byte[] publicKey, int ss58Prefix) {
         if (publicKey == null || publicKey.length != 32) {
             throw new IllegalArgumentException("Polkadot account id must be 32 bytes");
@@ -75,7 +67,6 @@ public class PolkadotKeyService {
         address[address.length - 1] = checksum[1];
         return Base58.encode(address);
     }
-
     public static boolean isValidSs58Address(String address) {
         String value = address == null ? "" : address.trim();
         if (value.length() < 47 || value.length() > 50) {
@@ -107,7 +98,6 @@ public class PolkadotKeyService {
         return decoded[decoded.length - 2] == checksum[0]
                 && decoded[decoded.length - 1] == checksum[1];
     }
-
     private static byte[] ss58PrefixBytes(int ss58Prefix) {
         if (ss58Prefix < 0 || ss58Prefix > 16383) {
             throw new IllegalArgumentException("SS58 prefix must be between 0 and 16383");
@@ -119,7 +109,6 @@ public class PolkadotKeyService {
         int second = (ss58Prefix >> 8) | ((ss58Prefix & 0x0003) << 6);
         return new byte[]{(byte) first, (byte) second};
     }
-
     private Ed25519KeyProvider provider() {
         return testProvider != null ? testProvider : keyMaterial.ed25519();
     }

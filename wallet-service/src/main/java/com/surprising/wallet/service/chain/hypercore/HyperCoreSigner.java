@@ -18,13 +18,7 @@ import java.math.BigInteger;
  */
 @Component
 public class HyperCoreSigner {
-    static final String SIGNATURE_CHAIN_ID = "0x66eee";
-    private static final String DOMAIN_NAME = "HyperliquidSignTransaction";
-    private static final String DOMAIN_VERSION = "1";
-    private static final String ZERO_VERIFYING_CONTRACT = "0x0000000000000000000000000000000000000000";
-
-    private final ObjectMapper objectMapper;
-
+    static final String SIGNATURE_CHAIN_ID = "0x66eee";    private static final String DOMAIN_NAME = "HyperliquidSignTransaction";    private static final String DOMAIN_VERSION = "1";    private static final String ZERO_VERIFYING_CONTRACT = "0x0000000000000000000000000000000000000000";    private final ObjectMapper objectMapper;
     public HyperCoreSigner() {
         this(new ObjectMapper());
     }
@@ -32,22 +26,18 @@ public class HyperCoreSigner {
     HyperCoreSigner(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
-
     public ObjectNode signUsdSend(ObjectNode action, ECKey key, boolean mainnet) {
         addCommonFields(action, mainnet);
         return sign(action, key, "HyperliquidTransaction:UsdSend", usdSendTypes());
     }
-
     public ObjectNode signSpotSend(ObjectNode action, ECKey key, boolean mainnet) {
         addCommonFields(action, mainnet);
         return sign(action, key, "HyperliquidTransaction:SpotSend", spotSendTypes());
     }
-
     byte[] hashUsdSend(ObjectNode action, boolean mainnet) {
         addCommonFields(action, mainnet);
         return hash(action, "HyperliquidTransaction:UsdSend", usdSendTypes());
     }
-
     private ObjectNode sign(ObjectNode action, ECKey key, String primaryType, ArrayNode payloadTypes) {
         byte[] hash = hash(action, primaryType, payloadTypes);
         ECKeyPair keyPair = ECKeyPair.create(key.getPrivKey());
@@ -58,7 +48,6 @@ public class HyperCoreSigner {
         node.put("v", signature.getV()[0] & 0xFF);
         return node;
     }
-
     private byte[] hash(ObjectNode action, String primaryType, ArrayNode payloadTypes) {
         try {
             ObjectNode typed = objectMapper.createObjectNode();
@@ -80,12 +69,10 @@ public class HyperCoreSigner {
             throw new IllegalStateException("HyperCore typed-data serialization failed", e);
         }
     }
-
     private void addCommonFields(ObjectNode action, boolean mainnet) {
         action.put("signatureChainId", SIGNATURE_CHAIN_ID);
         action.put("hyperliquidChain", mainnet ? "Mainnet" : "Testnet");
     }
-
     private ArrayNode usdSendTypes() {
         ArrayNode types = objectMapper.createArrayNode();
         addType(types, "hyperliquidChain", "string");
@@ -94,7 +81,6 @@ public class HyperCoreSigner {
         addType(types, "time", "uint64");
         return types;
     }
-
     private ArrayNode spotSendTypes() {
         ArrayNode types = objectMapper.createArrayNode();
         addType(types, "hyperliquidChain", "string");
@@ -104,7 +90,6 @@ public class HyperCoreSigner {
         addType(types, "time", "uint64");
         return types;
     }
-
     private ArrayNode domainTypes() {
         ArrayNode types = objectMapper.createArrayNode();
         addType(types, "name", "string");
@@ -113,7 +98,6 @@ public class HyperCoreSigner {
         addType(types, "verifyingContract", "address");
         return types;
     }
-
     private void addType(ArrayNode types, String name, String type) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("name", name);

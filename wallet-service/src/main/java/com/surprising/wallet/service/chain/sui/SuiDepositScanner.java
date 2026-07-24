@@ -21,16 +21,12 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
-public class SuiDepositScanner {
-    private static final String CHAIN = "SUI";
-    static final String SCANNER = "sui-balance-change-scanner";
-
-    private final SuiRpcClient rpc;
-    private final ChainJdbcRepository repository;
+public
+class SuiDepositScanner {
+    private static final String CHAIN = "SUI";    static final String SCANNER = "sui-balance-change-scanner";    private final SuiRpcClient rpc;    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
-
     public List<DepositEvent> scanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "sui scanAndCredit");
         AccountChainProfile profile = profile();
@@ -55,7 +51,6 @@ public class SuiDepositScanner {
         repository.updateScanHeight(CHAIN, SCANNER, latest, end);
         return events;
     }
-
     private void addTargets(List<AssetScanTarget> targets, String symbol, String coinType) {
         for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, symbol)) {
             if ("DEPOSIT".equals(address.getWalletRole())) {
@@ -114,7 +109,6 @@ public class SuiDepositScanner {
             events.add(event);
         }
     }
-
     private boolean ownerMatches(JsonNode owner, String address) {
         String expected = SuiHex.normalizeAddress(address);
         if (owner.isTextual()) {
@@ -123,7 +117,6 @@ public class SuiDepositScanner {
         String value = owner.path("AddressOwner").asText(null);
         return value != null && expected.equals(SuiHex.normalizeAddress(value));
     }
-
     private Set<String> platformAddresses() {
         Set<String> addresses = new HashSet<>();
         for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
@@ -132,7 +125,6 @@ public class SuiDepositScanner {
         }
         return addresses;
     }
-
     private void addAddress(Set<String> addresses, String address) {
         if (address == null || address.isBlank()) {
             return;
@@ -143,11 +135,9 @@ public class SuiDepositScanner {
             // Ignore malformed historical records; address creation validates new rows.
         }
     }
-
     private boolean sameCoinType(String expected, String actual) {
         return normalizeCoinType(expected).equals(normalizeCoinType(actual));
     }
-
     private String normalizeCoinType(String value) {
         String[] parts = value.split("::");
         if (parts.length != 3) {
@@ -155,7 +145,6 @@ public class SuiDepositScanner {
         }
         return SuiHex.normalizeAddress(parts[0]) + "::" + parts[1] + "::" + parts[2];
     }
-
     private int decimals(String symbol) {
         return repository.findAsset(CHAIN, symbol)
                 .map(asset -> asset.getDecimals())
@@ -163,18 +152,15 @@ public class SuiDepositScanner {
                         .map(TokenDefinition::getDecimals)
                         .orElse(9));
     }
-
     private long totalGas(JsonNode gas) {
         return gas.path("computationCost").asLong(0)
                 + gas.path("storageCost").asLong(0)
                 - gas.path("storageRebate").asLong(0);
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     private long scanStart(AccountChainProfile profile, long latest) {
         return repository.findScanSafeHeight(CHAIN, SCANNER)
                 .map(height -> Math.min(latest, height + 1L))
@@ -184,7 +170,6 @@ public class SuiDepositScanner {
                     return Math.max(configured, latest - scanBatchSize(profile) + 1L);
                 });
     }
-
     private int scanBatchSize(AccountChainProfile profile) {
         Long maxBlocks = profile.getScanMaxBlocksPerRun();
         if (maxBlocks != null && maxBlocks > 0L) {
@@ -193,10 +178,8 @@ public class SuiDepositScanner {
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 50 : batchSize;
     }
-
     private record AssetScanTarget(String symbol, String coinType, ChainAddressRecord address) {
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);

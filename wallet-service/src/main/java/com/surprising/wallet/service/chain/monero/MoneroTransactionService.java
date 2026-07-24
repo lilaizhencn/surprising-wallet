@@ -13,13 +13,9 @@ import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
-public class MoneroTransactionService {
-    private static final String CHAIN = MoneroWalletRpcClient.CHAIN;
-    private static final String SYMBOL = MoneroWalletRpcClient.SYMBOL;
-
-    private final MoneroWalletRpcClient walletRpcClient;
-    private final ChainJdbcRepository repository;
-
+public
+class MoneroTransactionService {
+    private static final String CHAIN = MoneroWalletRpcClient.CHAIN;    private static final String SYMBOL = MoneroWalletRpcClient.SYMBOL;    private final MoneroWalletRpcClient walletRpcClient;    private final ChainJdbcRepository repository;
     public String sendNative(AccountChainProfile profile, ChainAddressRecord from, String toAddress, BigDecimal amount) {
         MoneroWalletRpcClient.Transfer transfer = walletRpcClient.transfer(
                 Math.toIntExact(from.getAddressIndex()), toAddress, amount, network(profile), "rpc");
@@ -106,7 +102,6 @@ public class MoneroTransactionService {
                         Math.max(1, profile.getDepositConfirmations()),
                         recipient.getAccountId()));
     }
-
     private static long scannerLogIndex(ChainAddressRecord recipient) {
         long subaddressIndex = recipient.getAddressIndex() == null ? 0L : recipient.getAddressIndex();
         return subaddressIndex << 32;
@@ -141,7 +136,6 @@ public class MoneroTransactionService {
                 .build());
         return confirmations >= required ? transfer : null;
     }
-
     private static String network(AccountChainProfile profile) {
         return profile == null ? null : profile.getNetwork();
     }

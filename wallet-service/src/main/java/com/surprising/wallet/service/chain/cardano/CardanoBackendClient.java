@@ -16,12 +16,9 @@ import java.util.Locale;
 
 @Component
 @RequiredArgsConstructor
-public class CardanoBackendClient {
-    static final String CHAIN = "ADA";
-
-    private final ChainJdbcRepository repository;
-    private final ChainRpcNodeService rpcNodeService;
-
+public
+class CardanoBackendClient {
+    static final String CHAIN = "ADA";    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;
     public <T> T withBackend(BackendRequest<T> request) {
         AccountChainProfile profile = repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for ADA"));
@@ -34,7 +31,6 @@ public class CardanoBackendClient {
             }
         });
     }
-
     public static <T> T requireSuccess(Result<T> result, String operation) {
         if (result == null) {
             throw new IllegalStateException("Cardano " + operation + " returned no result");
@@ -44,11 +40,9 @@ public class CardanoBackendClient {
         }
         return result.getValue();
     }
-
     static boolean isNotFound(Result<?> result) {
         return result != null && !result.isSuccessful() && result.code() == 404;
     }
-
     private BackendService backend(ChainRpcNode node, String network) {
         String apiKey = node.getApiKey() == null ? "" : node.getApiKey().trim();
         if (apiKey.isBlank()) {
@@ -56,7 +50,6 @@ public class CardanoBackendClient {
         }
         return new BFBackendService(blockfrostUrl(node.getRpcUrl(), network), apiKey);
     }
-
     private static String blockfrostUrl(String configuredUrl, String network) {
         String value = configuredUrl == null ? "" : configuredUrl.trim();
         if (!value.isBlank()) {

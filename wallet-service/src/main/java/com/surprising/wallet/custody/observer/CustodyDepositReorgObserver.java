@@ -16,11 +16,7 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Component
 public class CustodyDepositReorgObserver implements DepositReorgObserver {
-    private static final String EVENT_TYPE = "DEPOSIT.REORGED";
-
-    private final JdbcTemplate jdbc;
-    private final CustodyRepository repository;
-    private final ObjectMapper objectMapper;
+    private static final String EVENT_TYPE = "DEPOSIT.REORGED";    private final JdbcTemplate jdbc;    private final CustodyRepository repository;    private final ObjectMapper objectMapper;
 
     public CustodyDepositReorgObserver(JdbcTemplate jdbc, CustodyRepository repository,
                                        ObjectMapper objectMapper) {
@@ -111,12 +107,10 @@ public class CustodyDepositReorgObserver implements DepositReorgObserver {
                 "DEPOSIT.REORG", "CUSTODY_DEPOSIT", projection.depositId().toString(), null,
                 json(data));
     }
-
     private static String reference(ReorgedDeposit deposit, String action) {
         return deposit.chain() + ":" + deposit.txHash() + ":" + deposit.logIndex()
                 + ":" + action + ":" + deposit.creditGeneration();
     }
-
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);

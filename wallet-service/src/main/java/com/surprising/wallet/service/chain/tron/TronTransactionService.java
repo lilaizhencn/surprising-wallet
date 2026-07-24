@@ -20,15 +20,12 @@ public class TronTransactionService {
         Chain.Transaction signed = client.api().signTransaction(tx, keyPair);
         return new SignedTronTransaction(txId(signed), signed);
     }
-
     public String broadcast(TronTridentClient client, SignedTronTransaction transaction) {
         return client.broadcast(transaction.transaction());
     }
-
     public static String txId(Chain.Transaction transaction) {
         return ApiWrapper.toHex(ApiWrapper.calculateTransactionHash(transaction));
     }
-
     public record SignedTronTransaction(String txId, Chain.Transaction transaction) {
     }
 }

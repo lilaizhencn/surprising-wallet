@@ -73,10 +73,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class AccountChainWorkflowService {
-    private static final int WITHDRAW_LIMIT = 20;
-    private static final int CONFIRM_LIMIT = 50;
-    private static final int COLLECTION_LIMIT = 20;
-    private static final Duration SIGNING_STALE_TIMEOUT = Duration.ofMinutes(10);
+    private static final int WITHDRAW_LIMIT = 20;    private static final int CONFIRM_LIMIT = 50;    private static final int COLLECTION_LIMIT = 20;    private static final Duration SIGNING_STALE_TIMEOUT = Duration.ofMinutes(10);
     private static final BigDecimal TRX_SUN = new BigDecimal("1000000");
     private static final List<String> ACCOUNT_CHAIN_PRIORITY = List.of(
             "XMR",
@@ -84,39 +81,9 @@ public class AccountChainWorkflowService {
             "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C", "HYPEREVM",
             "MANTLE", "LINEA", "SCROLL", "UNICHAIN",
             "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
-
-    private final ChainJdbcRepository repository;
-    private final WalletRuntimeConfigService runtimeConfigService;
-    private final AccountSecp256k1KeyService secp256k1KeyService;
-
-    private final EvmDepositScanner evmDepositScanner;
-    private final EvmAccountTransactionService evmTransactionService;
-    private final HyperCoreDepositScanner hyperCoreDepositScanner;
-    private final HyperCoreTransactionService hyperCoreTransactionService;
-    private final SolanaDepositScanner solanaDepositScanner;
-    private final SolanaTransactionService solanaTransactionService;
-    private final AptosDepositScanner aptosDepositScanner;
-    private final AptosTransactionService aptosTransactionService;
-    private final SuiDepositScanner suiDepositScanner;
-    private final SuiTransactionService suiTransactionService;
-    private final TonDepositScanner tonDepositScanner;
-    private final TonTransactionService tonTransactionService;
-    private final XrpDepositScanner xrpDepositScanner;
-    private final XrpTransactionService xrpTransactionService;
-    private final CardanoDepositScanner cardanoDepositScanner;
-    private final CardanoTransactionService cardanoTransactionService;
-    private final MoneroDepositScanner moneroDepositScanner;
-    private final MoneroTransactionService moneroTransactionService;
-    private final NearDepositScanner nearDepositScanner;
-    private final NearTransactionService nearTransactionService;
-    private final PolkadotDepositScanner polkadotDepositScanner;
-    private final PolkadotTransactionService polkadotTransactionService;
-
-    private final TronClientFactory tronClientFactory;
-    private final TronDepositScanner tronDepositScanner;
-    private final TronTransactionService tronTransactionService;
-    private final TronTrc20Service tronTrc20Service;
-
+    private final ChainJdbcRepository repository;    private final WalletRuntimeConfigService runtimeConfigService;    private final AccountSecp256k1KeyService secp256k1KeyService;
+    private final EvmDepositScanner evmDepositScanner;    private final EvmAccountTransactionService evmTransactionService;    private final HyperCoreDepositScanner hyperCoreDepositScanner;    private final HyperCoreTransactionService hyperCoreTransactionService;    private final SolanaDepositScanner solanaDepositScanner;    private final SolanaTransactionService solanaTransactionService;    private final AptosDepositScanner aptosDepositScanner;    private final AptosTransactionService aptosTransactionService;    private final SuiDepositScanner suiDepositScanner;    private final SuiTransactionService suiTransactionService;    private final TonDepositScanner tonDepositScanner;    private final TonTransactionService tonTransactionService;    private final XrpDepositScanner xrpDepositScanner;    private final XrpTransactionService xrpTransactionService;    private final CardanoDepositScanner cardanoDepositScanner;    private final CardanoTransactionService cardanoTransactionService;    private final MoneroDepositScanner moneroDepositScanner;    private final MoneroTransactionService moneroTransactionService;    private final NearDepositScanner nearDepositScanner;    private final NearTransactionService nearTransactionService;    private final PolkadotDepositScanner polkadotDepositScanner;    private final PolkadotTransactionService polkadotTransactionService;
+    private final TronClientFactory tronClientFactory;    private final TronDepositScanner tronDepositScanner;    private final TronTransactionService tronTransactionService;    private final TronTrc20Service tronTrc20Service;
     public void moneroWorkflow() {
         AccountChainProfile profile = repository.findProfileByChain("XMR")
                 .filter(candidate -> Boolean.TRUE.equals(candidate.getEnabled()))
@@ -126,37 +93,31 @@ public class AccountChainWorkflowService {
         }
         processSingleAccountChain(profile);
     }
-
     public void scanDeposits() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
             scanDeposits(profile);
         }
     }
-
     public void processWithdrawals() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
             processWithdrawals(profile);
         }
     }
-
     public void confirmWithdrawals() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
             confirmWithdrawals(profile);
         }
     }
-
     public void processCollections() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
             processCollections(profile);
         }
     }
-
     public void confirmCollections() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
             confirmCollections(profile);
         }
     }
-
     private void processSingleAccountChain(AccountChainProfile profile) {
         scanDeposits(profile);
         processWithdrawals(profile);
@@ -164,7 +125,6 @@ public class AccountChainWorkflowService {
         processCollections(profile);
         confirmCollections(profile);
     }
-
     private void scanDeposits(AccountChainProfile profile) {
         if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_SCAN)) {
             return;
@@ -193,7 +153,6 @@ public class AccountChainWorkflowService {
                     profile.getChain(), e.getMessage(), e);
         }
     }
-
     private void processWithdrawals(AccountChainProfile profile) {
         if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_WITHDRAW)) {
             return;
@@ -218,7 +177,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-
     private void confirmWithdrawals(AccountChainProfile profile) {
         for (WithdrawalOrderRecord order : repository.listWithdrawalsByStatus(
                 profile.getChain(), "SENT", CONFIRM_LIMIT)) {
@@ -230,7 +188,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-
     private void processCollections(AccountChainProfile profile) {
         if (!runtimeConfigService.isTaskEnabled(profile.getChain(), WalletRuntimeConfigService.TASK_COLLECTION)) {
             return;
@@ -253,7 +210,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-
     private void confirmCollections(AccountChainProfile profile) {
         for (ChainCollectionRecord record : repository.listCollectionsByStatus(
                 profile.getChain(), "SENT", CONFIRM_LIMIT)) {
@@ -265,7 +221,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-
     private void processWithdrawal(AccountChainProfile profile, WithdrawalOrderRecord order) {
         UUID tenantId = Objects.requireNonNull(order.getTenantId(), "withdrawal tenantId is required");
         ChainAddressRecord from = requireAddress(
@@ -368,7 +323,6 @@ public class AccountChainWorkflowService {
             default -> throw new IllegalStateException("unsupported account-chain withdrawal: " + chain);
         };
     }
-
     private void confirmWithdrawal(AccountChainProfile profile, WithdrawalOrderRecord order) throws Exception {
         UUID tenantId = Objects.requireNonNull(order.getTenantId(), "withdrawal tenantId is required");
         if ("evm".equalsIgnoreCase(profile.getFamily())
@@ -412,7 +366,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-
     private void createCollectionCandidates(AccountChainProfile profile) {
         List<CollectionCandidateRecord> candidates = repository.listCollectableLedgerBalances(
                 profile.getChain(), BigDecimal.ZERO, COLLECTION_LIMIT);
@@ -436,7 +389,6 @@ public class AccountChainWorkflowService {
                     amount, BigDecimal.ZERO, null);
         }
     }
-
     private void processCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {
         if ("evm".equalsIgnoreCase(profile.getFamily())
                 && repository.isEvm7702Managed(profile.getChain(), profile.getNetwork())) {
@@ -561,7 +513,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-
     private void confirmCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
             if (repository.isCollectionInPendingEvm7702Batch(
@@ -602,7 +553,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-
     private void scanEvm(AccountChainProfile profile) throws IOException {
         ChainType chainType = ChainType.valueOf(profile.getChain());
         long latest = evmDepositScanner.getLatestBlockNumber(chainType).longValueExact();
@@ -614,47 +564,36 @@ public class AccountChainWorkflowService {
             evmDepositScanner.scanAndCreditErc20(chainType, height);
         }
     }
-
     private void scanSolana() {
         solanaDepositScanner.scanAndCredit();
     }
-
     private void scanAptos() {
         aptosDepositScanner.scanAndCredit();
     }
-
     private void scanSui() {
         suiDepositScanner.scanAndCredit();
     }
-
     private void scanTon() {
         tonDepositScanner.scanAndCredit();
     }
-
     private void scanXrp() {
         xrpDepositScanner.scanAndCredit();
     }
-
     private void scanCardano() {
         cardanoDepositScanner.scanAndCredit();
     }
-
     private void scanPolkadot() {
         polkadotDepositScanner.scanAndCredit();
     }
-
     private void scanNear() {
         nearDepositScanner.scanAndCredit();
     }
-
     private void scanHyperCore(AccountChainProfile profile) {
         hyperCoreDepositScanner.scanAndCredit(profile);
     }
-
     private void scanMonero(AccountChainProfile profile) {
         moneroDepositScanner.scanAndCredit(profile);
     }
-
     private void scanTron(AccountChainProfile profile) throws Exception {
         try (TronTridentClient client = tronClientFactory.create()) {
             long latest = client.getNowBlock().getBlockHeader().getRawData().getNumber();
@@ -669,7 +608,6 @@ public class AccountChainWorkflowService {
             }
         }
     }
-
     private String broadcastTonNative(WithdrawalOrderRecord order, ChainAddressRecord from) {
         TonTransactionService.PreparedTransfer prepared = tonTransactionService.prepareNative(
                 from, order.getToAddress(), toAtomicBigInteger(order.getAmount(), assetDecimals(order)),
@@ -677,7 +615,6 @@ public class AccountChainWorkflowService {
         return tonTransactionService.broadcastAndRecord(prepared, from.getAddress(), order.getToAddress(),
                 order.getAssetSymbol(), null, order.getAmount());
     }
-
     private String broadcastTonJetton(WithdrawalOrderRecord order, ChainAddressRecord from, TokenDefinition token) {
         ChainAddressRecord jettonWallet = repository.findChainAddress(
                         order.getChain(), token.getSymbol(), from.getUserId(), from.getBiz(),
@@ -762,7 +699,6 @@ public class AccountChainWorkflowService {
                     order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
         }
     }
-
     private void confirmTronCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {
         Response.TransactionInfo txInfo = confirmedTronInfo(profile, record.getTxHash());
         if (txInfo != null) {
@@ -807,7 +743,6 @@ public class AccountChainWorkflowService {
                 .rawPayload(txInfo.toString())
                 .build());
     }
-
     private void confirmTonWithdrawal(WithdrawalOrderRecord order, ChainAddressRecord from) {
         if (order.getTxHash() == null || order.getTxHash().isBlank()) {
             return;
@@ -817,7 +752,6 @@ public class AccountChainWorkflowService {
                     order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
         }
     }
-
     private static String tonOwnerAddress(ChainAddressRecord address) {
         return address.getOwnerAddress() == null || address.getOwnerAddress().isBlank()
                 ? address.getAddress() : address.getOwnerAddress();
@@ -886,7 +820,6 @@ public class AccountChainWorkflowService {
                 : BigDecimal.valueOf(profile.getDustThreshold()).movePointLeft(decimals);
         return feeReserve.add(dustReserve);
     }
-
     private ChainAddressRecord requireAddress(String chain, String symbol, String address) {
         if (address == null || address.isBlank()) {
             throw new IllegalStateException("missing source address");
@@ -896,7 +829,6 @@ public class AccountChainWorkflowService {
                 .orElseThrow(() -> new IllegalStateException(
                         "missing chain_address for " + chain + "/" + symbol + " " + address));
     }
-
     private ChainAddressRecord requireAddress(UUID tenantId, String chain, String symbol, String address) {
         if (address == null || address.isBlank()) {
             throw new IllegalStateException("missing source address");
@@ -906,53 +838,42 @@ public class AccountChainWorkflowService {
                 .orElseThrow(() -> new IllegalStateException(
                         "missing tenant chain_address for " + chain + "/" + symbol + " " + address));
     }
-
     private TokenDefinition requireToken(String chain, String symbol) {
         return repository.findToken(chain, symbol)
                 .orElseThrow(() -> new IllegalStateException("missing token_config for " + chain + "/" + symbol));
     }
-
     private int assetDecimals(WithdrawalOrderRecord order) {
         return assetDecimals(order.getChain(), order.getAssetSymbol());
     }
-
     private int assetDecimals(ChainCollectionRecord record) {
         return assetDecimals(record.getChain(), record.getAssetSymbol());
     }
-
     private int assetDecimals(String chain, String symbol) {
         return repository.findAsset(chain, symbol)
                 .map(ChainAsset::getDecimals)
                 .orElseGet(() -> requireToken(chain, symbol).getDecimals());
     }
-
     private BigDecimal toAtomicDecimal(BigDecimal amount, int decimals) {
         return new BigDecimal(toAtomicBigInteger(amount, decimals));
     }
-
     private BigInteger toAtomicBigInteger(BigDecimal amount, int decimals) {
         return amount.movePointRight(decimals).setScale(0, RoundingMode.UNNECESSARY).toBigIntegerExact();
     }
-
     private long toAtomicLong(BigDecimal amount, int decimals) {
         return toAtomicBigInteger(amount, decimals).longValueExact();
     }
-
     private boolean isNative(AccountChainProfile profile, String symbol) {
         return symbol != null && symbol.equalsIgnoreCase(profile.getNativeSymbol());
     }
-
     private String debitAccountId(WithdrawalOrderRecord order, ChainAddressRecord from) {
         String debitAccountId = order.getDebitAccountId();
         return debitAccountId == null || debitAccountId.isBlank() ? from.getAccountId() : debitAccountId;
     }
-
     private BigDecimal withdrawalDebitAmount(WithdrawalOrderRecord order) {
         BigDecimal amount = order.getAmount() == null ? BigDecimal.ZERO : order.getAmount();
         BigDecimal fee = order.getFee() == null ? BigDecimal.ZERO : order.getFee();
         return amount.add(fee);
     }
-
     private List<AccountChainProfile> enabledAccountProfiles() {
         return repository.listEnabledChainProfiles().stream()
                 .filter(profile -> !"utxo".equalsIgnoreCase(profile.getFamily()))
@@ -963,12 +884,10 @@ public class AccountChainWorkflowService {
                         .thenComparing(AccountChainProfile::getNetwork))
                 .toList();
     }
-
     private int accountChainPriority(String chain) {
         int index = ACCOUNT_CHAIN_PRIORITY.indexOf(chain);
         return index < 0 ? ACCOUNT_CHAIN_PRIORITY.size() : index;
     }
-
     private long scanStart(AccountChainProfile profile, long latest, String... scannerNames) {
         long configured = profile.getScanStartHeight() == null ? 0L : profile.getScanStartHeight();
         long fallback = configured > 0 ? configured : Math.max(0L, latest - scanBatch(profile) + 1L);
@@ -981,7 +900,6 @@ public class AccountChainWorkflowService {
         }
         return Math.min(next == Long.MAX_VALUE ? fallback : next, latest);
     }
-
     private long scanBatch(AccountChainProfile profile) {
         if (profile.getScanMaxBlocksPerRun() != null && profile.getScanMaxBlocksPerRun() > 0) {
             return profile.getScanMaxBlocksPerRun();
@@ -991,7 +909,6 @@ public class AccountChainWorkflowService {
         }
         return 20L;
     }
-
     private Map<String, TronScanner.TokenConfig> tronTokens() {
         Map<String, TronScanner.TokenConfig> tokens = new LinkedHashMap<>();
         for (TokenDefinition token : repository.listTokens("TRON")) {
@@ -1007,17 +924,14 @@ public class AccountChainWorkflowService {
         }
         return tokens;
     }
-
     private KeyPair tronKey(AccountChainProfile profile, ChainAddressRecord from) {
         ECKey ecKey = secp256k1KeyService.key(profile, from);
         return TronTridentKeyFactory.fromBitcoinEcKey(ecKey);
     }
-
     private long tronFeeLimitSun(AccountChainProfile profile) {
         Long configured = profile.getDefaultFee();
         return configured == null || configured <= 0 ? 30_000_000L : Math.max(10_000_000L, configured);
     }
-
     private String collectionNo(CollectionCandidateRecord candidate, BigDecimal amount) {
         String basis = candidate.getChain() + "|" + candidate.getAssetSymbol() + "|"
                 + candidate.getAccountId() + "|" + candidate.getAddress() + "|"
@@ -1025,7 +939,6 @@ public class AccountChainWorkflowService {
         return "COLL-" + candidate.getChain() + "-" + candidate.getAssetSymbol() + "-"
                 + shortHash(basis);
     }
-
     private String shortHash(String value) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")

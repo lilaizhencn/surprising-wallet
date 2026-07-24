@@ -29,18 +29,12 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class SolanaTransactionService {
-    private static final String CHAIN = "SOLANA";
-    private static final int SPL_MINT_ACCOUNT_LENGTH = 82;
-
-    private final SolanaRpcClient rpc;
-    private final SolanaKeyService keyService;
-    private final SolanaAddressService addressService;
-    private final ChainJdbcRepository repository;
+public
+class SolanaTransactionService {
+    private static final String CHAIN = "SOLANA";    private static final int SPL_MINT_ACCOUNT_LENGTH = 82;    private final SolanaRpcClient rpc;    private final SolanaKeyService keyService;    private final SolanaAddressService addressService;    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
-
     public String sendNative(long derivationIndex, String toAddress, long lamports) {
         if (lamports <= 0) {
             throw new IllegalArgumentException("lamports must be positive");
@@ -48,7 +42,6 @@ public class SolanaTransactionService {
         Account sender = keyService.account(derivationIndex);
         return sendNative(sender, toAddress, lamports);
     }
-
     public String sendNative(ChainAddressRecord from, String toAddress, long lamports) {
         if (lamports <= 0) {
             throw new IllegalArgumentException("lamports must be positive");
@@ -56,7 +49,6 @@ public class SolanaTransactionService {
         Account sender = keyService.account(from.getUserId(), from.getBiz(), from.getAddressIndex());
         return sendNative(sender, toAddress, lamports);
     }
-
     private String sendNative(Account sender, String toAddress, long lamports) {
         Transaction transaction = new Transaction()
                 .addInstruction(SystemProgram.transfer(
@@ -320,7 +312,6 @@ public class SolanaTransactionService {
         }
         return false;
     }
-
     public boolean confirmCollection(UUID tenantId, String collectionNo) {
         String signature = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         JsonNode status = requireSuccessfulConfirmation(signature, Duration.ofMinutes(2));
@@ -328,7 +319,6 @@ public class SolanaTransactionService {
         updateConfirmedTransaction(signature, status);
         return updated;
     }
-
     public JsonNode requireSuccessfulConfirmation(String signature, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
@@ -351,18 +341,15 @@ public class SolanaTransactionService {
         }
         throw new IllegalStateException("Solana confirmation timeout for " + signature);
     }
-
     private String signAndSend(Transaction transaction, List<Account> signers) {
         transaction.setRecentBlockHash(rpc.getLatestBlockhash());
         transaction.sign(signers);
         return rpc.sendTransaction(transaction.serialize());
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     private ChainAddressRecord defaultHotFeePayer(UUID tenantId) {
         return repository.listDefaultHotAddressCandidates(CHAIN, "SOL").stream()
                 .filter(address -> tenantId.equals(address.getTenantId()))
@@ -370,13 +357,11 @@ public class SolanaTransactionService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("missing enabled Solana default hot fee payer"));
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
-
     private long toAtomicAmount(BigDecimal amount, int decimals) {
         BigInteger atomic = amount.movePointRight(decimals).toBigIntegerExact();
         return atomic.longValueExact();
@@ -397,7 +382,6 @@ public class SolanaTransactionService {
                 .status(status)
                 .build());
     }
-
     private void updateConfirmedTransaction(String signature, JsonNode status) {
         JsonNode transaction = rpc.getTransaction(signature);
         repository.recordSolanaTransaction(SolanaTransactionRecord.builder()
@@ -414,7 +398,6 @@ public class SolanaTransactionService {
                 .rawPayload(transaction.toString())
                 .build());
     }
-
     public record DeploySplMintResult(String signature, String mintAddress, String ownerTokenAccount) {
     }
 }

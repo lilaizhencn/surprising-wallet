@@ -25,12 +25,7 @@ import java.util.Locale;
 @Service
 @RequiredArgsConstructor
 public class BlockchainRuntimeService {
-    private static final String BITCOIN_LIKE_FAMILY = "bitcoin-like";
-
-    private final BlockchainAdapterRegistry adapterRegistry;
-    private final ChainJdbcRepository repository;
-    private final ChainAddressRuntime addressRuntime;
-
+    private static final String BITCOIN_LIKE_FAMILY = "bitcoin-like";    private final BlockchainAdapterRegistry adapterRegistry;    private final ChainJdbcRepository repository;    private final ChainAddressRuntime addressRuntime;
     public RuntimeChain requireRuntime(String chain) {
         AccountChainProfile profile = repository.findProfileByChain(normalizeChain(chain))
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for chain " + chain));
@@ -48,11 +43,9 @@ public class BlockchainRuntimeService {
                 adapter.capabilities()
         );
     }
-
     public BlockchainAdapter requireAdapter(String chain) {
         return adapterRegistry.require(requireRuntime(chain).chainType());
     }
-
     public Address generateDepositAddress(String chain, long userId, int biz) {
         RuntimeChain runtime = requireRuntime(chain);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
@@ -73,7 +66,6 @@ public class BlockchainRuntimeService {
         return addressRuntime.generateDepositAddressAtIndex(
                 runtime.chainType(), userId, biz, childIndex);
     }
-
     public boolean checkAddress(String chain, String address) {
         RuntimeChain runtime = requireRuntime(chain);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
@@ -82,7 +74,6 @@ public class BlockchainRuntimeService {
         }
         return addressRuntime.checkAddress(runtime.chainType(), address);
     }
-
     public long depositConfirmationThreshold(AssetRuntimeMetadata asset) {
         RuntimeChain runtime = requireRuntime(asset);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
@@ -91,7 +82,6 @@ public class BlockchainRuntimeService {
         }
         return profile(asset).getDepositConfirmations();
     }
-
     public long dustThresholdAtomic(AssetRuntimeMetadata asset) {
         RuntimeChain runtime = requireRuntime(asset);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
@@ -100,19 +90,16 @@ public class BlockchainRuntimeService {
         }
         return 0L;
     }
-
     public long bestHeight(AssetRuntimeMetadata asset) {
         RuntimeChain runtime = requireRuntime(asset);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
         return adapter.bestHeight(runtime.chainType());
     }
-
     public List<TransactionDTO> findRelatedTransactions(AssetRuntimeMetadata asset, long height) {
         RuntimeChain runtime = requireRuntime(asset);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
         return adapter.findRelatedTransactions(runtime.chainType(), height);
     }
-
     public void updateTransactionConfirmations(AssetRuntimeMetadata asset) {
         RuntimeChain runtime = requireRuntime(asset);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
@@ -120,7 +107,6 @@ public class BlockchainRuntimeService {
             adapter.updateTransactionConfirmations(runtime.chainType());
         }
     }
-
     public void updateTotalBalance(AssetRuntimeMetadata asset) {
         RuntimeChain runtime = requireRuntime(asset);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
@@ -128,59 +114,48 @@ public class BlockchainRuntimeService {
             adapter.updateTotalBalance(runtime.chainType());
         }
     }
-
     public String broadcastSignedTransaction(AssetRuntimeMetadata asset, WithdrawTransaction transaction) {
         RuntimeChain runtime = requireRuntime(asset);
         BlockchainAdapter adapter = adapterRegistry.require(runtime.chainType());
         return adapter.broadcastSignedTransaction(runtime.chainType(), transaction);
     }
-
     public RuntimeChain requireRuntime(AssetRuntimeMetadata asset) {
         return requireRuntime(chainName(asset));
     }
-
     public AssetRuntimeMetadata assetMetadata(String chain) {
         AccountChainProfile profile = repository.findProfileByChain(normalizeChain(chain))
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for chain " + chain));
         return AssetRuntimeMetadata.fromProfile(profile, nativeAsset(profile));
     }
-
     public boolean isBitcoinLikeRuntime(String chain) {
         AccountChainProfile profile = repository.findProfileByChain(normalizeChain(chain))
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for chain " + chain));
         return BITCOIN_LIKE_FAMILY.equalsIgnoreCase(profile.getFamily());
     }
-
     public boolean isBitcoinLikeRuntime(AssetRuntimeMetadata asset) {
         return asset != null && repository.isRuntimeCurrencyFamily(asset.getIndex(), BITCOIN_LIKE_FAMILY);
     }
-
     public String chainName(AssetRuntimeMetadata asset) {
         return repository.findChainByRuntimeCurrencyId(asset.getIndex())
                 .map(value -> value.toUpperCase(Locale.ROOT))
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for runtime_currency_id " + asset.getIndex()));
     }
-
     public String scannerName(AssetRuntimeMetadata asset) {
         return chainName(asset).toLowerCase(Locale.ROOT) + "-block-scanner";
     }
-
     public String nativeSymbol(String chain) {
         return requireRuntime(chain).nativeSymbol();
     }
-
     public AssetRuntimeMetadata assetMetadata(int runtimeCurrencyId) {
         AccountChainProfile profile = repository.findProfileByRuntimeCurrencyId(runtimeCurrencyId)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for runtime_currency_id " + runtimeCurrencyId));
         return AssetRuntimeMetadata.fromProfile(profile, nativeAsset(profile));
     }
-
     private ChainAsset nativeAsset(AccountChainProfile profile) {
         return repository.findAsset(profile.getChain(), profile.getNativeSymbol()).orElse(null);
     }
-
     private ChainType requireChainType(String chain) {
         try {
             return ChainType.valueOf(normalizeChain(chain));
@@ -188,14 +163,12 @@ public class BlockchainRuntimeService {
             throw new IllegalStateException("unsupported chain type " + chain, e);
         }
     }
-
     private String normalizeChain(String chain) {
         if (chain == null || chain.isBlank()) {
             throw new IllegalArgumentException("chain is required");
         }
         return chain.trim().toUpperCase(Locale.ROOT);
     }
-
     private AccountChainProfile profile(AssetRuntimeMetadata asset) {
         return repository.findProfileByChain(chainName(asset))
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + asset.chain()));

@@ -5,8 +5,8 @@ import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import org.springframework.stereotype.Component;
 
 @Component
-public class DbBtcCommand extends DbBtcLikeJsonRpcCommand implements BtcCommand {
-    public DbBtcCommand(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
-        super("BTC", repository, rpcNodeService);
+public
+class DbBtcCommand extends DbBtcLikeJsonRpcCommand implements BtcCommand {
+    public DbBtcCommand(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {        super("BTC", repository, rpcNodeService);
     }
 }

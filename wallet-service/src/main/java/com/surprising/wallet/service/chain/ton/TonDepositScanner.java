@@ -25,21 +25,9 @@ import java.util.Set;
 
 @Service
 @Slf4j
-public class TonDepositScanner {
-    private static final String CHAIN = "TON";
-    private static final String SCANNER = "ton-account-message-scanner";
-    private static final int TON_DECIMALS = 9;
-    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";
-    private static final String WALLET_ROLE_CONTRACT_DEPLOYER = "CONTRACT_DEPLOYER";
-    private static final long JETTON_TRANSFER_NOTIFICATION = 0x7362d09cL;
-    private static final long JETTON_INTERNAL_TRANSFER = 0x178d4519L;
-    private static final long JETTON_EXCESSES = 0xd53276dbL;
-    private static final long TEXT_COMMENT = 0x00000000L;
-
-    private final TonCenterClient rpc;
-    private final TonAddressService addressService;
-    private final ChainJdbcRepository repository;
-    private final TonApiClient tonApi;
+public
+class TonDepositScanner {
+    private static final String CHAIN = "TON";    private static final String SCANNER = "ton-account-message-scanner";    private static final int TON_DECIMALS = 9;    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";    private static final String WALLET_ROLE_CONTRACT_DEPLOYER = "CONTRACT_DEPLOYER";    private static final long JETTON_TRANSFER_NOTIFICATION = 0x7362d09cL;    private static final long JETTON_INTERNAL_TRANSFER = 0x178d4519L;    private static final long JETTON_EXCESSES = 0xd53276dbL;    private static final long TEXT_COMMENT = 0x00000000L;    private final TonCenterClient rpc;    private final TonAddressService addressService;    private final ChainJdbcRepository repository;    private final TonApiClient tonApi;
 
     @Autowired
     public TonDepositScanner(TonCenterClient rpc, TonAddressService addressService,
@@ -57,7 +45,6 @@ public class TonDepositScanner {
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
-
     public List<DepositEvent> scanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "ton scanAndCredit");
         AccountChainProfile profile = profile();
@@ -125,11 +112,9 @@ public class TonDepositScanner {
             events.add(event);
         }
     }
-
     JettonNotification parseJettonNotification(String bodyBase64) {
         return parseJettonDepositBody(bodyBase64);
     }
-
     JettonNotification parseJettonDepositBody(String bodyBase64) {
         if (bodyBase64 == null || bodyBase64.isBlank()) {
             return null;
@@ -182,7 +167,6 @@ public class TonDepositScanner {
                 .build());
         repository.recordAndCreditDeposit(event, 0, profile.getDepositConfirmations(), accountId);
     }
-
     private boolean sameAddress(String first, String second) {
         if (first == null || first.isBlank() || second == null || second.isBlank()) {
             return false;
@@ -193,7 +177,6 @@ public class TonDepositScanner {
             return false;
         }
     }
-
     private boolean isPlatformAddress(String address, Set<String> platformAddresses) {
         if (address == null || address.isBlank()) {
             return false;
@@ -204,7 +187,6 @@ public class TonDepositScanner {
             return false;
         }
     }
-
     private Set<String> platformAddresses() {
         Set<String> addresses = new HashSet<>();
         for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
@@ -213,7 +195,6 @@ public class TonDepositScanner {
         }
         return addresses;
     }
-
     private void addNormalized(Set<String> addresses, String address) {
         if (address == null || address.isBlank()) {
             return;
@@ -251,7 +232,6 @@ public class TonDepositScanner {
             }
         }
     }
-
     private boolean isOperationalNativeMessage(String bodyBase64) {
         if (bodyBase64 == null || bodyBase64.isBlank()) {
             return false;
@@ -269,7 +249,6 @@ public class TonDepositScanner {
             return false;
         }
     }
-
     private static boolean isNativeScanRole(ChainAddressRecord address) {
         if (address == null) {
             return false;
@@ -277,38 +256,31 @@ public class TonDepositScanner {
         return WALLET_ROLE_DEPOSIT.equals(address.getWalletRole())
                 || WALLET_ROLE_CONTRACT_DEPLOYER.equals(address.getWalletRole());
     }
-
     private static BigDecimal decimal(String value) {
         return value == null || value.isBlank() ? BigDecimal.ZERO : new BigDecimal(value);
     }
-
     private static BigDecimal displayAmount(BigDecimal atomicAmount, int decimals) {
         return atomicAmount.movePointLeft(decimals);
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     private int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 100 : batchSize;
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
-
     private boolean isTestnet() {
         if (repository == null) {
             return true;
         }
         return profile().getNetwork().toLowerCase(java.util.Locale.ROOT).contains("test");
     }
-
     record JettonNotification(BigInteger amount, String sender) {
     }
 }

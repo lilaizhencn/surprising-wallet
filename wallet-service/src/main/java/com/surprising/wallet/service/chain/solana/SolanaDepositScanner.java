@@ -23,20 +23,15 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
-public class SolanaDepositScanner {
-    private static final String CHAIN = "SOLANA";
-    private static final String SCANNER = "solana-signature-scanner";
-    private static final int SOL_DECIMALS = 9;
-
-    private final SolanaRpcClient rpc;
-    private final ChainJdbcRepository repository;
+public
+class SolanaDepositScanner {
+    private static final String CHAIN = "SOLANA";    private static final String SCANNER = "solana-signature-scanner";    private static final int SOL_DECIMALS = 9;    private final SolanaRpcClient rpc;    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
 
     @Autowired(required = false)
     private SolanaAddressService addressService;
-
     public List<DepositEvent> scanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "solana scanAndCredit");
         AccountChainProfile profile = profile();
@@ -112,7 +107,6 @@ public class SolanaDepositScanner {
             }
         }
     }
-
     private List<ChainAddressRecord> tokenScanAddresses(TokenDefinition token) {
         List<ChainAddressRecord> addresses = new ArrayList<>(repository.listChainAddresses(CHAIN, token.getSymbol()));
         if (addressService == null || !StringUtils.hasText(token.getContractAddress())) {
@@ -149,7 +143,6 @@ public class SolanaDepositScanner {
         }
         return addresses;
     }
-
     private Set<String> platformAddresses() {
         Set<String> addresses = new HashSet<>();
         for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
@@ -198,7 +191,6 @@ public class SolanaDepositScanner {
                 info.path("source").asText(), tracked.getAddress(), displayAmount, slot, signature, confirmations,
                 token.getContractAddress(), transaction.toString());
     }
-
     private List<JsonNode> flattenInstructions(JsonNode transaction) {
         List<JsonNode> instructions = new ArrayList<>();
         JsonNode outer = transaction.path("transaction").path("message").path("instructions");
@@ -209,21 +201,17 @@ public class SolanaDepositScanner {
         }
         return instructions;
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     private int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 100 : batchSize;
     }
-
     private String normalize(String address) {
         return address == null ? "" : address;
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);

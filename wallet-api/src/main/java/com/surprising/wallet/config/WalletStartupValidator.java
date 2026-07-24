@@ -23,15 +23,27 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+/**
+ * 应用启动自检器，防止在链配置、RPC 配置、资产配置存在缺失时上线路径运行。
+ */
 public class WalletStartupValidator implements ApplicationRunner {
+    /** 链配置仓储，用于读取 chain_profile/rpc/config 运行状态。 */
     private final ChainJdbcRepository repository;
+    /** 运行时开关配置，核验任务总开关与链级开关。 */
     private final WalletRuntimeConfigService runtimeConfigService;
+    /** 原始 SQL 查询器，用于关键配置一致性校验。 */
     private final JdbcTemplate jdbcTemplate;
+    /** 钱包密钥提供者，用于启动前校验签名材料是否已配置。 */
     private final WalletKeyMaterialProvider keyMaterial;
 
+    /** 当前环境标识（dev/test/prod）。 */
     @Value("${sw.app.env.name:dev}")
     private String environmentName;
 
+    /**
+     * 启动顺序执行三类校验：密钥、资产/代币配置、链与 RPC 配置；
+     * 任何不一致直接抛异常阻断应用启动。
+     */
     @Override
     public void run(ApplicationArguments args) {
         boolean keysetConfigured = validateKeyset();
@@ -43,6 +55,9 @@ public class WalletStartupValidator implements ApplicationRunner {
         logRuntimeMatrix();
     }
 
+    /**
+     * 校验签名公钥材料是否都已加载，确保地址派生与签名服务可用。
+     */
     private boolean validateKeyset() {
         if (!keyMaterial.isConfigured()) {
             return false;
@@ -55,6 +70,9 @@ public class WalletStartupValidator implements ApplicationRunner {
         return true;
     }
 
+    /**
+     * 校验启用资产与代币配置，确认合约地址非占位符且 token 与 chain_asset 一一对应。
+     */
     void validateEnabledAssetsAndTokens() {
         List<Map<String, Object>> tokenRows = jdbcTemplate.queryForList("""
                 select chain, symbol,
@@ -124,10 +142,14 @@ public class WalletStartupValidator implements ApplicationRunner {
                 throw new IllegalStateException(
                         "active token chain_asset contract must match enabled token_config: "
                                 + chain + "/" + symbol);
-            }
+                }
         }
     }
 
+    /**
+     * 校验所有已启用链配置：
+     * 每条链必须有且仅有一个启用网络；生产环境只允许生产网络。
+     */
     List<AccountChainProfile> validateProfiles() {
         List<AccountChainProfile> enabledProfiles = repository.listEnabledChainProfiles();
         if (enabledProfiles.isEmpty()) {
@@ -158,6 +180,9 @@ public class WalletStartupValidator implements ApplicationRunner {
         return enabledProfiles;
     }
 
+    /**
+     * 校验单个 RPC 节点字段完整性与认证信息缺失问题。
+     */
     private void validateRpcNode(AccountChainProfile profile, ChainRpcNode node) {
         if (!StringUtils.hasText(node.getRpcUrl())) {
             throw new IllegalStateException(
@@ -179,6 +204,9 @@ public class WalletStartupValidator implements ApplicationRunner {
         validateRpcNodeCredentials(profile, node);
     }
 
+    /**
+     * 按连接类型校验 RPC 认证策略：API key 或用户口令必须齐备。
+     */
     private void validateRpcNodeCredentials(AccountChainProfile profile, ChainRpcNode node) {
         String authType = normalized(node.getAuthType());
         String connectionType = normalized(node.getConnectionType());
@@ -199,6 +227,9 @@ public class WalletStartupValidator implements ApplicationRunner {
         }
     }
 
+    /**
+     * 校验每个链 profile 对应环境开关下，所需 purpose 的 RPC 都有可用节点。
+     */
     private void validateRequiredRpcPurposes(AccountChainProfile profile) {
         for (String purpose : WalletRpcPolicy.requiredPurposes(
                 profile.getChain(), profile.getNetwork(), !repository.listTokens(profile.getChain()).isEmpty())) {
@@ -215,6 +246,9 @@ public class WalletStartupValidator implements ApplicationRunner {
         }
     }
 
+    /**
+     * 判断值是否是占位符（例如 ${...} 或空白字符串）。
+     */
     static boolean containsPlaceholder(String value) {
         if (!StringUtils.hasText(value)) {
             return false;
@@ -222,24 +256,39 @@ public class WalletStartupValidator implements ApplicationRunner {
         return WalletRpcPolicy.containsPlaceholder(value);
     }
 
+    /**
+     * 标准化链名/网络名用于一致性比较。
+     */
     private static String normalized(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
+    /**
+     * 安全转字符串，null 输出空串，避免 JDBC 空值比较。
+     */
     private static String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value);
     }
 
+    /**
+     * 生成 chain/symbol 的统一键用于映射校验。
+     */
     private static String assetKey(String chain, String symbol) {
         return normalized(chain) + "/" + normalized(symbol);
     }
 
+    /**
+     * 忽略大小写比较合约地址一致性。
+     */
     private static boolean sameContract(String left, String right) {
         return StringUtils.hasText(left)
                 && StringUtils.hasText(right)
                 && left.trim().equalsIgnoreCase(right.trim());
     }
 
+    /**
+     * 打印当前运行时环境与链配置矩阵，便于启动日志审计留痕。
+     */
     private void logRuntimeMatrix() {
         log.info("wallet runtime config env={} global all={} scan={} withdraw={} collection={} transfer={}",
                 environmentName,

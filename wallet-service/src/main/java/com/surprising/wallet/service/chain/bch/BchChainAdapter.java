@@ -18,9 +18,7 @@ import java.util.List;
 
 @Component
 public class BchChainAdapter implements BlockchainAdapter {
-    private final BitcoinLikeChainRuntime runtime;
-
-    public BchChainAdapter(BitcoinLikeChainRuntime runtime) {
+    private final BitcoinLikeChainRuntime runtime;    public BchChainAdapter(BitcoinLikeChainRuntime runtime) {
         this.runtime = runtime;
     }
 

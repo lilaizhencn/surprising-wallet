@@ -28,13 +28,8 @@ import java.util.Locale;
 public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGateway {
     private static final BigDecimal WEI = new BigDecimal("1000000000000000000");
     private static final String TRANSFER_TOPIC =
-            "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-    private static final String DECIMALS_SELECTOR = "0x313ce567";
-
-    private final ChainJdbcRepository repository;
-    private final ChainRpcNodeService rpcNodes;
-    private final EvmAccountTransactionService transactions;
-    private final ObjectMapper objectMapper;
+            "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";    private static final String DECIMALS_SELECTOR = "0x313ce567";
+    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodes;    private final EvmAccountTransactionService transactions;    private final ObjectMapper objectMapper;
 
     public EvmAssetRecoveryChainGateway(ChainJdbcRepository repository,
                                         ChainRpcNodeService rpcNodes,
@@ -192,7 +187,6 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
         }
         return matches.getFirst();
     }
-
     private int tokenDecimals(Web3j web3j, String chain, String contract) throws Exception {
         TokenDefinition configured = repository.findTokenByContract(chain, contract).orElse(null);
         if (configured != null && configured.getDecimals() != null) {
@@ -208,7 +202,6 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
         }
         return decimals;
     }
-
     private AccountChainProfile profile(String chain) {
         AccountChainProfile profile = repository.findProfileByChain(chain)
                 .orElseThrow(() -> new IllegalArgumentException("actual chain is not enabled by the platform"));
@@ -217,7 +210,6 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
         }
         return profile;
     }
-
     private <T> T withWeb3(AccountChainProfile profile, Web3Request<T> request) {
         return rpcNodes.withFailover(profile.getChain(), profile.getNetwork(), node -> {
             Web3j web3j = Web3j.build(new HttpService(node.getRpcUrl()));
@@ -232,7 +224,6 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
             }
         });
     }
-
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -240,12 +231,10 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
             throw new IllegalStateException("failed to serialize recovery verification", e);
         }
     }
-
     private static String topicAddress(String topic) {
         String clean = Numeric.cleanHexPrefix(topic);
         return "0x" + clean.substring(clean.length() - 40).toLowerCase(Locale.ROOT);
     }
-
     private static String normalizeAddress(String address) {
         String value = normalizeNullableAddress(address);
         if (value == null) {
@@ -253,7 +242,6 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
         }
         return value;
     }
-
     private static String normalizeNullableAddress(String address) {
         String value = address == null ? "" : address.trim().toLowerCase(Locale.ROOT);
         return value.matches("^0x[0-9a-f]{40}$") ? value : null;

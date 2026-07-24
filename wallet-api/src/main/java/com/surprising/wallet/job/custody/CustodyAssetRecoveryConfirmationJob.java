@@ -16,12 +16,19 @@ import com.surprising.wallet.custody.service.CustodyAssetRecoveryService;
  */
 @Component
 public class CustodyAssetRecoveryConfirmationJob {
+    /** 资产找回业务服务。 */
     private final CustodyAssetRecoveryService recoveries;
 
+    /**
+     * 扫描找回广播中的订单并确认结果，更新恢复状态。
+     */
     public CustodyAssetRecoveryConfirmationJob(CustodyAssetRecoveryService recoveries) {
         this.recoveries = recoveries;
     }
 
+    /**
+     * 每 15 秒同步一次找回广播状态。
+     */
     @Scheduled(scheduler = "custodyTaskScheduler", fixedDelayString = "${custody.asset-recovery.confirm-delay-ms:15000}")
     public void confirmBroadcastRecoveries() {
         recoveries.confirmBroadcastRecoveries();

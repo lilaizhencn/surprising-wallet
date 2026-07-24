@@ -23,22 +23,34 @@ import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
 public class CustodyApiAuthenticationFilter extends OncePerRequestFilter {
+    /** API 请求体最大允许字节，超出直接拒绝。 */
     private static final int MAX_BODY_BYTES = 2 * 1024 * 1024;
 
+    /** API Key 鉴权服务：负责签名验签与防重放。 */
     private final CustodyApiKeyService apiKeys;
+    /** 错误响应序列化工具。 */
     private final ObjectMapper objectMapper;
 
+    /**
+     * 构造注入服务与 JSON 编码器，避免单例内部静态查找。
+     */
     public CustodyApiAuthenticationFilter(CustodyApiKeyService apiKeys, ObjectMapper objectMapper) {
         this.apiKeys = apiKeys;
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 仅处理 custody API 请求路径，排除 CORS 预检请求。
+     */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         return !request.getRequestURI().startsWith("/custody/api/v1/")
                 || "OPTIONS".equalsIgnoreCase(request.getMethod());
     }
 
+    /**
+     * 读取并验证签名头、时间戳与 body，鉴权通过后写入 Principal。
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
@@ -74,6 +86,9 @@ public class CustodyApiAuthenticationFilter extends OncePerRequestFilter {
         }
     }
 
+    /**
+     * 读取固定 Header，缺失时直接抛出未授权异常。
+     */
     private static String requiredHeader(HttpServletRequest request, String name) {
         String value = request.getHeader(name);
         if (value == null || value.isBlank()) {
@@ -82,6 +97,9 @@ public class CustodyApiAuthenticationFilter extends OncePerRequestFilter {
         return value.trim();
     }
 
+    /**
+     * 解析时间戳头，非法值视为未授权。
+     */
     private static long parseTimestamp(String value) {
         try {
             return Long.parseLong(value);

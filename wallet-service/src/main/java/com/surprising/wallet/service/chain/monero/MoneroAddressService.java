@@ -7,13 +7,9 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-public class MoneroAddressService {
-    private static final String CHAIN = MoneroWalletRpcClient.CHAIN;
-    private static final String SYMBOL = MoneroWalletRpcClient.SYMBOL;
-
-    private final MoneroWalletRpcClient walletRpcClient;
-    private final ChainJdbcRepository repository;
-
+public
+class MoneroAddressService {
+    private static final String CHAIN = MoneroWalletRpcClient.CHAIN;    private static final String SYMBOL = MoneroWalletRpcClient.SYMBOL;    private final MoneroWalletRpcClient walletRpcClient;    private final ChainJdbcRepository repository;
     public ChainAddressRecord createNativeAddress(long userId, int biz, long preferredIndex, String walletRole) {
         MoneroWalletRpcClient.Subaddress subaddress = userId == 0 && biz == 0 && preferredIndex == 0
                 ? walletRpcClient.primaryAddress()
@@ -35,7 +31,6 @@ public class MoneroAddressService {
         return repository.findChainAddress(CHAIN, SYMBOL, userId, biz, subaddress.addressIndex(), walletRole)
                 .orElseThrow();
     }
-
     private static String label(long userId, int biz, long preferredIndex) {
         return "surprising-wallet user=" + userId + " biz=" + biz + " requested-index=" + preferredIndex;
     }

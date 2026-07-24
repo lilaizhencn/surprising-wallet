@@ -16,8 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Locale;
 
 /**
- * Creates the deterministic platform relayer address needed by the local EIP-7702 runtime.
- * This runner is opt-in and refuses production-like environments or non-devtest networks.
+ * 创建开发环境下确定性 relayer 钱包地址，用于本地 EIP-7702 流程的授权签名入口。
+ *
+ * <p>仅在允许的开发/测试环境与 devtest/local 网络下执行，避免误入生产。 </p>
  */
 @Slf4j
 @Component
@@ -27,9 +28,13 @@ import java.util.Locale;
         name = "enabled",
         havingValue = "true")
 public class DevEip7702RelayerBootstrap implements ApplicationRunner {
+    /** 开发 relayer 租户 ID（固定值，避免跨租户污染）。 */
     static final long RELAYER_USER_ID = 9_000_001L;
+    /** relayer 使用的业务位。 */
     static final int RELAYER_BIZ = 7702;
+    /** relayer 地址索引。 */
     static final long RELAYER_ADDRESS_INDEX = 0L;
+    /** 角色标识，用于查找/持久化钱包地址。 */
     static final String RELAYER_ROLE = "EIP7702_RELAYER";
 
     private final ChainJdbcRepository repository;
@@ -47,6 +52,7 @@ public class DevEip7702RelayerBootstrap implements ApplicationRunner {
     @Override
     @Transactional(rollbackFor = Throwable.class)
     public void run(ApplicationArguments args) {
+        // 环境/网络校验通过后，初始化或校验 dev relayer 地址是否稳定可用。
         requireSafeDevEnvironment();
         AccountChainProfile profile = repository.findProfileByChain(chain.toUpperCase(Locale.ROOT))
                 .orElseThrow(() -> new IllegalStateException(
@@ -86,6 +92,9 @@ public class DevEip7702RelayerBootstrap implements ApplicationRunner {
                 profile.getChain(), profile.getNetwork(), saved.getId(), saved.getAddress());
     }
 
+    /**
+     * 限制仅允许在开发/联调环境和 devtest/local 网络执行，防止误发到生产。
+     */
     private void requireSafeDevEnvironment() {
         String normalizedEnvironment = environment == null
                 ? "" : environment.trim().toLowerCase(Locale.ROOT);

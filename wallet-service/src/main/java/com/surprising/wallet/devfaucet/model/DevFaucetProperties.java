@@ -14,16 +14,12 @@ import java.util.Set;
 public class DevFaucetProperties {
     private static final Set<String> ALLOWED_ENVIRONMENTS =
             Set.of("dev", "test", "test2", "local");
-
     private boolean enabled;
     private Duration delay = Duration.ofSeconds(10);
     private Duration retryDelay = Duration.ofSeconds(30);
-    private Duration requestTimeout = Duration.ofSeconds(10);
-    private int batchSize = 20;
-    private int maxAttempts = 3;
+    private Duration requestTimeout = Duration.ofSeconds(10);    private int batchSize = 20;    private int maxAttempts = 3;
     private final Bitcoin bitcoin = new Bitcoin();
     private final Evm evm = new Evm();
-
     public void validate(String environment) {
         if (!enabled) {
             return;
@@ -57,7 +53,6 @@ public class DevFaucetProperties {
             throw new IllegalStateException("dev faucet bitcoin confirmation blocks are invalid");
         }
     }
-
     private static void requireLoopback(String value, String name) {
         try {
             URI uri = URI.create(value);
@@ -72,7 +67,6 @@ public class DevFaucetProperties {
             throw new IllegalStateException(name + " is invalid", error);
         }
     }
-
     private static void requireRange(AmountRange range, String name) {
         requirePositive(range.min, name + ".min");
         requirePositive(range.max, name + ".max");
@@ -81,7 +75,6 @@ public class DevFaucetProperties {
             throw new IllegalStateException(name + " range/scale is invalid");
         }
     }
-
     private static void requirePositive(BigDecimal value, String name) {
         if (value == null || value.signum() <= 0) {
             throw new IllegalStateException(name + " must be positive");
@@ -102,7 +95,6 @@ public class DevFaucetProperties {
     public void setMaxAttempts(int maxAttempts) { this.maxAttempts = maxAttempts; }
     public Bitcoin getBitcoin() { return bitcoin; }
     public Evm getEvm() { return evm; }
-
     public static class Bitcoin {
         private String rpcUrl = "http://127.0.0.1:18444";
         private String rpcUsername = "";
@@ -127,7 +119,6 @@ public class DevFaucetProperties {
         public void setGasAmount(BigDecimal gasAmount) { this.gasAmount = gasAmount; }
         public AmountRange getCustomer() { return customer; }
     }
-
     public static class Evm {
         private String rpcUrl = "http://127.0.0.1:8545";
         private String fromAddress = "";
@@ -146,7 +137,6 @@ public class DevFaucetProperties {
         public AmountRange getUsdt() { return usdt; }
         public AmountRange getUsdc() { return usdc; }
     }
-
     public static class AmountRange {
         private BigDecimal min;
         private BigDecimal max;

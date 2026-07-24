@@ -23,9 +23,7 @@ import java.util.List;
  */
 @Service
 public class BitcoinLikeSettlementService {
-    private final ChainJdbcRepository chainRepository;
-
-    public BitcoinLikeSettlementService(ChainJdbcRepository chainRepository) {
+    private final ChainJdbcRepository chainRepository;    public BitcoinLikeSettlementService(ChainJdbcRepository chainRepository) {
         this.chainRepository = chainRepository;
     }
 

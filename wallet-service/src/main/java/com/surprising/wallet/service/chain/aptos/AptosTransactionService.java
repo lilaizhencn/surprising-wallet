@@ -20,19 +20,13 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class AptosTransactionService {
-    private static final String CHAIN = "APTOS";
-
-    private final AptosRpcClient rpc;
-    private final AptosTransactionSigner signer;
-    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "APTOS";    private final AptosRpcClient rpc;    private final AptosTransactionSigner signer;    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
-
     public String sendNative(long derivationIndex, String fromAddress, String toAddress, long amountOctas) {
         return sendNative(0L, 0, derivationIndex, fromAddress, toAddress, amountOctas);
     }
-
     public String sendNative(ChainAddressRecord from, String toAddress, long amountOctas) {
         return sendNative(from.getUserId(), from.getBiz(), from.getAddressIndex(),
                 from.getAddress(), toAddress, amountOctas);
@@ -261,7 +255,6 @@ public class AptosTransactionService {
         }
         return false;
     }
-
     public boolean confirmCollection(java.util.UUID tenantId, String collectionNo) {
         String hash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(hash, Duration.ofMinutes(2));
@@ -271,7 +264,6 @@ public class AptosTransactionService {
         }
         return false;
     }
-
     public JsonNode requireSuccessfulConfirmation(String hash, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
@@ -289,19 +281,16 @@ public class AptosTransactionService {
         }
         throw new IllegalStateException("Aptos confirmation timeout for " + hash);
     }
-
     private GasPlan gasPlan() {
         long gasUnitPrice = Math.max(1L, rpc.estimateGasPrice());
         long feeReserve = Math.max(1L, profile().getDefaultFee());
         long maxGasAmount = Math.max(50_000L, (feeReserve + gasUnitPrice - 1L) / gasUnitPrice);
         return new GasPlan(maxGasAmount, gasUnitPrice);
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
@@ -327,7 +316,6 @@ public class AptosTransactionService {
                 .rawPayload(rawPayload)
                 .build());
     }
-
     private void markConfirmed(String hash, JsonNode transaction) {
         long version = transaction.path("version").asLong(0);
         long gasUsed = transaction.path("gas_used").asLong(0);
@@ -340,7 +328,6 @@ public class AptosTransactionService {
                     transaction.path("sequence_number").asLong(0) + 1L);
         }
     }
-
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);
@@ -349,10 +336,8 @@ public class AptosTransactionService {
             throw new IllegalStateException("Aptos wait interrupted", e);
         }
     }
-
     private record GasPlan(long maxGasAmount, long gasUnitPrice) {
     }
-
     public record DeployPackageResult(String txHash, long sequenceNumber) {
     }
 }

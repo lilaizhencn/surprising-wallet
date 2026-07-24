@@ -11,12 +11,7 @@ import java.util.Base64;
 
 @Service
 public class CustodyPasswordService {
-    private static final String ALGORITHM = "PBKDF2WithHmacSHA256";
-    private static final String PREFIX = "pbkdf2-sha256";
-    private static final int ITERATIONS = 210_000;
-    private static final int KEY_BITS = 256;
-    private static final SecureRandom RANDOM = new SecureRandom();
-
+    private static final String ALGORITHM = "PBKDF2WithHmacSHA256";    private static final String PREFIX = "pbkdf2-sha256";    private static final int ITERATIONS = 210_000;    private static final int KEY_BITS = 256;    private static final SecureRandom RANDOM = new SecureRandom();
     public String hash(String password) {
         validatePassword(password);
         byte[] salt = new byte[16];
@@ -26,7 +21,6 @@ public class CustodyPasswordService {
                 + Base64.getEncoder().encodeToString(salt) + "$"
                 + Base64.getEncoder().encodeToString(hash);
     }
-
     public boolean verify(String password, String encoded) {
         if (password == null || encoded == null) {
             return false;
@@ -48,13 +42,11 @@ public class CustodyPasswordService {
             return false;
         }
     }
-
     private void validatePassword(String password) {
         if (password == null || password.length() < 12 || password.length() > 256) {
             throw new IllegalArgumentException("password must contain between 12 and 256 characters");
         }
     }
-
     private byte[] derive(char[] password, byte[] salt, int iterations, int keyBits) {
         PBEKeySpec spec = new PBEKeySpec(password, salt, iterations, keyBits);
         try {

@@ -29,17 +29,25 @@ import java.util.Optional;
 @Component
 public class ScanBlockJob {
 
+    /** 当前链运行时元数据。 */
     private AssetRuntimeMetadata currency;
 
+    /** 交易服务，负责入库交易记录。 */
     @Autowired
     private TransactionService txService;
+    /** 数据仓储服务。 */
     @Autowired
     private ChainJdbcRepository chainJdbcRepository;
+    /** 链运行时服务，查询链上区块与状态。 */
     @Autowired
     private BlockchainRuntimeService blockchainRuntimeService;
+    /** 运行开关/扫描参数配置服务。 */
     @Autowired
     private WalletRuntimeConfigService runtimeConfigService;
 
+    /**
+     * 按指定链扫描区块：处理区块内相关交易并推进数据库扫描高度。
+     */
     public void scan(String chain) {
         if (!runtimeConfigService.isTaskEnabled(chain, WalletRuntimeConfigService.TASK_SCAN)) {
             log.debug("{} scan skipped: DB scan switch disabled", chain);
@@ -108,6 +116,9 @@ public class ScanBlockJob {
         log.info("扫描 {} 交易高度结束 当前高度:{}", requireCurrency().getName(), bestHeight);
     }
 
+    /**
+     * 获取当前扫描上下文的链元数据，否则抛出非法状态异常。
+     */
     private AssetRuntimeMetadata requireCurrency() {
         if (currency == null) {
             throw new IllegalStateException("scan job runtime currency is not configured");
@@ -115,6 +126,9 @@ public class ScanBlockJob {
         return currency;
     }
 
+    /**
+     * 将扫描高度持久化到数据库。
+     */
     private void updateStoreHeight(Long bestHeight, BestBlockHeight storedHeight) {
         storedHeight.setHeight(bestHeight);
         storedHeight.setUpdateDate(Date.from(Instant.now()));
@@ -124,6 +138,9 @@ public class ScanBlockJob {
                 chain, blockchainRuntimeService.scannerName(requireCurrency()), bestHeight, safeHeight);
     }
 
+    /**
+     * 查询数据库里的扫描快照（若不存在返回 null）。
+     */
     private BestBlockHeight getDbBestBlockHeight() {
         String chain = blockchainRuntimeService.chainName(requireCurrency());
         Optional<Long> scanHeight =
@@ -138,6 +155,9 @@ public class ScanBlockJob {
         return null;
     }
 
+    /**
+     * 首次初始化扫描高度，优先使用配置起始高度。
+     */
     private boolean initCurrencyBestHeight(BestBlockHeight storedHeight, Long bestHeight) {
         long initialHeight = bestHeight;
         long configuredStartHeight = runtimeConfigService.scanStartHeight(requireCurrency());

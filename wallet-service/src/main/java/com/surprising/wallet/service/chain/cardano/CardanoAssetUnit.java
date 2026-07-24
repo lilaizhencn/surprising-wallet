@@ -1,13 +1,9 @@
 package com.surprising.wallet.service.chain.cardano;
 
 import java.util.Locale;
-
 final class CardanoAssetUnit {
-    static final String LOVELACE = "lovelace";
-
-    private CardanoAssetUnit() {
+    static final String LOVELACE = "lovelace";    private CardanoAssetUnit() {
     }
-
     static String normalize(String value) {
         String unit = value == null ? "" : value.trim();
         if (unit.equalsIgnoreCase(LOVELACE)) {
@@ -19,7 +15,6 @@ final class CardanoAssetUnit {
         }
         return hex(unit, "asset unit");
     }
-
     static String fromTokenContract(String contractAddress) {
         String unit = normalize(contractAddress);
         if (LOVELACE.equals(unit) || unit.length() < 56) {
@@ -27,7 +22,6 @@ final class CardanoAssetUnit {
         }
         return unit;
     }
-
     static String policyId(String unit) {
         String normalized = normalize(unit);
         if (normalized.length() < 56) {
@@ -35,7 +29,6 @@ final class CardanoAssetUnit {
         }
         return normalized.substring(0, 56);
     }
-
     static String assetNameHex(String unit) {
         String normalized = normalize(unit);
         if (normalized.length() <= 56) {
@@ -43,11 +36,9 @@ final class CardanoAssetUnit {
         }
         return normalized.substring(56);
     }
-
     static long depositLogIndex(int outputIndex, int assetIndex) {
         return outputIndex * 10_000L + assetIndex;
     }
-
     private static String hex(String value, String label) {
         String hex = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         if (hex.startsWith("0x")) {

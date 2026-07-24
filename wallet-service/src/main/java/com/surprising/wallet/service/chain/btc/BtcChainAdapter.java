@@ -16,10 +16,9 @@ import java.math.RoundingMode;
 import java.util.List;
 
 @Component
-public class BtcChainAdapter implements BlockchainAdapter {
-    private final BitcoinLikeChainRuntime runtime;
-
-    public BtcChainAdapter(BitcoinLikeChainRuntime runtime) {
+public
+class BtcChainAdapter implements BlockchainAdapter {
+    private final BitcoinLikeChainRuntime runtime;    public BtcChainAdapter(BitcoinLikeChainRuntime runtime) {
         this.runtime = runtime;
     }
 

@@ -14,12 +14,9 @@ import java.math.BigDecimal;
 import java.util.List;
 
 @Component
-public class XrpChainAdapter implements BlockchainAdapter {
-    private static final String CHAIN = "XRP";
-
-    private final XrpDepositScanner scanner;
-    private final ChainJdbcRepository repository;
-
+public
+class XrpChainAdapter implements BlockchainAdapter {
+    private static final String CHAIN = "XRP";    private final XrpDepositScanner scanner;    private final ChainJdbcRepository repository;
     public XrpChainAdapter(XrpDepositScanner scanner, ChainJdbcRepository repository) {
         this.scanner = scanner;
         this.repository = repository;
@@ -71,7 +68,6 @@ public class XrpChainAdapter implements BlockchainAdapter {
     public List<DepositEvent> scanDeposits(long height) {
         return scanner.scanAndCredit();
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));

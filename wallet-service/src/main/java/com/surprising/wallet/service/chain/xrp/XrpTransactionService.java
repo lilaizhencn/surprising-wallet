@@ -34,28 +34,19 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
-public class XrpTransactionService {
-    private static final String CHAIN = "XRP";
-    private static final String NATIVE_SYMBOL = "XRP";
-    public static final String ACTIVATION_SYMBOL = "XRP_ACTIVATION";
-    private static final int XRP_DECIMALS = 6;
-    private static final BigDecimal TRUSTLINE_LIMIT = new BigDecimal("1000000000");
-    private static final int PREPARATION_CONFIRM_ATTEMPTS = 8;
+public
+class XrpTransactionService {
+    private static final String CHAIN = "XRP";    private static final String NATIVE_SYMBOL = "XRP";    public static final String ACTIVATION_SYMBOL = "XRP_ACTIVATION";    private static final int XRP_DECIMALS = 6;    private static final BigDecimal TRUSTLINE_LIMIT = new BigDecimal("1000000000");    private static final int PREPARATION_CONFIRM_ATTEMPTS = 8;
     private static final Duration PREPARATION_CONFIRM_SLEEP = Duration.ofSeconds(2);
-
-    private final XrpRpcClient rpc;
-    private final XrpKeyService keyService;
-    private final ChainJdbcRepository repository;
+    private final XrpRpcClient rpc;    private final XrpKeyService keyService;    private final ChainJdbcRepository repository;
     private final BcSignatureService signatureService = new BcSignatureService();
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
-
     public String sendNative(ChainAddressRecord from, String toAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "xrp sendNative");
         return sendNativeInternal(from, toAddress, amount);
     }
-
     private String sendNativeInternal(ChainAddressRecord from, String toAddress, BigDecimal amount) {
         return sendNativeInternal(from, toAddress, amount, NATIVE_SYMBOL);
     }
@@ -131,7 +122,6 @@ public class XrpTransactionService {
             throw e;
         }
     }
-
     public BigDecimal collectableNativeAmount(String address, BigDecimal candidateAmount) {
         BigDecimal candidate = candidateAmount == null ? BigDecimal.ZERO : candidateAmount;
         if (candidate.signum() <= 0) {
@@ -153,7 +143,6 @@ public class XrpTransactionService {
         }
         return candidate.min(spendable).stripTrailingZeros();
     }
-
     private int missingIssuedCurrencyTrustLines(String address) {
         Map<String, TokenDefinition> tokens = new HashMap<>();
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
@@ -209,7 +198,6 @@ public class XrpTransactionService {
             throw e;
         }
     }
-
     private void ensureCollectionDestinationTrustLine(TokenDefinition token, String hotAddress) {
         XrpIssuedCurrency issued = XrpIssuedCurrency.fromToken(token);
         if (hotAddress.equals(issued.issuer()) || hasTrustLine(hotAddress, issued)) {
@@ -236,7 +224,6 @@ public class XrpTransactionService {
         updateConfirmedTransaction(txHash, confirmation);
         return updated;
     }
-
     public DepositPreparation ensureIssuedCurrencyDepositReady(ChainAddressRecord depositAddress, String symbol) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_TRANSFER, "xrp prepareIssuedCurrencyDepositAddress");
         TokenDefinition token = token(symbol);
@@ -276,11 +263,9 @@ public class XrpTransactionService {
         return new DepositPreparation(activated, trustLineReady, activatedBefore, trustLineBefore,
                 activationAmount, activationTxHash, trustSetTxHash);
     }
-
     public boolean hasIssuedCurrencyTrustLine(String address, String symbol) {
         return hasTrustLine(address, XrpIssuedCurrency.fromToken(token(symbol)));
     }
-
     private Payment payment(ChainAddressRecord from, String toAddress, CurrencyAmount amount) {
         long feeDrops = feeDrops();
         long sequence = rpc.accountSequence(from.getAddress());
@@ -294,7 +279,6 @@ public class XrpTransactionService {
                 .lastLedgerSequence(UnsignedInteger.valueOf(lastLedger))
                 .build();
     }
-
     private String signAndSubmit(ChainAddressRecord from, Payment payment) {
         AccountChainProfile profile = profile();
         PrivateKey privateKey = keyService.privateKey(profile, from);
@@ -309,7 +293,6 @@ public class XrpTransactionService {
             privateKey.destroy();
         }
     }
-
     private String signAndSubmit(ChainAddressRecord from, TrustSet trustSet) {
         AccountChainProfile profile = profile();
         PrivateKey privateKey = keyService.privateKey(profile, from);
@@ -324,7 +307,6 @@ public class XrpTransactionService {
             privateKey.destroy();
         }
     }
-
     private String createTrustLine(ChainAddressRecord address, XrpIssuedCurrency issued) {
         ensureActivated(address.getAddress());
         long feeDrops = feeDrops();
@@ -368,13 +350,11 @@ public class XrpTransactionService {
                 .max(BigDecimal.ZERO)
                 .stripTrailingZeros();
     }
-
     private ChainAddressRecord defaultHotAddress() {
         return repository.listDefaultHotAddressCandidates(CHAIN, NATIVE_SYMBOL).stream()
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("missing XRP default hot wallet address"));
     }
-
     private TokenDefinition token(String symbol) {
         String value = symbol == null ? "" : symbol.trim();
         return repository.listTokens(CHAIN).stream()
@@ -382,7 +362,6 @@ public class XrpTransactionService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("XRPL issued currency not configured: " + symbol));
     }
-
     private Confirmation waitForValidated(String txHash, String operation) {
         AccountChainProfile profile = profile();
         RuntimeException lastFailure = null;
@@ -402,7 +381,6 @@ public class XrpTransactionService {
         }
         throw new IllegalStateException(operation + " was submitted but not confirmed in time: " + txHash);
     }
-
     private void sleepBeforeConfirmationRetry() {
         try {
             Thread.sleep(PREPARATION_CONFIRM_SLEEP.toMillis());
@@ -434,7 +412,6 @@ public class XrpTransactionService {
                 .rawPayload(confirmation.raw().toString())
                 .build());
     }
-
     private Confirmation confirmation(AccountChainProfile profile, String txHash) {
         JsonNode result = rpc.transaction(txHash);
         if (!result.path("validated").asBoolean(false)) {
@@ -451,7 +428,6 @@ public class XrpTransactionService {
         return new Confirmation(confirmations >= Math.max(1, profile.getWithdrawConfirmations()),
                 ledger, confirmations, result);
     }
-
     private void updateConfirmedTransaction(String txHash, Confirmation confirmation) {
         JsonNode tx = txNode(confirmation.raw());
         JsonNode amountNode = deliveredAmount(confirmation.raw());
@@ -485,7 +461,6 @@ public class XrpTransactionService {
         }
         repository.recordXrpTransaction(builder.build());
     }
-
     private boolean matchesIssuedCurrency(TokenDefinition token, String issuer, String currency) {
         try {
             return XrpIssuedCurrency.fromToken(token).matches(issuer, currency);
@@ -512,59 +487,48 @@ public class XrpTransactionService {
                 .rawPayload(rawPayload)
                 .build());
     }
-
     private void ensureTrustLine(String address, XrpIssuedCurrency issued, String side) {
         if (!hasTrustLine(address, issued)) {
             throw new IllegalStateException("XRPL " + side + " account has no trustline for "
                     + issued.symbol() + " issuer=" + issued.issuer());
         }
     }
-
     private boolean hasTrustLine(String address, XrpIssuedCurrency issued) {
         return rpc.accountLines(address, issued.issuer()).findValues("currency").stream()
                 .anyMatch(node -> issued.currencyCode().equalsIgnoreCase(node.asText()));
     }
-
     private void ensureActivated(String address) {
         if (rpc.accountInfo(address).isEmpty()) {
             throw new IllegalStateException("XRPL account is not activated: " + address);
         }
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     private long feeDrops() {
         Long configured = profile().getDefaultFee();
         return configured == null || configured <= 0 ? rpc.feeDrops() : Math.max(10L, configured);
     }
-
     private BigDecimal feeAsXrp() {
         return fromDrops(BigDecimal.valueOf(feeDrops()));
     }
-
     private long toDrops(BigDecimal amount) {
         return amount.movePointRight(XRP_DECIMALS)
                 .setScale(0, RoundingMode.UNNECESSARY)
                 .longValueExact();
     }
-
     private BigDecimal fromDrops(BigDecimal drops) {
         return drops.movePointLeft(XRP_DECIMALS).stripTrailingZeros();
     }
-
     private JsonNode txNode(JsonNode result) {
         JsonNode txJson = result.path("tx_json");
         return txJson.isMissingNode() || txJson.isNull() ? result : txJson;
     }
-
     private JsonNode metaNode(JsonNode result) {
         JsonNode meta = result.path("meta");
         return meta.isMissingNode() || meta.isNull() ? result.path("metaData") : meta;
     }
-
     private JsonNode deliveredAmount(JsonNode result) {
         JsonNode meta = metaNode(result);
         JsonNode delivered = meta.path("delivered_amount");
@@ -573,17 +537,14 @@ public class XrpTransactionService {
         }
         return txNode(result).path("Amount");
     }
-
     private void validateAddress(String address) {
         Address.of(address).validateAddress();
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
-
     private record Confirmation(boolean confirmed, long ledgerIndex, long confirmations, JsonNode raw) {
     }
 

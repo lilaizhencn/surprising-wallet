@@ -40,20 +40,9 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class HotWalletAddressService {
-    private final ChainJdbcRepository repository;
-    private final PubKeyConfig pubKeyConfig;
-    private final SolanaKeyService solanaKeyService;
-    private final SuiKeyService suiKeyService;
-    private final AptosKeyService aptosKeyService;
-    private final TonKeyService tonKeyService;
-    private final XrpKeyService xrpKeyService;
-    private final CardanoKeyService cardanoKeyService;
-    private final NearKeyService nearKeyService;
-    private final PolkadotKeyService polkadotKeyService;
-    private final MoneroAddressService moneroAddressService;
-
-    public Optional<ChainAddressRecord> findDefaultHotAddress(String chain, String assetSymbol) {
+public
+class HotWalletAddressService {
+    private final ChainJdbcRepository repository;    private final PubKeyConfig pubKeyConfig;    private final SolanaKeyService solanaKeyService;    private final SuiKeyService suiKeyService;    private final AptosKeyService aptosKeyService;    private final TonKeyService tonKeyService;    private final XrpKeyService xrpKeyService;    private final CardanoKeyService cardanoKeyService;    private final NearKeyService nearKeyService;    private final PolkadotKeyService polkadotKeyService;    private final MoneroAddressService moneroAddressService;    public Optional<ChainAddressRecord> findDefaultHotAddress(String chain, String assetSymbol) {
         return repository.findChainAddress(
                 chain,
                 assetSymbol,
@@ -62,12 +51,10 @@ public class HotWalletAddressService {
                 HotWalletRules.DEFAULT_HOT_ADDRESS_INDEX,
                 HotWalletRules.DEFAULT_HOT_WALLET_ROLE);
     }
-
     public ChainAddressRecord requireVerifiedDefaultHotAddress(AccountChainProfile profile) {
         ChainAddressRecord expected = deriveDefaultHotAddress(profile);
         return requireDefaultHotAddressMatches(profile, expected);
     }
-
     private ChainAddressRecord requireDefaultHotAddressMatches(AccountChainProfile profile, ChainAddressRecord expected) {
         ChainAddressRecord actual = findDefaultHotAddress(profile.getChain(), profile.getNativeSymbol())
                 .orElseThrow(() -> new IllegalStateException("missing default hot wallet chain_address for "
@@ -108,7 +95,6 @@ public class HotWalletAddressService {
         }
         return actual;
     }
-
     public ChainAddressRecord deriveDefaultHotAddress(AccountChainProfile profile) {
         return deriveAddress(
                 profile,
@@ -164,7 +150,6 @@ public class HotWalletAddressService {
         }
         return baseRecord(profile, userId, biz, addressIndex, address, null, metadata.getPath(), walletRole);
     }
-
     private NetworkParameters bitcoinLikeNetworkParameters(AccountChainProfile profile) {
         String chain = normalize(profile.getChain());
         String network = normalize(profile.getNetwork());
@@ -201,7 +186,6 @@ public class HotWalletAddressService {
                     + profile.getChain());
         };
     }
-
     private boolean isMainnet(String network) {
         return "main".equals(network) || "mainnet".equals(network);
     }
@@ -280,7 +264,6 @@ public class HotWalletAddressService {
         String address = PolkadotKeyService.ss58Address(key.publicKey(), polkadotSs58Prefix(profile));
         return baseRecord(profile, userId, biz, addressIndex, address, address, key.derivationPath(), walletRole);
     }
-
     private ChainAddressRecord deriveMonero(long userId, int biz, long addressIndex, String walletRole) {
         return moneroAddressService.createNativeAddress(userId, biz, addressIndex, walletRole);
     }
@@ -302,7 +285,6 @@ public class HotWalletAddressService {
                 .enabled(true)
                 .build();
     }
-
     private boolean sameAddress(AccountChainProfile profile, String left, String right) {
         if (left == null || right == null) {
             return false;
@@ -313,33 +295,27 @@ public class HotWalletAddressService {
         }
         return left.equals(right);
     }
-
     private boolean isDefaultHotAddressRow(AccountChainProfile profile, ChainAddressRecord record) {
         return profile.getNativeSymbol().equalsIgnoreCase(record.getAssetSymbol())
                 && record.getAddressIndex() != null
                 && record.getAddressIndex().equals(HotWalletRules.DEFAULT_HOT_ADDRESS_INDEX)
                 && HotWalletRules.DEFAULT_HOT_WALLET_ROLE.equals(record.getWalletRole());
     }
-
     private String derivationPath(AccountChainProfile profile, long userId, int biz, long index) {
         return String.format("m/44/%d/%d/%d/%d", derivationCoinType(profile), biz, userId, index);
     }
-
     private int derivationCoinType(AccountChainProfile profile) {
         return ChainType.derivationCoinType(profile.getChain(), profile.getBip44CoinType());
     }
-
     private int polkadotSs58Prefix(AccountChainProfile profile) {
         if (profile.getChainId() != null && profile.getChainId() >= 0 && profile.getChainId() <= 16383) {
             return Math.toIntExact(profile.getChainId());
         }
         return isMainnet(normalize(profile.getNetwork())) ? 0 : 42;
     }
-
     private String normalize(String value) {
         return value == null ? "" : value.toLowerCase(Locale.ROOT);
     }
-
     private enum AddressFormat {
         EVM,
         TRON,

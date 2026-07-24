@@ -43,10 +43,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 @Component
-public class SuiRpcClient {
-    private static final String CHAIN = "SUI";
-    private static final long RPC_TIMEOUT_SECONDS = 30L;
-    private static final FieldMask TRANSACTION_READ_MASK = FieldMask.newBuilder()
+public
+class SuiRpcClient {
+    private static final String CHAIN = "SUI";    private static final long RPC_TIMEOUT_SECONDS = 30L;    private static final FieldMask TRANSACTION_READ_MASK = FieldMask.newBuilder()
             .addPaths("digest")
             .addPaths("transaction.sender")
             .addPaths("effects.status")
@@ -70,13 +69,8 @@ public class SuiRpcClient {
             .addPaths("transactions.checkpoint")
             .addPaths("transactions.balance_changes")
             .build();
-
     public static final String SUI_COIN_TYPE = "0x2::sui::SUI";
-
-    private final ObjectMapper objectMapper;
-    private final ChainJdbcRepository repository;
-    private final ChainRpcNodeService rpcNodeService;
-    private final String fixedGrpcEndpoint;
+    private final ObjectMapper objectMapper;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedGrpcEndpoint;
 
     @Autowired
     public SuiRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
@@ -94,20 +88,17 @@ public class SuiRpcClient {
         this.rpcNodeService = rpcNodeService;
         this.fixedGrpcEndpoint = fixedGrpcEndpoint;
     }
-
     public long latestCheckpoint() {
         return call(context -> ledger(context).getServiceInfo(
                         LedgerServiceOuterClass.GetServiceInfoRequest.getDefaultInstance()))
                 .getCheckpointHeight();
     }
-
     public long referenceGasPrice() {
         LedgerServiceOuterClass.GetEpochRequest request = LedgerServiceOuterClass.GetEpochRequest.newBuilder()
                 .setReadMask(FieldMask.newBuilder().addPaths("reference_gas_price"))
                 .build();
         return call(context -> ledger(context).getEpoch(request)).getEpoch().getReferenceGasPrice();
     }
-
     public BigDecimal balance(String owner, String coinType) {
         StateServiceOuterClass.GetBalanceRequest request = StateServiceOuterClass.GetBalanceRequest.newBuilder()
                 .setOwner(SuiHex.normalizeAddress(owner))
@@ -116,14 +107,12 @@ public class SuiRpcClient {
         long value = call(context -> state(context).getBalance(request)).getBalance().getBalance();
         return unsignedBigDecimal(value);
     }
-
     public List<SuiCoin> coins(String owner, String coinType, int limit) {
         if (limit <= 0) {
             return List.of();
         }
         return call(context -> listCoins(context, owner, coinType, limit));
     }
-
     public List<JsonNode> checkpointTransactions(long startCheckpoint, long endCheckpoint) {
         if (endCheckpoint < startCheckpoint) {
             return List.of();
@@ -151,7 +140,6 @@ public class SuiRpcClient {
             return transactions;
         });
     }
-
     public JsonNode transactionBlock(String digest) {
         LedgerServiceOuterClass.GetTransactionRequest request =
                 LedgerServiceOuterClass.GetTransactionRequest.newBuilder()
@@ -171,7 +159,6 @@ public class SuiRpcClient {
                 ? toLegacyTransaction(response.getTransaction())
                 : objectMapper.createObjectNode();
     }
-
     public JsonNode executeSignedTransaction(String txBytesBase64, String signatureBase64) {
         BcsOuterClass.Bcs transactionBcs = BcsOuterClass.Bcs.newBuilder()
                 .setValue(ByteString.copyFrom(Base64.getDecoder().decode(txBytesBase64)))
@@ -197,7 +184,6 @@ public class SuiRpcClient {
         }
         return transaction;
     }
-
     private List<SuiCoin> listCoins(GrpcContext context, String owner, String coinType, int limit) {
         List<SuiCoin> result = new ArrayList<>();
         ByteString pageToken = ByteString.EMPTY;
@@ -225,7 +211,6 @@ public class SuiRpcClient {
         } while (!pageToken.isEmpty() && result.size() < limit);
         return result;
     }
-
     private ObjectNode toLegacyTransaction(ExecutedTransactionOuterClass.ExecutedTransaction source) {
         ObjectNode transaction = objectMapper.createObjectNode();
         transaction.put("digest", source.getDigest());
@@ -265,7 +250,6 @@ public class SuiRpcClient {
         }
         return transaction;
     }
-
     private <T> T call(Function<GrpcContext, T> request) {
         if (fixedGrpcEndpoint != null && !fixedGrpcEndpoint.isBlank()) {
             return callNode(fixedGrpcEndpoint, Map.of(), request);
@@ -306,12 +290,10 @@ public class SuiRpcClient {
             }
         }
     }
-
     private static LedgerServiceGrpc.LedgerServiceBlockingStub ledger(GrpcContext context) {
         return LedgerServiceGrpc.newBlockingStub(context.channel())
                 .withDeadlineAfter(RPC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
-
     private static StateServiceGrpc.StateServiceBlockingStub state(GrpcContext context) {
         return StateServiceGrpc.newBlockingStub(context.channel())
                 .withDeadlineAfter(RPC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -322,11 +304,9 @@ public class SuiRpcClient {
         return TransactionExecutionServiceGrpc.newBlockingStub(context.channel())
                 .withDeadlineAfter(RPC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
-
     private static BigDecimal unsignedBigDecimal(long value) {
         return new BigDecimal(Long.toUnsignedString(value));
     }
-
     private static String normalizeCoinType(String value) {
         String[] parts = value.split("::");
         if (parts.length != 3) {
@@ -334,10 +314,8 @@ public class SuiRpcClient {
         }
         return SuiHex.normalizeAddress(parts[0]) + "::" + parts[1] + "::" + parts[2];
     }
-
     private record GrpcContext(Channel channel) {
     }
-
     private record Endpoint(String target, boolean secure) {
         private static Endpoint parse(String value) {
             String endpoint = value == null ? "" : value.trim();
@@ -360,7 +338,6 @@ public class SuiRpcClient {
             return new Endpoint(target, target.endsWith(":443"));
         }
     }
-
     public record SuiCoin(String objectId, String version, String digest, BigDecimal balance) {
     }
 }

@@ -19,10 +19,7 @@ import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
 
 @Service
 public class CustodyTenantChainService {
-    private final CustodyTenantChainRepository chains;
-    private final CustodyRepository custody;
-    private final BlockchainAdapterRegistry adapters;
-
+    private final CustodyTenantChainRepository chains;    private final CustodyRepository custody;    private final BlockchainAdapterRegistry adapters;
     public CustodyTenantChainService(CustodyTenantChainRepository chains,
                                      CustodyRepository custody,
                                      BlockchainAdapterRegistry adapters) {
@@ -30,7 +27,6 @@ public class CustodyTenantChainService {
         this.custody = custody;
         this.adapters = adapters;
     }
-
     public List<ChainView> list(CustodyPrincipal principal) {
         requireScope(principal, "chains:read");
         Map<String, CustodyRepository.GasAccountRecord> addresses = custody
@@ -69,7 +65,6 @@ public class CustodyTenantChainService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("tenant chain status was not persisted"));
     }
-
     public void requireActive(UUID tenantId, String chainValue) {
         String chain = normalizeChain(chainValue);
         if (!chains.active(tenantId, chain)) {
@@ -77,7 +72,6 @@ public class CustodyTenantChainService {
                     "chain " + chain + " is not open for this tenant");
         }
     }
-
     public void requireWithdrawalEnabled(UUID tenantId, String chainValue, String symbolValue) {
         String chain = normalizeChain(chainValue);
         String symbol = normalizeSymbol(symbolValue);
@@ -112,13 +106,11 @@ public class CustodyTenantChainService {
                 address == null ? null : address.memo(),
                 row.openedAt(), row.closedAt());
     }
-
     private static TokenView tokenView(CustodyTenantChainRepository.TokenRecord row) {
         return new TokenView(
                 row.symbol(), row.standard(), row.contractAddress(), row.decimals(),
                 row.platformEnabled());
     }
-
     private BlockchainAdapter requireAdapter(String chain) {
         try {
             return adapters.require(ChainType.valueOf(chain));
@@ -126,7 +118,6 @@ public class CustodyTenantChainService {
             throw new IllegalArgumentException("chain has no executable wallet adapter: " + chain, e);
         }
     }
-
     private static String normalizeChain(String value) {
         String chain = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!chain.matches("^[A-Z][A-Z0-9_]{1,31}$")) {
@@ -134,7 +125,6 @@ public class CustodyTenantChainService {
         }
         return chain;
     }
-
     private static String normalizeSymbol(String value) {
         String symbol = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!symbol.matches("^[A-Z][A-Z0-9_]{1,31}$")) {
@@ -142,13 +132,11 @@ public class CustodyTenantChainService {
         }
         return symbol;
     }
-
     private static void requireScope(CustodyPrincipal principal, String scope) {
         if (principal == null || principal.tenantId() == null || !principal.hasScope(scope)) {
             throw new CustodyForbiddenException(scope + " scope required");
         }
     }
-
     private static void requireTenantAdmin(CustodyPrincipal principal) {
         requireScope(principal, "chains:write");
         if (!"TENANT_ADMIN".equals(principal.role())) {

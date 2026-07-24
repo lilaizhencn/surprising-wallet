@@ -26,15 +26,7 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class CustodyAddressService {
-    private static final String RESERVED_SUBJECT_PREFIX = "__sw_";
-    static final long DEFAULT_ADDRESS_VERSION = 0L;
-    private static final long MAX_ADDRESS_VERSION = Integer.MAX_VALUE;
-
-    private final CustodyRepository custodyRepository;
-    private final ChainJdbcRepository chainRepository;
-    private final BlockchainRuntimeService runtime;
-    private final CustodyTenantChainService tenantChains;
-    private final ObjectMapper objectMapper;
+    private static final String RESERVED_SUBJECT_PREFIX = "__sw_";    static final long DEFAULT_ADDRESS_VERSION = 0L;    private static final long MAX_ADDRESS_VERSION = Integer.MAX_VALUE;    private final CustodyRepository custodyRepository;    private final ChainJdbcRepository chainRepository;    private final BlockchainRuntimeService runtime;    private final CustodyTenantChainService tenantChains;    private final ObjectMapper objectMapper;
 
     @Autowired(required = false)
     private Evm7702CollectionRepository evm7702Repository;
@@ -197,12 +189,10 @@ public class CustodyAddressService {
                 json(details));
         return toView(saved);
     }
-
     public List<Map<String, Object>> assets(CustodyPrincipal principal) {
         requireScope(principal, "assets:read");
         return custodyRepository.tenantAssetOverview(principal.tenantId());
     }
-
     private AddressView toView(AddressRecord record) {
         return new AddressView(
                 record.id(),
@@ -227,7 +217,6 @@ public class CustodyAddressService {
             throw new IllegalStateException("stored address metadata is invalid", e);
         }
     }
-
     private String metadataJson(Map<String, Object> metadata) {
         Map<String, Object> value = metadata == null ? Map.of() : metadata;
         String json = json(value);
@@ -236,7 +225,6 @@ public class CustodyAddressService {
         }
         return json;
     }
-
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -255,7 +243,6 @@ public class CustodyAddressService {
         details.put("childIndex", childIndex);
         return json(details);
     }
-
     public static long requireAddressVersion(Long value) {
         long addressVersion = value == null ? DEFAULT_ADDRESS_VERSION : value;
         if (addressVersion < 0 || addressVersion > MAX_ADDRESS_VERSION) {
@@ -264,7 +251,6 @@ public class CustodyAddressService {
         }
         return addressVersion;
     }
-
     private static String requireChain(String value) {
         String chain = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!chain.matches("^[A-Z][A-Z0-9_]{1,31}$")) {
@@ -272,7 +258,6 @@ public class CustodyAddressService {
         }
         return chain;
     }
-
     private static String optional(String value, int max, String field) {
         String result = value == null ? "" : value.trim();
         if (result.length() > max) {
@@ -280,7 +265,6 @@ public class CustodyAddressService {
         }
         return result.isBlank() ? null : result;
     }
-
     public static String requireSubject(String value, boolean allowReserved) {
         String subject = value == null ? "" : value.trim();
         if (!subject.matches("^[A-Za-z0-9_][A-Za-z0-9._:-]{0,159}$")) {
@@ -292,7 +276,6 @@ public class CustodyAddressService {
         }
         return subject;
     }
-
     private static String normalizeSource(String value) {
         String source = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!"API".equals(source) && !"CONSOLE".equals(source)) {
@@ -300,11 +283,9 @@ public class CustodyAddressService {
         }
         return source;
     }
-
     private static String upperOrEmpty(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
-
     private static void requireScope(CustodyPrincipal principal, String scope) {
         if (principal == null || principal.tenantId() == null || !principal.hasScope(scope)) {
             throw new CustodyForbiddenException(scope + " scope required");

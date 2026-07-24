@@ -14,12 +14,9 @@ import java.math.BigDecimal;
 import java.util.List;
 
 @Component
-public class SolanaChainAdapter implements BlockchainAdapter {
-    private static final String CHAIN = "SOLANA";
-
-    private final SolanaDepositScanner scanner;
-    private final ChainJdbcRepository repository;
-
+public
+class SolanaChainAdapter implements BlockchainAdapter {
+    private static final String CHAIN = "SOLANA";    private final SolanaDepositScanner scanner;    private final ChainJdbcRepository repository;
     public SolanaChainAdapter(SolanaDepositScanner scanner, ChainJdbcRepository repository) {
         this.scanner = scanner;
         this.repository = repository;
@@ -67,7 +64,6 @@ public class SolanaChainAdapter implements BlockchainAdapter {
     public List<DepositEvent> scanDeposits(long height) {
         return scanner.scanAndCredit();
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));

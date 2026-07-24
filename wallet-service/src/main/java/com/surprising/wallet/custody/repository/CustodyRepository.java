@@ -19,9 +19,7 @@ import java.util.UUID;
 
 @Repository
 public class CustodyRepository {
-    private final JdbcTemplate jdbc;
-
-    public CustodyRepository(JdbcTemplate jdbc) {
+    private final JdbcTemplate jdbc;    public CustodyRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
@@ -39,7 +37,6 @@ public class CustodyRepository {
                         """, adminId, tenantId, adminEmail, adminDisplayName, passwordHash);
         return requireTenant(tenantId);
     }
-
     public Optional<TenantRecord> findTenantBySlug(String slug) {
         return jdbc.query("""
                         select id, slug, name, status, derivation_namespace, ip_allowlist_enabled,
@@ -58,7 +55,6 @@ public class CustodyRepository {
                         rs.getTimestamp("updated_at").toInstant()),
                 slug).stream().findFirst();
     }
-
     public TenantRecord requireTenant(UUID tenantId) {
         return jdbc.query("""
                         select id, slug, name, status, derivation_namespace, ip_allowlist_enabled,
@@ -173,7 +169,6 @@ public class CustodyRepository {
                 }, blankToEmpty(search), blankToEmpty(status),
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
-
     public long countTenants(String search, String status) {
         Long count = jdbc.queryForObject("""
                 select count(*)
@@ -189,7 +184,6 @@ public class CustodyRepository {
                 blankToEmpty(status), blankToEmpty(status));
         return count == null ? 0L : count;
     }
-
     public Map<String, Object> tenantOperationsSummary(UUID tenantId) {
         return jdbc.query("""
                         select
@@ -244,7 +238,6 @@ public class CustodyRepository {
                     return row;
                 }, tenantId);
     }
-
     public void updateTenantProfile(UUID tenantId, String name, String displayCurrency) {
         if (jdbc.update("""
                         update custody_tenant
@@ -254,7 +247,6 @@ public class CustodyRepository {
             throw new IllegalArgumentException("tenant not found");
         }
     }
-
     public void updateTenantStatus(UUID tenantId, String status) {
         if (jdbc.update("""
                         update custody_tenant
@@ -264,7 +256,6 @@ public class CustodyRepository {
             throw new IllegalArgumentException("tenant not found");
         }
     }
-
     public int revokeTenantSessions(UUID tenantId) {
         return jdbc.update("""
                 update custody_session
@@ -272,7 +263,6 @@ public class CustodyRepository {
                  where tenant_id = ? and revoked_at is null
                 """, tenantId);
     }
-
     public Optional<AuthUser> findTenantUser(String email) {
         return jdbc.query("""
                         select u.id, u.tenant_id, t.slug as tenant_slug, t.status as tenant_status,
@@ -283,7 +273,6 @@ public class CustodyRepository {
                          where u.tenant_id is not null and lower(u.email) = lower(?)
                         """, (rs, rowNum) -> mapAuthUser(rs), email).stream().findFirst();
     }
-
     public Optional<AuthUser> findPlatformUser(String email) {
         return jdbc.query("""
                         select u.id, u.tenant_id, null::varchar as tenant_slug,
@@ -295,7 +284,6 @@ public class CustodyRepository {
                            and lower(u.email) = lower(?)
                         """, (rs, rowNum) -> mapAuthUser(rs), email).stream().findFirst();
     }
-
     public boolean platformAdminExists() {
         Long count = jdbc.queryForObject("""
                 select count(*) from custody_tenant_user
@@ -303,7 +291,6 @@ public class CustodyRepository {
                 """, Long.class);
         return count != null && count > 0;
     }
-
     public void insertPlatformAdmin(UUID userId, String email, String passwordHash) {
         jdbc.update("""
                 insert into custody_tenant_user(
@@ -312,7 +299,6 @@ public class CustodyRepository {
                 on conflict do nothing
                 """, userId, email.toLowerCase(Locale.ROOT), passwordHash);
     }
-
     public void recordLoginFailure(UUID userId, Instant lockedUntil) {
         jdbc.update("""
                         update custody_tenant_user
@@ -322,7 +308,6 @@ public class CustodyRepository {
                          where id = ?
                         """, timestampOrNull(lockedUntil), userId);
     }
-
     public void recordLoginSuccess(UUID userId) {
         jdbc.update("""
                         update custody_tenant_user
@@ -341,7 +326,6 @@ public class CustodyRepository {
                         """, sessionId, userId, tenantId, tokenHash, sourceIp, truncate(userAgent, 512),
                 Timestamp.from(expiresAt));
     }
-
     public Optional<SessionRecord> findActiveSession(String tokenHash) {
         return jdbc.query("""
                         select s.id as session_id, s.tenant_user_id, s.tenant_id, t.slug as tenant_slug,
@@ -366,7 +350,6 @@ public class CustodyRepository {
                         rs.getTimestamp("expires_at").toInstant()),
                 tokenHash).stream().findFirst();
     }
-
     public List<Map<String, Object>> listTenantUsers(UUID tenantId) {
         return jdbc.query("""
                         select id, email, display_name, role, status, failed_login_count,
@@ -395,7 +378,6 @@ public class CustodyRepository {
                     return row;
                 }, tenantId);
     }
-
     public Map<String, Object> unlockTenantAdministrator(UUID tenantId, UUID userId) {
         if (jdbc.update("""
                         update custody_tenant_user
@@ -411,7 +393,6 @@ public class CustodyRepository {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "tenant administrator not found"));
     }
-
     public void touchSession(UUID sessionId) {
         jdbc.update("""
                         update custody_session
@@ -420,7 +401,6 @@ public class CustodyRepository {
                            and last_seen_at < now() - interval '5 minutes'
                         """, sessionId);
     }
-
     public void revokeSession(String tokenHash) {
         jdbc.update("""
                 update custody_session set revoked_at = now()
@@ -437,7 +417,6 @@ public class CustodyRepository {
                         """, id, tenantId, keyId, name, encryptedSecret, createdBy);
         return requireApiKey(keyId);
     }
-
     public Optional<ApiKeyRecord> findActiveApiKey(String keyId) {
         return jdbc.query("""
                         select k.id, k.tenant_id, t.slug as tenant_slug, t.status as tenant_status,
@@ -450,7 +429,6 @@ public class CustodyRepository {
                            and (k.expires_at is null or k.expires_at > now())
                         """, (rs, rowNum) -> mapApiKey(rs), keyId).stream().findFirst();
     }
-
     public ApiKeyRecord requireApiKey(String keyId) {
         return jdbc.query("""
                         select k.id, k.tenant_id, t.slug as tenant_slug, t.status as tenant_status,
@@ -462,7 +440,6 @@ public class CustodyRepository {
                         """, (rs, rowNum) -> mapApiKey(rs), keyId).stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("API key not found"));
     }
-
     public List<Map<String, Object>> listApiKeys(UUID tenantId) {
         return jdbc.query("""
                         select id, key_id, name, status, last_used_at, last_used_ip,
@@ -484,7 +461,6 @@ public class CustodyRepository {
                     return row;
                 }, tenantId);
     }
-
     public void revokeApiKey(UUID tenantId, UUID keyId) {
         if (jdbc.update("""
                         update custody_api_key
@@ -494,7 +470,6 @@ public class CustodyRepository {
             throw new IllegalArgumentException("active API key not found");
         }
     }
-
     public void touchApiKey(UUID keyId, String sourceIp) {
         jdbc.update("""
                         update custody_api_key
@@ -507,7 +482,6 @@ public class CustodyRepository {
                            )
                         """, sourceIp, keyId, sourceIp);
     }
-
     public boolean reserveNonce(String keyId, String nonce, Instant expiresAt) {
         try {
             return jdbc.update("""
@@ -518,7 +492,6 @@ public class CustodyRepository {
             return false;
         }
     }
-
     public List<String> activeIpRules(UUID tenantId) {
         return jdbc.query("""
                 select cidr::text from custody_ip_rule
@@ -526,7 +499,6 @@ public class CustodyRepository {
                  order by cidr
                 """, (rs, rowNum) -> rs.getString(1), tenantId);
     }
-
     public List<Map<String, Object>> listIpRules(UUID tenantId) {
         return jdbc.query("""
                         select id, label, cidr::text as cidr, enabled, created_at, updated_at
@@ -544,7 +516,6 @@ public class CustodyRepository {
                     return row;
                 }, tenantId);
     }
-
     public Map<String, Object> insertIpRule(UUID tenantId, UUID ruleId, String label, String cidr, UUID createdBy) {
         return jdbc.queryForMap("""
                         insert into custody_ip_rule(id, tenant_id, label, cidr, created_by)
@@ -552,13 +523,11 @@ public class CustodyRepository {
                         returning id, label, cidr::text as cidr, enabled, created_at, updated_at
                         """, ruleId, tenantId, label, cidr, createdBy);
     }
-
     public void deleteIpRule(UUID tenantId, UUID ruleId) {
         if (jdbc.update("delete from custody_ip_rule where tenant_id = ? and id = ?", tenantId, ruleId) != 1) {
             throw new IllegalArgumentException("IP rule not found");
         }
     }
-
     public void setIpAllowlistEnabled(UUID tenantId, boolean enabled) {
         if (enabled && activeIpRules(tenantId).isEmpty()) {
             throw new IllegalStateException("add at least one enabled IP rule before enforcing the allowlist");
@@ -571,7 +540,6 @@ public class CustodyRepository {
             throw new IllegalArgumentException("tenant not found");
         }
     }
-
     public int resolveDerivationSubject(UUID tenantId, String subject) {
         String mappingKey = tenantId + "\n" + subject;
         jdbc.query(
@@ -596,7 +564,6 @@ public class CustodyRepository {
         }
         return allocated;
     }
-
     public void lockSubjectAddressAllocation(UUID tenantId, String chain, String subject) {
         String allocationKey = tenantId + "\n" + chain + "\n" + subject;
         jdbc.query(
@@ -622,7 +589,6 @@ public class CustodyRepository {
                 derivationChild, createdBy);
         return requireAddress(tenantId, id);
     }
-
     public void assignChainAddressTenant(UUID tenantId, long chainAddressId) {
         if (jdbc.update("""
                         update chain_address
@@ -632,7 +598,6 @@ public class CustodyRepository {
             throw new IllegalStateException("chain address belongs to another tenant");
         }
     }
-
     public AddressRecord requireAddress(UUID tenantId, UUID addressId) {
         return jdbc.query("""
                         select id, tenant_id, chain_address_id, chain, network, address, memo,
@@ -660,7 +625,6 @@ public class CustodyRepository {
                 tenantId, chain, subject, addressVersion)
                 .stream().findFirst();
     }
-
     public boolean isGasAddress(UUID tenantId, UUID addressId) {
         Boolean result = jdbc.queryForObject("""
                         select exists (
@@ -737,7 +701,6 @@ public class CustodyRepository {
                 normalizedSearch, normalizedSearch, normalizedSearch, normalizedSearch,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
-
     public List<Map<String, Object>> tenantAssetOverview(UUID tenantId) {
         return jdbc.query("""
                         with tenant_accounts as (
@@ -797,7 +760,6 @@ public class CustodyRepository {
                     return row;
                 }, tenantId, tenantId);
     }
-
     public Optional<GasAccountRecord> findGasAccount(UUID tenantId, String chain) {
         return gasAccounts(tenantId, chain).stream().findFirst();
     }
@@ -816,14 +778,12 @@ public class CustodyRepository {
         return findGasAccount(tenantId, chain)
                 .orElseThrow(() -> new IllegalStateException("failed to create gas account"));
     }
-
     public GasAccountRecord requireGasAccount(UUID tenantId, UUID gasAccountId) {
         return gasAccounts(tenantId, "").stream()
                 .filter(account -> account.id().equals(gasAccountId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("gas account not found"));
     }
-
     public List<GasAccountRecord> listGasAccounts(UUID tenantId) {
         return gasAccounts(tenantId, "");
     }
@@ -868,7 +828,6 @@ public class CustodyRepository {
                 }, tenantId, gasAccountId,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
-
     public GasPricingMetadata gasPricingMetadata(String chain, String assetSymbol) {
         return jdbc.query("""
                         select p.family, p.native_symbol, coalesce(p.default_fee_rate, 1) default_fee_rate,
@@ -1103,7 +1062,6 @@ public class CustodyRepository {
                 }, tenantId, gasAccountId,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
-
     public List<GasUsageRecord> listOverdueGasUsage(int limit) {
         return jdbc.query("""
                         select id, tenant_id, gas_account_id, operation_type, operation_id,
@@ -1134,7 +1092,6 @@ public class CustodyRepository {
                         instantOrNull(rs.getTimestamp("settled_at"))),
                 Math.min(Math.max(limit, 1), 200));
     }
-
     private GasUsageRecord requireGasUsage(UUID tenantId, String operationType, UUID operationId) {
         return findGasUsage(tenantId, operationType, operationId)
                 .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
@@ -1171,7 +1128,6 @@ public class CustodyRepository {
                 tenantId, operationType, operationId).stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
     }
-
     public Optional<GasUsageRecord> findGasUsage(UUID custodyWithdrawalId) {
         return jdbc.query("""
                         select tenant_id from custody_gas_usage
@@ -1210,7 +1166,6 @@ public class CustodyRepository {
                         instantOrNull(rs.getTimestamp("settled_at"))),
                 tenantId, operationType, operationId).stream().findFirst();
     }
-
     private GasUsageRecord requireWithdrawalGasUsage(UUID custodyWithdrawalId) {
         return findGasUsage(custodyWithdrawalId)
                 .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
@@ -1238,12 +1193,10 @@ public class CustodyRepository {
             throw new IllegalArgumentException("gas operation does not belong to tenant and chain");
         }
     }
-
     private static GasFundingSource gasFundingSource(GasAccountRecord gasAccount) {
         return new GasFundingSource(
                 gasAccount.custodyAddressId(), gasAccount.accountId());
     }
-
     private record GasFundingSource(UUID custodyAddressId, String accountId) {
     }
 
@@ -1348,7 +1301,6 @@ public class CustodyRepository {
                         (rs, rowNum) -> rs.getBigDecimal(1), first, second)
                 .stream().filter(java.util.Objects::nonNull).findFirst();
     }
-
     public Map<String, Object> onboardingStatus(UUID tenantId) {
         return jdbc.queryForObject("""
                         select
@@ -1435,7 +1387,6 @@ public class CustodyRepository {
                     return result;
                 }, tenantId);
     }
-
     private List<GasAccountRecord> gasAccounts(UUID tenantId, String chain) {
         return jdbc.query("""
                         select g.id, g.tenant_id, g.custody_address_id, g.chain, g.network,
@@ -1497,7 +1448,6 @@ public class CustodyRepository {
                         rs.getTimestamp("updated_at").toInstant()),
                 tenantId, blankToEmpty(chain), blankToEmpty(chain));
     }
-
     public Optional<IdempotencyRecord> findIdempotency(UUID tenantId, String key, String operation) {
         return jdbc.query("""
                         select request_hash, response_status, response_body::text as response_body, expires_at
@@ -1555,7 +1505,6 @@ public class CustodyRepository {
                 verificationTokenHash, createdBy);
         return requireWebhookEndpoint(tenantId, id);
     }
-
     public WebhookEndpointRecord requireWebhookEndpoint(UUID tenantId, UUID endpointId) {
         return jdbc.query("""
                         select id, tenant_id, name, url, secret_ciphertext,
@@ -1567,7 +1516,6 @@ public class CustodyRepository {
                 .stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("webhook endpoint not found"));
     }
-
     public List<Map<String, Object>> listWebhookEndpoints(UUID tenantId) {
         return jdbc.query("""
                         select e.id, e.name, e.url, e.status,
@@ -1599,7 +1547,6 @@ public class CustodyRepository {
                     return row;
                 }, tenantId);
     }
-
     public void markWebhookVerified(UUID tenantId, UUID endpointId) {
         if (jdbc.update("""
                         update custody_webhook_endpoint
@@ -1611,7 +1558,6 @@ public class CustodyRepository {
             throw new IllegalStateException("webhook endpoint is not pending verification");
         }
     }
-
     public void setWebhookStatus(UUID tenantId, UUID endpointId, String status) {
         if (jdbc.update("""
                         update custody_webhook_endpoint
@@ -1813,7 +1759,6 @@ public class CustodyRepository {
                 terminal ? null : Timestamp.from(nextAttempt), Math.max(durationMs, 0L),
                 task.attemptId());
     }
-
     public void retryWebhookDelivery(UUID tenantId, UUID deliveryId) {
         if (jdbc.update("""
                         update custody_webhook_delivery
@@ -1827,7 +1772,6 @@ public class CustodyRepository {
             throw new IllegalStateException("failed or retryable webhook delivery not found");
         }
     }
-
     public int retryFailedWebhookDeliveries(UUID tenantId, UUID endpointId) {
         return jdbc.update("""
                         update custody_webhook_delivery
@@ -1999,7 +1943,6 @@ public class CustodyRepository {
                 normalizedSearch, normalizedSearch,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
-
     public List<WithdrawalStatusChange> findWithdrawalStatusChanges(int limit) {
         return jdbc.query("""
                         select w.id, w.tenant_id, w.custody_address_id, w.order_no,
@@ -2136,7 +2079,6 @@ public class CustodyRepository {
                         """, UUID.randomUUID(), tenantId, actorType, actorId, action, resourceType,
                 resourceId, sourceIp, detailsJson == null ? "{}" : detailsJson);
     }
-
     public List<Map<String, Object>> listAudit(UUID tenantId, int limit, int offset) {
         return jdbc.query("""
                         select id, actor_type, actor_id, action, resource_type, resource_id,
@@ -2159,7 +2101,6 @@ public class CustodyRepository {
                     return row;
                 }, tenantId, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
-
     public List<Map<String, Object>> listPlatformAudit(int limit, int offset) {
         return jdbc.query("""
                         select id, actor_type, actor_id, action, resource_type, resource_id,
@@ -2182,7 +2123,6 @@ public class CustodyRepository {
                     return row;
                 }, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
-
     public int cleanupExpiredSecurityRows() {
         int nonces = jdbc.update("delete from custody_api_nonce where expires_at < now()");
         int sessions = jdbc.update("""
@@ -2193,7 +2133,6 @@ public class CustodyRepository {
         int idempotency = jdbc.update("delete from custody_idempotency_key where expires_at < now()");
         return nonces + sessions + idempotency;
     }
-
     private AuthUser mapAuthUser(java.sql.ResultSet rs) throws SQLException {
         return new AuthUser(
                 rs.getObject("id", UUID.class),
@@ -2208,7 +2147,6 @@ public class CustodyRepository {
                 rs.getInt("failed_login_count"),
                 instantOrNull(rs.getTimestamp("locked_until")));
     }
-
     private ApiKeyRecord mapApiKey(java.sql.ResultSet rs) throws SQLException {
         return new ApiKeyRecord(
                 rs.getObject("id", UUID.class),
@@ -2223,7 +2161,6 @@ public class CustodyRepository {
                 instantOrNull(rs.getTimestamp("expires_at")),
                 rs.getTimestamp("created_at").toInstant());
     }
-
     private AddressRecord mapAddress(java.sql.ResultSet rs) throws SQLException {
         return new AddressRecord(
                 rs.getObject("id", UUID.class),
@@ -2244,7 +2181,6 @@ public class CustodyRepository {
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant());
     }
-
     private WebhookEndpointRecord mapWebhookEndpoint(java.sql.ResultSet rs) throws SQLException {
         return new WebhookEndpointRecord(
                 rs.getObject("id", UUID.class),
@@ -2259,22 +2195,18 @@ public class CustodyRepository {
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant());
     }
-
     private static Instant instantOrNull(Timestamp timestamp) {
         return timestamp == null ? null : timestamp.toInstant();
     }
-
     private static Timestamp timestampOrNull(Instant instant) {
         return instant == null ? null : Timestamp.from(instant);
     }
-
     private static String truncate(String value, int maxLength) {
         if (value == null) {
             return "";
         }
         return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
-
     private static String blankToEmpty(String value) {
         return value == null ? "" : value.trim();
     }

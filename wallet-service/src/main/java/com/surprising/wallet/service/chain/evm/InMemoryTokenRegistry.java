@@ -13,7 +13,8 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
-public class InMemoryTokenRegistry implements TokenRegistry {
+public
+class InMemoryTokenRegistry implements TokenRegistry {
     private final Map<String, TokenDefinition> byKey = new ConcurrentHashMap<>();
     private final Map<String, TokenDefinition> byContract = new ConcurrentHashMap<>();
 
@@ -38,7 +39,6 @@ public class InMemoryTokenRegistry implements TokenRegistry {
         tokens.sort(Comparator.comparing(TokenDefinition::getSymbol));
         return Collections.unmodifiableList(tokens);
     }
-
     public void register(TokenDefinition tokenDefinition) {
         if (tokenDefinition == null) {
             throw new IllegalArgumentException("tokenDefinition must not be null");
@@ -48,11 +48,9 @@ public class InMemoryTokenRegistry implements TokenRegistry {
             byContract.put(key(tokenDefinition.getChain(), tokenDefinition.getContractAddress()), tokenDefinition);
         }
     }
-
     private static String key(String chain, String value) {
         return normalize(chain) + ":" + normalize(value);
     }
-
     private static String normalize(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }

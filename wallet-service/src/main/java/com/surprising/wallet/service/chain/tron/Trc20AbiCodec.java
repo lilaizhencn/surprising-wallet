@@ -18,11 +18,8 @@ import java.util.Locale;
  * no floating point arithmetic is used.
  */
 public final class Trc20AbiCodec {
-    public static final String TRANSFER_TOPIC = "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-
-    private Trc20AbiCodec() {
+    public static final String TRANSFER_TOPIC = "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";    private Trc20AbiCodec() {
     }
-
     public static String encodeTransfer(String recipientBase58, BigDecimal amount, int decimals) {
         BigInteger rawAmount = toRawAmount(amount, decimals);
         List<Type> inputs = List.of(
@@ -31,7 +28,6 @@ public final class Trc20AbiCodec {
         );
         return Numeric.cleanHexPrefix(FunctionEncoder.encode(new Function("transfer", inputs, List.of())));
     }
-
     public static TransferLog decodeTransferLog(String contractHex, List<String> topics, String data, int decimals) {
         if (topics.size() < 3) {
             throw new IllegalArgumentException("TRC20 Transfer log requires at least 3 topics");
@@ -45,7 +41,6 @@ public final class Trc20AbiCodec {
         BigInteger raw = Numeric.toBigInt(Numeric.cleanHexPrefix(data));
         return new TransferLog(TronAddressCodec.hexToBase58(contractHex), from, to, fromRawAmount(raw, decimals), raw);
     }
-
     public static BigInteger toRawAmount(BigDecimal amount, int decimals) {
         BigDecimal scaled = amount.movePointRight(decimals).stripTrailingZeros();
         if (scaled.scale() > 0) {
@@ -57,7 +52,6 @@ public final class Trc20AbiCodec {
         }
         return raw;
     }
-
     public static BigDecimal fromRawAmount(BigInteger rawAmount, int decimals) {
         if (rawAmount.signum() < 0) {
             throw new IllegalArgumentException("raw amount must not be negative");

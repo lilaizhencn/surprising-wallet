@@ -20,8 +20,7 @@ import java.util.Locale;
 
 /** Strict per-item parser for a payout transaction sent to a delegated hot-wallet EOA. */
 public class Evm7702PayoutReceiptParser {
-    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
-    public static final String ITEM_TOPIC = Hash.sha3String(
+    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";    public static final String ITEM_TOPIC = Hash.sha3String(
             "PayoutItemResult(bytes32,uint256,bytes32,address,address,uint256,uint256,bool,bytes32)");
     public static final String BATCH_TOPIC = Hash.sha3String(
             "PayoutBatchProcessed(bytes32,address,uint256,uint256,uint256)");
@@ -108,7 +107,6 @@ public class Evm7702PayoutReceiptParser {
         }
         return new ParsedReceipt(List.copyOf(results), batch);
     }
-
     private static boolean isExpectedTransfer(Log log, String authority, ExpectedPayout expected) {
         if (!log.getAddress().equalsIgnoreCase(expected.token()) || log.getTopics().size() != 3
                 || !TRANSFER_TOPIC.equalsIgnoreCase(log.getTopics().getFirst())
@@ -120,7 +118,6 @@ public class Evm7702PayoutReceiptParser {
             return false;
         }
     }
-
     private static String addressTopic(String address) {
         String clean = Numeric.cleanHexPrefix(address);
         if (!clean.matches("[0-9a-fA-F]{40}")) throw new IllegalArgumentException("invalid EVM address");
@@ -131,7 +128,6 @@ public class Evm7702PayoutReceiptParser {
     private static <T extends Type> TypeReference<Type> ref(TypeReference<T> reference) {
         return (TypeReference<Type>) (TypeReference<?>) reference;
     }
-
     public record ExpectedPayout(byte[] withdrawalId, String token, String recipient, BigInteger amount) {
         public ExpectedPayout {
             if (withdrawalId == null || withdrawalId.length != 32) {

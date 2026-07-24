@@ -13,17 +13,27 @@ import com.surprising.wallet.custody.service.WalletConfigOverviewService;
 @RestController
 @RequestMapping("/custody/platform/v1/wallet-config")
 public class WalletConfigOverviewController {
+    /** 配置总览服务，返回平台统计与全局开关。 */
     private final WalletConfigOverviewService service;
 
+    /**
+     * 注入总览服务。
+     */
     public WalletConfigOverviewController(WalletConfigOverviewService service) {
         this.service = service;
     }
 
+    /**
+     * 获取平台配置摘要（开关、状态、计数）。
+     */
     @GetMapping("/summary")
     public WalletConfigOverviewService.SummaryView summary(HttpServletRequest request) {
         return service.summary(CustodyRequestSupport.requirePrincipal(request));
     }
 
+    /**
+     * 更新全局功能开关。
+     */
     @PatchMapping("/global-switches")
     public WalletConfigOverviewService.SummaryView updateGlobalSwitches(
             @RequestBody WalletConfigOverviewService.UpdateGlobalSwitchesCommand body,

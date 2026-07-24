@@ -24,8 +24,12 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class Evm7702CollectionJob {
 
+    /** 7702 归集工作流服务。 */
     private final Evm7702CollectionWorkflowService workflowService;
 
+    /**
+     * 按固定延迟触发批量归集，处理 batchCollect 合约并完成确认。
+     */
     @Scheduled(scheduler = "evm7702TaskScheduler", fixedDelayString = "${sw.wallet.evm7702.collection-delay:5000}")
     public void run() {
         log.debug("EVM 7702 collection job begin");

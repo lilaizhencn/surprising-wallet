@@ -24,11 +24,16 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class RetryFailedWithdraw {
 
+    /** 提现服务，重试失败请求。 */
     @Autowired
     private TransactionService txService;
+    /** 全局任务开关服务。 */
     @Autowired
     private WalletRuntimeConfigService runtimeConfigService;
 
+    /**
+     * 每分钟从失败队列取出待重试请求，调用提现流程，失败继续回填等待下一轮处理。
+     */
     @Scheduled(scheduler = "withdrawTaskScheduler", cron = "1 1/1 * * * ?")
     public void execute() {
         if (!runtimeConfigService.isGlobalTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW)) {

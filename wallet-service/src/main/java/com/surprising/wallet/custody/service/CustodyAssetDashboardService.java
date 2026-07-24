@@ -18,15 +18,12 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class CustodyAssetDashboardService {
-    private final CustodyAssetDashboardRepository repository;
-    private final CustodyRepository custody;
-
+    private final CustodyAssetDashboardRepository repository;    private final CustodyRepository custody;
     public CustodyAssetDashboardService(CustodyAssetDashboardRepository repository,
                                         CustodyRepository custody) {
         this.repository = repository;
         this.custody = custody;
     }
-
     public Dashboard dashboard(CustodyPrincipal principal) {
         requireScope(principal, "assets:read");
         List<CustodyAssetDashboardRepository.AssetBalance> balances =
@@ -73,7 +70,6 @@ public class CustodyAssetDashboardService {
                                 row.createdAt()))
                         .toList());
     }
-
     public List<CustodyAssetDashboardRepository.AssetPrice> prices(CustodyPrincipal principal) {
         requirePlatformAdmin(principal);
         return repository.prices();
@@ -103,7 +99,6 @@ public class CustodyAssetDashboardService {
                 "{\"assetSymbol\":\"" + symbol + "\",\"source\":\"" + source + "\"}");
         return saved;
     }
-
     private static String normalizeSymbol(String value) {
         String symbol = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!symbol.matches("^[A-Z][A-Z0-9_]{1,31}$")) {
@@ -111,20 +106,17 @@ public class CustodyAssetDashboardService {
         }
         return symbol;
     }
-
     private static void requireScope(CustodyPrincipal principal, String scope) {
         if (principal == null || principal.tenantId() == null || !principal.hasScope(scope)) {
             throw new CustodyForbiddenException(scope + " scope required");
         }
     }
-
     private static void requirePlatformAdmin(CustodyPrincipal principal) {
         if (principal == null || principal.tenantId() != null
                 || !"PLATFORM_ADMIN".equals(principal.role())) {
             throw new CustodyForbiddenException("platform administrator required");
         }
     }
-
     private static final class MutableAggregate {
         private final String symbol;
         private BigDecimal available = BigDecimal.ZERO;
@@ -154,7 +146,6 @@ public class CustodyAssetDashboardService {
                     priced ? valueUsd : null, List.copyOf(chains));
         }
     }
-
     private static final class MutableChain {
         private final String chain;
         private BigDecimal valueUsd = BigDecimal.ZERO;
@@ -215,7 +206,6 @@ public class CustodyAssetDashboardService {
             List<String> chains
     ) {
     }
-
     public record ChainAggregate(String chain, BigDecimal valueUsd, List<AssetRow> assets) {
     }
 
@@ -230,7 +220,6 @@ public class CustodyAssetDashboardService {
             Instant createdAt
     ) {
     }
-
     public record SetPriceCommand(BigDecimal usdPrice, String source, Instant observedAt) {
     }
 }

@@ -22,13 +22,8 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class CustodyGasService {
-    static final long COLLECTION_CHILD_INDEX = 1L;
-    private static final BigDecimal DEFAULT_LOW_BALANCE_THRESHOLD = new BigDecimal("0.01");
-    private static final String SYSTEM_REFERENCE_PREFIX = "__sw_collection__:";
-
-    private final CustodyRepository repository;
-    private final CustodyAddressService addresses;
-    private final BlockchainRuntimeService runtime;
+    static final long COLLECTION_CHILD_INDEX = 1L;    private static final BigDecimal DEFAULT_LOW_BALANCE_THRESHOLD = new BigDecimal("0.01");    private static final String SYSTEM_REFERENCE_PREFIX = "__sw_collection__:";
+    private final CustodyRepository repository;    private final CustodyAddressService addresses;    private final BlockchainRuntimeService runtime;
 
     public CustodyGasService(CustodyRepository repository,
                              CustodyAddressService addresses,
@@ -37,7 +32,6 @@ public class CustodyGasService {
         this.addresses = addresses;
         this.runtime = runtime;
     }
-
     public List<GasAccountView> list(CustodyPrincipal principal) {
         requireScope(principal, "assets:read");
         return repository.listGasAccounts(principal.tenantId())
@@ -90,7 +84,6 @@ public class CustodyGasService {
                         + chainRuntime.nativeSymbol() + "\"}");
         return toView(saved);
     }
-
     public static String collectionSubject(String chain, ChainType chainType) {
         String namespace = chainType.isEvm()
                 ? "evm"
@@ -148,7 +141,6 @@ public class CustodyGasService {
         repository.reserveGasUsage(
                 tenantId, custodyWithdrawalId, orderNo, chain, reservation);
     }
-
     BigDecimal reservationAmount(String chain, String assetSymbol) {
         CustodyRepository.GasPricingMetadata metadata =
                 repository.gasPricingMetadata(chain, assetSymbol);
@@ -175,12 +167,10 @@ public class CustodyGasService {
                 .setScale(metadata.decimals(), RoundingMode.UP)
                 .stripTrailingZeros();
     }
-
     public Map<String, Object> onboarding(CustodyPrincipal principal) {
         requireScope(principal, "assets:read");
         return repository.onboardingStatus(principal.tenantId());
     }
-
     private static GasAccountView toView(GasAccountRecord record) {
         return new GasAccountView(
                 record.id(),
@@ -200,7 +190,6 @@ public class CustodyGasService {
                 record.createdAt(),
                 record.updatedAt());
     }
-
     private static BigDecimal positiveAmount(String value, String field) {
         try {
             BigDecimal amount = new BigDecimal(value == null ? "" : value.trim());
@@ -213,7 +202,6 @@ public class CustodyGasService {
                     field + " must be a positive decimal with at most 24 fraction digits");
         }
     }
-
     private static String requireChain(String value) {
         String chain = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!chain.matches("^[A-Z][A-Z0-9_]{1,31}$")) {
@@ -221,20 +209,17 @@ public class CustodyGasService {
         }
         return chain;
     }
-
     private static void requireTenantAdmin(CustodyPrincipal principal) {
         if (principal == null || principal.tenantId() == null
                 || !"TENANT_ADMIN".equals(principal.role())) {
             throw new CustodyForbiddenException("tenant administrator required");
         }
     }
-
     private static void requireScope(CustodyPrincipal principal, String scope) {
         if (principal == null || principal.tenantId() == null || !principal.hasScope(scope)) {
             throw new CustodyForbiddenException(scope + " scope required");
         }
     }
-
     public record CreateGasAccountCommand(String chain) {
     }
 

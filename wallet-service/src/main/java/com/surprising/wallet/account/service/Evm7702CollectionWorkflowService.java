@@ -62,18 +62,10 @@ public class Evm7702CollectionWorkflowService {
     private static final BigInteger MIN_ITEM_GAS = BigInteger.valueOf(60_000L);
     private static final BigInteger DEFAULT_ITEM_GAS = BigInteger.valueOf(180_000L);
     private static final BigInteger ONE_GWEI = BigInteger.valueOf(1_000_000_000L);
-    private static final BigDecimal WEI_PER_NATIVE = new BigDecimal("1000000000000000000");
-    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
+    private static final BigDecimal WEI_PER_NATIVE = new BigDecimal("1000000000000000000");    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
     private static final String OP_STACK_GAS_PRICE_ORACLE =
             "0x420000000000000000000000000000000000000F";
-
-    private final Evm7702CollectionRepository repository;
-    private final Evm7702CollectionCoordinator coordinator;
-    private final ChainJdbcRepository chainRepository;
-    private final ChainRpcNodeService rpcNodes;
-    private final AccountSecp256k1KeyService keyService;
-    private final CustodyCryptoService crypto;
-    private final WalletRuntimeConfigService runtimeConfig;
+    private final Evm7702CollectionRepository repository;    private final Evm7702CollectionCoordinator coordinator;    private final ChainJdbcRepository chainRepository;    private final ChainRpcNodeService rpcNodes;    private final AccountSecp256k1KeyService keyService;    private final CustodyCryptoService crypto;    private final WalletRuntimeConfigService runtimeConfig;
     private final Evm7702AuthorizationService authorizationService = new Evm7702AuthorizationService();
     private final Evm7702OperationSigner operationSigner = new Evm7702OperationSigner();
     private final Evm7702ContractCodec contractCodec = new Evm7702ContractCodec();
@@ -97,7 +89,6 @@ public class Evm7702CollectionWorkflowService {
         this.crypto = crypto;
         this.runtimeConfig = runtimeConfig;
     }
-
     public void run() {
         if (!running.compareAndSet(false, true)) return;
         try {
@@ -175,7 +166,6 @@ public class Evm7702CollectionWorkflowService {
             web3j.shutdown();
         }
     }
-
     public Optional<String> processOne(AccountChainProfile profile) {
         Evm7702CollectionRepository.Batch batch = repository
                 .claimNextBatch(profile.getChain(), profile.getNetwork()).orElse(null);
@@ -219,7 +209,6 @@ public class Evm7702CollectionWorkflowService {
                     : new IllegalStateException("failed to process EIP-7702 batch", e);
         }
     }
-
     public void confirm(AccountChainProfile profile) {
         ChainRpcNode node = requireRpcNode(profile);
         Web3j web3j = Web3j.build(http(node));
@@ -312,7 +301,6 @@ public class Evm7702CollectionWorkflowService {
         }
         return (BigInteger) values.getFirst().getValue();
     }
-
     private boolean isOpStackL2(AccountChainProfile profile) {
         return "eip1559-l2".equalsIgnoreCase(profile.getGasPolicy())
                 && ("BASE".equalsIgnoreCase(profile.getChain())
@@ -332,7 +320,6 @@ public class Evm7702CollectionWorkflowService {
         }
         return value;
     }
-
     private boolean positiveQuantity(String value) {
         return value != null && !value.isBlank() && Numeric.decodeQuantity(value).signum() > 0;
     }
@@ -512,7 +499,6 @@ public class Evm7702CollectionWorkflowService {
         }
         return Numeric.decodeQuantity(response.getResult());
     }
-
     private Map<String, String> authorizationJson(AuthorizationTuple tuple) {
         Map<String, String> result = new LinkedHashMap<>();
         result.put("chainId", Numeric.encodeQuantity(tuple.getChainId()));
@@ -523,7 +509,6 @@ public class Evm7702CollectionWorkflowService {
         result.put("s", Numeric.encodeQuantity(tuple.getS()));
         return result;
     }
-
     private BigInteger tokenBalance(Web3j web3j, String token, String owner) throws Exception {
         Function function = new Function(
                 "balanceOf", List.of(new Address(owner)), List.of(new TypeReference<Uint256>() { }));
@@ -535,7 +520,6 @@ public class Evm7702CollectionWorkflowService {
         if (values.size() != 1) throw new IllegalStateException("token balanceOf returned malformed data");
         return (BigInteger) values.getFirst().getValue();
     }
-
     private BigInteger operationNonce(Web3j web3j, String authority) throws Exception {
         Function function = new Function("operationNonce", List.of(), List.of(new TypeReference<Uint256>() { }));
         EthCall call = web3j.ethCall(
@@ -545,14 +529,12 @@ public class Evm7702CollectionWorkflowService {
         return (BigInteger) FunctionReturnDecoder.decode(call.getValue(), function.getOutputParameters())
                 .getFirst().getValue();
     }
-
     private boolean isTransactionKnown(Web3j web3j, String txHash) throws Exception {
         if (web3j.ethGetTransactionReceipt(txHash).send().getTransactionReceipt().isPresent()) {
             return true;
         }
         return web3j.ethGetTransactionByHash(txHash).send().getTransaction().isPresent();
     }
-
     private void requireCodeHash(Web3j web3j, String address, String expected, String label) throws Exception {
         String code = web3j.ethGetCode(address, DefaultBlockParameterName.LATEST).send().getCode();
         if (code == null || "0x".equalsIgnoreCase(code)) {
@@ -569,7 +551,6 @@ public class Evm7702CollectionWorkflowService {
         ECKey key = keyService.key(profile, address);
         return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(key.getPrivKey(), 64));
     }
-
     private ChainRpcNode requireRpcNode(AccountChainProfile profile) {
         List<ChainRpcNode> nodes = rpcNodes.enabledNodes(profile.getChain(), profile.getNetwork(), "rpc");
         if (nodes.isEmpty()) {
@@ -578,22 +559,18 @@ public class Evm7702CollectionWorkflowService {
         }
         return nodes.getFirst();
     }
-
     private HttpService http(ChainRpcNode node) {
         HttpService service = new HttpService(node.getRpcUrl());
         service.addHeaders(rpcNodes.authHeaders(node));
         return service;
     }
-
     private static String delegationCode(String delegate) {
         return "0xef0100" + Numeric.cleanHexPrefix(delegate).toLowerCase();
     }
-
     private static String batchHash(java.util.UUID tenantId, java.util.UUID batchId) {
         return Numeric.toHexString(Hash.sha3(
                 (tenantId + ":" + batchId).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
-
     private static <T> T send(CheckedSupplier<T> supplier) {
         try {
             return supplier.get();
@@ -606,13 +583,10 @@ public class Evm7702CollectionWorkflowService {
     private interface CheckedSupplier<T> {
         T get() throws Exception;
     }
-
     public static class QuantityResponse extends Response<String> {
     }
-
     public static class EvmReceiptResponse extends Response<EvmTransactionReceipt> {
     }
-
     public static class EvmTransactionReceipt extends TransactionReceipt {
         private String l1Fee;
         private String gasUsedForL1;

@@ -30,15 +30,12 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class WalletConfigManagementService {
-    private final JdbcTemplate jdbc;
-    private final CustodyRepository custodyRepository;
-    private final String environment;
-    private final HttpClient httpClient;
-
+    private final JdbcTemplate jdbc;    private final CustodyRepository custodyRepository;    private final String environment;    private final HttpClient httpClient;
     @Autowired
     public WalletConfigManagementService(JdbcTemplate jdbc,
                                          CustodyRepository custodyRepository,
-                                         @Value("${sw.app.env.name:dev}") String environment) {
+                                         @Value("${sw.app.env.name:dev}")
+                                         String environment) {
         this(jdbc, custodyRepository, environment,
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build());
     }
@@ -78,7 +75,6 @@ public class WalletConfigManagementService {
                 .filter(row -> transferEnabled == null || row.transferEnabled() == transferEnabled)
                 .toList();
     }
-
     public ChainDetailView getChain(CustodyPrincipal actor, long id) {
         requirePlatformAdmin(actor);
         ChainView chain = requireChain(id);
@@ -194,7 +190,6 @@ public class WalletConfigManagementService {
                 "{\"enabled\":" + command.enabled() + "}");
         return getChain(actor, id);
     }
-
     public List<RpcNodeView> listRpcNodes(CustodyPrincipal actor, long chainId) {
         requirePlatformAdmin(actor);
         requireChain(chainId);
@@ -267,7 +262,6 @@ public class WalletConfigManagementService {
         audit(actor, "WALLET_RPC.DELETE", "CHAIN_RPC_NODE", String.valueOf(nodeId), sourceIp,
                 "{\"chain\":" + json(chain.chain()) + ",\"network\":" + json(chain.network()) + "}");
     }
-
     public RpcTestView testRpcNode(CustodyPrincipal actor, long chainId, long nodeId) {
         requirePlatformAdmin(actor);
         ChainView chain = requireChain(chainId);
@@ -420,12 +414,10 @@ public class WalletConfigManagementService {
                 "{\"enabled\":" + command.enabled() + "}");
         return requireToken(id);
     }
-
     public List<Map<String, Object>> auditLog(CustodyPrincipal actor, int limit, int offset) {
         requirePlatformAdmin(actor);
         return custodyRepository.listPlatformAudit(limit, offset);
     }
-
     private List<RpcNodeView> listRpcNodesInternal(long chainId) {
         ChainView chain = requireChain(chainId);
         return jdbc.queryForList("""
@@ -439,7 +431,6 @@ public class WalletConfigManagementService {
                  order by environment, purpose, priority, id
                 """, chain.chain(), chain.network()).stream().map(this::rpcView).toList();
     }
-
     private List<TokenView> listTokensInternal(String search, String chain, Boolean enabled) {
         String query = normalize(search);
         String chainFilter = normalize(chain);
@@ -472,7 +463,6 @@ public class WalletConfigManagementService {
                 .filter(row -> enabled == null || row.enabled() == enabled)
                 .toList();
     }
-
     private ChainView requireChain(long id) {
         try {
             return chainView(jdbc.queryForMap(CHAIN_SELECT + " where p.id = ?", id));
@@ -480,12 +470,10 @@ public class WalletConfigManagementService {
             throw new IllegalArgumentException("chain profile not found");
         }
     }
-
     private RpcNodeView requireRpcNode(long chainId, long nodeId) {
         return listRpcNodesInternal(chainId).stream().filter(node -> node.id() == nodeId).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("RPC node not found"));
     }
-
     private RpcStored requireRpcStored(ChainView chain, long nodeId) {
         try {
             Map<String, Object> row = jdbc.queryForMap("""
@@ -505,12 +493,10 @@ public class WalletConfigManagementService {
             throw new IllegalArgumentException("RPC node not found for chain profile");
         }
     }
-
     private TokenView requireToken(long id) {
         return listTokensInternal("", "", null).stream().filter(token -> token.id() == id).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("token not found"));
     }
-
     private void validateCanEnable(String chain, String network, Long currentId) {
         if (WalletEnvironmentPolicy.isProduction(environment)
                 && !WalletEnvironmentPolicy.isProductionNetwork(network)) {
@@ -549,7 +535,6 @@ public class WalletConfigManagementService {
                     true, instant(row.get("renewal_due_at")), nullable(row.get("remark")))));
         }
     }
-
     private void validateCanDisableRpc(ChainView chain, long nodeId, String purpose, String nodeEnvironment) {
         if (!chain.enabled() || !WalletRpcPolicy.requiredPurposes(
                 chain.chain(), chain.network(), chain.tokenCount() > 0).contains(normalizeLower(purpose))
@@ -566,7 +551,6 @@ public class WalletConfigManagementService {
             throw new IllegalStateException("an enabled chain must retain an enabled RPC node for required purpose " + purpose);
         }
     }
-
     private void validateChainValues(ChainValues value) {
         required(value.chain(), "chain");
         required(value.network(), "network");
@@ -581,7 +565,6 @@ public class WalletConfigManagementService {
             throw new IllegalArgumentException("chain numeric settings are invalid");
         }
     }
-
     private void validateRpc(RpcValues value) {
         required(value.environment(), "environment");
         required(value.nodeLabel(), "nodeLabel");
@@ -616,7 +599,6 @@ public class WalletConfigManagementService {
             throw new IllegalArgumentException("RPC priority and request interval must not be negative");
         }
     }
-
     private void validateToken(TokenValues value) {
         required(value.chain(), "chain");
         required(value.network(), "network");
@@ -649,7 +631,6 @@ public class WalletConfigManagementService {
             }
         }
     }
-
     private void upsertAsset(TokenValues value) {
         jdbc.update("""
                 insert into chain_asset(
@@ -664,12 +645,10 @@ public class WalletConfigManagementService {
                 """, value.chain(), value.symbol(), value.standard(), value.contractAddress(),
                 value.decimals(), value.enabled(), value.minWithdraw(), value.minWithdraw());
     }
-
     private void setAssetActive(String chain, String symbol, boolean active) {
         jdbc.update("update chain_asset set active = ?, updated_at = now() where chain = ? and symbol = ? and native_asset = false",
                 active, chain, symbol);
     }
-
     private List<String> chainChecks(ChainView chain, List<RpcNodeView> rpcNodes, List<TokenView> tokens) {
         LinkedHashSet<String> checks = new LinkedHashSet<>();
         if (WalletEnvironmentPolicy.isProduction(environment)
@@ -689,7 +668,6 @@ public class WalletConfigManagementService {
         }
         return List.copyOf(checks);
     }
-
     private ChainValues mergeChain(ChainView current, ChainCommand command) {
         if (command == null) throw new IllegalArgumentException("chain body is required");
         return new ChainValues(
@@ -715,7 +693,6 @@ public class WalletConfigManagementService {
                 or(command.scanStartHeight(), current == null ? null : current.scanStartHeight(), 0L),
                 or(command.scanMaxBlocksPerRun(), current == null ? null : current.scanMaxBlocksPerRun(), 0L));
     }
-
     private RpcValues mergeRpc(RpcStored current, RpcNodeCommand command, ChainView chain) {
         if (command == null) throw new IllegalArgumentException("RPC body is required");
         String authType = upper(or(command.authType(), current == null ? "NONE" : current.authType()));
@@ -747,7 +724,6 @@ public class WalletConfigManagementService {
                 or(command.renewalDueAt(), current == null ? null : current.renewalDueAt()),
                 or(command.remark(), current == null ? null : current.remark()));
     }
-
     private TokenValues mergeToken(TokenView current, TokenCommand command) {
         if (command == null) throw new IllegalArgumentException("token body is required");
         return new TokenValues(upper(or(command.chain(), current == null ? null : current.chain())),
@@ -766,7 +742,6 @@ public class WalletConfigManagementService {
                 or(command.gasStrategy(), current == null ? null : current.gasStrategy()),
                 or(command.confirmationRequired(), current == null ? null : current.confirmationRequired()));
     }
-
     private ChainView chainView(Map<String, Object> row) {
         return new ChainView(longValue(row.get("id")), string(row.get("chain")), string(row.get("network")),
                 string(row.get("family")), intValue(row.get("runtime_currency_id")),
@@ -782,7 +757,6 @@ public class WalletConfigManagementService {
                 intValue(row.get("token_count")), intValue(row.get("rpc_count")),
                 instant(row.get("created_at")), instant(row.get("updated_at")));
     }
-
     private RpcNodeView rpcView(Map<String, Object> row) {
         return new RpcNodeView(longValue(row.get("id")), string(row.get("environment")),
                 string(row.get("node_label")), string(row.get("purpose")),
@@ -796,7 +770,6 @@ public class WalletConfigManagementService {
                 nullableInteger(row.get("last_http_status")), nullable(row.get("last_error")),
                 instant(row.get("created_at")), instant(row.get("updated_at")));
     }
-
     private TokenView tokenView(Map<String, Object> row, RuntimeSwitches runtime) {
         boolean configured = bool(row.get("enabled"));
         boolean assetActive = bool(row.get("asset_active"));
@@ -823,7 +796,6 @@ public class WalletConfigManagementService {
                 runtime.wallet() && configured && assetActive && chainEnabled && anyTaskEnabled,
                 List.copyOf(blockers), instant(row.get("created_at")), instant(row.get("updated_at")));
     }
-
     private boolean chainHasRuntimeData(String chain) {
         return count("select count(*) from chain_address where upper(chain) = upper(?)", chain) > 0
                 || count("select count(*) from ledger_balance where upper(chain) = upper(?)", chain) > 0
@@ -831,7 +803,6 @@ public class WalletConfigManagementService {
                 || count("select count(*) from withdrawal_order where upper(chain) = upper(?)", chain) > 0
                 || count("select count(*) from collection_record where upper(chain) = upper(?)", chain) > 0;
     }
-
     private RuntimeSwitches loadRuntimeSwitches() {
         Map<String, Boolean> values = new java.util.HashMap<>();
         jdbc.queryForList("""
@@ -847,7 +818,6 @@ public class WalletConfigManagementService {
                 values.getOrDefault("global.collection.enabled", true),
                 values.getOrDefault("global.transfer.enabled", true));
     }
-
     private boolean tokenHasRuntimeData(String chain, String symbol) {
         return count("select count(*) from chain_address where upper(chain) = upper(?) and upper(asset_symbol) = upper(?)",
                 chain, symbol) > 0
@@ -856,7 +826,6 @@ public class WalletConfigManagementService {
                 || count("select count(*) from withdrawal_order where upper(chain) = upper(?) and upper(asset_symbol) = upper(?)", chain, symbol) > 0
                 || count("select count(*) from collection_record where upper(chain) = upper(?) and upper(asset_symbol) = upper(?)", chain, symbol) > 0;
     }
-
     private void applyAuth(HttpRequest.Builder builder, RpcStored node) {
         String auth = upper(node.authType());
         if ("BLOCKFROST".equalsIgnoreCase(node.connectionType()) && !blank(node.apiKey())) {
@@ -873,7 +842,6 @@ public class WalletConfigManagementService {
             builder.header("Authorization", "Basic " + value);
         }
     }
-
     private RpcTestView saveRpcTest(long nodeId, RpcTestView result) {
         jdbc.update("""
                 update chain_rpc_node
@@ -883,7 +851,6 @@ public class WalletConfigManagementService {
                 result.statusCode(), result.error(), nodeId);
         return result;
     }
-
     private void applyAuth(WebSocket.Builder builder, RpcStored node) {
         String auth = upper(node.authType());
         if ("BEARER".equals(auth) && !blank(node.apiKey())) {
@@ -898,7 +865,6 @@ public class WalletConfigManagementService {
             builder.header("Authorization", "Basic " + value);
         }
     }
-
     private long count(String sql, Object... args) {
         Long value = jdbc.queryForObject(sql, Long.class, args);
         return value == null ? 0 : value;
@@ -909,82 +875,68 @@ public class WalletConfigManagementService {
         custodyRepository.audit(null, "PLATFORM_USER", actor.actorId().toString(), action,
                 resourceType, resourceId, sourceIp, details);
     }
-
     private static void requirePlatformAdmin(CustodyPrincipal actor) {
         if (actor == null || !actor.isPlatformAdmin() || actor.tenantId() != null) {
             throw new CustodyForbiddenException("platform administrator access is required");
         }
     }
-
     private static String rpcAudit(RpcValues value) {
         return "{\"environment\":" + json(value.environment()) + ",\"purpose\":"
                 + json(value.purpose()) + ",\"enabled\":" + value.enabled()
                 + ",\"credentialsConfigured\":"
                 + (!blank(value.apiKey()) || !blank(value.username()) || !blank(value.password())) + "}";
     }
-
     private static String tokenAudit(TokenValues value) {
         return "{\"chain\":" + json(value.chain()) + ",\"network\":" + json(value.network())
                 + ",\"symbol\":" + json(value.symbol()) + ",\"enabled\":" + value.enabled() + "}";
     }
-
     private static String json(String value) {
         if (value == null) return "null";
         return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"")
                 .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\"";
     }
-
     private static long elapsedMillis(long started) {
         return Duration.ofNanos(System.nanoTime() - started).toMillis();
     }
-
     private static String safeError(Exception error) {
         String message = error.getMessage();
         return message == null || message.isBlank() ? error.getClass().getSimpleName() : message;
     }
-
     private static void required(String value, String field) {
         if (blank(value)) throw new IllegalArgumentException(field + " is required");
     }
-
     private static String secret(String requested, String current) {
         return requested == null || requested.isBlank() ? current : requested;
     }
 
     private static boolean blank(String value) { return value == null || value.isBlank(); }
     private static String string(Object value) { return value == null ? "" : String.valueOf(value); }
-    private static String nullable(Object value) { return value == null ? null : String.valueOf(value); }
-    private static BigDecimal decimal(Object value) {
+    private static String nullable(Object value) { return value == null ? null : String.valueOf(value); }    private static BigDecimal decimal(Object value) {
         if (value == null) return null;
         return value instanceof BigDecimal decimal ? decimal : new BigDecimal(String.valueOf(value));
     }
     private static String normalize(String value) { return value == null ? "" : value.trim().toUpperCase(Locale.ROOT); }
     private static String normalizeLower(String value) { return value == null ? "" : value.trim().toLowerCase(Locale.ROOT); }
     private static String upper(String value) { return value == null ? null : value.trim().toUpperCase(Locale.ROOT); }
-    private static String lower(String value) { return value == null ? null : value.trim().toLowerCase(Locale.ROOT); }
-    private static List<String> splitCsv(String value) {
+    private static String lower(String value) { return value == null ? null : value.trim().toLowerCase(Locale.ROOT); }    private static List<String> splitCsv(String value) {
         return value == null || value.isBlank() ? List.of() : List.of(value.split(","));
     }
     private static boolean bool(Object value) { return value instanceof Boolean b ? b : Boolean.parseBoolean(string(value)); }
     private static int intValue(Object value) { return value == null ? 0 : ((Number) value).intValue(); }
     private static Integer nullableInteger(Object value) { return value == null ? null : ((Number) value).intValue(); }
     private static long longValue(Object value) { return value == null ? 0 : ((Number) value).longValue(); }
-    private static Long nullableLong(Object value) { return value == null ? null : ((Number) value).longValue(); }
-    private static Instant instant(Object value) {
+    private static Long nullableLong(Object value) { return value == null ? null : ((Number) value).longValue(); }    private static Instant instant(Object value) {
         if (value == null) return null;
         if (value instanceof Instant result) return result;
         if (value instanceof java.sql.Timestamp timestamp) return timestamp.toInstant();
         if (value instanceof java.time.OffsetDateTime offset) return offset.toInstant();
         return null;
     }
-    private static <T> T or(T requested, T current) { return requested == null ? current : requested; }
-    private static int or(Integer requested, Integer current, int fallback) {
+    private static <T> T or(T requested, T current) { return requested == null ? current : requested; }    private static int or(Integer requested, Integer current, int fallback) {
         return requested != null ? requested : current != null ? current : fallback;
-    }
-    private static long or(Long requested, Long current, long fallback) {
+    }    private static long or(Long requested, Long current, long fallback) {
         return requested != null ? requested : current != null ? current : fallback;
-    }
-    private static boolean or(Boolean requested, Boolean current, boolean fallback) {
+    }    private static boolean or(Boolean requested, Boolean current, boolean fallback) {
         return requested != null ? requested : current != null ? current : fallback;
     }
 

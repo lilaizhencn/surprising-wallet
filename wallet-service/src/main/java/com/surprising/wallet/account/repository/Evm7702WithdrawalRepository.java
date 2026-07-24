@@ -23,9 +23,7 @@ import java.util.UUID;
 /** Tenant-scoped persistence, locking and encrypted outbox for EIP-7702 payout batches. */
 @Repository
 public class Evm7702WithdrawalRepository {
-    private final JdbcTemplate jdbc;
-    private final Evm7702CollectionRepository configRepository;
-
+    private final JdbcTemplate jdbc;    private final Evm7702CollectionRepository configRepository;
     public Evm7702WithdrawalRepository(JdbcTemplate jdbc,
                                        Evm7702CollectionRepository configRepository) {
         this.jdbc = jdbc;
@@ -36,7 +34,6 @@ public class Evm7702WithdrawalRepository {
             String chain, String network, int version) {
         return configRepository.requireRuntimeConfigVersion(chain, network, version);
     }
-
     public List<RuntimeTarget> listRuntimeTargets() {
         return jdbc.query("""
                 select p.chain, p.network,
@@ -253,7 +250,6 @@ public class Evm7702WithdrawalRepository {
                    and w.status = 'SIGNING' and w.tx_hash is null
                 """, txHash, tenantId, batchId);
     }
-
     public void markBroadcastUnknown(UUID tenantId, UUID batchId, String code, String message) {
         jdbc.update("""
                 update evm_withdrawal_batch
@@ -266,7 +262,6 @@ public class Evm7702WithdrawalRepository {
                  where tenant_id = ? and batch_id = ? and status = 'CREATED'
                 """, code, truncate(message, 1000), tenantId, batchId);
     }
-
     public List<UnknownAttempt> listUnknownAttempts(String chain, String network, int limit) {
         return jdbc.query("""
                 select b.tenant_id, b.id batch_id, a.tx_hash,
@@ -285,7 +280,6 @@ public class Evm7702WithdrawalRepository {
                 rs.getString("tx_hash"), rs.getString("signed_tx_ciphertext"),
                 rs.getInt("rebroadcast_count")), chain, network, Math.min(Math.max(limit, 1), 100));
     }
-
     public void recordRecoveryAttempt(UnknownAttempt attempt) {
         jdbc.update("""
                 update evm_withdrawal_batch_attempt
@@ -295,7 +289,6 @@ public class Evm7702WithdrawalRepository {
                  where tenant_id = ? and batch_id = ? and tx_hash = ? and status = 'UNKNOWN'
                 """, attempt.tenantId(), attempt.batchId(), attempt.txHash());
     }
-
     public void markRecoveryError(UnknownAttempt attempt, String code, String message) {
         jdbc.update("""
                 update evm_withdrawal_batch_attempt set error_code = ?, error_message = ?
@@ -306,7 +299,6 @@ public class Evm7702WithdrawalRepository {
                  where tenant_id = ? and id = ? and status = 'BROADCAST_UNKNOWN'
                 """, code, truncate(message, 1000), attempt.tenantId(), attempt.batchId());
     }
-
     public List<PendingBatch> listPendingBatches(String chain, String network, int limit) {
         return jdbc.query("""
                 select b.tenant_id, b.id, b.chain, b.canonical_tx_hash, b.status,
@@ -325,7 +317,6 @@ public class Evm7702WithdrawalRepository {
                 rs.getString("hot_wallet"), rs.getInt("required_confirmations")),
                 chain, network, Math.min(Math.max(limit, 1), 200));
     }
-
     public List<BatchItemIdentity> listBatchItems(UUID tenantId, UUID batchId) {
         return jdbc.query("""
                 select item.tenant_id, item.item_index, item.withdrawal_order_id, item.custody_withdrawal_id,
@@ -357,14 +348,12 @@ public class Evm7702WithdrawalRepository {
                 """, result.actualReceived(), status, result.logIndex(),
                 result.success() ? null : result.errorHash(), tenantId, batchId, itemIndex);
     }
-
     public int countFailedAttempts(long withdrawalOrderId) {
         return Optional.ofNullable(jdbc.queryForObject("""
                 select count(*) from evm_withdrawal_batch_item
                  where withdrawal_order_id = ? and status in ('RETRYABLE', 'FAILED')
                 """, Integer.class, withdrawalOrderId)).orElse(0);
     }
-
     public int markWithdrawalRetrying(BatchItemIdentity item, String error) {
         return jdbc.update("""
                 update withdrawal_order
@@ -372,7 +361,6 @@ public class Evm7702WithdrawalRepository {
                  where tenant_id = ? and id = ? and status = 'SENT'
                 """, truncate(error, 1000), item.tenantId(), item.withdrawalOrderId());
     }
-
     public int markWithdrawalFailed(BatchItemIdentity item, String error) {
         return jdbc.update("""
                 update withdrawal_order
@@ -511,7 +499,6 @@ public class Evm7702WithdrawalRepository {
                  where tenant_id = ? and id = ? and status = 'LOCKED'
                 """, code, truncate(message, 1000), batch.tenantId(), batch.id());
     }
-
     public BatchState requireBatchState(UUID tenantId, UUID batchId) {
         return jdbc.query("""
                 select operation_nonce, delegate_version, authorization_included
@@ -521,7 +508,6 @@ public class Evm7702WithdrawalRepository {
                 rs.getInt("delegate_version"), rs.getBoolean("authorization_included")),
                 tenantId, batchId).stream().findFirst().orElseThrow();
     }
-
     private CandidateGroup mapCandidate(ResultSet rs) throws SQLException {
         ChainAddressRecord hot = ChainAddressRecord.builder()
                 .id(rs.getLong("chain_address_id")).chain(rs.getString("hot_chain"))
@@ -533,7 +519,6 @@ public class Evm7702WithdrawalRepository {
         return new CandidateGroup(rs.getObject("tenant_id", UUID.class), rs.getString("asset_symbol"),
                 rs.getString("from_address"), rs.getString("token_contract"), rs.getInt("decimals"), hot);
     }
-
     private ClaimedItem mapClaimedItem(ResultSet rs, UUID tenantId, int decimals) throws SQLException {
         BigDecimal amount = rs.getBigDecimal("amount");
         BigInteger atomic;
@@ -550,12 +535,10 @@ public class Evm7702WithdrawalRepository {
                 rs.getString("debit_account_id"), Numeric.hexStringToByteArray(
                         withdrawalHash(tenantId, rs.getObject("custody_withdrawal_id", UUID.class))));
     }
-
     private static String withdrawalHash(UUID tenantId, UUID custodyWithdrawalId) {
         return Numeric.toHexString(Hash.sha3(
                 (tenantId + ":WITHDRAWAL:" + custodyWithdrawalId).getBytes(StandardCharsets.UTF_8)));
     }
-
     private static String truncate(String value, int max) {
         if (value == null) return null;
         return value.length() <= max ? value : value.substring(0, max);

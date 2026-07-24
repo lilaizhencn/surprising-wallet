@@ -17,14 +17,9 @@ import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
-public class HyperCoreTransactionService {
-    private static final String CHAIN = "HYPERCORE";
-
-    private final HyperCoreApiClient apiClient;
-    private final HyperCoreSigner signer;
-    private final HyperCoreRepository hyperCoreRepository;
-    private final ChainJdbcRepository chainRepository;
-    private final AccountSecp256k1KeyService keyService;
+public
+class HyperCoreTransactionService {
+    private static final String CHAIN = "HYPERCORE";    private final HyperCoreApiClient apiClient;    private final HyperCoreSigner signer;    private final HyperCoreRepository hyperCoreRepository;    private final ChainJdbcRepository chainRepository;    private final AccountSecp256k1KeyService keyService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public String sendUsd(AccountChainProfile profile, ChainAddressRecord from,
@@ -63,7 +58,6 @@ public class HyperCoreTransactionService {
         return chainRepository.confirmWithdrawalAndSettle(tenantId, CHAIN, orderNo, actionId,
                 assetSymbol, debitAccountId, debitAmount);
     }
-
     public boolean confirmCollection(java.util.UUID tenantId, String collectionNo, String actionId) {
         return hyperCoreRepository.actionAccepted(actionId)
                 && chainRepository.markCollectionConfirmed(
@@ -92,28 +86,23 @@ public class HyperCoreTransactionService {
             throw e;
         }
     }
-
     private String wireToken(AccountChainProfile profile, TokenDefinition token) {
         return hyperCoreRepository.tokenNameBySymbol(profile.getNetwork(), token.getSymbol())
                 .orElse(token.getSymbol());
     }
-
     private long nextNonce(ChainAddressRecord from) {
         return chainRepository.reserveAccountSequence(
                 CHAIN,
                 normalizeAddress(from.getAddress()),
                 System.currentTimeMillis());
     }
-
     private static boolean isMainnet(AccountChainProfile profile) {
         String network = profile.getNetwork() == null ? "" : profile.getNetwork().toLowerCase(Locale.ROOT);
         return network.equals("mainnet") || network.equals("main");
     }
-
     private static String amountString(BigDecimal amount) {
         return amount.stripTrailingZeros().toPlainString();
     }
-
     private static String normalizeAddress(String address) {
         return address == null ? "" : address.trim().toLowerCase(Locale.ROOT);
     }

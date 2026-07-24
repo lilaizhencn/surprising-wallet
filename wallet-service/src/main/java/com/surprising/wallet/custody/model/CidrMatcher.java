@@ -2,11 +2,8 @@ package com.surprising.wallet.custody.model;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-
 public final class CidrMatcher {
-    private CidrMatcher() {
-    }
-
+    private CidrMatcher() {    }
     public static boolean matches(String cidr, String address) {
         if (cidr == null || cidr.isBlank() || address == null || address.isBlank()) {
             return false;

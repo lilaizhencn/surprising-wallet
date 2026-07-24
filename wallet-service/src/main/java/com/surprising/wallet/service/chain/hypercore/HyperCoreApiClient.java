@@ -17,14 +17,9 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 
 @Component
-public class HyperCoreApiClient {
-    static final String CHAIN = "HYPERCORE";
-
-    private final ObjectMapper objectMapper;
-    private final HttpClient httpClient;
-    private final ChainJdbcRepository repository;
-    private final ChainRpcNodeService rpcNodeService;
-    private final String fixedBaseUrl;
+public
+class HyperCoreApiClient {
+    static final String CHAIN = "HYPERCORE";    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedBaseUrl;
 
     @Autowired
     public HyperCoreApiClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
@@ -46,15 +41,12 @@ public class HyperCoreApiClient {
                 .version(HttpClient.Version.HTTP_1_1)
                 .build();
     }
-
     public JsonNode postInfo(ObjectNode body) {
         return post("info", "/info", body);
     }
-
     public JsonNode postExchange(ObjectNode body) {
         return post("exchange", "/exchange", body);
     }
-
     private JsonNode post(String purpose, String path, ObjectNode body) {
         try {
             String requestBody = objectMapper.writeValueAsString(body);
@@ -70,7 +62,6 @@ public class HyperCoreApiClient {
             throw new IllegalStateException("HyperCore request serialization failed", e);
         }
     }
-
     private JsonNode execute(String path, String requestBody, String baseUrl, ChainRpcNode node) {
         String url = endpoint(baseUrl, path);
         try {
@@ -103,7 +94,6 @@ public class HyperCoreApiClient {
             throw new IllegalStateException("HyperCore HTTP request interrupted for " + path, e);
         }
     }
-
     private static String endpoint(String baseUrl, String path) {
         String value = baseUrl == null ? "" : baseUrl.trim().replaceAll("/+$", "");
         if (value.endsWith(path)) {
@@ -114,7 +104,6 @@ public class HyperCoreApiClient {
         }
         return value + path;
     }
-
     private static String abbreviate(String value) {
         if (value == null || value.isBlank()) {
             return "<empty>";

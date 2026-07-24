@@ -16,10 +16,8 @@ import java.util.List;
  */
 @Component
 public class EvmTransactionBuilder {
-    public String buildNativePayload() {
-        return "0x";
+    public String buildNativePayload() {        return "0x";
     }
-
     public String buildErc20TransferPayload(String toAddress, BigDecimal amount, TokenDefinition tokenDefinition) {
         if (toAddress == null || amount == null || tokenDefinition == null) {
             throw new IllegalArgumentException("invalid erc20 payload arguments");
@@ -31,7 +29,6 @@ public class EvmTransactionBuilder {
                 List.of());
         return FunctionEncoder.encode(function);
     }
-
     public String buildApprovalPayload(String spender, BigDecimal amount, TokenDefinition tokenDefinition) {
         if (spender == null || amount == null || tokenDefinition == null) {
             throw new IllegalArgumentException("invalid approval payload arguments");
@@ -43,7 +40,6 @@ public class EvmTransactionBuilder {
                 List.of());
         return FunctionEncoder.encode(function);
     }
-
     private int requireTokenDecimals(TokenDefinition tokenDefinition) {
         if (tokenDefinition.getDecimals() == null) {
             throw new IllegalStateException("missing token decimals in DB asset metadata for "

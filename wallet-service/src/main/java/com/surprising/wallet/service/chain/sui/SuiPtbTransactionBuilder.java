@@ -12,12 +12,11 @@ import java.util.List;
 import java.util.Objects;
 
 @Component
-public class SuiPtbTransactionBuilder {
+public
+class SuiPtbTransactionBuilder {
     private static final String BASE58_ALPHABET =
             "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-    private static final BigInteger BASE58_RADIX = BigInteger.valueOf(58);
-    private static final int SUI_ADDRESS_LENGTH = 32;
-    private static final int SUI_DIGEST_LENGTH = 32;
+    private static final BigInteger BASE58_RADIX = BigInteger.valueOf(58);    private static final int SUI_ADDRESS_LENGTH = 32;    private static final int SUI_DIGEST_LENGTH = 32;
 
     public String buildSuiTransfer(String sender, List<SuiRpcClient.SuiCoin> gasPayment,
                                    String recipient, long amountMist, long gasPrice, long gasBudget) {
@@ -50,7 +49,6 @@ public class SuiPtbTransactionBuilder {
         out.variant(0); // TransactionExpiration::None
         return Base64.getEncoder().encodeToString(out.bytes());
     }
-
     private void writeSuiTransferPtb(BcsWriter out, String recipient, long amountMist) {
         out.vectorLength(2);
         writePure(out, SuiHex.addressBytes(recipient));
@@ -105,46 +103,39 @@ public class SuiPtbTransactionBuilder {
         out.u64(gasPrice);
         out.u64(gasBudget);
     }
-
     private void writePure(BcsWriter out, byte[] value) {
         out.variant(0); // CallArg::Pure
         out.bytes(value);
     }
-
     private void writeObjectInput(BcsWriter out, SuiRpcClient.SuiCoin coin) {
         out.variant(1); // CallArg::Object
         out.variant(0); // ObjectArg::ImmOrOwnedObject
         writeObjectRef(out, coin);
     }
-
     private void writeObjectRef(BcsWriter out, SuiRpcClient.SuiCoin coin) {
         Objects.requireNonNull(coin, "coin");
         out.fixedBytes(SuiHex.addressBytes(coin.objectId()), SUI_ADDRESS_LENGTH);
         out.u64(Long.parseUnsignedLong(coin.version()));
         out.bytes(decodeDigest(coin.digest()));
     }
-
     private void writeTransferObjects(BcsWriter out, List<Argument> objects, Argument recipient) {
         out.variant(1); // Command::TransferObjects
         out.vectorLength(objects.size());
         objects.forEach(argument -> argument.write(out));
         recipient.write(out);
     }
-
     private void writeSplitCoins(BcsWriter out, Argument coin, List<Argument> amounts) {
         out.variant(2); // Command::SplitCoins
         coin.write(out);
         out.vectorLength(amounts.size());
         amounts.forEach(argument -> argument.write(out));
     }
-
     private void writeMergeCoins(BcsWriter out, Argument target, List<Argument> sources) {
         out.variant(3); // Command::MergeCoins
         target.write(out);
         out.vectorLength(sources.size());
         sources.forEach(argument -> argument.write(out));
     }
-
     private void validateGas(List<SuiRpcClient.SuiCoin> gasPayment, long gasPrice, long gasBudget) {
         if (gasPayment == null || gasPayment.isEmpty()) {
             throw new IllegalArgumentException("Sui transaction requires at least one gas coin");
@@ -152,13 +143,11 @@ public class SuiPtbTransactionBuilder {
         requirePositive(gasPrice, "gasPrice");
         requirePositive(gasBudget, "gasBudget");
     }
-
     private void requirePositive(long value, String name) {
         if (value <= 0) {
             throw new IllegalArgumentException(name + " must be positive");
         }
     }
-
     private BigDecimal selectedTotal(List<SuiRpcClient.SuiCoin> coins) {
         BigDecimal total = BigDecimal.ZERO;
         for (SuiRpcClient.SuiCoin coin : coins) {
@@ -166,13 +155,11 @@ public class SuiPtbTransactionBuilder {
         }
         return total;
     }
-
     private byte[] u64Bytes(long value) {
         BcsWriter writer = new BcsWriter();
         writer.u64(value);
         return writer.bytes();
     }
-
     private byte[] decodeDigest(String base58Digest) {
         byte[] decoded = decodeBase58(base58Digest);
         if (decoded.length != SUI_DIGEST_LENGTH) {
@@ -180,7 +167,6 @@ public class SuiPtbTransactionBuilder {
         }
         return decoded;
     }
-
     private byte[] decodeBase58(String input) {
         if (input == null || input.isBlank()) {
             throw new IllegalArgumentException("base58 value is blank");
@@ -207,7 +193,6 @@ public class SuiPtbTransactionBuilder {
         System.arraycopy(raw, 0, decoded, zeros, raw.length);
         return decoded;
     }
-
     private record Argument(int kind, int input, int result, int subresult) {
         static Argument gasCoin() {
             return new Argument(0, 0, 0, 0);
@@ -244,7 +229,6 @@ public class SuiPtbTransactionBuilder {
     private interface CommandWriter {
         void write(BcsWriter out);
     }
-
     private static final class BcsWriter {
         private final ByteArrayOutputStream out = new ByteArrayOutputStream();
 

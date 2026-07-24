@@ -12,12 +12,9 @@ import java.util.UUID;
 
 @Repository
 public class CustodyTenantChainRepository {
-    private final JdbcTemplate jdbc;
-
-    public CustodyTenantChainRepository(JdbcTemplate jdbc) {
+    private final JdbcTemplate jdbc;    public CustodyTenantChainRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
-
     public List<ChainRecord> list(UUID tenantId) {
         Map<String, List<TokenRecord>> tokensByChain = tokens().stream()
                 .collect(java.util.stream.Collectors.groupingBy(
@@ -45,7 +42,6 @@ public class CustodyTenantChainRepository {
                 instantOrNull(rs.getTimestamp("closed_at")),
                 tokensByChain.getOrDefault(rs.getString("chain"), List.of())), tenantId);
     }
-
     public List<TokenRecord> tokens() {
         return jdbc.query("""
                 select p.chain, a.symbol,
@@ -65,14 +61,12 @@ public class CustodyTenantChainRepository {
                 rs.getString("contract_address"), rs.getInt("decimals"),
                 rs.getBoolean("platform_enabled")));
     }
-
     public boolean platformChainEnabled(String chain) {
         Boolean enabled = jdbc.queryForObject("""
                 select exists(select 1 from chain_profile where chain = ? and enabled = true)
                 """, Boolean.class, chain);
         return Boolean.TRUE.equals(enabled);
     }
-
     public boolean active(UUID tenantId, String chain) {
         Boolean active = jdbc.queryForObject("""
                 select exists(
@@ -84,7 +78,6 @@ public class CustodyTenantChainRepository {
                 """, Boolean.class, tenantId, chain);
         return Boolean.TRUE.equals(active);
     }
-
     public void setStatus(UUID tenantId, String chain, String status, UUID actorId) {
         jdbc.update("""
                 insert into custody_tenant_chain(
@@ -109,11 +102,9 @@ public class CustodyTenantChainRepository {
                 """, tenantId, chain, status,
                 status, actorId, status, status, actorId, status);
     }
-
     public boolean depositEnabled(UUID tenantId, String chain, String symbol) {
         return assetOperationEnabled(tenantId, chain, symbol, true);
     }
-
     public boolean withdrawalEnabled(UUID tenantId, String chain, String symbol) {
         return assetOperationEnabled(tenantId, chain, symbol, false);
     }
@@ -139,7 +130,6 @@ public class CustodyTenantChainRepository {
                 """, Boolean.class, tenantId, chain, symbol, deposit);
         return Boolean.TRUE.equals(enabled);
     }
-
     private static Instant instantOrNull(Timestamp value) {
         return value == null ? null : value.toInstant();
     }

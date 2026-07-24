@@ -22,11 +22,8 @@ import com.surprising.wallet.custody.model.CustodySecurityProperties;
 public class CustodyCryptoService {
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
-    private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();
-    private static final String VERSION = "v1";
-
+    private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();    private static final String VERSION = "v1";
     private final CustodySecurityProperties properties;
-
     public CustodyCryptoService(CustodySecurityProperties properties) {
         this.properties = properties;
     }
@@ -36,7 +33,6 @@ public class CustodyCryptoService {
         byte[] key = masterKey();
         Arrays.fill(key, (byte) 0);
     }
-
     public String randomSecret(int bytes) {
         if (bytes < 16) {
             throw new IllegalArgumentException("secret must contain at least 16 random bytes");
@@ -45,7 +41,6 @@ public class CustodyCryptoService {
         RANDOM.nextBytes(value);
         return URL_ENCODER.encodeToString(value);
     }
-
     public String encrypt(String plaintext) {
         if (plaintext == null || plaintext.isBlank()) {
             throw new IllegalArgumentException("secret is required");
@@ -71,7 +66,6 @@ public class CustodyCryptoService {
             throw new IllegalStateException("failed to encrypt custody secret", e);
         }
     }
-
     public String decrypt(String ciphertext) {
         if (ciphertext == null || !ciphertext.startsWith(VERSION + ":")) {
             throw new IllegalArgumentException("unsupported custody secret format");
@@ -101,7 +95,6 @@ public class CustodyCryptoService {
             throw new IllegalStateException("failed to decrypt custody secret", e);
         }
     }
-
     public String hmacSha256(String secret, String value) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
@@ -111,7 +104,6 @@ public class CustodyCryptoService {
             throw new IllegalStateException("failed to sign custody message", e);
         }
     }
-
     public String sha256(String value) {
         try {
             return HexFormat.of().formatHex(
@@ -120,7 +112,6 @@ public class CustodyCryptoService {
             throw new IllegalStateException("SHA-256 is unavailable", e);
         }
     }
-
     public String sha256(byte[] value) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value));
@@ -128,7 +119,6 @@ public class CustodyCryptoService {
             throw new IllegalStateException("SHA-256 is unavailable", e);
         }
     }
-
     public boolean constantTimeEquals(String expected, String actual) {
         if (expected == null || actual == null) {
             return false;
@@ -137,7 +127,6 @@ public class CustodyCryptoService {
                 expected.getBytes(StandardCharsets.UTF_8),
                 actual.getBytes(StandardCharsets.UTF_8));
     }
-
     private byte[] masterKey() {
         String configured = properties.getSecretMasterKey();
         if (configured == null || configured.isBlank()) {

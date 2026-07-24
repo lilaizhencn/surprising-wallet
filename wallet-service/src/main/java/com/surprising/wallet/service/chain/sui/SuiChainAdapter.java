@@ -16,11 +16,9 @@ import java.util.List;
 
 @Component
 @RequiredArgsConstructor
-public class SuiChainAdapter implements BlockchainAdapter {
-    private static final String CHAIN = "SUI";
-
-    private final SuiDepositScanner scanner;
-    private final ChainJdbcRepository repository;
+public
+class SuiChainAdapter implements BlockchainAdapter {
+    private static final String CHAIN = "SUI";    private final SuiDepositScanner scanner;    private final ChainJdbcRepository repository;
 
     @Override
     public ChainType chainType() {
@@ -65,7 +63,6 @@ public class SuiChainAdapter implements BlockchainAdapter {
     public List<DepositEvent> scanDeposits(long height) {
         return scanner.scanAndCredit();
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));

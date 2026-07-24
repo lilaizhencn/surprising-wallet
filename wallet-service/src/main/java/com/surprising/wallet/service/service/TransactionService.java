@@ -29,19 +29,36 @@ import java.util.List;
 import static com.surprising.wallet.common.utils.Constants.WALLET_DEPOSIT_KEY;
 
 /**
+ * 充值/提现事务服务。
+ *
+ * 统一处理钱包侧入账/出账核心流程：充值事件入队、提现工单落库、签名交易广播、失败回滚与流水追踪状态同步。
+ *
  * @author lilaizhen
  */
 @Slf4j
 @Component
 public class TransactionService {
+    /**
+     * 地址服务，负责解析地址归属关系，用于内部转账识别。
+     */
     @Autowired
     AddressService addressService;
 
+    /**
+     * 链运行时服务，提供资产元数据、链上确认数和广播能力。
+     */
     @Autowired
     BlockchainRuntimeService blockchainRuntimeService;
 
+    /**
+     * 共享仓储，处理提现状态、UTXO 绑定、入账记录和冻结余额更新。
+     */
     @Autowired
     ChainJdbcRepository chainJdbcRepository;
+
+    /**
+     * 运行时配置服务，用于校验任务开关和链路状态。
+     */
     @Autowired
     WalletRuntimeConfigService runtimeConfigService;
 
@@ -54,6 +71,9 @@ public class TransactionService {
         log.info("saveTransactions dto end");
     }
 
+    /**
+     * 处理单笔充值事件：过滤内部转账、校验链路、满足确认数时尝试入账并将消息推送至入账队列。
+     */
     @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_COMMITTED)
     public void saveTransaction(TransactionDTO dto) {
         log.info("saveTransaction dto: {} begin", dto.getTxId());
@@ -200,6 +220,9 @@ public class TransactionService {
         return true;
     }
 
+    /**
+     * 标记统一 UTXO 广播为 UNKNOWN，记录错误原因并刷新待发提现状态，防止交易丢失。
+     */
     private void markBitcoinLikeBroadcastUnknown(WithdrawTransaction transaction, AssetRuntimeMetadata currency,
                                                  JSONObject signature, String error) {
         String chain = chainName(currency);
@@ -209,6 +232,9 @@ public class TransactionService {
                 chain, record.getWithdrawId(), "BROADCAST_UNKNOWN", null, null, error));
     }
 
+    /**
+     * UTXO 签名失败处理：释放锁定 UTXO 与冻结余额，更新提现记录为失败状态。
+     */
     private void failBitcoinLikeTransaction(WithdrawTransaction transaction, AssetRuntimeMetadata currency, String error) {
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
         String lockRef = transaction.getId().toString();
@@ -232,6 +258,10 @@ public class TransactionService {
         });
     }
 
+    /**
+     * 对 UTXO 入账链路进行幂等记账：
+     * 命中 utxo key 后写入/更新入账流水，并在确认数达标时补充标记。
+     */
     private void creditDepositIfNeeded(
             TransactionDTO dto, AssetRuntimeMetadata currency, long requiredConfirmations) {
         UtxoKey utxoKey = UtxoKey.parse(dto.getTxId());
@@ -274,16 +304,25 @@ public class TransactionService {
                 currency.getName(), dto.getTxId());
     }
 
+    /**
+     * 计算提现冻结金额。
+     */
     private BigDecimal withdrawFrozenAmount(WithdrawRecord record) {
         BigDecimal fee = record.getFee() == null ? BigDecimal.ZERO : record.getFee();
         return record.getBalance().add(fee);
     }
 
+    /**
+     * 判断目标地址是否为内部地址：未命中/未绑定用户/非法用户都视为内部地址。
+     */
     private boolean isInternalAddress(TransactionDTO dto, AssetRuntimeMetadata currency) {
         Address address = addressService.getAddress(dto.getAddress(), currency);
         return address == null || address.getUserId() == null || address.getUserId() <= 0;
     }
 
+    /**
+     * 查询提现订单对应的 debited 账户标识，默认回退到用户 ID。
+     */
     private String withdrawalDebitAccount(String chain, WithdrawRecord record) {
         return chainJdbcRepository.findWithdrawalOrder(chain, record.getWithdrawId())
                 .map(order -> order.getDebitAccountId())
@@ -291,14 +330,24 @@ public class TransactionService {
                 .orElse(record.getUserId().toString());
     }
 
+    /**
+     * 判断是否为统一 Bitcoin-like 链类型。
+     */
     private boolean isUnifiedBitcoinLike(AssetRuntimeMetadata currency) {
         return blockchainRuntimeService.isBitcoinLikeRuntime(currency);
     }
 
+    /**
+     * 从资产元数据中读取链名。
+     */
     private String chainName(AssetRuntimeMetadata currency) {
         return blockchainRuntimeService.chainName(currency);
     }
 
+    /**
+     * 从提现交易读取运行时元数据：
+     * 优先走交易内联 chain/asset 字段，兜底按 currency 编码查询。
+     */
     private AssetRuntimeMetadata transactionAsset(WithdrawTransaction transaction) {
         if (StringUtils.hasText(transaction.getChain())
                 && StringUtils.hasText(transaction.getAssetSymbol())
@@ -309,15 +358,30 @@ public class TransactionService {
         return blockchainRuntimeService.assetMetadata(transaction.getCurrency());
     }
 
+    /**
+     * UTXO 幂等键（txid + vout 序号）。
+     */
     private static class UtxoKey {
+        /**
+         * 原始交易哈希。
+         */
         private final String txId;
+        /**
+         * 输出序号。
+         */
         private final Short seq;
 
+        /**
+         * 创建 UTXO 键对象。
+         */
         private UtxoKey(String txId, Short seq) {
             this.txId = txId;
             this.seq = seq;
         }
 
+        /**
+         * 按 value 解析 UTXO key，格式要求为 txid-seq，非法输入返回 null。
+         */
         private static UtxoKey parse(String value) {
             if (!StringUtils.hasText(value)) {
                 return null;

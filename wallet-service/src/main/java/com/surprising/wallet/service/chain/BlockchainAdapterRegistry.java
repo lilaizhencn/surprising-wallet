@@ -9,15 +9,14 @@ import java.util.Map;
 import java.util.Optional;
 
 @Component
-public class BlockchainAdapterRegistry {
+public
+class BlockchainAdapterRegistry {
     private final Map<ChainType, BlockchainAdapter> adapters = new EnumMap<>(ChainType.class);
-
     public BlockchainAdapterRegistry(List<BlockchainAdapter> adapterList) {
         for (BlockchainAdapter adapter : adapterList) {
             adapters.put(adapter.chainType(), adapter);
         }
     }
-
     public Optional<BlockchainAdapter> find(ChainType chainType) {
         BlockchainAdapter adapter = adapters.get(chainType);
         if (adapter != null) {
@@ -25,7 +24,6 @@ public class BlockchainAdapterRegistry {
         }
         return adapters.values().stream().filter(candidate -> candidate.supports(chainType)).findFirst();
     }
-
     public BlockchainAdapter require(ChainType chainType) {
         return find(chainType).orElseThrow(() ->
                 new IllegalArgumentException("No adapter registered for " + chainType));

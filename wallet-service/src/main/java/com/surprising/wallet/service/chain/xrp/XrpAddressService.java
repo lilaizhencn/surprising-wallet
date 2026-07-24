@@ -9,13 +9,9 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-public class XrpAddressService {
-    private static final String CHAIN = "XRP";
-    private static final String NATIVE_SYMBOL = "XRP";
-
-    private final XrpKeyService keyService;
-    private final ChainJdbcRepository repository;
-
+public
+class XrpAddressService {
+    private static final String CHAIN = "XRP";    private static final String NATIVE_SYMBOL = "XRP";    private final XrpKeyService keyService;    private final ChainJdbcRepository repository;
     public ChainAddressRecord createNativeAddress(long userId, int biz, long derivationIndex, String walletRole) {
         HotWalletRules.requireAllowedReservedAddress(
                 CHAIN, NATIVE_SYMBOL, NATIVE_SYMBOL, userId, biz, derivationIndex, walletRole);
@@ -67,12 +63,10 @@ public class XrpAddressService {
                             .orElseThrow();
                 });
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     private String derivationPath(AccountChainProfile profile, long userId, int biz, long index) {
         return String.format("m/44/%d/%d/%d/%d",
                 profile.getBip44CoinType(), biz, userId, index);

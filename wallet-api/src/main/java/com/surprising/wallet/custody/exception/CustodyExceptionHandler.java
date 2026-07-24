@@ -15,54 +15,84 @@ import java.util.Map;
 
 @RestControllerAdvice(basePackages = "com.surprising.wallet.custody")
 public class CustodyExceptionHandler {
+    /**
+     * 未授权异常统一转为 401，返回标准错误码与消息。
+     */
     @ExceptionHandler(CustodyUnauthorizedException.class)
     public ResponseEntity<Map<String, Object>> unauthorized(CustodyUnauthorizedException e) {
         return error(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", e.getMessage());
     }
 
+    /**
+     * 禁止访问异常统一转为 403，避免泄露鉴权细节。
+     */
     @ExceptionHandler(CustodyForbiddenException.class)
     public ResponseEntity<Map<String, Object>> forbidden(CustodyForbiddenException e) {
         return error(HttpStatus.FORBIDDEN, "FORBIDDEN", e.getMessage());
     }
 
+    /**
+     * 参数非法转为 400，保留入参错误提示。
+     */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> invalid(IllegalArgumentException e) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", e.getMessage());
     }
 
+    /**
+     * 唯一性/外键等数据库约束冲突转为 409。
+     */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, Object>> conflict(DataIntegrityViolationException e) {
         return error(HttpStatus.CONFLICT, "CONFLICT", "resource already exists or violates a constraint");
     }
 
+    /**
+     * 业务状态异常转为 409，便于上游根据 code 做重试或人工介入。
+     */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, Object>> state(IllegalStateException e) {
         return error(HttpStatus.CONFLICT, "INVALID_STATE", e.getMessage());
     }
 
+    /**
+     * WebFlux/控制器层定义的响应状态统一透传。
+     */
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> responseStatus(ResponseStatusException e) {
         return error(e.getStatusCode(), codeFor(e.getStatusCode()), e.getReason());
     }
 
+    /**
+     * 缺失 Header 直接返回 400，避免后续 NPE。
+     */
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<Map<String, Object>> missingHeader(MissingRequestHeaderException e) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST",
                 "missing required header: " + e.getHeaderName());
     }
 
+    /**
+     * 反序列化失败返回 400，提示请求体格式不合法。
+     */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> unreadableBody(HttpMessageNotReadableException e) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST",
                 "request body is malformed or contains invalid field types");
     }
 
+    /**
+     * 参数类型转换失败返回 400，保留参数名方便排查。
+     */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Map<String, Object>> invalidParameter(MethodArgumentTypeMismatchException e) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST",
                 "invalid request parameter: " + e.getName());
     }
 
+    /**
+     * 根据 HTTP 状态映射统一错误码。
+     */
     private static String codeFor(HttpStatusCode status) {
         return switch (status.value()) {
             case 400 -> "INVALID_REQUEST";
@@ -74,11 +104,14 @@ public class CustodyExceptionHandler {
         };
     }
 
+    /**
+     * 统一构造错误响应体，保持前后端一致的错误结构。
+     */
     private static ResponseEntity<Map<String, Object>> error(
             HttpStatusCode status, String code, String message) {
         return ResponseEntity.status(status).body(Map.of(
                 "error", Map.of(
-                        "code", code,
+                    "code", code,
                         "message", message == null || message.isBlank()
                                 ? "request could not be completed"
                                 : message)));

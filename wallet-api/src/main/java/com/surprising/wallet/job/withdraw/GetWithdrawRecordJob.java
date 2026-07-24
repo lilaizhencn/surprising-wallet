@@ -16,22 +16,22 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@Component
-@Slf4j
-public class GetWithdrawRecordJob {
 /**
  * 提现请求拉取任务。
  * <p>
- * 每 30 秒执行一次：从 Redis "待提现队列" 批量拉取用户提现请求，
- * 调用 TransactionService 执行提现流程（构建 withdrawal_order → 入签名队列）。
+ * 每 30 秒执行一次：从 Redis 待提现队列读取提现请求，触发提现编排，
  * 失败的请求写入失败队列等待重试。
- *
- * @author atomex
  */
-
+@Component
+@Slf4j
+public class GetWithdrawRecordJob {
+    /** 提现交易服务，负责把请求转为待签名订单。 */
     @Autowired
     private TransactionService txService;
 
+    /**
+     * 执行一次取数与提交：读取待提现队列、去重、入流水并对失败请求回写重试队列。
+     */
     @Scheduled(scheduler = "withdrawTaskScheduler", fixedDelay = 30_000)
     public void run() {
         String key = Constants.WALLET_WITHDRAW_WAIT_KEY;

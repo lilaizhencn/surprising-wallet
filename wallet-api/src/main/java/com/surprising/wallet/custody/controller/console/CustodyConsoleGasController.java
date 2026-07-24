@@ -25,17 +25,27 @@ import com.surprising.wallet.custody.model.CustodyRequestSupport;
 @RestController
 @RequestMapping("/custody/console/v1")
 public class CustodyConsoleGasController {
+    /** Gas 管理服务。 */
     private final CustodyGasService gas;
 
+    /**
+     * 注入 gas 服务。
+     */
     public CustodyConsoleGasController(CustodyGasService gas) {
         this.gas = gas;
     }
 
+    /**
+     * 查询租户下 gas 账户列表。
+     */
     @GetMapping("/gas-accounts")
     public List<GasAccountView> accounts(HttpServletRequest request) {
         return gas.list(CustodyRequestSupport.requirePrincipal(request));
     }
 
+    /**
+     * 新建 gas 账户（链上 gas 充值/扣费统一管理）。
+     */
     @PostMapping("/gas-accounts")
     @ResponseStatus(HttpStatus.CREATED)
     public GasAccountView create(@RequestBody CreateGasAccountCommand body,
@@ -46,6 +56,9 @@ public class CustodyConsoleGasController {
                 CustodyRequestSupport.clientIp(request));
     }
 
+    /**
+     * 更新 gas 账户配置（额度、策略、启停等）。
+     */
     @PatchMapping("/gas-accounts/{gasAccountId}")
     public GasAccountView update(@PathVariable UUID gasAccountId,
                                  @RequestBody UpdateGasAccountCommand body,
@@ -57,6 +70,9 @@ public class CustodyConsoleGasController {
                 CustodyRequestSupport.clientIp(request));
     }
 
+    /**
+     * 查询 gas 充值记录。
+     */
     @GetMapping("/gas-accounts/{gasAccountId}/topups")
     public List<Map<String, Object>> topups(
             @PathVariable UUID gasAccountId,
@@ -70,6 +86,9 @@ public class CustodyConsoleGasController {
                 offset);
     }
 
+    /**
+     * 查询 gas 使用明细与余额消耗统计。
+     */
     @GetMapping("/gas-accounts/{gasAccountId}/usage")
     public List<Map<String, Object>> usage(
             @PathVariable UUID gasAccountId,
@@ -83,6 +102,9 @@ public class CustodyConsoleGasController {
                 offset);
     }
 
+    /**
+     * 查询 gas 上手册信息（最小充值、链支持、常见提示）。
+     */
     @GetMapping("/onboarding")
     public Map<String, Object> onboarding(HttpServletRequest request) {
         return gas.onboarding(CustodyRequestSupport.requirePrincipal(request));

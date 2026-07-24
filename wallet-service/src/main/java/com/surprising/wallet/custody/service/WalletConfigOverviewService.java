@@ -32,17 +32,14 @@ public class WalletConfigOverviewService {
             "withdraw", "global.withdraw.enabled",
             "collection", "global.collection.enabled",
             "transfer", "global.transfer.enabled");
-
-    private final JdbcTemplate jdbc;
-    private final CustodyRepository custodyRepository;
-    private final BooleanSupplier keysetConfigured;
-    private final String environment;
+    private final JdbcTemplate jdbc;    private final CustodyRepository custodyRepository;    private final BooleanSupplier keysetConfigured;    private final String environment;
 
     @Autowired
     public WalletConfigOverviewService(JdbcTemplate jdbc,
                                        CustodyRepository custodyRepository,
                                        WalletKeyMaterialProvider keyMaterial,
-                                       @Value("${sw.app.env.name:dev}") String environment) {
+                                       @Value("${sw.app.env.name:dev}")
+                                       String environment) {
         this.jdbc = jdbc;
         this.custodyRepository = custodyRepository;
         this.keysetConfigured = keyMaterial::isConfigured;
@@ -58,7 +55,6 @@ public class WalletConfigOverviewService {
         this.keysetConfigured = keysetConfigured;
         this.environment = normalizeEnvironment(environment);
     }
-
     public SummaryView summary(CustodyPrincipal actor) {
         requirePlatformAdmin(actor);
         GlobalSwitches switches = loadSwitches();
@@ -147,7 +143,6 @@ public class WalletConfigOverviewService {
                 sourceIp, details);
         return summary(actor);
     }
-
     private GlobalSwitches loadSwitches() {
         Map<String, Boolean> values = new HashMap<>();
         for (Map<String, Object> row : jdbc.queryForList("""
@@ -172,7 +167,6 @@ public class WalletConfigOverviewService {
                 values.getOrDefault(SWITCH_KEYS.get("collection"), true),
                 values.getOrDefault(SWITCH_KEYS.get("transfer"), true));
     }
-
     private List<ProfileRow> loadProfiles() {
         return jdbc.queryForList("""
                 select id, chain, network, family, enabled,
@@ -190,7 +184,6 @@ public class WalletConfigOverviewService {
                 booleanValue(row.get("collection_enabled"), false),
                 booleanValue(row.get("transfer_enabled"), false))).toList();
     }
-
     private List<TokenRow> loadTokens() {
         return jdbc.queryForList("""
                 select chain, network, symbol, enabled,
@@ -204,7 +197,6 @@ public class WalletConfigOverviewService {
                 stringValue(row.get("contract_address")),
                 booleanValue(row.get("enabled"), false))).toList();
     }
-
     private List<AssetRow> loadAssets() {
         return jdbc.queryForList("""
                 select chain, symbol, contract_address, active
@@ -217,7 +209,6 @@ public class WalletConfigOverviewService {
                 stringValue(row.get("contract_address")),
                 booleanValue(row.get("active"), false))).toList();
     }
-
     private List<RpcRow> loadRpcNodes() {
         return jdbc.queryForList("""
                 select chain, network, environment, enabled
@@ -388,25 +379,21 @@ public class WalletConfigOverviewService {
                 profile.enabled(), configured, effective, tokenCount, rpcNodeCount,
                 status, List.copyOf(blockers));
     }
-
     private Map<String, Integer> enabledTokenCounts(List<TokenRow> tokens) {
         Map<String, Integer> counts = new HashMap<>();
         tokens.stream().filter(TokenRow::enabled).forEach(token ->
                 counts.merge(profileKey(token.chain(), token.network()), 1, Integer::sum));
         return counts;
     }
-
     private Map<String, Integer> enabledRpcCounts(List<RpcRow> nodes) {
         Map<String, Integer> counts = new HashMap<>();
         nodes.stream().filter(RpcRow::enabled).filter(this::currentEnvironment).forEach(node ->
                 counts.merge(profileKey(node.chain(), node.network()), 1, Integer::sum));
         return counts;
     }
-
     private boolean currentEnvironment(RpcRow row) {
         return environment.equalsIgnoreCase(row.environment());
     }
-
     private void upsertSwitch(String key, boolean value) {
         jdbc.update("""
                 insert into wallet_system_config(
@@ -424,42 +411,33 @@ public class WalletConfigOverviewService {
                                      boolean profile, boolean profileTask) {
         return wallet && globalTask && profile && profileTask;
     }
-
     private static boolean sameContract(String left, String right) {
         return !left.isBlank() && !right.isBlank() && left.trim().equalsIgnoreCase(right.trim());
     }
-
     private static String profileKey(String chain, String network) {
         return normalize(chain) + "|" + normalize(network);
     }
-
     private static String assetKey(String chain, String symbol) {
         return normalize(chain) + "|" + normalize(symbol);
     }
-
     private static String normalize(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
-
     private static String normalizeEnvironment(String value) {
         return value == null || value.isBlank() ? "dev" : value.trim();
     }
-
     private static String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
-
     private static long longValue(Object value) {
         return value instanceof Number number ? number.longValue() : Long.parseLong(stringValue(value));
     }
-
     private static boolean booleanValue(Object value, boolean defaultValue) {
         if (value == null) {
             return defaultValue;
         }
         return value instanceof Boolean bool ? bool : Boolean.parseBoolean(String.valueOf(value));
     }
-
     private static void requirePlatformAdmin(CustodyPrincipal actor) {
         if (actor == null || !actor.isPlatformAdmin()) {
             throw new CustodyForbiddenException("platform administrator required");

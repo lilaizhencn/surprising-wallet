@@ -20,8 +20,7 @@ import java.util.Locale;
 
 /** Strictly decodes and validates per-item collector events from a canonical receipt. */
 public class Evm7702ReceiptParser {
-    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
-    public static final String ITEM_TOPIC = Hash.sha3String(
+    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";    public static final String ITEM_TOPIC = Hash.sha3String(
             "CollectionItemResult(bytes32,uint256,address,address,address,uint256,uint256,bool,bytes32)");
     public static final String BATCH_TOPIC = Hash.sha3String(
             "BatchProcessed(bytes32,uint256,uint256,uint256)");
@@ -136,7 +135,6 @@ public class Evm7702ReceiptParser {
         }
         return new ParsedReceipt(List.copyOf(items), batch);
     }
-
     private static boolean isExpectedTransfer(Log log, ExpectedTransfer expected) {
         if (!log.getAddress().equalsIgnoreCase(expected.token()) || log.getTopics().size() != 3
                 || !TRANSFER_TOPIC.equalsIgnoreCase(log.getTopics().getFirst())
@@ -150,7 +148,6 @@ public class Evm7702ReceiptParser {
             return false;
         }
     }
-
     private static String addressTopic(String address) {
         String clean = Numeric.cleanHexPrefix(address);
         if (!clean.matches("[0-9a-fA-F]{40}")) {
@@ -169,7 +166,6 @@ public class Evm7702ReceiptParser {
             BigInteger requestedAmount, BigInteger actualReceived, boolean success,
             String errorHash, int logIndex) {
     }
-
     public record BatchResult(int totalItems, int successCount, int failureCount) {
     }
 
@@ -184,7 +180,6 @@ public class Evm7702ReceiptParser {
             addressTopic(recipient);
         }
     }
-
     public record ParsedReceipt(List<ItemResult> items, BatchResult batch) {
     }
 }

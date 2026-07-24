@@ -34,12 +34,7 @@ import java.util.function.Function;
 @Component
 public class LitecoinEsploraCommand implements BtcLikeCommand {
     private static final BigDecimal LITOSHI = new BigDecimal("100000000");
-
-    private final HttpClient httpClient;
-    private final ObjectMapper objectMapper;
-    private final ChainJdbcRepository repository;
-    private final ChainRpcNodeService rpcNodeService;
-    private volatile long cachedTipHeight;
+    private final HttpClient httpClient;    private final ObjectMapper objectMapper;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private volatile long cachedTipHeight;
 
     public LitecoinEsploraCommand(ChainJdbcRepository repository,
                                   ChainRpcNodeService rpcNodeService) {
@@ -72,7 +67,6 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
                 ? callJsonRpc(node, "getblock", BtcLikeBlock.class, hash)
                 : getEsploraBlock(node, hash));
     }
-
     private BtcLikeBlock getEsploraBlock(ChainRpcNode node, String hash) {
         JsonNode txids = getJson(node, "/block/" + hash + "/txids");
         BtcLikeBlock block = new BtcLikeBlock();
@@ -94,7 +88,6 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
                 ? callJsonRpc(node, "getrawtransaction", BtcLikeRawTransaction.class, txid, verbose)
                 : getEsploraRawTransaction(node, txid));
     }
-
     private BtcLikeRawTransaction getEsploraRawTransaction(ChainRpcNode node, String txid) {
         JsonNode tx = getJson(node, "/tx/" + txid);
         BtcLikeRawTransaction result = new BtcLikeRawTransaction();
@@ -174,7 +167,6 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
             return send(request).trim();
         });
     }
-
     private JsonNode getJson(ChainRpcNode node, String path) {
         try {
             return objectMapper.readTree(getText(node, path));
@@ -182,7 +174,6 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
             throw new IllegalStateException("invalid Esplora JSON response for " + path, e);
         }
     }
-
     private String getText(ChainRpcNode node, String path) {
         HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl(node) + path))
                 .timeout(Duration.ofSeconds(30))
@@ -190,14 +181,12 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
                 .build();
         return send(request);
     }
-
     private <T> T withNode(Function<ChainRpcNode, T> request) {
         String network = repository.findProfileByChain("LTC")
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for LTC"))
                 .getNetwork();
         return rpcNodeService.withFailover("LTC", network, request);
     }
-
     private String baseUrl(ChainRpcNode node) {
         String baseUrl = node.getRpcUrl();
         if (baseUrl.endsWith("/")) {
@@ -205,11 +194,9 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
         }
         return baseUrl;
     }
-
     private boolean isJsonRpc(ChainRpcNode node) {
         return "HTTP_JSON_RPC".equalsIgnoreCase(node.getConnectionType());
     }
-
     private <T> T callJsonRpc(ChainRpcNode node, String method, Class<T> responseType, Object... params) {
         try {
             Map<String, String> headers = new HashMap<>();
@@ -226,7 +213,6 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
             throw new IllegalStateException("Litecoin JSON-RPC call failed: " + method, e);
         }
     }
-
     private String send(HttpRequest request) {
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());

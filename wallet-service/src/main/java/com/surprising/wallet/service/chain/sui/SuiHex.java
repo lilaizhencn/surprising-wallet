@@ -1,22 +1,17 @@
 package com.surprising.wallet.service.chain.sui;
 
 import java.util.HexFormat;
-
 final class SuiHex {
     private static final HexFormat HEX = HexFormat.of();
-
     private SuiHex() {
     }
-
     static String withPrefix(byte[] bytes) {
         return "0x" + HEX.formatHex(bytes);
     }
-
     static String normalizeAddress(String address) {
         byte[] bytes = addressBytes(address);
         return withPrefix(bytes);
     }
-
     static byte[] addressBytes(String address) {
         String value = stripPrefix(address);
         if (value.length() > 64) {
@@ -30,7 +25,6 @@ final class SuiHex {
         System.arraycopy(raw, 0, result, 32 - raw.length, raw.length);
         return result;
     }
-
     static String stripPrefix(String hex) {
         if (hex == null || hex.isBlank()) {
             throw new IllegalArgumentException("hex value is blank");

@@ -22,12 +22,7 @@ import java.util.UUID;
 
 @Service
 public class CustodyAssetRecoveryService {
-    private final CustodyAssetRecoveryRepository repository;
-    private final CustodyRepository custody;
-    private final JdbcTemplate jdbc;
-    private final List<CustodyAssetRecoveryChainGateway> gateways;
-    private final ObjectMapper objectMapper;
-
+    private final CustodyAssetRecoveryRepository repository;    private final CustodyRepository custody;    private final JdbcTemplate jdbc;    private final List<CustodyAssetRecoveryChainGateway> gateways;    private final ObjectMapper objectMapper;
     public CustodyAssetRecoveryService(CustodyAssetRecoveryRepository repository,
                                        CustodyRepository custody, JdbcTemplate jdbc,
                                        List<CustodyAssetRecoveryChainGateway> gateways,
@@ -38,7 +33,6 @@ public class CustodyAssetRecoveryService {
         this.gateways = List.copyOf(gateways);
         this.objectMapper = objectMapper;
     }
-
     public RecoveryRecord submit(CustodyPrincipal principal, SubmitCommand command, String sourceIp) {
         requireTenant(principal);
         String actualChain = upper(command.actualChain(), "actualChain", 32);
@@ -87,7 +81,6 @@ public class CustodyAssetRecoveryService {
                 "{\"actualChain\":\"" + actualChain + "\",\"txHash\":\"" + txHash + "\"}");
         return verifyInternal(recovery, ownership, command.logIndex());
     }
-
     private static RecoveryRecord requireSameTenant(UUID tenantId, RecoveryRecord recovery) {
         if (!tenantId.equals(recovery.tenantId())) {
             throw new IllegalStateException("recovery request already belongs to another tenant");
@@ -106,7 +99,6 @@ public class CustodyAssetRecoveryService {
         requirePlatform(principal);
         return repository.list(null, normalizedStatus(status), pageSize(limit), offset(offset));
     }
-
     public RecoveryRecord verify(CustodyPrincipal principal, UUID id, String sourceIp) {
         requirePlatform(principal);
         RecoveryRecord recovery = repository.require(id);
@@ -140,7 +132,6 @@ public class CustodyAssetRecoveryService {
                 "{\"recoveryAddress\":\"" + recoveryAddress + "\"}");
         return result;
     }
-
     public RecoveryRecord execute(CustodyPrincipal principal, UUID id, String sourceIp) {
         requirePlatform(principal);
         RecoveryRecord existing = repository.require(id);
@@ -167,7 +158,6 @@ public class CustodyAssetRecoveryService {
             return repository.executionFailed(id, friendly(e));
         }
     }
-
     public RecoveryRecord confirm(CustodyPrincipal principal, UUID id, String sourceIp) {
         requirePlatform(principal);
         RecoveryRecord result = confirm(repository.require(id));
@@ -178,7 +168,6 @@ public class CustodyAssetRecoveryService {
         }
         return result;
     }
-
     public void confirmBroadcastRecoveries() {
         for (RecoveryRecord recovery : repository.broadcastRecoveries(100)) {
             try {
@@ -193,7 +182,6 @@ public class CustodyAssetRecoveryService {
             }
         }
     }
-
     private RecoveryRecord confirm(RecoveryRecord recovery) {
         if (!"BROADCAST".equals(recovery.status())) {
             throw new IllegalStateException("only a broadcast recovery can be confirmed");
@@ -210,7 +198,6 @@ public class CustodyAssetRecoveryService {
         publishRecovered(confirmed);
         return confirmed;
     }
-
     private void publishRecovered(RecoveryRecord recovery) {
         UUID eventId = UUID.randomUUID();
         boolean automatic = Boolean.TRUE.equals(jdbc.queryForObject("""
@@ -233,7 +220,6 @@ public class CustodyAssetRecoveryService {
                 json(Map.of("id", eventId, "type", "ASSET_RECOVERY.RECOVERED",
                         "createdAt", java.time.Instant.now(), "data", data)), automatic);
     }
-
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -324,7 +310,6 @@ public class CustodyAssetRecoveryService {
         }
         return selected;
     }
-
     private ChainAddressRecord sourceAddress(UUID tenantId, String actualChain, Ownership ownership) {
         return ChainAddressRecord.builder()
                 .tenantId(tenantId)
@@ -341,13 +326,11 @@ public class CustodyAssetRecoveryService {
                 .enabled(true)
                 .build();
     }
-
     private CustodyAssetRecoveryChainGateway gateway(String chain) {
         return gateways.stream().filter(candidate -> candidate.supports(chain)).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
                         "automatic recovery is not available for chain " + chain));
     }
-
     private static String friendly(Throwable error) {
         Throwable value = error;
         while (value.getCause() != null && value.getMessage() == null) {
@@ -356,41 +339,33 @@ public class CustodyAssetRecoveryService {
         String message = value.getMessage();
         return message == null || message.isBlank() ? "chain verification failed" : message;
     }
-
     private static void requireTenant(CustodyPrincipal principal) {
         if (principal == null || principal.tenantId() == null || !principal.hasScope("deposits:read")) {
             throw new CustodyForbiddenException("tenant deposits access required");
         }
     }
-
     private static void requirePlatform(CustodyPrincipal principal) {
         if (principal == null || principal.tenantId() != null
                 || !"PLATFORM_ADMIN".equals(principal.role())) {
             throw new CustodyForbiddenException("platform administrator required");
         }
     }
-
     private static int pageSize(int value) {
         return Math.max(1, Math.min(value, 200));
     }
-
     private static int offset(int value) {
         return Math.max(0, value);
     }
-
     private static String normalizedStatus(String status) {
         return status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
     }
-
     private static String upper(String value, String field, int max) {
         return required(value, field, max).toUpperCase(Locale.ROOT);
     }
-
     private static String optionalUpper(String value, int max) {
         String result = optional(value, max);
         return result == null ? null : result.toUpperCase(Locale.ROOT);
     }
-
     private static String required(String value, String field, int max) {
         String result = value == null ? "" : value.trim();
         if (result.isEmpty() || result.length() > max) {
@@ -398,7 +373,6 @@ public class CustodyAssetRecoveryService {
         }
         return result;
     }
-
     private static String optional(String value, int max) {
         String result = value == null ? "" : value.trim();
         if (result.length() > max) {
@@ -411,10 +385,8 @@ public class CustodyAssetRecoveryService {
                                 String tokenContract, String txHash, Long logIndex,
                                 String destinationAddress, String claimedAmount) {
     }
-
     public record ApproveCommand(String recoveryAddress) {
     }
-
     public record RejectCommand(String reason) {
     }
 

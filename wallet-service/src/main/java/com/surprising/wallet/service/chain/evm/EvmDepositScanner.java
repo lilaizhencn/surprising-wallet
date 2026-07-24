@@ -37,15 +37,8 @@ import java.util.Set;
 @Slf4j
 @Component
 public class EvmDepositScanner {
-    private static final int FINALITY_AUDIT_DEPTH = 256;
-    private static final BigDecimal WEI_PER_ETH = new BigDecimal("1000000000000000000");
-    private static final String TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-
-    private final ChainJdbcRepository repository;
-    private final EvmLogScanner logScanner;
-    private final ChainRpcNodeService rpcNodeService;
-    private final String fixedRpcUrl;
-    private final int fixedConfirmations;
+    private static final int FINALITY_AUDIT_DEPTH = 256;    private static final BigDecimal WEI_PER_ETH = new BigDecimal("1000000000000000000");    private static final String TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+    private final ChainJdbcRepository repository;    private final EvmLogScanner logScanner;    private final ChainRpcNodeService rpcNodeService;    private final String fixedRpcUrl;    private final int fixedConfirmations;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
@@ -74,11 +67,9 @@ public class EvmDepositScanner {
         this.fixedRpcUrl = sepoliaRpcUrl;
         this.fixedConfirmations = sepoliaConfirmations;
     }
-
     public BigDecimal getNativeBalance(String address) throws IOException {
         return withDefaultRpc(rpcUrl -> getNativeBalance(rpcUrl, address));
     }
-
     public BigDecimal getNativeBalance(String rpcUrl, String address) throws IOException {
         Web3j web3j = web3j(rpcUrl);
         try {
@@ -88,11 +79,9 @@ public class EvmDepositScanner {
             web3j.shutdown();
         }
     }
-
     public BigInteger getPendingNonce(String address) throws IOException {
         return withDefaultRpc(rpcUrl -> getPendingNonce(rpcUrl, address));
     }
-
     public BigInteger getPendingNonce(String rpcUrl, String address) throws IOException {
         Web3j web3j = web3j(rpcUrl);
         try {
@@ -101,11 +90,9 @@ public class EvmDepositScanner {
             web3j.shutdown();
         }
     }
-
     public BigDecimal getGasPriceGwei() throws IOException {
         return withDefaultRpc(this::getGasPriceGwei);
     }
-
     public BigDecimal getGasPriceGwei(String rpcUrl) throws IOException {
         Web3j web3j = web3j(rpcUrl);
         try {
@@ -115,11 +102,9 @@ public class EvmDepositScanner {
             web3j.shutdown();
         }
     }
-
     public BigInteger getLatestBlockNumber() throws IOException {
         return withDefaultRpc(this::getLatestBlockNumber);
     }
-
     public BigInteger getLatestBlockNumber(String rpcUrl) throws IOException {
         Web3j web3j = web3j(rpcUrl);
         try {
@@ -128,36 +113,30 @@ public class EvmDepositScanner {
             web3j.shutdown();
         }
     }
-
     public BigInteger getLatestBlockNumber(ChainType chainType) throws IOException {
         return withDefaultRpc(chainType, this::getLatestBlockNumber);
     }
-
     public List<DepositEvent> scanNativeEthDeposits(long blockHeight) throws IOException {
         return withDefaultRpc(rpcUrl -> scanNativeDeposits(ChainType.ETH, profile(ChainType.ETH).getNativeSymbol(),
                 rpcUrl, blockHeight));
     }
-
     public List<DepositEvent> scanAndCreditNativeEth(long blockHeight) throws IOException {
         AccountChainProfile profile = profile(ChainType.ETH);
         int confirmations = fixedRpcUrl != null ? fixedConfirmations : profile.getDepositConfirmations();
         return withDefaultRpc(ChainType.ETH, rpcUrl -> scanAndCreditNative(ChainType.ETH, profile.getNativeSymbol(),
                 rpcUrl, confirmations, blockHeight));
     }
-
     public List<DepositEvent> scanAndCreditNative(ChainType chainType, long blockHeight) throws IOException {
         AccountChainProfile profile = profile(chainType);
         int confirmations = fixedRpcUrl != null ? fixedConfirmations : profile.getDepositConfirmations();
         return withDefaultRpc(chainType, rpcUrl -> scanAndCreditNative(chainType, profile.getNativeSymbol(),
                 rpcUrl, confirmations, blockHeight));
     }
-
     public List<DepositEvent> scanAndCreditErc20(ChainType chainType, long blockHeight) throws IOException {
         AccountChainProfile profile = profile(chainType);
         int confirmations = fixedRpcUrl != null ? fixedConfirmations : profile.getDepositConfirmations();
         return withDefaultRpc(chainType, rpcUrl -> scanAndCreditErc20(chainType, rpcUrl, confirmations, blockHeight));
     }
-
     public void reconcileCreditedDeposits(ChainType chainType, long latestHeight) throws IOException {
         long minimumHeight = Math.max(0L, latestHeight - FINALITY_AUDIT_DEPTH + 1L);
         List<Long> heights = repository.listCanonicalDepositBlockHeights(
@@ -316,20 +295,16 @@ public class EvmDepositScanner {
         return repository.observeCanonicalBlock(chainType.name(), "evm-canonical", blockHeight,
                 block.getHash(), block.getParentHash());
     }
-
     private Web3j web3j(String rpcUrl) {
         return Web3j.build(new HttpService(rpcUrl));
     }
-
     private AccountChainProfile profile(ChainType chainType) {
         return repository.findProfileByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
     }
-
     private <T> T withDefaultRpc(IoRpcRequest<T> request) throws IOException {
         return withDefaultRpc(ChainType.ETH, request);
     }
-
     private <T> T withDefaultRpc(ChainType chainType, IoRpcRequest<T> request) throws IOException {
         if (fixedRpcUrl != null && !fixedRpcUrl.isBlank()) {
             return request.apply(fixedRpcUrl);
@@ -352,7 +327,6 @@ public class EvmDepositScanner {
     private interface IoRpcRequest<T> {
         T apply(String rpcUrl) throws IOException;
     }
-
     private static class RpcIoException extends RuntimeException {
         RpcIoException(IOException cause) {
             super(cause);
@@ -363,22 +337,18 @@ public class EvmDepositScanner {
             return (IOException) super.getCause();
         }
     }
-
     private static int confirmations(BigInteger latest, long blockHeight) {
         BigInteger confirmations = latest.subtract(BigInteger.valueOf(blockHeight)).add(BigInteger.ONE);
         return confirmations.signum() < 0 ? 0 : confirmations.min(BigInteger.valueOf(Integer.MAX_VALUE)).intValue();
     }
-
     private static BigDecimal weiToEth(BigInteger wei) {
         return new BigDecimal(wei).divide(WEI_PER_ETH, 18, RoundingMode.DOWN);
     }
-
     private void requireTaskEnabled(ChainType chainType, String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(chainType.name(), task, operation);
         }
     }
-
     private static String lower(String address) {
         return address == null ? null : address.toLowerCase(Locale.ROOT);
     }

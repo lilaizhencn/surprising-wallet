@@ -5,19 +5,21 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /**
- * Dedicated thread pools per job category to prevent slow or stuck jobs from
- * starving unrelated schedulers.
- * <p>
- * Jobs reference their scheduler by bean name:
- * {@code @Scheduled(scheduler = "custodyTaskScheduler", ...)}.
- * <p>
- * The default pool (for jobs without an explicit scheduler) is configured via
- * {@code spring.task.scheduling.pool.size} in application.yaml.
+ * 按任务类型隔离调度线程池，避免单个慢任务影响其他定时任务。
+ *
+ * <p>每个 Job 都应通过 {@code @Scheduled(scheduler = "...")} 显式指定池名，
+ * 便于链路级限流和故障隔离。</p>
+ *
+ * <p>未显式指定调度器的任务使用全局配置
+ * {@code spring.task.scheduling.pool.size}。</p>
  */
 @Configuration
 public class SchedulingConfig {
 
-    /** Fast custody reconciliation / dispatch jobs (500ms–2s fixed delay). */
+    /**
+     * 托管清结算与派发类任务（默认 500ms~2s）。
+     * 主要用于 webhook 派发、提现状态对账、gas 结算等低延迟任务。
+     */
     @Bean(name = "custodyTaskScheduler", destroyMethod = "shutdown")
     public ThreadPoolTaskScheduler custodyTaskScheduler() {
         ThreadPoolTaskScheduler s = new ThreadPoolTaskScheduler();
@@ -28,7 +30,9 @@ public class SchedulingConfig {
         return s;
     }
 
-    /** EIP-7702 collection / withdrawal workflow (3s–5s fixed delay, IO-heavy). */
+    /**
+     * EIP-7702 批量归集/提现工作流专用池（偏 I/O 密集，默认 3~5 秒间隔）。
+     */
     @Bean(name = "evm7702TaskScheduler", destroyMethod = "shutdown")
     public ThreadPoolTaskScheduler evm7702TaskScheduler() {
         ThreadPoolTaskScheduler s = new ThreadPoolTaskScheduler();
@@ -39,7 +43,9 @@ public class SchedulingConfig {
         return s;
     }
 
-    /** Account-chain workflow jobs (deposit scan / withdrawal / collection cron). */
+    /**
+     * Account-Chain 全链路任务池：充值扫描、提现处理、归集、确认等。
+     */
     @Bean(name = "accountTaskScheduler", destroyMethod = "shutdown")
     public ThreadPoolTaskScheduler accountTaskScheduler() {
         ThreadPoolTaskScheduler s = new ThreadPoolTaskScheduler();
@@ -50,7 +56,9 @@ public class SchedulingConfig {
         return s;
     }
 
-    /** Deposit block-scanning jobs (UTXO chains, each ~59s cron). */
+    /**
+     * 区块扫描任务池：UTXO 链扫描器按固定周期推进链上高度。
+     */
     @Bean(name = "depositTaskScheduler", destroyMethod = "shutdown")
     public ThreadPoolTaskScheduler depositTaskScheduler() {
         ThreadPoolTaskScheduler s = new ThreadPoolTaskScheduler();
@@ -61,7 +69,9 @@ public class SchedulingConfig {
         return s;
     }
 
-    /** Withdraw batch / signing / fee-rate jobs (cron 30s–2min). */
+    /**
+     * 提现链路专用池：提单出池、签名重放、广播、RBF 及 fee rate 更新。
+     */
     @Bean(name = "withdrawTaskScheduler", destroyMethod = "shutdown")
     public ThreadPoolTaskScheduler withdrawTaskScheduler() {
         ThreadPoolTaskScheduler s = new ThreadPoolTaskScheduler();

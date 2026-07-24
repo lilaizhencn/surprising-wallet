@@ -7,7 +7,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 @Configuration
-public class WalletKeyConfiguration {
+public
+class WalletKeyConfiguration {
     @Bean
     WalletKeyConfigStore walletKeyConfigStore(JdbcTemplate jdbcTemplate) {
         return new WalletKeyConfigStore(jdbcTemplate);

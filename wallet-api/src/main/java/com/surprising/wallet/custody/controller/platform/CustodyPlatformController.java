@@ -31,10 +31,16 @@ import com.surprising.wallet.custody.service.CustodyTenantService;
 @RestController
 @RequestMapping("/custody/platform/v1")
 public class CustodyPlatformController {
+    /** 平台鉴权服务。 */
     private final CustodyAuthService auth;
+    /** 平台租户管理服务。 */
     private final CustodyTenantService tenants;
+    /** 平台资产仪表盘服务。 */
     private final CustodyAssetDashboardService assets;
 
+    /**
+     * 注入平台鉴权、租户与资产服务。
+     */
     public CustodyPlatformController(CustodyAuthService auth, CustodyTenantService tenants,
                                      CustodyAssetDashboardService assets) {
         this.auth = auth;
@@ -42,6 +48,9 @@ public class CustodyPlatformController {
         this.assets = assets;
     }
 
+    /**
+     * 管理员登录，签发会话 token 并返回。
+     */
     @PostMapping("/auth/login")
     public CustodyAuthService.LoginResult login(@RequestBody PlatformLoginRequest body,
                                                 HttpServletRequest request,
@@ -54,6 +63,9 @@ public class CustodyPlatformController {
         return result;
     }
 
+    /**
+     * 当前会话身份信息。
+     */
     @GetMapping("/auth/me")
     public Map<String, Object> me(HttpServletRequest request) {
         CustodyPrincipal principal = CustodyRequestSupport.requirePrincipal(request);
@@ -63,6 +75,9 @@ public class CustodyPlatformController {
                 "scopes", principal.scopes());
     }
 
+    /**
+     * 清理登录会话并返回成功。
+     */
     @PostMapping("/auth/logout")
     public Map<String, Object> logout(HttpServletRequest request, HttpServletResponse response) {
         auth.logout(request);
@@ -70,6 +85,9 @@ public class CustodyPlatformController {
         return Map.of("ok", true);
     }
 
+    /**
+     * 分页查询租户列表。
+     */
     @GetMapping("/tenants")
     public TenantPage tenants(
             @RequestParam(defaultValue = "") String search,
@@ -82,6 +100,9 @@ public class CustodyPlatformController {
                 search, status, limit, offset);
     }
 
+    /**
+     * 创建新租户。
+     */
     @PostMapping("/tenants")
     public CustodyRepository.TenantRecord createTenant(@RequestBody CreateTenantCommand body,
                                                         HttpServletRequest request) {
@@ -89,12 +110,18 @@ public class CustodyPlatformController {
                 CustodyRequestSupport.clientIp(request));
     }
 
+    /**
+     * 查询租户详情。
+     */
     @GetMapping("/tenants/{tenantId}")
     public TenantDetail tenant(@PathVariable UUID tenantId,
                                HttpServletRequest request) {
         return tenants.detail(CustodyRequestSupport.requirePrincipal(request), tenantId);
     }
 
+    /**
+     * 更新租户基本信息。
+     */
     @PatchMapping("/tenants/{tenantId}")
     public CustodyRepository.TenantRecord updateTenant(
             @PathVariable UUID tenantId,
@@ -107,6 +134,9 @@ public class CustodyPlatformController {
                 CustodyRequestSupport.clientIp(request));
     }
 
+    /**
+     * 更新租户状态（启用/禁用）。
+     */
     @PatchMapping("/tenants/{tenantId}/status")
     public CustodyRepository.TenantRecord status(@PathVariable UUID tenantId,
                                                  @RequestBody TenantStatusRequest body,
@@ -115,6 +145,9 @@ public class CustodyPlatformController {
                 body.status(), CustodyRequestSupport.clientIp(request));
     }
 
+    /**
+     * 解锁租户管理员账号。
+     */
     @PostMapping("/tenants/{tenantId}/administrators/{userId}/unlock")
     public Map<String, Object> unlockAdministrator(
             @PathVariable UUID tenantId,
@@ -127,12 +160,18 @@ public class CustodyPlatformController {
                 CustodyRequestSupport.clientIp(request));
     }
 
+    /**
+     * 查询资产价格设置。
+     */
     @GetMapping("/asset-prices")
     public java.util.List<CustodyAssetDashboardRepository.AssetPrice> assetPrices(
             HttpServletRequest request) {
         return assets.prices(CustodyRequestSupport.requirePrincipal(request));
     }
 
+    /**
+     * 更新资产价格快照。
+     */
     @PutMapping("/asset-prices/{symbol}")
     public CustodyAssetDashboardRepository.AssetPrice setAssetPrice(
             @PathVariable String symbol,
@@ -142,9 +181,15 @@ public class CustodyPlatformController {
                 CustodyRequestSupport.clientIp(request));
     }
 
+    /**
+     * 平台登录请求体。
+     */
     public record PlatformLoginRequest(String email, String password) {
     }
 
+    /**
+     * 租户状态更新请求体。
+     */
     public record TenantStatusRequest(String status) {
     }
 }

@@ -8,7 +8,6 @@ import java.util.UUID;
  */
 public interface DepositReorgObserver {
     void onDepositReorged(ReorgedDeposit deposit);
-
     record ReorgedDeposit(
             long depositRecordId,
             UUID tenantId,

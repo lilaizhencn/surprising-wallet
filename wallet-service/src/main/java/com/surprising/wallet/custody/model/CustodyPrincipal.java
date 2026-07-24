@@ -10,17 +10,14 @@ public record CustodyPrincipal(
         String tenantSlug,
         String role,
         Set<String> scopes
-) {
-    public enum ActorType {
+) {    public enum ActorType {
         PLATFORM_USER,
         TENANT_USER,
         API_KEY
     }
-
     public boolean isPlatformAdmin() {
         return actorType == ActorType.PLATFORM_USER && "PLATFORM_ADMIN".equals(role);
     }
-
     public boolean hasScope(String scope) {
         return scopes != null && (scopes.contains("*") || scopes.contains(scope));
     }

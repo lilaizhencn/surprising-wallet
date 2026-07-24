@@ -37,7 +37,6 @@ public class EvmLogScanner {
         }
         return events;
     }
-
     private static String topicToAddress(String topic) {
         if (topic == null) {
             return null;
@@ -45,11 +44,9 @@ public class EvmLogScanner {
         String hex = stripHex(topic);
         return "0x" + hex.substring(Math.max(0, hex.length() - 40));
     }
-
     private static String stripHex(String value) {
         return value == null ? "" : value.startsWith("0x") ? value.substring(2) : value;
     }
-
     private static int requireTokenDecimals(TokenDefinition tokenDefinition) {
         if (tokenDefinition == null || tokenDefinition.getDecimals() == null) {
             String chain = tokenDefinition == null ? null : tokenDefinition.getChain();

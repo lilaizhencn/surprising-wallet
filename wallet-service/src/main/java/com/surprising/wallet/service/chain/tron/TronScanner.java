@@ -44,7 +44,6 @@ public class TronScanner {
         }
         return transfers;
     }
-
     public record TokenConfig(String symbol, String contractHex, int decimals) {
         public TokenConfig {
             contractHex = TronAddressCodec.normalizeHexAddress(contractHex);
@@ -55,7 +54,6 @@ public class TronScanner {
                                          java.math.BigDecimal amount, java.math.BigInteger rawAmount,
                                          long blockHeight, long logIndex) {
     }
-
     private static String normalizeLogContractAddress(Response.TransactionInfo.Log log) {
         String rawHex = Numeric.toHexStringNoPrefix(log.getAddress().toByteArray()).toLowerCase(Locale.ROOT);
         if (rawHex.length() == 40) {

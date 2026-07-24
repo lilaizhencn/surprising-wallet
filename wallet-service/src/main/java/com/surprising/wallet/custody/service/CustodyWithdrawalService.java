@@ -22,14 +22,7 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class CustodyWithdrawalService {
-    private static final String CREATE_OPERATION = "WITHDRAWAL.CREATE";
-
-    private final CustodyRepository repository;
-    private final CustodyWithdrawalExecutionService executionService;
-    private final CustodyGasService gasService;
-    private final CustodyTenantChainService tenantChains;
-    private final CustodyCryptoService crypto;
-    private final ObjectMapper objectMapper;
+    private static final String CREATE_OPERATION = "WITHDRAWAL.CREATE";    private final CustodyRepository repository;    private final CustodyWithdrawalExecutionService executionService;    private final CustodyGasService gasService;    private final CustodyTenantChainService tenantChains;    private final CustodyCryptoService crypto;    private final ObjectMapper objectMapper;
 
     public CustodyWithdrawalService(CustodyRepository repository,
                                     CustodyWithdrawalExecutionService executionService,
@@ -175,7 +168,6 @@ public class CustodyWithdrawalService {
                 principal.tenantId(), upperOrEmpty(chain), upperOrEmpty(assetSymbol),
                 upperOrEmpty(status), search, limit, offset);
     }
-
     private WithdrawalView replay(UUID tenantId, String key, String requestHash) {
         IdempotencyRecord existing = repository.findIdempotency(tenantId, key, CREATE_OPERATION)
                 .orElse(null);
@@ -194,7 +186,6 @@ public class CustodyWithdrawalService {
             throw new IllegalStateException("stored idempotent response is invalid", e);
         }
     }
-
     String eventPayload(UUID eventId, String eventType, WithdrawalView view) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("withdrawalId", view.id());
@@ -215,7 +206,6 @@ public class CustodyWithdrawalService {
                 "createdAt", Instant.now(),
                 "data", data));
     }
-
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -223,7 +213,6 @@ public class CustodyWithdrawalService {
             throw new IllegalArgumentException("value cannot be serialized as JSON", e);
         }
     }
-
     private static String normalizeSource(String source) {
         String value = source == null ? "" : source.trim().toUpperCase(Locale.ROOT);
         if (!"API".equals(value) && !"CONSOLE".equals(value)) {
@@ -231,7 +220,6 @@ public class CustodyWithdrawalService {
         }
         return value;
     }
-
     private static String requireUpper(String value, String field, int max) {
         String result = required(value, field, max).toUpperCase(Locale.ROOT);
         if (!result.matches("^[A-Z][A-Z0-9_]{1," + (max - 1) + "}$")) {
@@ -239,7 +227,6 @@ public class CustodyWithdrawalService {
         }
         return result;
     }
-
     private static String required(String value, String field, int max) {
         String result = value == null ? "" : value.trim();
         if (result.isBlank() || result.length() > max) {
@@ -247,7 +234,6 @@ public class CustodyWithdrawalService {
         }
         return result;
     }
-
     private static String optional(String value, int max) {
         String result = value == null ? "" : value.trim();
         if (result.length() > max) {
@@ -255,7 +241,6 @@ public class CustodyWithdrawalService {
         }
         return result.isBlank() ? null : result;
     }
-
     private static String requireIdempotencyKey(String value) {
         String key = value == null ? "" : value.trim();
         if (!key.matches("^[A-Za-z0-9._:-]{8,160}$")) {
@@ -264,11 +249,9 @@ public class CustodyWithdrawalService {
         }
         return key;
     }
-
     private static String upperOrEmpty(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
-
     private static void requireScope(CustodyPrincipal principal, String scope) {
         if (principal == null || principal.tenantId() == null || !principal.hasScope(scope)) {
             throw new CustodyForbiddenException(scope + " scope required");

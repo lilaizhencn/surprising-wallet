@@ -27,36 +27,26 @@ import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
-public class PolkadotRuntimeClient {
-    static final String CHAIN = "DOT";
-    private static final String PURPOSE_NATIVE_RPC = "rpc";
-    private static final String PURPOSE_ASSET_RPC = "asset_rpc";
-    private static final String PURPOSE_RUNTIME = "runtime";
-
-    private final ChainJdbcRepository repository;
-    private final ChainRpcNodeService rpcNodeService;
+public
+class PolkadotRuntimeClient {
+    static final String CHAIN = "DOT";    private static final String PURPOSE_NATIVE_RPC = "rpc";    private static final String PURPOSE_ASSET_RPC = "asset_rpc";    private static final String PURPOSE_RUNTIME = "runtime";    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .version(HttpClient.Version.HTTP_1_1)
             .build();
-
     public long latestFinalizedHeight() {
         return latestFinalizedHeight(PURPOSE_NATIVE_RPC);
     }
-
     public long latestAssetHubFinalizedHeight() {
         return latestFinalizedHeight(PURPOSE_ASSET_RPC);
     }
-
     public BigInteger nativeBalance(String address) {
         return nativeBalance(address, PURPOSE_NATIVE_RPC);
     }
-
     public BigInteger assetHubNativeBalance(String address) {
         return nativeBalance(address, PURPOSE_ASSET_RPC);
     }
-
     public BigInteger assetBalance(String assetId, String address) {
         ObjectNode body = baseBody();
         body.put("ss58Prefix", ss58Prefix(profile()));
@@ -65,7 +55,6 @@ public class PolkadotRuntimeClient {
         return amountPlanck(callRuntime("/v1/polkadot/asset-balance", PURPOSE_ASSET_RPC, body)
                 .path("balance"));
     }
-
     public AssetInfo assetInfo(String assetId) {
         ObjectNode body = baseBody();
         body.put("assetId", normalizeAssetId(assetId));
@@ -116,11 +105,9 @@ public class PolkadotRuntimeClient {
         return scanTransfers(PURPOSE_ASSET_RPC, fromBlock, toBlock, addresses,
                 tokensByAssetId.keySet(), false, true);
     }
-
     private long latestFinalizedHeight(String rpcPurpose) {
         return callRuntime("/v1/polkadot/latest-finalized", rpcPurpose, baseBody()).path("height").asLong();
     }
-
     private BigInteger nativeBalance(String address, String rpcPurpose) {
         ObjectNode body = baseBody();
         body.put("ss58Prefix", ss58Prefix(profile()));
@@ -214,15 +201,12 @@ public class PolkadotRuntimeClient {
         JsonNode result = callRuntime("/v1/polkadot/asset-transfer", PURPOSE_ASSET_RPC, body);
         return submitted(result);
     }
-
     public boolean transactionFinalized(String txHash, int maxRecentBlocks) {
         return transactionFinalized(txHash, maxRecentBlocks, PURPOSE_NATIVE_RPC);
     }
-
     public boolean assetTransactionFinalized(String txHash, int maxRecentBlocks) {
         return transactionFinalized(txHash, maxRecentBlocks, PURPOSE_ASSET_RPC);
     }
-
     private boolean transactionFinalized(String txHash, int maxRecentBlocks, String rpcPurpose) {
         ObjectNode body = baseBody();
         body.put("txHash", txHash);
@@ -230,7 +214,6 @@ public class PolkadotRuntimeClient {
         return callRuntime("/v1/polkadot/transaction-status", rpcPurpose, body)
                 .path("finalized").asBoolean(false);
     }
-
     private JsonNode callRuntime(String path, String rpcPurpose, ObjectNode body) {
         AccountChainProfile profile = profile();
         List<ChainRpcNode> substrateNodes = rpcNodeService.enabledNodes(CHAIN, profile.getNetwork(), rpcPurpose);
@@ -256,7 +239,6 @@ public class PolkadotRuntimeClient {
                 ? new IllegalStateException("all Polkadot substrate rpc nodes failed for purpose=" + rpcPurpose)
                 : last;
     }
-
     private JsonNode execute(ChainRpcNode node, String path, ObjectNode body) {
         try {
             String baseUrl = trim(node.getRpcUrl());
@@ -293,18 +275,15 @@ public class PolkadotRuntimeClient {
             throw new IllegalStateException("Polkadot runtime interrupted: " + path, e);
         }
     }
-
     private ObjectNode baseBody() {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("chain", CHAIN);
         return body;
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     static int ss58Prefix(AccountChainProfile profile) {
         if (profile.getChainId() != null && profile.getChainId() >= 0 && profile.getChainId() <= 16_383) {
             return profile.getChainId().intValue();
@@ -315,28 +294,23 @@ public class PolkadotRuntimeClient {
         }
         return 42;
     }
-
     static String normalizeAssetId(String value) {
         String assetId = trim(value);
         return assetId.isBlank() ? "" : assetId;
     }
-
     static BigInteger amountPlanck(JsonNode node) {
         String value = node == null || node.isMissingNode() || node.isNull() ? "0" : node.asText("0");
         return new BigInteger(value);
     }
-
     private static SubmittedTransaction submitted(JsonNode result) {
         return new SubmittedTransaction(result.path("txHash").asText(),
                 result.path("blockHeight").asLong(0L),
                 result.path("status").asText("FINALIZED"),
                 result.toString());
     }
-
     private static String trim(String value) {
         return value == null ? "" : value.trim();
     }
-
     private static String abbreviate(String value) {
         if (value == null || value.isBlank()) {
             return "<empty>";
@@ -348,7 +322,6 @@ public class PolkadotRuntimeClient {
                                 BigInteger amountPlanck, long blockHeight, long eventIndex,
                                 String assetId, String rawPayload) {
     }
-
     public record SubmittedTransaction(String txHash, long blockHeight, String status, String rawPayload) {
     }
 

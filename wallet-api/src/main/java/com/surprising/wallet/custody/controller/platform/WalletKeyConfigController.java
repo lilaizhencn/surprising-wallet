@@ -13,17 +13,27 @@ import com.surprising.wallet.custody.service.WalletKeyConfigService;
 @RestController
 @RequestMapping("/custody/platform/v1/wallet-config/keyset")
 public class WalletKeyConfigController {
+    /** 密钥服务。 */
     private final WalletKeyConfigService service;
 
+    /**
+     * 注入密钥服务。
+     */
     public WalletKeyConfigController(WalletKeyConfigService service) {
         this.service = service;
     }
 
+    /**
+     * 查询当前有效密钥材料视图。
+     */
     @GetMapping
     public WalletKeyConfigService.KeysetView get(HttpServletRequest request) {
         return service.get(CustodyRequestSupport.requirePrincipal(request));
     }
 
+    /**
+     * 覆盖保存密钥配置（审计与生效记录）。
+     */
     @PutMapping
     public WalletKeyConfigService.KeysetView save(
             @RequestBody WalletKeyConfigService.SaveKeysetCommand body,

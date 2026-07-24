@@ -9,7 +9,8 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 
 @Component
-public class TronChainAdapter implements BlockchainAdapter {
+public
+class TronChainAdapter implements BlockchainAdapter {
     private final TronEnergyEstimator energyEstimator = new TronEnergyEstimator();
 
     @Override

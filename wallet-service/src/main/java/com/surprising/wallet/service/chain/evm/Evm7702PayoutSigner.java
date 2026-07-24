@@ -23,7 +23,6 @@ public class Evm7702PayoutSigner {
             "PayoutItem(bytes32 withdrawalId,uint256 itemIndex,address token,address recipient,uint256 amount,uint256 callGasLimit)");
     static final byte[] REQUEST_TYPEHASH = hashUtf8(
             "PayoutRequest(bytes32 batchId,address authority,address executor,bytes32 itemsHash,uint256 operationNonce,uint256 deadline)");
-
     public byte[] digest(BigInteger chainId, Evm7702PayoutRequest request) {
         Evm7702PayoutItem.requireUint(chainId, "chainId", false);
         byte[] domainSeparator = abiHash(List.of(
@@ -41,7 +40,6 @@ public class Evm7702PayoutSigner {
         System.arraycopy(structHash, 0, payload, 34, 32);
         return Hash.sha3(payload);
     }
-
     public byte[] itemsHash(List<Evm7702PayoutItem> items) {
         byte[] encoded = new byte[items.size() * 32];
         for (int index = 0; index < items.size(); index++) {
@@ -55,7 +53,6 @@ public class Evm7702PayoutSigner {
         }
         return Hash.sha3(encoded);
     }
-
     public byte[] sign(BigInteger chainId, Evm7702PayoutRequest request, Credentials authority) {
         if (authority == null || !authority.getAddress().equalsIgnoreCase(request.authority())) {
             throw new IllegalArgumentException("authority credentials do not match payout request");
@@ -67,11 +64,9 @@ public class Evm7702PayoutSigner {
         encoded[64] = signature.getV()[0];
         return encoded;
     }
-
     private static byte[] abiHash(List<Type> values) {
         return Hash.sha3(Numeric.hexStringToByteArray(FunctionEncoder.encodeConstructor(values)));
     }
-
     private static byte[] hashUtf8(String value) {
         return Hash.sha3(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }

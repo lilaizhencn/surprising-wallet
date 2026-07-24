@@ -23,9 +23,7 @@ import java.util.UUID;
 /** Tenant-scoped persistence and outbox for EIP-7702 collection batches. */
 @Repository
 public class Evm7702CollectionRepository {
-    private final JdbcTemplate jdbc;
-
-    public Evm7702CollectionRepository(JdbcTemplate jdbc) {
+    private final JdbcTemplate jdbc;    public Evm7702CollectionRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
@@ -38,7 +36,6 @@ public class Evm7702CollectionRepository {
                 on conflict (tenant_id, custody_address_id, chain) do nothing
                 """, UUID.randomUUID(), tenantId, custodyAddressId, chain, network, authorityAddress);
     }
-
     public Optional<RuntimeConfig> findRuntimeConfig(String chain, String network, String status) {
         return jdbc.query("""
                         select c.id, c.chain, c.network, c.chain_id, c.version,
@@ -60,13 +57,11 @@ public class Evm7702CollectionRepository {
                         """, (rs, rowNum) -> mapConfig(rs), chain, network, status)
                 .stream().findFirst();
     }
-
     public RuntimeConfig requireActiveConfig(String chain, String network) {
         return findRuntimeConfig(chain, network, "ACTIVE")
                 .orElseThrow(() -> new IllegalStateException(
                         "EIP-7702 ACTIVE configuration is missing for " + chain + "/" + network));
     }
-
     public RuntimeConfig requireRuntimeConfigVersion(String chain, String network, int version) {
         return jdbc.query("""
                         select c.id, c.chain, c.network, c.chain_id, c.version,
@@ -90,7 +85,6 @@ public class Evm7702CollectionRepository {
                         "EIP-7702 configuration version is missing for "
                                 + chain + "/" + network + "/" + version));
     }
-
     public List<RuntimeTarget> listRuntimeTargets() {
         return jdbc.query("""
                 select p.chain, p.network,
@@ -111,7 +105,6 @@ public class Evm7702CollectionRepository {
                 """, (rs, rowNum) -> new RuntimeTarget(
                 rs.getString("chain"), rs.getString("network"), rs.getBoolean("active")));
     }
-
     public List<UnknownAttempt> listUnknownAttempts(String chain, String network, int limit) {
         return jdbc.query("""
                 select b.tenant_id, b.id batch_id, a.tx_hash,
@@ -130,7 +123,6 @@ public class Evm7702CollectionRepository {
                 rs.getString("tx_hash"), rs.getString("signed_tx_ciphertext"),
                 rs.getInt("rebroadcast_count")), chain, network, Math.min(Math.max(limit, 1), 100));
     }
-
     public void recordRecoveryAttempt(UnknownAttempt attempt) {
         jdbc.update("""
                 update evm_collection_batch_attempt
@@ -140,7 +132,6 @@ public class Evm7702CollectionRepository {
                  where tenant_id = ? and batch_id = ? and tx_hash = ? and status = 'UNKNOWN'
                 """, attempt.tenantId(), attempt.batchId(), attempt.txHash());
     }
-
     public void markRecoveryError(UnknownAttempt attempt, String errorCode, String errorMessage) {
         jdbc.update("""
                 update evm_collection_batch_attempt
@@ -375,7 +366,6 @@ public class Evm7702CollectionRepository {
                    and cr.status in ('SIGNING', 'SENT')
                 """, txHash, tenantId, batchId);
     }
-
     public void markBroadcastUnknown(UUID tenantId, UUID batchId, String errorCode, String errorMessage) {
         jdbc.update("""
                 update evm_collection_batch
@@ -388,7 +378,6 @@ public class Evm7702CollectionRepository {
                  where tenant_id = ? and batch_id = ? and status = 'CREATED'
                 """, errorCode, truncate(errorMessage, 1000), tenantId, batchId);
     }
-
     public Optional<PendingBatch> findPendingBatch(UUID tenantId, UUID batchId) {
         return jdbc.query("""
                 select b.tenant_id, b.id, b.canonical_tx_hash, b.status,
@@ -404,7 +393,6 @@ public class Evm7702CollectionRepository {
                 rs.getInt("required_confirmations"), rs.getString("collector_address")), tenantId, batchId)
                 .stream().findFirst();
     }
-
     public List<PendingBatch> listPendingBatches(String chain, String network, int limit) {
         return jdbc.query("""
                 select b.tenant_id, b.id, b.canonical_tx_hash, b.status,
@@ -423,7 +411,6 @@ public class Evm7702CollectionRepository {
                 rs.getInt("required_confirmations"), rs.getString("collector_address")),
                 chain, network, Math.min(Math.max(limit, 1), 200));
     }
-
     public List<BatchItemIdentity> listBatchItemIdentities(UUID tenantId, UUID batchId) {
         return jdbc.query("""
                 select item_index, authority_address, token_contract, recipient,
@@ -575,7 +562,6 @@ public class Evm7702CollectionRepository {
                    and cr.status = 'SIGNING'
                 """, truncate(errorMessage, 1000), batch.tenantId(), batch.id());
     }
-
     private RuntimeConfig mapConfig(ResultSet rs) throws SQLException {
         String configuredRelayer = rs.getString("relayer_address");
         String derivedRelayer = rs.getString("address");
@@ -612,7 +598,6 @@ public class Evm7702CollectionRepository {
                 rs.getBoolean("batch_withdrawal_enabled"), rs.getInt("withdrawal_max_wait_ms"),
                 rs.getInt("withdrawal_max_batch_items"), relayer);
     }
-
     private ClaimedItem mapClaimedItem(ResultSet rs, int decimals) throws SQLException {
         BigDecimal amount = rs.getBigDecimal("amount");
         BigInteger atomic;
@@ -643,7 +628,6 @@ public class Evm7702CollectionRepository {
                 rs.getObject("tenant_id", UUID.class), rs.getObject("custody_address_id", UUID.class),
                 rs.getString("from_address"), rs.getString("to_address"), amount, atomic, authority);
     }
-
     private static String truncate(String value, int max) {
         if (value == null) return null;
         return value.length() <= max ? value : value.substring(0, max);
@@ -701,7 +685,6 @@ public class Evm7702CollectionRepository {
             UUID tenantId, UUID batchId, String txHash,
             String signedTxCiphertext, int rebroadcastCount) {
     }
-
     public record RuntimeTarget(String chain, String network, boolean active) {
     }
 

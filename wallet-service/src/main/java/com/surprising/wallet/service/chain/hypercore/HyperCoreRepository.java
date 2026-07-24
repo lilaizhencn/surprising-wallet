@@ -17,11 +17,9 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class HyperCoreRepository {
-    private static final String CHAIN = "HYPERCORE";
-
-    private final JdbcTemplate jdbcTemplate;
-    private final ChainJdbcRepository chainRepository;
+public
+class HyperCoreRepository {
+    private static final String CHAIN = "HYPERCORE";    private final JdbcTemplate jdbcTemplate;    private final ChainJdbcRepository chainRepository;
 
     @Transactional(rollbackFor = Throwable.class)
     public Optional<BigDecimal> recordObservedBalance(ChainAddressRecord address, String symbol,
@@ -137,7 +135,6 @@ public class HyperCoreRepository {
                 actionId, actionType, CHAIN, assetSymbol, fromAddress, toAddress, amount, nonce,
                 requestPayload, tsNow(), tsNow());
     }
-
     public void markActionAccepted(String actionId, String responsePayload) {
         jdbcTemplate.update("""
                         update hypercore_action_record
@@ -148,7 +145,6 @@ public class HyperCoreRepository {
                          where action_id = ?
                         """, responsePayload, tsNow(), actionId);
     }
-
     public void markActionFailed(String actionId, String errorMessage) {
         jdbcTemplate.update("""
                         update hypercore_action_record
@@ -158,7 +154,6 @@ public class HyperCoreRepository {
                          where action_id = ?
                         """, errorMessage, tsNow(), actionId);
     }
-
     public boolean actionAccepted(String actionId) {
         Boolean exists = jdbcTemplate.queryForObject("""
                         select exists(
@@ -168,7 +163,6 @@ public class HyperCoreRepository {
                         """, Boolean.class, actionId);
         return Boolean.TRUE.equals(exists);
     }
-
     public Optional<String> tokenNameBySymbol(String network, String symbol) {
         List<String> values = jdbcTemplate.queryForList("""
                         select name
@@ -179,7 +173,6 @@ public class HyperCoreRepository {
                         """, String.class, network, symbol);
         return values.stream().findFirst();
     }
-
     private static Timestamp tsNow() {
         return Timestamp.from(Instant.now());
     }

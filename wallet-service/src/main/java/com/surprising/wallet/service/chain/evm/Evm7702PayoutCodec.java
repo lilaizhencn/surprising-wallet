@@ -13,8 +13,7 @@ import java.util.List;
 
 /** ABI codec for Eip7702PayoutDelegate.payoutBatch. */
 public class Evm7702PayoutCodec {
-    public String encode(Evm7702PayoutRequest request, byte[] signature) {
-        if (signature == null || signature.length != 65) {
+    public String encode(Evm7702PayoutRequest request, byte[] signature) {        if (signature == null || signature.length != 65) {
             throw new IllegalArgumentException("payout authority signature must contain 65 bytes");
         }
         List<PayoutItemStruct> items = request.items().stream().map(PayoutItemStruct::new).toList();
@@ -27,7 +26,6 @@ public class Evm7702PayoutCodec {
                 List.of());
         return FunctionEncoder.encode(function);
     }
-
     public static final class PayoutItemStruct extends StaticStruct {
         PayoutItemStruct(Evm7702PayoutItem item) {
             super(new Bytes32(item.withdrawalId()), new Uint256(item.itemIndex()),

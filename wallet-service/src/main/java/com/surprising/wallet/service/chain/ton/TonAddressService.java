@@ -13,11 +13,9 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class TonAddressService {
-    private static final String CHAIN = "TON";
-
-    private final TonKeyService keyService;
-    private final ChainJdbcRepository repository;
+public
+class TonAddressService {
+    private static final String CHAIN = "TON";    private final TonKeyService keyService;    private final ChainJdbcRepository repository;
 
     public ChainAddressRecord createNativeAddress(UUID tenantId, long userId, int biz,
                                                   long derivationIndex, String walletRole) {
@@ -75,11 +73,9 @@ public class TonAddressService {
                             .orElseThrow();
                 });
     }
-
     public String normalizeRaw(String address) {
         return Address.of(address).toRaw();
     }
-
     private String friendly(Address address, boolean bounceable) {
         boolean testnet = repository.findProfileByChain(CHAIN)
                 .map(profile -> profile.getNetwork().toLowerCase(java.util.Locale.ROOT).contains("test"))

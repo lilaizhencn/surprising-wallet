@@ -4,18 +4,13 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.random.RandomGenerator;
-
 public final class DevFaucetAmountGenerator {
-    private final RandomGenerator random;
-
-    public DevFaucetAmountGenerator() {
+    private final RandomGenerator random;    public DevFaucetAmountGenerator() {
         this(new SecureRandom());
     }
-
     public DevFaucetAmountGenerator(RandomGenerator random) {
         this.random = random;
     }
-
     public BigDecimal next(DevFaucetProperties.AmountRange range) {
         int scale = range.getScale();
         BigInteger min = range.getMin().movePointRight(scale).toBigIntegerExact();

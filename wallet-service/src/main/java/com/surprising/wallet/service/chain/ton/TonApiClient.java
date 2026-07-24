@@ -19,15 +19,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 @Component
-public class TonApiClient {
-    private static final String CHAIN = "TON";
-
-    private final ObjectMapper objectMapper;
-    private final HttpClient httpClient;
-    private final ChainJdbcRepository repository;
-    private final ChainRpcNodeService rpcNodeService;
-    private final String fixedBaseUrl;
-    private final String fixedApiKey;
+public
+class TonApiClient {
+    private static final String CHAIN = "TON";    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedBaseUrl;    private final String fixedApiKey;
 
     @Autowired
     public TonApiClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
@@ -47,7 +41,6 @@ public class TonApiClient {
         this.fixedApiKey = apiKey == null ? "" : apiKey;
         this.httpClient = buildHttpClient();
     }
-
     public String resolveJettonWallet(String ownerAddress, String jettonMaster) {
         JsonNode result = get("/v2/accounts/" + encode(ownerAddress)
                 + "/jettons/" + encode(jettonMaster));
@@ -57,7 +50,6 @@ public class TonApiClient {
         }
         return address;
     }
-
     private JsonNode get(String path) {
         if (!fixedBaseUrl.isBlank()) {
             return execute(fixedBaseUrl + path, null, fixedApiKey);
@@ -68,7 +60,6 @@ public class TonApiClient {
         return rpcNodeService.withFailover(CHAIN, network, "indexer",
                 node -> execute(trim(node.getRpcUrl()) + path, node, ""));
     }
-
     private JsonNode execute(String url, ChainRpcNode node, String apiKey) {
         try {
             HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
@@ -93,15 +84,12 @@ public class TonApiClient {
             throw new IllegalStateException("TON API interrupted", e);
         }
     }
-
     private static String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
-
     private static String trim(String value) {
         return value == null ? "" : value.replaceAll("/+$", "");
     }
-
     private static HttpClient buildHttpClient() {
         try {
             SSLContext context = SSLContext.getInstance("TLSv1.2");

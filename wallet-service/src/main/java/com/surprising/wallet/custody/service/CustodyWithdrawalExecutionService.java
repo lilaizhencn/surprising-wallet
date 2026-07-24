@@ -24,10 +24,7 @@ import java.util.UUID;
 @Service
 public class CustodyWithdrawalExecutionService {
     private static final SecureRandom RANDOM = new SecureRandom();
-
-    private final JdbcTemplate jdbc;
-    private final ChainJdbcRepository chains;
-    private final WalletRuntimeConfigService runtimeConfig;
+    private final JdbcTemplate jdbc;    private final ChainJdbcRepository chains;    private final WalletRuntimeConfigService runtimeConfig;
 
     public CustodyWithdrawalExecutionService(JdbcTemplate jdbc, ChainJdbcRepository chains,
                                              WalletRuntimeConfigService runtimeConfig) {
@@ -71,7 +68,6 @@ public class CustodyWithdrawalExecutionService {
         return new ExecutionResult(orderNo, status, chain, symbol, amount,
                 asset.networkFeeReserve(), toAddress, sourceAddress, spend.address(), approvalRequired);
     }
-
     private AssetMeta requireAsset(String chain, String symbol) {
         List<Map<String, Object>> rows = jdbc.queryForList("""
                 select a.native_asset, cp.native_symbol, cp.default_fee_rate,
@@ -128,7 +124,6 @@ public class CustodyWithdrawalExecutionService {
         Map<String, Object> row = rows.getFirst();
         return new SpendAccount(String.valueOf(row.get("account_id")), String.valueOf(row.get("address")));
     }
-
     private String withdrawalSourceAddress(UUID tenantId, AssetMeta asset, SpendAccount spend) {
         if (ChainType.valueOf(asset.chain()).isUtxo()) {
             return spend.address();
@@ -136,7 +131,6 @@ public class CustodyWithdrawalExecutionService {
         return chains.findActiveTenantCollectionAddress(tenantId, asset.chain())
                 .orElse(spend.address());
     }
-
     private static String normalizeOrderPrefix(String value) {
         String prefix = value == null ? "" : value.replaceAll("[^A-Za-z0-9_-]", "");
         if (prefix.isBlank() || prefix.length() > 56) {
@@ -144,7 +138,6 @@ public class CustodyWithdrawalExecutionService {
         }
         return prefix;
     }
-
     private static void validateExternalAddress(String chain, String address) {
         String value = address == null ? "" : address.trim();
         if (value.isBlank() || value.length() > 160) {
@@ -173,12 +166,10 @@ public class CustodyWithdrawalExecutionService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid NEAR address");
         }
     }
-
     private static BigDecimal atomicToDecimal(Object value, int decimals) {
         return value == null ? BigDecimal.ZERO
                 : new BigDecimal(String.valueOf(value)).movePointLeft(decimals);
     }
-
     private static String randomSuffix() {
         return Integer.toUnsignedString(RANDOM.nextInt(), 36).toLowerCase(Locale.ROOT);
     }
@@ -186,7 +177,6 @@ public class CustodyWithdrawalExecutionService {
     private record AssetMeta(String chain, String symbol, boolean nativeAsset,
                              String nativeSymbol, BigDecimal networkFeeReserve) {
     }
-
     private record SpendAccount(String accountId, String address) {
     }
 

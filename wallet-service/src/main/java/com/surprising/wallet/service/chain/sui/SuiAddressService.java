@@ -12,11 +12,9 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class SuiAddressService {
-    private static final String CHAIN = "SUI";
-
-    private final SuiKeyService keyService;
-    private final ChainJdbcRepository repository;
+public
+class SuiAddressService {
+    private static final String CHAIN = "SUI";    private final SuiKeyService keyService;    private final ChainJdbcRepository repository;
 
     public ChainAddressRecord createNativeAddress(UUID tenantId, long userId, int biz,
                                                   long derivationIndex, String walletRole) {

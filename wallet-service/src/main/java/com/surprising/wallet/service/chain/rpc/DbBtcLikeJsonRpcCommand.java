@@ -9,13 +9,8 @@ import com.surprising.wallet.service.dao.ChainJdbcRepository;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
-
 abstract class DbBtcLikeJsonRpcCommand implements BtcLikeCommand {
-    private static final int TIMEOUT_MS = 120_000;
-
-    private final String chain;
-    private final ChainJdbcRepository repository;
-    private final ChainRpcNodeService rpcNodeService;
+    private static final int TIMEOUT_MS = 120_000;    private final String chain;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;
 
     protected DbBtcLikeJsonRpcCommand(String chain,
                                       ChainJdbcRepository repository,
@@ -69,7 +64,6 @@ abstract class DbBtcLikeJsonRpcCommand implements BtcLikeCommand {
     public String sendRawTransaction(String hex) {
         return call("sendrawtransaction", String.class, hex);
     }
-
     private <T> T call(String method, Class<T> responseType, Object... params) {
         String network = repository.findProfileByChain(chain)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chain))

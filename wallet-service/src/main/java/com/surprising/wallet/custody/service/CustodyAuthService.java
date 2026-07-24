@@ -25,13 +25,8 @@ import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 
 @Service
 public class CustodyAuthService {
-    private static final int MAX_FAILURES = 5;
-    private static final Duration LOCK_DURATION = Duration.ofMinutes(15);
-
-    private final CustodyRepository repository;
-    private final CustodyPasswordService passwords;
-    private final CustodyCryptoService crypto;
-    private final CustodySecurityProperties properties;
+    private static final int MAX_FAILURES = 5;    private static final Duration LOCK_DURATION = Duration.ofMinutes(15);
+    private final CustodyRepository repository;    private final CustodyPasswordService passwords;    private final CustodyCryptoService crypto;    private final CustodySecurityProperties properties;
 
     public CustodyAuthService(CustodyRepository repository, CustodyPasswordService passwords,
                               CustodyCryptoService crypto, CustodySecurityProperties properties) {
@@ -53,13 +48,11 @@ public class CustodyAuthService {
 
     @Transactional(
             rollbackFor = Throwable.class,
-            noRollbackFor = {CustodyUnauthorizedException.class, CustodyForbiddenException.class})
-    public LoginResult platformLogin(String email, String password, String sourceIp, String userAgent) {
+            noRollbackFor = {CustodyUnauthorizedException.class, CustodyForbiddenException.class})    public LoginResult platformLogin(String email, String password, String sourceIp, String userAgent) {
         AuthUser user = repository.findPlatformUser(normalizeEmail(email))
                 .orElseThrow(() -> new CustodyUnauthorizedException("invalid credentials"));
         return authenticate(user, password, sourceIp, userAgent, ActorType.PLATFORM_USER);
     }
-
     public CustodyPrincipal requireSession(HttpServletRequest request, boolean platformRoute) {
         String token = CustodySessionCookie.read(request.getCookies());
         String tokenHash = crypto.sha256(token);
@@ -81,11 +74,9 @@ public class CustodyAuthService {
                 session.role(),
                 consoleScopes(session.role()));
     }
-
     public void logout(HttpServletRequest request) {
         repository.revokeSession(crypto.sha256(CustodySessionCookie.read(request.getCookies())));
     }
-
     public boolean sessionCookieSecure() {
         return properties.isSessionCookieSecure();
     }
@@ -134,7 +125,6 @@ public class CustodyAuthService {
                 user.role(),
                 consoleScopes(user.role()));
     }
-
     private Duration validatedSessionTtl() {
         Duration ttl = properties.getSessionTtl();
         if (ttl.isNegative() || ttl.isZero() || ttl.compareTo(Duration.ofDays(7)) > 0) {
@@ -142,7 +132,6 @@ public class CustodyAuthService {
         }
         return ttl;
     }
-
     private static Set<String> consoleScopes(String role) {
         return switch (role) {
             case "PLATFORM_ADMIN", "TENANT_ADMIN" -> Set.of("*");
@@ -154,7 +143,6 @@ public class CustodyAuthService {
                     "withdrawals:read", "webhooks:read", "audit:read", "chains:read");
         };
     }
-
     private static String normalizeEmail(String email) {
         String value = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
         if (value.length() > 254 || !value.contains("@")) {
@@ -164,7 +152,8 @@ public class CustodyAuthService {
     }
 
     public record LoginResult(
-            @JsonIgnore String token,
+            @JsonIgnore
+            String token,
             Instant expiresAt,
             UUID userId,
             UUID tenantId,

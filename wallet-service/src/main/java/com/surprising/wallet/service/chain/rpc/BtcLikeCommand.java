@@ -3,7 +3,6 @@ package com.surprising.wallet.service.chain.rpc;
 import com.googlecode.jsonrpc4j.JsonRpcMethod;
 import com.surprising.wallet.common.pojo.rpc.BtcLikeBlock;
 import com.surprising.wallet.common.pojo.rpc.BtcLikeRawTransaction;
-
 public interface BtcLikeCommand {
     @JsonRpcMethod(value = "getblockcount", required = true)
     long getBlockCount();

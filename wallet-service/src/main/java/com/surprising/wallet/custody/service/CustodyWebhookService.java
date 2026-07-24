@@ -31,17 +31,13 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 public class CustodyWebhookService {
     private static final java.util.Set<String> DELIVERY_STATUSES = java.util.Set.of(
             "PENDING", "DELIVERING", "DELIVERED", "RETRY", "FAILED");
-
-    private final CustodyRepository repository;
-    private final CustodyCryptoService crypto;
-    private final ObjectMapper objectMapper;
-    private final HttpClient httpClient;
-    private final boolean production;
+    private final CustodyRepository repository;    private final CustodyCryptoService crypto;    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final boolean production;
 
     public CustodyWebhookService(CustodyRepository repository,
                                  CustodyCryptoService crypto,
                                  ObjectMapper objectMapper,
-                                 @Value("${sw.app.env.name:dev}") String environment) {
+                                 @Value("${sw.app.env.name:dev}")
+                                 String environment) {
         this.repository = repository;
         this.crypto = crypto;
         this.objectMapper = objectMapper;
@@ -71,7 +67,6 @@ public class CustodyWebhookService {
                 saved.id(), saved.name(), saved.url(), saved.status(),
                 secret, saved.createdAt());
     }
-
     public List<Map<String, Object>> list(CustodyPrincipal principal) {
         requireScope(principal, "webhooks:read");
         return repository.listWebhookEndpoints(principal.tenantId());
@@ -165,7 +160,6 @@ public class CustodyWebhookService {
                 json(Map.of("queued", queued, "statuses", List.of("FAILED", "RETRY"))));
         return queued;
     }
-
     private String normalizeDeliveryStatus(String status) {
         String normalized = status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
         if (normalized.isBlank()) {
@@ -211,7 +205,6 @@ public class CustodyWebhookService {
             throw new IllegalStateException("webhook request failed: " + e.getMessage(), e);
         }
     }
-
     URI validateEndpoint(String value) {
         String url = value == null ? "" : value.trim();
         if (url.isBlank() || url.length() > 2048) {
@@ -243,7 +236,6 @@ public class CustodyWebhookService {
             throw new IllegalArgumentException("webhook URL is invalid or cannot be resolved", e);
         }
     }
-
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -251,7 +243,6 @@ public class CustodyWebhookService {
             throw new IllegalStateException("failed to serialize webhook payload", e);
         }
     }
-
     private static String required(String value, String field, int maxLength) {
         String result = value == null ? "" : value.trim();
         if (result.isBlank() || result.length() > maxLength) {
@@ -259,19 +250,16 @@ public class CustodyWebhookService {
         }
         return result;
     }
-
     private static void requireTenantAdmin(CustodyPrincipal principal) {
         if (principal == null || !"TENANT_ADMIN".equals(principal.role())) {
             throw new CustodyForbiddenException("tenant administrator required");
         }
     }
-
     private static void requireScope(CustodyPrincipal principal, String scope) {
         if (principal == null || !principal.hasScope(scope)) {
             throw new CustodyForbiddenException(scope + " scope required");
         }
     }
-
     public record CreateWebhookCommand(String name, String url) {
     }
 
@@ -284,7 +272,6 @@ public class CustodyWebhookService {
             Instant createdAt
     ) {
     }
-
     public record WebhookHttpResult(int statusCode, String body, String retryAfter) {
     }
 }

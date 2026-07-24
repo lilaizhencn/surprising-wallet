@@ -13,14 +13,9 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 
 @Component
-public class NearTransactionSigner {
-    private static final int ED25519_KEY_TYPE = 0;
-    private static final int DEPLOY_CONTRACT_ACTION = 1;
-    private static final int FUNCTION_CALL_ACTION = 2;
-    private static final int TRANSFER_ACTION = 3;
-
-    private final NearKeyService keyService;
-
+public
+class NearTransactionSigner {
+    private static final int ED25519_KEY_TYPE = 0;    private static final int DEPLOY_CONTRACT_ACTION = 1;    private static final int FUNCTION_CALL_ACTION = 2;    private static final int TRANSFER_ACTION = 3;    private final NearKeyService keyService;
     public NearTransactionSigner(NearKeyService keyService) {
         this.keyService = keyService;
     }
@@ -155,7 +150,6 @@ public class NearTransactionSigner {
         writer.u128(depositYocto);
         return writer.toByteArray();
     }
-
     private static byte[] signedTransactionBytes(byte[] transaction, byte[] signature) {
         if (signature == null || signature.length != 64) {
             throw new IllegalArgumentException("NEAR Ed25519 signature must be 64 bytes");
@@ -166,7 +160,6 @@ public class NearTransactionSigner {
         writer.bytes(signature);
         return writer.toByteArray();
     }
-
     private static byte[] sha256(byte[] value) {
         try {
             return MessageDigest.getInstance("SHA-256").digest(value);
@@ -174,10 +167,8 @@ public class NearTransactionSigner {
             throw new IllegalStateException("SHA-256 unavailable", e);
         }
     }
-
     public record SignedTransaction(String transactionHash, String signedTransactionBase64, String publicKeyBase58) {
     }
-
     private static final class BorshWriter {
         private final ByteArrayOutputStream out = new ByteArrayOutputStream();
 

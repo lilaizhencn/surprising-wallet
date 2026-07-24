@@ -27,13 +27,8 @@ import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
 @Component
 @ConditionalOnProperty(prefix = "sw.wallet.dev-faucet", name = "enabled", havingValue = "true")
 public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
-    private static final String ERC20_TRANSFER_SELECTOR = "a9059cbb";
-
-    private final DevFaucetProperties properties;
-    private final ObjectMapper objectMapper;
-    private final HttpClient httpClient;
+    private static final String ERC20_TRANSFER_SELECTOR = "a9059cbb";    private final DevFaucetProperties properties;    private final ObjectMapper objectMapper;    private final HttpClient httpClient;
     private final AtomicLong requestIds = new AtomicLong();
-
     public JsonRpcDevFaucetClient(DevFaucetProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
@@ -51,7 +46,6 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
             default -> throw new RejectedException("unsupported dev faucet chain " + funding.chain());
         };
     }
-
     private String sendBitcoin(DevFaucetFunding funding) {
         DevFaucetProperties.Bitcoin bitcoin = properties.getBitcoin();
         URI walletUri = URI.create(trimSlash(bitcoin.getRpcUrl()) + "/wallet/"
@@ -70,7 +64,6 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
                     "bitcoin transaction was sent but confirmation block mining failed", error);
         }
     }
-
     private String sendEvm(DevFaucetFunding funding) {
         DevFaucetProperties.Evm evm = properties.getEvm();
         String from = evm.getFromAddress().toLowerCase(Locale.ROOT);
@@ -102,7 +95,6 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
         return requiredText(call(URI.create(evm.getRpcUrl()), null,
                 "eth_sendTransaction", List.of(transaction)), "eth_sendTransaction");
     }
-
     private JsonNode call(URI uri, String authorization, String method, List<?> params) {
         try {
             String payload = objectMapper.writeValueAsString(Map.of(
@@ -145,14 +137,12 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
             throw new AmbiguousException("dev faucet RPC outcome is unknown", error);
         }
     }
-
     private String bitcoinAuth() {
         DevFaucetProperties.Bitcoin bitcoin = properties.getBitcoin();
         String raw = bitcoin.getRpcUsername() + ":" + bitcoin.getRpcPassword();
         return "Basic " + Base64.getEncoder().encodeToString(
                 raw.getBytes(StandardCharsets.UTF_8));
     }
-
     public static String encodeTransfer(String address, BigInteger atomicAmount) {
         if (address == null || !address.matches("(?i)^0x[0-9a-f]{40}$")) {
             throw new RejectedException("invalid EVM deposit address");
@@ -164,21 +154,18 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
                 + leftPad(address.substring(2).toLowerCase(Locale.ROOT), 64)
                 + leftPad(atomicAmount.toString(16), 64);
     }
-
     private static String hexQuantity(BigInteger value) {
         if (value.signum() < 0) {
             throw new RejectedException("EVM value must not be negative");
         }
         return "0x" + value.toString(16);
     }
-
     private static String leftPad(String value, int length) {
         if (value.length() > length) {
             throw new RejectedException("EVM ABI value exceeds 32 bytes");
         }
         return "0".repeat(length - value.length()) + value;
     }
-
     private static String requiredText(JsonNode node, String operation) {
         String value = node == null ? "" : node.asText("").trim();
         if (value.isEmpty()) {
@@ -186,7 +173,6 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
         }
         return value;
     }
-
     private static String trimSlash(String value) {
         String result = value;
         while (result.endsWith("/")) {

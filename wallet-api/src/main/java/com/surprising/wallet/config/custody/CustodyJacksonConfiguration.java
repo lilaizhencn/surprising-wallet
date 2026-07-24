@@ -8,6 +8,9 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class CustodyJacksonConfiguration {
+    /**
+     * 为 custody 模块返回值提供统一的 JSON 映射器，禁止时间戳序列化。
+     */
     @Bean
     public ObjectMapper custodyObjectMapper() {
         return JsonMapper.builder()

@@ -26,17 +26,27 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
  */
 @Component
 public class CustodyWithdrawalReconciliationJob {
+    /** 需要标记为失败的状态集合。 */
     private static final Set<String> FAILURE_STATES = Set.of("FAILED", "REJECTED", "CANCELLED");
 
+    /** 账务仓储。 */
     private final CustodyRepository repository;
+    /** JSON 序列化器。 */
     private final ObjectMapper objectMapper;
+    /** 防并发开关。 */
     private final AtomicBoolean running = new AtomicBoolean();
 
+    /**
+     * 构造注入仓储与序列化组件。
+     */
     public CustodyWithdrawalReconciliationJob(CustodyRepository repository, ObjectMapper objectMapper) {
         this.repository = repository;
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 500ms 拉取状态变更并落 custody_event，保持事件一致性。
+     */
     @Scheduled(scheduler = "custodyTaskScheduler", fixedDelayString = "${sw.wallet.custody.withdrawal-reconcile-delay:500}")
     public void reconcile() {
         if (!running.compareAndSet(false, true)) {
@@ -55,6 +65,9 @@ public class CustodyWithdrawalReconciliationJob {
         }
     }
 
+    /**
+     * 根据状态映射事件类型（广播/失败/确认）。
+     */
     private String eventType(String status) {
         return switch (status) {
             case "SENT" -> "WITHDRAWAL.BROADCAST";
@@ -64,6 +77,9 @@ public class CustodyWithdrawalReconciliationJob {
         };
     }
 
+    /**
+     * 组织提现事件 payload，供 webhook/审计消费。
+     */
     private String payload(UUID eventId, String eventType, WithdrawalStatusChange change) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("withdrawalId", change.id());

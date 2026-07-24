@@ -22,14 +22,22 @@ import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 30)
 public class CustodyConsoleAuthenticationFilter extends OncePerRequestFilter {
+    /** 会话鉴权服务。 */
     private final CustodyAuthService auth;
+    /** 错误响应序列化工具。 */
     private final ObjectMapper objectMapper;
 
+    /**
+     * 控制台/平台路由复用同一拦截器，通过 URI 判断业务域。
+     */
     public CustodyConsoleAuthenticationFilter(CustodyAuthService auth, ObjectMapper objectMapper) {
         this.auth = auth;
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 仅拦截 console 与 platform API，登录接口与 OPTIONS 不做拦截。
+     */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
@@ -41,6 +49,9 @@ public class CustodyConsoleAuthenticationFilter extends OncePerRequestFilter {
         return (!console && !platform) || path.endsWith("/auth/login");
     }
 
+    /**
+     * 根据路径识别 platform 与 console 会话，校验 session 并注入 Principal。
+     */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {

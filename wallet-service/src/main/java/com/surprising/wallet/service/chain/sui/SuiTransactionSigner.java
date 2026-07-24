@@ -10,16 +10,12 @@ import java.util.Base64;
 
 @Component
 @RequiredArgsConstructor
-public class SuiTransactionSigner {
-    private static final byte ED25519_SCHEME = 0x00;
-    private static final byte[] TRANSACTION_DATA_INTENT = new byte[]{0, 0, 0};
-
-    private final SuiKeyService keyService;
-
+public
+class SuiTransactionSigner {
+    private static final byte ED25519_SCHEME = 0x00;    private static final byte[] TRANSACTION_DATA_INTENT = new byte[]{0, 0, 0};    private final SuiKeyService keyService;
     public String signTransactionBytes(long derivationIndex, String txBytesBase64) {
         return signTransactionBytes(0L, 0, derivationIndex, txBytesBase64);
     }
-
     public String signTransactionBytes(long userId, int biz, long derivationIndex, String txBytesBase64) {
         byte[] txBytes = Base64.getDecoder().decode(txBytesBase64);
         byte[] intentMessage = new byte[TRANSACTION_DATA_INTENT.length + txBytes.length];

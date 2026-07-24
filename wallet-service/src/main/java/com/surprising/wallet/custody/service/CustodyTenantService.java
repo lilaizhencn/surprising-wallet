@@ -20,10 +20,7 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class CustodyTenantService {
-    private final CustodyRepository repository;
-    private final CustodyPasswordService passwords;
-    private final ObjectMapper objectMapper;
-
+    private final CustodyRepository repository;    private final CustodyPasswordService passwords;    private final ObjectMapper objectMapper;
     public CustodyTenantService(CustodyRepository repository, CustodyPasswordService passwords,
                                 ObjectMapper objectMapper) {
         this.repository = repository;
@@ -134,13 +131,11 @@ public class CustodyTenantService {
                 json(Map.of("email", administrator.get("email"))));
         return administrator;
     }
-
     private void requirePlatformAdmin(CustodyPrincipal actor) {
         if (actor == null || !actor.isPlatformAdmin()) {
             throw new CustodyForbiddenException("platform administrator required");
         }
     }
-
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -148,7 +143,6 @@ public class CustodyTenantService {
             throw new IllegalStateException("failed to serialize audit detail", e);
         }
     }
-
     private static String normalizeSlug(String value) {
         String slug = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         if (!slug.matches("^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")) {
@@ -157,7 +151,6 @@ public class CustodyTenantService {
         }
         return slug;
     }
-
     private static String normalizeEmail(String value) {
         String email = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         if (email.length() > 254 || !email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
@@ -165,7 +158,6 @@ public class CustodyTenantService {
         }
         return email;
     }
-
     private static String required(String value, String field, int maxLength) {
         String normalized = value == null ? "" : value.trim();
         if (normalized.isBlank() || normalized.length() > maxLength) {
@@ -173,7 +165,6 @@ public class CustodyTenantService {
         }
         return normalized;
     }
-
     private static String optional(String value, int maxLength) {
         String normalized = value == null ? "" : value.trim();
         if (normalized.length() > maxLength) {
@@ -182,7 +173,6 @@ public class CustodyTenantService {
         }
         return normalized;
     }
-
     private static String optionalTenantStatus(String value) {
         String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!normalized.isEmpty() && !SetHolder.TENANT_STATUSES.contains(normalized)) {
@@ -191,7 +181,6 @@ public class CustodyTenantService {
         }
         return normalized;
     }
-
     private static String normalizeDisplayCurrency(String value) {
         String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!normalized.matches("^[A-Z0-9]{3,12}$")) {
@@ -200,7 +189,6 @@ public class CustodyTenantService {
         }
         return normalized;
     }
-
     private static final class SetHolder {
         private static final java.util.Set<String> TENANT_STATUSES = java.util.Set.of("ACTIVE", "SUSPENDED");
     }

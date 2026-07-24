@@ -20,14 +20,9 @@ import java.time.Duration;
 import java.util.Optional;
 
 @Component
-public class XrpRpcClient {
-    private static final String CHAIN = "XRP";
-
-    private final ObjectMapper objectMapper;
-    private final HttpClient httpClient;
-    private final ChainJdbcRepository repository;
-    private final ChainRpcNodeService rpcNodeService;
-    private final String fixedRpcUrl;
+public
+class XrpRpcClient {
+    private static final String CHAIN = "XRP";    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedRpcUrl;
 
     @Autowired
     public XrpRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
@@ -49,7 +44,6 @@ public class XrpRpcClient {
                 .version(HttpClient.Version.HTTP_1_1)
                 .build();
     }
-
     public long latestLedgerIndex() {
         JsonNode info = call("server_info", objectMapper.createObjectNode()).path("info");
         JsonNode validated = info.path("validated_ledger");
@@ -61,7 +55,6 @@ public class XrpRpcClient {
         }
         return info.path("ledger_current_index").asLong(0);
     }
-
     public ReserveInfo reserveInfo() {
         JsonNode validated = call("server_info", objectMapper.createObjectNode())
                 .path("info")
@@ -70,7 +63,6 @@ public class XrpRpcClient {
                 new BigDecimal(validated.path("reserve_base_xrp").asText("1")),
                 new BigDecimal(validated.path("reserve_inc_xrp").asText("0.2")));
     }
-
     public long feeDrops() {
         JsonNode drops = call("fee", objectMapper.createObjectNode()).path("drops");
         String fee = drops.path("open_ledger_fee").asText("");
@@ -82,7 +74,6 @@ public class XrpRpcClient {
         }
         return Math.max(10L, Long.parseLong(fee));
     }
-
     public Optional<AccountState> accountInfo(String address) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("account", address);
@@ -101,17 +92,14 @@ public class XrpRpcClient {
             throw e;
         }
     }
-
     public long accountSequence(String address) {
         return accountInfo(address)
                 .map(AccountState::sequence)
                 .orElseThrow(() -> new IllegalStateException("XRPL account is not activated: " + address));
     }
-
     public BigDecimal accountBalanceDrops(String address) {
         return accountInfo(address).map(AccountState::balanceDrops).orElse(BigDecimal.ZERO);
     }
-
     public ArrayNode accountTransactions(String address, long minLedger, long maxLedger, int limit) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("account", address);
@@ -130,7 +118,6 @@ public class XrpRpcClient {
             throw e;
         }
     }
-
     public ArrayNode accountLines(String address, String peer) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("account", address);
@@ -148,14 +135,12 @@ public class XrpRpcClient {
             throw e;
         }
     }
-
     public JsonNode transaction(String txHash) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("transaction", txHash);
         params.put("binary", false);
         return call("tx", params);
     }
-
     public String submit(String signedTransactionHex) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("tx_blob", signedTransactionHex);
@@ -174,7 +159,6 @@ public class XrpRpcClient {
         }
         return hash;
     }
-
     private JsonNode call(String method, JsonNode paramsObject) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("method", method);
@@ -195,7 +179,6 @@ public class XrpRpcClient {
             throw new IllegalStateException("XRPL RPC serialization failed for " + method, e);
         }
     }
-
     private JsonNode execute(String method, String requestBody, String rpcUrl, ChainRpcNode node) {
         try {
             HttpRequest.Builder builder = HttpRequest.newBuilder()
@@ -226,13 +209,10 @@ public class XrpRpcClient {
             throw new IllegalStateException("XRPL RPC failed for " + method, e);
         }
     }
-
     public record AccountState(String account, long sequence, BigDecimal balanceDrops, int ownerCount) {
     }
-
     public record ReserveInfo(BigDecimal baseXrp, BigDecimal ownerXrp) {
     }
-
     public static class XrpRpcException extends RuntimeException {
         private final String error;
 

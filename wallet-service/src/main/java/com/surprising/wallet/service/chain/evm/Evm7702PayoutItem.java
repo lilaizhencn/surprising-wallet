@@ -30,7 +30,6 @@ public record Evm7702PayoutItem(
     public byte[] withdrawalId() {
         return withdrawalId.clone();
     }
-
     static String requireAddress(String value, String field, boolean allowZero) {
         String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         if (!normalized.matches("^0x[0-9a-f]{40}$")
@@ -39,14 +38,12 @@ public record Evm7702PayoutItem(
         }
         return Keys.toChecksumAddress(normalized);
     }
-
     static void requireUint(BigInteger value, String field, boolean allowZero) {
         if (value == null || value.signum() < 0 || (!allowZero && value.signum() == 0)
                 || value.bitLength() > 256) {
             throw new IllegalArgumentException(field + " must be a valid uint256");
         }
     }
-
     private static boolean allZero(byte[] value) {
         for (byte current : value) if (current != 0) return false;
         return true;

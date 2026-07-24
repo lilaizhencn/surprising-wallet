@@ -14,10 +14,7 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class WalletKeyConfigService {
-    private final WalletKeyConfigStore store;
-    private final WalletKeyMaterialProvider keyMaterial;
-    private final CustodyRepository custodyRepository;
-
+    private final WalletKeyConfigStore store;    private final WalletKeyMaterialProvider keyMaterial;    private final CustodyRepository custodyRepository;
     public WalletKeyConfigService(WalletKeyConfigStore store,
                                   WalletKeyMaterialProvider keyMaterial,
                                   CustodyRepository custodyRepository) {
@@ -25,7 +22,6 @@ public class WalletKeyConfigService {
         this.keyMaterial = keyMaterial;
         this.custodyRepository = custodyRepository;
     }
-
     public KeysetView get(CustodyPrincipal actor) {
         requirePlatformAdmin(actor);
         return view(store.find());
@@ -55,7 +51,6 @@ public class WalletKeyConfigService {
                 "{\"seedCount\":4,\"plaintextStorage\":true}");
         return view(Optional.of(saved));
     }
-
     private KeysetView view(Optional<WalletKeyConfig> config) {
         if (config.isEmpty()) {
             return new KeysetView(false, false, null, null, null, null, null, null, null);
@@ -65,7 +60,6 @@ public class WalletKeyConfigService {
                 value.sig1Seed(), value.sig2Seed(), value.recoverySeed(), value.ed25519Seed(),
                 value.createdAt(), value.updatedAt(), value.updatedBy());
     }
-
     private static boolean sameSeeds(WalletKeyConfig left, WalletKeyConfig right) {
         return left != null
                 && left.sig1Seed().equals(trim(right.sig1Seed()))
@@ -73,11 +67,9 @@ public class WalletKeyConfigService {
                 && left.recoverySeed().equals(trim(right.recoverySeed()))
                 && left.ed25519Seed().equals(trim(right.ed25519Seed()));
     }
-
     private static String trim(String value) {
         return value == null ? null : value.trim();
     }
-
     private static void requirePlatformAdmin(CustodyPrincipal actor) {
         if (actor == null || !actor.isPlatformAdmin()) {
             throw new CustodyForbiddenException("platform administrator required");

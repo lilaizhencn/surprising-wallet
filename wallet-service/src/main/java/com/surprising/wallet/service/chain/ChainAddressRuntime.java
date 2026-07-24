@@ -26,13 +26,9 @@ import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
-public class ChainAddressRuntime {
-    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";
-    private static final String EVM_ADDRESS_REGEX = "^0x[a-fA-F0-9]{40}$";
-    private static final String HEX_32_BYTE_ADDRESS_REGEX = "^0x[0-9a-fA-F]{64}$";
-
-    private final ChainJdbcRepository repository;
-    private final HotWalletAddressService hotWalletAddressService;
+public
+class ChainAddressRuntime {
+    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";    private static final String EVM_ADDRESS_REGEX = "^0x[a-fA-F0-9]{40}$";    private static final String HEX_32_BYTE_ADDRESS_REGEX = "^0x[0-9a-fA-F]{64}$";    private final ChainJdbcRepository repository;    private final HotWalletAddressService hotWalletAddressService;
 
     @Transactional(rollbackFor = Throwable.class)
     public synchronized Address generateDepositAddress(ChainType chainType, long userId, int biz) {
@@ -80,7 +76,6 @@ public class ChainAddressRuntime {
                 .orElse(record);
         return toAddress(profile, saved);
     }
-
     public boolean checkAddress(ChainType chainType, String address) {
         if (!StringUtils.hasText(address)) {
             return false;
@@ -102,19 +97,16 @@ public class ChainAddressRuntime {
                     "address validation is not implemented by generic runtime for " + chainType);
         };
     }
-
     private long nextAddressIndex(AccountChainProfile profile, long userId, int biz) {
         return repository.findMaxChainAddressIndex(
                         profile.getChain(), profile.getNativeSymbol(), userId, biz, WALLET_ROLE_DEPOSIT)
                 .map(value -> value + 1L)
                 .orElse(0L);
     }
-
     private AccountChainProfile profile(ChainType chainType) {
         return repository.findProfileByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
     }
-
     private Address toAddress(AccountChainProfile profile, ChainAddressRecord record) {
         return Address.builder()
                 .address(record.getAddress())
@@ -131,7 +123,6 @@ public class ChainAddressRuntime {
                 .updateDate(Date.from(Instant.now()))
                 .build();
     }
-
     private boolean isValidXrpAddress(String address) {
         try {
             org.xrpl.xrpl4j.model.transactions.Address.of(address).validateAddress();
@@ -140,7 +131,6 @@ public class ChainAddressRuntime {
             return false;
         }
     }
-
     private boolean isValidSolanaAddress(String address) {
         try {
             return Base58.decode(address).length == 32;
@@ -148,7 +138,6 @@ public class ChainAddressRuntime {
             return false;
         }
     }
-
     private boolean isValidTonAddress(String address) {
         try {
             org.ton.ton4j.address.Address.of(address);

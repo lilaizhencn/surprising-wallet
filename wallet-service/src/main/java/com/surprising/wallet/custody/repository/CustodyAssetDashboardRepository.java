@@ -11,12 +11,9 @@ import java.util.UUID;
 
 @Repository
 public class CustodyAssetDashboardRepository {
-    private final JdbcTemplate jdbc;
-
-    public CustodyAssetDashboardRepository(JdbcTemplate jdbc) {
+    private final JdbcTemplate jdbc;    public CustodyAssetDashboardRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
-
     public List<AssetBalance> balances(UUID tenantId) {
         return jdbc.query("""
                 with tenant_accounts as (
@@ -94,7 +91,6 @@ public class CustodyAssetDashboardRepository {
                 instantOrNull(rs.getTimestamp("observed_at"))),
                 tenantId, tenantId, tenantId, tenantId);
     }
-
     public List<AssetPrice> prices() {
         return jdbc.query("""
                 select asset_symbol, usd_price, source, observed_at, updated_at
@@ -104,7 +100,6 @@ public class CustodyAssetDashboardRepository {
                 rs.getString("source"), rs.getTimestamp("observed_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant()));
     }
-
     public List<ReorgDeficit> openReorgDeficits(UUID tenantId) {
         return jdbc.query("""
                 select id, custody_address_id, chain, asset_symbol,
@@ -119,7 +114,6 @@ public class CustodyAssetDashboardRepository {
                 rs.getBigDecimal("deficit_amount"), rs.getBigDecimal("recovered_amount"),
                 rs.getTimestamp("created_at").toInstant()), tenantId);
     }
-
     public AssetPrice upsertPrice(String symbol, BigDecimal price, String source, Instant observedAt) {
         return jdbc.queryForObject("""
                 insert into custody_asset_price(asset_symbol, usd_price, source, observed_at, updated_at)
@@ -136,7 +130,6 @@ public class CustodyAssetDashboardRepository {
                 rs.getTimestamp("updated_at").toInstant()),
                 symbol, price, source, Timestamp.from(observedAt));
     }
-
     private static Instant instantOrNull(Timestamp value) {
         return value == null ? null : value.toInstant();
     }

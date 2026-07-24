@@ -10,9 +10,9 @@ import java.time.format.DateTimeParseException;
 import java.util.UUID;
 
 @Component
-public class CustodyWebhookRetryPolicy {
-    public static final int MAX_AUTOMATIC_ATTEMPTS = 10;
-    private static final Duration MIN_DELAY = Duration.ofSeconds(30);
+public
+class CustodyWebhookRetryPolicy {
+    public static final int MAX_AUTOMATIC_ATTEMPTS = 10;    private static final Duration MIN_DELAY = Duration.ofSeconds(30);
     private static final Duration MAX_DELAY = Duration.ofHours(6);
 
     public RetryDecision decide(
@@ -35,7 +35,6 @@ public class CustodyWebhookRetryPolicy {
         }
         return new RetryDecision(false, now.plus(delay), delay);
     }
-
     private static Duration parseRetryAfter(String value, Instant now) {
         if (value == null || value.isBlank()) {
             return null;

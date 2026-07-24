@@ -19,12 +19,19 @@ import com.surprising.wallet.custody.model.CustodyRequestSupport;
 @RestController
 @RequestMapping("/custody/console/v1/asset-recoveries")
 public class CustodyConsoleAssetRecoveryController {
+    /** 资产找回服务，用于提交、查询和取消找回工单。 */
     private final CustodyAssetRecoveryService recoveries;
 
+    /**
+     * 注入资产找回服务。
+     */
     public CustodyConsoleAssetRecoveryController(CustodyAssetRecoveryService recoveries) {
         this.recoveries = recoveries;
     }
 
+    /**
+     * 按状态分页查询当前租户找回记录。
+     */
     @GetMapping
     public List<CustodyAssetRecoveryRepository.RecoveryRecord> list(
             @RequestParam(defaultValue = "") String status,
@@ -35,6 +42,9 @@ public class CustodyConsoleAssetRecoveryController {
                 CustodyRequestSupport.requirePrincipal(request), status, limit, offset);
     }
 
+    /**
+     * 提交一笔资产找回申请并返回创建后的记录。
+     */
     @PostMapping
     public CustodyAssetRecoveryRepository.RecoveryRecord submit(
             @RequestBody CustodyAssetRecoveryService.SubmitCommand body,
@@ -43,6 +53,9 @@ public class CustodyConsoleAssetRecoveryController {
                 CustodyRequestSupport.clientIp(request));
     }
 
+    /**
+     * 取消未执行或可取消状态的找回申请。
+     */
     @PostMapping("/{id}/cancel")
     public CustodyAssetRecoveryRepository.RecoveryRecord cancel(
             @PathVariable UUID id, HttpServletRequest request) {

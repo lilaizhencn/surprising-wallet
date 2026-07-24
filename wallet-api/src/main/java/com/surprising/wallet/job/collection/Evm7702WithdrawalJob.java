@@ -24,8 +24,12 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class Evm7702WithdrawalJob {
 
+    /** 7702 提现工作流服务。 */
     private final Evm7702WithdrawalWorkflowService workflowService;
 
+    /**
+     * 按固定延迟触发批量提现，处理 batchWithdraw 并完成链上广播确认。
+     */
     @Scheduled(scheduler = "evm7702TaskScheduler", fixedDelayString = "${sw.wallet.evm7702.withdrawal-delay:3000}")
     public void run() {
         log.debug("EVM 7702 withdrawal job begin");

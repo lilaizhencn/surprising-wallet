@@ -11,5 +11,4 @@ import com.surprising.wallet.common.chain.DepositEvent;
  */
 @FunctionalInterface
 public interface DepositCreditObserver {
-    void onDepositCredited(DepositEvent event, long logIndex, String accountId);
-}
+    void onDepositCredited(DepositEvent event, long logIndex, String accountId);}

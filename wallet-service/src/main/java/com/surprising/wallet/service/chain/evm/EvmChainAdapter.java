@@ -19,15 +19,9 @@ import java.util.List;
 import java.util.Map;
 
 @Component
-public class EvmChainAdapter implements BlockchainAdapter {
-    private final EvmNonceManager nonceManager;
-    private final TokenRegistry tokenRegistry;
-    private final EvmGasEstimator gasEstimator;
-    private final EvmTransactionBuilder transactionBuilder;
-    private final EvmLogScanner logScanner;
-    private final EvmDepositScanner depositScanner;
-    private final Map<ChainType, ChainProfile> profiles = new EnumMap<>(ChainType.class);
-    private final ChainJdbcRepository repository;
+public
+class EvmChainAdapter implements BlockchainAdapter {
+    private final EvmNonceManager nonceManager;    private final TokenRegistry tokenRegistry;    private final EvmGasEstimator gasEstimator;    private final EvmTransactionBuilder transactionBuilder;    private final EvmLogScanner logScanner;    private final EvmDepositScanner depositScanner;    private final Map<ChainType, ChainProfile> profiles = new EnumMap<>(ChainType.class);    private final ChainJdbcRepository repository;
 
     @Autowired
     public EvmChainAdapter(EvmNonceManager nonceManager, TokenRegistry tokenRegistry,
@@ -122,11 +116,9 @@ public class EvmChainAdapter implements BlockchainAdapter {
             throw new IllegalStateException("EVM deposit scan failed at height " + height, e);
         }
     }
-
     public ChainProfile getProfile(ChainType chainType) {
         return profileOf(chainType);
     }
-
     private void registerProfiles() {
         registerProfile(ChainType.ETH, "ETH", 11155111L, 1L);
         // The current runtime is testnet-only. Keep the adapter chainIds aligned
@@ -144,7 +136,6 @@ public class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.SCROLL, "ETH_SCROLL", 534351L, 1L);
         registerProfile(ChainType.UNICHAIN, "ETH_UNICHAIN", 1301L, 1L);
     }
-
     private void registerDbProfiles() {
         for (AccountChainProfile profile : repository.listEnabledChainProfiles()) {
             if (!"evm".equalsIgnoreCase(profile.getFamily())) {
@@ -167,7 +158,6 @@ public class EvmChainAdapter implements BlockchainAdapter {
                     .build());
         }
     }
-
     private void registerProfile(ChainType chainType, String nativeSymbol, Long chainId, Long gasFloorGwei) {
         profiles.put(chainType, ChainProfile.builder()
                 .chainType(chainType)
@@ -179,7 +169,6 @@ public class EvmChainAdapter implements BlockchainAdapter {
                 .chainId(chainId)
                 .build());
     }
-
     private ChainProfile profileOf(ChainType chainType) {
         ChainProfile profile = profiles.get(chainType);
         if (profile == null) {

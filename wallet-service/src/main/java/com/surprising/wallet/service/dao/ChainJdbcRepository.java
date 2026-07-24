@@ -50,11 +50,7 @@ import java.util.stream.Collectors;
 
 @Repository
 public class ChainJdbcRepository {
-    private final JdbcTemplate jdbcTemplate;
-    private final List<DepositCreditObserver> depositCreditObservers;
-    private final List<DepositReorgObserver> depositReorgObservers;
-
-    public ChainJdbcRepository(JdbcTemplate jdbcTemplate) {
+    private final JdbcTemplate jdbcTemplate;    private final List<DepositCreditObserver> depositCreditObservers;    private final List<DepositReorgObserver> depositReorgObservers;    public ChainJdbcRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
         this.depositCreditObservers = List.of();
         this.depositReorgObservers = List.of();
@@ -75,7 +71,6 @@ public class ChainJdbcRepository {
         this.depositCreditObservers = depositCreditObservers.orderedStream().toList();
         this.depositReorgObservers = depositReorgObservers.orderedStream().toList();
     }
-
     public int upsertChainAsset(ChainAsset asset) {
         return jdbcTemplate.update("""
                 insert into chain_asset(chain, symbol, asset_kind, contract_address, decimals, native_asset, active,
@@ -95,7 +90,6 @@ public class ChainJdbcRepository {
                 asset.getDecimals(), asset.getNativeAsset(), asset.getActive(), asset.getMinTransfer(),
                 asset.getMinWithdraw(), toTs(nowOr(asset.getCreatedAt())), toTs(nowOr(asset.getUpdatedAt())));
     }
-
     public Optional<BitcoinLikeChainProfile> findBitcoinLikeProfile(String chain, String network) {
         List<BitcoinLikeChainProfile> results = jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
@@ -109,7 +103,6 @@ public class ChainJdbcRepository {
                 chain, network);
         return results.stream().findFirst();
     }
-
     public Optional<AccountChainProfile> findAccountChainProfile(String chain, String network) {
         List<AccountChainProfile> results = jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
@@ -123,7 +116,6 @@ public class ChainJdbcRepository {
                 chain, network);
         return results.stream().findFirst();
     }
-
     public Optional<AccountChainProfile> findProfileByRuntimeCurrencyId(int runtimeCurrencyId) {
         List<AccountChainProfile> results = jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
@@ -145,7 +137,6 @@ public class ChainJdbcRepository {
                 runtimeCurrencyId);
         return results.stream().findFirst();
     }
-
     public Optional<AccountChainProfile> findProfileByChain(String chain) {
         List<AccountChainProfile> results = jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
@@ -167,7 +158,6 @@ public class ChainJdbcRepository {
                 chain);
         return results.stream().findFirst();
     }
-
     public Optional<String> findChainByRuntimeCurrencyId(int runtimeCurrencyId) {
         List<String> results = jdbcTemplate.queryForList("""
                         select distinct chain
@@ -178,7 +168,6 @@ public class ChainJdbcRepository {
                         """, String.class, runtimeCurrencyId);
         return results.stream().findFirst();
     }
-
     public boolean isRuntimeCurrencyFamily(int runtimeCurrencyId, String family) {
         Boolean exists = jdbcTemplate.queryForObject("""
                         select exists(
@@ -190,7 +179,6 @@ public class ChainJdbcRepository {
                         """, Boolean.class, runtimeCurrencyId, family);
         return Boolean.TRUE.equals(exists);
     }
-
     public int reserveNonce(EvmNonceRecord nonceRecord) {
         return jdbcTemplate.update("""
                 insert into evm_nonce(chain, address, chain_nonce, reserved_nonce, status, created_at, updated_at)
@@ -239,7 +227,6 @@ public class ChainJdbcRepository {
                 chainNonce, reserved.add(BigInteger.ONE), toTs(now()), chain, address);
         return reserved;
     }
-
     public int recordEvmTransaction(EvmTransactionRecord tx) {
         return jdbcTemplate.update("""
                 insert into evm_tx(chain, tx_hash, from_address, to_address, asset_symbol, contract_address,
@@ -258,7 +245,6 @@ public class ChainJdbcRepository {
                 tx.getContractAddress(), tx.getAmount(), tx.getFee(), tx.getNonce(), tx.getBlockHeight(),
                 tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
     }
-
     public int recordTronTransaction(TronTransactionRecord tx) {
         return jdbcTemplate.update("""
                 insert into tron_tx(chain, tx_hash, from_address, to_address, asset_symbol, contract_address,
@@ -277,7 +263,6 @@ public class ChainJdbcRepository {
                 tx.getContractAddress(), tx.getAmount(), tx.getFee(), tx.getBlockHeight(), tx.getConfirmations(),
                 tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
     }
-
     public int recordXrpTransaction(XrpTransactionRecord tx) {
         return jdbcTemplate.update("""
                         insert into xrp_transaction(
@@ -300,7 +285,6 @@ public class ChainJdbcRepository {
                 tx.getSequenceNumber(), tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(),
                 toTs(now()), toTs(now()));
     }
-
     public Optional<String> findXrpTransactionAssetSymbol(String chain, String txHash) {
         List<String> results = jdbcTemplate.queryForList("""
                         select asset_symbol
@@ -310,7 +294,6 @@ public class ChainJdbcRepository {
                         """, String.class, chain, txHash);
         return results.stream().findFirst();
     }
-
     public int upsertLedgerBalance(LedgerBalanceRecord record) {
         return jdbcTemplate.update("""
                 insert into ledger_balance(chain, asset_symbol, account_id, available_balance, locked_balance,
@@ -325,11 +308,9 @@ public class ChainJdbcRepository {
                 record.getChain(), record.getAssetSymbol(), record.getAccountId(), record.getAvailableBalance(),
                 record.getLockedBalance(), record.getTotalBalance(), toTs(now()), toTs(now()));
     }
-
     public Set<String> listEnabledHotWalletAddresses(String chain) {
         return listEnabledChainScanAddresses(chain);
     }
-
     public Set<String> listEnabledChainScanAddresses(String chain) {
         return jdbcTemplate.queryForList("""
                         select lower(address) from chain_address
@@ -338,7 +319,6 @@ public class ChainJdbcRepository {
                 .stream()
                 .collect(Collectors.toSet());
     }
-
     public int upsertChainAddress(ChainAddressRecord address) {
         return jdbcTemplate.update("""
                 insert into chain_address(
@@ -375,7 +355,6 @@ public class ChainJdbcRepository {
                 chain, assetSymbol, userId, biz, addressIndex, walletRole);
         return results.stream().findFirst();
     }
-
     public List<ChainAddressRecord> listDefaultHotAddressCandidates(String chain, String assetSymbol) {
         return jdbcTemplate.query("""
                         select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
@@ -395,7 +374,6 @@ public class ChainJdbcRepository {
                 HotWalletRules.DEFAULT_HOT_BIZ,
                 HotWalletRules.DEFAULT_HOT_WALLET_ROLE);
     }
-
     public List<ChainAddressRecord> listReservedHotNamespaceAddresses(String chain) {
         return jdbcTemplate.query("""
                         select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
@@ -411,7 +389,6 @@ public class ChainJdbcRepository {
                 HotWalletRules.DEFAULT_HOT_USER_ID,
                 HotWalletRules.DEFAULT_HOT_BIZ);
     }
-
     public List<ChainAddressRecord> listChainAddresses(String chain, String assetSymbol) {
         return jdbcTemplate.query("""
                         select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
@@ -422,7 +399,6 @@ public class ChainJdbcRepository {
                         """,
                 (rs, rowNum) -> mapChainAddress(rs), chain, assetSymbol);
     }
-
     public List<ChainAddressRecord> listChainAddresses(String chain) {
         return jdbcTemplate.query("""
                         select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
@@ -433,7 +409,6 @@ public class ChainJdbcRepository {
                         """,
                 (rs, rowNum) -> mapChainAddress(rs), chain);
     }
-
     public Optional<ChainAddressRecord> findChainAddressByAddress(String chain, String address) {
         List<ChainAddressRecord> results = jdbcTemplate.query("""
                         select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
@@ -444,7 +419,6 @@ public class ChainJdbcRepository {
                 (rs, rowNum) -> mapChainAddress(rs), chain, address);
         return results.stream().findFirst();
     }
-
     public Optional<ChainAddressRecord> findChainAddressByAddress(String chain, String assetSymbol, String address) {
         List<ChainAddressRecord> results = jdbcTemplate.query("""
                         select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
@@ -495,7 +469,6 @@ public class ChainJdbcRepository {
                         """, Long.class, chain, assetSymbol, userId, biz, walletRole);
         return Optional.ofNullable(maxIndex);
     }
-
     public int recordSolanaTransaction(SolanaTransactionRecord tx) {
         return jdbcTemplate.update("""
                         insert into sol_transaction(
@@ -516,7 +489,6 @@ public class ChainJdbcRepository {
                 tx.getMintAddress(), tx.getAmount(), tx.getFeeLamports(), tx.getSlot(), tx.getConfirmations(),
                 tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
     }
-
     public int recordTonTransaction(TonTransactionRecord tx) {
         return jdbcTemplate.update("""
                         insert into ton_transaction(
@@ -537,7 +509,6 @@ public class ChainJdbcRepository {
                 tx.getJettonMaster(), tx.getAmount(), tx.getFeeNano(), tx.getLogicalTime(),
                 tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
     }
-
     public int markTonTransactionConfirmed(String chain, String txHash) {
         return jdbcTemplate.update("""
                         update ton_transaction
@@ -548,7 +519,6 @@ public class ChainJdbcRepository {
                         """,
                 toTs(now()), chain, txHash);
     }
-
     public Optional<String> findTonTransactionRawPayload(String chain, String txHash) {
         List<String> results = jdbcTemplate.queryForList("""
                         select raw_payload from ton_transaction
@@ -556,7 +526,6 @@ public class ChainJdbcRepository {
                         """, String.class, chain, txHash);
         return results.stream().findFirst();
     }
-
     public int recordAptosTransaction(AptosTransactionRecord tx) {
         return jdbcTemplate.update("""
                         insert into aptos_transaction(
@@ -596,7 +565,6 @@ public class ChainJdbcRepository {
                         """,
                 version, gasUsed, gasUnitPrice, rawPayload, toTs(now()), chain, txHash);
     }
-
     public int recordSuiTransaction(SuiTransactionRecord tx) {
         return jdbcTemplate.update("""
                         insert into sui_transaction(
@@ -615,7 +583,6 @@ public class ChainJdbcRepository {
                 tx.getCoinType(), tx.getAmount(), tx.getGasUsed(), tx.getCheckpoint(), tx.getStatus(),
                 tx.getRawPayload(), toTs(now()), toTs(now()));
     }
-
     public int recordMoneroTransaction(MoneroTransactionRecord tx) {
         return jdbcTemplate.update("""
                         insert into monero_transaction(
@@ -651,7 +618,6 @@ public class ChainJdbcRepository {
                         """,
                 checkpoint, gasUsed, rawPayload, toTs(now()), chain, txDigest);
     }
-
     public int recordNearTransaction(NearTransactionRecord tx) {
         return jdbcTemplate.update("""
                         insert into near_transaction(
@@ -691,7 +657,6 @@ public class ChainJdbcRepository {
                         """,
                 blockHeight, gasBurnt, rawPayload, toTs(now()), chain, txHash);
     }
-
     public Optional<String> findNearTransactionSender(String chain, String txHash) {
         List<String> results = jdbcTemplate.queryForList("""
                         select sender from near_transaction
@@ -727,7 +692,6 @@ public class ChainJdbcRepository {
                 chainSequence, reserved + 1, toTs(now()), chain, address);
         return reserved;
     }
-
     public void synchronizeAccountSequence(String chain, String address, long chainSequence) {
         jdbcTemplate.update("""
                         insert into account_sequence(
@@ -894,7 +858,6 @@ public class ChainJdbcRepository {
                 normalizedChain, normalizedScanner, blockHeight);
         return new BlockObservation(true, previousHash, normalizedHash, reversed);
     }
-
     private void reverseDeposit(DepositForReorg deposit, String replacementBlockHash, String reason) {
         BigDecimal reversedAmount = BigDecimal.ZERO;
         BigDecimal deficitAmount = BigDecimal.ZERO;
@@ -943,7 +906,6 @@ public class ChainJdbcRepository {
             }
         }
     }
-
     private static String requireText(String value, String field) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(field + " is required");
@@ -973,7 +935,6 @@ public class ChainJdbcRepository {
                 """, Boolean.class, tenantId, chain, txHash, toAddress);
         return Boolean.TRUE.equals(internal);
     }
-
     private UUID requireDepositTenant(String chain, String accountId, String address) {
         List<UUID> tenants = jdbcTemplate.queryForList("""
                         select distinct tenant_id
@@ -1014,7 +975,6 @@ public class ChainJdbcRepository {
                 chain, assetSymbol, txHash, vout, address, amount, blockHeight, blockHash, confirmations, credited,
                 toTs(now()), toTs(now()));
     }
-
     public int markUtxoCredited(String chain, String txHash, int vout) {
         return jdbcTemplate.update("""
                         update utxo_record
@@ -1023,7 +983,6 @@ public class ChainJdbcRepository {
                         """,
                 toTs(now()), chain, txHash, vout);
     }
-
     public int lockUtxo(String chain, String txHash, int vout, String lockRef) {
         return jdbcTemplate.update("""
                         update utxo_record
@@ -1033,7 +992,6 @@ public class ChainJdbcRepository {
                         """,
                 lockRef, toTs(now()), chain, txHash, vout, lockRef);
     }
-
     public int lockUtxo(UUID tenantId, String chain, String txHash, int vout, String lockRef) {
         return jdbcTemplate.update("""
                         update utxo_record ur
@@ -1048,7 +1006,6 @@ public class ChainJdbcRepository {
                         """,
                 lockRef, toTs(now()), chain, txHash, vout, lockRef, tenantId);
     }
-
     public int releaseUtxos(String chain, String lockRef) {
         return jdbcTemplate.update("""
                         update utxo_record
@@ -1057,7 +1014,6 @@ public class ChainJdbcRepository {
                         """,
                 toTs(now()), chain, lockRef);
     }
-
     public int markUtxosSpent(String chain, String lockRef, String spentTxHash) {
         return jdbcTemplate.update("""
                         update utxo_record
@@ -1066,7 +1022,6 @@ public class ChainJdbcRepository {
                         """,
                 spentTxHash, toTs(now()), chain, lockRef);
     }
-
     public int updateUtxoConfirmations(String chain, String txHash, int vout, int confirmations) {
         return jdbcTemplate.update("""
                         update utxo_record
@@ -1173,7 +1128,6 @@ public class ChainJdbcRepository {
                 (rs, rowNum) -> mapUtxoRecord(rs, chain),
                 chain, assetSymbol, maxConfirmations, limit, offset);
     }
-
     public BigDecimal sumAvailableUtxoAmount(String chain, String assetSymbol) {
         BigDecimal balance = jdbcTemplate.queryForObject("""
                         select coalesce(sum(amount), 0)
@@ -1185,7 +1139,6 @@ public class ChainJdbcRepository {
                 BigDecimal.class, chain, assetSymbol);
         return balance == null ? BigDecimal.ZERO : balance;
     }
-
     public List<UtxoTransaction> listUtxosByAddress(String chain, String address, int limit) {
         return jdbcTemplate.query("""
                         select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
@@ -1213,7 +1166,6 @@ public class ChainJdbcRepository {
                 (rs, rowNum) -> mapUtxoRecord(rs, chain),
                 chain, address, limit);
     }
-
     public boolean depositRecordExists(String chain, String txHash, int logIndex) {
         Boolean exists = jdbcTemplate.queryForObject("""
                         select exists(
@@ -1224,7 +1176,6 @@ public class ChainJdbcRepository {
                 Boolean.class, chain, txHash, logIndex);
         return Boolean.TRUE.equals(exists);
     }
-
     private UtxoTransaction mapUtxoRecord(java.sql.ResultSet rs, String chain) throws java.sql.SQLException {
         int runtimeCurrencyId = rs.getInt("runtime_currency_id");
         if (rs.wasNull()) {
@@ -1284,7 +1235,6 @@ public class ChainJdbcRepository {
                 tenantId, orderNo, userId, chain, assetSymbol, fromAddress,
                 debitAccountId, toAddress, amount, fee, toTs(now()), toTs(now()));
     }
-
     public List<WithdrawalOrderRecord> listWithdrawalsForSigning(String chain, String assetSymbol, int limit) {
         return jdbcTemplate.query("""
                         select w.id, w.tenant_id, w.order_no, w.user_id, w.chain, w.asset_symbol,
@@ -1308,7 +1258,6 @@ public class ChainJdbcRepository {
                 (rs, rowNum) -> mapWithdrawalOrder(rs),
                 chain, assetSymbol, chain, assetSymbol, limit);
     }
-
     public List<WithdrawalOrderRecord> listWithdrawalsForSigning(String chain, int limit) {
         return jdbcTemplate.query("""
                         select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
@@ -1321,7 +1270,6 @@ public class ChainJdbcRepository {
                 (rs, rowNum) -> mapWithdrawalOrder(rs),
                 chain, limit);
     }
-
     public List<WithdrawalOrderRecord> listWithdrawalsByStatus(String chain, String status, int limit) {
         return jdbcTemplate.query("""
                         select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
@@ -1334,7 +1282,6 @@ public class ChainJdbcRepository {
                 (rs, rowNum) -> mapWithdrawalOrder(rs),
                 chain, status, limit);
     }
-
     public boolean isWithdrawalInPendingEvm7702Batch(UUID tenantId, long withdrawalOrderId) {
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
                 select exists(
@@ -1348,7 +1295,6 @@ public class ChainJdbcRepository {
                 )
                 """, Boolean.class, tenantId, withdrawalOrderId));
     }
-
     public boolean isCollectionInPendingEvm7702Batch(UUID tenantId, long collectionRecordId) {
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
                 select exists(
@@ -1362,7 +1308,6 @@ public class ChainJdbcRepository {
                 )
                 """, Boolean.class, tenantId, collectionRecordId));
     }
-
     public int claimWithdrawalSigning(String chain, String orderNo, String fromAddress) {
         return jdbcTemplate.update("""
                         update withdrawal_order
@@ -1381,7 +1326,6 @@ public class ChainJdbcRepository {
                         """,
                 fromAddress, toTs(now()), chain, orderNo);
     }
-
     public int claimWithdrawalSigning(UUID tenantId, String chain, String orderNo, String fromAddress) {
         return jdbcTemplate.update("""
                         update withdrawal_order
@@ -1401,7 +1345,6 @@ public class ChainJdbcRepository {
                         """,
                 fromAddress, toTs(now()), tenantId, chain, orderNo);
     }
-
     public int markStaleSigningWithdrawalsUnknown(String chain, Instant before) {
         return jdbcTemplate.update("""
                         update withdrawal_order
@@ -1413,7 +1356,6 @@ public class ChainJdbcRepository {
                         """,
                 toTs(now()), chain, toTs(before));
     }
-
     public int markWithdrawalSent(String chain, String orderNo, String fromAddress, String txHash) {
         if (txHash == null || txHash.isBlank()) {
             throw new IllegalArgumentException("withdrawal tx hash must not be blank");
@@ -1447,7 +1389,6 @@ public class ChainJdbcRepository {
                         """,
                 fromAddress, txHash, toTs(now()), tenantId, chain, orderNo);
     }
-
     public int markWithdrawalBroadcastUnknown(String chain, String orderNo, String fromAddress, String errorMessage) {
         return jdbcTemplate.update("""
                         update withdrawal_order
@@ -1501,7 +1442,6 @@ public class ChainJdbcRepository {
                         """,
                 status, fromAddress, txHash, errorMessage, toTs(now()), tenantId, chain, orderNo);
     }
-
     public int markWithdrawalConfirmed(String chain, String orderNo, String txHash) {
         return jdbcTemplate.update("""
                         update withdrawal_order
@@ -1511,7 +1451,6 @@ public class ChainJdbcRepository {
                         """,
                 txHash, toTs(now()), chain, orderNo, txHash);
     }
-
     public int markWithdrawalConfirmed(UUID tenantId, String chain, String orderNo, String txHash) {
         return jdbcTemplate.update("""
                         update withdrawal_order
@@ -1581,14 +1520,12 @@ public class ChainJdbcRepository {
         }
         return true;
     }
-
     public Optional<String> findWithdrawalStatus(String chain, String orderNo) {
         List<String> results = jdbcTemplate.queryForList("""
                         select status from withdrawal_order where chain = ? and order_no = ?
                         """, String.class, chain, orderNo);
         return results.stream().findFirst();
     }
-
     public Optional<String> findWithdrawalTxHash(String chain, String orderNo) {
         List<String> results = jdbcTemplate.queryForList("""
                         select tx_hash from withdrawal_order
@@ -1596,7 +1533,6 @@ public class ChainJdbcRepository {
                         """, String.class, chain, orderNo);
         return results.stream().findFirst();
     }
-
     public Optional<String> findWithdrawalTxHash(UUID tenantId, String chain, String orderNo) {
         List<String> results = jdbcTemplate.queryForList("""
                         select tx_hash from withdrawal_order
@@ -1604,7 +1540,6 @@ public class ChainJdbcRepository {
                         """, String.class, tenantId, chain, orderNo);
         return results.stream().findFirst();
     }
-
     public UUID requireWithdrawalTenant(String chain, String orderNo) {
         List<UUID> tenants = jdbcTemplate.queryForList("""
                         select tenant_id from withdrawal_order
@@ -1616,7 +1551,6 @@ public class ChainJdbcRepository {
         }
         return tenants.getFirst();
     }
-
     public Optional<WithdrawalOrderRecord> findWithdrawalOrder(String chain, String orderNo) {
         List<WithdrawalOrderRecord> results = jdbcTemplate.query("""
                         select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
@@ -1628,7 +1562,6 @@ public class ChainJdbcRepository {
                 chain, orderNo);
         return results.stream().findFirst();
     }
-
     public Optional<WithdrawalOrderRecord> findWithdrawalOrder(UUID tenantId, String chain, String orderNo) {
         List<WithdrawalOrderRecord> results = jdbcTemplate.query("""
                         select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
@@ -1639,7 +1572,6 @@ public class ChainJdbcRepository {
                 (rs, rowNum) -> mapWithdrawalOrder(rs), tenantId, chain, orderNo);
         return results.stream().findFirst();
     }
-
     private WithdrawalOrderRecord mapWithdrawalOrder(java.sql.ResultSet rs) throws java.sql.SQLException {
         return WithdrawalOrderRecord.builder()
                 .id(rs.getLong("id"))
@@ -1678,7 +1610,6 @@ public class ChainJdbcRepository {
                 tenantId, custodyAddressId,
                 toTs(now()), toTs(now()));
     }
-
     public List<ChainCollectionRecord> listCollectionsForSigning(String chain, int limit) {
         return jdbcTemplate.query("""
                         select id, tenant_id, custody_address_id, collection_no, chain, asset_symbol, from_address, to_address,
@@ -1692,7 +1623,6 @@ public class ChainJdbcRepository {
                 (rs, rowNum) -> mapCollectionRecord(rs),
                 chain, limit);
     }
-
     public List<ChainCollectionRecord> listCollectionsByStatus(String chain, String status, int limit) {
         return jdbcTemplate.query("""
                         select id, tenant_id, custody_address_id, collection_no, chain, asset_symbol, from_address, to_address,
@@ -1757,7 +1687,6 @@ public class ChainJdbcRepository {
                         """,
                 txHash, toTs(now()), tenantId, chain, collectionNo);
     }
-
     public Optional<String> findCollectionStatus(UUID tenantId, String chain, String collectionNo) {
         Objects.requireNonNull(tenantId, "tenantId is required");
         List<String> results = jdbcTemplate.queryForList("""
@@ -1767,7 +1696,6 @@ public class ChainJdbcRepository {
                         """, String.class, tenantId, chain, collectionNo);
         return results.stream().findFirst();
     }
-
     public Optional<String> findCollectionTxHash(UUID tenantId, String chain, String collectionNo) {
         Objects.requireNonNull(tenantId, "tenantId is required");
         List<String> results = jdbcTemplate.queryForList("""
@@ -1777,7 +1705,6 @@ public class ChainJdbcRepository {
                         """, String.class, tenantId, chain, collectionNo);
         return results.stream().findFirst();
     }
-
     private ChainCollectionRecord mapCollectionRecord(java.sql.ResultSet rs) throws java.sql.SQLException {
         return ChainCollectionRecord.builder()
                 .id(rs.getLong("id"))
@@ -1904,7 +1831,6 @@ public class ChainJdbcRepository {
                 chain, txId);
         return results.stream().findFirst();
     }
-
     public boolean bitcoinLikeSigningTransactionExists(AssetRuntimeMetadata currency, String txId) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         Boolean exists = jdbcTemplate.queryForObject("""
@@ -1915,7 +1841,6 @@ public class ChainJdbcRepository {
                         """, Boolean.class, chain, txId);
         return Boolean.TRUE.equals(exists);
     }
-
     public int updateBitcoinLikeSigningTransaction(AssetRuntimeMetadata currency, WithdrawTransaction transaction) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         return jdbcTemplate.update("""
@@ -1938,7 +1863,6 @@ public class ChainJdbcRepository {
                 chain,
                 transaction.getId());
     }
-
     public int markBitcoinLikeSigningError(AssetRuntimeMetadata currency, int transactionId, String errorMessage) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         return jdbcTemplate.update("""
@@ -1949,7 +1873,6 @@ public class ChainJdbcRepository {
                         """,
                 errorMessage, toTs(now()), chain, transactionId);
     }
-
     public List<WithdrawTransaction> findSentBitcoinLikeSigningTransactions(AssetRuntimeMetadata currency) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         return jdbcTemplate.query("""
@@ -1961,7 +1884,6 @@ public class ChainJdbcRepository {
                 (rs, rowNum) -> mapSigningTransaction(rs),
                 chain, Constants.SENT);
     }
-
     public Optional<LedgerBalanceRecord> findLedgerBalance(String chain, String assetSymbol, String accountId) {
         List<LedgerBalanceRecord> results = jdbcTemplate.query("""
                         select chain, asset_symbol, account_id, available_balance, locked_balance, total_balance,
@@ -1982,7 +1904,6 @@ public class ChainJdbcRepository {
                 chain, assetSymbol, accountId);
         return results.stream().findFirst();
     }
-
     public List<LedgerBalanceRecord> listLedgerBalances() {
         return jdbcTemplate.query("""
                         select id, chain, asset_symbol, account_id, available_balance, locked_balance, total_balance,
@@ -2002,7 +1923,6 @@ public class ChainJdbcRepository {
                         .updatedAt(toInstant(rs.getTimestamp("updated_at")))
                         .build());
     }
-
     public BigDecimal sumLedgerTotalBalance(String chain, String assetSymbol) {
         BigDecimal balance = jdbcTemplate.queryForObject("""
                         select coalesce(sum(total_balance), 0)
@@ -2012,7 +1932,6 @@ public class ChainJdbcRepository {
                 BigDecimal.class, chain, assetSymbol);
         return balance == null ? BigDecimal.ZERO : balance;
     }
-
     public BigDecimal sumLedgerAvailableBalance(String chain, String assetSymbol) {
         BigDecimal balance = jdbcTemplate.queryForObject("""
                         select coalesce(sum(available_balance), 0)
@@ -2050,7 +1969,6 @@ public class ChainJdbcRepository {
                         """,
                 chain, transactionId, Constants.SIGNING, staleSeconds) == 1;
     }
-
     private WithdrawTransaction mapSigningTransaction(java.sql.ResultSet rs) throws java.sql.SQLException {
         return WithdrawTransaction.builder()
                 .id(rs.getInt("id"))
@@ -2063,7 +1981,6 @@ public class ChainJdbcRepository {
                 .updateDate(rs.getTimestamp("update_date"))
                 .build();
     }
-
     public int recordEvmTokenTransfer(DepositEvent event, long logIndex, String status) {
         return jdbcTemplate.update("""
                         insert into evm_token_transfer(chain, tx_hash, log_index, token_symbol, contract_address,
@@ -2079,7 +1996,6 @@ public class ChainJdbcRepository {
                 event.fromAddress(), event.toAddress(), event.amount(), event.blockHeight(),
                 event.confirmations(), status, toTs(now()), toTs(now()));
     }
-
     public int recordTronTokenTransfer(DepositEvent event, long logIndex, String status) {
         return jdbcTemplate.update("""
                         insert into tron_token_transfer(chain, tx_hash, log_index, token_symbol, contract_address,
@@ -2116,7 +2032,6 @@ public class ChainJdbcRepository {
             throw new IllegalStateException("ledger balance belongs to another tenant");
         }
     }
-
     public boolean debitLedgerBalance(String chain, String assetSymbol, String accountId, BigDecimal amount) {
         int updated = jdbcTemplate.update("""
                         update ledger_balance
@@ -2333,7 +2248,6 @@ public class ChainJdbcRepository {
                         .build(),
                 chain, chain, chain, minimumAmount, HotWalletRules.DEFAULT_HOT_USER_ID, chain, limit);
     }
-
     public Optional<String> findActiveTenantCollectionAddress(UUID tenantId, String chain) {
         if (tenantId == null) {
             return Optional.empty();
@@ -2349,7 +2263,6 @@ public class ChainJdbcRepository {
                         """, String.class, tenantId, chain)
                 .stream().findFirst();
     }
-
     public boolean isEvm7702CollectionActive(String chain, String network) {
         Boolean active = jdbcTemplate.queryForObject("""
                 select exists(select 1 from evm_7702_config
@@ -2357,7 +2270,6 @@ public class ChainJdbcRepository {
                 """, Boolean.class, chain, network);
         return Boolean.TRUE.equals(active);
     }
-
     public boolean isEvm7702Managed(String chain, String network) {
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
                 select exists(select 1 from evm_7702_config
@@ -2365,7 +2277,6 @@ public class ChainJdbcRepository {
                                  and status in ('ACTIVE', 'PAUSED'))
                 """, Boolean.class, chain, network));
     }
-
     public boolean isEvm7702NativeCollectionActive(String chain, String network) {
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
                 select exists(select 1 from evm_7702_config
@@ -2373,7 +2284,6 @@ public class ChainJdbcRepository {
                                  and native_collection_enabled = true)
                 """, Boolean.class, chain, network));
     }
-
     public boolean isEvm7702BatchWithdrawalActive(String chain, String network) {
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
                 select exists(select 1 from evm_7702_config
@@ -2381,7 +2291,6 @@ public class ChainJdbcRepository {
                                  and batch_withdrawal_enabled = true)
                 """, Boolean.class, chain, network));
     }
-
     public void updateScanHeight(String chain, String scannerName, long bestHeight, long safeHeight) {
         jdbcTemplate.update("""
                         insert into chain_scan_height(chain, scanner_name, best_height, safe_height, status,
@@ -2399,7 +2308,6 @@ public class ChainJdbcRepository {
                         """,
                 chain, scannerName, bestHeight, safeHeight, toTs(now()), toTs(now()));
     }
-
     public Optional<Long> findScanSafeHeight(String chain, String scannerName) {
         List<Long> results = jdbcTemplate.queryForList("""
                         select safe_height from chain_scan_height
@@ -2407,7 +2315,6 @@ public class ChainJdbcRepository {
                         """, Long.class, chain, scannerName);
         return results.stream().findFirst();
     }
-
     public List<Long> listCanonicalDepositBlockHeights(String chain, long minimumHeight) {
         return jdbcTemplate.queryForList("""
                         select distinct block_height
@@ -2417,7 +2324,6 @@ public class ChainJdbcRepository {
                          order by block_height
                         """, Long.class, chain, minimumHeight);
     }
-
     public List<ChainScanHeightRecord> listActiveScanHeights() {
         return jdbcTemplate.query("""
                         select chain, scanner_name, best_height, safe_height, status, updated_at
@@ -2434,7 +2340,6 @@ public class ChainJdbcRepository {
                         .updatedAt(toInstant(rs.getTimestamp("updated_at")))
                         .build());
     }
-
     public Optional<TokenDefinition> findToken(String chain, String symbol) {
         List<TokenDefinition> results = queryTokens("""
                 select id, chain, symbol,
@@ -2445,7 +2350,6 @@ public class ChainJdbcRepository {
                 """, chain, symbol);
         return results.stream().findFirst();
     }
-
     public Optional<TokenDefinition> findTokenByContract(String chain, String contractAddress) {
         List<TokenDefinition> results = queryTokens("""
                 select id, chain, symbol,
@@ -2460,7 +2364,6 @@ public class ChainJdbcRepository {
                 """, chain, contractAddress, contractAddress, contractAddress);
         return results.stream().findFirst();
     }
-
     public List<TokenDefinition> listTokens(String chain) {
         return queryTokens("""
                 select id, chain, symbol,
@@ -2470,7 +2373,6 @@ public class ChainJdbcRepository {
                 from token_config where chain = ? and enabled = true order by symbol
                 """, chain);
     }
-
     public Optional<ChainAsset> findAsset(String chain, String symbol) {
         List<ChainAsset> results = jdbcTemplate.query("""
                         select id, chain, symbol, asset_kind, contract_address, decimals, native_asset, active,
@@ -2494,7 +2396,6 @@ public class ChainJdbcRepository {
                 chain, symbol);
         return results.stream().findFirst();
     }
-
     public List<AccountChainProfile> listEnabledChainProfiles() {
         return jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
@@ -2507,7 +2408,6 @@ public class ChainJdbcRepository {
                         """,
                 (rs, rowNum) -> mapAccountProfile(rs));
     }
-
     public List<AccountChainProfile> listAllChainProfiles() {
         return jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
@@ -2519,7 +2419,6 @@ public class ChainJdbcRepository {
                         """,
                 (rs, rowNum) -> mapAccountProfile(rs));
     }
-
     public boolean systemBoolean(String configKey, boolean defaultValue) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
                         select config_value, enabled
@@ -2537,7 +2436,6 @@ public class ChainJdbcRepository {
         }
         return Boolean.parseBoolean(String.valueOf(row.get("config_value")));
     }
-
     public Optional<String> systemValue(String configKey) {
         List<String> values = jdbcTemplate.queryForList("""
                         select config_value
@@ -2547,7 +2445,6 @@ public class ChainJdbcRepository {
                         """, String.class, configKey);
         return values.stream().findFirst();
     }
-
     public List<ChainRpcNode> listEnabledRpcNodes(String chain, String network, String environment, String purpose) {
         String env = environment == null ? "" : environment;
         String nodePurpose = purpose == null ? "rpc" : purpose;
@@ -2566,11 +2463,9 @@ public class ChainJdbcRepository {
                         """,
                 (rs, rowNum) -> mapRpcNode(rs), chain, network, env, nodePurpose);
     }
-
     public List<ChainRpcNode> listEnabledRpcNodes(String chain, String network, String environment) {
         return listEnabledRpcNodes(chain, network, environment, "rpc");
     }
-
     public List<ChainRpcNode> listAllEnabledRpcNodes(String chain, String network, String environment) {
         String env = environment == null ? "" : environment;
         return jdbcTemplate.query("""
@@ -2587,23 +2482,18 @@ public class ChainJdbcRepository {
                         """,
                 (rs, rowNum) -> mapRpcNode(rs), chain, network, env);
     }
-
     private static Timestamp toTs(Instant instant) {
         return instant == null ? null : Timestamp.from(instant);
     }
-
     private static Instant nowOr(Instant instant) {
         return instant == null ? now() : instant;
     }
-
     private static Instant now() {
         return Instant.now();
     }
-
     private static Instant toInstant(Timestamp timestamp) {
         return timestamp == null ? null : timestamp.toInstant();
     }
-
     private List<TokenDefinition> queryTokens(String sql, Object... args) {
         try {
             return jdbcTemplate.query(sql,
@@ -2622,7 +2512,6 @@ public class ChainJdbcRepository {
             return List.of();
         }
     }
-
     private static AccountChainProfile mapAccountProfile(ResultSet rs) throws SQLException {
         return AccountChainProfile.builder()
                 .chain(rs.getString("chain"))
@@ -2649,7 +2538,6 @@ public class ChainJdbcRepository {
                 .scanMaxBlocksPerRun(rs.getObject("scan_max_blocks_per_run", Long.class))
                 .build();
     }
-
     private static BitcoinLikeChainProfile mapBitcoinLikeProfile(ResultSet rs) throws SQLException {
         return BitcoinLikeChainProfile.builder()
                 .chain(rs.getString("chain"))
@@ -2676,7 +2564,6 @@ public class ChainJdbcRepository {
                 .scanMaxBlocksPerRun(rs.getObject("scan_max_blocks_per_run", Long.class))
                 .build();
     }
-
     private static ChainRpcNode mapRpcNode(ResultSet rs) throws SQLException {
         return ChainRpcNode.builder()
                 .id(rs.getLong("id"))
@@ -2702,7 +2589,6 @@ public class ChainJdbcRepository {
                 .remark(rs.getString("remark"))
                 .build();
     }
-
     private static ChainAddressRecord mapChainAddress(java.sql.ResultSet rs) throws java.sql.SQLException {
         return ChainAddressRecord.builder()
                 .id(rs.getLong("id"))

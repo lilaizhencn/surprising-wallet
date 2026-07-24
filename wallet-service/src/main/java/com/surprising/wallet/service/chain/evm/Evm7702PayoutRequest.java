@@ -44,13 +44,11 @@ public record Evm7702PayoutRequest(
     public byte[] batchId() {
         return batchId.clone();
     }
-
     public void requireNotExpired(Instant now) {
         if (deadline.compareTo(BigInteger.valueOf(now.getEpochSecond())) <= 0) {
             throw new IllegalArgumentException("payout signature deadline has expired");
         }
     }
-
     private static boolean allZero(byte[] value) {
         for (byte current : value) if (current != 0) return false;
         return true;

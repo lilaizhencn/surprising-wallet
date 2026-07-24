@@ -60,7 +60,7 @@ public class RbfBumpJob {
     private WalletRuntimeConfigService runtimeConfigService;
 
     /**
-     * 每 30 秒检查一次 RBF 触发队列
+     * 每 30 秒检查一次 RBF 触发队列，发现请求即执行重报流程。
      */
     @Scheduled(scheduler = "withdrawTaskScheduler", cron = "0/30 * * * * ?")
     public void execute() {
@@ -85,6 +85,9 @@ public class RbfBumpJob {
         }
     }
 
+    /**
+     * 按交易 id 重建 fee 更高的签名 payload，并回推到签名队列。
+     */
     private void bumpFee(int txId) {
         // 1. 找到原始交易
         AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata("BTC");

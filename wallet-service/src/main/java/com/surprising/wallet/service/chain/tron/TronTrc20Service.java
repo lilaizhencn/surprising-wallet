@@ -37,7 +37,6 @@ public class TronTrc20Service {
         Chain.Transaction signed = client.api().signTransaction(unsigned, keyPair);
         return new TronTransactionService.SignedTronTransaction(TronTransactionService.txId(signed), signed);
     }
-
     public String broadcast(TronTridentClient client, TronTransactionService.SignedTronTransaction transaction) {
         return client.broadcast(transaction.transaction());
     }

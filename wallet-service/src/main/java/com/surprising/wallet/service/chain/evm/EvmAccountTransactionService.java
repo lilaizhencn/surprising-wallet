@@ -31,14 +31,8 @@ import java.util.Optional;
 public class EvmAccountTransactionService {
     private static final BigInteger WEI_PER_NATIVE = new BigInteger("1000000000000000000");
     private static final BigInteger NATIVE_GAS_LIMIT = BigInteger.valueOf(21_000L);
-    private static final BigInteger TOKEN_GAS_LIMIT = BigInteger.valueOf(65_000L);
-    private static final BigInteger COLLECTION_FEE_SAFETY_MULTIPLIER = BigInteger.TWO;
-
-    private final ChainJdbcRepository repository;
-    private final ChainRpcNodeService rpcNodeService;
-    private final AccountSecp256k1KeyService keyService;
-    private final EvmTransactionBuilder transactionBuilder;
-
+    private static final BigInteger TOKEN_GAS_LIMIT = BigInteger.valueOf(65_000L);    private static final BigInteger COLLECTION_FEE_SAFETY_MULTIPLIER = BigInteger.TWO;
+    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final AccountSecp256k1KeyService keyService;    private final EvmTransactionBuilder transactionBuilder;
     public String sendNative(String chain, ChainAddressRecord from, String toAddress, BigDecimal amount) {
         AccountChainProfile profile = profile(chain);
         BigInteger valueWei = amount.movePointRight(18).toBigIntegerExact();
@@ -73,7 +67,6 @@ public class EvmAccountTransactionService {
             return txHash;
         });
     }
-
     public BigDecimal estimateCollectionFeeReserve(String chain, int enabledTokenCount) {
         AccountChainProfile profile = profile(chain);
         int tokenCount = Math.max(0, enabledTokenCount);
@@ -107,7 +100,6 @@ public class EvmAccountTransactionService {
         }
         return false;
     }
-
     public boolean confirmCollection(java.util.UUID tenantId, String chain, String collectionNo) {
         String txHash = repository.findCollectionTxHash(tenantId, chain, collectionNo).orElseThrow();
         TransactionReceipt receipt = confirmedReceipt(chain, txHash).orElse(null);
@@ -123,7 +115,6 @@ public class EvmAccountTransactionService {
         }
         return false;
     }
-
     private Optional<TransactionReceipt> confirmedReceipt(String chain, String txHash) {
         AccountChainProfile profile = profile(chain);
         return withWeb3(profile, web3j -> {
@@ -139,7 +130,6 @@ public class EvmAccountTransactionService {
             return confirmations.compareTo(BigInteger.valueOf(required)) >= 0 ? receipt : Optional.empty();
         });
     }
-
     private void markConfirmed(String chain, String txHash, TransactionReceipt receipt) {
         BigInteger gasUsed = receipt.getGasUsed() == null ? BigInteger.ZERO : receipt.getGasUsed();
         BigInteger effectiveGasPrice = receipt.getEffectiveGasPrice() == null
@@ -160,7 +150,6 @@ public class EvmAccountTransactionService {
                 .rawPayload(receipt.toString())
                 .build());
     }
-
     private String broadcast(Web3j web3j, Long chainId, RawTransaction tx, Credentials credentials) throws Exception {
         byte[] signed = TransactionEncoder.signMessage(tx, chainId, credentials);
         EthSendTransaction sent = web3j.ethSendRawTransaction(Numeric.toHexString(signed)).send();
@@ -169,16 +158,13 @@ public class EvmAccountTransactionService {
         }
         return sent.getTransactionHash();
     }
-
     private Credentials credentials(AccountChainProfile profile, ChainAddressRecord from) {
         ECKey ecKey = keyService.key(profile, from);
         return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(ecKey.getPrivKey(), 64));
     }
-
     private BigInteger gasPrice(Web3j web3j) throws Exception {
         return web3j.ethGasPrice().send().getGasPrice();
     }
-
     private BigInteger pendingNonce(Web3j web3j, String address) throws Exception {
         return web3j.ethGetTransactionCount(address, DefaultBlockParameterName.PENDING)
                 .send()
@@ -202,7 +188,6 @@ public class EvmAccountTransactionService {
                 .rawPayload(rawPayload)
                 .build());
     }
-
     private <T> T withWeb3(AccountChainProfile profile, Web3Request<T> request) {
         return rpcNodeService.withFailover(profile.getChain(), profile.getNetwork(), node -> {
             Web3j web3j = Web3j.build(new HttpService(node.getRpcUrl()));
@@ -217,24 +202,19 @@ public class EvmAccountTransactionService {
             }
         });
     }
-
     private AccountChainProfile profile(String chain) {
         return repository.findProfileByChain(chain)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chain));
     }
-
     private String nativeSymbol(AccountChainProfile profile) {
         return profile.getNativeSymbol() == null ? profile.getChain() : profile.getNativeSymbol();
     }
-
     private BigDecimal fee(BigInteger gasPrice, BigInteger gasLimit) {
         return weiToNative(gasPrice.multiply(gasLimit));
     }
-
     private BigDecimal weiToNative(BigInteger wei) {
         return new BigDecimal(wei).divide(new BigDecimal(WEI_PER_NATIVE), 18, RoundingMode.DOWN);
     }
-
     private String normalize(String address) {
         return address == null ? null : address.toLowerCase(java.util.Locale.ROOT);
     }

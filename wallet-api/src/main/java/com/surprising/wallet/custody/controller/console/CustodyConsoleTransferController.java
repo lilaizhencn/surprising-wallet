@@ -18,12 +18,19 @@ import com.surprising.wallet.custody.service.CustodyWithdrawalService;
 @RestController
 @RequestMapping("/custody/console/v1")
 public class CustodyConsoleTransferController {
+    /** 提现服务：查询与提交提现工单。 */
     private final CustodyWithdrawalService transfers;
 
+    /**
+     * 注入提现服务。
+     */
     public CustodyConsoleTransferController(CustodyWithdrawalService transfers) {
         this.transfers = transfers;
     }
 
+    /**
+     * 控制台分页查询充值记录。
+     */
     @GetMapping("/deposits")
     public List<Map<String, Object>> deposits(
             @RequestParam(defaultValue = "") String chain,
@@ -38,6 +45,9 @@ public class CustodyConsoleTransferController {
                 chain, assetSymbol, status, search, limit, offset);
     }
 
+    /**
+     * 控制台分页查询提现记录。
+     */
     @GetMapping("/withdrawals")
     public List<Map<String, Object>> withdrawals(
             @RequestParam(defaultValue = "") String chain,
@@ -52,6 +62,9 @@ public class CustodyConsoleTransferController {
                 chain, assetSymbol, status, search, limit, offset);
     }
 
+    /**
+     * 提交控制台提现请求，来源打标记为 CONSOLE。
+     */
     @PostMapping("/withdrawals")
     public CustodyWithdrawalService.WithdrawalView create(
             @RequestBody CreateWithdrawalCommand body,

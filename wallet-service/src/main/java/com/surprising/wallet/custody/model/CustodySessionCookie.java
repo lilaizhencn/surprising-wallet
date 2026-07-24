@@ -8,13 +8,9 @@ import org.springframework.http.ResponseCookie;
 import java.time.Duration;
 
 import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
-
 public final class CustodySessionCookie {
-    public static final String NAME = "SW_CUSTODY_SESSION";
-
-    private CustodySessionCookie() {
+    public static final String NAME = "SW_CUSTODY_SESSION";    private CustodySessionCookie() {
     }
-
     public static String read(Cookie[] cookies) {
         if (cookies == null) {
             throw new CustodyUnauthorizedException("session cookie required");
@@ -27,15 +23,12 @@ public final class CustodySessionCookie {
         }
         throw new CustodyUnauthorizedException("session cookie required");
     }
-
     public static void set(HttpServletResponse response, String token, Duration ttl, boolean secure) {
         response.addHeader(HttpHeaders.SET_COOKIE, cookie(token, ttl, secure).toString());
     }
-
     public static void clear(HttpServletResponse response, boolean secure) {
         response.addHeader(HttpHeaders.SET_COOKIE, cookie("", Duration.ZERO, secure).toString());
     }
-
     private static ResponseCookie cookie(String value, Duration maxAge, boolean secure) {
         return ResponseCookie.from(NAME, value)
                 .httpOnly(true)

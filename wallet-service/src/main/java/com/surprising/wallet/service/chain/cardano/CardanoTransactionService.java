@@ -26,22 +26,15 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class CardanoTransactionService {
-    private static final String CHAIN = CardanoBackendClient.CHAIN;
-    private static final String SYMBOL = "ADA";
-    private static final int ADA_DECIMALS = 6;
-
-    private final CardanoBackendClient backendClient;
-    private final CardanoKeyService keyService;
-    private final ChainJdbcRepository repository;
+public
+class CardanoTransactionService {
+    private static final String CHAIN = CardanoBackendClient.CHAIN;    private static final String SYMBOL = "ADA";    private static final int ADA_DECIMALS = 6;    private final CardanoBackendClient backendClient;    private final CardanoKeyService keyService;    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
-
     public String sendNative(ChainAddressRecord from, String toAddress, BigInteger lovelace) {
         return send(from, toAddress, Amount.lovelace(lovelace));
     }
-
     public String sendToken(ChainAddressRecord from, TokenDefinition token, String toAddress, BigDecimal amount) {
         BigInteger atomic = toAtomic(amount, token.getDecimals());
         String unit = CardanoAssetUnit.fromTokenContract(token.getContractAddress());
@@ -78,16 +71,13 @@ public class CardanoTransactionService {
         }
         return false;
     }
-
     public static BigInteger toLovelace(BigDecimal amount) {
         return toAtomic(amount, ADA_DECIMALS);
     }
-
     public static BigDecimal fromLovelace(BigInteger amount) {
         return new BigDecimal(amount == null ? BigInteger.ZERO : amount).movePointLeft(ADA_DECIMALS)
                 .stripTrailingZeros();
     }
-
     private String send(ChainAddressRecord from, String toAddress, Amount amount) {
         return backendClient.withBackend((backend, node, profile) -> {
             SecretKey secretKey = secretKey(from);
@@ -114,7 +104,6 @@ public class CardanoTransactionService {
             return hash;
         });
     }
-
     private String collect(java.util.UUID tenantId, String collectionNo, TxSubmitter submitter) {
         Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
@@ -134,7 +123,6 @@ public class CardanoTransactionService {
             throw e;
         }
     }
-
     private boolean confirmed(AccountChainProfile profile, String txHash) {
         if (txHash == null || txHash.isBlank()) {
             return false;
@@ -159,11 +147,9 @@ public class CardanoTransactionService {
         }
         return false;
     }
-
     private Ed25519DerivedKey derivedKey(ChainAddressRecord from) {
         return keyService.derive(from.getUserId(), from.getBiz(), from.getAddressIndex());
     }
-
     private SecretKey secretKey(ChainAddressRecord from) {
         try {
             return SecretKey.create(derivedKey(from).privateSeed());
@@ -171,17 +157,14 @@ public class CardanoTransactionService {
             throw new IllegalStateException("unable to create Cardano signing key", e);
         }
     }
-
     private static BigInteger toAtomic(BigDecimal amount, int decimals) {
         return amount.movePointRight(decimals).setScale(0, RoundingMode.UNNECESSARY).toBigIntegerExact();
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
-
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);

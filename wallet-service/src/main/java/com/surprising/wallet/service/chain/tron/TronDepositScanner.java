@@ -31,9 +31,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class TronDepositScanner {
     private static final BigDecimal SUN_PER_TRX = new BigDecimal("1000000");
-
-    private final ChainJdbcRepository repository;
-    private final TronScanner tronScanner;
+    private final ChainJdbcRepository repository;    private final TronScanner tronScanner;
 
     public List<DepositEvent> scanAndCreditTrx(TronTridentClient client,
                                                long blockHeight,
@@ -114,15 +112,12 @@ public class TronDepositScanner {
             throws InvalidProtocolBufferException {
         return contract.getParameter().unpack(Contract.TransferContract.class);
     }
-
     private static boolean containsAddress(Set<String> addresses, String address) {
         return addresses.contains(address.toLowerCase(Locale.ROOT));
     }
-
     private static int confirmations(long bestHeight, long blockHeight) {
         return Math.toIntExact(Math.max(0, bestHeight - blockHeight + 1));
     }
-
     private static BigDecimal transactionFee(TronTridentClient client, String txId) {
         try {
             Response.TransactionInfo info = client.getTransactionInfo(txId, NodeType.FULL_NODE);

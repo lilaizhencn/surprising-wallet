@@ -14,8 +14,7 @@ import java.util.List;
 
 /** ABI codec for Eip7702BatchCollector.collectBatch. */
 public class Evm7702ContractCodec {
-    public String encodeCollectBatch(List<Evm7702CollectionRequest> requests, List<byte[]> signatures) {
-        if (requests == null || requests.isEmpty() || requests.size() > 100
+    public String encodeCollectBatch(List<Evm7702CollectionRequest> requests, List<byte[]> signatures) {        if (requests == null || requests.isEmpty() || requests.size() > 100
                 || signatures == null || signatures.size() != requests.size()) {
             throw new IllegalArgumentException("batch must contain 1..100 requests and matching signatures");
         }
@@ -41,7 +40,6 @@ public class Evm7702ContractCodec {
                 List.of());
         return FunctionEncoder.encode(function);
     }
-
     public static final class CollectionRequestStruct extends StaticStruct {
         CollectionRequestStruct(Evm7702CollectionRequest request) {
             super(

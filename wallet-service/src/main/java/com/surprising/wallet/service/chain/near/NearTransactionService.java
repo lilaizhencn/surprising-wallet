@@ -23,18 +23,9 @@ import java.time.Instant;
 import java.util.Optional;
 
 @Service
-public class NearTransactionService {
-    private static final String CHAIN = "NEAR";
-    private static final String SYMBOL = "NEAR";
-    private static final int DECIMALS = 24;
-    private static final long DEFAULT_FUNCTION_CALL_GAS = 30_000_000_000_000L;
-    private static final long TOKEN_TRANSFER_GAS = 15_000_000_000_000L;
-    private static final BigInteger ONE_YOCTO = BigInteger.ONE;
-
-    private final NearRpcClient rpc;
-    private final NearTransactionSigner signer;
-    private final NearKeyService keyService;
-    private final ChainJdbcRepository repository;
+public
+class NearTransactionService {
+    private static final String CHAIN = "NEAR";    private static final String SYMBOL = "NEAR";    private static final int DECIMALS = 24;    private static final long DEFAULT_FUNCTION_CALL_GAS = 30_000_000_000_000L;    private static final long TOKEN_TRANSFER_GAS = 15_000_000_000_000L;    private static final BigInteger ONE_YOCTO = BigInteger.ONE;    private final NearRpcClient rpc;    private final NearTransactionSigner signer;    private final NearKeyService keyService;    private final ChainJdbcRepository repository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired(required = false)
@@ -49,7 +40,6 @@ public class NearTransactionService {
         this.keyService = keyService;
         this.repository = repository;
     }
-
     public String sendNative(ChainAddressRecord from, String toAddress, BigInteger amountYocto) {
         JsonNode accessKey = rpc.accessKey(from.getAddress(), publicKeyBase58(from));
         long nonce = accessKey.path("nonce").asLong(0L) + 1L;
@@ -64,11 +54,9 @@ public class NearTransactionService {
                 result.toString());
         return txHash;
     }
-
     public boolean accountExists(String accountId) {
         return rpc.accountExists(accountId);
     }
-
     public String activateImplicitAccount(ChainAddressRecord payer, String accountId, BigInteger amountYocto) {
         if (!NearKeyService.isValidAccountId(accountId)) {
             throw new IllegalArgumentException("invalid NEAR account id: " + accountId);
@@ -78,7 +66,6 @@ public class NearTransactionService {
         }
         return sendNative(payer, accountId, amountYocto);
     }
-
     public String sendToken(ChainAddressRecord from, TokenDefinition token, String toAccountId, BigDecimal amount) {
         BigInteger atomicAmount = toAtomic(amount, token.getDecimals());
         ObjectNode args = objectMapper.createObjectNode();
@@ -124,14 +111,12 @@ public class NearTransactionService {
                 result.toString());
         return new DeployResult(txHash, nonce, result);
     }
-
     public boolean tokenStorageRegistered(TokenDefinition token, String accountId) {
         ObjectNode args = objectMapper.createObjectNode();
         args.put("account_id", accountId);
         JsonNode balance = rpc.viewFunctionJson(token.getContractAddress(), "storage_balance_of", jsonBytes(args));
         return balance != null && !balance.isNull() && !balance.isMissingNode();
     }
-
     public BigInteger tokenStorageMinimum(TokenDefinition token) {
         JsonNode bounds = rpc.viewFunctionJson(token.getContractAddress(), "storage_balance_bounds",
                 "{}".getBytes(StandardCharsets.UTF_8));
@@ -196,7 +181,6 @@ public class NearTransactionService {
             throw e;
         }
     }
-
     private void ensureTokenStorageRegistered(TokenDefinition token, String accountId) {
         if (tokenStorageRegistered(token, accountId)) {
             return;
@@ -218,7 +202,6 @@ public class NearTransactionService {
             throw new IllegalStateException("NEAR token storage registration did not complete");
         }
     }
-
     public boolean waitForTokenStorageRegistered(TokenDefinition token, String accountId, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
@@ -241,7 +224,6 @@ public class NearTransactionService {
         }
         return false;
     }
-
     public JsonNode requireSuccessfulConfirmation(String txHash, String senderAccountId, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         String sender = senderAccountId == null || senderAccountId.isBlank()
@@ -260,7 +242,6 @@ public class NearTransactionService {
         }
         throw new IllegalStateException("NEAR confirmation timeout for " + txHash);
     }
-
     private String publicKeyBase58(ChainAddressRecord from) {
         return keyService.publicKeyBase58(from.getUserId(), from.getBiz(), from.getAddressIndex());
     }
@@ -293,12 +274,10 @@ public class NearTransactionService {
                 .rawPayload(rawPayload)
                 .build());
     }
-
     private static boolean txSucceeded(JsonNode result) {
         JsonNode status = result.path("status");
         return status.has("SuccessValue") || status.has("SuccessReceiptId");
     }
-
     private static long gasBurnt(JsonNode result) {
         long total = result.path("transaction_outcome").path("outcome").path("gas_burnt").asLong(0L);
         for (JsonNode receipt : result.path("receipts_outcome")) {
@@ -306,7 +285,6 @@ public class NearTransactionService {
         }
         return total;
     }
-
     private static long blockHeight(JsonNode result) {
         long height = result.path("transaction_outcome").path("block_height").asLong(0L);
         for (JsonNode receipt : result.path("receipts_outcome")) {
@@ -314,21 +292,17 @@ public class NearTransactionService {
         }
         return height;
     }
-
     public static BigInteger toYocto(BigDecimal amount) {
         return amount.movePointRight(DECIMALS).setScale(0, RoundingMode.UNNECESSARY).toBigIntegerExact();
     }
-
     public static BigDecimal fromYocto(BigInteger amount) {
         return new BigDecimal(amount == null ? BigInteger.ZERO : amount)
                 .movePointLeft(DECIMALS)
                 .stripTrailingZeros();
     }
-
     public static BigInteger toAtomic(BigDecimal amount, int decimals) {
         return amount.movePointRight(decimals).setScale(0, RoundingMode.UNNECESSARY).toBigIntegerExact();
     }
-
     private byte[] jsonBytes(JsonNode json) {
         try {
             return objectMapper.writeValueAsBytes(json);
@@ -336,13 +310,11 @@ public class NearTransactionService {
             throw new IllegalStateException("NEAR JSON serialization failed", e);
         }
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
-
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);
@@ -351,7 +323,6 @@ public class NearTransactionService {
             throw new IllegalStateException("NEAR wait interrupted", e);
         }
     }
-
     public record DeployResult(String txHash, long nonce, JsonNode result) {
     }
 }

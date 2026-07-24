@@ -15,42 +15,34 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Component
-public class PubKeyConfig {
-    private static final HexFormat HEX = HexFormat.of();
-    private final WalletKeyMaterialProvider keyMaterial;
-    private final Bip32Node[] testNodes;
+public
+class PubKeyConfig {
+    private static final HexFormat HEX = HexFormat.of();    private final WalletKeyMaterialProvider keyMaterial;    private final Bip32Node[] testNodes;
 
     @Autowired
     public PubKeyConfig(WalletKeyMaterialProvider keyMaterial) {
         this.keyMaterial = keyMaterial;
         this.testNodes = null;
     }
-
     public PubKeyConfig(Bip32Node node1, Bip32Node node2, Bip32Node node3) {
         this.keyMaterial = null;
         this.testNodes = new Bip32Node[]{node1, node2, node3};
     }
-
     public Bip32Node node1() {
         return testNodes == null ? keyMaterial.sig1PublicRoot() : testNodes[0];
     }
-
     public Bip32Node node2() {
         return testNodes == null ? keyMaterial.sig2PublicRoot() : testNodes[1];
     }
-
     public Bip32Node node3() {
         return testNodes == null ? keyMaterial.recoveryPublicRoot() : testNodes[2];
     }
-
     public String genThree_TwoAddress(int currency, int userId, int biz, int index) {
         return genThreeTwoAddressMetadata(currency, userId, biz, index).address;
     }
-
     public AddressMetadata genThreeTwoAddressMetadata(int currency, int userId, int biz, int index) {
         return genThreeTwoAddressMetadata(Constants.NET_PARAMS, currency, userId, biz, index);
     }
-
     public AddressMetadata genThreeTwoAddressMetadata(NetworkParameters params, int currency, int userId, int biz, int index) {
         return genThreeTwoAddressMetadata(params, currency, userId, biz, index, node1(), node2(), node3());
     }
@@ -95,11 +87,9 @@ public class PubKeyConfig {
         String path = String.format("m/44/%d/%d/%d/%d", coinType, biz, userId, index);
         return new AddressMetadata(address, path, generator.getRedeemScriptHex(), "", pubKeys);
     }
-
     private static ECKey childKey(Bip32Node node, int currency, int biz, int userId, int index) {
         return node.getChild(44).getChild(currency).getChild(biz).getChild(userId).getChild(index).getEcKey();
     }
-
     public static class AddressMetadata {
         private final String address;
         private final String path;

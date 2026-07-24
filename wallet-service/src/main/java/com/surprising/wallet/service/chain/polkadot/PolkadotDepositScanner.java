@@ -24,21 +24,12 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class PolkadotDepositScanner {
-    private static final String CHAIN = PolkadotRuntimeClient.CHAIN;
-    private static final String SYMBOL = "DOT";
-    private static final String NATIVE_SCANNER = "polkadot-runtime-scanner";
-    private static final String ASSET_HUB_SCANNER = "polkadot-assethub-scanner";
-    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";
-    private static final String WALLET_ROLE_CONTRACT_DEPLOYER = "CONTRACT_DEPLOYER";
-    private static final int DEFAULT_DOT_DECIMALS = 10;
-
-    private final PolkadotRuntimeClient runtimeClient;
-    private final ChainJdbcRepository repository;
+public
+class PolkadotDepositScanner {
+    private static final String CHAIN = PolkadotRuntimeClient.CHAIN;    private static final String SYMBOL = "DOT";    private static final String NATIVE_SCANNER = "polkadot-runtime-scanner";    private static final String ASSET_HUB_SCANNER = "polkadot-assethub-scanner";    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";    private static final String WALLET_ROLE_CONTRACT_DEPLOYER = "CONTRACT_DEPLOYER";    private static final int DEFAULT_DOT_DECIMALS = 10;    private final PolkadotRuntimeClient runtimeClient;    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
-
     public List<DepositEvent> scanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "polkadot scanAndCredit");
         AccountChainProfile profile = profile();
@@ -50,7 +41,6 @@ public class PolkadotDepositScanner {
         }
         return events;
     }
-
     private List<DepositEvent> scanNative(AccountChainProfile profile) {
         long latest = runtimeClient.latestFinalizedHeight();
         int requiredConfirmations = requiredConfirmations(profile);
@@ -87,7 +77,6 @@ public class PolkadotDepositScanner {
         repository.updateScanHeight(CHAIN, NATIVE_SCANNER, latest, end);
         return events;
     }
-
     private List<DepositEvent> scanAssets(AccountChainProfile profile, Map<String, TokenDefinition> tokens) {
         long latest = runtimeClient.latestAssetHubFinalizedHeight();
         int requiredConfirmations = requiredConfirmations(profile);
@@ -157,7 +146,6 @@ public class PolkadotDepositScanner {
                 transfer.fromAddress(), tracked.getAddress(), amount, transfer.blockHeight(),
                 transfer.txHash(), confirmations, assetId, transfer.rawPayload());
     }
-
     private Map<String, ChainAddressRecord> trackedDepositAddresses(String assetSymbol) {
         Map<String, ChainAddressRecord> addresses = new HashMap<>();
         for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, assetSymbol)) {
@@ -167,7 +155,6 @@ public class PolkadotDepositScanner {
         }
         return addresses;
     }
-
     private boolean isTrackedRole(ChainAddressRecord address) {
         if (address == null) {
             return false;
@@ -188,7 +175,6 @@ public class PolkadotDepositScanner {
         }
         return addressesBySymbol;
     }
-
     private Map<String, TokenDefinition> tokensByAssetId() {
         Map<String, TokenDefinition> tokens = new HashMap<>();
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
@@ -199,7 +185,6 @@ public class PolkadotDepositScanner {
         }
         return tokens;
     }
-
     private long scanStart(AccountChainProfile profile, long safeHeight, String scannerName) {
         return repository.findScanSafeHeight(CHAIN, scannerName)
                 .map(height -> Math.min(height + 1L, safeHeight + 1L))
@@ -211,7 +196,6 @@ public class PolkadotDepositScanner {
                     return Math.max(0L, safeHeight - scanBatch(profile) + 1L);
                 });
     }
-
     private static int scanBatch(AccountChainProfile profile) {
         Long maxBlocks = profile.getScanMaxBlocksPerRun();
         if (maxBlocks != null && maxBlocks > 0) {
@@ -220,36 +204,29 @@ public class PolkadotDepositScanner {
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 25 : Math.min(batchSize, 100);
     }
-
     private static int requiredConfirmations(AccountChainProfile profile) {
         Integer configured = profile.getDepositConfirmations();
         return configured == null || configured <= 0 ? 12 : configured;
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     private int nativeDecimals() {
         return repository.findAsset(CHAIN, SYMBOL)
                 .map(ChainAsset::getDecimals)
                 .filter(decimals -> decimals != null && decimals > 0)
                 .orElse(DEFAULT_DOT_DECIMALS);
     }
-
     private static int confirmations(long latest, long blockHeight) {
         return (int) Math.min(Integer.MAX_VALUE, Math.max(1L, latest - blockHeight + 1L));
     }
-
     private static BigDecimal fromAtomic(BigInteger amount, int decimals) {
         return new BigDecimal(amount).movePointLeft(decimals).stripTrailingZeros();
     }
-
     private static String normalize(String address) {
         return address == null ? "" : address.trim().toLowerCase(Locale.ROOT);
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);

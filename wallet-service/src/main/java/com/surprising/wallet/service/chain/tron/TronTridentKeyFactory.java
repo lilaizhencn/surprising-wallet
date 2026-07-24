@@ -15,20 +15,16 @@ import java.util.Locale;
  * mnemonic, otherwise old addresses and signing services would diverge.
  */
 public final class TronTridentKeyFactory {
-    private TronTridentKeyFactory() {
-    }
-
+    private TronTridentKeyFactory() {    }
     public static KeyPair fromBitcoinEcKey(ECKey ecKey) {
         if (!ecKey.hasPrivKey()) {
             throw new IllegalArgumentException("Bitcoin ECKey must contain private key for TRON signing");
         }
         return fromPrivateKeyHex(Numeric.toHexStringNoPrefixZeroPadded(ecKey.getPrivKey(), 64));
     }
-
     public static KeyPair fromPrivateKeyHex(String privateKeyHex) {
         return new KeyPair(normalizePrivateKeyHex(privateKeyHex));
     }
-
     public static String normalizePrivateKeyHex(String privateKeyHex) {
         String clean = Numeric.cleanHexPrefix(privateKeyHex).toLowerCase(Locale.ROOT);
         if (!clean.matches("[0-9a-f]+") || clean.length() > 64) {
@@ -40,15 +36,12 @@ public final class TronTridentKeyFactory {
         }
         return Numeric.toHexStringNoPrefixZeroPadded(value, 64);
     }
-
     public static String toBase58Address(ECKey ecKey) {
         return fromBitcoinEcKey(ecKey).toBase58CheckAddress();
     }
-
     public static String toHexAddress(ECKey ecKey) {
         return fromBitcoinEcKey(ecKey).toHexAddress().toLowerCase(Locale.ROOT);
     }
-
     public static String legacyBase58Address(ECKey ecKey) {
         return TronWalletApi.getAddress(ecKey.getPubKey());
     }

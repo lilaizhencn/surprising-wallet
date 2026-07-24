@@ -19,21 +19,14 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class PolkadotTransactionService {
-    private static final String CHAIN = PolkadotRuntimeClient.CHAIN;
-    private static final String SYMBOL = "DOT";
-    private static final int DOT_DECIMALS = 10;
-    private static final BigInteger DEFAULT_ASSET_HUB_MIN_GAS_PLANCK = new BigInteger("20000000000");
+public
+class PolkadotTransactionService {
+    private static final String CHAIN = PolkadotRuntimeClient.CHAIN;    private static final String SYMBOL = "DOT";    private static final int DOT_DECIMALS = 10;    private static final BigInteger DEFAULT_ASSET_HUB_MIN_GAS_PLANCK = new BigInteger("20000000000");
     private static final BigInteger DEFAULT_ASSET_HUB_GAS_TOPUP_PLANCK = new BigInteger("100000000000");
-
-    private final PolkadotRuntimeClient runtimeClient;
-    private final PolkadotKeyService keyService;
-    private final ChainJdbcRepository repository;
-    private final HotWalletAddressService hotWalletAddressService;
+    private final PolkadotRuntimeClient runtimeClient;    private final PolkadotKeyService keyService;    private final ChainJdbcRepository repository;    private final HotWalletAddressService hotWalletAddressService;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
-
     public String sendNative(ChainAddressRecord from, String toAddress, BigInteger amountPlanck) {
         return sendNative(from, toAddress, amountPlanck, true);
     }
@@ -44,7 +37,6 @@ public class PolkadotTransactionService {
                 secretSeedHex(from), from.getAddress(), toAddress, amountPlanck, keepAlive);
         return tx.txHash();
     }
-
     public String sendAsset(ChainAddressRecord from, TokenDefinition token, String toAddress, BigDecimal amount) {
         return sendAsset(from, token, toAddress, amount, true);
     }
@@ -113,16 +105,13 @@ public class PolkadotTransactionService {
         }
         return false;
     }
-
     public static BigInteger toPlanck(BigDecimal amount) {
         return toAtomic(amount, DOT_DECIMALS);
     }
-
     public static BigDecimal fromPlanck(BigInteger amount) {
         return new BigDecimal(amount == null ? BigInteger.ZERO : amount).movePointLeft(DOT_DECIMALS)
                 .stripTrailingZeros();
     }
-
     private String collect(java.util.UUID tenantId, String collectionNo, TxSubmitter submitter) {
         Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
@@ -142,12 +131,10 @@ public class PolkadotTransactionService {
             throw e;
         }
     }
-
     private String secretSeedHex(ChainAddressRecord from) {
         Ed25519DerivedKey key = keyService.derive(from.getUserId(), from.getBiz(), from.getAddressIndex());
         return HexFormat.of().formatHex(key.privateSeed());
     }
-
     private void ensureAssetHubGas(ChainAddressRecord sender) {
         BigInteger minimum = systemPlanck("dot.asset_hub.min_sender_gas.planck",
                 DEFAULT_ASSET_HUB_MIN_GAS_PLANCK);
@@ -170,7 +157,6 @@ public class PolkadotTransactionService {
             throw new IllegalStateException("DOT Asset Hub gas top-up did not reach minimum reserve");
         }
     }
-
     private BigInteger systemPlanck(String key, BigInteger fallback) {
         return repository.systemValue(key)
                 .map(String::trim)
@@ -179,28 +165,23 @@ public class PolkadotTransactionService {
                 .filter(value -> value.signum() > 0)
                 .orElse(fallback);
     }
-
     private static boolean sameAddress(String left, String right) {
         return left != null && right != null && left.equalsIgnoreCase(right);
     }
-
     private static int confirmationLookback(AccountChainProfile profile) {
         Integer configured = profile.getWithdrawConfirmations();
         int confirmations = configured == null || configured <= 0 ? 12 : configured;
         return Math.max(512, confirmations * 20);
     }
-
     private boolean transactionFinalized(String assetSymbol, String txHash, int maxRecentBlocks) {
         if (SYMBOL.equalsIgnoreCase(assetSymbol)) {
             return runtimeClient.transactionFinalized(txHash, maxRecentBlocks);
         }
         return runtimeClient.assetTransactionFinalized(txHash, maxRecentBlocks);
     }
-
     private static BigInteger toAtomic(BigDecimal amount, int decimals) {
         return amount.movePointRight(decimals).setScale(0, RoundingMode.UNNECESSARY).toBigIntegerExact();
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
@@ -211,7 +192,6 @@ public class PolkadotTransactionService {
     private interface TxSubmitter {
         String submit();
     }
-
     public record DeployAssetResult(String txHash, String assetId, long blockHeight) {
     }
 }

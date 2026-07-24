@@ -17,45 +17,39 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 
 /**
- * 定时从外部 API 拉取实时 mempool 费率并写入 Redis。
+ * 定时从外部 API 拉取 BTC 推荐费率并写入 Redis。
  *
- * <p>每 2 分钟从 mempool.space API 拉取当前推荐费率 (sat/vB)。
- * 取 fastestFee / economyFee 的中位数作为推荐值。
- *
- * <p>Redis key: {@code sw:wallet:withdraw:fee:currency:{index}}
- *
- * <h3>费率来源</h3>
- * <ul>
- *   <li>mempool.space (免费): GET /api/v1/fees/recommended</li>
- *   <li>备选: bitcoinfees.earn.com — 已不再维护</li>
- * </ul>
- *
- * <h3>回退逻辑</h3>
- * <p>如果 API 不可用，保留 Redis 中已有值不变，最小不低于 2 sat/vB。
+ * <p>每 2 分钟从 mempool.space API 拉取当前推荐费率（sat/vB），并写入可被提现任务读取的 key。
  */
 @Slf4j
 @Component
 public class FeeRateUpdater {
 
-    /** mempool.space 费率 API */
+    /** mempool.space 费率 API。 */
     private static final String MEMPOOL_API = "https://mempool.space/api/v1/fees/recommended";
 
-    /** 最低费率 (sat/vB) */
+    /** 最低费率（sat/vB）。 */
     private static final int MIN_FEE_RATE = 2;
 
-    /** 兜底费率 (sat/vB) */
+    /** API 异常时的兜底费率（sat/vB）。 */
     private static final int DEFAULT_FEE_RATE = 10;
 
+    /** 全局 HTTP 客户端实例，复用连接池。 */
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
+
+    /** 链元数据服务。 */
     @Autowired
     private BlockchainRuntimeService blockchainRuntimeService;
+
+    /** 运行时开关服务。 */
     @Autowired
     private WalletRuntimeConfigService runtimeConfigService;
 
     /**
-     * 每 2 分钟更新一次费率
+     * 每 2 分钟更新 BTC 费率。
+     * 若开关关闭则跳过；更新失败则保留 Redis 现有值或写入兜底值。
      */
     @Scheduled(scheduler = "withdrawTaskScheduler", cron = "0 */2 * * * ?")
     public void updateFeeRate() {
@@ -70,7 +64,6 @@ public class FeeRateUpdater {
                 REDIS.set(key, String.valueOf(feeRate));
                 log.info("费率更新: {} = {} sat/vB", key, feeRate);
             } catch (Exception e) {
-                // API 不可用，检查 Redis 是否有值，没有则设默认
                 String key = Constants.WALLET_FEE + currency.getIndex();
                 Integer current = REDIS.getInt(key);
                 if (current == null || current <= 0) {
@@ -83,6 +76,9 @@ public class FeeRateUpdater {
         }
     }
 
+    /**
+     * 调用 mempool.space API 并解析 fastestFee，返回不低于 MIN_FEE_RATE 的费率值。
+     */
     private int fetchFeeRate() throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(MEMPOOL_API))
@@ -100,8 +96,6 @@ public class FeeRateUpdater {
         // API 返回: {"fastestFee":20,"halfHourFee":10,"hourFee":5,"economyFee":3,"minimumFee":2}
         String body = response.body();
         int fastestIdx = body.indexOf("\"fastestFee\":");
-        int halfHourIdx = body.indexOf("\"halfHourFee\":");
-
         if (fastestIdx < 0) {
             throw new RuntimeException("unexpected API response: " + body);
         }
@@ -116,7 +110,7 @@ public class FeeRateUpdater {
     }
 
     /**
-     * 手动强制更新费率（运维接口可调用）
+     * 手动强制设置费率（运维调用），不低于下限。
      */
     public void forceUpdate(int feeRate) {
         String key = Constants.WALLET_FEE + btc().getIndex();
@@ -124,6 +118,9 @@ public class FeeRateUpdater {
         log.warn("手动强制费率: {} = {} sat/vB", key, feeRate);
     }
 
+    /**
+     * 返回 BTC 资产元数据，当前更新任务只负责 BTC 链。
+     */
     private AssetRuntimeMetadata btc() {
         return blockchainRuntimeService.assetMetadata("BTC");
     }

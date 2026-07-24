@@ -31,18 +31,10 @@ import java.util.Map;
 import java.util.HexFormat;
 
 @Component
-public class MoneroWalletRpcClient {
-    static final String CHAIN = "XMR";
-    static final String SYMBOL = "XMR";
-    static final int ACCOUNT_INDEX = 0;
-    private static final int DECIMALS = 12;
-    private static final BigDecimal ATOMIC_FACTOR = BigDecimal.TEN.pow(DECIMALS);
-
-    private final ObjectMapper objectMapper;
-    private final HttpClient httpClient;
-    private final ChainJdbcRepository repository;
-    private final ChainRpcNodeService rpcNodeService;
-    private final String fixedRpcUrl;
+public
+class MoneroWalletRpcClient {
+    static final String CHAIN = "XMR";    static final String SYMBOL = "XMR";    static final int ACCOUNT_INDEX = 0;    private static final int DECIMALS = 12;    private static final BigDecimal ATOMIC_FACTOR = BigDecimal.TEN.pow(DECIMALS);
+    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedRpcUrl;
 
     @Autowired
     public MoneroWalletRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
@@ -64,35 +56,27 @@ public class MoneroWalletRpcClient {
                 .version(HttpClient.Version.HTTP_1_1)
                 .build();
     }
-
     public long height() {
         return call("get_height", objectMapper.createObjectNode()).path("height").asLong(0L);
     }
-
     public long height(String network, String purpose) {
         return call("get_height", objectMapper.createObjectNode(), network, purpose).path("height").asLong(0L);
     }
-
     public void refresh() {
         call("refresh", objectMapper.createObjectNode());
     }
-
     public void refresh(String network, String purpose) {
         call("refresh", objectMapper.createObjectNode(), network, purpose);
     }
-
     public Subaddress primaryAddress() {
         return getAddress(0);
     }
-
     public Subaddress primaryAddress(String network, String purpose) {
         return getAddress(0, network, purpose);
     }
-
     public Subaddress getAddress(int subaddressIndex) {
         return getAddress(subaddressIndex, null, null);
     }
-
     public Subaddress getAddress(int subaddressIndex, String network, String purpose) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("account_index", ACCOUNT_INDEX);
@@ -111,7 +95,6 @@ public class MoneroWalletRpcClient {
         }
         return new Subaddress(result.path("address").asText(), subaddressIndex);
     }
-
     public Subaddress createAddress(String label) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("account_index", ACCOUNT_INDEX);
@@ -123,11 +106,9 @@ public class MoneroWalletRpcClient {
                 result.path("address").asText(),
                 result.path("address_index").asInt());
     }
-
     public List<Transfer> incomingTransfers(long minHeight) {
         return incomingTransfers(minHeight, null, null);
     }
-
     public List<Transfer> incomingTransfers(long minHeight, String network, String purpose) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("in", true);
@@ -152,7 +133,6 @@ public class MoneroWalletRpcClient {
         }
         return transfers;
     }
-
     public Transfer transfer(int fromSubaddressIndex, String toAddress, BigDecimal amount) {
         return transfer(fromSubaddressIndex, toAddress, amount, null, null);
     }
@@ -190,11 +170,9 @@ public class MoneroWalletRpcClient {
                 "OUT",
                 result.toString());
     }
-
     public Transfer transferByTxHash(String txHash) {
         return transferByTxHash(txHash, null, null);
     }
-
     public Transfer transferByTxHash(String txHash, String network, String purpose) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("txid", txHash);
@@ -207,21 +185,17 @@ public class MoneroWalletRpcClient {
         }
         return mapTransfer(transfer, transfer.path("type").asText("OUT").toUpperCase(), network, purpose);
     }
-
     public BigDecimal fromAtomic(BigInteger atomicAmount) {
         return new BigDecimal(atomicAmount == null ? BigInteger.ZERO : atomicAmount)
                 .divide(ATOMIC_FACTOR, DECIMALS, RoundingMode.DOWN)
                 .stripTrailingZeros();
     }
-
     public BigInteger toAtomic(BigDecimal amount) {
         return amount.movePointRight(DECIMALS).setScale(0, RoundingMode.UNNECESSARY).toBigIntegerExact();
     }
-
     private Transfer mapTransfer(JsonNode item, String direction) {
         return mapTransfer(item, direction, null, null);
     }
-
     private Transfer mapTransfer(JsonNode item, String direction, String network, String purpose) {
         JsonNode subaddr = item.path("subaddr_index");
         int subaddressIndex = subaddr.path("minor").asInt(0);
@@ -244,7 +218,6 @@ public class MoneroWalletRpcClient {
                 direction,
                 item.toString());
     }
-
     private JsonNode call(String method, JsonNode params) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("jsonrpc", "2.0");
@@ -263,7 +236,6 @@ public class MoneroWalletRpcClient {
             throw new IllegalStateException("Monero wallet-rpc serialization failed for " + method, e);
         }
     }
-
     private JsonNode call(String method, JsonNode params, String network, String purpose) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("jsonrpc", "2.0");
@@ -276,13 +248,11 @@ public class MoneroWalletRpcClient {
             throw new IllegalStateException("Monero wallet-rpc serialization failed for " + method, e);
         }
     }
-
     private JsonNode callSerialized(String method, String requestBody, String network, String purpose) {
         String effectivePurpose = purpose == null || purpose.isBlank() ? "rpc" : purpose;
         return rpcNodeService.withFailover(CHAIN, network, effectivePurpose,
                 node -> execute(method, requestBody, node.getRpcUrl(), node));
     }
-
     private JsonNode execute(String method, String requestBody, String rpcUrl, ChainRpcNode node) {
         String endpoint = jsonRpcEndpoint(rpcUrl);
         try {
@@ -344,7 +314,6 @@ public class MoneroWalletRpcClient {
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody));
         return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
-
     static String digestAuthorization(String method, URI uri, String username, String password, String challenge) {
         Map<String, String> values = parseDigestChallenge(challenge);
         String realm = values.getOrDefault("realm", "");
@@ -391,7 +360,6 @@ public class MoneroWalletRpcClient {
         }
         return header.toString();
     }
-
     private static Map<String, String> parseDigestChallenge(String challenge) {
         String value = challenge == null ? "" : challenge.trim();
         if (value.toLowerCase(Locale.ROOT).startsWith("digest")) {
@@ -439,7 +407,6 @@ public class MoneroWalletRpcClient {
         }
         return result;
     }
-
     private static String firstQop(String qop) {
         String value = qop == null ? "" : qop.trim();
         if (value.isBlank()) {
@@ -452,7 +419,6 @@ public class MoneroWalletRpcClient {
         }
         return value.split(",")[0].trim();
     }
-
     private static void appendDigestPart(StringBuilder builder, String key, String value, boolean quoted) {
         if (builder.length() > "Digest ".length()) {
             builder.append(", ");
@@ -465,15 +431,12 @@ public class MoneroWalletRpcClient {
             builder.append(value == null ? "" : value);
         }
     }
-
     private static boolean hasPasswordAuth(ChainRpcNode node) {
         return !trim(node.getUsername()).isBlank() || !trim(node.getPassword()).isBlank();
     }
-
     private static boolean isDigestAuth(ChainRpcNode node) {
         return "DIGEST".equalsIgnoreCase(trim(node.getAuthType()));
     }
-
     private static String md5Hex(String value) {
         try {
             byte[] digest = MessageDigest.getInstance("MD5")
@@ -483,7 +446,6 @@ public class MoneroWalletRpcClient {
             throw new IllegalStateException("MD5 digest unavailable", e);
         }
     }
-
     private static String jsonRpcEndpoint(String rpcUrl) {
         String value = rpcUrl == null ? "" : rpcUrl.trim().replaceAll("/+$", "");
         if (value.endsWith("/json_rpc")) {
@@ -491,18 +453,15 @@ public class MoneroWalletRpcClient {
         }
         return value + "/json_rpc";
     }
-
     private static String abbreviate(String value) {
         if (value == null || value.isBlank()) {
             return "<empty>";
         }
         return value.length() <= 500 ? value : value.substring(0, 500) + "...";
     }
-
     private static String trim(String value) {
         return value == null ? "" : value.trim();
     }
-
     public record Subaddress(String address, int addressIndex) {
     }
 

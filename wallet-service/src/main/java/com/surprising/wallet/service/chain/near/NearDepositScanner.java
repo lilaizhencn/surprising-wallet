@@ -26,20 +26,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 @RequiredArgsConstructor
-public class NearDepositScanner {
-    private static final String CHAIN = "NEAR";
-    private static final String SYMBOL = "NEAR";
-    private static final String SCANNER = "near-block-scanner";
-    private static final String EMPTY_MERKLE_ROOT = "11111111111111111111111111111111";
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-
-    private final NearRpcClient rpc;
-    private final ChainJdbcRepository repository;
+public
+class NearDepositScanner {
+    private static final String CHAIN = "NEAR";    private static final String SYMBOL = "NEAR";    private static final String SCANNER = "near-block-scanner";    private static final String EMPTY_MERKLE_ROOT = "11111111111111111111111111111111";    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private final NearRpcClient rpc;    private final ChainJdbcRepository repository;
     private final AtomicBoolean scanning = new AtomicBoolean(false);
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
-
     public List<DepositEvent> scanAndCredit() {
         if (!scanning.compareAndSet(false, true)) {
             return List.of();
@@ -50,7 +44,6 @@ public class NearDepositScanner {
             scanning.set(false);
         }
     }
-
     private List<DepositEvent> doScanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "near scanAndCredit");
         AccountChainProfile profile = profile();
@@ -157,13 +150,11 @@ public class NearDepositScanner {
             }
         }
     }
-
     private boolean transactionSucceeded(ScannedTransfer transfer) {
         JsonNode result = rpc.transactionStatus(transfer.txHash(), transfer.sender());
         JsonNode status = result.path("status");
         return status.has("SuccessValue") || status.has("SuccessReceiptId");
     }
-
     static List<NativeTransfer> nativeTransfers(JsonNode chunk, long blockHeight, long latestHeight) {
         List<NativeTransfer> transfers = new ArrayList<>();
         for (JsonNode transaction : chunk.path("transactions")) {
@@ -226,7 +217,6 @@ public class NearDepositScanner {
         }
         return transfers;
     }
-
     private Map<String, ChainAddressRecord> trackedNativeDepositAddresses() {
         Map<String, ChainAddressRecord> addresses = new HashMap<>();
         for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, SYMBOL)) {
@@ -236,7 +226,6 @@ public class NearDepositScanner {
         }
         return addresses;
     }
-
     private Map<String, TokenDefinition> tokensByContract() {
         Map<String, TokenDefinition> tokens = new HashMap<>();
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
@@ -263,7 +252,6 @@ public class NearDepositScanner {
         }
         return addresses;
     }
-
     private long scanStart(AccountChainProfile profile, long safeHeight) {
         return repository.findScanSafeHeight(CHAIN, SCANNER)
                 .map(height -> Math.min(height + 1L, safeHeight + 1L))
@@ -275,7 +263,6 @@ public class NearDepositScanner {
                     return Math.max(0L, safeHeight - maxBlocksPerRun(profile) + 1L);
                 });
     }
-
     private int maxBlocksPerRun(AccountChainProfile profile) {
         Long configured = profile.getScanMaxBlocksPerRun();
         if (configured != null && configured > 0) {
@@ -287,31 +274,25 @@ public class NearDepositScanner {
         }
         return 50;
     }
-
     private int requiredConfirmations(AccountChainProfile profile) {
         Integer configured = profile.getDepositConfirmations();
         return configured == null || configured <= 0 ? 1 : configured;
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
-
     private static int confirmations(long latestHeight, long blockHeight) {
         return (int) Math.min(Integer.MAX_VALUE, Math.max(1L, latestHeight - blockHeight + 1L));
     }
-
     private static String normalize(String address) {
         return address == null ? "" : address.trim().toLowerCase(Locale.ROOT);
     }
-
     private static JsonNode decodeFunctionArgs(String encoded) {
         if (encoded == null || encoded.isBlank()) {
             return MAPPER.nullNode();
@@ -322,7 +303,6 @@ public class NearDepositScanner {
             return MAPPER.nullNode();
         }
     }
-
     interface ScannedTransfer {
         String txHash();
 

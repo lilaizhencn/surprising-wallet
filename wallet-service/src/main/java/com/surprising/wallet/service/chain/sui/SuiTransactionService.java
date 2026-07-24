@@ -19,13 +19,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
-public class SuiTransactionService {
-    private static final String CHAIN = "SUI";
-
-    private final SuiRpcClient rpc;
-    private final SuiTransactionSigner signer;
-    private final SuiPtbTransactionBuilder ptbBuilder;
-    private final ChainJdbcRepository repository;
+public
+class SuiTransactionService {
+    private static final String CHAIN = "SUI";    private final SuiRpcClient rpc;    private final SuiTransactionSigner signer;    private final SuiPtbTransactionBuilder ptbBuilder;    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
@@ -42,11 +38,9 @@ public class SuiTransactionService {
     SuiTransactionService(SuiRpcClient rpc, SuiTransactionSigner signer, ChainJdbcRepository repository) {
         this(rpc, signer, new SuiPtbTransactionBuilder(), repository);
     }
-
     public String sendNative(long derivationIndex, String fromAddress, String toAddress, long amountMist) {
         return sendNative(0L, 0, derivationIndex, fromAddress, toAddress, amountMist);
     }
-
     public String sendNative(ChainAddressRecord from, String toAddress, long amountMist) {
         return sendNative(from.getUserId(), from.getBiz(), from.getAddressIndex(),
                 from.getAddress(), toAddress, amountMist);
@@ -68,7 +62,6 @@ public class SuiTransactionService {
                            String toAddress, long amountAtomic) {
         return sendCoin(0L, 0, derivationIndex, fromAddress, coinType, toAddress, amountAtomic);
     }
-
     public String sendCoin(ChainAddressRecord from, String coinType, String toAddress, long amountAtomic) {
         return sendCoin(from.getUserId(), from.getBiz(), from.getAddressIndex(),
                 from.getAddress(), coinType, toAddress, amountAtomic);
@@ -230,7 +223,6 @@ public class SuiTransactionService {
         }
         return false;
     }
-
     public boolean confirmCollection(java.util.UUID tenantId, String collectionNo) {
         String digest = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(digest, Duration.ofMinutes(2));
@@ -240,7 +232,6 @@ public class SuiTransactionService {
         }
         return false;
     }
-
     public JsonNode requireSuccessfulConfirmation(String digest, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
@@ -257,7 +248,6 @@ public class SuiTransactionService {
         }
         throw new IllegalStateException("Sui confirmation timeout for " + digest);
     }
-
     private List<SuiRpcClient.SuiCoin> selectCoins(String owner, String coinType, BigDecimal required) {
         List<SuiRpcClient.SuiCoin> selected = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
@@ -270,12 +260,10 @@ public class SuiTransactionService {
         }
         throw new IllegalStateException("insufficient on-chain " + coinType + " balance");
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
@@ -298,29 +286,24 @@ public class SuiTransactionService {
                 .rawPayload(rawPayload)
                 .build());
     }
-
     private void markConfirmed(String digest, JsonNode transaction) {
         long gasUsed = totalGas(transaction.path("effects").path("gasUsed"));
         long checkpoint = transaction.path("checkpoint").asLong(0L);
         repository.markSuiTransactionConfirmed(CHAIN, digest, checkpoint, gasUsed, transaction.toString());
     }
-
     private long totalGas(JsonNode gas) {
         return gas.path("computationCost").asLong(0)
                 + gas.path("storageCost").asLong(0)
                 - gas.path("storageRebate").asLong(0);
     }
-
     private int decimals(String symbol) {
         return repository.findAsset(CHAIN, symbol)
                 .map(asset -> asset.getDecimals())
                 .orElseThrow(() -> new IllegalStateException("missing Sui asset configuration: " + symbol));
     }
-
     private long toAtomic(BigDecimal amount, int decimals) {
         return amount.movePointRight(decimals).longValueExact();
     }
-
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);

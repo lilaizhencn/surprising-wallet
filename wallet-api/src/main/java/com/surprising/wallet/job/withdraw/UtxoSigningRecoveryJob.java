@@ -34,16 +34,24 @@ import java.util.List;
 @Component
 public class UtxoSigningRecoveryJob {
 
+    /** 重试阈值（秒）：超过该时长仍在 SIGNING 状态则认为卡住。 */
     private static final long STALE_SECONDS = 60;
+    /** 统一扫描链列表。 */
     private static final List<String> CHAINS = List.of("BTC", "BCH", "LTC", "DOGE");
 
+    /** 签名交易仓储。 */
     @Autowired
     private ChainJdbcRepository repository;
+    /** 链元数据服务。 */
     @Autowired
     private BlockchainRuntimeService blockchainRuntimeService;
+    /** 任务开关服务。 */
     @Autowired
     private WalletRuntimeConfigService runtimeConfigService;
 
+    /**
+     * 每 30 秒扫描一次待签名悬挂交易，回推至首次签名队列，避免重启后遗留交易丢失。
+     */
     @Scheduled(scheduler = "withdrawTaskScheduler", fixedDelay = 30_000)
     public void execute() {
         for (String chain : CHAINS) {

@@ -21,7 +21,6 @@ public class Evm7702OperationSigner {
     static final byte[] VERSION_HASH = hashUtf8("1");
     static final byte[] COLLECTION_TYPEHASH = hashUtf8(
             "CollectionRequest(bytes32 batchId,uint256 itemIndex,address authority,address collector,address token,address recipient,uint256 amount,uint256 operationNonce,uint256 deadline,uint256 callGasLimit)");
-
     public byte[] digest(BigInteger chainId, Evm7702CollectionRequest request) {
         if (chainId == null || chainId.signum() <= 0 || chainId.bitLength() > 256) {
             throw new IllegalArgumentException("chainId must be a positive uint256");
@@ -53,7 +52,6 @@ public class Evm7702OperationSigner {
         System.arraycopy(structHash, 0, payload, 34, 32);
         return Hash.sha3(payload);
     }
-
     public byte[] sign(BigInteger chainId, Evm7702CollectionRequest request, Credentials authority) {
         if (authority == null || !authority.getAddress().equalsIgnoreCase(request.authority())) {
             throw new IllegalArgumentException("authority credentials do not match request authority");
@@ -65,11 +63,9 @@ public class Evm7702OperationSigner {
         encoded[64] = signature.getV()[0];
         return encoded;
     }
-
     private static byte[] abiHash(List<Type> values) {
         return Hash.sha3(Numeric.hexStringToByteArray(FunctionEncoder.encodeConstructor(values)));
     }
-
     private static byte[] hashUtf8(String value) {
         return Hash.sha3(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }

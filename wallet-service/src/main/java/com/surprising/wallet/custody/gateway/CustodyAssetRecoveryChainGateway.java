@@ -3,16 +3,10 @@ package com.surprising.wallet.custody.gateway;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 
 import java.math.BigDecimal;
-
 public interface CustodyAssetRecoveryChainGateway {
-    boolean supports(String chain);
-
-    Verification verify(VerificationRequest request);
-
+    boolean supports(String chain);    Verification verify(VerificationRequest request);
     String execute(ExecutionRequest request);
-
     boolean confirmed(String chain, String txHash);
-
     final class PermanentlyFailedTransactionException extends RuntimeException {
         public PermanentlyFailedTransactionException(String message) {
             super(message);

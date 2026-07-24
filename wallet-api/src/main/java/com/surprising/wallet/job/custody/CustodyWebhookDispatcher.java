@@ -27,11 +27,17 @@ import com.surprising.wallet.custody.service.CustodyWebhookService;
 @Slf4j
 @Component
 public class CustodyWebhookDispatcher {
+    /** 仓储：负责领取/标记 webhook 投递任务。 */
     private final CustodyRepository repository;
+    /** 加解密服务，处理 webhook 签名密钥。 */
     private final CustodyCryptoService crypto;
+    /** webhook 调用服务。 */
     private final CustodyWebhookService webhooks;
+    /** 重试策略。 */
     private final CustodyWebhookRetryPolicy retryPolicy;
+    /** 实例唯一 Worker 标识，避免重复领任务。 */
     private final String workerId = "webhook-" + UUID.randomUUID();
+    /** 防并发开关。 */
     private final AtomicBoolean running = new AtomicBoolean();
 
     public CustodyWebhookDispatcher(CustodyRepository repository,
@@ -44,6 +50,9 @@ public class CustodyWebhookDispatcher {
         this.retryPolicy = retryPolicy;
     }
 
+    /**
+     * 每秒拉取一批待投递任务并异步执行 HTTP 回调。
+     */
     @Scheduled(scheduler = "custodyTaskScheduler", fixedDelayString = "${sw.wallet.custody.webhook-dispatch-delay:1000}")
     public void dispatch() {
         if (!running.compareAndSet(false, true)) {
@@ -59,6 +68,9 @@ public class CustodyWebhookDispatcher {
         }
     }
 
+    /**
+     * 对单个任务执行发送，成功写 delivered，失败按策略重试。
+     */
     private void deliver(WebhookDeliveryTask task) {
         long startedAt = System.nanoTime();
         try {
@@ -79,6 +91,9 @@ public class CustodyWebhookDispatcher {
         }
     }
 
+    /**
+     * 统一处理发送失败分支，写失败次数与下一次重试时间。
+     */
     private void fail(WebhookDeliveryTask task, Integer httpStatus, String error,
                       String response, String retryAfter, long durationMs) {
         CustodyWebhookRetryPolicy.RetryDecision decision = retryPolicy.decide(
@@ -88,6 +103,9 @@ public class CustodyWebhookDispatcher {
                 decision.terminal(), durationMs);
     }
 
+    /**
+     * 计算任务执行耗时（毫秒）。
+     */
     private static long elapsedMs(long startedAt) {
         return Math.max(0L, (System.nanoTime() - startedAt) / 1_000_000L);
     }

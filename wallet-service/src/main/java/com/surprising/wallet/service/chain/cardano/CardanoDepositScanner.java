@@ -29,18 +29,12 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class CardanoDepositScanner {
-    private static final String CHAIN = CardanoBackendClient.CHAIN;
-    private static final String SYMBOL = "ADA";
-    private static final String SCANNER = "cardano-address-scanner";
-    private static final int ADA_DECIMALS = 6;
-
-    private final CardanoBackendClient backendClient;
-    private final ChainJdbcRepository repository;
+public
+class CardanoDepositScanner {
+    private static final String CHAIN = CardanoBackendClient.CHAIN;    private static final String SYMBOL = "ADA";    private static final String SCANNER = "cardano-address-scanner";    private static final int ADA_DECIMALS = 6;    private final CardanoBackendClient backendClient;    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
-
     public List<DepositEvent> scanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "cardano scanAndCredit");
         Map<String, TokenDefinition> tokensByUnit = tokensByUnit();
@@ -149,7 +143,6 @@ public class CardanoDepositScanner {
                 unit, output.toString());
         return new CreditableDeposit(event, addressRecord);
     }
-
     Map<String, TrackedCardanoAddress> trackedDepositAddresses(Map<String, TokenDefinition> tokensByUnit) {
         Map<String, MutableTrackedCardanoAddress> addresses = new HashMap<>();
         for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, SYMBOL)) {
@@ -173,7 +166,6 @@ public class CardanoDepositScanner {
         addresses.forEach((key, value) -> immutableAddresses.put(key, value.toRecord()));
         return immutableAddresses;
     }
-
     private Map<String, TokenDefinition> tokensByUnit() {
         Map<String, TokenDefinition> tokens = new HashMap<>();
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
@@ -183,15 +175,12 @@ public class CardanoDepositScanner {
         }
         return tokens;
     }
-
     private static List<TxContentUtxoOutputs> safeOutputs(TxContentUtxo utxo) {
         return utxo == null || utxo.getOutputs() == null ? List.of() : utxo.getOutputs();
     }
-
     private static List<TxContentOutputAmount> safeAmounts(List<TxContentOutputAmount> amounts) {
         return amounts == null ? List.of() : amounts;
     }
-
     private static String firstInputAddress(TxContentUtxo utxo) {
         if (utxo == null || utxo.getInputs() == null) {
             return "";
@@ -203,7 +192,6 @@ public class CardanoDepositScanner {
         }
         return "";
     }
-
     private static Set<String> inputAddresses(TxContentUtxo utxo) {
         if (utxo == null || utxo.getInputs() == null) {
             return Set.of();
@@ -214,25 +202,20 @@ public class CardanoDepositScanner {
                 .filter(address -> !address.isBlank())
                 .collect(Collectors.toSet());
     }
-
     private static boolean reservedHotAddress(ChainAddressRecord address) {
         return address.getUserId() == 0L && address.getBiz() == 0 && address.getAddressIndex() == 0L;
     }
-
     private static int confirmations(long latest, long blockHeight) {
         return (int) Math.min(Integer.MAX_VALUE, Math.max(1L, latest - blockHeight + 1L));
     }
-
     private static int requiredConfirmations(AccountChainProfile profile) {
         Integer configured = profile.getDepositConfirmations();
         return configured == null || configured <= 0 ? 15 : configured;
     }
-
     private static int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 50 : Math.min(batchSize, 100);
     }
-
     private static String normalize(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
@@ -240,10 +223,8 @@ public class CardanoDepositScanner {
     record TrackedCardanoAddress(String normalizedAddress, String address, ChainAddressRecord nativeRecord,
                                  Map<String, ChainAddressRecord> tokenRecordsByUnit) {
     }
-
     private record CreditableDeposit(DepositEvent event, ChainAddressRecord addressRecord) {
     }
-
     private static final class MutableTrackedCardanoAddress {
         private final String normalizedAddress;
         private final String address;
@@ -259,7 +240,6 @@ public class CardanoDepositScanner {
             return new TrackedCardanoAddress(normalizedAddress, address, nativeRecord, Map.copyOf(tokenRecordsByUnit));
         }
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);

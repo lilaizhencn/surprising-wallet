@@ -18,12 +18,19 @@ import com.surprising.wallet.custody.model.CustodySessionCookie;
 @RestController
 @RequestMapping("/custody/console/v1/auth")
 public class CustodyConsoleAuthController {
+    /** 控制台鉴权服务，提供租户登录、登出、会话管理。 */
     private final CustodyAuthService auth;
 
+    /**
+     * 注入鉴权服务。
+     */
     public CustodyConsoleAuthController(CustodyAuthService auth) {
         this.auth = auth;
     }
 
+    /**
+     * 处理租户控制台登录，返回 token 并写入会话 cookie。
+     */
     @PostMapping("/login")
     public CustodyAuthService.LoginResult login(@RequestBody TenantLoginRequest body,
                                                 HttpServletRequest request,
@@ -36,6 +43,9 @@ public class CustodyConsoleAuthController {
         return result;
     }
 
+    /**
+     * 返回当前会话的租户身份信息。
+     */
     @GetMapping("/me")
     public Map<String, Object> me(HttpServletRequest request) {
         CustodyPrincipal principal = CustodyRequestSupport.requirePrincipal(request);
@@ -47,6 +57,9 @@ public class CustodyConsoleAuthController {
                 "scopes", principal.scopes());
     }
 
+    /**
+     * 清理当前会话并退出登录。
+     */
     @PostMapping("/logout")
     public Map<String, Object> logout(HttpServletRequest request, HttpServletResponse response) {
         auth.logout(request);
@@ -54,6 +67,9 @@ public class CustodyConsoleAuthController {
         return Map.of("ok", true);
     }
 
+    /**
+     * 登录请求体：用户名与密码。
+     */
     public record TenantLoginRequest(String email, String password) {
     }
 }

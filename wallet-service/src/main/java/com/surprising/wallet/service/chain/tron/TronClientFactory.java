@@ -12,11 +12,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class TronClientFactory {
-    private static final String CHAIN = "TRON";
-
-    private final ChainJdbcRepository repository;
-    private final ChainRpcNodeService rpcNodeService;
-
+    private static final String CHAIN = "TRON";    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;
     public TronTridentClient create() {
         AccountChainProfile profile = repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for TRON"));
@@ -26,14 +22,12 @@ public class TronClientFactory {
                 rpcNodeService.enabledNodes(CHAIN, profile.getNetwork(), "solidity"), fullNode);
         return new TronTridentClient(fullNode, solidityNode, rpcNodeService);
     }
-
     private static ChainRpcNode first(List<ChainRpcNode> nodes, String message) {
         if (nodes == null || nodes.isEmpty()) {
             throw new IllegalStateException(message);
         }
         return nodes.get(0);
     }
-
     private static ChainRpcNode firstOrSame(List<ChainRpcNode> nodes, ChainRpcNode fallback) {
         return nodes == null || nodes.isEmpty() ? fallback : nodes.get(0);
     }

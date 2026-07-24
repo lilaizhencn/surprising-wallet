@@ -15,11 +15,7 @@ import java.util.List;
 
 @Component
 public class AptosChainAdapter implements BlockchainAdapter {
-    private static final String CHAIN = "APTOS";
-
-    private final AptosDepositScanner scanner;
-    private final ChainJdbcRepository repository;
-
+    private static final String CHAIN = "APTOS";    private final AptosDepositScanner scanner;    private final ChainJdbcRepository repository;
     public AptosChainAdapter(AptosDepositScanner scanner, ChainJdbcRepository repository) {
         this.scanner = scanner;
         this.repository = repository;
@@ -68,7 +64,6 @@ public class AptosChainAdapter implements BlockchainAdapter {
     public List<DepositEvent> scanDeposits(long height) {
         return scanner.scanAndCredit();
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));

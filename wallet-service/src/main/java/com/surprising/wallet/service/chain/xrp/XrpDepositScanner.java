@@ -28,18 +28,12 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class XrpDepositScanner {
-    private static final String CHAIN = "XRP";
-    private static final String NATIVE_SYMBOL = "XRP";
-    private static final String SCANNER = "xrp-account-tx-scanner";
-    private static final int XRP_DECIMALS = 6;
-
-    private final XrpRpcClient rpc;
-    private final ChainJdbcRepository repository;
+public
+class XrpDepositScanner {
+    private static final String CHAIN = "XRP";    private static final String NATIVE_SYMBOL = "XRP";    private static final String SCANNER = "xrp-account-tx-scanner";    private static final int XRP_DECIMALS = 6;    private final XrpRpcClient rpc;    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
-
     public List<DepositEvent> scanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "xrp scanAndCredit");
         AccountChainProfile profile = profile();
@@ -172,7 +166,6 @@ public class XrpDepositScanner {
                 .rawPayload(event.rawPayload())
                 .build());
     }
-
     private Map<String, TokenDefinition> tokenMap() {
         Map<String, TokenDefinition> tokens = new LinkedHashMap<>();
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
@@ -185,7 +178,6 @@ public class XrpDepositScanner {
         }
         return tokens;
     }
-
     private JsonNode txNode(JsonNode entry) {
         JsonNode tx = entry.path("tx_json");
         if (!tx.isMissingNode() && !tx.isNull()) {
@@ -194,12 +186,10 @@ public class XrpDepositScanner {
         tx = entry.path("tx");
         return tx.isMissingNode() || tx.isNull() ? entry : tx;
     }
-
     private JsonNode metaNode(JsonNode entry) {
         JsonNode meta = entry.path("meta");
         return meta.isMissingNode() || meta.isNull() ? entry.path("metaData") : meta;
     }
-
     private JsonNode deliveredAmount(JsonNode entry) {
         JsonNode meta = metaNode(entry);
         JsonNode delivered = meta.path("delivered_amount");
@@ -208,7 +198,6 @@ public class XrpDepositScanner {
         }
         return txNode(entry).path("Amount");
     }
-
     private String txHash(JsonNode entry, JsonNode tx) {
         String hash = tx.path("hash").asText("");
         if (hash.isBlank()) {
@@ -219,38 +208,31 @@ public class XrpDepositScanner {
         }
         return hash;
     }
-
     private long ledgerIndex(JsonNode entry, JsonNode tx) {
         long ledger = entry.path("ledger_index").asLong(0);
         return ledger == 0 ? tx.path("ledger_index").asLong(0) : ledger;
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     private int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 100 : batchSize;
     }
-
     private boolean isUserDepositAddress(ChainAddressRecord address) {
         return address.getUserId() != HotWalletRules.DEFAULT_HOT_USER_ID;
     }
-
     private boolean isSystemActivationTransaction(String txHash) {
         return repository.findXrpTransactionAssetSymbol(CHAIN, txHash)
                 .filter(XrpTransactionService.ACTIVATION_SYMBOL::equals)
                 .isPresent();
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
-
     private String tokenKey(String issuer, String currency) {
         return issuer + "|" + (currency == null ? "" : currency.toUpperCase(Locale.ROOT));
     }

@@ -17,12 +17,19 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 @Slf4j
 @Component
 public class CustodyMaintenanceJob {
+    /** 仓储服务，执行安全数据清理。 */
     private final CustodyRepository repository;
 
+    /**
+     * 注入仓储服务。
+     */
     public CustodyMaintenanceJob(CustodyRepository repository) {
         this.repository = repository;
     }
 
+    /**
+     * 每天定时清理安全相关过期行。
+     */
     @Scheduled(scheduler = "custodyTaskScheduler", cron = "${sw.wallet.custody.security-cleanup-cron:0 17 3 * * *}")
     public void cleanupExpiredSecurityRows() {
         int deleted = repository.cleanupExpiredSecurityRows();

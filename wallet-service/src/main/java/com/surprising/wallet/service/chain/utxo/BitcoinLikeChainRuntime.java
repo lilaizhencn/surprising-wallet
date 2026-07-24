@@ -61,18 +61,9 @@ import java.util.stream.Collectors;
 import static com.surprising.wallet.common.utils.Constants.UNSPENT_TX_ID;
 
 @Service
-public class BitcoinLikeChainRuntime {
-    private static final int FINALITY_AUDIT_DEPTH = 256;
-    private final ChainJdbcRepository chainRepository;
-    private final PubKeyConfig pubKeyConfig;
-    private final AddressService addressService;
-    private final ObjectProvider<TransactionService> transactionServiceProvider;
-    private final BitcoinLikeSettlementService settlementService;
-    private final BtcCommand btcCommand;
-    private final LitecoinEsploraCommand ltcCommand;
-    private final DogeCommand dogeCommand;
-    private final BchCommand bchCommand;
-
+public
+class BitcoinLikeChainRuntime {
+    private static final int FINALITY_AUDIT_DEPTH = 256;    private final ChainJdbcRepository chainRepository;    private final PubKeyConfig pubKeyConfig;    private final AddressService addressService;    private final ObjectProvider<TransactionService> transactionServiceProvider;    private final BitcoinLikeSettlementService settlementService;    private final BtcCommand btcCommand;    private final LitecoinEsploraCommand ltcCommand;    private final DogeCommand dogeCommand;    private final BchCommand bchCommand;
     public BitcoinLikeChainRuntime(
             ChainJdbcRepository chainRepository,
             PubKeyConfig pubKeyConfig,
@@ -125,7 +116,6 @@ public class BitcoinLikeChainRuntime {
         chainRepository.upsertChainAddress(toChainAddressRecord(address, asset));
         return address;
     }
-
     public boolean checkAddress(ChainType chainType, String address) {
         if (!StringUtils.hasText(address)) {
             return false;
@@ -139,15 +129,12 @@ public class BitcoinLikeChainRuntime {
             return false;
         }
     }
-
     public long depositConfirmationThreshold(ChainType chainType) {
         return bitcoinLikeProfile(chainType).getDepositConfirmations();
     }
-
     public long withdrawConfirmationThreshold(ChainType chainType) {
         return bitcoinLikeProfile(chainType).getWithdrawConfirmations();
     }
-
     public long dustThresholdAtomic(ChainType chainType) {
         BitcoinLikeChainProfile profile = bitcoinLikeProfile(chainType);
         if (chainType == ChainType.BCH && profile.getDustThreshold() == null) {
@@ -155,11 +142,9 @@ public class BitcoinLikeChainRuntime {
         }
         return profile.getDustThreshold() == null ? 0L : profile.getDustThreshold();
     }
-
     public long bestHeight(ChainType chainType) {
         return command(chainType).getBlockCount();
     }
-
     public List<TransactionDTO> findRelatedTransactions(ChainType chainType, long height) {
         AssetRuntimeMetadata asset = assetMetadata(chainType);
         String hash = command(chainType).getBlockHash(height);
@@ -188,14 +173,12 @@ public class BitcoinLikeChainRuntime {
         persistScannedUtxos(chainType, results);
         return results.parallelStream().map(this::convertUtxoToDto).collect(Collectors.toList());
     }
-
     public void updateTransactionConfirmations(ChainType chainType) {
         AssetRuntimeMetadata asset = assetMetadata(chainType);
         reconcileCreditedDeposits(chainType);
         updateUnifiedUtxoConfirmations(chainType, asset);
         updatePendingWithdrawConfirmations(chainType, asset);
     }
-
     private void reconcileCreditedDeposits(ChainType chainType) {
         long latest = bestHeight(chainType);
         long minimumHeight = Math.max(0L, latest - FINALITY_AUDIT_DEPTH + 1L);
@@ -215,12 +198,10 @@ public class BitcoinLikeChainRuntime {
             }
         }
     }
-
     public void updateTotalBalance(ChainType chainType) {
         String chain = chainType.name();
         chainRepository.sumAvailableUtxoAmount(chain, chain);
     }
-
     public String broadcastSignedTransaction(ChainType chainType, WithdrawTransaction transaction) {
         String expectedTxId = txId(transaction);
         try {
@@ -241,21 +222,18 @@ public class BitcoinLikeChainRuntime {
             return "";
         }
     }
-
     public AssetRuntimeMetadata assetMetadata(ChainType chainType) {
         AccountChainProfile profile = chainRepository.findProfileByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
         ChainAsset asset = chainRepository.findAsset(profile.getChain(), profile.getNativeSymbol()).orElse(null);
         return AssetRuntimeMetadata.fromProfile(profile, asset);
     }
-
     private int nextAddressIndex(AssetRuntimeMetadata asset, long userId, int biz) {
         return chainRepository.findMaxChainAddressIndex(
                         asset.chain(), asset.assetSymbol(), userId, biz, "DEPOSIT")
                 .map(value -> Math.toIntExact(value + 1))
                 .orElse(0);
     }
-
     private Address buildAddress(ChainType chainType, long userId, int biz, int index) {
         AssetRuntimeMetadata asset = assetMetadata(chainType);
         PubKeyConfig.AddressMetadata metadata;
@@ -293,7 +271,6 @@ public class BitcoinLikeChainRuntime {
                 .updateDate(Date.from(Instant.now()))
                 .build();
     }
-
     private ChainAddressRecord toChainAddressRecord(Address address, AssetRuntimeMetadata asset) {
         return ChainAddressRecord.builder()
                 .chain(asset.chain())
@@ -351,7 +328,6 @@ public class BitcoinLikeChainRuntime {
                 .updateDate(Date.from(Instant.now()))
                 .build();
     }
-
     private String extractOutputAddress(ChainType chainType, ScriptPubKey pubKey) {
         if (pubKey == null) {
             return null;
@@ -367,14 +343,12 @@ public class BitcoinLikeChainRuntime {
         }
         return null;
     }
-
     private String normalizeScannedAddress(ChainType chainType, String address) {
         if (chainType != ChainType.BCH) {
             return address;
         }
         return normalizeBchAddress(address, networkParameters(chainType));
     }
-
     private String normalizeBchAddress(String address, NetworkParameters params) {
         if (address == null || address.isBlank()) {
             return null;
@@ -394,7 +368,6 @@ public class BitcoinLikeChainRuntime {
             return null;
         }
     }
-
     private BtcLikeRawTransaction getRawTransaction(ChainType chainType, String txid) {
         try {
             return command(chainType).getRawTransaction(txid, true);
@@ -408,12 +381,10 @@ public class BitcoinLikeChainRuntime {
             return null;
         }
     }
-
     private Integer confirmations(ChainType chainType, String txId) {
         BtcLikeRawTransaction transaction = getRawTransaction(chainType, txId);
         return transaction == null ? 0 : transaction.getConfirmations();
     }
-
     private void updateWithdrawTransaction(ChainType chainType, String txId, AssetRuntimeMetadata asset) {
         Optional<WithdrawTransaction> existing =
                 chainRepository.findBitcoinLikeSigningTransactionByTxId(asset, txId);
@@ -432,7 +403,6 @@ public class BitcoinLikeChainRuntime {
         }
         settlementService.settleConfirmed(transaction, txId, asset);
     }
-
     private void updateUnifiedUtxoConfirmations(ChainType chainType, AssetRuntimeMetadata asset) {
         int pageSize = 500;
         int offset = 0;
@@ -455,7 +425,6 @@ public class BitcoinLikeChainRuntime {
             offset += pageSize;
         }
     }
-
     private void updatePendingWithdrawConfirmations(ChainType chainType, AssetRuntimeMetadata asset) {
         List<WithdrawTransaction> pending = chainRepository.findSentBitcoinLikeSigningTransactions(asset);
         for (WithdrawTransaction transaction : pending) {
@@ -470,7 +439,6 @@ public class BitcoinLikeChainRuntime {
             }
         }
     }
-
     private void markConfirming(ChainType chainType, JSONObject signature, String txId) {
         String chain = chainType.name();
         List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
@@ -481,7 +449,6 @@ public class BitcoinLikeChainRuntime {
                     tenantId, chain, record.getWithdrawId(), "CONFIRMING", null, txId, null);
         });
     }
-
     private boolean enrichUtxoMetadata(UtxoTransaction utxo, AssetRuntimeMetadata asset) {
         Address address = addressService.getAddress(utxo.getAddress(), asset);
         if (address == null) {
@@ -491,7 +458,6 @@ public class BitcoinLikeChainRuntime {
         utxo.setCurrency(asset.getIndex());
         return true;
     }
-
     private void persistScannedUtxos(ChainType chainType, List<UtxoTransaction> utxos) {
         String chain = chainType.name();
         for (UtxoTransaction utxo : utxos) {
@@ -508,7 +474,6 @@ public class BitcoinLikeChainRuntime {
                     Boolean.TRUE.equals(utxo.getCredited()));
         }
     }
-
     private TransactionDTO convertUtxoToDto(UtxoTransaction utxo) {
         return TransactionDTO.builder()
                 .address(utxo.getAddress())
@@ -521,7 +486,6 @@ public class BitcoinLikeChainRuntime {
                 .biz(utxo.getBiz())
                 .build();
     }
-
     private boolean transactionExists(ChainType chainType, String txId) {
         try {
             return getRawTransaction(chainType, txId) != null;
@@ -529,20 +493,17 @@ public class BitcoinLikeChainRuntime {
             return false;
         }
     }
-
     private String txId(WithdrawTransaction transaction) {
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
         String raw = signature.getString("rawTransaction");
         Transaction signCompleteTx = Transaction.read(java.nio.ByteBuffer.wrap(java.util.HexFormat.of().parseHex(raw)));
         return signCompleteTx.getTxId().toString();
     }
-
     private void rejectReservedHotAddress(long userId, int biz) {
         if (HotWalletRules.isDefaultHotUser(userId, biz)) {
             throw new IllegalArgumentException("userId=0,biz=0 is reserved for the unique default hot wallet address");
         }
     }
-
     private BitcoinLikeChainProfile bitcoinLikeProfile(ChainType chainType) {
         AccountChainProfile enabled = chainRepository.findProfileByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
@@ -550,7 +511,6 @@ public class BitcoinLikeChainRuntime {
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for " + chainType.name() + "/" + enabled.getNetwork()));
     }
-
     private NetworkParameters networkParameters(ChainType chainType) {
         String network = bitcoinLikeProfile(chainType).getNetwork();
         boolean mainnet = "main".equalsIgnoreCase(network) || "mainnet".equalsIgnoreCase(network);
@@ -570,7 +530,6 @@ public class BitcoinLikeChainRuntime {
             default -> throw new IllegalStateException("unsupported bitcoin-like chain " + chainType);
         };
     }
-
     private BtcLikeCommand command(ChainType chainType) {
         return switch (chainType) {
             case BTC -> btcCommand;

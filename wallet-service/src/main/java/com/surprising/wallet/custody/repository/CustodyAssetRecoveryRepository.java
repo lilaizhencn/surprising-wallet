@@ -15,9 +15,7 @@ import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway;
 
 @Repository
 public class CustodyAssetRecoveryRepository {
-    private final JdbcTemplate jdbc;
-
-    public CustodyAssetRecoveryRepository(JdbcTemplate jdbc) {
+    private final JdbcTemplate jdbc;    public CustodyAssetRecoveryRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
@@ -37,21 +35,18 @@ public class CustodyAssetRecoveryRepository {
                 destinationAddress, claimedAmount, requestedBy);
         return require(id);
     }
-
     public RecoveryRecord require(UUID id) {
         return jdbc.query("""
                         select * from custody_asset_recovery where id = ?
                         """, this::map, id).stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("asset recovery case not found"));
     }
-
     public RecoveryRecord require(UUID tenantId, UUID id) {
         return jdbc.query("""
                         select * from custody_asset_recovery where tenant_id = ? and id = ?
                         """, this::map, tenantId, id).stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("asset recovery case not found"));
     }
-
     public Optional<RecoveryRecord> findByTransaction(String actualChain, String txHash, long logIndex) {
         return jdbc.query("""
                         select * from custody_asset_recovery
@@ -73,7 +68,6 @@ public class CustodyAssetRecoveryRepository {
                         """, this::map, actualChain, txHash, destinationAddress,
                 assetSymbol, tokenContract, tokenContract).stream().findFirst();
     }
-
     public List<RecoveryRecord> list(UUID tenantId, String status, int limit, int offset) {
         if (tenantId == null) {
             return jdbc.query("""
@@ -105,7 +99,6 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
-
     public RecoveryRecord verificationFailed(UUID id, String reason) {
         jdbc.update("""
                         update custody_asset_recovery
@@ -114,7 +107,6 @@ public class CustodyAssetRecoveryRepository {
                         """, reason, id);
         return require(id);
     }
-
     public RecoveryRecord approve(UUID id, String recoveryAddress, UUID reviewer) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -126,7 +118,6 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
-
     public boolean claimExecution(UUID id) {
         return jdbc.update("""
                         update custody_asset_recovery
@@ -134,7 +125,6 @@ public class CustodyAssetRecoveryRepository {
                          where id = ? and status = 'APPROVED'
                         """, id) == 1;
     }
-
     public RecoveryRecord broadcasted(UUID id, String recoveryTxHash, UUID executor) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -146,7 +136,6 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
-
     public RecoveryRecord confirmed(UUID id) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -158,7 +147,6 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
-
     public RecoveryRecord broadcastFailed(UUID id, String reason) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -169,7 +157,6 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
-
     public List<RecoveryRecord> broadcastRecoveries(int limit) {
         return jdbc.query("""
                         select * from custody_asset_recovery
@@ -177,7 +164,6 @@ public class CustodyAssetRecoveryRepository {
                          order by updated_at limit ?
                         """, this::map, limit);
     }
-
     public RecoveryRecord executionFailed(UUID id, String reason) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -188,7 +174,6 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
-
     public RecoveryRecord reject(UUID id, String reason, UUID reviewer) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -199,7 +184,6 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
-
     public RecoveryRecord cancel(UUID tenantId, UUID id) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -210,7 +194,6 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(tenantId, id);
     }
-
     private RecoveryRecord map(ResultSet rs, int rowNum) throws SQLException {
         return new RecoveryRecord(
                 rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
@@ -229,7 +212,6 @@ public class CustodyAssetRecoveryRepository {
                 instant(rs, "approved_at"), instant(rs, "executed_at"),
                 rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant());
     }
-
     private static Instant instant(ResultSet rs, String field) throws SQLException {
         var value = rs.getTimestamp(field);
         return value == null ? null : value.toInstant();

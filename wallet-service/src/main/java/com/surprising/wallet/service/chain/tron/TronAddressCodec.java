@@ -12,13 +12,8 @@ import java.util.Locale;
  * code must re-add the `41` prefix before matching platform deposit addresses.
  */
 public final class TronAddressCodec {
-    public static final String MAINNET_PREFIX_HEX = "41";
-    private static final int HEX_ADDRESS_LENGTH = 42;
-    private static final int TOPIC_LENGTH = 64;
-
-    private TronAddressCodec() {
+    public static final String MAINNET_PREFIX_HEX = "41";    private static final int HEX_ADDRESS_LENGTH = 42;    private static final int TOPIC_LENGTH = 64;    private TronAddressCodec() {
     }
-
     public static String base58ToHex(String base58Address) {
         byte[] decoded = Base58Check.base58ToBytes(base58Address);
         if (decoded.length != 21 || decoded[0] != 0x41) {
@@ -26,12 +21,10 @@ public final class TronAddressCodec {
         }
         return Numeric.toHexStringNoPrefix(decoded).toLowerCase(Locale.ROOT);
     }
-
     public static String hexToBase58(String hexAddress) {
         String normalized = normalizeHexAddress(hexAddress);
         return Base58Check.bytesToBase58(Numeric.hexStringToByteArray(normalized));
     }
-
     public static String normalizeHexAddress(String hexAddress) {
         String clean = Numeric.cleanHexPrefix(hexAddress).toLowerCase(Locale.ROOT);
         if (clean.length() != HEX_ADDRESS_LENGTH || !clean.startsWith(MAINNET_PREFIX_HEX)) {
@@ -39,7 +32,6 @@ public final class TronAddressCodec {
         }
         return clean;
     }
-
     public static boolean isValidBase58(String address) {
         try {
             base58ToHex(address);
@@ -48,7 +40,6 @@ public final class TronAddressCodec {
             return false;
         }
     }
-
     public static String topicAddressToBase58(String topic) {
         String clean = Numeric.cleanHexPrefix(topic).toLowerCase(Locale.ROOT);
         if (clean.length() != TOPIC_LENGTH) {
@@ -56,7 +47,6 @@ public final class TronAddressCodec {
         }
         return hexToBase58(MAINNET_PREFIX_HEX + clean.substring(24));
     }
-
     public static String toAbiAddress(String base58Address) {
         return base58ToHex(base58Address);
     }

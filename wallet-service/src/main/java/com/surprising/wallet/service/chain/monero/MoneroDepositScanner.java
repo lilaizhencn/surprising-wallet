@@ -15,14 +15,9 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class MoneroDepositScanner {
-    private static final String CHAIN = MoneroWalletRpcClient.CHAIN;
-    private static final String SYMBOL = MoneroWalletRpcClient.SYMBOL;
-    private static final String SCANNER_NAME = "monero-wallet-rpc";
-
-    private final MoneroWalletRpcClient walletRpcClient;
-    private final ChainJdbcRepository repository;
-
+public
+class MoneroDepositScanner {
+    private static final String CHAIN = MoneroWalletRpcClient.CHAIN;    private static final String SYMBOL = MoneroWalletRpcClient.SYMBOL;    private static final String SCANNER_NAME = "monero-wallet-rpc";    private final MoneroWalletRpcClient walletRpcClient;    private final ChainJdbcRepository repository;
     public void scanAndCredit(AccountChainProfile profile) {
         String network = profile == null ? null : profile.getNetwork();
         walletRpcClient.refresh(network, "rpc");

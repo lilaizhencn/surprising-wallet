@@ -22,17 +22,27 @@ import com.surprising.wallet.custody.service.CustodyWebhookService;
 @RestController
 @RequestMapping("/custody/console/v1")
 public class CustodyConsoleWebhookController {
+    /** Webhook 服务：管理回调地址、投递与重试。 */
     private final CustodyWebhookService webhooks;
 
+    /**
+     * 注入 webhook 服务。
+     */
     public CustodyConsoleWebhookController(CustodyWebhookService webhooks) {
         this.webhooks = webhooks;
     }
 
+    /**
+     * 查询当前租户 webhook 端点与状态列表。
+     */
     @GetMapping("/webhooks")
     public List<Map<String, Object>> webhooks(HttpServletRequest request) {
         return webhooks.list(CustodyRequestSupport.requirePrincipal(request));
     }
 
+    /**
+     * 创建 webhook 端点，写入回调目标与签名参数。
+     */
     @PostMapping("/webhooks")
     public CustodyWebhookService.CreatedWebhook create(@RequestBody CreateWebhookCommand body,
                                                        HttpServletRequest request) {
@@ -40,6 +50,9 @@ public class CustodyConsoleWebhookController {
                 CustodyRequestSupport.clientIp(request));
     }
 
+    /**
+     * 手工触发单条 webhook 地址校验。
+     */
     @PostMapping("/webhooks/{endpointId}/verify")
     public CustodyRepository.WebhookEndpointRecord verify(
             @PathVariable UUID endpointId, HttpServletRequest request) {
@@ -47,6 +60,9 @@ public class CustodyConsoleWebhookController {
                 CustodyRequestSupport.clientIp(request));
     }
 
+    /**
+     * 启停 webhook 投递开关。
+     */
     @PatchMapping("/webhooks/{endpointId}/status")
     public Map<String, Object> status(@PathVariable UUID endpointId,
                                       @RequestBody WebhookStatusRequest body,
@@ -56,6 +72,9 @@ public class CustodyConsoleWebhookController {
         return Map.of("ok", true);
     }
 
+    /**
+     * 分页查询投递记录，支持状态与 endpoint 过滤。
+     */
     @GetMapping("/webhook-deliveries")
     public List<Map<String, Object>> deliveries(
             @RequestParam(required = false) UUID endpointId,
@@ -67,6 +86,9 @@ public class CustodyConsoleWebhookController {
                 CustodyRequestSupport.requirePrincipal(request), endpointId, status, limit, offset);
     }
 
+    /**
+     * 重试失败投递，返回当前任务是否重新入队。
+     */
     @PostMapping("/webhook-deliveries/{deliveryId}/retry")
     public Map<String, Object> retry(@PathVariable UUID deliveryId, HttpServletRequest request) {
         webhooks.retry(CustodyRequestSupport.requirePrincipal(request), deliveryId,
@@ -83,6 +105,9 @@ public class CustodyConsoleWebhookController {
         return Map.of("queued", queued);
     }
 
+    /**
+     * 查询单次 webhook 投递尝试历史，支持分页。
+     */
     @GetMapping("/webhook-deliveries/{deliveryId}/attempts")
     public List<Map<String, Object>> attempts(
             @PathVariable UUID deliveryId,
@@ -96,6 +121,9 @@ public class CustodyConsoleWebhookController {
                 offset);
     }
 
+    /**
+     * webhook 状态变更请求体。
+     */
     public record WebhookStatusRequest(boolean enabled) {
     }
 }

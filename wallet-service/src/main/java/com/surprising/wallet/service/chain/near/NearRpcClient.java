@@ -20,14 +20,9 @@ import java.time.Duration;
 import java.util.Base64;
 
 @Component
-public class NearRpcClient {
-    private static final String CHAIN = "NEAR";
-
-    private final ObjectMapper objectMapper;
-    private final HttpClient httpClient;
-    private final ChainJdbcRepository repository;
-    private final ChainRpcNodeService rpcNodeService;
-    private final String fixedRpcUrl;
+public
+class NearRpcClient {
+    private static final String CHAIN = "NEAR";    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedRpcUrl;
 
     @Autowired
     public NearRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
@@ -49,7 +44,6 @@ public class NearRpcClient {
                 .version(HttpClient.Version.HTTP_1_1)
                 .build();
     }
-
     public JsonNode account(String accountId) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("request_type", "view_account");
@@ -57,7 +51,6 @@ public class NearRpcClient {
         params.put("account_id", accountId);
         return call("query", params);
     }
-
     public boolean accountExists(String accountId) {
         try {
             account(accountId);
@@ -69,7 +62,6 @@ public class NearRpcClient {
             throw e;
         }
     }
-
     public JsonNode accessKey(String accountId, String publicKeyBase58) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("request_type", "view_access_key");
@@ -78,11 +70,9 @@ public class NearRpcClient {
         params.put("public_key", "ed25519:" + publicKeyBase58);
         return call("query", params);
     }
-
     public BigInteger accountBalanceYocto(String accountId) {
         return new BigInteger(account(accountId).path("amount").asText("0"));
     }
-
     public JsonNode viewFunction(String contractAccountId, String methodName, byte[] argsJson) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("request_type", "call_function");
@@ -92,7 +82,6 @@ public class NearRpcClient {
         params.put("args_base64", Base64.getEncoder().encodeToString(argsJson == null ? new byte[0] : argsJson));
         return call("query", params);
     }
-
     public JsonNode viewFunctionJson(String contractAccountId, String methodName, byte[] argsJson) {
         JsonNode result = viewFunction(contractAccountId, methodName, argsJson).path("result");
         if (!result.isArray() || result.isEmpty()) {
@@ -108,46 +97,38 @@ public class NearRpcClient {
             throw new IllegalStateException("NEAR view function returned invalid JSON: " + methodName, e);
         }
     }
-
     public JsonNode finalBlock() {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("finality", "final");
         return call("block", params);
     }
-
     public JsonNode block(long height) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("block_id", height);
         return call("block", params);
     }
-
     public long latestFinalBlockHeight() {
         return finalBlock().path("header").path("height").asLong(0L);
     }
-
     public BigInteger gasPriceYocto() {
         return new BigInteger(finalBlock().path("header").path("gas_price").asText("0"));
     }
-
     public JsonNode chunk(String chunkHash) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("chunk_id", chunkHash);
         return call("chunk", params);
     }
-
     public JsonNode broadcastTxCommit(String signedTransactionBase64) {
         ArrayNode params = objectMapper.createArrayNode();
         params.add(signedTransactionBase64);
         return call("broadcast_tx_commit", params);
     }
-
     public JsonNode transactionStatus(String txHash, String senderAccountId) {
         ArrayNode params = objectMapper.createArrayNode();
         params.add(txHash);
         params.add(senderAccountId);
         return call("tx", params);
     }
-
     private JsonNode call(String method, JsonNode params) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("jsonrpc", "2.0");
@@ -168,7 +149,6 @@ public class NearRpcClient {
             throw new IllegalStateException("NEAR RPC serialization failed for " + method, e);
         }
     }
-
     private JsonNode execute(String method, String requestBody, String rpcUrl, ChainRpcNode node) {
         try {
             for (int attempt = 1; attempt <= 4; attempt++) {
@@ -205,14 +185,12 @@ public class NearRpcClient {
             throw new IllegalStateException("NEAR RPC interrupted for " + method, e);
         }
     }
-
     private static String abbreviate(String value) {
         if (value == null || value.isBlank()) {
             return "<empty>";
         }
         return value.length() <= 500 ? value : value.substring(0, 500) + "...";
     }
-
     static boolean isMissingAccountError(String message) {
         if (message == null || message.isBlank()) {
             return false;
@@ -221,7 +199,6 @@ public class NearRpcClient {
                 || message.contains("AccountDoesNotExist")
                 || message.contains("does not exist while viewing");
     }
-
     static boolean isUnknownBlockError(String message) {
         if (message == null || message.isBlank()) {
             return false;

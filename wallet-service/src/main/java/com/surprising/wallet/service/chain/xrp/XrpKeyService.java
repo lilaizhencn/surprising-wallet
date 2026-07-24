@@ -16,15 +16,12 @@ import org.xrpl.xrpl4j.crypto.keys.PublicKey;
 import java.util.Arrays;
 
 @Service
-public class XrpKeyService {
-    private final PubKeyConfig pubKeyConfig;
-    private final AccountSecp256k1KeyService signerKeyService;
-
-    public XrpKeyService(PubKeyConfig pubKeyConfig, AccountSecp256k1KeyService signerKeyService) {
+public
+class XrpKeyService {
+    private final PubKeyConfig pubKeyConfig;    private final AccountSecp256k1KeyService signerKeyService;    public XrpKeyService(PubKeyConfig pubKeyConfig, AccountSecp256k1KeyService signerKeyService) {
         this.pubKeyConfig = pubKeyConfig;
         this.signerKeyService = signerKeyService;
     }
-
     public String address(AccountChainProfile profile, long userId, int biz, long derivationIndex) {
         ECKey ecKey = pubKeyConfig.node2().getChild(44)
                 .getChild(ChainType.derivationCoinType(profile.getChain(), profile.getBip44CoinType()))
@@ -34,19 +31,15 @@ public class XrpKeyService {
                 .getEcKey();
         return address(ecKey);
     }
-
     public PrivateKey privateKey(AccountChainProfile profile, ChainAddressRecord address) {
         return privateKey(signerKeyService.key(profile, address));
     }
-
     public static String address(ECKey ecKey) {
         return publicKey(ecKey).deriveAddress().value();
     }
-
     public static PublicKey publicKey(ECKey ecKey) {
         return PublicKey.fromBase16EncodedPublicKey(Hex.toHexString(ecKey.getPubKey()).toUpperCase());
     }
-
     public static PrivateKey privateKey(ECKey ecKey) {
         byte[] privateBytes = ecKey.getPrivKeyBytes();
         try {

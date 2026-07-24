@@ -19,7 +19,6 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class JdbcTokenRegistry implements TokenRegistry {
     private final ChainJdbcRepository repository;
-
     @Override
     public Optional<TokenDefinition> find(String chain, String symbol) {
         return repository.findToken(chain, symbol);

@@ -19,16 +19,25 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
  */
 @Component
 public class CustodyGasReconciliationJob {
+    /** 结构化日志实例。 */
     private static final Logger log =
             LoggerFactory.getLogger(CustodyGasReconciliationJob.class);
 
+    /** 账务仓储。 */
     private final CustodyRepository repository;
+    /** 防并发开关，避免重复 reconcile。 */
     private final AtomicBoolean running = new AtomicBoolean();
 
+    /**
+     * 每次调度执行 gas 用量结算。
+     */
     public CustodyGasReconciliationJob(CustodyRepository repository) {
         this.repository = repository;
     }
 
+    /**
+     * 每 2 秒扫描 overdue gas usage 并尝试 settle。
+     */
     @Scheduled(scheduler = "custodyTaskScheduler", fixedDelayString = "${sw.wallet.custody.gas-reconcile-delay:2000}")
     public void reconcile() {
         if (!running.compareAndSet(false, true)) {

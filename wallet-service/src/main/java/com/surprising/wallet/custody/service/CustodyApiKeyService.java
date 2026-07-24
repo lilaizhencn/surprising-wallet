@@ -22,10 +22,7 @@ import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 
 @Service
 public class CustodyApiKeyService {
-    private final CustodyRepository repository;
-    private final CustodyCryptoService crypto;
-    private final CustodySecurityProperties properties;
-
+    private final CustodyRepository repository;    private final CustodyCryptoService crypto;    private final CustodySecurityProperties properties;
     public CustodyApiKeyService(CustodyRepository repository, CustodyCryptoService crypto,
                                 CustodySecurityProperties properties) {
         this.repository = repository;
@@ -48,7 +45,6 @@ public class CustodyApiKeyService {
                 "API_KEY", id.toString(), sourceIp, "{\"keyId\":\"" + keyId + "\"}");
         return new CreatedApiKey(saved.id(), keyId, secret, saved.name(), saved.createdAt());
     }
-
     public List<Map<String, Object>> list(UUID tenantId) {
         return repository.listApiKeys(tenantId);
     }

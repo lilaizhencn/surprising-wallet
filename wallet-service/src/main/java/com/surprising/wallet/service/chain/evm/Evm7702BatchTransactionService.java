@@ -92,7 +92,6 @@ public class Evm7702BatchTransactionService {
         return new SignedBatchTransaction(
                 Numeric.toHexString(signed), Numeric.toHexString(Hash.sha3(signed)), relayerNonce, 2);
     }
-
     public record SignedType4Transaction(String rawTransaction, String transactionHash, BigInteger relayerNonce) {
     }
 

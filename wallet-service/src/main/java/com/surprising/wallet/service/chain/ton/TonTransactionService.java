@@ -28,16 +28,11 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class TonTransactionService {
-    private static final String CHAIN = "TON";
-    private static final BigInteger JETTON_FORWARD_TON = BigInteger.valueOf(10_000_000L);
-    private static final BigInteger JETTON_GAS_TON = BigInteger.valueOf(70_000_000L);
-    private static final long MESSAGE_VALIDITY_SECONDS = 15 * 60L;
-    private static final int CONFIRMATION_SCAN_LIMIT = 100;
-
-    private final TonCenterClient rpc;
-    private final TonKeyService keyService;
-    private final ChainJdbcRepository repository;
+public
+class TonTransactionService {
+    private static final String CHAIN = "TON";    private static final BigInteger JETTON_FORWARD_TON = BigInteger.valueOf(10_000_000L);
+    private static final BigInteger JETTON_GAS_TON = BigInteger.valueOf(70_000_000L);    private static final long MESSAGE_VALIDITY_SECONDS = 15 * 60L;    private static final int CONFIRMATION_SCAN_LIMIT = 100;
+    private final TonCenterClient rpc;    private final TonKeyService keyService;    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
@@ -110,16 +105,13 @@ public class TonTransactionService {
                 .build();
         return prepare(wallet, config, seqno);
     }
-
     public PreparedTransfer prepareWalletDeploy(long derivationIndex) {
         return prepareWalletDeploy(keyService.wallet(derivationIndex));
     }
-
     public PreparedTransfer prepareWalletDeploy(ChainAddressRecord from) {
         return prepareWalletDeploy(keyService.wallet(
                 from.getUserId(), from.getBiz(), from.getAddressIndex()));
     }
-
     private PreparedTransfer prepareWalletDeploy(WalletV4R2 wallet) {
         Message message = wallet.prepareDeployMsg();
         byte[] boc = message.toCell().toBoc(false);
@@ -161,7 +153,6 @@ public class TonTransactionService {
                 .build();
         return prepare(wallet, config, seqno);
     }
-
     public String broadcast(PreparedTransfer transfer) {
         return rpc.sendBoc(transfer.boc());
     }
@@ -176,7 +167,6 @@ public class TonTransactionService {
         record(hash, from, to, symbol, master, amount, fee, null, "SENT", transfer.bocBase64());
         return hash;
     }
-
     public boolean confirmSentMessage(String messageHash, String senderAddress) {
         Optional<com.fasterxml.jackson.databind.JsonNode> transaction = rpc.findExternalMessageTransaction(
                 senderAddress, messageHash, CONFIRMATION_SCAN_LIMIT);
@@ -193,7 +183,6 @@ public class TonTransactionService {
         repository.synchronizeAccountSequence(CHAIN, senderAddress, rpc.seqno(senderAddress));
         return true;
     }
-
     private void rebroadcast(String messageHash) {
         repository.findTonTransactionRawPayload(CHAIN, messageHash).ifPresent(rawPayload -> {
             try {
@@ -364,7 +353,6 @@ public class TonTransactionService {
             throw e;
         }
     }
-
     public boolean confirmCollection(java.util.UUID tenantId, String collectionNo, String senderAddress) {
         String hash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         if (!confirmSentMessage(hash, senderAddress)) {
@@ -375,7 +363,6 @@ public class TonTransactionService {
         }
         return false;
     }
-
     private PreparedTransfer prepare(WalletV4R2 wallet, WalletV4R2Config config, long seqno) {
         Message message = wallet.prepareExternalMsg(config);
         byte[] boc = message.toCell().toBoc(false);
@@ -383,20 +370,16 @@ public class TonTransactionService {
                 java.util.Base64.getEncoder().encodeToString(boc),
                 java.util.HexFormat.of().formatHex(message.toCell().hash()));
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     private static BigInteger atomicAmount(BigDecimal amount, int decimals) {
         return amount.movePointRight(decimals).toBigIntegerExact();
     }
-
     private static BigDecimal displayAmount(long atomicAmount, int decimals) {
         return BigDecimal.valueOf(atomicAmount).movePointLeft(decimals);
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
@@ -420,12 +403,10 @@ public class TonTransactionService {
                 .rawPayload(rawPayload)
                 .build());
     }
-
     private String friendly(Address address, boolean bounceable) {
         boolean testnet = profile().getNetwork().toLowerCase(java.util.Locale.ROOT).contains("test");
         return address.toString(true, true, bounceable, testnet);
     }
-
     public record PreparedTransfer(long seqno, byte[] boc, String bocBase64, String messageHashHex) {
     }
 }

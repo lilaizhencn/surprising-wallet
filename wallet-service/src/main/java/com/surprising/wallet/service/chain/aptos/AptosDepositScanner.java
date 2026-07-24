@@ -24,19 +24,11 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AptosDepositScanner {
-    private static final String CHAIN = "APTOS";
-    static final String SCANNER = "aptos-fa-event-scanner";
-    private static final String FUNGIBLE_DEPOSIT = "0x1::fungible_asset::Deposit";
-    private static final String FUNGIBLE_STORE = "0x1::fungible_asset::FungibleStore";
-    private static final String OBJECT_CORE = "0x1::object::ObjectCore";
-    private static final String APT_METADATA = AptosHex.normalizeAddress("0xa");
-
-    private final AptosRpcClient rpc;
-    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "APTOS";    static final String SCANNER = "aptos-fa-event-scanner";    private static final String FUNGIBLE_DEPOSIT = "0x1::fungible_asset::Deposit";    private static final String FUNGIBLE_STORE = "0x1::fungible_asset::FungibleStore";    private static final String OBJECT_CORE = "0x1::object::ObjectCore";    private static final String APT_METADATA = AptosHex.normalizeAddress("0xa");
+    private final AptosRpcClient rpc;    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
-
     public List<DepositEvent> scanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "aptos scanAndCredit");
         AccountChainProfile profile = profile();
@@ -133,17 +125,14 @@ public class AptosDepositScanner {
             events.add(event);
         }
     }
-
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
-
     private int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 100 : batchSize;
     }
-
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
@@ -169,7 +158,6 @@ public class AptosDepositScanner {
         return new ResolvedAsset(token.getSymbol(), token.getContractAddress(),
                 metadata, address, token.getDecimals());
     }
-
     private Map<String, String> storeOwners(JsonNode transaction) {
         Map<String, String> owners = new HashMap<>();
         for (JsonNode change : transaction.path("changes")) {
@@ -181,7 +169,6 @@ public class AptosDepositScanner {
         }
         return owners;
     }
-
     private Map<String, String> storeMetadata(JsonNode transaction) {
         Map<String, String> metadata = new HashMap<>();
         for (JsonNode change : transaction.path("changes")) {
@@ -194,7 +181,6 @@ public class AptosDepositScanner {
         }
         return metadata;
     }
-
     private boolean isPlatformAddress(String address) {
         for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
             if (sameAddress(address, tracked.getAddress()) || sameAddress(address, tracked.getOwnerAddress())) {
@@ -203,7 +189,6 @@ public class AptosDepositScanner {
         }
         return false;
     }
-
     private boolean sameAddress(String first, String second) {
         if (first == null || first.isBlank() || second == null || second.isBlank()) {
             return false;

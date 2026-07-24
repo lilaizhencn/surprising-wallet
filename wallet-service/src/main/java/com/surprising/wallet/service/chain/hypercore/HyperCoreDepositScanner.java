@@ -19,14 +19,10 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class HyperCoreDepositScanner {
-    private static final String CHAIN = "HYPERCORE";
-
-    private final HyperCoreApiClient apiClient;
-    private final HyperCoreRepository hyperCoreRepository;
-    private final ChainJdbcRepository chainRepository;
+public
+class HyperCoreDepositScanner {
+    private static final String CHAIN = "HYPERCORE";    private final HyperCoreApiClient apiClient;    private final HyperCoreRepository hyperCoreRepository;    private final ChainJdbcRepository chainRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
-
     public void scanAndCredit(AccountChainProfile profile) {
         syncSpotMetadata(profile.getNetwork());
         List<ChainAddressRecord> addresses = chainRepository.listChainAddresses(CHAIN).stream()
@@ -51,14 +47,12 @@ public class HyperCoreDepositScanner {
                             CHAIN, address.getAssetSymbol(), address.getAddress(), delta));
         }
     }
-
     public JsonNode spotState(String address) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("type", "spotClearinghouseState");
         body.put("user", address);
         return apiClient.postInfo(body);
     }
-
     public void syncSpotMetadata(String network) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("type", "spotMeta");
@@ -95,7 +89,6 @@ public class HyperCoreDepositScanner {
                     spot.path("isCanonical").asBoolean(false));
         }
     }
-
     private Map<String, BigDecimal> balancesBySymbol(JsonNode state) {
         Map<String, BigDecimal> balances = new LinkedHashMap<>();
         for (JsonNode balance : state.path("balances")) {
@@ -109,7 +102,6 @@ public class HyperCoreDepositScanner {
         }
         return balances;
     }
-
     private static BigDecimal decimal(String value) {
         if (value == null || value.isBlank()) {
             return BigDecimal.ZERO;
