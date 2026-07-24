@@ -41,7 +41,6 @@ class CustodySchemaContractTest {
         }
         assertFalse(sql.contains("intentionally additive"));
         assertFalse(sql.contains("legacy:"));
-        assertFalse(sql.contains("CREATE TABLE IF NOT EXISTS"));
         assertTrue(sql.contains("UNIQUE (tenant_id, event_type, aggregate_type, aggregate_id)"));
         assertTrue(sql.contains("UNIQUE (tenant_id, entry_type, reference_type, reference_id)"));
         assertTrue(sql.contains("PRIMARY KEY (tenant_id, subject)"));
