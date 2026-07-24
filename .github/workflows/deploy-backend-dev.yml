@@ -54,5 +54,24 @@ jobs:
           DEPLOY_HOST: ${{ secrets.BACKEND_DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.BACKEND_DEPLOY_USER }}
         run: |
-          ssh -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "/usr/local/sbin/surprising-wallet-backend-deploy"
+          ssh -o ServerAliveInterval=30 -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "nohup /usr/local/sbin/surprising-wallet-backend-deploy > /var/log/surprising-wallet-deploy.log 2>&1 &"
+          echo "Deploy triggered on server. Polling for completion..."
+          for i in $(seq 1 60); do
+            sleep 10
+            if ssh -o ConnectTimeout=5 -o ServerAliveInterval=5 -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST" \
+              "grep -q 'backend release.*is healthy' /var/log/surprising-wallet-deploy.log 2>/dev/null"; then
+              echo "✅ Deploy succeeded"
+              exit 0
+            fi
+            if ssh -o ConnectTimeout=5 -o ServerAliveInterval=5 -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST" \
+              "grep -q 'backend release.*failed health check\|deploy must run as root\|repo directory does not exist\|build did not produce\|env file.*is missing' /var/log/surprising-wallet-deploy.log 2>/dev/null"; then
+              echo "❌ Deploy failed"
+              ssh -o ConnectTimeout=5 -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST" \
+                "tail -30 /var/log/surprising-wallet-deploy.log"
+              exit 1
+            fi
+            echo "  waiting... ($((i*10))s)"
+          done
+          echo "❌ Deploy timed out after 10 minutes"
+          exit 1
