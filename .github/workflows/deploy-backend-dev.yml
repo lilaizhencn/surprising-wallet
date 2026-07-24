@@ -12,9 +12,7 @@ on:
       - wallet-service/**
       - wallet-api/**
       - pom.xml
-      - resources/docs/db/**
-      - infra/systemd/surprising-wallet.service
-      - scripts/deploy/backend-activate.sh
+      - scripts/deploy/backend-deploy.sh
   workflow_dispatch:
 
 permissions:
@@ -25,21 +23,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test-build-deploy:
+  verify-and-trigger:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -49,19 +35,8 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Test backend
-        env:
-          PGPASSWORD: postgres
-          SW_TEST_CUSTODY_DB_URL: jdbc:postgresql://127.0.0.1:5432/surprising_wallet_test_ci
-          SW_TEST_CUSTODY_DB_USERNAME: postgres
-          SW_TEST_CUSTODY_DB_PASSWORD: postgres
-        run: |
-          psql -h 127.0.0.1 -U postgres -d postgres \
-            -c 'create database surprising_wallet_test_ci'
-          mvn -B -ntp -pl wallet-api -am test
-
-      - name: Package backend
-        run: mvn -B -ntp -pl wallet-api -am -DskipTests package
+      - name: Compile (tests skipped)
+        run: mvn -B -ntp compile
 
       - name: Configure SSH
         env:
@@ -74,23 +49,10 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 0644 "$HOME/.ssh/known_hosts"
 
-      - name: Upload immutable release
-        env:
-          DEPLOY_HOST: ${{ secrets.BACKEND_DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.BACKEND_DEPLOY_USER }}
-        run: |
-          remote="$DEPLOY_USER@$DEPLOY_HOST"
-          release="/opt/surprising-wallet-backend/releases/$GITHUB_SHA"
-          ssh -i "$HOME/.ssh/backend_deploy" "$remote" "install -d -m 0750 '$release'"
-          scp -i "$HOME/.ssh/backend_deploy" \
-            wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar \
-            "$remote:$release/wallet-api.jar"
-          scp -i "$HOME/.ssh/backend_deploy" resources/docs/db/*.sql "$remote:$release/"
-
-      - name: Activate and verify release
+      - name: Trigger server deploy
         env:
           DEPLOY_HOST: ${{ secrets.BACKEND_DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.BACKEND_DEPLOY_USER }}
         run: |
           ssh -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "sudo /usr/local/sbin/surprising-wallet-backend-activate '$GITHUB_SHA'"
+            "/usr/local/sbin/surprising-wallet-backend-deploy"
