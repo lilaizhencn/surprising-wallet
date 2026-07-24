@@ -2,7 +2,9 @@
 set -euo pipefail
 
 # surprising-wallet backend deploy script
+# Server-side: git pull → mvn package → migrate → switch → verify.
 # Invoked by GitHub Actions via SSH (command= restricted key).
+# Steps: pull → build → deploy EIP-7702 → migrate → switch → health check → rollback on failure.
 # This script is self-contained: git pull → build → migrate → switch → verify.
 
 if [[ ${EUID} -ne 0 ]]; then
