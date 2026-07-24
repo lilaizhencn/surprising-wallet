@@ -118,12 +118,23 @@ ALTER TABLE public.custody_gas_usage
     ADD COLUMN IF NOT EXISTS operation_id uuid,
     ADD COLUMN IF NOT EXISTS reference_no character varying(96);
 
--- Set defaults for existing rows
-UPDATE public.custody_gas_usage
-   SET operation_type = 'WITHDRAWAL',
-       operation_id = COALESCE(operation_id, custody_withdrawal_id),
-       reference_no = COALESCE(reference_no, order_no)
- WHERE operation_type IS NULL;
+-- Backfill nulls from legacy columns; skip if those columns were already dropped
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'custody_gas_usage'
+           AND column_name IN ('custody_withdrawal_id', 'order_no')
+    ) THEN
+        UPDATE public.custody_gas_usage
+           SET operation_type = 'WITHDRAWAL',
+               operation_id = COALESCE(operation_id, custody_withdrawal_id),
+               reference_no = COALESCE(reference_no, order_no)
+         WHERE operation_type IS NULL;
+    END IF;
+END;
+$$;
 
 ALTER TABLE public.custody_gas_usage
     ALTER COLUMN operation_type SET NOT NULL,
