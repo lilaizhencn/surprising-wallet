@@ -46,7 +46,7 @@ jobs:
           DEPLOY_HOST: ${{ secrets.BACKEND_DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.BACKEND_DEPLOY_USER }}
         run: |
-          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+          ssh -f -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
             -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "nohup /usr/local/sbin/surprising-wallet-backend-deploy </dev/null >/var/log/surprising-wallet-deploy.log 2>&1 &"
+            "/usr/local/sbin/surprising-wallet-backend-deploy >/var/log/surprising-wallet-deploy.log 2>&1"
           echo "✅ Deploy triggered"
