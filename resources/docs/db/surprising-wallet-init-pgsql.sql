@@ -6807,3 +6807,44 @@ CREATE TABLE IF NOT EXISTS public.evm_withdrawal_batch_attempt (
 );
 
 COMMIT;
+
+
+-- =================================================================
+--  Seeded test accounts (dev environment only)
+--  Platform admin password = tenant admin password = the value of
+--  SW_CUSTODY_PLATFORM_ADMIN_PASSWORD in the dev wallet.env
+-- =================================================================
+
+-- Platform administrator (tenant_id is null = platform-level)
+INSERT INTO custody_tenant_user(
+    id, tenant_id, email, display_name, password_hash, role, status)
+VALUES (
+    '5dece8cf-0ddc-4907-846f-3df9e6330cae',
+    NULL,
+    'admin@local.test',
+    'Platform administrator',
+    'pbkdf2-sha256$210000$bpHtkDbuvrQbwBeA4PJELg==$5m/0PBbJom2Ibw7Es8MPTtMHhnlMBHeXctednN5j8s0=',
+    'PLATFORM_ADMIN',
+    'ACTIVE')
+ON CONFLICT (id) DO NOTHING;
+
+-- Test tenant
+INSERT INTO custody_tenant(id, slug, name)
+VALUES (
+    '00000000-0000-0000-0000-000000000001',
+    'test-tenant',
+    'Test Tenant')
+ON CONFLICT (id) DO NOTHING;
+
+-- Test tenant administrator
+INSERT INTO custody_tenant_user(
+    id, tenant_id, email, display_name, password_hash, role, status)
+VALUES (
+    '00000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000001',
+    'tenant@local.test',
+    'Tenant Admin',
+    'pbkdf2-sha256$210000$bpHtkDbuvrQbwBeA4PJELg==$5m/0PBbJom2Ibw7Es8MPTtMHhnlMBHeXctednN5j8s0=',
+    'TENANT_ADMIN',
+    'ACTIVE')
+ON CONFLICT (id) DO NOTHING;
