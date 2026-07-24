@@ -39,7 +39,7 @@ final class CustodyIntegrationDatabase {
         try (Connection connection = dataSource.getConnection()) {
             requirePostgreSql18(connection);
             ScriptUtils.executeSqlScript(connection, new FileSystemResource(
-                    projectRoot().resolve("docs/db/surprising-wallet-init-pgsql.sql")));
+                    projectRoot().resolve("resources/docs/db/surprising-wallet-init-pgsql.sql")));
         }
     }
 
@@ -63,7 +63,8 @@ final class CustodyIntegrationDatabase {
     private static Path projectRoot() throws IOException {
         Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath();
         while (current != null) {
-            if (Files.exists(current.resolve("docs/db/surprising-wallet-init-pgsql.sql"))) {
+            if (Files.exists(current.resolve("resources/docs/db/surprising-wallet-init-pgsql.sql"))
+                    || Files.exists(current.resolve("docs/db/surprising-wallet-init-pgsql.sql"))) {
                 return current;
             }
             current = current.getParent();

@@ -62,7 +62,11 @@ class DatabaseSeedSafetyTest {
     private static String databaseSeed() throws IOException {
         Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath();
         while (current != null) {
-            Path candidate = current.resolve("docs/db/surprising-wallet-init-pgsql.sql");
+            Path candidate = current.resolve("resources/docs/db/surprising-wallet-init-pgsql.sql");
+            if (Files.exists(candidate)) {
+                return Files.readString(candidate);
+            }
+            candidate = current.resolve("docs/db/surprising-wallet-init-pgsql.sql");
             if (Files.exists(candidate)) {
                 return Files.readString(candidate);
             }
