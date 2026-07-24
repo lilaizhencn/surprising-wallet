@@ -57,16 +57,16 @@ sw:
     # Local-chain transaction simulator. It is disabled by default and refuses
     # non-loopback RPC endpoints or production-like environments when enabled.
     dev-faucet:
-      enabled: ${SW_WALLET_DEV_FAUCET_ENABLED:false}
+      enabled: true
       delay: ${SW_WALLET_DEV_FAUCET_DELAY:PT10S}
       retry-delay: ${SW_WALLET_DEV_FAUCET_RETRY_DELAY:PT30S}
       request-timeout: ${SW_WALLET_DEV_FAUCET_REQUEST_TIMEOUT:PT10S}
       batch-size: ${SW_WALLET_DEV_FAUCET_BATCH_SIZE:20}
       max-attempts: ${SW_WALLET_DEV_FAUCET_MAX_ATTEMPTS:3}
       bitcoin:
-        rpc-url: ${SW_WALLET_DEV_FAUCET_BTC_RPC_URL:http://127.0.0.1:18444}
-        rpc-username: ${SW_WALLET_DEV_FAUCET_BTC_RPC_USERNAME:}
-        rpc-password: ${SW_WALLET_DEV_FAUCET_BTC_RPC_PASSWORD:}
+        rpc-url: http://127.0.0.1:18444
+        rpc-username: wallet
+        rpc-password: wallet123
         wallet: ${SW_WALLET_DEV_FAUCET_BTC_WALLET:regtest-funder}
         confirmation-blocks: ${SW_WALLET_DEV_FAUCET_BTC_CONFIRMATION_BLOCKS:6}
         gas-amount: ${SW_WALLET_DEV_FAUCET_BTC_GAS_AMOUNT:0.10000000}

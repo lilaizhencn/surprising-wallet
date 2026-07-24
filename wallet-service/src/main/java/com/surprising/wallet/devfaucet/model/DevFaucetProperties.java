@@ -57,9 +57,7 @@ public class DevFaucetProperties {
         requireRange(evm.usdt, "evm.usdt");
         requireRange(evm.usdc, "evm.usdc");
         requirePositive(evm.gasAmount, "evm.gas-amount");
-        if (bitcoin.rpcUsername.isBlank() || bitcoin.rpcPassword.isBlank()) {
-            throw new IllegalStateException("dev faucet bitcoin RPC credentials are required");
-        }
+        // BTC RPC credentials are optional (regtest node may not require auth)
         if (!bitcoin.wallet.matches("[A-Za-z0-9._-]{1,64}")) {
             throw new IllegalStateException("dev faucet bitcoin wallet name is invalid");
         }
