@@ -118,3 +118,117 @@ mvn compile
 
 真实链测试需要有余额的测试地址，并受外部 RPC/Faucet 可用性影响，因此默认不运行。
 参见[脚本与 Regtest](resources/docs/zh/scripts-and-regtest.md)。
+
+## 接下来的计划 TODO
+1. web 端租户也要显示 gas 充值记录。，其他计划：oracle 语言机 集成，MPC方案集成，跨链桥集成，为每一个链建一份文档，介绍其生态，技术 活跃度 开发者社区 类库等等，尤其是 java 的
+2. 启用链页面 生成地址 语义不准确，应当改为生成热提钱包，还要提示用户，这个地址就是 gas 地址，非 7702的地址会给充值地址转 gas，7702的默认使用此地址的原生币作为 gas。另外检查当前项目 7702的开启后，是否每次都进行了授权，这个好像是授权一次就可以吧。
+3. web 端页面感觉响应卡顿，前端需要优化，系统需要简化部署，所有链的主流 tokens 都要配置好 支持管理员后台添加 tokens，验证合约和各项参数，动态化的。 检查已经集成的链 已经扫描到的记录，当有新的块产生时会不会继续更新已经扫描到的记录并且是否会更新状态 比如 tron
+4. 接入 lisk 链及其 tokens方案 并启用 usdt usdc 如果有的话，还要配置 regtest 运行方案，调研页面部署合约 java 后端如何做，为 regtest 开发环境运行提供标准化的文档包括各个链如何启动，如何产生币，如何模拟真实生产环境。
+5. robbinhood chain 接入
+6. aave 接入
+7. thorchain
+8. okx 的链 x layer？
+9. layer zero 调研
+10. stellar xlm
+11. chainlink link
+12. zcash zec
+13. cronos CRO
+14. ripple usd RLUSD
+15. Aster ASTER
+16. SONIC chain
+17. pulse chain
+18. etherlink
+19. bera chain
+20. pulse chain
+21. abstract chain
+22. celo
+23. hedera hashgraph
+24. gnosis
+25. soneium
+26. ronin
+27. world chain
+28. blast
+29. zksync
+30. XDC NETWORK
+31. STORY
+32. KAIA
+33. BOUNCEBIT
+34. Metis
+35. kava
+36. moonriver
+37. ApeChain
+38. Beam
+39. Chiliz chain
+40. Conflux
+41. IOTA evm
+42. mode
+43. merlin chain
+44. Venom
+45. Moonbeam
+46. opBNB
+47. fantom
+48. Iotex
+49. Canto
+50. DuckChain
+51. Astar
+52. Aurora
+53. Sei v2
+54. Zeta
+55. Core
+56. Polygon zkEvm
+57. ONUS
+58. dogeChain evm
+59. Wan chain
+60. Boba Network
+61. Shido Network
+62. X layer
+63. Energi
+64. Shibarium
+65. Elastos
+66. velas
+67. Atritrum Nova
+68. Oasis Emerald
+69. Harmony
+70. ThunderCore
+71. KCC
+72. MAP Protocol
+73. Neon Evm
+74. Fuse
+75. Degen Chain
+76. KardiaChain
+77. Telos
+78. Taiko
+79. b2 network
+80. Manta Pacific
+81. Sei network
+82. Injective
+83. GodWaken
+84. wemix
+85. evmos
+86. Meter
+87. vector smart chain
+88. sophon
+89. Apertum
+90. peaq
+91. zedxion smart chain
+92. osmosis
+93. starknet
+94. flare Network
+95. ethereumPoW
+96. ethereumClassic
+97. Fuel network
+98. plasma
+99. Juchain
+100. somnia
+101. monad
+102. katana
+103. ink
+104. MegaEth
+105. bevm
+106. zklink nova
+107. krown
+108. kiteAi
+109. tempo
+110. Anubis
+111. onyx
+112. stable
