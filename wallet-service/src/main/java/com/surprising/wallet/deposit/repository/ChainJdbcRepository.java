@@ -214,6 +214,16 @@ public class ChainJdbcRepository {
                         """, String.class, runtimeCurrencyId);
         return results.stream().findFirst();
     }
+    public Optional<String> findNetworkByRuntimeCurrencyId(int runtimeCurrencyId) {
+        List<String> results = jdbcTemplate.queryForList("""
+                        select distinct network
+                        from chain_profile
+                        where runtime_currency_id = ? and enabled = true
+                        order by network
+                        limit 1
+                        """, String.class, runtimeCurrencyId);
+        return results.stream().findFirst();
+    }
     public boolean isRuntimeCurrencyFamily(int runtimeCurrencyId, String family) {
         Boolean exists = jdbcTemplate.queryForObject("""
                         select exists(

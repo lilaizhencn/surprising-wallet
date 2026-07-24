@@ -145,7 +145,10 @@ public class BlockchainRuntimeService {
                         "missing enabled chain_profile for runtime_currency_id " + asset.getIndex()));
     }
     public String scannerName(AssetRuntimeMetadata asset) {
-        return chainName(asset).toLowerCase(Locale.ROOT) + "-block-scanner";
+        String network = repository.findNetworkByRuntimeCurrencyId(asset.getIndex())
+                .map(n -> "-" + n.toLowerCase(Locale.ROOT))
+                .orElse("");
+        return chainName(asset).toLowerCase(Locale.ROOT) + network + "-block-scanner";
     }
     public String nativeSymbol(String chain) {
         return requireRuntime(chain).nativeSymbol();
