@@ -1,4 +1,5 @@
 name: Deploy backend dev
+# Server-side: checkout → mvn compile → SSH trigger → server git pull → build → deploy
 
 on:
   push:
