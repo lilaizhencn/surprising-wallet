@@ -15,6 +15,12 @@ import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.model.CustodySessionCookie;
 
+/**
+ * Console 认证控制器。
+ *
+ * <p>端点路径：/custody/console/v1/auth。提供登录（POST /login）、
+ * 登出（POST /logout）、当前用户信息查询（GET /me）功能。
+ */
 @RestController
 @RequestMapping("/custody/console/v1/auth")
 public class CustodyConsoleAuthController {

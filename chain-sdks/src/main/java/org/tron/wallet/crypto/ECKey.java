@@ -60,6 +60,36 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.Arrays;
 
 
+/**
+ * TRON椭圆曲线密钥类，封装了基于<b>secp256k1</b>椭圆曲线的ECDSA密钥对操作，
+ * 是TRON地址生成、交易签名和密钥管理的核心组件。
+ *
+ * <h3>secp256k1椭圆曲线</h3>
+ * secp256k1是Bitcoin、Ethereum、TRON等主流区块链共用的椭圆曲线，参数定义在
+ * SEC 2标准中。曲线方程为 {@code y^2 = x^3 + 7}，定义在素数域上。
+ * TRON地址通过以下流程生成：公钥（未压缩64字节） -> Keccak-256哈希 -> 取最后20字节 -> 添加0x41前缀。
+ *
+ * <h3>核心功能</h3>
+ * <ul>
+ *   <li><b>密钥生成</b>：随机生成secp256k1密钥对，使用SpongyCastle加密库</li>
+ *   <li><b>ECDSA签名</b>：使用RFC 6979确定性签名（HMAC-DRBG），产生规范化的低S值签名，
+ *       签名包含恢复ID（recId），支持从签名恢复公钥</li>
+ *   <li><b>签名验证</b>：支持DER编码和原始R/S格式的ECDSA签名验证</li>
+ *   <li><b>地址计算</b>：{@link #computeAddress}使用Keccak-256（SHA3）哈希计算TRON地址</li>
+ *   <li><b>公钥恢复</b>：从签名恢复公钥（SEC1v2 4.1.6节算法），recId范围0-3</li>
+ *   <li><b>ECDH密钥协商</b>：支持椭圆曲线Diffie-Hellman密钥交换</li>
+ *   <li><b>AES解密</b>：使用私钥作为AES密钥进行CTR模式解密（已废弃）</li>
+ * </ul>
+ *
+ * <h3>内部类</h3>
+ * <ul>
+ *   <li>{@link ECDSASignature}：ECDSA签名（R, S, V）的封装，支持DER编码/解码、
+ *       规范化（低S值）和Base64/Hex序列化</li>
+ *   <li>{@link MissingPrivateKeyException}：私钥缺失异常</li>
+ * </ul>
+ *
+ * @see <a href="https://www.secg.org/sec2-v2.pdf">SEC 2: Recommended Elliptic Curve Domain Parameters</a>
+ */
 @Slf4j
 public class ECKey implements Serializable {
 

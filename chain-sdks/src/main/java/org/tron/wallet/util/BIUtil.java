@@ -20,6 +20,23 @@ package org.tron.wallet.util;
 
 import java.math.BigInteger;
 
+/**
+ * 大整数（BigInteger）工具类，提供大整数的比较、运算和转换方法。
+ *
+ * <h3>核心功能</h3>
+ * <ul>
+ *   <li><b>比较运算</b>：{@link #isLessThan} / {@link #isMoreThan} / {@link #isEqual}
+ *       / {@link #isNotEqual} / {@link #isPositive} / {@link #isZero}</li>
+ *   <li><b>算术运算</b>：{@link #sum}大整数加法、{@link #max}取最大值、
+ *       {@link #addSafely}安全int加法（溢出时返回Integer.MAX_VALUE）</li>
+ *   <li><b>类型转换</b>：{@link #toBI(byte[])} / {@link #toBI(long)}
+ *       将字节数组或长整数转为正大整数（使用符号位为1的构造函数）</li>
+ *   <li><b>范围检查</b>：{@link #isNotCovers}判断一个数是否不足以覆盖另一个数</li>
+ * </ul>
+ *
+ * <p>主要用于secp256k1椭圆曲线运算中的大整数比较（如签名验证中的r/s值范围检查）
+ * 和TRON金额计算。</p>
+ */
 public class BIUtil {
 
     /**

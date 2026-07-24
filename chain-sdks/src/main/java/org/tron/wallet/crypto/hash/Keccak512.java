@@ -18,6 +18,21 @@
 
 package org.tron.wallet.crypto.hash;
 
+/**
+ * Keccak-512哈希算法实现，输出512位（64字节）摘要。
+ *
+ * <p>继承自{@link KeccakCore}，使用海绵构造（sponge construction）处理输入数据，
+ * 比特率（rate）为576位（72字节），容量（capacity）为1024位。
+ * 算法名称为{@code "tron-keccak-512"}，注册在TRON自定义的SpongyCastle安全提供者中。</p>
+ *
+ * <p>主要用途：</p>
+ * <ul>
+ *   <li>TRON交易签名消息的哈希</li>
+ *   <li>需要更长摘要的安全场景</li>
+ * </ul>
+ *
+ * @see KeccakCore Keccak算法核心实现
+ */
 public class Keccak512 extends KeccakCore {
 
     /**

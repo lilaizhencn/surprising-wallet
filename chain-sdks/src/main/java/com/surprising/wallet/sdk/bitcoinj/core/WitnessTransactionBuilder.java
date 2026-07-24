@@ -20,6 +20,25 @@ import java.util.Collections;
 import java.util.HexFormat;
 import java.util.List;
 
+/**
+ * Native SegWit（P2WSH）多签交易构建器，负责构建和签署隔离见证多签交易。
+ * 支持两阶段签名流程：
+ *
+ * <ul>
+ *   <li><b>第一阶段（{@link #buildFirstSign}）</b>：构建原始交易并对每个输入进行首次签名，
+ *       生成包含单个签名的半签名交易（hex格式）</li>
+ *   <li><b>第二阶段（{@link #buildSecondSign}）</b>：在半签名交易基础上追加第二个签名，
+ *       支持多签阈值（m-of-n）验证，自动将新签名合并到正确的公钥位置</li>
+ * </ul>
+ *
+ * <p>技术细节：</p>
+ * <ul>
+ *   <li>所有输入默认启用RBF（Replace-By-Fee），sequence设为{@code 0xfffffffd}</li>
+ *   <li>签名使用{@link WitnessSigner}进行witness签名计算与组装</li>
+ *   <li>支持虚拟字节（vsize）估算，用于费率计算</li>
+ *   <li>输入和输出通过内部{@code InputMeta}/{@code OutputMeta}元数据类管理</li>
+ * </ul>
+ */
 public class WitnessTransactionBuilder {
     private static final HexFormat HEX = HexFormat.of();
     private static final long RBF_SEQUENCE = 0xfffffffdL;

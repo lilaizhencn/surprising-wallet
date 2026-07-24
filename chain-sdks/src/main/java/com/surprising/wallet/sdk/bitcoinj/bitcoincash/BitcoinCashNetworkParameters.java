@@ -9,6 +9,12 @@ import org.bitcoinj.store.BlockStoreException;
 import java.math.BigInteger;
 import java.time.Instant;
 
+/**
+ * Bitcoin Cash网络参数配置类。定义Bitcoin Cash主网、测试网和回归测试网的网络级参数，
+ * 包括地址头（addressHeader）、P2SH头（p2shHeader）、导出私钥头（dumpedPrivateKeyHeader）、
+ * 端口、魔术字（packetMagic）、难度调整间隔（interval）、目标时间跨度（targetTimespan）、
+ * 最大难度目标（maxTarget）以及BIP32扩展密钥头（bip32Header）等关键网络参数。
+ */
 public final class BitcoinCashNetworkParameters extends NetworkParameters {
     private static final BitcoinCashNetworkParameters MAIN =
             new BitcoinCashNetworkParameters(BitcoinCashNetwork.MAINNET);

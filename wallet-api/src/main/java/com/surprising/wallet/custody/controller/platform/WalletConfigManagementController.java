@@ -18,6 +18,13 @@ import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.service.WalletConfigManagementService;
 
+/**
+ * 平台钱包配置管理控制器。
+ *
+ * <p>端点路径：/custody/platform/v1/wallet-config。
+ * 提供环境策略（environment_policy）和 RPC 策略（rpc_policy）的 CRUD 管理，
+ * 以及链配置文件的增删查。需要平台管理员权限。
+ */
 @RestController
 @RequestMapping("/custody/platform/v1/wallet-config")
 public class WalletConfigManagementController {

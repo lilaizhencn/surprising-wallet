@@ -20,7 +20,14 @@
 package org.ethereum.crypto.cryptohash;
 
 /**
- * This class implements the core operations for the Keccak digest
+ * Keccak 海绵构造的核心实现。
+ *
+ * <p>基于 Keccak-f[1600] 置换，内部维护 25 个 64 位 lane 的状态数组（共 1600 位），
+ * 通过海绵吸收（absorb）→ 挤压（squeeze）模式处理输入。每轮执行
+ * θ/ρ/π/χ/ι 五步变换，共 24 轮。子类通过覆写 {@link #engineGetDigestLength()}
+ * 指定输出长度（如 Keccak256 输出 256 位、Keccak512 输出 512 位）。</p>
+ *
+ * <p>This class implements the core operations for the Keccak digest
  * algorithm.
  *
  * <pre>

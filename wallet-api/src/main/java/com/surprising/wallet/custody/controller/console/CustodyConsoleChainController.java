@@ -13,6 +13,12 @@ import java.util.List;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.service.CustodyTenantChainService;
 
+/**
+ * Console 链配置控制器。
+ *
+ * <p>端点路径：/custody/console/v1/{tenantId}/chains。
+ * 提供租户链启用状态的查询（GET）和更新（PUT）功能。
+ */
 @RestController
 @RequestMapping("/custody/console/v1/chains")
 public class CustodyConsoleChainController {

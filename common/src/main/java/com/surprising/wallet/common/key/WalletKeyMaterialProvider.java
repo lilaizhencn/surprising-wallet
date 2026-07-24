@@ -2,6 +2,22 @@ package com.surprising.wallet.common.key;
 
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 
+/**
+ * 钱包密钥材料提供者，负责从配置存储中加载、缓存并提供各类密钥材料（BIP32 根密钥、Ed25519 密钥等）。
+ *
+ * <p>支持三种运行模式，通过 {@link Mode} 枚举控制不同角色可访问的密钥类型：</p>
+ * <ul>
+ *   <li>{@link Mode#WALLET_SERVER} - 钱包服务端，可访问 sig2 私钥和 Ed25519 密钥</li>
+ *   <li>{@link Mode#SIG1} - 签名方 1，仅可访问 sig1 私钥</li>
+ *   <li>{@link Mode#SIG2} - 签名方 2，仅可访问 sig2 私钥</li>
+ * </ul>
+ *
+ * <p>密钥材料采用延迟加载（lazy loading）和双重检查锁定（double-checked locking）的方式，
+ * 确保线程安全。调用 {@link #reload()} 可清空缓存，强制下次访问时重新加载。</p>
+ *
+ * @see WalletKeyConfig
+ * @see WalletKeyConfigStore
+ */
 public final class WalletKeyMaterialProvider {
     public enum Mode {
         WALLET_SERVER,

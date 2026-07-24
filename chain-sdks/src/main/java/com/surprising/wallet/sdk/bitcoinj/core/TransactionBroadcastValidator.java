@@ -15,6 +15,22 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * 交易广播前验证器，用于在将已签名的比特币交易广播到网络之前对其进行完整性校验。
+ * 专注于Native SegWit（P2WSH）多签交易的验证，校验内容包括：
+ *
+ * <ul>
+ *   <li>交易基本格式和网络参数验证（{@link org.bitcoinj.core.Transaction#verify}）</li>
+ *   <li>输入项不为空</li>
+ *   <li>所有输入的scriptSig为空（SegWit特征）</li>
+ *   <li>无重复输入（UTXO双花检测）</li>
+ *   <li>Witness结构完整性（最少3个push：dummy、签名、witnessScript）</li>
+ *   <li>多签签名数量是否满足阈值要求</li>
+ *   <li>输出是否为粉尘（dust）交易</li>
+ * </ul>
+ *
+ * <p>验证结果通过{@link ValidationResult}返回，包含有效性标志、错误列表、输入/签名计数和交易ID。</p>
+ */
 public class TransactionBroadcastValidator {
     private static final HexFormat HEX = HexFormat.of();
 

@@ -22,6 +22,13 @@ import java.security.NoSuchProviderException;
 import java.security.Provider;
 import java.security.Signature;
 
+/**
+ * 原始 ECDSA 签名工厂。
+ *
+ * <p>对 JCE {@link java.security.Signature}（算法 "NONEwithECDSA"，即不做哈希的
+ * 原始 ECDSA 签名）的薄封装，支持默认实例、按名称或 {@link java.security.Provider}
+ * 获取签名对象。</p>
+ */
 public final class ECSignatureFactory {
 
     public static final String RAW_ALGORITHM = "NONEwithECDSA";

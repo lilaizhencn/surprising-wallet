@@ -23,6 +23,10 @@ import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.Provider;
 
+/**
+ * EC密钥协商类。封装<b>ECDH</b>（椭圆曲线Diffie-Hellman）密钥协商算法的获取逻辑，
+ * 支持通过Provider或Provider名称获取{@link KeyAgreement}实例。
+ */
 public final class ECKeyAgreement {
 
     public static final String ALGORITHM = "ECDH";

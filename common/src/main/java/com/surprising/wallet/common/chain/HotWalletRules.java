@@ -1,5 +1,13 @@
 package com.surprising.wallet.common.chain;
 
+/**
+ * 热钱包地址规则。
+ *
+ * <p>定义 userId=0、biz=0 为系统保留热钱包标识，
+ * 仅允许该组合下的原生代币默认热钱包地址（address_index=0、
+ * wallet_role=DEPOSIT），其他 userId=0 的资产将被拒绝，
+ * 防止误用保留地址空间。</p>
+ */
 public final class HotWalletRules {
     public static final long DEFAULT_HOT_USER_ID = 0L;
     public static final int DEFAULT_HOT_BIZ = 0;

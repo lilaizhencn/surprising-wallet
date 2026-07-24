@@ -26,6 +26,26 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+/**
+ * 底层字节操作工具类，提供字节数组的合并、比较、格式转换等基础操作。
+ *
+ * <h3>核心功能</h3>
+ * <ul>
+ *   <li><b>大整数转换</b>：{@link #bigIntegerToBytes(BigInteger, int)}将BigInteger
+ *       转为固定长度的字节数组（大端无符号），自动去除符号位</li>
+ *   <li><b>数组合并</b>：{@link #merge}将多个字节数组拼接为一个</li>
+ *   <li><b>前导零处理</b>：{@link #stripLeadingZeroes} / {@link #numberOfLeadingZeros}
+ *       处理大整数编码中的前导零字节</li>
+ *   <li><b>字典序比较</b>：{@link #greater} / {@link #less} / {@link #equals}等
+ *       对等长字节数组进行无符号字典序比较</li>
+ *   <li><b>Hex转换</b>：{@link #toHexString} / {@link #oneByteToHexString}</li>
+ *   <li><b>32字节字解析</b>：{@link #parseWord}以EVM字（256位）为单位解析数据</li>
+ *   <li><b>整数转换</b>：{@link #intToBytes} / {@link #byteArrayToInt} /
+ *       {@link #byteArrayToLong}等</li>
+ * </ul>
+ *
+ * <p>用于TRON智能合约ABI编码、交易序列化和密码学运算中的字节级操作。</p>
+ */
 public class ByteUtil {
 
     public static final byte[] EMPTY_BYTE_ARRAY = new byte[0];

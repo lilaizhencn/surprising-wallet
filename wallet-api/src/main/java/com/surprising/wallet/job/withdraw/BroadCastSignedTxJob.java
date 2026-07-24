@@ -5,7 +5,7 @@ import com.googlecode.jsonrpc4j.JsonRpcClientException;
 import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.service.service.TransactionService;
+import com.surprising.wallet.wallet.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;

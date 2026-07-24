@@ -24,6 +24,13 @@ import java.security.spec.ECGenParameterSpec;
 import java.security.spec.ECParameterSpec;
 import java.security.spec.InvalidParameterSpecException;
 
+/**
+ * secp256k1 椭圆曲线算法参数。
+ *
+ * <p>对 JCE {@link java.security.AlgorithmParameters}（算法 "EC"，曲线 secp256k1）
+ * 的薄封装，通过 Holder 模式缓存初始化后的参数实例，提供 {@code ECParameterSpec} 和
+ * ASN.1 编码输出。</p>
+ */
 public final class ECAlgorithmParameters {
 
     public static final String ALGORITHM = "EC";

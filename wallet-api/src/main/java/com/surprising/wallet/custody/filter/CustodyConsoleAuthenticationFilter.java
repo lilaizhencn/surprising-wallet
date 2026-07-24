@@ -19,6 +19,12 @@ import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 
+/**
+ * Custody Console 认证过滤器，拦截 /console/** 请求。
+ *
+ * <p>通过 Session Cookie 进行 Console 用户认证，跳过登录和公开端点。
+ * 认证通过后将管理员主体信息注入请求上下文。
+ */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 30)
 public class CustodyConsoleAuthenticationFilter extends OncePerRequestFilter {

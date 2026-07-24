@@ -4,6 +4,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+/**
+ * 钱包 RPC 策略，定义 RPC 节点的认证方式和用途管理。
+ *
+ * <p>提供 RPC 节点用途（purpose）的链级差异化管理（如 Polkadot 需要 rpc + runtime + asset_rpc）
+ * 和鉴权类型判定（API Key / User+Password / Public / 占位符）。
+ */
 public final class WalletRpcPolicy {
     private static final Set<String> API_KEY_AUTH = Set.of("BEARER", "API_KEY", "PROJECT_ID", "TOKEN");
     private static final Set<String> USER_PASSWORD_AUTH = Set.of("BASIC", "DIGEST");

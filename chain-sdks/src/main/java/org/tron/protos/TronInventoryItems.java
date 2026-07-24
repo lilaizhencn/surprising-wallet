@@ -3,6 +3,21 @@
 
 package org.tron.protos;
 
+/**
+ * TRON节点清单（Inventory）协议的Protobuf消息定义（自动生成），用于P2P网络中
+ * 节点间交换区块、交易等数据的哈希列表。
+ *
+ * <h3>消息类型</h3>
+ * <ul>
+ *   <li>{@link InventoryItems}：清单条目列表，包含类型标识（区块/交易类型）
+ *       和对应的哈希列表，用于快速同步链上数据</li>
+ * </ul>
+ *
+ * <p>清单协议是TRON P2P网络中数据同步的基础，节点通过交换清单来确定
+ * 需要从对方获取哪些区块或交易数据。</p>
+ *
+ * <p>由{@code core/TronInventoryItems.proto}文件通过protoc编译器生成，请勿手动编辑。</p>
+ */
 public final class TronInventoryItems {
   private TronInventoryItems() {}
   public static void registerAllExtensions(

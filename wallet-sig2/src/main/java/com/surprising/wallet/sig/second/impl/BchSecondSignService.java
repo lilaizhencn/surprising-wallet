@@ -18,16 +18,37 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * BCH（Bitcoin Cash）第二次签名服务。
+ *
+ * <p>BCH 使用 P2SH 多签脚本（非 P2WSH），签名流程与 BTC/LTC 不同：
+ * 需要 redeemScript 和完整 UTXO 信息，通过 {@link BitcoinCashMultisigTransactionBuilder}
+ * 构建第二签。
+ *
+ * <p>网络模式可通过配置 {@code sw.bch.network} 切换（mainnet/testnet/regtest）。
+ */
 @Component
 public class BchSecondSignService implements ISignService {
+
+    /** BCH 网络模式：mainnet / testnet / regtest */
     @Value("${sw.bch.network:testnet}")
     private String network;
 
+    /** @return 链名称 BCH */
     @Override
     public String chain() {
         return "BCH";
     }
 
+    /**
+     * 对 BCH P2SH 提现交易执行第二次签名。
+     *
+     * <p>要求脚本类型为 bch-p2sh，校验 address、utxo、redeemScript 数量一致后，
+     * 逐输入派生 BIP32 私钥并委托 {@link BitcoinCashMultisigTransactionBuilder} 完成签名。
+     *
+     * @param transaction 提现交易
+     * @return 签名后的交易十六进制字符串，失败时设置 valid=false 并返回空字符串
+     */
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
         AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
@@ -69,6 +90,11 @@ public class BchSecondSignService implements ISignService {
         }
     }
 
+    /**
+     * 根据配置的 {@link #network} 返回对应的 BCH 网络参数。
+     *
+     * @return BCH 网络参数
+     */
     private BitcoinCashNetworkParameters networkParameters() {
         if ("main".equalsIgnoreCase(network) || "mainnet".equalsIgnoreCase(network)) {
             return BitcoinCashNetworkParameters.mainnet();

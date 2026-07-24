@@ -20,8 +20,16 @@ import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 托管提现服务，处理租户的提现请求流程。
+ *
+ * <p>核心功能：创建提现请求（幂等）、查询提现记录、校验地址归属、
+ * 管理员审批、估算手续费。提现流程包括预扣余额、链上构造交易、
+ * sig1/sig2 双重签名、广播上链、确认后扣款。
+ */
 @Service
 public class CustodyWithdrawalService {
+    /** 提现创建操作的幂等键前缀 */
     private static final String CREATE_OPERATION = "WITHDRAWAL.CREATE";
     private final CustodyRepository repository;
     private final CustodyWithdrawalExecutionService executionService;

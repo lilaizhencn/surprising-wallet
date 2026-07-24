@@ -12,6 +12,20 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.HexFormat;
 
+/**
+ * Native SegWit（P2WSH）多签地址生成器，用于生成基于隔离见证（Segregated Witness）的
+ * 多签地址。该类管理一组压缩公钥，使用{@link org.bitcoinj.script.ScriptBuilder#createMultiSigOutputScript}
+ * 创建多签赎回脚本（witnessScript），并通过SHA-256哈希计算P2WSH地址。
+ *
+ * <p>关键概念：</p>
+ * <ul>
+ *   <li><b>P2WSH</b>（Pay to Witness Script Hash）：将资金锁定到赎回脚本的SHA-256哈希值</li>
+ *   <li><b>witnessScript</b>：多签赎回脚本，定义了m-of-n的签名阈值</li>
+ *   <li><b>witnessProgram</b>：witnessScript的SHA-256哈希，即P2WSH地址的核心部分</li>
+ * </ul>
+ *
+ * <p>限制：最多16个公钥，所有公钥必须为压缩格式（33字节），公钥基于secp256k1椭圆曲线。</p>
+ */
 public class SegwitMultiSignAddressGenerator {
     private static final HexFormat HEX = HexFormat.of();
 

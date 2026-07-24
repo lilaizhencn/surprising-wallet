@@ -8,6 +8,14 @@ import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 
+/**
+ * 基于 JDBC 的钱包密钥配置持久化存储。
+ *
+ * <p>通过 {@link org.springframework.jdbc.core.JdbcOperations} 操作
+ * {@code wallet_key_config} 表（固定 id=1），支持查询、保存（upsert）
+ * 与派生地址存在性检查。保存时调用 {@link WalletSeedCodec#validate}
+ * 校验四个种子的长度、唯一性与有效性。</p>
+ */
 public final class WalletKeyConfigStore {
     private final JdbcOperations jdbc;
 

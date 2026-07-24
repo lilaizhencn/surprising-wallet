@@ -19,6 +19,13 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.service.CustodyWebhookService;
 
+/**
+ * Console Webhook 端点管理控制器。
+ *
+ * <p>端点路径：/custody/console/v1/{tenantId}/webhooks。
+ * 提供 Webhook 端点的创建（POST）、查询列表（GET）、启停（PATCH）功能。
+ * 支持充值到账（deposit.credited）和提现状态变更（withdrawal.*）事件订阅。
+ */
 @RestController
 @RequestMapping("/custody/console/v1")
 public class CustodyConsoleWebhookController {

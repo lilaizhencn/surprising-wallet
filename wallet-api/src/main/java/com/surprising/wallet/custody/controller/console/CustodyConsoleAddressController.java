@@ -20,6 +20,12 @@ import java.util.UUID;
 import com.surprising.wallet.custody.service.CustodyAddressService;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 
+/**
+ * Console 充值地址管理控制器。
+ *
+ * <p>端点路径：/custody/console/v1/{tenantId}/addresses。
+ * 提供充值地址的创建（POST）、查询列表（GET）、修改备注/标签（PATCH）功能。
+ */
 @RestController
 @RequestMapping("/custody/console/v1")
 public class CustodyConsoleAddressController {

@@ -14,21 +14,35 @@ import java.math.BigInteger;
 import java.math.BigDecimal;
 
 /**
+ * ERC20 代币第二次签名服务。
+ *
+ * <p>与 {@link EthSecondSignService} 同属 ETH 链，但专门处理 ERC20 代币转账。
+ * 通过 {@link #supports(AssetRuntimeMetadata)} 排除 ETH 主币，
+ * 只匹配有合约地址的 ERC20 资产。签名时构造 token transfer 函数调用并编码入交易 data。
+ *
  * @author lilaizhen
  */
 @Component
 @Slf4j
 public class Erc20SecondSignService extends AbstractEthLikeSecondSign implements ISignService {
+    /** @return 链名称 ETH */
     @Override
     public String chain() {
         return "ETH";
     }
 
+    /** @return "*" 通配，匹配所有非 ETH 主币的资产 */
     @Override
     public String assetSymbol() {
         return "*";
     }
 
+    /**
+     * 匹配规则：链为 ETH、非主币、且合约地址非空。
+     *
+     * @param asset 资产元数据
+     * @return true 如果是以太坊上的 ERC20 代币
+     */
     @Override
     public boolean supports(AssetRuntimeMetadata asset) {
         return asset != null
@@ -37,6 +51,15 @@ public class Erc20SecondSignService extends AbstractEthLikeSecondSign implements
                 && !asset.getContractAddress().isBlank();
     }
 
+    /**
+     * 对 ERC20 代币提现交易执行第二次签名。
+     *
+     * <p>将代币数量转为最小单位后构造 ERC20 transfer 调用，
+     * 使用 BIP32 派生的私钥签名，支持 chainId。
+     *
+     * @param transaction 提现交易
+     * @return 签名后的交易十六进制字符串
+     */
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
         AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);

@@ -7,13 +7,59 @@ import com.surprising.wallet.sdk.bitcoinj.core.WitnessTransactionBuilder;import 
 import lombok.extern.slf4j.Slf4j;import org.bitcoinj.base.Coin;import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.crypto.ECKey;import org.springframework.beans.factory.annotation.Autowired;
 import java.math.BigDecimal;import java.util.ArrayList;import java.util.List;
+/**
+ * BTC-like 链（BTC、LTC）P2WSH（SegWit 多签）一签抽象基类。
+ *
+ * <p>负责构建见证交易、计算手续费和找零、生成 P2WSH 见证脚本、
+ * 使用 sig1 密钥分片对每个 UTXO 输入生成第一次部分签名。
+ *
+ * <p>派生路径：m/44'/{coinType}'/{biz}'/{userId}'/{index}
+ * 签名使用 2-of-3 多签模型（sig1 + sig2 + recovery）。
+ *
+ * <p>子类可覆盖 {@link #getNetworkParameters()}、{@link #defaultFeeRate()}、
+ * {@link #dustThresholdSat()} 来适配不同链的网络参数。
+ */
 @Slf4j
 abstract public class AbstractBtcLikeFirstSign implements ISignService {
-    public Bip32Node NODE; @Autowired protected PubKeyConfig pubKeyConfig; @Autowired protected WalletKeyMaterialProvider keyMaterial;
+
+    /** 测试用 BIP32 根节点（为 null 时从 keyMaterial 获取） */
+    public Bip32Node NODE;
+    /** 多签公钥配置 */
+    @Autowired
+    protected PubKeyConfig pubKeyConfig;
+    /** 密钥材料提供者 */
+    @Autowired
+    protected WalletKeyMaterialProvider keyMaterial;
+
+    /** 默认费率（sat/vByte），子类可覆盖 */
     private static final long DEFAULT_FEE_RATE = 10L;
+    /** 默认粉尘阈值（sat），子类可覆盖 */
     private static final long DUST_THRESHOLD_SAT = 546L;
-    protected NetworkParameters getNetworkParameters(){return Constants.NET_PARAMS;}
-    @Override public void signTransaction(WithdrawTransaction transaction){
+
+    /**
+     * 返回当前链的网络参数。
+     *
+     * @return 网络参数，默认从 {@link Constants#NET_PARAMS} 获取
+     */
+    protected NetworkParameters getNetworkParameters() { return Constants.NET_PARAMS; }
+
+    /**
+     * 对 BTC-like P2WSH 提现交易执行第一次签名。
+     *
+     * <p>处理流程：
+     * <ol>
+     *   <li>解析 utxos、addresses、withdraw 数组</li>
+     *   <li>逐 UTXO 派生 BIP44 子密钥、生成 witness script、构建输入</li>
+     *   <li>计算手续费（包含找零优化）和粉尘检查</li>
+     *   <li>构建输出（提现 + 找零）</li>
+     *   <li>使用 sig1 密钥分片生成 firstSignTx</li>
+     *   <li>将 witnessScripts、utxoValues、scriptType 写入 signature</li>
+     * </ol>
+     *
+     * @param transaction 提现交易
+     */
+    @Override
+    public void signTransaction(WithdrawTransaction transaction) {
         AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
         WitnessTransactionBuilder wtxBuilder=new WitnessTransactionBuilder(getNetworkParameters());
         JSONObject signature=JSONObject.parseObject(transaction.getSignature());
@@ -53,9 +99,23 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
         }catch(Throwable e){log.error("sign error",e); signature.put("valid",false); signature.put("error",e.getMessage());}
         transaction.setSignature(signature.toJSONString());
     }
-    public Bip32Node getBipNODE(Address a,AssetRuntimeMetadata currency){
-        Bip32Node root=NODE!=null?NODE:keyMaterial.sig1Root();
-        return root.getChild(44).getChild(currency.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex());}
-    protected long defaultFeeRate(){return DEFAULT_FEE_RATE;}
-    protected long dustThresholdSat(){return DUST_THRESHOLD_SAT;}
+    /**
+     * 按 BIP44 路径派生地址对应的 BIP32 节点及私钥。
+     *
+     * <p>派生路径：m/44'/{coinType}'/{biz}'/{userId}'/{index}
+     * 优先使用测试节点 {@link #NODE}，为 null 时从 {@code keyMaterial.sig1Root()} 获取。
+     *
+     * @param a        地址信息
+     * @param currency 资产元数据
+     * @return 派生后的 BIP32 节点
+     */
+    public Bip32Node getBipNODE(Address a, AssetRuntimeMetadata currency) {
+        Bip32Node root = NODE != null ? NODE : keyMaterial.sig1Root();
+        return root.getChild(44).getChild(currency.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex());
+    }
+
+    /** @return 默认费率（sat/vByte） */
+    protected long defaultFeeRate() { return DEFAULT_FEE_RATE; }
+    /** @return 默认粉尘阈值（sat） */
+    protected long dustThresholdSat() { return DUST_THRESHOLD_SAT; }
 }

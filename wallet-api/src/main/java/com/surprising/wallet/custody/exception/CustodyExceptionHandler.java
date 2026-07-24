@@ -13,6 +13,18 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
+/**
+ * Custody 模块全局异常处理器。
+ *
+ * <p>将业务异常映射为标准 HTTP 响应：
+ * <ul>
+ *   <li>{@link CustodyUnauthorizedException} → 401</li>
+ *   <li>{@link CustodyForbiddenException} → 403</li>
+ *   <li>参数/请求体格式错误 → 400</li>
+ *   <li>数据库约束冲突 → 409</li>
+ *   <li>未预期的运行时异常 → 500（仅暴露错误码，不泄露内部细节）</li>
+ * </ul>
+ */
 @RestControllerAdvice(basePackages = "com.surprising.wallet.custody")
 public class CustodyExceptionHandler {
     /**

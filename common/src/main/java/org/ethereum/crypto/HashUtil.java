@@ -30,6 +30,21 @@ import java.util.Random;
 
 import static java.util.Arrays.copyOfRange;
 
+/**
+ * 哈希工具类，提供 SHA-256、Keccak-256（ETH 风格）等哈希算法的便捷封装。
+ *
+ * <p>关键方法：</p>
+ * <ul>
+ *   <li>{@link #sha256(byte[])} - 计算 SHA-256 哈希</li>
+ *   <li>{@link #sha3(byte[])} - 计算 Keccak-256 哈希（以太坊使用的 SHA3 变体）</li>
+ *   <li>{@link #sha3omit12(byte[])} - 取 Keccak-256 哈希的右 160 位（用于生成以太坊地址）</li>
+ *   <li>{@link #doubleDigest(byte[], int, int)} - 双重 SHA-256 哈希（比特币标准）</li>
+ *   <li>{@link #randomHash()} - 生成随机 32 字节哈希</li>
+ *   <li>{@link #shortHash(byte[])} - 获取哈希的前 6 位 hex 字符串（短标识）</li>
+ * </ul>
+ *
+ * <p>初始化时通过 {@link org.ethereum.crypto.jce.SpongyCastleProvider} 注册加密提供者。</p>
+ */
 public class HashUtil {
 
     private static final Logger LOG = LoggerFactory.getLogger(HashUtil.class);

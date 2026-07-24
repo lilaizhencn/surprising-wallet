@@ -18,6 +18,12 @@ import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 托管租户管理服务，管理租户生命周期。
+ *
+ * <p>核心功能：创建租户（自动初始化 API Key、Gas 账户、管理员账号）、
+ * 查询租户信息、管理 IP 白名单和安全配置。
+ */
 @Service
 public class CustodyTenantService {
     private final CustodyRepository repository;

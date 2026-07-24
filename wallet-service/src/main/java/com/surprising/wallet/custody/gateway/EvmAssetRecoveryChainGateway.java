@@ -5,9 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.service.chain.evm.EvmAccountTransactionService;
-import com.surprising.wallet.service.config.ChainRpcNodeService;
-import com.surprising.wallet.service.dao.ChainJdbcRepository;
+import com.surprising.wallet.chain.evm.EvmAccountTransactionService;
+import com.surprising.wallet.config.ChainRpcNodeService;
+import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.springframework.stereotype.Component;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.DefaultBlockParameterName;
@@ -24,8 +24,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * EVM 链资产找回网关，负责构造和广播资产找回交易。
+ *
+ * <p>支持 ETH 原生币和 ERC20 代币的找回。通过
+ * {@link ChainRpcNodeService} 获取 RPC 连接，查询余额、
+ * 估算 Gas、构造签名交易并广播。
+ */
 @Component
 public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGateway {
+
+    /** 1 ETH = 10^18 wei */
     private static final BigDecimal WEI = new BigDecimal("1000000000000000000");
     private static final String TRANSFER_TOPIC =
             "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";

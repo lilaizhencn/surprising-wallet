@@ -20,6 +20,32 @@ package org.tron.wallet.crypto.hash;
 
 import java.security.MessageDigest;
 
+/**
+ * 摘要引擎抽象基类，继承JDK标准的{@link java.security.MessageDigest}并实现自定义
+ * {@link Digest}接口。为Keccak等哈希算法提供统一的缓冲区管理、块处理流水线和
+ * 状态复制能力。
+ *
+ * <h3>设计模式</h3>
+ * 使用模板方法模式（Template Method），子类只需实现以下抽象方法：
+ * <ul>
+ *   <li>{@link #engineReset()}：重置哈希状态</li>
+ *   <li>{@link #processBlock(byte[])}：处理一个完整的数据块（核心置换/压缩函数）</li>
+ *   <li>{@link #doPadding(byte[], int)}：执行最终填充并输出摘要</li>
+ *   <li>{@link #doInit()}：初始化内部状态（构造函数调用）</li>
+ *   <li>{@link #engineGetDigestLength()}：返回摘要长度</li>
+ *   <li>{@link #getBlockLength()}：返回块大小</li>
+ * </ul>
+ *
+ * <h3>内部缓冲机制</h3>
+ * <ul>
+ *   <li>维护{@code inputBuf}（块大小）和{@code inputLen}（已缓冲字节数）</li>
+ *   <li>{@link #update}方法累积数据，块满时自动调用{@link #processBlock}</li>
+ *   <li>{@link #flush}返回尚未处理的字节数，供填充时使用</li>
+ *   <li>支持{@link #copyState}实现摘要状态复制（用于HMAC等场景）</li>
+ * </ul>
+ *
+ * @see KeccakCore Keccak算法的具体实现
+ */
 public abstract class DigestEngine extends MessageDigest implements Digest {
 
     private int digestLen;

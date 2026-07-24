@@ -29,6 +29,20 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * 字节数组工具类，提供 BigInteger、long、int 与 byte[] 之间的转换，
+ * 以及字节数组的位运算、合并、填充、十六进制编解码等底层工具方法。
+ *
+ * <p>关键方法分类：</p>
+ * <ul>
+ *   <li><b>BigInteger 转换</b>：{@link #bigIntegerToBytes(BigInteger, int)}、{@link #bytesToBigInteger(byte[])}</li>
+ *   <li><b>基础类型转换</b>：{@link #longToBytes(long)}、{@link #intToBytes(int)}、{@link #byteArrayToInt(byte[])}、{@link #byteArrayToLong(byte[])}</li>
+ *   <li><b>十六进制编解码</b>：{@link #toHexString(byte[])}、{@link #hexStringToBytes(String)}、{@link #oneByteToHexString(byte)}</li>
+ *   <li><b>位运算</b>：{@link #and(byte[], byte[])}、{@link #or(byte[], byte[])}、{@link #xor(byte[], byte[])}、{@link #setBit(byte[], int, int)}、{@link #getBit(byte[], int)}</li>
+ *   <li><b>数据操作</b>：{@link #merge(byte[]...)}、{@link #stripLeadingZeroes(byte[])}、{@link #parseBytes(byte[], int, int)}、{@link #parseWord(byte[], int)}</li>
+ *   <li><b>网络相关</b>：{@link #hostToBytes(String)}、{@link #bytesToIp(byte[])}</li>
+ * </ul>
+ */
 public class ByteUtil {
 
     public static final byte[] EMPTY_BYTE_ARRAY = new byte[0];

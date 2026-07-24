@@ -20,6 +20,29 @@ import java.util.regex.Pattern;
 
 import static java.util.regex.Pattern.compile;
 
+/**
+ * 比特币工具类，提供底层加密和编码工具方法。
+ *
+ * <h3>核心功能</h3>
+ * <ul>
+ *   <li><b>Base58Check编码</b>：{@link #byteToString(byte, byte[])}和{@link #byteToString(byte[])}
+ *       将数据编码为带双重SHA-256校验和的Base58格式，用于生成比特币地址</li>
+ *   <li><b>校验和验证</b>：{@link #check}验证Base58Check编码数据的双重SHA-256校验和</li>
+ *   <li><b>HMAC-SHA512</b>：{@link #hmacSha512}用于BIP32分层确定性钱包的密钥派生</li>
+ *   <li><b>XOR运算</b>：{@link #xor}字节数组异或，用于密码学操作</li>
+ *   <li><b>地址生成</b>：{@link #pubKeyHexToAddress}从压缩公钥hex生成Base58Check地址，
+ *       使用SHA-256 + RIPEMD160哈希</li>
+ * </ul>
+ *
+ * <h3>加密算法说明</h3>
+ * <ul>
+ *   <li><b>SHA-256</b>：比特币广泛使用的256位安全哈希算法，用于地址校验和和交易哈希</li>
+ *   <li><b>RIPEMD160</b>：160位哈希算法，与SHA-256组合使用生成比特币地址的PubKeyHash</li>
+ *   <li><b>Base58</b>：去除易混淆字符（0/O/I/l）的Base64变体，用于比特币地址和私钥的
+ *       可读编码</li>
+ *   <li><b>HMAC-SHA512</b>：基于SHA-512的消息认证码，用于BIP32从种子派生主密钥</li>
+ * </ul>
+ */
 public class Tools {
 
     public static byte[] xor(byte[] arr1, byte[] arr2) {

@@ -10,6 +10,13 @@ import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.crypto.DumpedPrivateKey;
 import org.bitcoinj.crypto.ECKey;
 
+/**
+ * Bitcoin密钥生成器，封装{@link org.bitcoinj.crypto.ECKey ECKey}（基于secp256k1椭圆曲线）提供
+ * 密钥管理功能。支持从WIF格式私钥导入、导出WIF格式私钥、生成传统地址（P2PKH）以及获取
+ * 公钥十六进制表示。密钥对采用ECDSA签名算法，地址通过SHA-256和RIPEMD160哈希计算得出。
+ *
+ * <p>主要用于多签钱包中参与方密钥的管理与地址生成。</p>
+ */
 public class KeyGenerator {
 
     private final ECKey ecKey;

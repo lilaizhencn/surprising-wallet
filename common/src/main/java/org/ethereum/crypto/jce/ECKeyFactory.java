@@ -22,6 +22,13 @@ import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.Provider;
 
+/**
+ * 椭圆曲线密钥工厂。
+ *
+ * <p>对 JCE {@link java.security.KeyFactory}（算法 "EC"）的薄封装，
+ * 通过 Holder 模式缓存默认实例，同时支持按名称或 {@link java.security.Provider}
+ * 获取工厂实例。</p>
+ */
 public final class ECKeyFactory {
 
     public static final String ALGORITHM = "EC";

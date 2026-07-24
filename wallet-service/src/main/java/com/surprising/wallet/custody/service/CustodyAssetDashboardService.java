@@ -16,6 +16,12 @@ import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 托管资产仪表盘服务，提供租户资产概览数据。
+ *
+ * <p>汇总各链的原生币余额、代币余额、充值/提现统计（24h/7d），
+ * 用于 Console 首页仪表盘展示。
+ */
 @Service
 public class CustodyAssetDashboardService {
     private final CustodyAssetDashboardRepository repository;

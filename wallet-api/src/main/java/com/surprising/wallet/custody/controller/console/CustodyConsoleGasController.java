@@ -22,6 +22,13 @@ import java.util.UUID;
 import com.surprising.wallet.custody.service.CustodyGasService;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 
+/**
+ * Console Gas 账户管理控制器。
+ *
+ * <p>端点路径：/custody/console/v1/{tenantId}/gas-accounts。
+ * 提供 Gas 账户的创建（POST）、查询列表（GET）、修改阈值（PATCH）功能。
+ * Gas 账户用于租户预充值原生币以支付链上交易手续费。
+ */
 @RestController
 @RequestMapping("/custody/console/v1")
 public class CustodyConsoleGasController {

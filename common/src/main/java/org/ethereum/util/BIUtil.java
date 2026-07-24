@@ -19,6 +19,17 @@ package org.ethereum.util;
 
 import java.math.BigInteger;
 
+/**
+ * BigInteger 工具类，提供 BigInteger 的比较运算、算术运算和类型转换等便捷方法。
+ *
+ * <p>关键方法：</p>
+ * <ul>
+ *   <li><b>比较</b>：{@link #isZero(BigInteger)}、{@link #isEqual(BigInteger, BigInteger)}、{@link #isLessThan(BigInteger, BigInteger)}、{@link #isMoreThan(BigInteger, BigInteger)}、{@link #isPositive(BigInteger)}</li>
+ *   <li><b>范围判断</b>：{@link #isCovers(BigInteger, BigInteger)}、{@link #isIn20PercentRange(BigInteger, BigInteger)}</li>
+ *   <li><b>转换</b>：{@link #toBI(byte[])}、{@link #toBI(long)}</li>
+ *   <li><b>运算</b>：{@link #sum(BigInteger, BigInteger)}、{@link #max(BigInteger, BigInteger)}、{@link #addSafely(int, int)}</li>
+ * </ul>
+ */
 public class BIUtil {
 
 

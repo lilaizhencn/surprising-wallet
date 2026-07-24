@@ -23,6 +23,12 @@ import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 
+/**
+ * Console 安全配置控制器。
+ *
+ * <p>端点路径：/custody/console/v1/{tenantId}/security。
+ * 提供 API Key 管理（创建/列表/撤销）和 IP 白名单配置功能。
+ */
 @RestController
 @RequestMapping("/custody/console/v1")
 public class CustodyConsoleSecurityController {

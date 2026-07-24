@@ -23,22 +23,50 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * BCH（Bitcoin Cash）第一次签名服务。
+ *
+ * <p>BCH 使用 P2SH 多签脚本（非 P2WSH），需逐 UTXO 构建输入、
+ * 计算手续费（包含找零优化）和粉尘检查，使用 sig1 密钥分片对每个 UTXO 签名。
+ * 签名模式为 bch-p2sh，二签由 {@code BchSecondSignService} 完成。
+ *
+ * <p>网络模式可通过配置 {@code sw.bch.network} 切换（mainnet/testnet/regtest）。
+ */
 @Component
 public class BchFirstSignService implements ISignService {
+
+    /** 多签公钥配置 */
     @Autowired
     private PubKeyConfig pubKeyConfig;
 
+    /** 密钥材料提供者（sig1 模式） */
     @Autowired
     private WalletKeyMaterialProvider keyMaterial;
 
+    /** BCH 网络模式：mainnet / testnet / regtest */
     @Value("${sw.bch.network:testnet}")
     private String network;
 
+    /** @return 链名称 BCH */
     @Override
     public String chain() {
         return "BCH";
     }
 
+    /**
+     * 对 BCH P2SH 提现交易执行第一次签名。
+     *
+     * <p>处理流程：
+     * <ol>
+     *   <li>解析 utxos、addresses、withdraw 数组</li>
+     *   <li>逐 UTXO 派生 redeemScript 并校验一致性</li>
+     *   <li>使用 BitcoinCashFeePolicy 计算手续费和找零</li>
+     *   <li>构建输出并调用 builder.buildFirstSign 签名</li>
+     *   <li>将 firstSignTx、redeemScripts、scriptType=bch-p2sh 写入 signature</li>
+     * </ol>
+     *
+     * @param transaction 提现交易
+     */
     @Override
     public void signTransaction(WithdrawTransaction transaction) {
         AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
@@ -122,6 +150,15 @@ public class BchFirstSignService implements ISignService {
         transaction.setSignature(signature.toJSONString());
     }
 
+    /**
+     * 按 BIP44 路径从 sig1 根密钥派生地址对应的子密钥。
+     *
+     * <p>派生路径：m/44'/{coinType}'/{biz}'/{userId}'/{index}
+     *
+     * @param address  地址信息
+     * @param currency 资产元数据
+     * @return 派生后的 BIP32 节点
+     */
     private Bip32Node derive(Address address, AssetRuntimeMetadata currency) {
         return keyMaterial.sig1Root().getChild(44)
                 .getChild(currency.getBip44CoinType())
@@ -130,6 +167,11 @@ public class BchFirstSignService implements ISignService {
                 .getChild(address.getIndex());
     }
 
+    /**
+     * 根据配置的 {@link #network} 返回对应的 BCH 网络参数。
+     *
+     * @return BCH 网络参数
+     */
     private BitcoinCashNetworkParameters networkParameters() {
         if ("main".equalsIgnoreCase(network) || "mainnet".equalsIgnoreCase(network)) {
             return BitcoinCashNetworkParameters.mainnet();

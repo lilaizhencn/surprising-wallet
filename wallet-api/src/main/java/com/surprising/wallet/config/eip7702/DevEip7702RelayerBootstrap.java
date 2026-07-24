@@ -2,8 +2,8 @@ package com.surprising.wallet.config.eip7702;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import com.surprising.wallet.service.wallet.HotWalletAddressService;
+import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.wallet.service.HotWalletAddressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

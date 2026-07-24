@@ -3,6 +3,21 @@
 
 package org.tron.protos;
 
+/**
+ * TRON节点发现协议的Protobuf消息定义（自动生成），支持Kademlia DHT风格的P2P节点发现。
+ *
+ * <h3>消息类型</h3>
+ * <ul>
+ *   <li>{@link Endpoint}：节点端点信息（地址、端口、节点ID）</li>
+ *   <li>{@link PingMessage}：Ping消息，用于检测节点可达性和版本协商</li>
+ *   <li>{@link PongMessage}：Pong响应，回复Ping并附带回声码</li>
+ *   <li>{@link FindNeighbours}：邻居发现请求，查找目标节点附近的节点列表</li>
+ *   <li>{@link Neighbours}：邻居响应，返回最近已知的邻居节点信息</li>
+ *   <li>{@link BackupMessage}：备份消息，用于节点间数据备份通信</li>
+ * </ul>
+ *
+ * <p>由{@code core/Discover.proto}文件通过protoc编译器生成，请勿手动编辑。</p>
+ */
 public final class Discover {
   private Discover() {}
   public static void registerAllExtensions(

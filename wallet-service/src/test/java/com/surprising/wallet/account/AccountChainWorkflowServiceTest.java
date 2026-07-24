@@ -6,10 +6,10 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
-import com.surprising.wallet.service.chain.aptos.AptosTransactionService;
-import com.surprising.wallet.service.chain.evm.EvmAccountTransactionService;
-import com.surprising.wallet.service.chain.ton.TonTransactionService;
-import com.surprising.wallet.service.dao.ChainJdbcRepository;
+import com.surprising.wallet.chain.aptos.AptosTransactionService;
+import com.surprising.wallet.chain.evm.EvmAccountTransactionService;
+import com.surprising.wallet.chain.ton.TonTransactionService;
+import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.InvocationTargetException;

@@ -42,6 +42,25 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 
+/**
+ * TRON钱包通用工具类，提供TRON协议数据结构的格式化打印、随机数生成和
+ * 字符编码转换等辅助功能。
+ *
+ * <h3>核心功能</h3>
+ * <ul>
+ *   <li><b>账户信息打印</b>：{@link #printAccount}将TRON账户（Account protobuf）格式化为
+ *       可读字符串，含地址（Base58Check编码）、余额、冻结资产、投票、资源等</li>
+ *   <li><b>交易信息打印</b>：{@link #printTransaction} / {@link #printContract}解析并格式化
+ *       各种TRON交易类型（转账、创建账户、冻结资产、智能合约调用等）</li>
+ *   <li><b>区块信息打印</b>：{@link #printBlock} / {@link #printBlockHeader}格式化区块链数据</li>
+ *   <li><b>见证人/提案打印</b>：{@link #printWitness} / {@link #printProposal}等</li>
+ *   <li><b>资源信息打印</b>：{@link #printAccountResourceMessage}格式化能量/带宽资源信息</li>
+ *   <li><b>编码转换</b>：{@link #getBytes} / {@code getChars}处理UTF-8字符与字节的转换</li>
+ *   <li><b>随机数</b>：{@link #getRandom}提供安全随机数生成器</li>
+ * </ul>
+ *
+ * <p>主要用于调试、日志输出和TRON命令行工具的数据展示。</p>
+ */
 public class Utils {
 
   private static SecureRandom random = new SecureRandom();

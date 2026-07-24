@@ -9,40 +9,40 @@ import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.TronTransactionRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
-import com.surprising.wallet.service.chain.aptos.AptosDepositScanner;
-import com.surprising.wallet.service.chain.aptos.AptosTransactionService;
-import com.surprising.wallet.service.chain.cardano.CardanoDepositScanner;
-import com.surprising.wallet.service.chain.cardano.CardanoTransactionService;
-import com.surprising.wallet.service.chain.evm.EvmAccountTransactionService;
-import com.surprising.wallet.service.chain.evm.EvmDepositScanner;
-import com.surprising.wallet.service.chain.hypercore.HyperCoreDepositScanner;
-import com.surprising.wallet.service.chain.hypercore.HyperCoreTransactionService;
-import com.surprising.wallet.service.chain.monero.MoneroDepositScanner;
-import com.surprising.wallet.service.chain.monero.MoneroTransactionService;
-import com.surprising.wallet.service.chain.near.NearDepositScanner;
-import com.surprising.wallet.service.chain.near.NearTransactionService;
-import com.surprising.wallet.service.chain.polkadot.PolkadotDepositScanner;
-import com.surprising.wallet.service.chain.polkadot.PolkadotTransactionService;
-import com.surprising.wallet.service.chain.solana.SolanaDepositScanner;
-import com.surprising.wallet.service.chain.solana.SolanaTransactionService;
-import com.surprising.wallet.service.chain.sui.SuiDepositScanner;
-import com.surprising.wallet.service.chain.sui.SuiTransactionService;
-import com.surprising.wallet.service.chain.ton.TonDepositScanner;
-import com.surprising.wallet.service.chain.ton.TonTransactionService;
-import com.surprising.wallet.service.chain.tron.TronAddressCodec;
-import com.surprising.wallet.service.chain.tron.TronClientFactory;
-import com.surprising.wallet.service.chain.tron.TronDepositScanner;
-import com.surprising.wallet.service.chain.tron.TronScanner;
-import com.surprising.wallet.service.chain.tron.TronTransactionService;
-import com.surprising.wallet.service.chain.tron.TronTrc20Service;
-import com.surprising.wallet.service.chain.tron.TronTridentClient;
-import com.surprising.wallet.service.chain.tron.TronTridentKeyFactory;
-import com.surprising.wallet.service.chain.xrp.XrpDepositScanner;
-import com.surprising.wallet.service.chain.xrp.XrpTransactionService;
-import com.surprising.wallet.service.config.AccountSecp256k1KeyService;
-import com.surprising.wallet.service.config.WalletRuntimeConfigService;
-import com.surprising.wallet.service.dao.ChainJdbcRepository;
-import com.surprising.wallet.service.wallet.HotWalletAddressService;
+import com.surprising.wallet.chain.aptos.AptosDepositScanner;
+import com.surprising.wallet.chain.aptos.AptosTransactionService;
+import com.surprising.wallet.chain.cardano.CardanoDepositScanner;
+import com.surprising.wallet.chain.cardano.CardanoTransactionService;
+import com.surprising.wallet.chain.evm.EvmAccountTransactionService;
+import com.surprising.wallet.chain.evm.EvmDepositScanner;
+import com.surprising.wallet.chain.hypercore.HyperCoreDepositScanner;
+import com.surprising.wallet.chain.hypercore.HyperCoreTransactionService;
+import com.surprising.wallet.chain.monero.MoneroDepositScanner;
+import com.surprising.wallet.chain.monero.MoneroTransactionService;
+import com.surprising.wallet.chain.near.NearDepositScanner;
+import com.surprising.wallet.chain.near.NearTransactionService;
+import com.surprising.wallet.chain.polkadot.PolkadotDepositScanner;
+import com.surprising.wallet.chain.polkadot.PolkadotTransactionService;
+import com.surprising.wallet.chain.solana.SolanaDepositScanner;
+import com.surprising.wallet.chain.solana.SolanaTransactionService;
+import com.surprising.wallet.chain.sui.SuiDepositScanner;
+import com.surprising.wallet.chain.sui.SuiTransactionService;
+import com.surprising.wallet.chain.ton.TonDepositScanner;
+import com.surprising.wallet.chain.ton.TonTransactionService;
+import com.surprising.wallet.chain.tron.TronAddressCodec;
+import com.surprising.wallet.chain.tron.TronClientFactory;
+import com.surprising.wallet.chain.tron.TronDepositScanner;
+import com.surprising.wallet.chain.tron.TronScanner;
+import com.surprising.wallet.chain.tron.TronTransactionService;
+import com.surprising.wallet.chain.tron.TronTrc20Service;
+import com.surprising.wallet.chain.tron.TronTridentClient;
+import com.surprising.wallet.chain.tron.TronTridentKeyFactory;
+import com.surprising.wallet.chain.xrp.XrpDepositScanner;
+import com.surprising.wallet.chain.xrp.XrpTransactionService;
+import com.surprising.wallet.config.AccountSecp256k1KeyService;
+import com.surprising.wallet.config.WalletRuntimeConfigService;
+import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.wallet.service.HotWalletAddressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.crypto.ECKey;
@@ -69,50 +69,84 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * 账户链工作流服务，编排多链的充值扫描、提现签名/确认、归集与归集确认的完整流程。
+ *
+ * <p>支持的链族：EVM（ETH、BASE、BNB、POLYGON、ARBITRUM、OPTIMISM、AVAX_C 等）、
+ * Solana、Aptos、Sui、TON、XRP、Cardano、Polkadot、Monero、NEAR、HyperCore、TRON。</p>
+ *
+ * <p>核心调度方法：</p>
+ * <ul>
+ *   <li>{@link #scanDeposits()} — 批量扫描所有已启用账户链的充值</li>
+ *   <li>{@link #processWithdrawals()} — 批量处理待签名的提现单</li>
+ *   <li>{@link #confirmWithdrawals()} — 批量确认已发送的提现交易</li>
+ *   <li>{@link #processCollections()} — 批量创建并签名归集交易</li>
+ *   <li>{@link #confirmCollections()} — 批量确认归集交易</li>
+ * </ul>
+ *
+ * @see WalletRuntimeConfigService
+ * @see ChainJdbcRepository
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AccountChainWorkflowService {
+    /** 每次提现最多处理 20 笔 */
     private static final int WITHDRAW_LIMIT = 20;
+    /** 每次确认最多处理 50 笔 */
     private static final int CONFIRM_LIMIT = 50;
+    /** 每次归集最多处理 20 笔 */
     private static final int COLLECTION_LIMIT = 20;
+    /** 签名状态过期时间 10 分钟 */
     private static final Duration SIGNING_STALE_TIMEOUT = Duration.ofMinutes(10);
+    /** TRX SUN 单位：1 TRX = 1,000,000 SUN */
     private static final BigDecimal TRX_SUN = new BigDecimal("1000000");
+    /** 账户链调度优先级列表：XMR 和 HYPERCORE 最优先，其余链按列表顺序 */
     private static final List<String> ACCOUNT_CHAIN_PRIORITY = List.of(
             "XMR",
             "HYPERCORE",
             "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C", "HYPEREVM",
             "MANTLE", "LINEA", "SCROLL", "UNICHAIN",
             "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
+
     private final ChainJdbcRepository repository;
     private final WalletRuntimeConfigService runtimeConfigService;
     private final AccountSecp256k1KeyService secp256k1KeyService;
+
+    /** 各链族的充值扫描器 */
     private final EvmDepositScanner evmDepositScanner;
-    private final EvmAccountTransactionService evmTransactionService;
     private final HyperCoreDepositScanner hyperCoreDepositScanner;
-    private final HyperCoreTransactionService hyperCoreTransactionService;
     private final SolanaDepositScanner solanaDepositScanner;
-    private final SolanaTransactionService solanaTransactionService;
     private final AptosDepositScanner aptosDepositScanner;
-    private final AptosTransactionService aptosTransactionService;
     private final SuiDepositScanner suiDepositScanner;
-    private final SuiTransactionService suiTransactionService;
     private final TonDepositScanner tonDepositScanner;
-    private final TonTransactionService tonTransactionService;
     private final XrpDepositScanner xrpDepositScanner;
-    private final XrpTransactionService xrpTransactionService;
     private final CardanoDepositScanner cardanoDepositScanner;
-    private final CardanoTransactionService cardanoTransactionService;
     private final MoneroDepositScanner moneroDepositScanner;
-    private final MoneroTransactionService moneroTransactionService;
     private final NearDepositScanner nearDepositScanner;
-    private final NearTransactionService nearTransactionService;
     private final PolkadotDepositScanner polkadotDepositScanner;
+
+    /** 各链族的交易服务 */
+    private final EvmAccountTransactionService evmTransactionService;
+    private final HyperCoreTransactionService hyperCoreTransactionService;
+    private final SolanaTransactionService solanaTransactionService;
+    private final AptosTransactionService aptosTransactionService;
+    private final SuiTransactionService suiTransactionService;
+    private final TonTransactionService tonTransactionService;
+    private final XrpTransactionService xrpTransactionService;
+    private final CardanoTransactionService cardanoTransactionService;
+    private final MoneroTransactionService moneroTransactionService;
+    private final NearTransactionService nearTransactionService;
     private final PolkadotTransactionService polkadotTransactionService;
+
+    /** TRON 专用服务 */
     private final TronClientFactory tronClientFactory;
     private final TronDepositScanner tronDepositScanner;
     private final TronTransactionService tronTransactionService;
     private final TronTrc20Service tronTrc20Service;
+    /**
+     * Monero 专用工作流：扫描 -> 提现 -> 确认提现 -> 归集 -> 确认归集。
+     */
     public void moneroWorkflow() {
         AccountChainProfile profile = repository.findProfileByChain("XMR")
                 .filter(candidate -> Boolean.TRUE.equals(candidate.getEnabled()))
@@ -122,26 +156,36 @@ public class AccountChainWorkflowService {
         }
         processSingleAccountChain(profile);
     }
+
+    /** 批量扫描所有已启用账户链的充值。 */
     public void scanDeposits() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
             scanDeposits(profile);
         }
     }
+
+    /** 批量处理所有已启用账户链的待签名提现。 */
     public void processWithdrawals() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
             processWithdrawals(profile);
         }
     }
+
+    /** 批量确认所有已启用账户链的已发送提现。 */
     public void confirmWithdrawals() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
             confirmWithdrawals(profile);
         }
     }
+
+    /** 批量创建并签名所有已启用账户链的归集交易。 */
     public void processCollections() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
             processCollections(profile);
         }
     }
+
+    /** 批量确认所有已启用账户链的归集交易。 */
     public void confirmCollections() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
             confirmCollections(profile);

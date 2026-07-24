@@ -9,7 +9,29 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * CashAddr encoder/decoder for P2PKH and P2SH addresses.
+ * Bitcoin Cash CashAddr地址编解码器，支持P2PKH和P2SH地址的编码与解码。
+ *
+ * <h3>CashAddr格式</h3>
+ * CashAddr是Bitcoin Cash（BCH）在2018年引入的新地址格式，旨在解决传统Base58地址
+ * 容易与BTC地址混淆的问题。格式为：{@code prefix:payload}，其中：
+ * <ul>
+ *   <li><b>prefix</b>：人类可读前缀，主网为{@code bitcoincash}，测试网为{@code bchtest}</li>
+ *   <li><b>payload</b>：Base32编码的数据，包含版本字节和20字节哈希（RIPEMD160）</li>
+ * </ul>
+ *
+ * <h3>编码流程</h3>
+ * <ol>
+ *   <li>构建payload：版本字节(类型&lt;&lt;3) + 20字节哈希</li>
+ *   <li>8位到5位转换（convertBits）</li>
+ *   <li>前缀扩展并计算BCH多项式校验和</li>
+ *   <li>拼接前缀:Base32(payload + checksum)</li>
+ * </ol>
+ *
+ * <h3>与Base58Check的区别</h3>
+ * <ul>
+ *   <li>Base58Check: 双重SHA-256校验和 + Base58编码</li>
+ *   <li>CashAddr: BCH多项式校验和 + Base32编码，更强的错误检测能力</li>
+ * </ul>
  */
 public final class BitcoinCashAddressCodec {
     private static final String CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";

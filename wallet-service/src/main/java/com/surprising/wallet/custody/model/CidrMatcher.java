@@ -2,6 +2,12 @@ package com.surprising.wallet.custody.model;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+/**
+ * CIDR（无类别域间路由）IP 网段匹配工具。
+ *
+ * <p>用于校验请求来源 IP 是否在租户配置的 IP 白名单范围内。
+ * 支持 IPv4 和 IPv6，支持子网前缀长度（如 192.168.1.0/24）。
+ */
 public final class CidrMatcher {
     private CidrMatcher() {    }
     public static boolean matches(String cidr, String address) {

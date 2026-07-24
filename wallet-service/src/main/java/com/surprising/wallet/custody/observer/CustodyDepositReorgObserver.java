@@ -2,7 +2,7 @@ package com.surprising.wallet.custody.observer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.surprising.wallet.service.dao.DepositReorgObserver;
+import com.surprising.wallet.deposit.observer.DepositReorgObserver;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -14,13 +14,33 @@ import java.util.UUID;
 
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 托管充值重组观察者，实现 {@link DepositReorgObserver}，在链重组导致充值回滚时：
+ * <ol>
+ *   <li>更新 custody_deposit 状态为 REORGED</li>
+ *   <li>创建 DEPOSIT_REORG_REVERSAL 的借方分类账条目</li>
+ *   <li>若重组导致余额不足（赤字），创建 custody_reorg_deficit 记录</li>
+ *   <li>通过 {@link CustodyRepository#insertEventWithDeliveries} 发布 Webhook 事件</li>
+ * </ol>
+ *
+ * @see DepositReorgObserver
+ * @see CustodyRepository
+ */
 @Component
 public class CustodyDepositReorgObserver implements DepositReorgObserver {
+    /** Webhook 事件类型：充值被重组 */
     private static final String EVENT_TYPE = "DEPOSIT.REORGED";
     private final JdbcTemplate jdbc;
     private final CustodyRepository repository;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 构造器。
+     *
+     * @param jdbc         JDBC 模板
+     * @param repository   托管仓储
+     * @param objectMapper JSON 序列化器
+     */
     public CustodyDepositReorgObserver(JdbcTemplate jdbc, CustodyRepository repository,
                                        ObjectMapper objectMapper) {
         this.jdbc = jdbc;

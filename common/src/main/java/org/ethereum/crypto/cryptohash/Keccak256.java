@@ -20,6 +20,12 @@
 package org.ethereum.crypto.cryptohash;
 
 /**
+ * Keccak-256 哈希算法实现（输出 256 位 / 32 字节）。
+ *
+ * <p>继承 {@link KeccakCore}，将摘要长度固定为 32 字节，
+ * 通过算法名 "eth-keccak-256" 注册到 JCA 提供者。
+ * 广泛用于以太坊地址生成与交易哈希。</p>
+ *
  * <p>This class implements the Keccak-256 digest algorithm under the
  * {@link Digest} API.</p>
  *

@@ -22,6 +22,13 @@ import org.spongycastle.jce.provider.BouncyCastleProvider;
 import java.security.Provider;
 import java.security.Security;
 
+/**
+ * SpongyCastle 安全提供者注册。
+ *
+ * <p>封装 {@link org.spongycastle.jce.provider.BouncyCastleProvider}（Android 兼容的
+ * BouncyCastle 重打包），通过 Holder 模式确保单例，并额外注册 ETH-KECCAK-256 和
+ * ETH-KECCAK-512 消息摘要算法到 JCA 框架。</p>
+ */
 public final class SpongyCastleProvider {
 
     private static class Holder {

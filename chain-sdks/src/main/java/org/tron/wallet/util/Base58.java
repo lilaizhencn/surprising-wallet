@@ -3,6 +3,30 @@ package org.tron.wallet.util;
 import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 
+/**
+ * Base58编码/解码工具类，实现Bitcoin/TRON风格的Base58编码方案。
+ *
+ * <h3>Base58算法说明</h3>
+ * Base58是Bitcoin引入的一种二进制到文本编码方案，是Base64的变体，
+ * 从中去除了容易混淆的字符：数字0、大写O、大写I、小写l以及符号+和/。
+ * 字符表为：{@code 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz}（58个字符）。
+ *
+ * <h3>编码原理</h3>
+ * 将字节数组视为一个大端的大整数，反复除以58取余数映射到字符表：
+ * <ol>
+ *   <li>统计前导零字节，编码后以字符'1'填充</li>
+ *   <li>将剩余数据作为大整数，反复取模58，结果映射到字符表</li>
+ *   <li>反转结果（高位在前），添加前导'1'</li>
+ * </ol>
+ *
+ * <h3>TRON地址中的应用</h3>
+ * TRON地址使用Base58Check格式（Base58 + SHA-256双重校验和）：
+ * {@code base58(address_prefix + address_bytes + checksum)}，
+ * 其中地址前缀主网为{@code 0x41}。
+ *
+ * <p><b>注意</b>：本类不附加校验和，仅提供纯Base58编解码。校验和通常由
+ * 上层调用者（如{@link org.tron.TronWalletApi#encode58Check}）使用SHA-256双重校验。</p>
+ */
 public class Base58 {
 
     public static final char[] ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"

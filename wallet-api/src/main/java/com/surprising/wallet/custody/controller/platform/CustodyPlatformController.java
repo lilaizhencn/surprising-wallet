@@ -28,6 +28,12 @@ import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.model.CustodySessionCookie;
 import com.surprising.wallet.custody.service.CustodyTenantService;
 
+/**
+ * 平台管理控制器，提供租户管理（CRUD）、平台级仪表盘、登录/登出功能。
+ *
+ * <p>端点路径：/custody/platform/v1/tenants、/custody/platform/v1/dashboard、/custody/platform/v1/auth。
+ * 需要平台管理员会话认证。
+ */
 @RestController
 @RequestMapping("/custody/platform/v1")
 public class CustodyPlatformController {

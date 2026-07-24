@@ -4,6 +4,26 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * 状态枚举，定义系统中所有状态相关的常量值，包括用户性别、等级、认证状态、绑定状态以及币种状态等。
+ *
+ * <p>每个枚举常量的整数值通过 {@link #status} 字段获取。</p>
+ *
+ * <h3>枚举分类：</h3>
+ * <ul>
+ *   <li><b>用户性别</b>：{@link #USER_GENDER_MALE}、{@link #USER_GENDER_FEMALE}</li>
+ *   <li><b>用户等级</b>：{@link #USER_GRADE_NO_AUTH}、{@link #USER_GRADE_GENERAL}、{@link #USER_GRADE_MEDIUM}、{@link #USER_GRADE_SENIOR}</li>
+ *   <li><b>交易密码</b>：{@link #USER_TRADE_PASS_NOSET}、{@link #USER_TRADE_PASS_SETED}、{@link #USER_TRADE_PASS_PERIOD}</li>
+ *   <li><b>邮箱绑定</b>：{@link #USER_MAIL_NOT_BIND}、{@link #USER_MAIL_BINDED}</li>
+ *   <li><b>手机号绑定</b>：{@link #USER_PHONE_NOT_BIND}、{@link #USER_PHONE_BINDED}</li>
+ *   <li><b>初级认证</b>：{@link #USER_PRIMARY_AUTH_REFUSE}、{@link #USER_PRIMARY_AUTH_NO_COMMIT}、{@link #USER_PRIMARY_AUTH_WAIT}、{@link #USER_PRIMARY_AUTH_PASSED}</li>
+ *   <li><b>高级认证</b>：{@link #USER_SENIOR_AUTH_REFUSE}、{@link #USER_SENIOR_AUTH_NO_COMMIT}、{@link #USER_SENIOR_AUTH_WAIT}、{@link #USER_SENIOR_AUTH_PASSED}</li>
+ *   <li><b>视频认证</b>：{@link #USER_VIDEO_AUTH_REFUSE}、{@link #USER_VIDEO_AUTH_NO_COMMIT}、{@link #USER_VIDEO_AUTH_WAIT}、{@link #USER_VIDEO_AUTH_PASSED}</li>
+ *   <li><b>用户状态</b>：{@link #USER_STATUS_NORMAL}、{@link #USER_STATUS_DELETED}、{@link #USER_STATUS_FORBIDDEN}</li>
+ *   <li><b>谷歌绑定</b>：{@link #USER_GOOGLE_AUTH_NO_BIND}、{@link #USER_GOOGLE_AUTH_BINDED}、{@link #USER_GOOGLE_AUTH_CLOSED}</li>
+ *   <li><b>币种状态</b>：{@link #COIN_STATUS_ONLINE}、{@link #COIN_STATUS_OFFLINE}</li>
+ * </ul>
+ */
 @AllArgsConstructor
 public enum StatusEnums {
 

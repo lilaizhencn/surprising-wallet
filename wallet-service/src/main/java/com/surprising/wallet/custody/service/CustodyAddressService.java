@@ -7,8 +7,8 @@ import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.custody.repository.CustodyRepository.AddressRecord;
 import com.surprising.wallet.custody.repository.CustodyRepository.TenantRecord;
 import com.surprising.wallet.account.repository.Evm7702CollectionRepository;
-import com.surprising.wallet.service.chain.BlockchainRuntimeService;
-import com.surprising.wallet.service.dao.ChainJdbcRepository;
+import com.surprising.wallet.chain.BlockchainRuntimeService;
+import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +24,13 @@ import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 托管充值地址服务，管理租户的充值地址生命周期。
+ *
+ * <p>核心功能：为租户创建充值地址（链上 BIP44 派生 + EIP-7702 委托）、
+ * 查询地址列表、校验地址归属权限。地址创建时生成确定性 BIP32 路径，
+ * 同一 externalReference 多次请求返回相同地址。
+ */
 @Service
 public class CustodyAddressService {
     private static final String RESERVED_SUBJECT_PREFIX = "__sw_";

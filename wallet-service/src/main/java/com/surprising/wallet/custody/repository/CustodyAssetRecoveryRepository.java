@@ -13,9 +13,23 @@ import java.util.UUID;
 
 import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway;
 
+/**
+ * 资产误转恢复仓储，管理资产误转恢复案例的全生命周期状态流转。
+ *
+ * <p>状态机流转：SUBMITTED -> VERIFIED -> APPROVED -> EXECUTING -> BROADCAST -> RECOVERED。
+ * 可转为终态 REJECTED 或 CANCELLED。广播失败可回退到 APPROVED 重新执行。</p>
+ *
+ * @see com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway
+ */
 @Repository
 public class CustodyAssetRecoveryRepository {
     private final JdbcTemplate jdbc;
+
+    /**
+     * 构造器。
+     *
+     * @param jdbc JDBC 模板
+     */
     public CustodyAssetRecoveryRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }

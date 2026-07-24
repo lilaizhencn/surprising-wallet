@@ -24,6 +24,12 @@ import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 钱包配置概览服务，提供环境策略、RPC 策略、链配置的健康检查总览。
+ *
+ * <p>用于 Console 平台的系统状态页面，汇总环境名称、RPC 节点数、
+ * 链启用状态、密钥配置状态等信息。
+ */
 @Service
 public class WalletConfigOverviewService {
     private static final Map<String, String> SWITCH_KEYS = Map.of(

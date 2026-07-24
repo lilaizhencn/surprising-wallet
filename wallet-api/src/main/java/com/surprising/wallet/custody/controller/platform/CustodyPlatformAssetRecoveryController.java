@@ -16,6 +16,12 @@ import com.surprising.wallet.custody.repository.CustodyAssetRecoveryRepository;
 import com.surprising.wallet.custody.service.CustodyAssetRecoveryService;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 
+/**
+ * 平台资产找回管理控制器。
+ *
+ * <p>端点路径：/custody/platform/v1/asset-recoveries。
+ * 提供跨租户的资产找回记录查询，需要平台管理员权限。
+ */
 @RestController
 @RequestMapping("/custody/platform/v1/asset-recoveries")
 public class CustodyPlatformAssetRecoveryController {

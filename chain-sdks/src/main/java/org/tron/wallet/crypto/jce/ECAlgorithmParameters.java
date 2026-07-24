@@ -25,6 +25,9 @@ import java.security.spec.ECGenParameterSpec;
 import java.security.spec.ECParameterSpec;
 import java.security.spec.InvalidParameterSpecException;
 
+/**
+ * EC算法参数管理类。提供<b>secp256k1</b>椭圆曲线的参数规范（{@link ECParameterSpec}）及ASN.1编码。
+ */
 public final class ECAlgorithmParameters {
 
     public static final String ALGORITHM = "EC";

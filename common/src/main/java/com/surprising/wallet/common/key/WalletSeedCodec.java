@@ -7,6 +7,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * 钱包种子编解码工具类。
+ *
+ * <p>提供 Base64 种子解码（固定 32 字节）、BIP-32 根节点生成、
+ * 以及 {@link WalletKeyConfig} 四种子去重与校验。</p>
+ */
 public final class WalletSeedCodec {
     public static final int SEED_BYTES = 32;
 

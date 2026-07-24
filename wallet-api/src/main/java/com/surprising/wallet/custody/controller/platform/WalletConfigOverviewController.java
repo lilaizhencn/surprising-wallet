@@ -10,6 +10,12 @@ import org.springframework.web.bind.annotation.RestController;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.service.WalletConfigOverviewService;
 
+/**
+ * 平台钱包配置概览控制器。
+ *
+ * <p>端点路径：/custody/platform/v1/wallet-config/overview。
+ * 提供平台统计信息、全局开关状态、链配置摘要等总览数据。
+ */
 @RestController
 @RequestMapping("/custody/platform/v1/wallet-config")
 public class WalletConfigOverviewController {

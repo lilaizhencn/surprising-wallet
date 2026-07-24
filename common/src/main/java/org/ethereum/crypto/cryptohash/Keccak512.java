@@ -20,7 +20,12 @@
 package org.ethereum.crypto.cryptohash;
 
 /**
- * <p>This class implements the Keccak-256 digest algorithm under the
+ * Keccak-512 哈希算法实现（输出 512 位 / 64 字节）。
+ *
+ * <p>继承 {@link KeccakCore}，将摘要长度固定为 64 字节，
+ * 通过算法名 "eth-keccak-512" 注册到 JCA 提供者。</p>
+ *
+ * <p>This class implements the Keccak-512 digest algorithm under the
  * {@link Digest} API.</p>
  *
  * <pre>

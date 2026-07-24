@@ -9,19 +9,37 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * 开发环境水龙头配置属性，从 {@code sw.wallet.dev-faucet} 前缀绑定。
+ *
+ * <p>仅在允许的环境（dev/test/test2/local）中启用，用于向测试地址自动补币
+ * （BTC/ETH/USDT/USDC 等）。包含 BTC 和 EVM 链各自的 RPC 端点、阈值、私钥配置。
+ */
 @Component
 @ConfigurationProperties(prefix = "sw.wallet.dev-faucet")
 public class DevFaucetProperties {
+
+    /** 允许启用水龙头的环境列表 */
     private static final Set<String> ALLOWED_ENVIRONMENTS =
             Set.of("dev", "test", "test2", "local");
+    /** 是否启用 */
     private boolean enabled;
+    /** 轮询间隔，默认 10 秒 */
     private Duration delay = Duration.ofSeconds(10);
+    /** 失败重试延迟，默认 30 秒 */
     private Duration retryDelay = Duration.ofSeconds(30);
+    /** RPC 请求超时，默认 10 秒 */
     private Duration requestTimeout = Duration.ofSeconds(10);
+    /** 每次批处理的最大候选地址数 */
     private int batchSize = 20;
+    /** 每笔补币的最大重试次数 */
     private int maxAttempts = 3;
+    /** BTC 水龙头配置 */
     private final Bitcoin bitcoin = new Bitcoin();
+    /** EVM 水龙头配置 */
     private final Evm evm = new Evm();
+
+    /** 校验当前环境是否允许启用水龙头 */
     public void validate(String environment) {
         if (!enabled) {
             return;

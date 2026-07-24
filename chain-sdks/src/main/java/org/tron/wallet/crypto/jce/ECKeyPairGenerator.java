@@ -21,6 +21,9 @@ package org.tron.wallet.crypto.jce;
 import java.security.*;
 import java.security.spec.ECGenParameterSpec;
 
+/**
+ * EC密钥对生成器。使用<b>secp256k1</b>椭圆曲线生成密钥对，基于Holder模式实现单例延迟加载。
+ */
 public final class ECKeyPairGenerator {
 
     public static final String ALGORITHM = "EC";

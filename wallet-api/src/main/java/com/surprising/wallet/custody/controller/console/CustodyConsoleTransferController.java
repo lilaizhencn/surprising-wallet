@@ -15,6 +15,12 @@ import java.util.Map;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.service.CustodyWithdrawalService;
 
+/**
+ * Console 提现/转账管理控制器。
+ *
+ * <p>端点路径：/custody/console/v1/{tenantId}/withdrawals。
+ * 提供提现工单的创建（POST）和查询列表（GET）功能。
+ */
 @RestController
 @RequestMapping("/custody/console/v1")
 public class CustodyConsoleTransferController {

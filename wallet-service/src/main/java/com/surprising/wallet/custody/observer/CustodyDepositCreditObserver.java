@@ -3,7 +3,7 @@ package com.surprising.wallet.custody.observer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.service.dao.DepositCreditObserver;
+import com.surprising.wallet.deposit.observer.DepositCreditObserver;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -17,14 +17,38 @@ import java.util.UUID;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
 
+/**
+ * 托管充值入账观察者，实现 {@link DepositCreditObserver}，在充值确认后：
+ * <ol>
+ *   <li>根据 chain_address 匹配托管地址所属租户</li>
+ *   <li>校验租户链是否已开通且充值开关已启用</li>
+ *   <li>分配 deposit_record 和 ledger_balance 的 tenant_id</li>
+ *   <li>创建 custody_deposit 记录和 DEPOSIT CREDIT 分类账条目</li>
+ *   <li>自动应用尚未弥补的重组赤字（apply open reorg deficits）</li>
+ *   <li>通过 {@link CustodyRepository#insertEventWithDeliveries} 发布 DEPOSIT.CONFIRMED Webhook 事件</li>
+ * </ol>
+ *
+ * @see DepositCreditObserver
+ * @see CustodyRepository
+ * @see CustodyTenantChainRepository
+ */
 @Component
 public class CustodyDepositCreditObserver implements DepositCreditObserver {
+    /** Webhook 事件类型：充值已确认 */
     private static final String EVENT_TYPE = "DEPOSIT.CONFIRMED";
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
     private final CustodyRepository repository;
     private final CustodyTenantChainRepository tenantChains;
 
+    /**
+     * 构造器。
+     *
+     * @param jdbc         JDBC 模板
+     * @param objectMapper JSON 序列化器
+     * @param repository   托管仓储
+     * @param tenantChains 租户链仓储
+     */
     public CustodyDepositCreditObserver(JdbcTemplate jdbc, ObjectMapper objectMapper,
                                         CustodyRepository repository,
                                         CustodyTenantChainRepository tenantChains) {

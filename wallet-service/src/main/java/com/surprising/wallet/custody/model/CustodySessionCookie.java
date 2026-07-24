@@ -8,6 +8,13 @@ import org.springframework.http.ResponseCookie;
 import java.time.Duration;
 
 import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
+/**
+ * Custody Console 会话 Cookie 工具类。
+ *
+ * <p>管理 Console 用户的认证会话 Cookie，提供读取（从请求中提取 token）、
+ * 设置（写入 Set-Cookie 响应头）和清除（设置 maxAge=0）功能。
+ * Cookie 属性：HttpOnly、SameSite=Lax、path=/custody、Secure（由配置决定）。
+ */
 public final class CustodySessionCookie {
     public static final String NAME = "SW_CUSTODY_SESSION";
     private CustodySessionCookie() {

@@ -17,9 +17,35 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * 托管核心仓储，管理租户、用户、会话、API 密钥、地址、Gas 账户、Webhook、提现/充值记录等核心数据。
+ *
+ * <p>所有写操作均使用 JDBC 原子更新，关键事务通过 {@code @Transactional} 保证一致性。
+ * 涉及的数据库表包括：</p>
+ * <ul>
+ *   <li>custody_tenant — 租户信息</li>
+ *   <li>custody_tenant_user — 租户用户/平台管理员</li>
+ *   <li>custody_session — Console 会话</li>
+ *   <li>custody_api_key — API 密钥</li>
+ *   <li>custody_address — 托管地址</li>
+ *   <li>custody_gas_account — Gas 费用账户</li>
+ *   <li>custody_deposit — 充值记录</li>
+ *   <li>custody_withdrawal — 提现记录</li>
+ *   <li>custody_webhook_endpoint / custody_webhook_delivery — Webhook 端点与投递</li>
+ * </ul>
+ *
+ * @see CustodyTenantChainRepository
+ * @see CustodyAssetRecoveryRepository
+ */
 @Repository
 public class CustodyRepository {
     private final JdbcTemplate jdbc;
+
+    /**
+     * 构造器。
+     *
+     * @param jdbc JDBC 模板
+     */
     public CustodyRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }

@@ -13,10 +13,34 @@ import java.util.UUID;
 
 import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
 
+/**
+ * 开发环境水龙头数据仓储。
+ *
+ * <p>仅在 {@code sw.wallet.dev-faucet.enabled=true} 时加载。
+ * 提供候选地址发现、补币记录 CRUD、余额查询等功能。
+ * 所有操作使用 JDBC 直接访问 PostgreSQL。
+ */
+/**
+ * 开发水龙头仓储，管理测试环境下的自动充值（funding）生命周期。
+ *
+ * <p>仅在 {@code sw.wallet.dev-faucet.enabled=true} 且环境为 dev/test/test2/local 时生效。
+ * 核心流程：discover（发现待充值地址） -> create（创建充值任务） ->
+ * due（获取待发送任务） -> markSending/markSent/markFailed（状态更新） ->
+ * reconcileConfirmed（与 custody_deposit 对账确认）。</p>
+ *
+ * @see com.surprising.wallet.devfaucet.model.DevFaucetProperties
+ * @see com.surprising.wallet.devfaucet.service.DevFaucetRpcClient
+ */
 @Repository
 @ConditionalOnProperty(prefix = "sw.wallet.dev-faucet", name = "enabled", havingValue = "true")
 public class DevFaucetRepository {
     private final JdbcTemplate jdbc;
+
+    /**
+     * 构造器。
+     *
+     * @param jdbc JDBC 模板
+     */
     public DevFaucetRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }

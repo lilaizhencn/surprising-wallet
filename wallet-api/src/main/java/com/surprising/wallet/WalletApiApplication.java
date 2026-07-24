@@ -6,6 +6,15 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+/**
+ * wallet-api 模块 Spring Boot 启动入口。
+ *
+ * <p>wallet-api 是整个钱包系统的 HTTP 入口层，包含 Custody REST API、
+ * Console 管理后台、定时任务调度（充值扫描、提现批处理、Gas 对账、Webhook 投递等）。
+ * 组件扫描覆盖 {@code com.surprising.wallet} 和 {@code com.surprising.starters}。
+ *
+ * <p>启动时配置 TLS 命名组以兼容旧版签名库。
+ */
 @Slf4j
 @SpringBootApplication(scanBasePackages = {"com.surprising.wallet", "com.surprising.starters"})
 @EnableConfigurationProperties

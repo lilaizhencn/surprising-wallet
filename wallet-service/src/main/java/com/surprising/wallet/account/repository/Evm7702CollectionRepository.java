@@ -430,7 +430,7 @@ public class Evm7702CollectionRepository {
                               BigInteger gasUsed, BigInteger effectiveGasPrice,
                               BigInteger l2Fee, BigInteger l1Fee, BigInteger operatorFee,
                               BigInteger blockNumber, String blockHash,
-                              List<com.surprising.wallet.service.chain.evm.Evm7702ReceiptParser.ItemResult> results) {
+                              List<com.surprising.wallet.chain.evm.Evm7702ReceiptParser.ItemResult> results) {
         List<BatchItemIdentity> expected = listBatchItemIdentities(tenantId, batchId);
         if (expected.size() != results.size()) {
             throw new IllegalStateException("receipt result count does not match batch");

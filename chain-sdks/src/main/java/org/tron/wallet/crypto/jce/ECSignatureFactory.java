@@ -23,6 +23,10 @@ import java.security.NoSuchProviderException;
 import java.security.Provider;
 import java.security.Signature;
 
+/**
+ * EC签名工厂类。封装ECDSA签名实例的获取逻辑，支持原始格式（{@code NONEwithECDSA}）的
+ * 签名创建与验证，通过Provider或Provider名称获取{@link Signature}实例。
+ */
 public final class ECSignatureFactory {
 
     public static final String RAW_ALGORITHM = "NONEwithECDSA";

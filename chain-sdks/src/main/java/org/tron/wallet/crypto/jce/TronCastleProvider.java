@@ -25,6 +25,10 @@ import org.tron.wallet.crypto.hash.Keccak512;
 import java.security.Provider;
 import java.security.Security;
 
+/**
+ * TRON加密服务提供者。基于SpongyCastle（BouncyCastle）安全提供者，注册TRON自定义的
+ * Keccak-256和Keccak-512消息摘要算法，为TRON钱包提供统一的加密服务入口。
+ */
 public final class TronCastleProvider {
 
     public static Provider getInstance() {

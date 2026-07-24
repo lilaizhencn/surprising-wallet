@@ -20,6 +20,12 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodySecurityProperties;
 import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 
+/**
+ * API Key 管理服务，负责 API Key 的创建、查询和撤销。
+ *
+ * <p>每个租户可创建多个 API Key，每个 Key 有独立的权限集合和可选的过期时间。
+ * API Key Secret 仅创建时返回，存储时使用 AES-256-GCM 加密。
+ */
 @Service
 public class CustodyApiKeyService {
     private final CustodyRepository repository;

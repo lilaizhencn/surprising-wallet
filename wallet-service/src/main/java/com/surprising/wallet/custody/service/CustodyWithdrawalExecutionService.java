@@ -2,12 +2,12 @@ package com.surprising.wallet.custody.service;
 
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.custody.repository.CustodyRepository.AddressRecord;
-import com.surprising.wallet.service.chain.cardano.CardanoKeyService;
-import com.surprising.wallet.service.chain.monero.MoneroAddressValidator;
-import com.surprising.wallet.service.chain.near.NearKeyService;
-import com.surprising.wallet.service.chain.polkadot.PolkadotKeyService;
-import com.surprising.wallet.service.config.WalletRuntimeConfigService;
-import com.surprising.wallet.service.dao.ChainJdbcRepository;
+import com.surprising.wallet.chain.cardano.CardanoKeyService;
+import com.surprising.wallet.chain.monero.MoneroAddressValidator;
+import com.surprising.wallet.chain.near.NearKeyService;
+import com.surprising.wallet.chain.polkadot.PolkadotKeyService;
+import com.surprising.wallet.config.WalletRuntimeConfigService;
+import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;

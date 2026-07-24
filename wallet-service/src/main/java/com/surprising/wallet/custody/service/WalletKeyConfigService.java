@@ -12,6 +12,11 @@ import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 钱包密钥配置管理服务，提供 BIP32 密钥材料的 Console 管理功能。
+ *
+ * <p>支持查询密钥配置状态、轮换密钥材料。密钥操作需要平台管理员权限。
+ */
 @Service
 public class WalletKeyConfigService {
     private final WalletKeyConfigStore store;

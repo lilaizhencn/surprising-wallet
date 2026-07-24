@@ -29,6 +29,32 @@ import java.security.Security;
 
 import static java.util.Arrays.copyOfRange;
 
+/**
+ * TRON哈希工具类，提供基于<b>Keccak-256</b>和<b>Keccak-512</b>算法的哈希计算功能。
+ *
+ * <h3>Keccak算法说明</h3>
+ * Keccak是SHA-3标准的底层算法，TRON（继承自Ethereum）使用原始的Keccak-256而非
+ * NIST标准化的SHA3-256（两者在填充规则上略有不同）。Keccak基于海绵构造（sponge
+ * construction），具有以下特点：
+ * <ul>
+ *   <li>输出长度可变：Keccak-256输出32字节，Keccak-512输出64字节</li>
+ *   <li>抗碰撞性强：256位输出提供128位经典安全性</li>
+ *   <li>基于自定义TRON-KECCAK-{256,512}算法，通过SpongyCastle安全提供者注册</li>
+ * </ul>
+ *
+ * <h3>TRON地址计算</h3>
+ * TRON地址通过{@link #sha3omit12}计算：取Keccak-256哈希的第12到第31字节（共20字节），
+ * 并在开头添加主网地址前缀字节{@code 0x41}，生成21字节地址。
+ *
+ * <h3>方法概览</h3>
+ * <ul>
+ *   <li>{@link #sha3(byte[])}：单输入Keccak-256哈希</li>
+ *   <li>{@link #sha3(byte[], byte[])}：双输入拼接后Keccak-256哈希</li>
+ *   <li>{@link #sha3(byte[], int, int)}：指定范围的Keccak-256哈希</li>
+ *   <li>{@link #sha512(byte[])}：Keccak-512哈希</li>
+ *   <li>{@link #sha3omit12(byte[])}：TRON地址专用哈希（取末20字节+前缀）</li>
+ * </ul>
+ */
 @Slf4j
 public class Hash {
 

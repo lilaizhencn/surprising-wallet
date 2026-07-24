@@ -30,6 +30,22 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.math.BigInteger;
 
+/**
+ * 字节数组工具类，提供字节数组与各种数据类型之间的转换方法。
+ *
+ * <h3>核心功能</h3>
+ * <ul>
+ *   <li><b>Hex编码/解码</b>：{@link #toHexString} / {@link #fromHexString}，
+ *       支持{@code 0x}前缀，自动补全奇数长度</li>
+ *   <li><b>数值转换</b>：{@link #toLong} / {@link #toInt}将字节数组解释为大端无符号整数</li>
+ *   <li><b>字符串转换</b>：{@link #fromString} / {@link #toStr}进行UTF-8编码/解码</li>
+ *   <li><b>原始类型封装</b>：{@link #fromLong} / {@link #fromInt}将long/int转为字节数组</li>
+ *   <li><b>对象序列化</b>：{@link #fromObject}将可序列化对象转为字节数组</li>
+ *   <li><b>子数组截取</b>：{@link #subArray}安全地截取指定范围的字节</li>
+ * </ul>
+ *
+ * <p>用于TRON交易数据的序列化/反序列化，与{@link ByteUtil}配合使用。</p>
+ */
 @Slf4j
 public class ByteArray {
 

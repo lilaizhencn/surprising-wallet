@@ -23,6 +23,17 @@ import com.surprising.wallet.custody.model.CustodySecurityProperties;
 import com.surprising.wallet.custody.model.CustodySessionCookie;
 import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 
+/**
+ * 托管认证服务，管理 API Key 验证和 Console 会话。
+ *
+ * <p>支持两种认证模式：
+ * <ul>
+ *   <li>API 认证：通过 API Key + HMAC 签名验证</li>
+ *   <li>Console 认证：Email + 密码登录，Session Cookie 管理</li>
+ * </ul>
+ *
+ * <p>应用启动时自动预创建默认平台管理员账号。
+ */
 @Service
 public class CustodyAuthService {
     private static final int MAX_FAILURES = 5;

@@ -21,6 +21,12 @@ import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.service.CustodyTenantChainService;
 import com.surprising.wallet.custody.service.CustodyWithdrawalService;
 
+/**
+ * 公共 API 控制器，暴露给租户的 REST API。
+ *
+ * <p>端点路径：/custody/api/v1/addresses、/custody/api/v1/withdrawals 等。
+ * 需通过 API Key + HMAC 签名认证，限流和 IP 白名单由过滤器处理。
+ */
 @RestController
 @RequestMapping("/custody/api/v1")
 public class CustodyPublicApiController {

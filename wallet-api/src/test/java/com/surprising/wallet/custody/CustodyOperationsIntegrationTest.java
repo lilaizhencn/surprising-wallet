@@ -2,10 +2,10 @@ package com.surprising.wallet.custody;
 
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.pojo.Address;
-import com.surprising.wallet.service.chain.BlockchainAdapterRegistry;
-import com.surprising.wallet.service.chain.BlockchainRuntimeService;
-import com.surprising.wallet.service.chain.tron.TronChainAdapter;
-import com.surprising.wallet.service.dao.ChainJdbcRepository;
+import com.surprising.wallet.chain.BlockchainAdapterRegistry;
+import com.surprising.wallet.chain.BlockchainRuntimeService;
+import com.surprising.wallet.chain.tron.TronChainAdapter;
+import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;

@@ -18,6 +18,13 @@ import java.util.HexFormat;
 
 import com.surprising.wallet.custody.model.CustodySecurityProperties;
 
+/**
+ * 托管密码学服务，提供 AES-256-GCM 加密和 HMAC-SHA256 签名。
+ *
+ * <p>用于保护敏感数据（API Key Secret、Webhook Secret 等）的存储安全。
+ * 密钥材料来自环境变量 {@code SW_CUSTODY_SECRET_MASTER_KEY}，应用启动时初始化。
+ * 加密后的数据以 Base64 URL-safe 格式存储。
+ */
 @Service
 public class CustodyCryptoService {
     private static final SecureRandom RANDOM = new SecureRandom();

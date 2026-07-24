@@ -22,6 +22,12 @@ import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.Provider;
 
+/**
+ * ECDH 椭圆曲线密钥协商。
+ *
+ * <p>对 JCE {@link javax.crypto.KeyAgreement}（算法 "ECDH"）的薄封装，
+ * 支持默认实例、按名称或 {@link java.security.Provider} 获取协商对象。</p>
+ */
 public final class ECKeyAgreement {
 
     public static final String ALGORITHM = "ECDH";

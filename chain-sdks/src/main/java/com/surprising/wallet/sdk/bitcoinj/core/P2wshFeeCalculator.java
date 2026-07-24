@@ -1,5 +1,10 @@
 package com.surprising.wallet.sdk.bitcoinj.core;
 
+/**
+ * P2WSH（Pay-to-Witness-Script-Hash）多签交易费用计算器。
+ * 为BIP141原生隔离见证多签地址的交易提供虚拟字节（vByte）估算和矿工费计算功能，
+ * 支持可变的多签参数（requiredSignatures、totalPubKeys）和自定义费率。
+ */
 public final class P2wshFeeCalculator {
     public static final long DUST_THRESHOLD_SAT = 546L;
     private static final int DEFAULT_REQUIRED_SIGNATURES = 2;

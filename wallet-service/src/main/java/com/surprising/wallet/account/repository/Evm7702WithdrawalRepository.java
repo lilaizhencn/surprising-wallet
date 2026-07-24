@@ -1,7 +1,7 @@
 package com.surprising.wallet.account.repository;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.service.chain.evm.Evm7702PayoutReceiptParser;
+import com.surprising.wallet.chain.evm.Evm7702PayoutReceiptParser;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;

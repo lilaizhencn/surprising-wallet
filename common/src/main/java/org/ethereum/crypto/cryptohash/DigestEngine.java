@@ -22,6 +22,13 @@ package org.ethereum.crypto.cryptohash;
 import java.security.MessageDigest;
 
 /**
+ * 哈希引擎抽象基类，提供内部缓冲和块处理模板。
+ *
+ * <p>继承 {@link java.security.MessageDigest} 并实现 {@link Digest} 接口。
+ * 子类只需实现 {@link #engineReset()}、{@link #processBlock(byte[])}、
+ * {@link #doPadding(byte[], int)} 和 {@link #doInit()} 四个方法即可获得
+ * 完整的增量哈希计算能力。内部自动管理输入缓冲、块计数与输出截断。</p>
+ *
  * <p>This class is a template which can be used to implement hash
  * functions. It takes care of some of the API, and also provides an
  * internal data buffer whose length is equal to the hash function

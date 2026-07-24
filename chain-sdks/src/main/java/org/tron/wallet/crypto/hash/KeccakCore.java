@@ -18,6 +18,35 @@
 
 package org.tron.wallet.crypto.hash;
 
+/**
+ * Keccak哈希算法核心抽象类，实现Keccak海绵构造（sponge construction）的
+ * 置换函数（permutation）和填充规则。
+ *
+ * <h3>Keccak算法原理</h3>
+ * Keccak基于<b>海绵构造</b>，包含两个阶段：
+ * <ol>
+ *   <li><b>吸收阶段（Absorbing）</b>：将输入数据分块与内部状态（1600位，25个64位字）
+ *       进行XOR运算，然后执行置换函数</li>
+ *   <li><b>挤压阶段（Squeezing）</b>：从内部状态中提取输出摘要</li>
+ * </ol>
+ *
+ * <h3>Keccak-f[1600]置换</h3>
+ * 24轮迭代，每轮包含5个步骤（θ, ρ, π, χ, ι），对25个64位字（5x5矩阵）进行变换：
+ * <ul>
+ *   <li><b>θ（Theta）</b>：列奇偶扩散，每列奇偶位XOR到相邻列</li>
+ *   <li><b>ρ（Rho）</b>：字内旋转，每个字按不同偏移量循环移位</li>
+ *   <li><b>π（Pi）</b>：字重排列，将字按固定模式重新排列</li>
+ *   <li><b>χ（Chi）</b>：行非线性变换，每行使用(~a & b) ^ c的非线性函数</li>
+ *   <li><b>ι（Iota）</b>：轮常数XOR，每轮将不同的64位常数XOR到状态字[0,0]</li>
+ * </ul>
+ *
+ * <h3>填充规则</h3>
+ * 使用pad10*1填充：在消息末尾添加{@code 0x01}或{@code 0x81}以确保消息长度
+ * 是块大小的整数倍，然后对最后几个状态字进行位翻转作为最终处理。
+ *
+ * <p>子类通过{@link #engineGetDigestLength()}决定输出长度（Keccak-256为32字节，
+ * Keccak-512为64字节），块大小由此自动计算（200 - 2 * 摘要长度）。</p>
+ */
 abstract class KeccakCore extends DigestEngine {
 
     private static final long[] RC = {

@@ -1,8 +1,8 @@
 package com.surprising.wallet.custody.service;
 
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.service.chain.BlockchainAdapter;
-import com.surprising.wallet.service.chain.BlockchainAdapterRegistry;
+import com.surprising.wallet.chain.BlockchainAdapter;
+import com.surprising.wallet.chain.BlockchainAdapterRegistry;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,8 +17,15 @@ import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
 
+/**
+ * 租户链配置服务，管理租户启用的链和资产列表。
+ *
+ * <p>控制租户能访问哪些链（如 ETH、BTC、TRON），以及每条链上的资产类型。
+ * 链启用状态由平台管理员配置，租户只能操作已启用的链。
+ */
 @Service
 public class CustodyTenantChainService {
+    /** 租户链配置数据访问 */
     private final CustodyTenantChainRepository chains;
     private final CustodyRepository custody;
     private final BlockchainAdapterRegistry adapters;

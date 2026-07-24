@@ -9,9 +9,27 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 托管资产仪表盘仓储，提供租户资产余额汇总、资产价格、重组赤字等看板数据查询。
+ *
+ * <p>核心查询：</p>
+ * <ul>
+ *   <li>{@link #balances(UUID)} — 按链和资产符号汇总可用余额、锁定余额、总余额及地址数</li>
+ *   <li>{@link #prices()} — 查询所有资产的美元参考价格</li>
+ *   <li>{@link #openReorgDeficits(UUID)} — 查询尚未弥补的链重组赤字</li>
+ * </ul>
+ *
+ * @see CustodyRepository
+ */
 @Repository
 public class CustodyAssetDashboardRepository {
     private final JdbcTemplate jdbc;
+
+    /**
+     * 构造器。
+     *
+     * @param jdbc JDBC 模板
+     */
     public CustodyAssetDashboardRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }

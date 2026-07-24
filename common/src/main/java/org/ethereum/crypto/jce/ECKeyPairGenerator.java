@@ -20,6 +20,12 @@ package org.ethereum.crypto.jce;
 import java.security.*;
 import java.security.spec.ECGenParameterSpec;
 
+/**
+ * secp256k1 椭圆曲线密钥对生成器。
+ *
+ * <p>对 JCE {@link java.security.KeyPairGenerator}（算法 "EC"，曲线 secp256k1）
+ * 的薄封装，通过 Holder 模式延迟初始化并缓存单例。</p>
+ */
 public final class ECKeyPairGenerator {
 
     public static final String ALGORITHM = "EC";

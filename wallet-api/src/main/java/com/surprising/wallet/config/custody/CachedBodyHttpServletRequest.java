@@ -11,6 +11,13 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
+/**
+ * 可重复读取请求体的 {@link HttpServletRequestWrapper} 包装器。
+ *
+ * <p>Servlet 输入流默认只能读取一次，该类将请求体缓存为字节数组，
+ * 每次调用 {@link #getInputStream()} 或 {@link #getReader()} 都返回新的流，
+ * 供 HMAC 签名校验过滤器等多处消费者复用。
+ */
 public final class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
     /** 缓存后的请求体字节，用于签名过滤器重放读取。 */
     private final byte[] body;

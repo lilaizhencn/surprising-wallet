@@ -20,6 +20,16 @@ import java.util.Map;
 import java.util.Locale;
 import java.util.UUID;
 
+/**
+ * 托管资产找回服务，支持将误转入充值地址的资产找回至租户指定地址。
+ *
+ * <p>支持 EVM 链的原生币和 ERC20 代币找回。流程：
+ * <ol>
+ *   <li>管理员创建找回请求（指定源地址、资产、目标地址）</li>
+ *   <li>签名服务对找回交易进行双重签名</li>
+ *   <li>广播上链并记录结果</li>
+ * </ol>
+ */
 @Service
 public class CustodyAssetRecoveryService {
     private final CustodyAssetRecoveryRepository repository;

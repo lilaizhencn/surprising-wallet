@@ -10,6 +10,12 @@ import org.springframework.web.bind.annotation.RestController;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.service.WalletKeyConfigService;
 
+/**
+ * 平台密钥配置控制器。
+ *
+ * <p>端点路径：/custody/platform/v1/wallet-config/keyset。
+ * 提供 BIP32 密钥材料的状态查询和轮换功能，需要平台管理员权限。
+ */
 @RestController
 @RequestMapping("/custody/platform/v1/wallet-config/keyset")
 public class WalletKeyConfigController {

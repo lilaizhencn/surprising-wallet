@@ -8,6 +8,12 @@ import org.springframework.web.bind.annotation.RestController;
 import com.surprising.wallet.custody.service.CustodyAssetDashboardService;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 
+/**
+ * Console 仪表盘控制器。
+ *
+ * <p>端点路径：/custody/console/v1/{tenantId}/dashboard。
+ * 提供租户级资产总览：总余额、各链分布、今日充值/提现统计。
+ */
 @RestController
 @RequestMapping("/custody/console/v1/dashboard")
 public class CustodyConsoleDashboardController {

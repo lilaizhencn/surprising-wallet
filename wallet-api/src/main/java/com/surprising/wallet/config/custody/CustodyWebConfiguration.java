@@ -7,6 +7,13 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.Arrays;
 
+/**
+ * Custody 模块 CORS 跨域配置。
+ *
+ * <p>配置 /custody/** 路径的 CORS 策略，允许的来源通过 {@code SW_CUSTODY_CORS_ORIGINS}
+ * 环境变量指定（逗号分隔），支持 Console 前端和 API 客户端的跨域请求。
+ * 同时暴露认证所需的请求头（X-Custody-Key、X-Custody-Signature 等）和 Location 响应头。
+ */
 @Configuration
 public class CustodyWebConfiguration implements WebMvcConfigurer {
     /** 允许跨域来源白名单，默认开发端口。 */

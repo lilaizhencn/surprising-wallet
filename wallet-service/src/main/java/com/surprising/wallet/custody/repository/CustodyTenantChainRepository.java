@@ -10,9 +10,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * 托管租户链仓储，管理租户已开通的链及代币信息。
+ *
+ * <p>提供租户维度的链列表查询、链状态管理（开通/关闭）、
+ * 充值/提现开关检查以及平台全局代币配置的读取。</p>
+ *
+ * @see CustodyRepository
+ */
 @Repository
 public class CustodyTenantChainRepository {
     private final JdbcTemplate jdbc;
+
+    /**
+     * 构造器。
+     *
+     * @param jdbc JDBC 模板
+     */
     public CustodyTenantChainRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }

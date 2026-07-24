@@ -1,9 +1,9 @@
 package com.surprising.wallet.account.coordinator;
 
 import com.surprising.wallet.custody.repository.CustodyRepository;
-import com.surprising.wallet.service.chain.evm.Evm7702BatchTransactionService;
-import com.surprising.wallet.service.chain.evm.Evm7702PayoutReceiptParser;
-import com.surprising.wallet.service.dao.ChainJdbcRepository;
+import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
+import com.surprising.wallet.chain.evm.Evm7702PayoutReceiptParser;
+import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

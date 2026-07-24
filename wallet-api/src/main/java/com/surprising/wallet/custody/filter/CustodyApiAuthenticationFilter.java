@@ -20,6 +20,13 @@ import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 
+/**
+ * Custody API 认证过滤器，拦截 /api/v1/custody/** 请求。
+ *
+ * <p>使用 HMAC-SHA256 签名 + API Key 进行请求认证和防重放。
+ * 认证通过后将租户主体信息（CustodyPrincipal）注入请求上下文。
+ * 请求体最大 2MB，超出则直接拒绝。
+ */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
 public class CustodyApiAuthenticationFilter extends OncePerRequestFilter {

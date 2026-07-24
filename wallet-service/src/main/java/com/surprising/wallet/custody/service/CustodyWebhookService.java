@@ -27,6 +27,13 @@ import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 托管 Webhook 投递服务，负责向租户配置的 Webhook 端点投递事件通知。
+ *
+ * <p>支持的事件类型：充值到账（deposit.credited）、提现状态变更（withdrawal.*）。
+ * 每次投递使用 HMAC-SHA256 签名，租户可验证来源。失败后会按重试策略自动重试，
+ * 所有投递历史记录在 webhook_delivery 表中用于审计和手动重放。
+ */
 @Service
 public class CustodyWebhookService {
     private static final java.util.Set<String> DELIVERY_STATUSES = java.util.Set.of(

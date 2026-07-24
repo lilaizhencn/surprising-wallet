@@ -15,6 +15,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+/**
+ * SegWit见证数据签名器，专注于Native SegWit（P2WSH）多签交易的见证（witness）签名
+ * 生成与组装。基于secp256k1椭圆曲线的ECDSA签名算法，提供以下核心功能：
+ *
+ * <ul>
+ *   <li><b>签名计算</b>：使用{@link org.bitcoinj.core.Transaction#calculateWitnessSignature}
+ *       对指定输入计算witness签名，签名哈希类型默认为SIGHASH_ALL</li>
+ *   <li><b>见证数据组装</b>：按P2WSH规范组装witness结构（OP_0 + 签名列表 + witnessScript）</li>
+ *   <li><b>多签见证合并</b>：将新签名按公钥在witnessScript中的位置插入已有的多签witness中，
+ *       自动去重并验证签名有效性</li>
+ *   <li><b>工具方法</b>：提取witnessScript、统计签名数量、编码签名等</li>
+ * </ul>
+ *
+ * <p>P2WSH见证数据结构：{@code [dummy(0x00), sig1, sig2, ..., sigM, witnessScript]}</p>
+ */
 public class WitnessSigner {
     private static final byte[] EMPTY = new byte[0];
 

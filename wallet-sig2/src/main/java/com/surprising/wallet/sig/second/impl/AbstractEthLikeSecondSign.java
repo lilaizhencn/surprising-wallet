@@ -28,12 +28,26 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
+ * EVM 兼容链（ETH、BNB、POLYGON 等）的二签抽象基类。
+ *
+ * <p>提供 EVM 交易签名的公共逻辑：原始交易编码、ERC20 代币 transfer 函数编码、
+ * 以及基于 web3j 的 EIP-155 签名。子类只需实现 {@link ISignService#chain()}
+ * 和 {@link ISignService#assetSymbol()} 即可完成特定链/资产的适配。
+ *
  * @author atomex
  */
 @Slf4j
 abstract public class AbstractEthLikeSecondSign implements ISignService {
+
+    /** 十六进制字符串前缀 */
     public static final String PREFIX = "0x";
 
+    /**
+     * 将带 0x 前缀的十六进制字符串转为字节数组。
+     *
+     * @param x 十六进制字符串
+     * @return 解码后的字节数组
+     */
     public static byte[] StringHexToByteArray(String x) {
         if (x.startsWith(PREFIX)) {
             x = x.substring(2);
@@ -44,6 +58,15 @@ abstract public class AbstractEthLikeSecondSign implements ISignService {
         return Hex.decode(x);
     }
 
+    /**
+     * 对 EVM 提现交易执行第二次签名。
+     *
+     * <p>解析签名元数据中的 nonce、gasPrice、gas、to、chainId，
+     * 通过 BIP32 派生地址对应的私钥后调用 {@link #sign} 完成签名。
+     *
+     * @param transaction 提现交易
+     * @return 签名后的交易十六进制字符串
+     */
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
         String sigStr = transaction.getSignature();
@@ -64,16 +87,51 @@ abstract public class AbstractEthLikeSecondSign implements ISignService {
         return signResult;
     }
 
+    /**
+     * 计算手续费的精度因子（10^decimals），用于将 gasPrice/gasLimit 转换为最小单位。
+     *
+     * @param sigJson 签名 JSON（可包含 feeAssetDecimals 字段）
+     * @param currency 资产元数据
+     * @return 精度因子
+     */
     protected BigDecimal feeDecimal(JSONObject sigJson, AssetRuntimeMetadata currency) {
         Integer decimals = sigJson.getObject("feeAssetDecimals", Integer.class);
         return BigDecimal.TEN.pow(decimals == null ? currency.getDecimals() : decimals);
     }
 
 
+    /**
+     * 构建并签名 ERC20 代币转账交易（无 chainId）。
+     *
+     * @param gasPrice  gas 价格（最小单位）
+     * @param gasLimit  gas 限制
+     * @param nonce     发送方 nonce
+     * @param privateKey 发送方私钥十六进制
+     * @param contractAddress ERC20 代币合约地址
+     * @param toAddress 接收方地址
+     * @param amount    代币数量（最小单位）
+     * @return 签名后的交易十六进制字符串
+     */
     public static String tokenTransaction(BigInteger gasPrice, BigInteger gasLimit, BigInteger nonce, String privateKey, String contractAddress, String toAddress, BigInteger amount) {
         return tokenTransaction(gasPrice, gasLimit, nonce, privateKey, contractAddress, toAddress, amount, ChainIdLong.NONE);
     }
 
+    /**
+     * 构建并签名 ERC20 代币转账交易（指定 chainId，支持 EIP-155 重放保护）。
+     *
+     * <p>使用 ABI 编码构造 ERC20 transfer(address,uint256) 函数调用，
+     * 然后将调用数据作为 EVM 交易的 data 字段进行签名。
+     *
+     * @param gasPrice  gas 价格（最小单位）
+     * @param gasLimit  gas 限制
+     * @param nonce     发送方 nonce
+     * @param privateKey 发送方私钥十六进制
+     * @param contractAddress ERC20 代币合约地址
+     * @param toAddress 接收方地址
+     * @param amount    代币数量（最小单位）
+     * @param chainId   EVM 链 ID
+     * @return 签名后的交易十六进制字符串
+     */
     public static String tokenTransaction(BigInteger gasPrice, BigInteger gasLimit, BigInteger nonce, String privateKey, String contractAddress, String toAddress, BigInteger amount, long chainId) {
         BigInteger value = BigInteger.ZERO;
         //token转账参数

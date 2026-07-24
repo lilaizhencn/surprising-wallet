@@ -1,6 +1,6 @@
 package com.surprising.wallet.account;
 
-import com.surprising.wallet.service.chain.evm.Evm7702BatchTransactionService;
+import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.web3j.abi.FunctionEncoder;

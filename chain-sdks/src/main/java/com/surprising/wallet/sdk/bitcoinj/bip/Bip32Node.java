@@ -14,6 +14,30 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * BIP32（Bitcoin Improvement Proposal 32）分层确定性钱包（HD Wallet）节点实现。
+ * 基于secp256k1椭圆曲线，支持从主种子派生任意深度的父子密钥对，是构建
+ * 确定性钱包地址体系的核心组件。
+ *
+ * <h3>BIP32核心概念</h3>
+ * <ul>
+ *   <li><b>主密钥（Master Key）</b>：通过HMAC-SHA512从种子派生，种子通常由BIP39助记词生成</li>
+ *   <li><b>扩展密钥</b>：包含密钥本身（私钥/公钥）+ 链码（chain code），用于子密钥派生</li>
+ *   <li><b>硬化派生（Hardened Derivation）</b>：使用私钥+链码派生，提供更强的安全性，
+ *       索引范围为 {@code 2^31 ~ 2^32-1}（即 {@code 0x80000000} 以上）</li>
+ *   <li><b>非硬化派生（Non-Hardened Derivation）</b>：使用公钥+链码派生，允许仅持有公钥
+ *       的情况下派生子公钥</li>
+ *   <li><b>指纹（Fingerprint）</b>：父公钥的RIPEMD160(SHA-256(pubKey))前4字节</li>
+ * </ul>
+ *
+ * <h3>支持的币种</h3>
+ * 支持Bitcoin（主网/测试网）和Litecoin（主网/测试网），每种网络各有独立的私钥/公钥
+ * 扩展密钥前缀（xprv/xpub等），通过{@link #TYPE_BITCOIN}和{@link #TYPE_LITECOIN}区分。
+ *
+ * <h3>序列化格式</h3>
+ * 扩展密钥序列化为78字节的Base58Check编码字符串（如xprv、xpub），包含版本前缀、
+ * 深度、父指纹、序号、链码和密钥数据。
+ */
 public class Bip32Node {
     public static final int TYPE_BITCOIN = 0;
     public static final int TYPE_LITECOIN = 1;

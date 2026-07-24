@@ -28,6 +28,12 @@ import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 钱包配置管理服务，管理系统配置项（环境策略、RPC 策略）的 Console CRUD。
+ *
+ * <p>支持数据库连接测试、RPC 节点连通性探测（HTTP + WebSocket）、
+ * 链配置文件管理。所有写操作需平台管理员权限。
+ */
 @Service
 public class WalletConfigManagementService {
     private final JdbcTemplate jdbc;

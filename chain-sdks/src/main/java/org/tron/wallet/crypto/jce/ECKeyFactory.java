@@ -23,6 +23,10 @@ import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.Provider;
 
+/**
+ * EC密钥工厂类。封装椭圆曲线密钥工厂的获取逻辑，支持通过Provider或Provider名称获取
+ * {@link KeyFactory}实例，用于EC密钥对与密钥规范之间的转换。
+ */
 public final class ECKeyFactory {
 
     public static final String ALGORITHM = "EC";

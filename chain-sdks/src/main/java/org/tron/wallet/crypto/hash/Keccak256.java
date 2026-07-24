@@ -18,6 +18,19 @@
 
 package org.tron.wallet.crypto.hash;
 
+/**
+ * Keccak-256哈希算法实现，输出256位（32字节）摘要。
+ *
+ * <p>继承自{@link KeccakCore}，使用海绵构造（sponge construction）处理输入数据，
+ * 比特率（rate）为1088位（136字节），容量（capacity）为512位。
+ * 算法名称为{@code "tron-keccak-256"}，注册在TRON自定义的SpongyCastle安全提供者中。</p>
+ *
+ * <p>TRON和Ethereum使用原始Keccak-256而非NIST标准化后的SHA3-256，
+ * 两者填充规则不同，因此相同输入会产生不同的哈希值。</p>
+ *
+ * @see KeccakCore Keccak算法核心实现
+ * @see <a href="https://keccak.team/keccak_specs_summary.html">Keccak Specifications</a>
+ */
 public class Keccak256 extends KeccakCore {
 
     /**

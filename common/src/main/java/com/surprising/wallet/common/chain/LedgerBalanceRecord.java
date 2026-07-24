@@ -12,6 +12,18 @@ import java.time.Instant;
 @Data
 @Builder
 @NoArgsConstructor
+/**
+ * 账本余额记录，记录各账户在各链上的资产余额快照。
+ *
+ * <p>核心字段：</p>
+ * <ul>
+ *   <li>{@code chain} / {@code assetSymbol} - 链标识和资产符号</li>
+ *   <li>{@code accountId} - 账户 ID</li>
+ *   <li>{@code availableBalance} - 可用余额</li>
+ *   <li>{@code lockedBalance} - 锁定余额</li>
+ *   <li>{@code totalBalance} - 总余额</li>
+ * </ul>
+ */
 @AllArgsConstructor
 public class LedgerBalanceRecord implements Serializable {
     private Long id;

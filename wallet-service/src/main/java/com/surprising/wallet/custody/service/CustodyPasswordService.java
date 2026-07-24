@@ -9,6 +9,12 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
 
+/**
+ * 密码哈希服务，使用 PBKDF2-SHA256 对 Console 登录密码进行哈希。
+ *
+ * <p>格式：pbkdf2-sha256$iterations$salt$hash，每次使用 16 字节随机盐。
+ * 未使用 bcrypt/argon2 以保持 Java 标准库兼容。
+ */
 @Service
 public class CustodyPasswordService {
     private static final String ALGORITHM = "PBKDF2WithHmacSHA256";

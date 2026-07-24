@@ -24,6 +24,13 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
 import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
 
+/**
+ * JSON-RPC 开发水龙头客户端，通过 HTTP JSON-RPC 向测试地址发送测试币。
+ *
+ * <p>实现了 BTC（sendtoaddress）和 EVM（eth_sendTransaction）两类链的补币逻辑。
+ * EVM 代币通过构造 ERC20 transfer ABI 编码数据发送。仅在 {@code sw.wallet.dev-faucet.enabled=true} 时启用。
+ * 包含费率缓存（30 秒刷新）和 nonce 管理。
+ */
 @Component
 @ConditionalOnProperty(prefix = "sw.wallet.dev-faucet", name = "enabled", havingValue = "true")
 public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {

@@ -4,7 +4,7 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.custody.service.CustodyAddressService.AddressView;
 import com.surprising.wallet.custody.service.CustodyAddressService.CreateAddressCommand;
 import com.surprising.wallet.custody.repository.CustodyRepository.GasAccountRecord;
-import com.surprising.wallet.service.chain.BlockchainRuntimeService;
+import com.surprising.wallet.chain.BlockchainRuntimeService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,8 +20,16 @@ import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 托管 Gas 账户服务，管理租户的原生币 Gas 预充值账户。
+ *
+ * <p>租户需预先向 Gas 账户充值原生币，用于支付提现和归集的手续费。
+ * 提供 Gas 余额查询、充值、对账功能。每个租户的每条链有独立的 Gas 账户。
+ * 归集使用的子地址索引固定为 {@value #COLLECTION_CHILD_INDEX}。
+ */
 @Service
 public class CustodyGasService {
+    /** 归集合约交互使用的子地址索引 */
     static final long COLLECTION_CHILD_INDEX = 1L;
     private static final BigDecimal DEFAULT_LOW_BALANCE_THRESHOLD = new BigDecimal("0.01");
     private static final String SYSTEM_REFERENCE_PREFIX = "__sw_collection__:";

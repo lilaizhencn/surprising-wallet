@@ -20,6 +20,12 @@
 package org.ethereum.crypto.cryptohash;
 
 /**
+ * 哈希函数接口，定义 update/digest/reset/copy 标准操作。
+ *
+ * <p>该接口模拟 {@link java.security.MessageDigest} 的 API，但不继承它，
+ * 以兼容 J2ME 等精简 Java 环境。所有实现类基于 Keccak 海绵构造，
+ * 每次 digest 后自动重置，可复用。</p>
+ *
  * <p>This interface documents the API for a hash function. This
  * interface somewhat mimics the standard {@code
  * java.security.MessageDigest} class. We do not extend that class in
