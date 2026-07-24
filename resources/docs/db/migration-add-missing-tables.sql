@@ -142,7 +142,7 @@ BEGIN
             ADD CONSTRAINT custody_gas_usage_operation_type_check
             CHECK (operation_type IN ('WITHDRAWAL', 'COLLECTION_BATCH', 'WITHDRAWAL_BATCH'));
     END IF;
-END
+END;
 $$;
 
 -- Add unique constraint for tenant_id + operation_type + operation_id
@@ -156,7 +156,7 @@ BEGIN
         ALTER TABLE public.custody_gas_usage
             ADD CONSTRAINT custody_gas_usage_operation_key UNIQUE (tenant_id, operation_type, operation_id);
     END IF;
-END
+END;
 $$;
 
 
@@ -197,5 +197,5 @@ BEGIN
             ADD CONSTRAINT deposit_record_canonical_status_check
             CHECK (canonical_status IN ('CANONICAL', 'REORGED'));
     END IF;
-END
+END;
 $$;

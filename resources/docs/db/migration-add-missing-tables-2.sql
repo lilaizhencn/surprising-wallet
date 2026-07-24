@@ -300,8 +300,18 @@ ALTER TABLE public.collection_record
     ADD COLUMN IF NOT EXISTS tenant_id uuid,
     ADD COLUMN IF NOT EXISTS custody_address_id uuid;
 
-ALTER TABLE public.collection_record
-    ADD CONSTRAINT IF NOT EXISTS collection_record_tenant_id_key UNIQUE (tenant_id, id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conrelid = 'public.collection_record'::regclass
+           AND conname = 'collection_record_tenant_id_key'
+    ) THEN
+        ALTER TABLE public.collection_record
+            ADD CONSTRAINT collection_record_tenant_id_key UNIQUE (tenant_id, id);
+    END IF;
+END;
+$$;
 
 DO $$
 BEGIN
@@ -323,7 +333,7 @@ BEGIN
             ADD CONSTRAINT collection_record_custody_fk FOREIGN KEY (tenant_id, custody_address_id)
             REFERENCES public.custody_address(tenant_id, id) ON DELETE RESTRICT;
     END IF;
-END
+END;
 $$;
 
 
