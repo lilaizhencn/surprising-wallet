@@ -113,30 +113,49 @@ public class AccountChainWorkflowService {
     private final WalletRuntimeConfigService runtimeConfigService;
     private final AccountSecp256k1KeyService secp256k1KeyService;
 
-    /** 各链族的充值扫描器 */
+    /** EVM 链充值扫描器 */
     private final EvmDepositScanner evmDepositScanner;
-    private final HyperCoreDepositScanner hyperCoreDepositScanner;
-    private final SolanaDepositScanner solanaDepositScanner;
-    private final AptosDepositScanner aptosDepositScanner;
-    private final SuiDepositScanner suiDepositScanner;
-    private final TonDepositScanner tonDepositScanner;
-    private final XrpDepositScanner xrpDepositScanner;
-    private final CardanoDepositScanner cardanoDepositScanner;
-    private final MoneroDepositScanner moneroDepositScanner;
-    private final NearDepositScanner nearDepositScanner;
-    private final PolkadotDepositScanner polkadotDepositScanner;
-
-    /** 各链族的交易服务 */
+    /** EVM 链交易服务 */
     private final EvmAccountTransactionService evmTransactionService;
+    /** HyperCore 链充值扫描器 */
+    private final HyperCoreDepositScanner hyperCoreDepositScanner;
+    /** HyperCore 链交易服务 */
     private final HyperCoreTransactionService hyperCoreTransactionService;
+    /** Solana 链充值扫描器 */
+    private final SolanaDepositScanner solanaDepositScanner;
+    /** Solana 链交易服务 */
     private final SolanaTransactionService solanaTransactionService;
+    /** Aptos 链充值扫描器 */
+    private final AptosDepositScanner aptosDepositScanner;
+    /** Aptos 链交易服务 */
     private final AptosTransactionService aptosTransactionService;
+    /** Sui 链充值扫描器 */
+    private final SuiDepositScanner suiDepositScanner;
+    /** Sui 链交易服务 */
     private final SuiTransactionService suiTransactionService;
+    /** TON 链充值扫描器 */
+    private final TonDepositScanner tonDepositScanner;
+    /** TON 链交易服务 */
     private final TonTransactionService tonTransactionService;
+    /** XRP 链充值扫描器 */
+    private final XrpDepositScanner xrpDepositScanner;
+    /** XRP 链交易服务 */
     private final XrpTransactionService xrpTransactionService;
+    /** Cardano 链充值扫描器 */
+    private final CardanoDepositScanner cardanoDepositScanner;
+    /** Cardano 链交易服务 */
     private final CardanoTransactionService cardanoTransactionService;
+    /** Monero 链充值扫描器 */
+    private final MoneroDepositScanner moneroDepositScanner;
+    /** Monero 链交易服务 */
     private final MoneroTransactionService moneroTransactionService;
+    /** NEAR 链充值扫描器 */
+    private final NearDepositScanner nearDepositScanner;
+    /** NEAR 链交易服务 */
     private final NearTransactionService nearTransactionService;
+    /** Polkadot 链充值扫描器 */
+    private final PolkadotDepositScanner polkadotDepositScanner;
+    /** Polkadot 链交易服务 */
     private final PolkadotTransactionService polkadotTransactionService;
 
     /** TRON 专用服务 */
