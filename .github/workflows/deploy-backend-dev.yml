@@ -1,5 +1,5 @@
 name: Deploy backend dev
-# Server-side: checkout → mvn compile → SSH trigger → server git pull → build → deploy
+# GitHub only triggers the server — server does git pull + build + deploy itself.
 
 on:
   push:
@@ -24,20 +24,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify-and-trigger:
+  trigger:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-          cache: maven
-
-      - name: Compile (tests skipped)
-        run: mvn -B -ntp compile
 
       - name: Configure SSH
         env:
@@ -55,6 +46,7 @@ jobs:
           DEPLOY_HOST: ${{ secrets.BACKEND_DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.BACKEND_DEPLOY_USER }}
         run: |
-          ssh -v -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST" \
+          ssh -v -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+            -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST" \
             "nohup /usr/local/sbin/surprising-wallet-backend-deploy > /var/log/surprising-wallet-deploy.log 2>&1 &"
           echo "✅ Deploy triggered"
