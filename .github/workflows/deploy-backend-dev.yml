@@ -1,5 +1,5 @@
 name: Deploy backend dev
-# GitHub SSH-triggers server; server does git pull + mvn package + restart.
+# full deploy flow: push → GitHub checkout → SSH trigger → server git pull → mvn package → migrate → restart → verify
 
 on:
   push:
