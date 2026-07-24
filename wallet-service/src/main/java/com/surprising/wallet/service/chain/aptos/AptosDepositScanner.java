@@ -24,8 +24,14 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AptosDepositScanner {
-    private static final String CHAIN = "APTOS";    static final String SCANNER = "aptos-fa-event-scanner";    private static final String FUNGIBLE_DEPOSIT = "0x1::fungible_asset::Deposit";    private static final String FUNGIBLE_STORE = "0x1::fungible_asset::FungibleStore";    private static final String OBJECT_CORE = "0x1::object::ObjectCore";    private static final String APT_METADATA = AptosHex.normalizeAddress("0xa");
-    private final AptosRpcClient rpc;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "APTOS";
+    static final String SCANNER = "aptos-fa-event-scanner";
+    private static final String FUNGIBLE_DEPOSIT = "0x1::fungible_asset::Deposit";
+    private static final String FUNGIBLE_STORE = "0x1::fungible_asset::FungibleStore";
+    private static final String OBJECT_CORE = "0x1::object::ObjectCore";
+    private static final String APT_METADATA = AptosHex.normalizeAddress("0xa");
+    private final AptosRpcClient rpc;
+    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;

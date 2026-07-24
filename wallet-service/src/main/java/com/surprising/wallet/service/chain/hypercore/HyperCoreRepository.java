@@ -19,7 +19,9 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public
 class HyperCoreRepository {
-    private static final String CHAIN = "HYPERCORE";    private final JdbcTemplate jdbcTemplate;    private final ChainJdbcRepository chainRepository;
+    private static final String CHAIN = "HYPERCORE";
+    private final JdbcTemplate jdbcTemplate;
+    private final ChainJdbcRepository chainRepository;
 
     @Transactional(rollbackFor = Throwable.class)
     public Optional<BigDecimal> recordObservedBalance(ChainAddressRecord address, String symbol,

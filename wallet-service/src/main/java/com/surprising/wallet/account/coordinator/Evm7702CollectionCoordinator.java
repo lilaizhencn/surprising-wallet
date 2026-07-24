@@ -16,7 +16,9 @@ import com.surprising.wallet.account.repository.Evm7702CollectionRepository;
 /** Keeps the signed outbox, tenant gas reservation and final settlement atomic. */
 @Service
 public class Evm7702CollectionCoordinator {
-    private final Evm7702CollectionRepository repository;    private final CustodyRepository custodyRepository;    private final ChainJdbcRepository chainRepository;
+    private final Evm7702CollectionRepository repository;
+    private final CustodyRepository custodyRepository;
+    private final ChainJdbcRepository chainRepository;
     public Evm7702CollectionCoordinator(Evm7702CollectionRepository repository,
                                         CustodyRepository custodyRepository,
                                         ChainJdbcRepository chainRepository) {

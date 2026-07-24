@@ -10,7 +10,10 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 abstract class DbBtcLikeJsonRpcCommand implements BtcLikeCommand {
-    private static final int TIMEOUT_MS = 120_000;    private final String chain;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;
+    private static final int TIMEOUT_MS = 120_000;
+    private final String chain;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
 
     protected DbBtcLikeJsonRpcCommand(String chain,
                                       ChainJdbcRepository repository,

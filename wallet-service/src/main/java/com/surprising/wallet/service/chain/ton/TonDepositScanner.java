@@ -27,7 +27,19 @@ import java.util.Set;
 @Slf4j
 public
 class TonDepositScanner {
-    private static final String CHAIN = "TON";    private static final String SCANNER = "ton-account-message-scanner";    private static final int TON_DECIMALS = 9;    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";    private static final String WALLET_ROLE_CONTRACT_DEPLOYER = "CONTRACT_DEPLOYER";    private static final long JETTON_TRANSFER_NOTIFICATION = 0x7362d09cL;    private static final long JETTON_INTERNAL_TRANSFER = 0x178d4519L;    private static final long JETTON_EXCESSES = 0xd53276dbL;    private static final long TEXT_COMMENT = 0x00000000L;    private final TonCenterClient rpc;    private final TonAddressService addressService;    private final ChainJdbcRepository repository;    private final TonApiClient tonApi;
+    private static final String CHAIN = "TON";
+    private static final String SCANNER = "ton-account-message-scanner";
+    private static final int TON_DECIMALS = 9;
+    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";
+    private static final String WALLET_ROLE_CONTRACT_DEPLOYER = "CONTRACT_DEPLOYER";
+    private static final long JETTON_TRANSFER_NOTIFICATION = 0x7362d09cL;
+    private static final long JETTON_INTERNAL_TRANSFER = 0x178d4519L;
+    private static final long JETTON_EXCESSES = 0xd53276dbL;
+    private static final long TEXT_COMMENT = 0x00000000L;
+    private final TonCenterClient rpc;
+    private final TonAddressService addressService;
+    private final ChainJdbcRepository repository;
+    private final TonApiClient tonApi;
 
     @Autowired
     public TonDepositScanner(TonCenterClient rpc, TonAddressService addressService,

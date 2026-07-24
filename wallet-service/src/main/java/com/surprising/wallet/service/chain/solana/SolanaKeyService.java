@@ -14,7 +14,8 @@ import java.util.Arrays;
 @Component
 public
 class SolanaKeyService {
-    private final WalletKeyMaterialProvider keyMaterial;    private final Ed25519KeyProvider testProvider;
+    private final WalletKeyMaterialProvider keyMaterial;
+    private final Ed25519KeyProvider testProvider;
     @Autowired
     public SolanaKeyService(WalletKeyMaterialProvider keyMaterial) {
         this.keyMaterial = keyMaterial;

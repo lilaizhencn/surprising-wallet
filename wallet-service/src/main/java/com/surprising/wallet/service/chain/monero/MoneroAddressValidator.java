@@ -6,7 +6,11 @@ import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Set;
 public final class MoneroAddressValidator {
-    private static final String ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";    private static final int FULL_BLOCK_SIZE = 8;    private static final int FULL_ENCODED_BLOCK_SIZE = 11;    private static final int[] DECODED_BLOCK_SIZES = {0, 0, 1, 2, 0, 3, 4, 5, 0, 6, 7, 8};    private static final Set<Integer> SUPPORTED_PREFIXES = Set.of(
+    private static final String ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    private static final int FULL_BLOCK_SIZE = 8;
+    private static final int FULL_ENCODED_BLOCK_SIZE = 11;
+    private static final int[] DECODED_BLOCK_SIZES = {0, 0, 1, 2, 0, 3, 4, 5, 0, 6, 7, 8};
+    private static final Set<Integer> SUPPORTED_PREFIXES = Set.of(
             18, 19, 42,
             53, 54, 63,
             24, 25, 36);

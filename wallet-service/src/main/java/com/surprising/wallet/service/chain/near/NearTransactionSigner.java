@@ -15,7 +15,11 @@ import java.util.Base64;
 @Component
 public
 class NearTransactionSigner {
-    private static final int ED25519_KEY_TYPE = 0;    private static final int DEPLOY_CONTRACT_ACTION = 1;    private static final int FUNCTION_CALL_ACTION = 2;    private static final int TRANSFER_ACTION = 3;    private final NearKeyService keyService;
+    private static final int ED25519_KEY_TYPE = 0;
+    private static final int DEPLOY_CONTRACT_ACTION = 1;
+    private static final int FUNCTION_CALL_ACTION = 2;
+    private static final int TRANSFER_ACTION = 3;
+    private final NearKeyService keyService;
     public NearTransactionSigner(NearKeyService keyService) {
         this.keyService = keyService;
     }

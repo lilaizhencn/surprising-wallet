@@ -23,7 +23,10 @@ import java.util.Set;
 @RequiredArgsConstructor
 public
 class SuiDepositScanner {
-    private static final String CHAIN = "SUI";    static final String SCANNER = "sui-balance-change-scanner";    private final SuiRpcClient rpc;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "SUI";
+    static final String SCANNER = "sui-balance-change-scanner";
+    private final SuiRpcClient rpc;
+    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;

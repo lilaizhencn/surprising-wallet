@@ -30,7 +30,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public
 class XrpDepositScanner {
-    private static final String CHAIN = "XRP";    private static final String NATIVE_SYMBOL = "XRP";    private static final String SCANNER = "xrp-account-tx-scanner";    private static final int XRP_DECIMALS = 6;    private final XrpRpcClient rpc;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "XRP";
+    private static final String NATIVE_SYMBOL = "XRP";
+    private static final String SCANNER = "xrp-account-tx-scanner";
+    private static final int XRP_DECIMALS = 6;
+    private final XrpRpcClient rpc;
+    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;

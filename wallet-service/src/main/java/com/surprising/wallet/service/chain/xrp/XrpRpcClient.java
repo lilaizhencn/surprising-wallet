@@ -22,7 +22,12 @@ import java.util.Optional;
 @Component
 public
 class XrpRpcClient {
-    private static final String CHAIN = "XRP";    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedRpcUrl;
+    private static final String CHAIN = "XRP";
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedRpcUrl;
 
     @Autowired
     public XrpRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {

@@ -15,7 +15,9 @@ import java.util.List;
 
 @Component
 public class AptosChainAdapter implements BlockchainAdapter {
-    private static final String CHAIN = "APTOS";    private final AptosDepositScanner scanner;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "APTOS";
+    private final AptosDepositScanner scanner;
+    private final ChainJdbcRepository repository;
     public AptosChainAdapter(AptosDepositScanner scanner, ChainJdbcRepository repository) {
         this.scanner = scanner;
         this.repository = repository;

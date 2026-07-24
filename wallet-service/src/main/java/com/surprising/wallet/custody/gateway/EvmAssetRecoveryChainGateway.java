@@ -28,8 +28,12 @@ import java.util.Locale;
 public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGateway {
     private static final BigDecimal WEI = new BigDecimal("1000000000000000000");
     private static final String TRANSFER_TOPIC =
-            "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";    private static final String DECIMALS_SELECTOR = "0x313ce567";
-    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodes;    private final EvmAccountTransactionService transactions;    private final ObjectMapper objectMapper;
+            "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+            private static final String DECIMALS_SELECTOR = "0x313ce567";
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodes;
+    private final EvmAccountTransactionService transactions;
+    private final ObjectMapper objectMapper;
 
     public EvmAssetRecoveryChainGateway(ChainJdbcRepository repository,
                                         ChainRpcNodeService rpcNodes,

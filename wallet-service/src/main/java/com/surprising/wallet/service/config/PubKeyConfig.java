@@ -17,7 +17,9 @@ import java.util.stream.Stream;
 @Component
 public
 class PubKeyConfig {
-    private static final HexFormat HEX = HexFormat.of();    private final WalletKeyMaterialProvider keyMaterial;    private final Bip32Node[] testNodes;
+    private static final HexFormat HEX = HexFormat.of();
+    private final WalletKeyMaterialProvider keyMaterial;
+    private final Bip32Node[] testNodes;
 
     @Autowired
     public PubKeyConfig(WalletKeyMaterialProvider keyMaterial) {

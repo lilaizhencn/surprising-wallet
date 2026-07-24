@@ -12,7 +12,10 @@ import java.util.Locale;
  * code must re-add the `41` prefix before matching platform deposit addresses.
  */
 public final class TronAddressCodec {
-    public static final String MAINNET_PREFIX_HEX = "41";    private static final int HEX_ADDRESS_LENGTH = 42;    private static final int TOPIC_LENGTH = 64;    private TronAddressCodec() {
+    public static final String MAINNET_PREFIX_HEX = "41";
+    private static final int HEX_ADDRESS_LENGTH = 42;
+    private static final int TOPIC_LENGTH = 64;
+    private TronAddressCodec() {
     }
     public static String base58ToHex(String base58Address) {
         byte[] decoded = Base58Check.base58ToBytes(base58Address);

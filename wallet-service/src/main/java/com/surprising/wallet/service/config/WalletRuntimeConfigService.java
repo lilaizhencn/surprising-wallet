@@ -9,7 +9,12 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class WalletRuntimeConfigService {
-    public static final String TASK_SCAN = "scan";    public static final String TASK_WITHDRAW = "withdraw";    public static final String TASK_COLLECTION = "collection";    public static final String TASK_TRANSFER = "transfer";    public static final String WITHDRAWAL_ADMIN_APPROVAL_REQUIRED = "withdrawal.admin.approval.required";    private final ChainJdbcRepository repository;
+    public static final String TASK_SCAN = "scan";
+    public static final String TASK_WITHDRAW = "withdraw";
+    public static final String TASK_COLLECTION = "collection";
+    public static final String TASK_TRANSFER = "transfer";
+    public static final String WITHDRAWAL_ADMIN_APPROVAL_REQUIRED = "withdrawal.admin.approval.required";
+    private final ChainJdbcRepository repository;
     public boolean isTaskEnabled(AssetRuntimeMetadata asset, String task) {
         return asset != null && isTaskEnabled(asset.chain(), task);
     }

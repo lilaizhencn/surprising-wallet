@@ -24,7 +24,9 @@ import java.util.UUID;
 @Service
 public class CustodyWithdrawalExecutionService {
     private static final SecureRandom RANDOM = new SecureRandom();
-    private final JdbcTemplate jdbc;    private final ChainJdbcRepository chains;    private final WalletRuntimeConfigService runtimeConfig;
+    private final JdbcTemplate jdbc;
+    private final ChainJdbcRepository chains;
+    private final WalletRuntimeConfigService runtimeConfig;
 
     public CustodyWithdrawalExecutionService(JdbcTemplate jdbc, ChainJdbcRepository chains,
                                              WalletRuntimeConfigService runtimeConfig) {

@@ -12,7 +12,8 @@ import java.util.UUID;
 
 @Repository
 public class CustodyTenantChainRepository {
-    private final JdbcTemplate jdbc;    public CustodyTenantChainRepository(JdbcTemplate jdbc) {
+    private final JdbcTemplate jdbc;
+    public CustodyTenantChainRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
     public List<ChainRecord> list(UUID tenantId) {

@@ -13,7 +13,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class AccountSecp256k1KeyService {
-    private final WalletKeyMaterialProvider keyMaterial;    public AccountSecp256k1KeyService(WalletKeyMaterialProvider keyMaterial) {
+    private final WalletKeyMaterialProvider keyMaterial;
+    public AccountSecp256k1KeyService(WalletKeyMaterialProvider keyMaterial) {
         this.keyMaterial = keyMaterial;
     }
     public ECKey key(AccountChainProfile profile, ChainAddressRecord from) {

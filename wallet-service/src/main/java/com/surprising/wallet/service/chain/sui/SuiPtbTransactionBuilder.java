@@ -16,7 +16,9 @@ public
 class SuiPtbTransactionBuilder {
     private static final String BASE58_ALPHABET =
             "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-    private static final BigInteger BASE58_RADIX = BigInteger.valueOf(58);    private static final int SUI_ADDRESS_LENGTH = 32;    private static final int SUI_DIGEST_LENGTH = 32;
+    private static final BigInteger BASE58_RADIX = BigInteger.valueOf(58);
+    private static final int SUI_ADDRESS_LENGTH = 32;
+    private static final int SUI_DIGEST_LENGTH = 32;
 
     public String buildSuiTransfer(String sender, List<SuiRpcClient.SuiCoin> gasPayment,
                                    String recipient, long amountMist, long gasPrice, long gasBudget) {

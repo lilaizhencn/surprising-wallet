@@ -19,7 +19,8 @@ import java.util.UUID;
 
 @Repository
 public class CustodyRepository {
-    private final JdbcTemplate jdbc;    public CustodyRepository(JdbcTemplate jdbc) {
+    private final JdbcTemplate jdbc;
+    public CustodyRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 

@@ -19,7 +19,8 @@ class TonKeyService {
      * local constant for offline BOC construction.
      */
     public static final long WALLET_V4R2_SUBWALLET_ID = 698_983_191L;
-    private final WalletKeyMaterialProvider keyMaterial;    private final Ed25519KeyProvider testProvider;
+    private final WalletKeyMaterialProvider keyMaterial;
+    private final Ed25519KeyProvider testProvider;
 
     @Autowired
     public TonKeyService(WalletKeyMaterialProvider keyMaterial) {

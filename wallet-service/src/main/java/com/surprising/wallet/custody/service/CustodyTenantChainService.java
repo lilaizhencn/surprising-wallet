@@ -19,7 +19,9 @@ import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
 
 @Service
 public class CustodyTenantChainService {
-    private final CustodyTenantChainRepository chains;    private final CustodyRepository custody;    private final BlockchainAdapterRegistry adapters;
+    private final CustodyTenantChainRepository chains;
+    private final CustodyRepository custody;
+    private final BlockchainAdapterRegistry adapters;
     public CustodyTenantChainService(CustodyTenantChainRepository chains,
                                      CustodyRepository custody,
                                      BlockchainAdapterRegistry adapters) {

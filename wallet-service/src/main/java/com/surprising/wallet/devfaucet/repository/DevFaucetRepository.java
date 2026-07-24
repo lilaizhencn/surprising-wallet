@@ -16,7 +16,8 @@ import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
 @Repository
 @ConditionalOnProperty(prefix = "sw.wallet.dev-faucet", name = "enabled", havingValue = "true")
 public class DevFaucetRepository {
-    private final JdbcTemplate jdbc;    public DevFaucetRepository(JdbcTemplate jdbc) {
+    private final JdbcTemplate jdbc;
+    public DevFaucetRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
     public List<Candidate> discover(int limit) {

@@ -8,8 +8,10 @@ import java.time.Duration;
 @Component
 @ConfigurationProperties(prefix = "sw.wallet.custody")
 public class CustodySecurityProperties {
-    private String secretMasterKey = "";    private Duration sessionTtl = Duration.ofHours(12);
-    private Duration apiClockSkew = Duration.ofMinutes(5);    private boolean sessionCookieSecure;
+    private String secretMasterKey = "";
+    private Duration sessionTtl = Duration.ofHours(12);
+    private Duration apiClockSkew = Duration.ofMinutes(5);
+    private boolean sessionCookieSecure;
     private final PlatformAdmin platformAdmin = new PlatformAdmin();
     public String getSecretMasterKey() {
         return secretMasterKey;

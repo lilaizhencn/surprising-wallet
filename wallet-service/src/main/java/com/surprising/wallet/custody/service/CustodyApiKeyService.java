@@ -22,7 +22,9 @@ import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 
 @Service
 public class CustodyApiKeyService {
-    private final CustodyRepository repository;    private final CustodyCryptoService crypto;    private final CustodySecurityProperties properties;
+    private final CustodyRepository repository;
+    private final CustodyCryptoService crypto;
+    private final CustodySecurityProperties properties;
     public CustodyApiKeyService(CustodyRepository repository, CustodyCryptoService crypto,
                                 CustodySecurityProperties properties) {
         this.repository = repository;

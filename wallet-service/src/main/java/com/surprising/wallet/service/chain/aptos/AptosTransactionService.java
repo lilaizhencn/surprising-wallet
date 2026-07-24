@@ -20,7 +20,10 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class AptosTransactionService {
-    private static final String CHAIN = "APTOS";    private final AptosRpcClient rpc;    private final AptosTransactionSigner signer;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "APTOS";
+    private final AptosRpcClient rpc;
+    private final AptosTransactionSigner signer;
+    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;

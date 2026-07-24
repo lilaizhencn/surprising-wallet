@@ -19,7 +19,11 @@ import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
 
 @Component
 public class CustodyDepositCreditObserver implements DepositCreditObserver {
-    private static final String EVENT_TYPE = "DEPOSIT.CONFIRMED";    private final JdbcTemplate jdbc;    private final ObjectMapper objectMapper;    private final CustodyRepository repository;    private final CustodyTenantChainRepository tenantChains;
+    private static final String EVENT_TYPE = "DEPOSIT.CONFIRMED";
+    private final JdbcTemplate jdbc;
+    private final ObjectMapper objectMapper;
+    private final CustodyRepository repository;
+    private final CustodyTenantChainRepository tenantChains;
 
     public CustodyDepositCreditObserver(JdbcTemplate jdbc, ObjectMapper objectMapper,
                                         CustodyRepository repository,

@@ -2,7 +2,8 @@ package com.surprising.wallet.service.chain.cardano;
 
 import java.util.Locale;
 final class CardanoAssetUnit {
-    static final String LOVELACE = "lovelace";    private CardanoAssetUnit() {
+    static final String LOVELACE = "lovelace";
+    private CardanoAssetUnit() {
     }
     static String normalize(String value) {
         String unit = value == null ? "" : value.trim();

@@ -37,8 +37,14 @@ import java.util.Set;
 @Slf4j
 @Component
 public class EvmDepositScanner {
-    private static final int FINALITY_AUDIT_DEPTH = 256;    private static final BigDecimal WEI_PER_ETH = new BigDecimal("1000000000000000000");    private static final String TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-    private final ChainJdbcRepository repository;    private final EvmLogScanner logScanner;    private final ChainRpcNodeService rpcNodeService;    private final String fixedRpcUrl;    private final int fixedConfirmations;
+    private static final int FINALITY_AUDIT_DEPTH = 256;
+    private static final BigDecimal WEI_PER_ETH = new BigDecimal("1000000000000000000");
+    private static final String TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+    private final ChainJdbcRepository repository;
+    private final EvmLogScanner logScanner;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedRpcUrl;
+    private final int fixedConfirmations;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;

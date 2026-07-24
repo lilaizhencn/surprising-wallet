@@ -18,7 +18,8 @@ import java.util.List;
 @Component
 public
 class DogeChainAdapter implements BlockchainAdapter {
-    private static final long DEFAULT_FEE_RATE_KOINU_PER_VBYTE = 1_000L;    private final BitcoinLikeChainRuntime runtime;
+    private static final long DEFAULT_FEE_RATE_KOINU_PER_VBYTE = 1_000L;
+    private final BitcoinLikeChainRuntime runtime;
     public DogeChainAdapter(BitcoinLikeChainRuntime runtime) {
         this.runtime = runtime;
     }

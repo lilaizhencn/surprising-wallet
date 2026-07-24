@@ -28,7 +28,11 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public
 class ChainAddressRuntime {
-    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";    private static final String EVM_ADDRESS_REGEX = "^0x[a-fA-F0-9]{40}$";    private static final String HEX_32_BYTE_ADDRESS_REGEX = "^0x[0-9a-fA-F]{64}$";    private final ChainJdbcRepository repository;    private final HotWalletAddressService hotWalletAddressService;
+    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";
+    private static final String EVM_ADDRESS_REGEX = "^0x[a-fA-F0-9]{40}$";
+    private static final String HEX_32_BYTE_ADDRESS_REGEX = "^0x[0-9a-fA-F]{64}$";
+    private final ChainJdbcRepository repository;
+    private final HotWalletAddressService hotWalletAddressService;
 
     @Transactional(rollbackFor = Throwable.class)
     public synchronized Address generateDepositAddress(ChainType chainType, long userId, int biz) {

@@ -20,7 +20,8 @@ import java.util.Locale;
 
 /** Strictly decodes and validates per-item collector events from a canonical receipt. */
 public class Evm7702ReceiptParser {
-    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";    public static final String ITEM_TOPIC = Hash.sha3String(
+    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
+    public static final String ITEM_TOPIC = Hash.sha3String(
             "CollectionItemResult(bytes32,uint256,address,address,address,uint256,uint256,bool,bytes32)");
     public static final String BATCH_TOPIC = Hash.sha3String(
             "BatchProcessed(bytes32,uint256,uint256,uint256)");

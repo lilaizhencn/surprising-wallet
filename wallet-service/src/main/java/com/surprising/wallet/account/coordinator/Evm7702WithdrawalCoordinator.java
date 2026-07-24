@@ -16,7 +16,10 @@ import com.surprising.wallet.account.repository.Evm7702WithdrawalRepository;
 /** Atomically coordinates nonce/outbox, batch Gas and per-withdrawal ledger settlement. */
 @Service
 public class Evm7702WithdrawalCoordinator {
-    private static final int MAX_ITEM_FAILURES = 3;    private final Evm7702WithdrawalRepository repository;    private final CustodyRepository custodyRepository;    private final ChainJdbcRepository chainRepository;
+    private static final int MAX_ITEM_FAILURES = 3;
+    private final Evm7702WithdrawalRepository repository;
+    private final CustodyRepository custodyRepository;
+    private final ChainJdbcRepository chainRepository;
 
     public Evm7702WithdrawalCoordinator(Evm7702WithdrawalRepository repository,
                                         CustodyRepository custodyRepository,

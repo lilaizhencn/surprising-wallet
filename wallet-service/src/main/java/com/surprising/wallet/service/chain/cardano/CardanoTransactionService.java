@@ -28,7 +28,12 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public
 class CardanoTransactionService {
-    private static final String CHAIN = CardanoBackendClient.CHAIN;    private static final String SYMBOL = "ADA";    private static final int ADA_DECIMALS = 6;    private final CardanoBackendClient backendClient;    private final CardanoKeyService keyService;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = CardanoBackendClient.CHAIN;
+    private static final String SYMBOL = "ADA";
+    private static final int ADA_DECIMALS = 6;
+    private final CardanoBackendClient backendClient;
+    private final CardanoKeyService keyService;
+    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;

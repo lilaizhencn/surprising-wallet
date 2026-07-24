@@ -42,7 +42,18 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public
 class HotWalletAddressService {
-    private final ChainJdbcRepository repository;    private final PubKeyConfig pubKeyConfig;    private final SolanaKeyService solanaKeyService;    private final SuiKeyService suiKeyService;    private final AptosKeyService aptosKeyService;    private final TonKeyService tonKeyService;    private final XrpKeyService xrpKeyService;    private final CardanoKeyService cardanoKeyService;    private final NearKeyService nearKeyService;    private final PolkadotKeyService polkadotKeyService;    private final MoneroAddressService moneroAddressService;    public Optional<ChainAddressRecord> findDefaultHotAddress(String chain, String assetSymbol) {
+    private final ChainJdbcRepository repository;
+    private final PubKeyConfig pubKeyConfig;
+    private final SolanaKeyService solanaKeyService;
+    private final SuiKeyService suiKeyService;
+    private final AptosKeyService aptosKeyService;
+    private final TonKeyService tonKeyService;
+    private final XrpKeyService xrpKeyService;
+    private final CardanoKeyService cardanoKeyService;
+    private final NearKeyService nearKeyService;
+    private final PolkadotKeyService polkadotKeyService;
+    private final MoneroAddressService moneroAddressService;
+    public Optional<ChainAddressRecord> findDefaultHotAddress(String chain, String assetSymbol) {
         return repository.findChainAddress(
                 chain,
                 assetSymbol,

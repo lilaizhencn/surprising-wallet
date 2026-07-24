@@ -36,9 +36,16 @@ import java.util.Set;
 @RequiredArgsConstructor
 public
 class XrpTransactionService {
-    private static final String CHAIN = "XRP";    private static final String NATIVE_SYMBOL = "XRP";    public static final String ACTIVATION_SYMBOL = "XRP_ACTIVATION";    private static final int XRP_DECIMALS = 6;    private static final BigDecimal TRUSTLINE_LIMIT = new BigDecimal("1000000000");    private static final int PREPARATION_CONFIRM_ATTEMPTS = 8;
+    private static final String CHAIN = "XRP";
+    private static final String NATIVE_SYMBOL = "XRP";
+    public static final String ACTIVATION_SYMBOL = "XRP_ACTIVATION";
+    private static final int XRP_DECIMALS = 6;
+    private static final BigDecimal TRUSTLINE_LIMIT = new BigDecimal("1000000000");
+    private static final int PREPARATION_CONFIRM_ATTEMPTS = 8;
     private static final Duration PREPARATION_CONFIRM_SLEEP = Duration.ofSeconds(2);
-    private final XrpRpcClient rpc;    private final XrpKeyService keyService;    private final ChainJdbcRepository repository;
+    private final XrpRpcClient rpc;
+    private final XrpKeyService keyService;
+    private final ChainJdbcRepository repository;
     private final BcSignatureService signatureService = new BcSignatureService();
 
     @Autowired(required = false)

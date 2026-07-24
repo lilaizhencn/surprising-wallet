@@ -5,7 +5,8 @@ import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.random.RandomGenerator;
 public final class DevFaucetAmountGenerator {
-    private final RandomGenerator random;    public DevFaucetAmountGenerator() {
+    private final RandomGenerator random;
+    public DevFaucetAmountGenerator() {
         this(new SecureRandom());
     }
     public DevFaucetAmountGenerator(RandomGenerator random) {

@@ -25,7 +25,11 @@ import java.util.Set;
 @RequiredArgsConstructor
 public
 class SolanaDepositScanner {
-    private static final String CHAIN = "SOLANA";    private static final String SCANNER = "solana-signature-scanner";    private static final int SOL_DECIMALS = 9;    private final SolanaRpcClient rpc;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "SOLANA";
+    private static final String SCANNER = "solana-signature-scanner";
+    private static final int SOL_DECIMALS = 9;
+    private final SolanaRpcClient rpc;
+    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;

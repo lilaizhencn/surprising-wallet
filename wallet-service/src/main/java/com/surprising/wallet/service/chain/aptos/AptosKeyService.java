@@ -12,7 +12,9 @@ import java.security.NoSuchAlgorithmException;
 
 @Component
 public class AptosKeyService {
-    private static final byte APTOS_ED25519_SCHEME = 0x00;    private final WalletKeyMaterialProvider keyMaterial;    private final Ed25519KeyProvider testProvider;
+    private static final byte APTOS_ED25519_SCHEME = 0x00;
+    private final WalletKeyMaterialProvider keyMaterial;
+    private final Ed25519KeyProvider testProvider;
 
     @Autowired
     public AptosKeyService(WalletKeyMaterialProvider keyMaterial) {

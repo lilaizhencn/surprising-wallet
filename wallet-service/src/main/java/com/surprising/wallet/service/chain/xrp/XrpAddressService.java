@@ -11,7 +11,10 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public
 class XrpAddressService {
-    private static final String CHAIN = "XRP";    private static final String NATIVE_SYMBOL = "XRP";    private final XrpKeyService keyService;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "XRP";
+    private static final String NATIVE_SYMBOL = "XRP";
+    private final XrpKeyService keyService;
+    private final ChainJdbcRepository repository;
     public ChainAddressRecord createNativeAddress(long userId, int biz, long derivationIndex, String walletRole) {
         HotWalletRules.requireAllowedReservedAddress(
                 CHAIN, NATIVE_SYMBOL, NATIVE_SYMBOL, userId, biz, derivationIndex, walletRole);

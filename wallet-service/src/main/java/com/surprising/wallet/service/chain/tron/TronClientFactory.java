@@ -12,7 +12,9 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class TronClientFactory {
-    private static final String CHAIN = "TRON";    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;
+    private static final String CHAIN = "TRON";
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
     public TronTridentClient create() {
         AccountChainProfile profile = repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for TRON"));

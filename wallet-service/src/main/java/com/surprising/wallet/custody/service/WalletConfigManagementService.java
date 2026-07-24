@@ -30,7 +30,10 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class WalletConfigManagementService {
-    private final JdbcTemplate jdbc;    private final CustodyRepository custodyRepository;    private final String environment;    private final HttpClient httpClient;
+    private final JdbcTemplate jdbc;
+    private final CustodyRepository custodyRepository;
+    private final String environment;
+    private final HttpClient httpClient;
     @Autowired
     public WalletConfigManagementService(JdbcTemplate jdbc,
                                          CustodyRepository custodyRepository,

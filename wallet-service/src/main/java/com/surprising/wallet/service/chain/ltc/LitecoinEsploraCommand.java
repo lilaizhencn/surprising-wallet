@@ -34,7 +34,11 @@ import java.util.function.Function;
 @Component
 public class LitecoinEsploraCommand implements BtcLikeCommand {
     private static final BigDecimal LITOSHI = new BigDecimal("100000000");
-    private final HttpClient httpClient;    private final ObjectMapper objectMapper;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private volatile long cachedTipHeight;
+    private final HttpClient httpClient;
+    private final ObjectMapper objectMapper;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private volatile long cachedTipHeight;
 
     public LitecoinEsploraCommand(ChainJdbcRepository repository,
                                   ChainRpcNodeService rpcNodeService) {

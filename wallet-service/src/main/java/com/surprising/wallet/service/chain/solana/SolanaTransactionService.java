@@ -31,7 +31,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public
 class SolanaTransactionService {
-    private static final String CHAIN = "SOLANA";    private static final int SPL_MINT_ACCOUNT_LENGTH = 82;    private final SolanaRpcClient rpc;    private final SolanaKeyService keyService;    private final SolanaAddressService addressService;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "SOLANA";
+    private static final int SPL_MINT_ACCOUNT_LENGTH = 82;
+    private final SolanaRpcClient rpc;
+    private final SolanaKeyService keyService;
+    private final SolanaAddressService addressService;
+    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;

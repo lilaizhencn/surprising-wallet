@@ -25,7 +25,10 @@ import java.util.Locale;
 @Service
 @RequiredArgsConstructor
 public class BlockchainRuntimeService {
-    private static final String BITCOIN_LIKE_FAMILY = "bitcoin-like";    private final BlockchainAdapterRegistry adapterRegistry;    private final ChainJdbcRepository repository;    private final ChainAddressRuntime addressRuntime;
+    private static final String BITCOIN_LIKE_FAMILY = "bitcoin-like";
+    private final BlockchainAdapterRegistry adapterRegistry;
+    private final ChainJdbcRepository repository;
+    private final ChainAddressRuntime addressRuntime;
     public RuntimeChain requireRuntime(String chain) {
         AccountChainProfile profile = repository.findProfileByChain(normalizeChain(chain))
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for chain " + chain));

@@ -16,7 +16,10 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Component
 public class CustodyDepositReorgObserver implements DepositReorgObserver {
-    private static final String EVENT_TYPE = "DEPOSIT.REORGED";    private final JdbcTemplate jdbc;    private final CustodyRepository repository;    private final ObjectMapper objectMapper;
+    private static final String EVENT_TYPE = "DEPOSIT.REORGED";
+    private final JdbcTemplate jdbc;
+    private final CustodyRepository repository;
+    private final ObjectMapper objectMapper;
 
     public CustodyDepositReorgObserver(JdbcTemplate jdbc, CustodyRepository repository,
                                        ObjectMapper objectMapper) {

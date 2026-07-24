@@ -11,7 +11,8 @@ import java.util.UUID;
 
 @Repository
 public class CustodyAssetDashboardRepository {
-    private final JdbcTemplate jdbc;    public CustodyAssetDashboardRepository(JdbcTemplate jdbc) {
+    private final JdbcTemplate jdbc;
+    public CustodyAssetDashboardRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
     public List<AssetBalance> balances(UUID tenantId) {

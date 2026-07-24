@@ -33,8 +33,16 @@ import java.util.HexFormat;
 @Component
 public
 class MoneroWalletRpcClient {
-    static final String CHAIN = "XMR";    static final String SYMBOL = "XMR";    static final int ACCOUNT_INDEX = 0;    private static final int DECIMALS = 12;    private static final BigDecimal ATOMIC_FACTOR = BigDecimal.TEN.pow(DECIMALS);
-    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedRpcUrl;
+    static final String CHAIN = "XMR";
+    static final String SYMBOL = "XMR";
+    static final int ACCOUNT_INDEX = 0;
+    private static final int DECIMALS = 12;
+    private static final BigDecimal ATOMIC_FACTOR = BigDecimal.TEN.pow(DECIMALS);
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedRpcUrl;
 
     @Autowired
     public MoneroWalletRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {

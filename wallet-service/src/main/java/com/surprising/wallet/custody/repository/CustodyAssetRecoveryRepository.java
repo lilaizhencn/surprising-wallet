@@ -15,7 +15,8 @@ import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway;
 
 @Repository
 public class CustodyAssetRecoveryRepository {
-    private final JdbcTemplate jdbc;    public CustodyAssetRecoveryRepository(JdbcTemplate jdbc) {
+    private final JdbcTemplate jdbc;
+    public CustodyAssetRecoveryRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 

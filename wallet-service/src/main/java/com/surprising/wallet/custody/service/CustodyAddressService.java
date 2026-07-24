@@ -26,7 +26,14 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class CustodyAddressService {
-    private static final String RESERVED_SUBJECT_PREFIX = "__sw_";    static final long DEFAULT_ADDRESS_VERSION = 0L;    private static final long MAX_ADDRESS_VERSION = Integer.MAX_VALUE;    private final CustodyRepository custodyRepository;    private final ChainJdbcRepository chainRepository;    private final BlockchainRuntimeService runtime;    private final CustodyTenantChainService tenantChains;    private final ObjectMapper objectMapper;
+    private static final String RESERVED_SUBJECT_PREFIX = "__sw_";
+    static final long DEFAULT_ADDRESS_VERSION = 0L;
+    private static final long MAX_ADDRESS_VERSION = Integer.MAX_VALUE;
+    private final CustodyRepository custodyRepository;
+    private final ChainJdbcRepository chainRepository;
+    private final BlockchainRuntimeService runtime;
+    private final CustodyTenantChainService tenantChains;
+    private final ObjectMapper objectMapper;
 
     @Autowired(required = false)
     private Evm7702CollectionRepository evm7702Repository;

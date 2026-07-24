@@ -17,7 +17,9 @@ public class DevFaucetProperties {
     private boolean enabled;
     private Duration delay = Duration.ofSeconds(10);
     private Duration retryDelay = Duration.ofSeconds(30);
-    private Duration requestTimeout = Duration.ofSeconds(10);    private int batchSize = 20;    private int maxAttempts = 3;
+    private Duration requestTimeout = Duration.ofSeconds(10);
+    private int batchSize = 20;
+    private int maxAttempts = 3;
     private final Bitcoin bitcoin = new Bitcoin();
     private final Evm evm = new Evm();
     public void validate(String environment) {

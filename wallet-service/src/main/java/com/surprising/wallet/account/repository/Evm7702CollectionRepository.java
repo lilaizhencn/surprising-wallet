@@ -23,7 +23,8 @@ import java.util.UUID;
 /** Tenant-scoped persistence and outbox for EIP-7702 collection batches. */
 @Repository
 public class Evm7702CollectionRepository {
-    private final JdbcTemplate jdbc;    public Evm7702CollectionRepository(JdbcTemplate jdbc) {
+    private final JdbcTemplate jdbc;
+    public Evm7702CollectionRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 

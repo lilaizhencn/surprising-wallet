@@ -15,7 +15,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public
 class TonAddressService {
-    private static final String CHAIN = "TON";    private final TonKeyService keyService;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "TON";
+    private final TonKeyService keyService;
+    private final ChainJdbcRepository repository;
 
     public ChainAddressRecord createNativeAddress(UUID tenantId, long userId, int biz,
                                                   long derivationIndex, String walletRole) {

@@ -15,7 +15,10 @@ import java.math.BigDecimal;
 @RequiredArgsConstructor
 public
 class MoneroTransactionService {
-    private static final String CHAIN = MoneroWalletRpcClient.CHAIN;    private static final String SYMBOL = MoneroWalletRpcClient.SYMBOL;    private final MoneroWalletRpcClient walletRpcClient;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = MoneroWalletRpcClient.CHAIN;
+    private static final String SYMBOL = MoneroWalletRpcClient.SYMBOL;
+    private final MoneroWalletRpcClient walletRpcClient;
+    private final ChainJdbcRepository repository;
     public String sendNative(AccountChainProfile profile, ChainAddressRecord from, String toAddress, BigDecimal amount) {
         MoneroWalletRpcClient.Transfer transfer = walletRpcClient.transfer(
                 Math.toIntExact(from.getAddressIndex()), toAddress, amount, network(profile), "rpc");

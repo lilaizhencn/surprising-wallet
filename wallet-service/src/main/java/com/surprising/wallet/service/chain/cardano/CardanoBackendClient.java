@@ -18,7 +18,9 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public
 class CardanoBackendClient {
-    static final String CHAIN = "ADA";    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;
+    static final String CHAIN = "ADA";
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
     public <T> T withBackend(BackendRequest<T> request) {
         AccountChainProfile profile = repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for ADA"));

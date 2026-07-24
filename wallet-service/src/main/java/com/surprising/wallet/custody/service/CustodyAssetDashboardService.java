@@ -18,7 +18,8 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class CustodyAssetDashboardService {
-    private final CustodyAssetDashboardRepository repository;    private final CustodyRepository custody;
+    private final CustodyAssetDashboardRepository repository;
+    private final CustodyRepository custody;
     public CustodyAssetDashboardService(CustodyAssetDashboardRepository repository,
                                         CustodyRepository custody) {
         this.repository = repository;

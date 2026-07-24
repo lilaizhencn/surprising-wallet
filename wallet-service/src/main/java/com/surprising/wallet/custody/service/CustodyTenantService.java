@@ -20,7 +20,9 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class CustodyTenantService {
-    private final CustodyRepository repository;    private final CustodyPasswordService passwords;    private final ObjectMapper objectMapper;
+    private final CustodyRepository repository;
+    private final CustodyPasswordService passwords;
+    private final ObjectMapper objectMapper;
     public CustodyTenantService(CustodyRepository repository, CustodyPasswordService passwords,
                                 ObjectMapper objectMapper) {
         this.repository = repository;

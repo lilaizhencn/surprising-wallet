@@ -24,7 +24,8 @@ import java.util.function.Function;
 @Service
 @RequiredArgsConstructor
 public class ChainRpcNodeService {
-    private final ChainJdbcRepository repository;    private final Map<String, AtomicLong> lastRequestMillisByProvider = new ConcurrentHashMap<>();
+    private final ChainJdbcRepository repository;
+    private final Map<String, AtomicLong> lastRequestMillisByProvider = new ConcurrentHashMap<>();
     private final Map<String, Semaphore> providerLimiters = new ConcurrentHashMap<>();
 
     @Value("${sw.app.env.name:dev}")

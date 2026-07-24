@@ -18,7 +18,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public
 class SolanaAddressService {
-    private static final String CHAIN = "SOLANA";    private final SolanaKeyService keyService;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "SOLANA";
+    private final SolanaKeyService keyService;
+    private final ChainJdbcRepository repository;
 
     public ChainAddressRecord createNativeAddress(UUID tenantId, long userId, int biz,
                                                   long derivationIndex, String walletRole) {

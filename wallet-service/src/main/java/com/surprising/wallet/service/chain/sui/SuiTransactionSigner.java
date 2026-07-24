@@ -12,7 +12,9 @@ import java.util.Base64;
 @RequiredArgsConstructor
 public
 class SuiTransactionSigner {
-    private static final byte ED25519_SCHEME = 0x00;    private static final byte[] TRANSACTION_DATA_INTENT = new byte[]{0, 0, 0};    private final SuiKeyService keyService;
+    private static final byte ED25519_SCHEME = 0x00;
+    private static final byte[] TRANSACTION_DATA_INTENT = new byte[]{0, 0, 0};
+    private final SuiKeyService keyService;
     public String signTransactionBytes(long derivationIndex, String txBytesBase64) {
         return signTransactionBytes(0L, 0, derivationIndex, txBytesBase64);
     }

@@ -10,7 +10,9 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class AptosAddressService {
-    private static final String CHAIN = "APTOS";    private final AptosKeyService keyService;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "APTOS";
+    private final AptosKeyService keyService;
+    private final ChainJdbcRepository repository;
     public ChainAddressRecord createNativeAddress(long userId, int biz, long derivationIndex, String walletRole) {
         HotWalletRules.requireAllowedReservedAddress(CHAIN, "APT", "APT", userId, biz, derivationIndex, walletRole);
         return repository.findChainAddress(CHAIN, "APT", userId, biz, derivationIndex, walletRole)

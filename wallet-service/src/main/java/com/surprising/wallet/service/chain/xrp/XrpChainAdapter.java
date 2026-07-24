@@ -16,7 +16,9 @@ import java.util.List;
 @Component
 public
 class XrpChainAdapter implements BlockchainAdapter {
-    private static final String CHAIN = "XRP";    private final XrpDepositScanner scanner;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "XRP";
+    private final XrpDepositScanner scanner;
+    private final ChainJdbcRepository repository;
     public XrpChainAdapter(XrpDepositScanner scanner, ChainJdbcRepository repository) {
         this.scanner = scanner;
         this.repository = repository;

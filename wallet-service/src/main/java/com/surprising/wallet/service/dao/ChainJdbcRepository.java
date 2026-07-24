@@ -50,7 +50,10 @@ import java.util.stream.Collectors;
 
 @Repository
 public class ChainJdbcRepository {
-    private final JdbcTemplate jdbcTemplate;    private final List<DepositCreditObserver> depositCreditObservers;    private final List<DepositReorgObserver> depositReorgObservers;    public ChainJdbcRepository(JdbcTemplate jdbcTemplate) {
+    private final JdbcTemplate jdbcTemplate;
+    private final List<DepositCreditObserver> depositCreditObservers;
+    private final List<DepositReorgObserver> depositReorgObservers;
+    public ChainJdbcRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
         this.depositCreditObservers = List.of();
         this.depositReorgObservers = List.of();

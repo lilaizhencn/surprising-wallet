@@ -13,7 +13,8 @@ import java.util.HexFormat;
 @Component
 public
 class NearKeyService {
-    private final WalletKeyMaterialProvider keyMaterial;    private final Ed25519KeyProvider testProvider;
+    private final WalletKeyMaterialProvider keyMaterial;
+    private final Ed25519KeyProvider testProvider;
     @Autowired
     public NearKeyService(WalletKeyMaterialProvider keyMaterial) {
         this.keyMaterial = keyMaterial;

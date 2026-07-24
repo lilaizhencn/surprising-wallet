@@ -22,7 +22,11 @@ import java.util.UUID;
 
 @Service
 public class CustodyAssetRecoveryService {
-    private final CustodyAssetRecoveryRepository repository;    private final CustodyRepository custody;    private final JdbcTemplate jdbc;    private final List<CustodyAssetRecoveryChainGateway> gateways;    private final ObjectMapper objectMapper;
+    private final CustodyAssetRecoveryRepository repository;
+    private final CustodyRepository custody;
+    private final JdbcTemplate jdbc;
+    private final List<CustodyAssetRecoveryChainGateway> gateways;
+    private final ObjectMapper objectMapper;
     public CustodyAssetRecoveryService(CustodyAssetRecoveryRepository repository,
                                        CustodyRepository custody, JdbcTemplate jdbc,
                                        List<CustodyAssetRecoveryChainGateway> gateways,

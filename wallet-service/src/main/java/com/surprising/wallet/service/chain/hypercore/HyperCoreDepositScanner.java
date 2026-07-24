@@ -21,7 +21,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public
 class HyperCoreDepositScanner {
-    private static final String CHAIN = "HYPERCORE";    private final HyperCoreApiClient apiClient;    private final HyperCoreRepository hyperCoreRepository;    private final ChainJdbcRepository chainRepository;
+    private static final String CHAIN = "HYPERCORE";
+    private final HyperCoreApiClient apiClient;
+    private final HyperCoreRepository hyperCoreRepository;
+    private final ChainJdbcRepository chainRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     public void scanAndCredit(AccountChainProfile profile) {
         syncSpotMetadata(profile.getNetwork());

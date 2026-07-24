@@ -28,8 +28,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequiredArgsConstructor
 public
 class NearDepositScanner {
-    private static final String CHAIN = "NEAR";    private static final String SYMBOL = "NEAR";    private static final String SCANNER = "near-block-scanner";    private static final String EMPTY_MERKLE_ROOT = "11111111111111111111111111111111";    private static final ObjectMapper MAPPER = new ObjectMapper();
-    private final NearRpcClient rpc;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "NEAR";
+    private static final String SYMBOL = "NEAR";
+    private static final String SCANNER = "near-block-scanner";
+    private static final String EMPTY_MERKLE_ROOT = "11111111111111111111111111111111";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private final NearRpcClient rpc;
+    private final ChainJdbcRepository repository;
     private final AtomicBoolean scanning = new AtomicBoolean(false);
 
     @Autowired(required = false)

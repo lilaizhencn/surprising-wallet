@@ -18,10 +18,14 @@ import java.util.Objects;
 @Component
 @RequiredArgsConstructor
 public class AptosTransactionSigner {
-    private static final byte[] RAW_TRANSACTION_PREFIX = sha3("APTOS::RawTransaction".getBytes());    private static final String APTOS_ACCOUNT_MODULE = "0x1::aptos_account";    private static final String PRIMARY_FUNGIBLE_STORE_MODULE = "0x1::primary_fungible_store";    private static final String FUNGIBLE_ASSET_METADATA_TYPE = "0x1::fungible_asset::Metadata";
+    private static final byte[] RAW_TRANSACTION_PREFIX = sha3("APTOS::RawTransaction".getBytes());
+    private static final String APTOS_ACCOUNT_MODULE = "0x1::aptos_account";
+    private static final String PRIMARY_FUNGIBLE_STORE_MODULE = "0x1::primary_fungible_store";
+    private static final String FUNGIBLE_ASSET_METADATA_TYPE = "0x1::fungible_asset::Metadata";
     private static final HexFormat HEX = HexFormat.of();
 
-    private final ObjectMapper objectMapper = new ObjectMapper();    private final AptosKeyService keyService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final AptosKeyService keyService;
 
     public SignedTransaction nativeTransfer(long derivationIndex, String sender, long sequenceNumber,
                                             String recipient, long amountOctas, long maxGasAmount,

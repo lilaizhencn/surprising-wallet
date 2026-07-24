@@ -24,7 +24,14 @@ import java.util.Optional;
 @Component
 public
 class TonCenterClient {
-    private static final String CHAIN = "TON";    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedBaseUrl;    private final String fixedApiKey;    private long lastRequestMillis;
+    private static final String CHAIN = "TON";
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedBaseUrl;
+    private final String fixedApiKey;
+    private long lastRequestMillis;
 
     @Autowired
     public TonCenterClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {

@@ -18,7 +18,8 @@ import java.util.Locale;
  * no floating point arithmetic is used.
  */
 public final class Trc20AbiCodec {
-    public static final String TRANSFER_TOPIC = "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";    private Trc20AbiCodec() {
+    public static final String TRANSFER_TOPIC = "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+    private Trc20AbiCodec() {
     }
     public static String encodeTransfer(String recipientBase58, BigDecimal amount, int decimals) {
         BigInteger rawAmount = toRawAmount(amount, decimals);

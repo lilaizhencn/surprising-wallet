@@ -31,7 +31,8 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class TronDepositScanner {
     private static final BigDecimal SUN_PER_TRX = new BigDecimal("1000000");
-    private final ChainJdbcRepository repository;    private final TronScanner tronScanner;
+    private final ChainJdbcRepository repository;
+    private final TronScanner tronScanner;
 
     public List<DepositEvent> scanAndCreditTrx(TronTridentClient client,
                                                long blockHeight,

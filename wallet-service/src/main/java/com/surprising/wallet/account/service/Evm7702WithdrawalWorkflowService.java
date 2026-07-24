@@ -64,14 +64,21 @@ import com.surprising.wallet.account.repository.Evm7702WithdrawalRepository;
  */
 @Service
 public class Evm7702WithdrawalWorkflowService {
-    private static final Logger log = LoggerFactory.getLogger(Evm7702WithdrawalWorkflowService.class);    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
+    private static final Logger log = LoggerFactory.getLogger(Evm7702WithdrawalWorkflowService.class);
+    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
     private static final String OP_STACK_GAS_PRICE_ORACLE =
             "0x420000000000000000000000000000000000000F";
     private static final BigInteger ITEM_GAS = BigInteger.valueOf(120_000L);
     private static final BigInteger MIN_BATCH_GAS = BigInteger.valueOf(80_000L);
     private static final BigInteger ONE_GWEI = BigInteger.valueOf(1_000_000_000L);
     private static final BigDecimal WEI_PER_NATIVE = new BigDecimal("1000000000000000000");
-    private final Evm7702WithdrawalRepository repository;    private final Evm7702WithdrawalCoordinator coordinator;    private final ChainJdbcRepository chainRepository;    private final ChainRpcNodeService rpcNodes;    private final AccountSecp256k1KeyService keyService;    private final CustodyCryptoService crypto;    private final WalletRuntimeConfigService runtimeConfig;
+    private final Evm7702WithdrawalRepository repository;
+    private final Evm7702WithdrawalCoordinator coordinator;
+    private final ChainJdbcRepository chainRepository;
+    private final ChainRpcNodeService rpcNodes;
+    private final AccountSecp256k1KeyService keyService;
+    private final CustodyCryptoService crypto;
+    private final WalletRuntimeConfigService runtimeConfig;
     private final Evm7702AuthorizationService authorizationService = new Evm7702AuthorizationService();
     private final Evm7702PayoutSigner payoutSigner = new Evm7702PayoutSigner();
     private final Evm7702PayoutCodec payoutCodec = new Evm7702PayoutCodec();

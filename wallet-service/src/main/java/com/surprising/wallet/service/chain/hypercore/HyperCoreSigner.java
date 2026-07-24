@@ -18,7 +18,11 @@ import java.math.BigInteger;
  */
 @Component
 public class HyperCoreSigner {
-    static final String SIGNATURE_CHAIN_ID = "0x66eee";    private static final String DOMAIN_NAME = "HyperliquidSignTransaction";    private static final String DOMAIN_VERSION = "1";    private static final String ZERO_VERIFYING_CONTRACT = "0x0000000000000000000000000000000000000000";    private final ObjectMapper objectMapper;
+    static final String SIGNATURE_CHAIN_ID = "0x66eee";
+    private static final String DOMAIN_NAME = "HyperliquidSignTransaction";
+    private static final String DOMAIN_VERSION = "1";
+    private static final String ZERO_VERIFYING_CONTRACT = "0x0000000000000000000000000000000000000000";
+    private final ObjectMapper objectMapper;
     public HyperCoreSigner() {
         this(new ObjectMapper());
     }

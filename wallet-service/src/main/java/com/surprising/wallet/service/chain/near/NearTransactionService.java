@@ -25,7 +25,16 @@ import java.util.Optional;
 @Service
 public
 class NearTransactionService {
-    private static final String CHAIN = "NEAR";    private static final String SYMBOL = "NEAR";    private static final int DECIMALS = 24;    private static final long DEFAULT_FUNCTION_CALL_GAS = 30_000_000_000_000L;    private static final long TOKEN_TRANSFER_GAS = 15_000_000_000_000L;    private static final BigInteger ONE_YOCTO = BigInteger.ONE;    private final NearRpcClient rpc;    private final NearTransactionSigner signer;    private final NearKeyService keyService;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "NEAR";
+    private static final String SYMBOL = "NEAR";
+    private static final int DECIMALS = 24;
+    private static final long DEFAULT_FUNCTION_CALL_GAS = 30_000_000_000_000L;
+    private static final long TOKEN_TRANSFER_GAS = 15_000_000_000_000L;
+    private static final BigInteger ONE_YOCTO = BigInteger.ONE;
+    private final NearRpcClient rpc;
+    private final NearTransactionSigner signer;
+    private final NearKeyService keyService;
+    private final ChainJdbcRepository repository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired(required = false)

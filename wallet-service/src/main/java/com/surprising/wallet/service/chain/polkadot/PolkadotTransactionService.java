@@ -21,9 +21,15 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public
 class PolkadotTransactionService {
-    private static final String CHAIN = PolkadotRuntimeClient.CHAIN;    private static final String SYMBOL = "DOT";    private static final int DOT_DECIMALS = 10;    private static final BigInteger DEFAULT_ASSET_HUB_MIN_GAS_PLANCK = new BigInteger("20000000000");
+    private static final String CHAIN = PolkadotRuntimeClient.CHAIN;
+    private static final String SYMBOL = "DOT";
+    private static final int DOT_DECIMALS = 10;
+    private static final BigInteger DEFAULT_ASSET_HUB_MIN_GAS_PLANCK = new BigInteger("20000000000");
     private static final BigInteger DEFAULT_ASSET_HUB_GAS_TOPUP_PLANCK = new BigInteger("100000000000");
-    private final PolkadotRuntimeClient runtimeClient;    private final PolkadotKeyService keyService;    private final ChainJdbcRepository repository;    private final HotWalletAddressService hotWalletAddressService;
+    private final PolkadotRuntimeClient runtimeClient;
+    private final PolkadotKeyService keyService;
+    private final ChainJdbcRepository repository;
+    private final HotWalletAddressService hotWalletAddressService;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;

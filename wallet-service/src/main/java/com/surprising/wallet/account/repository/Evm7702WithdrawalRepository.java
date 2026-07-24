@@ -23,7 +23,8 @@ import java.util.UUID;
 /** Tenant-scoped persistence, locking and encrypted outbox for EIP-7702 payout batches. */
 @Repository
 public class Evm7702WithdrawalRepository {
-    private final JdbcTemplate jdbc;    private final Evm7702CollectionRepository configRepository;
+    private final JdbcTemplate jdbc;
+    private final Evm7702CollectionRepository configRepository;
     public Evm7702WithdrawalRepository(JdbcTemplate jdbc,
                                        Evm7702CollectionRepository configRepository) {
         this.jdbc = jdbc;

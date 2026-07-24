@@ -16,7 +16,9 @@ import java.util.List;
 @Component
 public
 class SolanaChainAdapter implements BlockchainAdapter {
-    private static final String CHAIN = "SOLANA";    private final SolanaDepositScanner scanner;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "SOLANA";
+    private final SolanaDepositScanner scanner;
+    private final ChainJdbcRepository repository;
     public SolanaChainAdapter(SolanaDepositScanner scanner, ChainJdbcRepository repository) {
         this.scanner = scanner;
         this.repository = repository;

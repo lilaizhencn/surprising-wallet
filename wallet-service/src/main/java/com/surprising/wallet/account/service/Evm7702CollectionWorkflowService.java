@@ -62,10 +62,17 @@ public class Evm7702CollectionWorkflowService {
     private static final BigInteger MIN_ITEM_GAS = BigInteger.valueOf(60_000L);
     private static final BigInteger DEFAULT_ITEM_GAS = BigInteger.valueOf(180_000L);
     private static final BigInteger ONE_GWEI = BigInteger.valueOf(1_000_000_000L);
-    private static final BigDecimal WEI_PER_NATIVE = new BigDecimal("1000000000000000000");    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
+    private static final BigDecimal WEI_PER_NATIVE = new BigDecimal("1000000000000000000");
+    private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
     private static final String OP_STACK_GAS_PRICE_ORACLE =
             "0x420000000000000000000000000000000000000F";
-    private final Evm7702CollectionRepository repository;    private final Evm7702CollectionCoordinator coordinator;    private final ChainJdbcRepository chainRepository;    private final ChainRpcNodeService rpcNodes;    private final AccountSecp256k1KeyService keyService;    private final CustodyCryptoService crypto;    private final WalletRuntimeConfigService runtimeConfig;
+    private final Evm7702CollectionRepository repository;
+    private final Evm7702CollectionCoordinator coordinator;
+    private final ChainJdbcRepository chainRepository;
+    private final ChainRpcNodeService rpcNodes;
+    private final AccountSecp256k1KeyService keyService;
+    private final CustodyCryptoService crypto;
+    private final WalletRuntimeConfigService runtimeConfig;
     private final Evm7702AuthorizationService authorizationService = new Evm7702AuthorizationService();
     private final Evm7702OperationSigner operationSigner = new Evm7702OperationSigner();
     private final Evm7702ContractCodec contractCodec = new Evm7702ContractCodec();

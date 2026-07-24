@@ -11,7 +11,11 @@ import java.util.Base64;
 
 @Service
 public class CustodyPasswordService {
-    private static final String ALGORITHM = "PBKDF2WithHmacSHA256";    private static final String PREFIX = "pbkdf2-sha256";    private static final int ITERATIONS = 210_000;    private static final int KEY_BITS = 256;    private static final SecureRandom RANDOM = new SecureRandom();
+    private static final String ALGORITHM = "PBKDF2WithHmacSHA256";
+    private static final String PREFIX = "pbkdf2-sha256";
+    private static final int ITERATIONS = 210_000;
+    private static final int KEY_BITS = 256;
+    private static final SecureRandom RANDOM = new SecureRandom();
     public String hash(String password) {
         validatePassword(password);
         byte[] salt = new byte[16];

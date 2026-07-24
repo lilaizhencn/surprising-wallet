@@ -16,7 +16,8 @@ import java.util.Arrays;
 public
 class PolkadotKeyService {
     private static final byte[] SS58_PREFIX = "SS58PRE".getBytes(StandardCharsets.US_ASCII);
-    private final WalletKeyMaterialProvider keyMaterial;    private final Ed25519KeyProvider testProvider;
+    private final WalletKeyMaterialProvider keyMaterial;
+    private final Ed25519KeyProvider testProvider;
 
     @Autowired
     public PolkadotKeyService(WalletKeyMaterialProvider keyMaterial) {

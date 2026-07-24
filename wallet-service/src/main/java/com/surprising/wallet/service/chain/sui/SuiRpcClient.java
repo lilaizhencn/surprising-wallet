@@ -45,7 +45,9 @@ import java.util.function.Function;
 @Component
 public
 class SuiRpcClient {
-    private static final String CHAIN = "SUI";    private static final long RPC_TIMEOUT_SECONDS = 30L;    private static final FieldMask TRANSACTION_READ_MASK = FieldMask.newBuilder()
+    private static final String CHAIN = "SUI";
+    private static final long RPC_TIMEOUT_SECONDS = 30L;
+    private static final FieldMask TRANSACTION_READ_MASK = FieldMask.newBuilder()
             .addPaths("digest")
             .addPaths("transaction.sender")
             .addPaths("effects.status")
@@ -70,7 +72,10 @@ class SuiRpcClient {
             .addPaths("transactions.balance_changes")
             .build();
     public static final String SUI_COIN_TYPE = "0x2::sui::SUI";
-    private final ObjectMapper objectMapper;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedGrpcEndpoint;
+    private final ObjectMapper objectMapper;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedGrpcEndpoint;
 
     @Autowired
     public SuiRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {

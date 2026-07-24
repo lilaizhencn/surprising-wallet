@@ -25,8 +25,12 @@ import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 
 @Service
 public class CustodyAuthService {
-    private static final int MAX_FAILURES = 5;    private static final Duration LOCK_DURATION = Duration.ofMinutes(15);
-    private final CustodyRepository repository;    private final CustodyPasswordService passwords;    private final CustodyCryptoService crypto;    private final CustodySecurityProperties properties;
+    private static final int MAX_FAILURES = 5;
+    private static final Duration LOCK_DURATION = Duration.ofMinutes(15);
+    private final CustodyRepository repository;
+    private final CustodyPasswordService passwords;
+    private final CustodyCryptoService crypto;
+    private final CustodySecurityProperties properties;
 
     public CustodyAuthService(CustodyRepository repository, CustodyPasswordService passwords,
                               CustodyCryptoService crypto, CustodySecurityProperties properties) {

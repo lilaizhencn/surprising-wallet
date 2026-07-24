@@ -21,7 +21,13 @@ import java.time.Duration;
 @Component
 public
 class TonApiClient {
-    private static final String CHAIN = "TON";    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedBaseUrl;    private final String fixedApiKey;
+    private static final String CHAIN = "TON";
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedBaseUrl;
+    private final String fixedApiKey;
 
     @Autowired
     public TonApiClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {

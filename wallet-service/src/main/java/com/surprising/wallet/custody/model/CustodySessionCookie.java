@@ -9,7 +9,8 @@ import java.time.Duration;
 
 import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 public final class CustodySessionCookie {
-    public static final String NAME = "SW_CUSTODY_SESSION";    private CustodySessionCookie() {
+    public static final String NAME = "SW_CUSTODY_SESSION";
+    private CustodySessionCookie() {
     }
     public static String read(Cookie[] cookies) {
         if (cookies == null) {

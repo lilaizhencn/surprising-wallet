@@ -24,8 +24,13 @@ import javax.net.ssl.SSLContext;
 @Component
 public
 class SolanaRpcClient {
-    private static final String CHAIN = "SOLANA";    private final ObjectMapper objectMapper;    private final HttpClient httpClient;
-    private final AtomicLong requestId = new AtomicLong();    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedRpcUrl;
+    private static final String CHAIN = "SOLANA";
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
+    private final AtomicLong requestId = new AtomicLong();
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedRpcUrl;
 
     @Autowired
     public SolanaRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {

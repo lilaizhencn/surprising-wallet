@@ -22,8 +22,12 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class CustodyGasService {
-    static final long COLLECTION_CHILD_INDEX = 1L;    private static final BigDecimal DEFAULT_LOW_BALANCE_THRESHOLD = new BigDecimal("0.01");    private static final String SYSTEM_REFERENCE_PREFIX = "__sw_collection__:";
-    private final CustodyRepository repository;    private final CustodyAddressService addresses;    private final BlockchainRuntimeService runtime;
+    static final long COLLECTION_CHILD_INDEX = 1L;
+    private static final BigDecimal DEFAULT_LOW_BALANCE_THRESHOLD = new BigDecimal("0.01");
+    private static final String SYSTEM_REFERENCE_PREFIX = "__sw_collection__:";
+    private final CustodyRepository repository;
+    private final CustodyAddressService addresses;
+    private final BlockchainRuntimeService runtime;
 
     public CustodyGasService(CustodyRepository repository,
                              CustodyAddressService addresses,

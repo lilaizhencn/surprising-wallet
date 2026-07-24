@@ -31,8 +31,12 @@ import java.util.Optional;
 public class EvmAccountTransactionService {
     private static final BigInteger WEI_PER_NATIVE = new BigInteger("1000000000000000000");
     private static final BigInteger NATIVE_GAS_LIMIT = BigInteger.valueOf(21_000L);
-    private static final BigInteger TOKEN_GAS_LIMIT = BigInteger.valueOf(65_000L);    private static final BigInteger COLLECTION_FEE_SAFETY_MULTIPLIER = BigInteger.TWO;
-    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final AccountSecp256k1KeyService keyService;    private final EvmTransactionBuilder transactionBuilder;
+    private static final BigInteger TOKEN_GAS_LIMIT = BigInteger.valueOf(65_000L);
+    private static final BigInteger COLLECTION_FEE_SAFETY_MULTIPLIER = BigInteger.TWO;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final AccountSecp256k1KeyService keyService;
+    private final EvmTransactionBuilder transactionBuilder;
     public String sendNative(String chain, ChainAddressRecord from, String toAddress, BigDecimal amount) {
         AccountChainProfile profile = profile(chain);
         BigInteger valueWei = amount.movePointRight(18).toBigIntegerExact();

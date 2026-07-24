@@ -18,7 +18,12 @@ import java.util.List;
  * it on shutdown to release gRPC channels.
  */
 public class TronTridentClient implements AutoCloseable {
-    private final ApiWrapper apiWrapper;    private final ChainRpcNode fullNode;    private final ChainRpcNode solidityNode;    private final ChainRpcNodeService rpcNodeService;    private final String apiKey;    public TronTridentClient(String fullNode, String solidityNode, String apiKey) {
+    private final ApiWrapper apiWrapper;
+    private final ChainRpcNode fullNode;
+    private final ChainRpcNode solidityNode;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String apiKey;
+    public TronTridentClient(String fullNode, String solidityNode, String apiKey) {
         this.apiKey = apiKey == null ? "" : apiKey;
         this.apiWrapper = new ApiWrapper(fullNode, solidityNode, "", this.apiKey);
         this.fullNode = ChainRpcNode.builder()

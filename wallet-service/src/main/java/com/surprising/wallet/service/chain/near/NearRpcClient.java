@@ -22,7 +22,12 @@ import java.util.Base64;
 @Component
 public
 class NearRpcClient {
-    private static final String CHAIN = "NEAR";    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedRpcUrl;
+    private static final String CHAIN = "NEAR";
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedRpcUrl;
 
     @Autowired
     public NearRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {

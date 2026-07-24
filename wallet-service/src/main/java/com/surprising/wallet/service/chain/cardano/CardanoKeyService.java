@@ -12,7 +12,10 @@ import org.springframework.stereotype.Component;
 @Component
 public
 class CardanoKeyService {
-    private static final int PAYMENT_KEY_HASH_LENGTH = 28;    private static final int ENTERPRISE_KEY_ADDRESS_TYPE = 0x60;    private final WalletKeyMaterialProvider keyMaterial;    private final Ed25519KeyProvider testProvider;
+    private static final int PAYMENT_KEY_HASH_LENGTH = 28;
+    private static final int ENTERPRISE_KEY_ADDRESS_TYPE = 0x60;
+    private final WalletKeyMaterialProvider keyMaterial;
+    private final Ed25519KeyProvider testProvider;
 
     @Autowired
     public CardanoKeyService(WalletKeyMaterialProvider keyMaterial) {

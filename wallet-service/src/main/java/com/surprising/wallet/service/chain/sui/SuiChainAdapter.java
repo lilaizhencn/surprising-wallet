@@ -18,7 +18,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public
 class SuiChainAdapter implements BlockchainAdapter {
-    private static final String CHAIN = "SUI";    private final SuiDepositScanner scanner;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "SUI";
+    private final SuiDepositScanner scanner;
+    private final ChainJdbcRepository repository;
 
     @Override
     public ChainType chainType() {

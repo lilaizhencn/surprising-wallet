@@ -18,7 +18,9 @@ import java.util.Arrays;
 @Service
 public
 class XrpKeyService {
-    private final PubKeyConfig pubKeyConfig;    private final AccountSecp256k1KeyService signerKeyService;    public XrpKeyService(PubKeyConfig pubKeyConfig, AccountSecp256k1KeyService signerKeyService) {
+    private final PubKeyConfig pubKeyConfig;
+    private final AccountSecp256k1KeyService signerKeyService;
+    public XrpKeyService(PubKeyConfig pubKeyConfig, AccountSecp256k1KeyService signerKeyService) {
         this.pubKeyConfig = pubKeyConfig;
         this.signerKeyService = signerKeyService;
     }

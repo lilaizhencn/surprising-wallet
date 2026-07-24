@@ -30,9 +30,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public
 class TonTransactionService {
-    private static final String CHAIN = "TON";    private static final BigInteger JETTON_FORWARD_TON = BigInteger.valueOf(10_000_000L);
-    private static final BigInteger JETTON_GAS_TON = BigInteger.valueOf(70_000_000L);    private static final long MESSAGE_VALIDITY_SECONDS = 15 * 60L;    private static final int CONFIRMATION_SCAN_LIMIT = 100;
-    private final TonCenterClient rpc;    private final TonKeyService keyService;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "TON";
+    private static final BigInteger JETTON_FORWARD_TON = BigInteger.valueOf(10_000_000L);
+    private static final BigInteger JETTON_GAS_TON = BigInteger.valueOf(70_000_000L);
+    private static final long MESSAGE_VALIDITY_SECONDS = 15 * 60L;
+    private static final int CONFIRMATION_SCAN_LIMIT = 100;
+    private final TonCenterClient rpc;
+    private final TonKeyService keyService;
+    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;

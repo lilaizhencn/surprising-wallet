@@ -11,7 +11,9 @@ import org.springframework.stereotype.Component;
 @Component
 public
 class SuiKeyService {
-    private static final byte ED25519_SCHEME = 0x00;    private final WalletKeyMaterialProvider keyMaterial;    private final Ed25519KeyProvider testProvider;
+    private static final byte ED25519_SCHEME = 0x00;
+    private final WalletKeyMaterialProvider keyMaterial;
+    private final Ed25519KeyProvider testProvider;
 
     @Autowired
     public SuiKeyService(WalletKeyMaterialProvider keyMaterial) {

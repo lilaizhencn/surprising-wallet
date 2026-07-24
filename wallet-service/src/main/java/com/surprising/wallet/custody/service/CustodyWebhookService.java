@@ -31,7 +31,11 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 public class CustodyWebhookService {
     private static final java.util.Set<String> DELIVERY_STATUSES = java.util.Set.of(
             "PENDING", "DELIVERING", "DELIVERED", "RETRY", "FAILED");
-    private final CustodyRepository repository;    private final CustodyCryptoService crypto;    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final boolean production;
+    private final CustodyRepository repository;
+    private final CustodyCryptoService crypto;
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
+    private final boolean production;
 
     public CustodyWebhookService(CustodyRepository repository,
                                  CustodyCryptoService crypto,

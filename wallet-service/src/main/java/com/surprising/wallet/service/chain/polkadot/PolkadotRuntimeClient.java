@@ -29,7 +29,12 @@ import java.util.Map;
 @RequiredArgsConstructor
 public
 class PolkadotRuntimeClient {
-    static final String CHAIN = "DOT";    private static final String PURPOSE_NATIVE_RPC = "rpc";    private static final String PURPOSE_ASSET_RPC = "asset_rpc";    private static final String PURPOSE_RUNTIME = "runtime";    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;
+    static final String CHAIN = "DOT";
+    private static final String PURPOSE_NATIVE_RPC = "rpc";
+    private static final String PURPOSE_ASSET_RPC = "asset_rpc";
+    private static final String PURPOSE_RUNTIME = "runtime";
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))

@@ -21,7 +21,14 @@ import java.util.Map;
 @Component
 public
 class EvmChainAdapter implements BlockchainAdapter {
-    private final EvmNonceManager nonceManager;    private final TokenRegistry tokenRegistry;    private final EvmGasEstimator gasEstimator;    private final EvmTransactionBuilder transactionBuilder;    private final EvmLogScanner logScanner;    private final EvmDepositScanner depositScanner;    private final Map<ChainType, ChainProfile> profiles = new EnumMap<>(ChainType.class);    private final ChainJdbcRepository repository;
+    private final EvmNonceManager nonceManager;
+    private final TokenRegistry tokenRegistry;
+    private final EvmGasEstimator gasEstimator;
+    private final EvmTransactionBuilder transactionBuilder;
+    private final EvmLogScanner logScanner;
+    private final EvmDepositScanner depositScanner;
+    private final Map<ChainType, ChainProfile> profiles = new EnumMap<>(ChainType.class);
+    private final ChainJdbcRepository repository;
 
     @Autowired
     public EvmChainAdapter(EvmNonceManager nonceManager, TokenRegistry tokenRegistry,

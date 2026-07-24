@@ -27,7 +27,10 @@ import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
 @Component
 @ConditionalOnProperty(prefix = "sw.wallet.dev-faucet", name = "enabled", havingValue = "true")
 public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
-    private static final String ERC20_TRANSFER_SELECTOR = "a9059cbb";    private final DevFaucetProperties properties;    private final ObjectMapper objectMapper;    private final HttpClient httpClient;
+    private static final String ERC20_TRANSFER_SELECTOR = "a9059cbb";
+    private final DevFaucetProperties properties;
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
     private final AtomicLong requestIds = new AtomicLong();
     public JsonRpcDevFaucetClient(DevFaucetProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;

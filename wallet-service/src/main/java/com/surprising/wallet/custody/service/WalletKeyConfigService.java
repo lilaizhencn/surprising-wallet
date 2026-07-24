@@ -14,7 +14,9 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class WalletKeyConfigService {
-    private final WalletKeyConfigStore store;    private final WalletKeyMaterialProvider keyMaterial;    private final CustodyRepository custodyRepository;
+    private final WalletKeyConfigStore store;
+    private final WalletKeyMaterialProvider keyMaterial;
+    private final CustodyRepository custodyRepository;
     public WalletKeyConfigService(WalletKeyConfigStore store,
                                   WalletKeyMaterialProvider keyMaterial,
                                   CustodyRepository custodyRepository) {

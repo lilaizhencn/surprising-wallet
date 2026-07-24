@@ -21,7 +21,11 @@ import java.util.UUID;
 @Service
 public
 class SuiTransactionService {
-    private static final String CHAIN = "SUI";    private final SuiRpcClient rpc;    private final SuiTransactionSigner signer;    private final SuiPtbTransactionBuilder ptbBuilder;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = "SUI";
+    private final SuiRpcClient rpc;
+    private final SuiTransactionSigner signer;
+    private final SuiPtbTransactionBuilder ptbBuilder;
+    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;

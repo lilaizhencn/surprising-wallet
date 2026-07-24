@@ -19,7 +19,12 @@ import java.time.Duration;
 @Component
 public
 class HyperCoreApiClient {
-    static final String CHAIN = "HYPERCORE";    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedBaseUrl;
+    static final String CHAIN = "HYPERCORE";
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedBaseUrl;
 
     @Autowired
     public HyperCoreApiClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {

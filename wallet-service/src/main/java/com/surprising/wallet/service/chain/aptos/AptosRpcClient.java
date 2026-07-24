@@ -24,8 +24,15 @@ import java.util.regex.Pattern;
 
 @Component
 public class AptosRpcClient {
-    private static final String CHAIN = "APTOS";    private static final String APT_COIN = "0x1::aptos_coin::AptosCoin";    private static final Pattern ADDRESS_PATTERN = Pattern.compile("(?i)^0x[0-9a-f]{1,64}$");
-    private final ObjectMapper objectMapper;    private final HttpClient httpClient;    private final ChainJdbcRepository repository;    private final ChainRpcNodeService rpcNodeService;    private final String fixedRpcUrl;    private final String fixedFaucetUrl;
+    private static final String CHAIN = "APTOS";
+    private static final String APT_COIN = "0x1::aptos_coin::AptosCoin";
+    private static final Pattern ADDRESS_PATTERN = Pattern.compile("(?i)^0x[0-9a-f]{1,64}$");
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
+    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeService rpcNodeService;
+    private final String fixedRpcUrl;
+    private final String fixedFaucetUrl;
 
     @Autowired
     public AptosRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {

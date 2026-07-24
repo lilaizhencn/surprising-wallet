@@ -22,7 +22,8 @@ import com.surprising.wallet.custody.model.CustodySecurityProperties;
 public class CustodyCryptoService {
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
-    private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();    private static final String VERSION = "v1";
+    private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();
+    private static final String VERSION = "v1";
     private final CustodySecurityProperties properties;
     public CustodyCryptoService(CustodySecurityProperties properties) {
         this.properties = properties;

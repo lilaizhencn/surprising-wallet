@@ -22,7 +22,13 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 
 @Service
 public class CustodyWithdrawalService {
-    private static final String CREATE_OPERATION = "WITHDRAWAL.CREATE";    private final CustodyRepository repository;    private final CustodyWithdrawalExecutionService executionService;    private final CustodyGasService gasService;    private final CustodyTenantChainService tenantChains;    private final CustodyCryptoService crypto;    private final ObjectMapper objectMapper;
+    private static final String CREATE_OPERATION = "WITHDRAWAL.CREATE";
+    private final CustodyRepository repository;
+    private final CustodyWithdrawalExecutionService executionService;
+    private final CustodyGasService gasService;
+    private final CustodyTenantChainService tenantChains;
+    private final CustodyCryptoService crypto;
+    private final ObjectMapper objectMapper;
 
     public CustodyWithdrawalService(CustodyRepository repository,
                                     CustodyWithdrawalExecutionService executionService,

@@ -12,7 +12,8 @@ import java.util.UUID;
 @Component
 public
 class CustodyWebhookRetryPolicy {
-    public static final int MAX_AUTOMATIC_ATTEMPTS = 10;    private static final Duration MIN_DELAY = Duration.ofSeconds(30);
+    public static final int MAX_AUTOMATIC_ATTEMPTS = 10;
+    private static final Duration MIN_DELAY = Duration.ofSeconds(30);
     private static final Duration MAX_DELAY = Duration.ofHours(6);
 
     public RetryDecision decide(

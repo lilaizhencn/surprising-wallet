@@ -19,7 +19,12 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public
 class HyperCoreTransactionService {
-    private static final String CHAIN = "HYPERCORE";    private final HyperCoreApiClient apiClient;    private final HyperCoreSigner signer;    private final HyperCoreRepository hyperCoreRepository;    private final ChainJdbcRepository chainRepository;    private final AccountSecp256k1KeyService keyService;
+    private static final String CHAIN = "HYPERCORE";
+    private final HyperCoreApiClient apiClient;
+    private final HyperCoreSigner signer;
+    private final HyperCoreRepository hyperCoreRepository;
+    private final ChainJdbcRepository chainRepository;
+    private final AccountSecp256k1KeyService keyService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public String sendUsd(AccountChainProfile profile, ChainAddressRecord from,

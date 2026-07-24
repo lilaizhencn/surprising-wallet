@@ -31,7 +31,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public
 class CardanoDepositScanner {
-    private static final String CHAIN = CardanoBackendClient.CHAIN;    private static final String SYMBOL = "ADA";    private static final String SCANNER = "cardano-address-scanner";    private static final int ADA_DECIMALS = 6;    private final CardanoBackendClient backendClient;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = CardanoBackendClient.CHAIN;
+    private static final String SYMBOL = "ADA";
+    private static final String SCANNER = "cardano-address-scanner";
+    private static final int ADA_DECIMALS = 6;
+    private final CardanoBackendClient backendClient;
+    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;

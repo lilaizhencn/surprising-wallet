@@ -63,7 +63,16 @@ import static com.surprising.wallet.common.utils.Constants.UNSPENT_TX_ID;
 @Service
 public
 class BitcoinLikeChainRuntime {
-    private static final int FINALITY_AUDIT_DEPTH = 256;    private final ChainJdbcRepository chainRepository;    private final PubKeyConfig pubKeyConfig;    private final AddressService addressService;    private final ObjectProvider<TransactionService> transactionServiceProvider;    private final BitcoinLikeSettlementService settlementService;    private final BtcCommand btcCommand;    private final LitecoinEsploraCommand ltcCommand;    private final DogeCommand dogeCommand;    private final BchCommand bchCommand;
+    private static final int FINALITY_AUDIT_DEPTH = 256;
+    private final ChainJdbcRepository chainRepository;
+    private final PubKeyConfig pubKeyConfig;
+    private final AddressService addressService;
+    private final ObjectProvider<TransactionService> transactionServiceProvider;
+    private final BitcoinLikeSettlementService settlementService;
+    private final BtcCommand btcCommand;
+    private final LitecoinEsploraCommand ltcCommand;
+    private final DogeCommand dogeCommand;
+    private final BchCommand bchCommand;
     public BitcoinLikeChainRuntime(
             ChainJdbcRepository chainRepository,
             PubKeyConfig pubKeyConfig,

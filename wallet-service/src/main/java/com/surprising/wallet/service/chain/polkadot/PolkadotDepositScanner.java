@@ -26,7 +26,15 @@ import java.util.Map;
 @Slf4j
 public
 class PolkadotDepositScanner {
-    private static final String CHAIN = PolkadotRuntimeClient.CHAIN;    private static final String SYMBOL = "DOT";    private static final String NATIVE_SCANNER = "polkadot-runtime-scanner";    private static final String ASSET_HUB_SCANNER = "polkadot-assethub-scanner";    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";    private static final String WALLET_ROLE_CONTRACT_DEPLOYER = "CONTRACT_DEPLOYER";    private static final int DEFAULT_DOT_DECIMALS = 10;    private final PolkadotRuntimeClient runtimeClient;    private final ChainJdbcRepository repository;
+    private static final String CHAIN = PolkadotRuntimeClient.CHAIN;
+    private static final String SYMBOL = "DOT";
+    private static final String NATIVE_SCANNER = "polkadot-runtime-scanner";
+    private static final String ASSET_HUB_SCANNER = "polkadot-assethub-scanner";
+    private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";
+    private static final String WALLET_ROLE_CONTRACT_DEPLOYER = "CONTRACT_DEPLOYER";
+    private static final int DEFAULT_DOT_DECIMALS = 10;
+    private final PolkadotRuntimeClient runtimeClient;
+    private final ChainJdbcRepository repository;
 
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;

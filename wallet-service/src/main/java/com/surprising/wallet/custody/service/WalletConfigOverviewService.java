@@ -32,7 +32,10 @@ public class WalletConfigOverviewService {
             "withdraw", "global.withdraw.enabled",
             "collection", "global.collection.enabled",
             "transfer", "global.transfer.enabled");
-    private final JdbcTemplate jdbc;    private final CustodyRepository custodyRepository;    private final BooleanSupplier keysetConfigured;    private final String environment;
+    private final JdbcTemplate jdbc;
+    private final CustodyRepository custodyRepository;
+    private final BooleanSupplier keysetConfigured;
+    private final String environment;
 
     @Autowired
     public WalletConfigOverviewService(JdbcTemplate jdbc,
