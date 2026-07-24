@@ -1,5 +1,5 @@
 name: Deploy backend dev
-# GitHub only triggers the server — server does git pull + build + deploy itself.
+# GitHub SSH-triggers the server; server does git pull + build + deploy.
 
 on:
   push:
