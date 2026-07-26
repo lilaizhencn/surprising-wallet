@@ -245,7 +245,7 @@ mvn compile
 | Shido Network | 独立 L1 | SHIDO | 原生币；部分资格账户支持 Gasfree | Cosmos SDK / EVM / WASM | [Docs](https://docs.shido.io/untitled/shido/about) | 暂缓；主网 `9008` 仍活跃且官方文档持续更新，但 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 Cosmos EVM 客户端支持 type-4 交易后再接入；旧表的 L2 分类已纠正 |
 | WEMIX3.0 | 独立 L1 | WEMIX | 原生币 | EVM / Gaming | [Docs](https://docs.wemix.com/) | 暂缓；主网 `1111`、测试网 `1112` 与官方 RPC 仍运行，但主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 `gwemix` 客户端支持 type-4 交易后再接入；旧表的 L2 分类已纠正 |
 | Somnia | 独立 L1 | SOMI | 原生币 | EVM / Gaming / Metaverse | [Docs](https://docs.somnia.network/developer/network-info) | 已完成；主网 `5031`、Shannon `50312`，两网官方 RPC 均通过 EIP-7702 门禁；约 0.1 秒出块；接入官方 USDC.e `0x28bec7e30e6faee657a03e19bf1128aad7632a00` 与 USDT `0x67B302E35Aef5EEE8c32D934F5856869EF428330` |
-| BounceBit | 独立 PoS L1 | BB | 原生币 | EVM / BTCFi / CeDeFi | [Docs](https://docs.bouncebit.io/) | 候选；不是 Bitcoin L2 |
+| BounceBit | 独立 PoS L1 | BB | 原生币 | EVM / BTCFi / CeDeFi | [Docs](https://docs.bouncebit.io/) | 暂缓；链仍在运营，但官方节点实现未发现 Prague/EIP-7702 支持，主网与测试网公开 RPC 因限流或超时无法通过 EIP-7702 能力门禁；BBUSD 不等同于 USDT |
 | Ronin | EVM 应用链/侧链 | RON | 原生币 | EVM / Gaming | [Docs](https://docs.roninchain.com/) | 候选；旧表的 L2 分类已纠正 |
 | XDC Network | 独立 L1 | XDC | 原生币 | EVM / Enterprise / RWA | [Docs](https://docs.xdc.community/) | 候选；旧表的 L2 分类已纠正 |
 | Beam | Avalanche L1（原 Subnet） | BEAM | 原生币 | Avalanche / EVM / Gaming | [Docs](https://docs.onbeam.com/service/beam-chain) | 候选；不是 Ethereum L2 |
