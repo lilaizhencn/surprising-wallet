@@ -248,7 +248,7 @@ mvn compile
 | Somnia | 独立 L1 | SOMI | 原生币 | EVM / Gaming / Metaverse | [Docs](https://docs.somnia.network/developer/network-info) | 已完成；主网 `5031`、Shannon `50312`，两网官方 RPC 均通过 EIP-7702 门禁；约 0.1 秒出块；接入官方 USDC.e `0x28bec7e30e6faee657a03e19bf1128aad7632a00` 与 USDT `0x67B302E35Aef5EEE8c32D934F5856869EF428330` |
 | BounceBit | 独立 PoS L1 | BB | 原生币 | EVM / BTCFi / CeDeFi | [Docs](https://docs.bouncebit.io/) | 暂缓；链仍在运营，但官方节点实现未发现 Prague/EIP-7702 支持，主网与测试网公开 RPC 因限流或超时无法通过 EIP-7702 能力门禁；BBUSD 不等同于 USDT |
 | Ronin | EVM 应用链/侧链 | RON | 原生币 | EVM / Gaming | [Docs](https://docs.roninchain.com/) | 已完成；主网 `2020`、Saigon `202601`，两网官方 RPC 均通过 EIP-7702 门禁；接入官方桥接 USDC `0x0B7007c13325C48911F73A2daD5FA5dCBf808aDc`，未确认官方 USDT |
-| XDC Network | 独立 L1 | XDC | 原生币 | EVM / Enterprise / RWA | [Docs](https://docs.xdc.community/) | 候选；旧表的 L2 分类已纠正 |
+| XDC Network | 独立 L1 | XDC | 原生币 | EVM / Enterprise / RWA | [Docs](https://docs.xdc.network/) | 暂缓；主网 `50`、Apothem `51` 仍活跃，但官方文档标注当前 EVM 为 Shanghai，主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 Prague/type-4 支持后再接入 |
 | Beam | Avalanche L1（原 Subnet） | BEAM | 原生币 | Avalanche / EVM / Gaming | [Docs](https://docs.onbeam.com/service/beam-chain) | 候选；不是 Ethereum L2 |
 | Chiliz Chain | 独立 L1 | CHZ | 原生币 | EVM / Sports | [Docs](https://docs.chiliz.com/) | 候选 |
 | Conflux | 独立 L1，Core Space + eSpace | CFX | 原生币 | Conflux / EVM eSpace | [Docs](https://doc.confluxnetwork.org/) | 专项；Core Space 与 eSpace 地址及交易模型不同 |
