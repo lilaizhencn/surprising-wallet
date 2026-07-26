@@ -175,6 +175,7 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.CRONOS, "CRO", 338L, 1L);
         registerProfile(ChainType.SONIC, "S", 14601L, 1L);
         registerProfile(ChainType.PULSECHAIN, "PLS", 943L, 1L);
+        registerProfile(ChainType.ZETACHAIN, "ZETA", 7001L, 1L);
     }
     private void registerDbProfiles() {
         for (AccountChainProfile profile : repository.listEnabledChainProfiles()) {

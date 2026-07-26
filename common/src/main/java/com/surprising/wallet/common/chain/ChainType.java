@@ -43,6 +43,7 @@ public enum ChainType {
     CRONOS("evm", "account"),
     SONIC("evm", "account"),
     PULSECHAIN("evm", "account"),
+    ZETACHAIN("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),
