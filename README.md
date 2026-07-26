@@ -59,13 +59,13 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 31 条链、14 个链族：
+运行模型覆盖 32 条链、14 个链族：
 
 | 链族 | 链 |
 |------|-----|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH |
 | EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD |
-| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO |
+| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN |
 | TRON | TRON |
 | Solana | SOL |
 | TON | TON |
@@ -153,6 +153,7 @@ mvn compile
 | Gnosis Chain | 已完成 | XDAI、USDC、USDT | Chiado `10200`；EIP-7702 使用 Prague Hardhat 验证；主网和公开 RPC 默认关闭 |
 | Celo | 已完成 | CELO、USDC、USDT | Celo Sepolia `11142220`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；仅使用 CELO 原生 Gas，CIP-64 Fee Abstraction 未启用 |
 | Monad | 已完成 | MON、USDC、USDT0 | Testnet `10143`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；原生 MON 的 7702 归集因 10 MON reserve 规则保持关闭 |
+| World Chain | 已完成 | ETH_WORLD、USDC | Sepolia `4801`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；官方资产表未列出 USDT |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -169,7 +170,7 @@ mvn compile
 | Manta Pacific | Ethereum L2（模块化 Rollup） | ETH | 原生币 | Ethereum / EVM / 模块化 DA | [Docs](https://docs.manta.network/docs/manta-pacific/) | 候选；需核验当前结算与 DA 配置 |
 | MegaETH | Ethereum L2 | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.megaeth.com/) | 候选；新主网，接入前复核节点、归档和最终性稳定性 |
 | Lisk | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.lisk.com/) | 候选；不是旧版独立 Lisk L1 |
-| World Chain | Ethereum L2（OP Stack） | ETH | 原生币；生态支持代付 | Ethereum / EVM | [Docs](https://docs.world.org/world-chain) | 候选 |
+| World Chain | Ethereum L2（OP Stack） | ETH | 原生币；生态支持代付 | Ethereum / EVM | [Docs](https://docs.world.org/world-chain) | 已完成；主网 `480`、Sepolia `4801`，Gas 为 ETH；接入官方 USDC，未配置无官方依据的 USDT |
 | Blast | Ethereum L2（Optimistic Rollup） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.blast.io/) | 候选；原生收益机制不改变 ETH Gas 资产 |
 | ApeChain | Arbitrum Orbit L3 | APE | 自定义原生 Gas 币 | Ethereum / Arbitrum / EVM | [Docs](https://docs.apechain.com/) | 候选；旧表的普通 L2 分类已纠正为 L3 |
 | X Layer | Ethereum L2（Polygon CDK ZK） | OKB | 自定义原生 Gas 币 | Ethereum / EVM | [Docs](https://web3.okx.com/xlayer/docs/developer/quick-start/about-x-layer) | 候选 |

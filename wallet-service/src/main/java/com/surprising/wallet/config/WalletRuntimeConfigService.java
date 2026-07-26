@@ -46,6 +46,7 @@ public class WalletRuntimeConfigService {
             Map.entry("ARBITRUM", 2_000L),
             Map.entry("OPTIMISM", 2_000L),
             Map.entry("BASE", 2_000L),
+            Map.entry("WORLD_CHAIN", 2_000L),
             Map.entry("AVAX", 2_000L),
             Map.entry("FANTOM", 2_000L),
             Map.entry("ZKSYNC", 2_000L),

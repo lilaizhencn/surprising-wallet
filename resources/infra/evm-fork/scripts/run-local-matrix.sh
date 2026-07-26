@@ -26,6 +26,7 @@ EVM_CHAINS=(
   "POLYGON|POL|80002|USDC,USDT|amoy|false"
   "SCROLL|ETH_SCROLL|534351|USDC|sepolia|false"
   "UNICHAIN|ETH_UNICHAIN|1301|USDC|sepolia|false"
+  "WORLD_CHAIN|ETH_WORLD|4801|USDC|sepolia|true"
 )
 
 should_run_chain() {

@@ -26,6 +26,7 @@ public enum ChainType {
     GNOSIS("evm", "account"),
     CELO("evm", "account"),
     MONAD("evm", "account"),
+    WORLD_CHAIN("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

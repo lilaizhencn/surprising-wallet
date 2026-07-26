@@ -120,7 +120,8 @@ class ChainAddressRuntime {
         String value = address.trim();
         return switch (chainType) {
             case ETH, BNB, POLYGON, ARBITRUM, OPTIMISM, BASE, AVAX_C, HYPEREVM,
-                    MANTLE, LINEA, SCROLL, UNICHAIN, BERACHAIN, GNOSIS, CELO, MONAD, HYPERCORE ->
+                    MANTLE, LINEA, SCROLL, UNICHAIN, BERACHAIN, GNOSIS, CELO, MONAD,
+                    WORLD_CHAIN, HYPERCORE ->
                     value.matches(EVM_ADDRESS_REGEX);
             case TRON -> TronAddressCodec.isValidBase58(value);
             case XRP -> isValidXrpAddress(value);
