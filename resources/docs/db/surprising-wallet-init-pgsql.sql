@@ -5710,7 +5710,8 @@ VALUES
     ('CONFLUX', 'CFX', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('CONFLUX', 'USDC_E', 'ERC20', '0x6963efed0ab40f6c3d7bda44a05dcf1437c44372', 18, false, true, 1, 1, now(), now()),
     ('CONFLUX', 'USDT0', 'ERC20', '0xaf37e8b6c9ed7f6318979f56fc287d76c30847ff', 6, false, true, 1, 1, now(), now()),
-    ('VECTOR_SMART_CHAIN', 'VSG', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now())
+    ('VECTOR_SMART_CHAIN', 'VSG', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('KROWN', 'KROWN', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -6155,6 +6156,10 @@ VALUES
     ('VECTOR_SMART_CHAIN', 'mainnet', 'evm', 9042, 60, 'VSG',
      'https://rpc.vscblockchain.org', 'https://explorer.vscblockchain.org/tx/',
      12, 12, 12, 0, false, now(), now(), 420042, 'eip1559', 200,
+     false, false, false, false, 0, 200),
+    ('KROWN', 'mainnet', 'evm', 9043, 60, 'KROWN',
+     'https://mainnet.krown.network', 'https://explorer.krown.network/tx/',
+     12, 12, 12, 0, false, now(), now(), 1983, 'eip1559', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6631,6 +6636,10 @@ VALUES
     ('VECTOR_SMART_CHAIN', 'mainnet', 'prod', 'official-vector-smart-chain-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://rpc.vscblockchain.org', 'NONE', NULL, 10, 5500, false,
      'Production Vector Smart Chain public JSON-RPC endpoint. No verified public testnet; enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('KROWN', 'mainnet', 'prod', 'official-krown-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://mainnet.krown.network', 'NONE', NULL, 10, 6000, false,
+     'Production Krown public JSON-RPC endpoint. No verified public testnet; enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",

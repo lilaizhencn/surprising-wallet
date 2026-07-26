@@ -303,7 +303,7 @@ mvn compile
 |---|---|---|---|---|
 | Vector Smart Chain | 独立 EVM L1 | VSG | [Official](https://vectorsmartgas.com/) | 已接入；主网 `420042` 持续出块且 EIP-7702 门禁通过，仅接入原生 VSG；未发现可信的官方测试网或官方 USDC/USDT 部署，本地以同 chain ID 的 Hardhat 网络验证，确认数保守配置为 `12` |
 | Zedxion Smart Chain | 独立 EVM L1 | ZEDX | [Docs](https://docs.zedscan.net/) | 暂缓；主网 `83872`、测试网 `40882` 的官方 RPC 当前持续出块，但主网 RPC 对 EIP-7702 返回 `unknown field authorizationList`；Explorer 时间展示失真，不作为停运依据 |
-| Krown Network | 官网宣称 PoS L1 已上线 | KROWN | [Official](https://krown.network/) | 尽调；需补齐可审计的开发文档、客户端源码、节点与网络参数 |
+| Krown Network | PoS EVM L1 | KROWN | [Official](https://krown.network/) | 已接入；主网 `1983` 的官方 RPC 持续出块，实测约 `12s`/块且 EIP-7702 门禁通过；仅接入原生 KROWN，未找到可信的官方测试网或有权威来源的 USDC/USDT 合约，本地以同 chain ID 的 Hardhat 网络验证，确认数保守配置为 `12` |
 | Onyx / XCN Ledger / Goliath | 官方资料同时存在 Base 上的 Orbit L3 与新的 Goliath 网络描述 | XCN | [Onyx Docs](https://docs.onyx.org/readme/about-onyx) / [Goliath Docs](https://docs.goliath.net/developer-guide/getting-started) | 暂停排期；必须先确定目标是旧 L3 还是 Goliath，并核验主网 chain ID；Goliath 文档还存在 EVM 内部 8 位、JSON-RPC 18 位的特殊精度说明 |
 | Apertum | Avalanche 基础设施上的 EVM L1 | APTM | [Official](https://apertum.io/developers) | 尽调；需验证 Avalanche L1 节点、验证者集合、原生币精度和归档能力 |
 | Anubis Chain | 新上线的隐私 EVM L1；浏览器显示 DAI 支付 Gas | DAI | [Official](https://anubischain.ai/index.html) | 尽调；隐私交易、普通 EVM 交易边界及稳定币 Gas 实现需要源码和节点级验证 |

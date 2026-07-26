@@ -55,6 +55,7 @@ public enum ChainType {
     SEI("evm", "account"),
     CONFLUX("evm", "account"),
     VECTOR_SMART_CHAIN("evm", "account"),
+    KROWN("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

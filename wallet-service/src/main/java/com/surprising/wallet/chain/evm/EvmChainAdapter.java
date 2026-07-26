@@ -187,6 +187,7 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.SEI, "SEI", 1328L, 1L);
         registerProfile(ChainType.CONFLUX, "CFX", 71L, 400L);
         registerProfile(ChainType.VECTOR_SMART_CHAIN, "VSG", 420042L, 12L);
+        registerProfile(ChainType.KROWN, "KROWN", 1983L, 12L);
     }
     private void registerDbProfiles() {
         for (AccountChainProfile profile : repository.listEnabledChainProfiles()) {
