@@ -249,7 +249,7 @@ mvn compile
 | BounceBit | 独立 PoS L1 | BB | 原生币 | EVM / BTCFi / CeDeFi | [Docs](https://docs.bouncebit.io/) | 暂缓；链仍在运营，但官方节点实现未发现 Prague/EIP-7702 支持，主网与测试网公开 RPC 因限流或超时无法通过 EIP-7702 能力门禁；BBUSD 不等同于 USDT |
 | Ronin | EVM 应用链/侧链 | RON | 原生币 | EVM / Gaming | [Docs](https://docs.roninchain.com/) | 已完成；主网 `2020`、Saigon `202601`，两网官方 RPC 均通过 EIP-7702 门禁；接入官方桥接 USDC `0x0B7007c13325C48911F73A2daD5FA5dCBf808aDc`，未确认官方 USDT |
 | XDC Network | 独立 L1 | XDC | 原生币 | EVM / Enterprise / RWA | [Docs](https://docs.xdc.network/) | 暂缓；主网 `50`、Apothem `51` 仍活跃，但官方文档标注当前 EVM 为 Shanghai，主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 Prague/type-4 支持后再接入 |
-| Beam | Avalanche L1（原 Subnet） | BEAM | 原生币 | Avalanche / EVM / Gaming | [Docs](https://docs.onbeam.com/service/beam-chain) | 候选；不是 Ethereum L2 |
+| Beam | Avalanche L1 / 主权链 | BEAM | 原生币 | Avalanche / Gaming | [Docs](https://docs.onbeam.com/) | 暂缓；主网 `4337`、测试网 `13337` 仍活跃，但主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 Avalanche L1 客户端支持 type-4 交易后再接入 |
 | Chiliz Chain | 独立 L1 | CHZ | 原生币 | EVM / Sports | [Docs](https://docs.chiliz.com/) | 候选 |
 | Conflux | 独立 L1，Core Space + eSpace | CFX | 原生币 | Conflux / EVM eSpace | [Docs](https://doc.confluxnetwork.org/) | 专项；Core Space 与 eSpace 地址及交易模型不同 |
 | IoTeX | 独立 L1 | IOTX | 原生币 | EVM / DePIN | [Docs](https://docs.iotex.io/) | 候选 |
