@@ -179,6 +179,7 @@ mvn compile
 | Kaia | 已完成 | KAIA、USDT | Kairos `1001`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 0.67 秒出块；接入 Kaia 官方列出的主网 USDT，未确认官方 USDC |
 | Plasma | 已完成 | XPL、USDT0 | Testnet `9746`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 1 秒出块；接入 USD₮0 官方部署合约，Circle 官方列表未提供 Plasma USDC |
 | Story | 已完成 | IP、USDC_E | Aeneid `1315`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 1.7 秒出块；接入 Story 官方支持的 Stargate Bridged USDC，未确认官方 USDT |
+| Sei | 已完成 | SEI、USDC、USDT0 | Atlantic-2 `1328`；主网与测试网 EIP-7702 门禁均通过；约 0.3 秒出块；接入官方原生 USDC 与 USDT0 |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -282,7 +283,7 @@ mvn compile
 
 | 网络 | 层级/网络形态 | Gas 资产 | Gas 模式 | 生态/执行环境 | 官方入口 | 状态与备注 |
 |---|---|---|---|---|---|---|
-| Sei | 独立 L1 | SEI | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.sei.io/) | 候选；需明确 EVM 地址与 Cosmos 地址映射 |
+| Sei | 独立 L1 | SEI | 原生币 | Cosmos SDK + Parallel EVM | [Docs](https://docs.sei.io/) | 已完成；主网 `1329`、Atlantic-2 `1328`，两网 EIP-7702 live 门禁均通过；接入官方原生 USDC `0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392` 与 USDT0 `0x9151434b16b9763660705744891fA906F660EcC5`；接口使用 EVM `0x` 地址 |
 | Kava | 独立 L1 | KAVA | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.kava.io/) | 候选；Cosmos Co-Chain 与 EVM Co-Chain 需分别测试 |
 | Injective | 独立 L1 | INJ | 原生币 | Cosmos SDK / WASM / MultiVM | [Docs](https://docs.injective.network/) | 专项；不能只按 EVM 链处理 |
 | Osmosis | 独立 L1 | OSMO | 原生币 | Cosmos SDK / CosmWasm | [Docs](https://docs.osmosis.zone/) | 专项；非 EVM，需 Cosmos SDK 适配 |

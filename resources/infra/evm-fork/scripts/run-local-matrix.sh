@@ -52,6 +52,7 @@ EVM_CHAINS=(
   "KAIA|KAIA|1001|USDT|testnet|true"
   "PLASMA|XPL|9746|USDT0|testnet|true"
   "STORY|IP|1315|USDC_E|testnet|true"
+  "SEI|SEI|1328|USDC,USDT0|testnet|true"
 )
 
 should_run_chain() {

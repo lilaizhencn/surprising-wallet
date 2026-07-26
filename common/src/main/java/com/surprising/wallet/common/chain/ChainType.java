@@ -52,6 +52,7 @@ public enum ChainType {
     KAIA("evm", "account"),
     PLASMA("evm", "account"),
     STORY("evm", "account"),
+    SEI("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),
