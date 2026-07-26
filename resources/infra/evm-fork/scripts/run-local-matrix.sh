@@ -15,6 +15,7 @@ EVM_CHAINS=(
   "BASE|ETH_BASE|84532|USDC,USDT|sepolia|false"
   "BERACHAIN|BERA|80069|USDC,USDT0|bepolia|true"
   "BNB|BNB|97|USDC,USDT|testnet|false"
+  "CELO|CELO|11142220|USDC,USDT|celo-sepolia|true"
   "ETH|ETH|11155111|USDC,USDT|sepolia|false"
   "GNOSIS|XDAI|10200|USDC,USDT|chiado|true"
   "HYPEREVM|HYPE|998|USDC|testnet|false"

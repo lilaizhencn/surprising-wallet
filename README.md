@@ -59,13 +59,13 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 29 条链、14 个链族：
+运行模型覆盖 30 条链、14 个链族：
 
 | 链族 | 链 |
 |------|-----|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH |
 | EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS |
-| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM |
+| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO |
 | TRON | TRON |
 | Solana | SOL |
 | TON | TON |
@@ -151,13 +151,13 @@ mvn compile
 | HyperEVM、Mantle、Linea、Scroll、Unichain | 已完成 | 原生币、链上已配置 ERC-20 | 现有通用 EVM 与 Hardhat 矩阵 |
 | Berachain | 已完成 | BERA、USDC、USDT0 | Bepolia `80069`；EIP-7702 使用 Prague Hardhat 验证；主网和公开 RPC 默认关闭 |
 | Gnosis Chain | 已完成 | XDAI、USDC、USDT | Chiado `10200`；EIP-7702 使用 Prague Hardhat 验证；主网和公开 RPC 默认关闭 |
+| Celo | 已完成 | CELO、USDC、USDT | Celo Sepolia `11142220`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；仅使用 CELO 原生 Gas，CIP-64 Fee Abstraction 未启用 |
 
 #### 1. Ethereum 生态 L2 / L3
 
 | 网络 | 层级/网络形态 | Gas 资产 | Gas 模式 | 生态/执行环境 | 官方入口 | 状态与备注 |
 |---|---|---|---|---|---|---|
-| Celo | Ethereum L2（OP Stack） | CELO；协议支持 USDC、USDT、USDm 等白名单币 | 原生 Fee Abstraction，非 Paymaster | Ethereum / EVM | [Docs](https://docs.celo.org/home/protocol/celo-token) | 候选；2025-03-26 已由独立 L1 迁移为 L2，旧表的 L1/L2 描述已纠正 |
-| Abstract | Ethereum L2（ZK Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.abs.xyz/) | 候选；需验证原生账户抽象交易与普通 EOA 路径 |
+| Celo | Ethereum L2（OP Stack） | CELO；协议支持 USDC、USDT、USDm 等白名单币 | 原生 Fee Abstraction，非 Paymaster | Ethereum / EVM | [Docs](https://docs.celo.org/home/protocol/celo-token) | 已完成；2025-03-26 已由独立 L1 迁移为 L2，旧表的 L1/L2 描述已纠正；已接入 Celo Sepolia `11142220` 与主网 `42220`，USDC、USDT 使用 CELO 支付 Gas，CIP-64 稳定币 Gas 暂不启用 || Abstract | Ethereum L2（ZK Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.abs.xyz/) | 候选；需验证原生账户抽象交易与普通 EOA 路径 |
 | Soneium | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.soneium.org/) | 候选 |
 | ZKsync Era | Ethereum L2（ZK Rollup） | ETH | 原生币；支持 Paymaster | Ethereum / EVM | [Docs](https://docs.zksync.io/) | 候选；交易类型和最终性需专项测试 |
 | Metis Andromeda | Ethereum L2（Optimistic Rollup） | METIS | 自定义原生 Gas 币 | Ethereum / EVM | [Docs](https://docs.metis.io/andromeda) | 候选；不能按 ETH Gas 的通用 OP 链假设处理 |

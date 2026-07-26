@@ -5631,7 +5631,10 @@ VALUES
     ('BERACHAIN', 'USDT0', 'ERC20', '0x779Ded0c9e1022225f8E0630b35a9b54bE713736', 6, false, true, 1, 1, now(), now()),
     ('GNOSIS', 'XDAI', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('GNOSIS', 'USDC', 'ERC20', '0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83', 6, false, true, 1, 1, now(), now()),
-    ('GNOSIS', 'USDT', 'ERC20', '0x4ECaBa5870353805a9F068101A40E0f32ed605C6', 6, false, true, 1, 1, now(), now())
+    ('GNOSIS', 'USDT', 'ERC20', '0x4ECaBa5870353805a9F068101A40E0f32ed605C6', 6, false, true, 1, 1, now(), now()),
+    ('CELO', 'CELO', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('CELO', 'USDC', 'ERC20', '0xcebA9300f2b948710d2653dD7B07f33A8B32118C', 6, false, true, 1, 1, now(), now()),
+    ('CELO', 'USDT', 'ERC20', '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5668,6 +5671,10 @@ VALUES
     ('GNOSIS', 'USDC', 'ERC20', '0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('GNOSIS', 'USDT', 'ERC20', '0x4ECaBa5870353805a9F068101A40E0f32ed605C6', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('CELO', 'USDC', 'ERC20', '0xcebA9300f2b948710d2653dD7B07f33A8B32118C', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('CELO', 'USDT', 'ERC20', '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -5740,6 +5747,14 @@ VALUES
     ('GNOSIS', 'mainnet', 'evm', 9011, 60, 'XDAI',
      'https://rpc.gnosischain.com', 'https://gnosisscan.io/tx/',
      32, 32, 1, 0, false, now(), now(), 100, 'eip1559', 200,
+     false, false, false, false, 0, 200),
+    ('CELO', 'celo-sepolia', 'evm', 9012, 60, 'CELO',
+     'https://forno.celo-sepolia.celo-testnet.org', 'https://celo-sepolia.blockscout.com/tx/',
+     40, 40, 1, 0, false, now(), now(), 11142220, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('CELO', 'mainnet', 'evm', 9012, 60, 'CELO',
+     'https://forno.celo.org', 'https://celoscan.io/tx/',
+     40, 40, 1, 0, false, now(), now(), 42220, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -5852,6 +5867,18 @@ VALUES
     ('GNOSIS', 'mainnet', 'prod', 'official-gnosis-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://rpc.gnosischain.com', 'NONE', NULL, 10, 1000, false,
      'Production Gnosis mainnet JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('CELO', 'celo-sepolia', 'dev', 'official-celo-sepolia', 'rpc', 'HTTP_JSON_RPC',
+     'https://forno.celo-sepolia.celo-testnet.org', 'NONE', NULL, 10, 500, false,
+     'Official Celo Sepolia JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('CELO', 'celo-sepolia', 'test2', 'official-celo-sepolia', 'rpc', 'HTTP_JSON_RPC',
+     'https://forno.celo-sepolia.celo-testnet.org', 'NONE', NULL, 10, 500, false,
+     'test2 official Celo Sepolia JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('CELO', 'mainnet', 'prod', 'official-celo-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://forno.celo.org', 'NONE', NULL, 10, 1000, false,
+     'Production Celo mainnet JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -6435,6 +6462,10 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83', NULL, NULL, 6, 'native-gas'),
         ('GNOSIS', 'USDT', 'ERC20', 'ERC20',
          '0x4ECaBa5870353805a9F068101A40E0f32ed605C6', NULL, NULL, 6, 'native-gas'),
+        ('CELO', 'USDC', 'ERC20', 'ERC20',
+         '0xcebA9300f2b948710d2653dD7B07f33A8B32118C', NULL, NULL, 6, 'native-gas'),
+        ('CELO', 'USDT', 'ERC20', 'ERC20',
+         '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',

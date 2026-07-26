@@ -67,7 +67,7 @@
 |---|---|---|---|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH | Docker regtest 节点 | 外部 RPC 配置 |
 | EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS | Hardhat fork | Sepolia、BSC testnet、Amoy、Berachain Bepolia、Gnosis Chiado |
-| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C | Hardhat fork | Sepolia L2、Avalanche Fuji |
+| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, CELO | Hardhat fork | Sepolia L2、Avalanche Fuji、Celo Sepolia |
 | EVM L2 (新增) | MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM | Hardhat fork | Mantle Sepolia、Linea Sepolia、Scroll Sepolia、Unichain Sepolia、HyperEVM testnet |
 | TRON | TRON | DB 测试 | Nile live flow |
 | Solana | SOL | DB 测试 | Devnet live flow |
