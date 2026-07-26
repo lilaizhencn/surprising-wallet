@@ -311,7 +311,6 @@ mvn compile
 | 网络 | 原分类 | 当前结论 | 官方依据/备注 |
 |---|---|---|---|
 | Fantom Opera | 独立 L1 | 不新增接入，优先 Sonic | [迁移说明](https://docs.soniclabs.com/migration/overview)：Opera 仍运行，但后续开发已转向 Sonic |
-| Juchain | 未确认 | 暂停 | 未找到可验证的官方开发文档、主网参数和持续运维入口；避免与同名资产/营销页面混淆 |
 
 #### 9. 不属于“链接入”的协议或资产
 
