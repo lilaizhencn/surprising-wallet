@@ -276,7 +276,7 @@ mvn compile
 | Astar Network | Polkadot Parachain | ASTR | 原生币 | Polkadot / Substrate / EVM + WASM | [Docs](https://docs.astar.network/docs/learn/astar/) | 暂缓；Astar Parachain（主网 `592`、Shibuya `81`）仍活跃并支持 Hardhat，但主网 RPC 对 EIP-7702 `authorizationList` 返回 `Invalid params`；Astar zkEVM 已于 2025-03-31 停运，不纳入接入 |
 | Moonbeam | Polkadot Parachain | GLMR | 原生币 | Polkadot / Substrate / EVM | [Docs](https://docs.moonbeam.network/) | 暂缓；Moonbeam（主网 `1284`、Moonbase Alpha `1287`）仍活跃并支持 Hardhat，但主网 RPC 对 EIP-7702 `authorizationList` 返回 `Invalid params`；H160 EVM 与 Substrate 账户及 XC-20 资产仍需严格区分 |
 | Moonriver | Kusama Parachain | MOVR | 原生币 | Kusama / Substrate / EVM | [Docs](https://docs.moonbeam.network/builders/get-started/networks/moonriver/) | 暂缓；Moonriver 主网 `1285` 仍活跃且 2026-07 仍有运行时升级，但 RPC 对 EIP-7702 `authorizationList` 返回 `Invalid params`；它是 Kusama 独立主网，不是 Moonbeam 测试网 |
-| peaq | Polkadot Parachain | PEAQ | 原生币 | Polkadot / Substrate / EVM / DePIN | [Docs](https://docs.peaq.network/) | 专项 |
+| peaq | Polkadot Parachain | PEAQ | 原生币 | Polkadot / Substrate / Frontier EVM / DePIN | [Docs](https://docs.peaq.xyz/build/getting-started/connecting-to-peaq) | 暂缓；主网 `3338`、Agung `9990` 的官方 RPC 均活跃，支持 H160 EVM 与 SS58 Substrate 账户；主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas，等待 Frontier 运行时支持 type-4 后再接入，本轮不新增双账户专用架构 |
 
 #### 5. Cosmos 生态主权 L1
 
