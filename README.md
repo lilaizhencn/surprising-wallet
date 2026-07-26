@@ -224,7 +224,7 @@ mvn compile
 | PulseChain | 独立 L1（Ethereum fork） | PLS | 原生币 | EVM | [Official](https://pulsechain.com/) | 已完成；主网 `369`、Testnet V4 `943`，两网官方 RPC 均通过 EIP-7702 门禁；约 10 秒出块；接入官方桥映射 USDC `0x15d38573d2Feeb82e7ad5187aB8c1D52810B1f07` 与 USDT `0x0cb6F5a34ad42ec934882A05265A7d5f59b51A2f`；状态复制稳定币无对应储备，不接入；公共 RPC 有波动且节点集中度仍需生产尽调 |
 | Berachain | 独立 L1 | BERA | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.berachain.com/) | 已完成；主网 `80094`、Bepolia `80069`，支持 EIP-7702；稳定币按实际资产接入 USDC 与 USDT0 |
 | Gnosis Chain | EVM 侧链 | xDAI | 稳定币作为原生 Gas | Ethereum 生态 / EVM | [Docs](https://docs.gnosischain.com/) | 已完成；主网 `100`、Chiado `10200`，Gas 资产 xDAI，支持 EIP-7702；接入 USDC 与 USDT |
-| Canto | 独立 L1 | CANTO | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.canto.io/) | 候选 |
+| Canto | 独立 L1 | CANTO | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.canto.io/) | 暂缓；主网 `7700` 仍有区块，但官方主网 RPC 与 Testnet `7701` 端点当前返回 `521/522` 或超时，官方列出的多数备选 EVM RPC 也不可用；唯一可读端点与 Java TLS 不兼容，无法可靠完成主网／测试网 EIP-7702 和全功能门禁，待官方恢复稳定 EVM RPC 后重试 |
 | ZetaChain | 独立 L1 | ZETA | 原生币 | Cosmos SDK / EVM / Omnichain | [Docs](https://www.zetachain.com/docs/) | 候选 |
 | Core | 独立 L1 | CORE | 原生币 | Bitcoin-aligned / EVM | [Docs](https://docs.coredao.org/) | 候选；不是 Bitcoin L2 |
 | Wanchain | 独立 L1 | WAN | 原生币 | EVM / 跨链 | [Docs](https://docs.wanchain.org/) | 候选 |
