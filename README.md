@@ -174,6 +174,7 @@ mvn compile
 | Core | 已完成 | CORE、USDC、USDT | Testnet2 `1114`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 3 秒出块；稳定币使用 Core 官方 LayerZero Bridge 合约 |
 | Somnia | 已完成 | SOMI、USDC_E、USDT | Shannon `50312`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 0.1 秒出块；USDC 使用官方列出的 Stargate Bridged USDC.e，USDT 使用官方合约 |
 | Ronin | 已完成 | RON、USDC | Saigon `202601`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；实测约 1.1 秒出块；USDC 使用 Ronin 官方桥接资产，未确认官方 USDT，故不接入 |
+| Chiliz Chain | 已完成 | CHZ、USDC、USDT | Spicy `88882`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 2 秒出块；稳定币使用官方目录列出的 ChainPort 桥接合约 |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -250,7 +251,7 @@ mvn compile
 | Ronin | EVM 应用链/侧链 | RON | 原生币 | EVM / Gaming | [Docs](https://docs.roninchain.com/) | 已完成；主网 `2020`、Saigon `202601`，两网官方 RPC 均通过 EIP-7702 门禁；接入官方桥接 USDC `0x0B7007c13325C48911F73A2daD5FA5dCBf808aDc`，未确认官方 USDT |
 | XDC Network | 独立 L1 | XDC | 原生币 | EVM / Enterprise / RWA | [Docs](https://docs.xdc.network/) | 暂缓；主网 `50`、Apothem `51` 仍活跃，但官方文档标注当前 EVM 为 Shanghai，主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 Prague/type-4 支持后再接入 |
 | Beam | Avalanche L1 / 主权链 | BEAM | 原生币 | Avalanche / Gaming | [Docs](https://docs.onbeam.com/) | 暂缓；主网 `4337`、测试网 `13337` 仍活跃，但主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 Avalanche L1 客户端支持 type-4 交易后再接入 |
-| Chiliz Chain | 独立 L1 | CHZ | 原生币 | EVM / Sports | [Docs](https://docs.chiliz.com/) | 候选 |
+| Chiliz Chain | 独立 L1 | CHZ | 原生币 | EVM / Sports | [Docs](https://docs.chiliz.com/) | 已完成；主网 `88888`、Spicy `88882`，两网官方 RPC 均通过 EIP-7702 门禁；接入官方目录列出的 USDC `0xa37936F56249965d407E39347528a1A91eB1cbef` 与 USDT `0x37C57a89812a0D492AeEd7691F1610CA0a8f74A1` |
 | Conflux | 独立 L1，Core Space + eSpace | CFX | 原生币 | Conflux / EVM eSpace | [Docs](https://doc.confluxnetwork.org/) | 专项；Core Space 与 eSpace 地址及交易模型不同 |
 | IoTeX | 独立 L1 | IOTX | 原生币 | EVM / DePIN | [Docs](https://docs.iotex.io/) | 候选 |
 | Kaia | 独立 L1 | KAIA | 原生币 | EVM / 亚洲支付生态 | [Docs](https://docs.kaia.io/) | 候选；旧 `KLAY` 名称已迁移为 `KAIA` |

@@ -47,6 +47,7 @@ EVM_CHAINS=(
   "CORE|CORE|1114|USDC,USDT|testnet|true"
   "SOMNIA|SOMI|50312|USDC_E,USDT|testnet|true"
   "RONIN|RON|202601|USDC|testnet|true"
+  "CHILIZ|CHZ|88882|USDC,USDT|testnet|true"
 )
 
 should_run_chain() {

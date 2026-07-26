@@ -47,6 +47,7 @@ public enum ChainType {
     CORE("evm", "account"),
     SOMNIA("evm", "account"),
     RONIN("evm", "account"),
+    CHILIZ("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),
