@@ -12,6 +12,7 @@ on:
       - wallet-sig2/**
       - wallet-service/**
       - wallet-api/**
+      - resources/docs/db/**
       - pom.xml
       - scripts/deploy/backend-deploy.sh
   workflow_dispatch:
@@ -26,7 +27,7 @@ concurrency:
 jobs:
   trigger:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -41,12 +42,10 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 0644 "$HOME/.ssh/known_hosts"
 
-      - name: Trigger server deploy
+      - name: Deploy backend and wait for result
         env:
           DEPLOY_HOST: ${{ secrets.BACKEND_DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.BACKEND_DEPLOY_USER }}
         run: |
-          ssh -f -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-            -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "/usr/local/sbin/surprising-wallet-backend-deploy >/var/log/surprising-wallet-deploy.log 2>&1"
-          echo "✅ Deploy triggered"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
+            -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST"

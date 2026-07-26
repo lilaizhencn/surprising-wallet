@@ -6828,6 +6828,26 @@ VALUES (
     'ACTIVE')
 ON CONFLICT (id) DO NOTHING;
 
+-- Development safety default: only local BTC regtest and ETH devtest are active.
+UPDATE public.chain_profile
+SET enabled = (chain = 'BTC' AND network = 'regtest')
+        OR (chain = 'ETH' AND network = 'devtest'),
+    scan_enabled = (chain = 'BTC' AND network = 'regtest')
+        OR (chain = 'ETH' AND network = 'devtest'),
+    withdraw_enabled = (chain = 'BTC' AND network = 'regtest')
+        OR (chain = 'ETH' AND network = 'devtest'),
+    collection_enabled = (chain = 'BTC' AND network = 'regtest')
+        OR (chain = 'ETH' AND network = 'devtest'),
+    transfer_enabled = (chain = 'BTC' AND network = 'regtest')
+        OR (chain = 'ETH' AND network = 'devtest'),
+    updated_at = now();
+
+UPDATE public.chain_rpc_node
+SET enabled = (chain = 'BTC' AND network = 'regtest')
+        OR (chain = 'ETH' AND network = 'devtest'),
+    updated_at = now()
+WHERE environment = 'dev';
+
 -- Test tenant
 INSERT INTO custody_tenant(id, slug, name)
 VALUES (
