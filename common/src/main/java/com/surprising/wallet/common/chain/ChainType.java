@@ -33,6 +33,7 @@ public enum ChainType {
     MODE("evm", "account"),
     LISK("evm", "account"),
     KATANA("evm", "account"),
+    MEGAETH("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

@@ -165,6 +165,7 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.MODE, "ETH_MODE", 919L, 1L);
         registerProfile(ChainType.LISK, "ETH_LISK", 4202L, 1L);
         registerProfile(ChainType.KATANA, "ETH_KATANA", 737373L, 1L);
+        registerProfile(ChainType.MEGAETH, "ETH_MEGAETH", 6343L, 1L);
     }
     private void registerDbProfiles() {
         for (AccountChainProfile profile : repository.listEnabledChainProfiles()) {

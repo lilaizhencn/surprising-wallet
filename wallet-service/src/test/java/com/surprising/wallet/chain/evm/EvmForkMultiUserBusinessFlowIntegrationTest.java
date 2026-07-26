@@ -53,7 +53,6 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     private static final UUID TEST_TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000001");
     private static final String LOCAL_RPC = "http://127.0.0.1:8545";
     private static final BigDecimal WEI_PER_NATIVE = new BigDecimal("1000000000000000000");
-    private static final BigDecimal TOKEN_DECIMAL = new BigDecimal("1000000");
     private static final BigDecimal GAS_BUFFER = new BigDecimal("0.01");
 
     @Test
@@ -94,14 +93,15 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
             if (withdrawalToken != null) {
                 scanTokenDeposit(scanner, chain, confirmations,
                         sendUnlockedTokenCall(web3j, deployer, withdrawalToken.address(),
-                                encodeTransfer(actors.userD().address(), new BigDecimal("80"))));
+                                encodeTransfer(actors.userD().address(), new BigDecimal("80"),
+                                        withdrawalToken.decimals())));
             }
 
             // Scanner is "stopped": chain deposits are mined, but DB has not been scanned yet.
             TransactionReceipt userAEthDeposit = sendUnlockedNative(web3j, deployer, actors.userA().address(), new BigDecimal("1.25"));
             TransactionReceipt userBTokenDeposit = collectionToken == null ? null
                     : sendUnlockedTokenCall(web3j, deployer, collectionToken.address(),
-                    encodeTransfer(actors.userB().address(), new BigDecimal("100")));
+                    encodeTransfer(actors.userB().address(), new BigDecimal("100"), collectionToken.decimals()));
             assertBalanceEquals(BigDecimal.ZERO, ledgerOrZero(jdbcTemplate, chain, nativeSymbol, actors.userA().address()));
             if (collectionToken != null) {
                 assertBalanceEquals(BigDecimal.ZERO,
@@ -129,7 +129,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
                     actors.userC(), externalNativeRecipient, new BigDecimal("0.05"), chainId);
             if (withdrawalToken != null) {
                 executeTokenWithdrawal(jdbcTemplate, repository, web3j, chain, nativeSymbol, actors.userD(),
-                        withdrawalToken.address(), withdrawalToken.symbol(), externalTokenRecipient,
+                        withdrawalToken.address(), withdrawalToken.symbol(), withdrawalToken.decimals(), externalTokenRecipient,
                         new BigDecimal("12.5"), chainId);
             }
             executeNativeCollection(jdbcTemplate, repository, web3j, chain, nativeSymbol, actors.userA(),
@@ -137,6 +137,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
             if (collectionToken != null) {
                 executeInterruptedTokenCollectionRecovery(jdbcTemplate, repository, web3j, chain, nativeSymbol,
                         actors.userB(), actors.hotWallet(), collectionToken.address(), collectionToken.symbol(),
+                        collectionToken.decimals(),
                         new BigDecimal("100"), chainId);
                 assertFalse(repository.freezeLedgerBalance(
                                 chain.name(), collectionToken.symbol(), actors.userB().address(), BigDecimal.ONE),
@@ -189,7 +190,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
 
     private static void executeTokenWithdrawal(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository, Web3j web3j,
                                                ChainType chain, String nativeSymbol, Actor user, String contract,
-                                               String tokenSymbol, String recipient, BigDecimal amount,
+                                               String tokenSymbol, int tokenDecimals, String recipient, BigDecimal amount,
                                                long chainId) throws Exception {
         String orderNo = orderNo(chain, user.label(), tokenSymbol, "WD");
         createOrder(jdbcTemplate, orderNo, user.userId(), chain, tokenSymbol, user.address(), recipient, amount);
@@ -197,9 +198,11 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         assertTrue(repository.freezeLedgerBalance(chain.name(), nativeSymbol, user.address(), GAS_BUFFER));
         updateOrder(jdbcTemplate, orderNo, "FROZEN", null, BigDecimal.ZERO, null);
         BigInteger nonce = reserveNonce(repository, web3j, chain, user);
-        assertTrue(estimateTokenGas(web3j, user.address(), contract, recipient, amount).compareTo(BigInteger.ZERO) > 0);
+        assertTrue(estimateTokenGas(web3j, user.address(), contract, recipient, amount, tokenDecimals)
+                .compareTo(BigInteger.ZERO) > 0);
         updateOrder(jdbcTemplate, orderNo, "SIGNING", null, BigDecimal.ZERO, null);
-        SignedTx tx = sendSignedTokenTransfer(web3j, user.credentials(), contract, recipient, amount, chainId, nonce);
+        SignedTx tx = sendSignedTokenTransfer(
+                web3j, user.credentials(), contract, recipient, amount, tokenDecimals, chainId, nonce);
         updateOrder(jdbcTemplate, orderNo, "SENT", tx.receipt().getTransactionHash(), fee(tx), null);
         assertTrue(repository.settleLockedDebit(chain.name(), tokenSymbol, user.address(), amount));
         settleFrozen(repository, chain.name(), nativeSymbol, user.address(), GAS_BUFFER, fee(tx));
@@ -229,7 +232,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     private static void executeInterruptedTokenCollectionRecovery(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
                                                                   Web3j web3j, ChainType chain, String nativeSymbol,
                                                                   Actor user, Actor hotWallet, String contract,
-                                                                  String tokenSymbol, BigDecimal amount,
+                                                                  String tokenSymbol, int tokenDecimals, BigDecimal amount,
                                                                   long chainId) throws Exception {
         String orderNo = orderNo(chain, user.label(), tokenSymbol, "COLL-RECOVERY");
         createOrder(jdbcTemplate, orderNo, user.userId(), chain, tokenSymbol, user.address(), hotWallet.address(), amount);
@@ -238,17 +241,18 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         updateOrder(jdbcTemplate, orderNo, "SIGNING", null, BigDecimal.ZERO, "simulated interruption before broadcast");
 
         SignedTx tx = recoverTokenCollection(jdbcTemplate, repository, web3j, chain, nativeSymbol, user, hotWallet,
-                contract, tokenSymbol, amount, chainId, orderNo);
-        BigDecimal hotBalanceAfterRecovery = tokenBalance(web3j, contract, hotWallet.address());
+                contract, tokenSymbol, tokenDecimals, amount, chainId, orderNo);
+        BigDecimal hotBalanceAfterRecovery = tokenBalance(web3j, contract, hotWallet.address(), tokenDecimals);
         recoverTokenCollection(jdbcTemplate, repository, web3j, chain, nativeSymbol, user, hotWallet,
-                contract, tokenSymbol, amount, chainId, orderNo);
-        assertBalanceEquals(hotBalanceAfterRecovery, tokenBalance(web3j, contract, hotWallet.address()));
+                contract, tokenSymbol, tokenDecimals, amount, chainId, orderNo);
+        assertBalanceEquals(
+                hotBalanceAfterRecovery, tokenBalance(web3j, contract, hotWallet.address(), tokenDecimals));
         recordEvmTx(repository, chain, tokenSymbol, contract, user.address(), hotWallet.address(), amount, tx);
     }
 
     private static SignedTx recoverTokenCollection(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository, Web3j web3j,
                                                    ChainType chain, String nativeSymbol, Actor user, Actor hotWallet,
-                                                   String contract, String tokenSymbol, BigDecimal amount,
+                                                   String contract, String tokenSymbol, int tokenDecimals, BigDecimal amount,
                                                    long chainId, String orderNo) throws Exception {
         String status = jdbcTemplate.queryForObject("select status from withdrawal_order where order_no = ?",
                 String.class, orderNo);
@@ -257,9 +261,11 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         }
         updateOrder(jdbcTemplate, orderNo, "RETRYING", null, BigDecimal.ZERO, "recover interrupted collection");
         BigInteger nonce = reserveNonce(repository, web3j, chain, user);
-        assertTrue(estimateTokenGas(web3j, user.address(), contract, hotWallet.address(), amount).compareTo(BigInteger.ZERO) > 0);
+        assertTrue(estimateTokenGas(web3j, user.address(), contract, hotWallet.address(), amount, tokenDecimals)
+                .compareTo(BigInteger.ZERO) > 0);
         updateOrder(jdbcTemplate, orderNo, "SIGNING", null, BigDecimal.ZERO, null);
-        SignedTx tx = sendSignedTokenTransfer(web3j, user.credentials(), contract, hotWallet.address(), amount, chainId, nonce);
+        SignedTx tx = sendSignedTokenTransfer(
+                web3j, user.credentials(), contract, hotWallet.address(), amount, tokenDecimals, chainId, nonce);
         updateOrder(jdbcTemplate, orderNo, "SENT", tx.receipt().getTransactionHash(), fee(tx), null);
         assertTrue(repository.settleLockedDebit(chain.name(), tokenSymbol, user.address(), amount));
         settleFrozen(repository, chain.name(), nativeSymbol, user.address(), GAS_BUFFER, fee(tx));
@@ -418,7 +424,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         assertBalanceEquals(getNativeBalance(web3j, actor.address()),
                 ledgerOrZero(jdbcTemplate, chain, nativeSymbol, actor.address()));
         for (TokenContract token : tokens) {
-            assertBalanceEquals(tokenBalance(web3j, token.address(), actor.address()),
+            assertBalanceEquals(tokenBalance(web3j, token.address(), actor.address(), token.decimals()),
                     ledgerOrZero(jdbcTemplate, chain, token.symbol(), actor.address()));
         }
         assertBalanceEquals(BigDecimal.ZERO, lockedOrZero(jdbcTemplate, chain, nativeSymbol, actor.address()));
@@ -428,12 +434,13 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
 
     private static List<TokenContract> tokenContracts(JdbcTemplate jdbcTemplate, ChainType chain) {
         return jdbcTemplate.query("""
-                        select symbol, contract_address
+                        select symbol, contract_address, decimals
                           from token_config
                          where chain = ? and enabled = true and standard = 'ERC20'
                          order by symbol
                         """,
-                (rs, rowNum) -> new TokenContract(rs.getString("symbol"), rs.getString("contract_address")),
+                (rs, rowNum) -> new TokenContract(
+                        rs.getString("symbol"), rs.getString("contract_address"), rs.getInt("decimals")),
                 chain.name());
     }
 
@@ -543,11 +550,12 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     }
 
     private static SignedTx sendSignedTokenTransfer(Web3j web3j, Credentials from, String contract, String to,
-                                                    BigDecimal amount, long chainId, BigInteger nonce) throws Exception {
+                                                    BigDecimal amount, int tokenDecimals,
+                                                    long chainId, BigInteger nonce) throws Exception {
         BigDecimal before = getNativeBalance(web3j, from.getAddress());
         BigInteger gasPrice = web3j.ethGasPrice().send().getGasPrice();
         RawTransaction raw = RawTransaction.createTransaction(nonce, gasPrice, BigInteger.valueOf(120_000L),
-                contract, BigInteger.ZERO, encodeTransfer(to, amount));
+                contract, BigInteger.ZERO, encodeTransfer(to, amount, tokenDecimals));
         TransactionReceipt receipt = sendSigned(web3j, raw, from, chainId);
         BigDecimal after = getNativeBalance(web3j, from.getAddress());
         return new SignedTx(receipt, nonce, before.subtract(after));
@@ -582,18 +590,19 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return web3j.ethEstimateGas(tx).send().getAmountUsed();
     }
 
-    private static BigInteger estimateTokenGas(Web3j web3j, String from, String contract, String to, BigDecimal amount) throws Exception {
+    private static BigInteger estimateTokenGas(Web3j web3j, String from, String contract, String to,
+                                               BigDecimal amount, int tokenDecimals) throws Exception {
         var tx = org.web3j.protocol.core.methods.request.Transaction.createFunctionCallTransaction(
-                from, null, null, null, contract, BigInteger.ZERO, encodeTransfer(to, amount));
+                from, null, null, null, contract, BigInteger.ZERO, encodeTransfer(to, amount, tokenDecimals));
         return web3j.ethEstimateGas(tx).send().getAmountUsed();
     }
 
-    private static String encodeTransfer(String to, BigDecimal amount) {
+    private static String encodeTransfer(String to, BigDecimal amount, int tokenDecimals) {
         return FunctionEncoder.encode(new Function("transfer",
-                List.of(new Address(to), new Uint256(tokenToUnits(amount))), List.of()));
+                List.of(new Address(to), new Uint256(tokenToUnits(amount, tokenDecimals))), List.of()));
     }
 
-    private static BigDecimal tokenBalance(Web3j web3j, String token, String account) throws Exception {
+    private static BigDecimal tokenBalance(Web3j web3j, String token, String account, int tokenDecimals) throws Exception {
         Function function = new Function("balanceOf",
                 List.of(new Address(account)), List.of(TypeReference.create(Uint256.class)));
         EthCall response = web3j.ethCall(
@@ -602,7 +611,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
                 DefaultBlockParameterName.LATEST).send();
         List<Type> decoded = FunctionReturnDecoder.decode(response.getValue(), function.getOutputParameters());
         BigInteger raw = (BigInteger) decoded.getFirst().getValue();
-        return new BigDecimal(raw).divide(TOKEN_DECIMAL, 18, RoundingMode.DOWN);
+        return new BigDecimal(raw).divide(decimalFactor(tokenDecimals), 18, RoundingMode.DOWN);
     }
 
     private static BigDecimal getNativeBalance(Web3j web3j, String account) throws Exception {
@@ -646,8 +655,12 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return amount.multiply(WEI_PER_NATIVE).toBigIntegerExact();
     }
 
-    private static BigInteger tokenToUnits(BigDecimal amount) {
-        return amount.multiply(TOKEN_DECIMAL).toBigIntegerExact();
+    private static BigInteger tokenToUnits(BigDecimal amount, int tokenDecimals) {
+        return amount.multiply(decimalFactor(tokenDecimals)).toBigIntegerExact();
+    }
+
+    private static BigDecimal decimalFactor(int tokenDecimals) {
+        return BigDecimal.TEN.pow(tokenDecimals);
     }
 
     private static BigDecimal weiToNative(BigInteger wei) {
@@ -663,7 +676,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return dataSource;
     }
 
-    private record TokenContract(String symbol, String address) {
+    private record TokenContract(String symbol, String address, int decimals) {
     }
 
     private record Actor(String label, String role, long userId, int derivationIndex,

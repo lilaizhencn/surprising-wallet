@@ -5654,7 +5654,9 @@ VALUES
     ('LISK', 'USDC_E', 'ERC20', '0xF242275d3a6527d877f2c927a82D9b057609cc71', 6, false, true, 1, 1, now(), now()),
     ('KATANA', 'ETH_KATANA', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('KATANA', 'USDC', 'ERC20', '0x203A662b0BD271A6ed5a60EdFbd04bFce608FD36', 6, false, true, 1, 1, now(), now()),
-    ('KATANA', 'USDT', 'ERC20', '0x2DCa96907fde857dd3D816880A0df407eeB2D2F2', 6, false, true, 1, 1, now(), now())
+    ('KATANA', 'USDT', 'ERC20', '0x2DCa96907fde857dd3D816880A0df407eeB2D2F2', 6, false, true, 1, 1, now(), now()),
+    ('MEGAETH', 'ETH_MEGAETH', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('MEGAETH', 'USDM', 'ERC20', '0xFAfDdbb3FC7688494971a79cc65DCa3EF82079E7', 18, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5719,6 +5721,8 @@ VALUES
     ('KATANA', 'USDC', 'ERC20', '0x203A662b0BD271A6ed5a60EdFbd04bFce608FD36', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('KATANA', 'USDT', 'ERC20', '0x2DCa96907fde857dd3D816880A0df407eeB2D2F2', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('MEGAETH', 'USDM', 'ERC20', '0xFAfDdbb3FC7688494971a79cc65DCa3EF82079E7', 18, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -5863,6 +5867,14 @@ VALUES
     ('KATANA', 'mainnet', 'evm', 9020, 60, 'ETH_KATANA',
      'https://rpc.katana.network', 'https://katanascan.com/tx/',
      40, 40, 1, 0, false, now(), now(), 747474, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('MEGAETH', 'carrot', 'evm', 9021, 60, 'ETH_MEGAETH',
+     'https://carrot.megaeth.com/rpc', 'https://megaeth-testnet-v2.blockscout.com/tx/',
+     40, 40, 1, 0, false, now(), now(), 6343, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('MEGAETH', 'mainnet', 'evm', 9021, 60, 'ETH_MEGAETH',
+     'https://mainnet.megaeth.com/rpc', 'https://megaeth.blockscout.com/tx/',
+     40, 40, 1, 0, false, now(), now(), 4326, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6083,6 +6095,18 @@ VALUES
     ('KATANA', 'mainnet', 'prod', 'official-katana-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://rpc.katana.network', 'NONE', NULL, 10, 1000, false,
      'Production Katana mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('MEGAETH', 'carrot', 'dev', 'official-megaeth-carrot', 'rpc', 'HTTP_JSON_RPC',
+     'https://carrot.megaeth.com/rpc', 'NONE', NULL, 10, 500, false,
+     'Official MegaETH Carrot JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('MEGAETH', 'carrot', 'test2', 'official-megaeth-carrot', 'rpc', 'HTTP_JSON_RPC',
+     'https://carrot.megaeth.com/rpc', 'NONE', NULL, 10, 500, false,
+     'test2 official MegaETH Carrot JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('MEGAETH', 'mainnet', 'prod', 'official-megaeth-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://mainnet.megaeth.com/rpc', 'NONE', NULL, 10, 1000, false,
+     'Production MegaETH mainnet public JSON-RPC endpoint. Use RPC gas estimation because MegaEVM gas costs differ from standard EVM.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -6694,6 +6718,8 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0x203A662b0BD271A6ed5a60EdFbd04bFce608FD36', NULL, NULL, 6, 'native-gas'),
         ('KATANA', 'USDT', 'ERC20', 'ERC20',
          '0x2DCa96907fde857dd3D816880A0df407eeB2D2F2', NULL, NULL, 6, 'native-gas'),
+        ('MEGAETH', 'USDM', 'ERC20', 'ERC20',
+         '0xFAfDdbb3FC7688494971a79cc65DCa3EF82079E7', NULL, NULL, 18, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',

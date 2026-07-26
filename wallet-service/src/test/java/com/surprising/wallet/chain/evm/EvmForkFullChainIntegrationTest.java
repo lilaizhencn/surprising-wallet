@@ -48,7 +48,6 @@ class EvmForkFullChainIntegrationTest {
     private static final UUID TEST_TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000001");
     private static final String LOCAL_RPC = "http://127.0.0.1:8545";
     private static final BigDecimal WEI_PER_ETH = new BigDecimal("1000000000000000000");
-    private static final BigDecimal TOKEN_DECIMAL = new BigDecimal("1000000");
 
     @Test
     void shouldExecuteNativeAndErc20ForkFullChain() throws Exception {
@@ -90,7 +89,7 @@ class EvmForkFullChainIntegrationTest {
                 TokenContract token = tokens.get(tokenIndex);
                 BigDecimal deposit = BigDecimal.valueOf(100L - tokenIndex * 25L);
                 TransactionReceipt receipt = sendUnlockedTokenCall(web3j, deployer, token.address(),
-                        encodeMint(wallet.getAddress(), deposit));
+                        encodeMint(wallet.getAddress(), deposit, token.decimals()));
                 scanner.scanAndCreditErc20(chain, LOCAL_RPC, confirmations,
                         receipt.getBlockNumber().longValueExact());
                 scanner.scanAndCreditErc20(chain, LOCAL_RPC, confirmations,
@@ -116,7 +115,7 @@ class EvmForkFullChainIntegrationTest {
                 BigDecimal deposit = entry.getValue();
                 BigDecimal withdrawal = deposit.movePointLeft(1);
                 SignedTx withdrawalTx = sendSignedTokenTransfer(
-                        web3j, wallet, token.address(), recipient, withdrawal, chainId);
+                        web3j, wallet, token.address(), recipient, withdrawal, token.decimals(), chainId);
                 assertTrue(repository.debitLedgerBalance(
                         chain.name(), token.symbol(), wallet.getAddress(), withdrawal));
                 assertTrue(repository.debitLedgerBalance(
@@ -124,7 +123,7 @@ class EvmForkFullChainIntegrationTest {
 
                 BigDecimal collection = deposit.subtract(withdrawal);
                 SignedTx collectionTx = sendSignedTokenTransfer(
-                        web3j, wallet, token.address(), deployer, collection, chainId);
+                        web3j, wallet, token.address(), deployer, collection, token.decimals(), chainId);
                 assertTrue(repository.debitLedgerBalance(
                         chain.name(), token.symbol(), wallet.getAddress(), collection));
                 assertTrue(repository.debitLedgerBalance(
@@ -133,7 +132,7 @@ class EvmForkFullChainIntegrationTest {
 
             assertBalanceEquals(getNativeBalance(web3j, wallet.getAddress()), ledger(jdbcTemplate, chain, nativeSymbol, wallet.getAddress()));
             for (TokenContract token : tokens) {
-                assertBalanceEquals(tokenBalance(web3j, token.address(), wallet.getAddress()),
+                assertBalanceEquals(tokenBalance(web3j, token.address(), wallet.getAddress(), token.decimals()),
                         ledger(jdbcTemplate, chain, token.symbol(), wallet.getAddress()));
                 assertEquals(BigDecimal.ZERO.setScale(18),
                         ledger(jdbcTemplate, chain, token.symbol(), wallet.getAddress()).setScale(18));
@@ -186,12 +185,13 @@ class EvmForkFullChainIntegrationTest {
 
     private static List<TokenContract> tokenContracts(JdbcTemplate jdbcTemplate, ChainType chain) {
         return jdbcTemplate.query("""
-                        select symbol, contract_address
+                        select symbol, contract_address, decimals
                           from token_config
                          where chain = ? and enabled = true and standard = 'ERC20'
                          order by symbol
                         """,
-                (rs, rowNum) -> new TokenContract(rs.getString("symbol"), rs.getString("contract_address")),
+                (rs, rowNum) -> new TokenContract(
+                        rs.getString("symbol"), rs.getString("contract_address"), rs.getInt("decimals")),
                 chain.name());
     }
 
@@ -295,12 +295,13 @@ class EvmForkFullChainIntegrationTest {
     }
 
     private static SignedTx sendSignedTokenTransfer(Web3j web3j, Credentials from, String contract,
-                                                    String to, BigDecimal amount, long chainId) throws Exception {
+                                                    String to, BigDecimal amount, int tokenDecimals,
+                                                    long chainId) throws Exception {
         BigDecimal before = getNativeBalance(web3j, from.getAddress());
         BigInteger nonce = pendingNonce(web3j, from);
         BigInteger gasPrice = web3j.ethGasPrice().send().getGasPrice();
         RawTransaction raw = RawTransaction.createTransaction(nonce, gasPrice, BigInteger.valueOf(100_000L),
-                contract, BigInteger.ZERO, encodeTransfer(to, amount));
+                contract, BigInteger.ZERO, encodeTransfer(to, amount, tokenDecimals));
         TransactionReceipt receipt = sendSigned(web3j, raw, from, chainId);
         BigDecimal after = getNativeBalance(web3j, from.getAddress());
         return new SignedTx(receipt, before.subtract(after));
@@ -335,17 +336,17 @@ class EvmForkFullChainIntegrationTest {
                 .send().getTransactionCount();
     }
 
-    private static String encodeMint(String to, BigDecimal amount) {
+    private static String encodeMint(String to, BigDecimal amount, int tokenDecimals) {
         return FunctionEncoder.encode(new Function("mint",
-                List.of(new Address(to), new Uint256(tokenToUnits(amount))), List.of()));
+                List.of(new Address(to), new Uint256(tokenToUnits(amount, tokenDecimals))), List.of()));
     }
 
-    private static String encodeTransfer(String to, BigDecimal amount) {
+    private static String encodeTransfer(String to, BigDecimal amount, int tokenDecimals) {
         return FunctionEncoder.encode(new Function("transfer",
-                List.of(new Address(to), new Uint256(tokenToUnits(amount))), List.of()));
+                List.of(new Address(to), new Uint256(tokenToUnits(amount, tokenDecimals))), List.of()));
     }
 
-    private static BigDecimal tokenBalance(Web3j web3j, String token, String account) throws Exception {
+    private static BigDecimal tokenBalance(Web3j web3j, String token, String account, int tokenDecimals) throws Exception {
         Function function = new Function("balanceOf",
                 List.of(new Address(account)), List.of(TypeReference.create(Uint256.class)));
         EthCall response = web3j.ethCall(
@@ -354,7 +355,7 @@ class EvmForkFullChainIntegrationTest {
                 DefaultBlockParameterName.LATEST).send();
         List<Type> decoded = FunctionReturnDecoder.decode(response.getValue(), function.getOutputParameters());
         BigInteger raw = (BigInteger) decoded.getFirst().getValue();
-        return new BigDecimal(raw).divide(TOKEN_DECIMAL, 18, RoundingMode.DOWN);
+        return new BigDecimal(raw).divide(decimalFactor(tokenDecimals), 18, RoundingMode.DOWN);
     }
 
     private static BigDecimal getNativeBalance(Web3j web3j, String account) throws Exception {
@@ -381,8 +382,12 @@ class EvmForkFullChainIntegrationTest {
         return amount.multiply(WEI_PER_ETH).toBigIntegerExact();
     }
 
-    private static BigInteger tokenToUnits(BigDecimal amount) {
-        return amount.multiply(TOKEN_DECIMAL).toBigIntegerExact();
+    private static BigInteger tokenToUnits(BigDecimal amount, int tokenDecimals) {
+        return amount.multiply(decimalFactor(tokenDecimals)).toBigIntegerExact();
+    }
+
+    private static BigDecimal decimalFactor(int tokenDecimals) {
+        return BigDecimal.TEN.pow(tokenDecimals);
     }
 
     private static BigDecimal weiToEth(BigInteger wei) {
@@ -398,7 +403,7 @@ class EvmForkFullChainIntegrationTest {
         return dataSource;
     }
 
-    private record TokenContract(String symbol, String address) {
+    private record TokenContract(String symbol, String address, int decimals) {
     }
 
     private record SignedTx(TransactionReceipt receipt, BigDecimal nativeFee) {
