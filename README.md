@@ -229,7 +229,7 @@ mvn compile
 | Canto | 独立 L1 | CANTO | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.canto.io/) | 暂缓；主网 `7700` 仍有区块，但官方主网 RPC 与 Testnet `7701` 端点当前返回 `521/522` 或超时，官方列出的多数备选 EVM RPC 也不可用；唯一可读端点与 Java TLS 不兼容，无法可靠完成主网／测试网 EIP-7702 和全功能门禁，待官方恢复稳定 EVM RPC 后重试 |
 | ZetaChain | 独立 L1 | ZETA | 原生币 | Cosmos SDK / EVM / Omnichain | [Docs](https://www.zetachain.com/docs/) | 已完成；主网 `7000`、Athens `7001`，两网 EVM RPC 均通过 EIP-7702 门禁；实测约 3.7 秒出块；接入 Ethereum 来源 ZRC-20 USDC `0x0cbe0dF132a6c6B4a2974Fa1b7Fb953CF0Cc798a` 与 USDT `0x7c8dDa80bbBE1254a7aACf3219EBe1481c6E01d7`，内部符号 `USDC_ETH/USDT_ETH`；Athens 稳定币均暂停，仅做原生币 live 门禁与本地稳定币测试；本次不扩展 ZRC-20 跨链 withdraw |
 | Core | 独立 L1 | CORE | 原生币 | Bitcoin-aligned / EVM | [Docs](https://docs.coredao.org/) | 已完成；不是 Bitcoin L2；主网 `1116`、Testnet2 `1114`，两网官方 RPC 均通过 EIP-7702 门禁；约 3 秒出块；接入官方 LayerZero Bridge USDC `0xa4151b2b3e269645181dccf2d426ce75fcbdeca9` 与 USDT `0x900101d06a7426441ae63e9ab3b9b0f63be145f1`；生产需使用私有 RPC |
-| Wanchain | 独立 L1 | WAN | 原生币 | EVM / 跨链 | [Docs](https://docs.wanchain.org/) | 候选 |
+| Wanchain | 独立 L1 | WAN | 原生币 | EVM / 跨链 | [Docs](https://docs.wanchain.org/) | 暂缓；主网 `888`、测试网 `999` 均活跃，但两网 `eth_estimateGas` 都忽略 type-4 `authorizationList` 并返回普通转账固定值 `21000`，未通过 EIP-7702 门禁；当前无法保证现有 EIP-7702 归集／提现完整工作流，待官方客户端升级后重试 |
 | Elastos Smart Chain | Elastos EVM 侧链 | ELA | 原生币 | Elastos / EVM | [Docs](https://docs.elastos.net/) | 专项；需区分 Elastos Mainchain 与 ESC |
 | Velas | 独立 L1 | VLX | 原生币 | EVM | [Docs](https://docs.velas.com/) | 候选；旧表的 `VELAS` Gas 符号已纠正为 `VLX` |
 | Harmony | 独立 L1 | ONE | 原生币 | EVM / Sharding | [Docs](https://docs.harmony.one/) | 尽调；历史桥安全事件和生态活跃度需评估 |
