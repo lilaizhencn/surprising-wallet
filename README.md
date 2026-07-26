@@ -257,7 +257,7 @@ mvn compile
 | Conflux | 独立 L1，Core Space + eSpace | CFX | 原生币 | Conflux / EVM eSpace | [Docs](https://doc.confluxnetwork.org/) | 专项；Core Space 与 eSpace 地址及交易模型不同 |
 | IoTeX | 独立 L1 | IOTX | 原生币 | EVM / DePIN | [Docs](https://docs.iotex.io/) | 已完成；主网 `4689`、测试网 `4690`，两网官方 RPC 均通过 EIP-7702 门禁；接入官方 USDC.e `0xcdf79194c6c285077a58da47641d4dbe51f63542` 与 ioUSDT `0x6fbcdc1169b5130c59e72e51ed68a84841c98cd1`；接口使用 EVM `0x` 地址 |
 | Kaia | 独立 L1 | KAIA | 原生币 | EVM / 亚洲支付生态 | [Docs](https://docs.kaia.io/) | 已完成；主网 `8217`、Kairos `1001`，两网官方 RPC 均通过 EIP-7702 门禁；接入官方 USDT `0xd077a400968890eacc75cdc901f0356c943e4fdb`；未确认官方 USDC；旧 `KLAY` 名称已迁移为 `KAIA` |
-| MAP Protocol / MAPO | 独立 L1 | MAPO | 原生币 | EVM / Omnichain | [Docs](https://docs.mapprotocol.io/) | 候选；名称统一为 MAP Protocol，链上币符号为 MAPO |
+| MAP Protocol / MAPO | 独立 L1 | MAPO | 原生币 | EVM / Omnichain | [Docs](https://docs.mapprotocol.io/) | 暂缓；主网 `22776`、Makalu `212` 仍活跃，但主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 MAPO 客户端支持 type-4 交易后再接入；名称统一为 MAP Protocol，链上币符号为 MAPO |
 | Kite AI | 独立 EVM 链 | KITE | 原生币 | EVM / AI Agent Payments | [Docs](https://docs.gokite.ai/kite-chain/1-getting-started/network-information) | 候选；主网 chain ID 2366，已不再是“仅测试网” |
 | Tempo | 独立支付 L1 | 受支持的 USD 稳定币 | 无原生波动币；TIP-20 稳定币直接付费 | EVM / Payments / Stablecoin | [Docs](https://docs.tempo.xyz/protocol/fees) | 专项；钱包、签名器和 Gas 余额判断不能假设单一 native token |
 | Stable | 独立支付 L1 | USDT0 | 稳定币作为原生 Gas | EVM / Payments / Stablecoin | [Docs](https://docs.stable.xyz/en/architecture/usdt-specific-features/usdt-as-gas-token) | 专项；v1.2 已由 `gUSDT` 切换为 `USDT0` |
