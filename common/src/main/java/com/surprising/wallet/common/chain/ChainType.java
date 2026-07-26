@@ -50,6 +50,7 @@ public enum ChainType {
     CHILIZ("evm", "account"),
     IOTEX("evm", "account"),
     KAIA("evm", "account"),
+    PLASMA("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

@@ -177,6 +177,7 @@ mvn compile
 | Chiliz Chain | 已完成 | CHZ、USDC、USDT | Spicy `88882`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 2 秒出块；稳定币使用官方目录列出的 ChainPort 桥接合约 |
 | IoTeX | 已完成 | IOTX、USDC_E、IOUSDT | Testnet `4690`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 1.7 秒出块；稳定币使用 ioTube 官方映射资产 |
 | Kaia | 已完成 | KAIA、USDT | Kairos `1001`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 0.67 秒出块；接入 Kaia 官方列出的主网 USDT，未确认官方 USDC |
+| Plasma | 已完成 | XPL、USDT0 | Testnet `9746`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 1 秒出块；接入 USD₮0 官方部署合约，Circle 官方列表未提供 Plasma USDC |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -261,7 +262,7 @@ mvn compile
 | Kite AI | Avalanche L1 / 独立 EVM 链 | KITE | 原生币 | Avalanche / AI Agent Payments | [Docs](https://docs.gokite.ai/kite-chain/1-getting-started/network-information) | 暂缓；主网 `2366`、测试网 `2368` 已上线并活跃，但主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 Avalanche L1 客户端支持 type-4 交易后再接入 |
 | Tempo | 独立支付 L1 | 受支持的 USD 稳定币 | 无原生波动币；TIP-20 稳定币直接付费 | EVM / Payments / Stablecoin | [Docs](https://docs.tempo.xyz/protocol/fees) | 专项；钱包、签名器和 Gas 余额判断不能假设单一 native token |
 | Stable | 独立支付 L1 | USDT0 | 稳定币作为原生 Gas | EVM / Payments / Stablecoin | [Docs](https://docs.stable.xyz/en/architecture/usdt-specific-features/usdt-as-gas-token) | 专项；v1.2 已由 `gUSDT` 切换为 `USDT0` |
-| Plasma | 独立支付 L1 | XPL | 原生 XPL；特定 USDT 转账可由协议 Paymaster 代付 | EVM / Payments / Stablecoin | [Docs](https://www.plasma.to/docs/plasma-chain/network-information/differences-ethereum-and-plasma) | 候选；旧表误判为“仅协议/规范”，现已恢复为网络候选 |
+| Plasma | 独立支付 L1 | XPL | 原生 XPL；特定 USDT0 转账可由协议 Paymaster 代付 | EVM / Payments / Stablecoin | [Docs](https://docs.plasma.org/) | 已完成；主网 `9745`、测试网 `9746`，两网官方 RPC 均通过 EIP-7702 门禁；接入 USD₮0 官方 Token 合约 `0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb`；Circle 官方列表未提供 Plasma USDC |
 | Story | 独立 L1 | IP | 原生币 | Cosmos/CometBFT + EVM / IP | [Docs](https://docs.story.foundation/introduction) | 候选；不是非 EVM 网络 |
 | Energi | 独立 L1 | NRG | 原生币 | EVM | [Docs](https://wiki.energi.world/) | 尽调；需复核当前节点版本和生态活跃度 |
 | ONUS Chain | 独立 EVM 链 | ONUS | 原生币 | EVM | [Docs](https://docs.onuschain.io/chain-setup) | 尽调；官方文档存在，但更新频率和节点独立性需评估 |

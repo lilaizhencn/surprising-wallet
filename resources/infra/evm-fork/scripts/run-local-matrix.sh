@@ -50,6 +50,7 @@ EVM_CHAINS=(
   "CHILIZ|CHZ|88882|USDC,USDT|testnet|true"
   "IOTEX|IOTX|4690|USDC_E,IOUSDT|testnet|true"
   "KAIA|KAIA|1001|USDT|testnet|true"
+  "PLASMA|XPL|9746|USDT0|testnet|true"
 )
 
 should_run_chain() {

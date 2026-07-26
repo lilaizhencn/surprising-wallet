@@ -123,7 +123,7 @@ class ChainAddressRuntime {
                     MANTLE, LINEA, SCROLL, UNICHAIN, BERACHAIN, GNOSIS, CELO, MONAD,
                     WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK, KATANA, MEGAETH,
                     X_LAYER, DEGEN, ROBINHOOD_CHAIN, ETHERLINK, IOTA_EVM, OASIS_EMERALD, CRONOS, SONIC,
-                    PULSECHAIN, ZETACHAIN, CORE, SOMNIA, RONIN, CHILIZ, IOTEX, KAIA, HYPERCORE ->
+                    PULSECHAIN, ZETACHAIN, CORE, SOMNIA, RONIN, CHILIZ, IOTEX, KAIA, PLASMA, HYPERCORE ->
                     value.matches(EVM_ADDRESS_REGEX);
             case TRON -> TronAddressCodec.isValidBase58(value);
             case XRP -> isValidXrpAddress(value);
