@@ -297,7 +297,7 @@ mvn compile
 | Hedera | 公共 Hashgraph DLT | HBAR | 费用以 USD 定价、以 HBAR 扣除 | Hedera / EVM services | [Docs](https://docs.hedera.com/) | 专项；账户 ID、别名地址、Token Service 和 EVM 地址并存 |
 | Venom | 独立异步多链网络 | VENOM | 原生币 | TVM / Workchains | [Docs](https://docs.venom.foundation/) | 专项；非 EVM，地址和异步消息模型独立实现 |
 
-#### 7. 低成熟度或资料质量不足，先尽调
+#### 7. 低成熟度链核验结果
 
 | 网络 | 当前可确认信息 | Gas 资产 | 官方入口 | 结论/前置条件 |
 |---|---|---|---|---|
