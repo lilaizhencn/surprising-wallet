@@ -59,13 +59,13 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 36 条链、14 个链族：
+运行模型覆盖 37 条链、14 个链族：
 
 | 链族 | 链 |
 |------|-----|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH |
 | EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD |
-| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE |
+| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK |
 | TRON | TRON |
 | Solana | SOL |
 | TON | TON |
@@ -158,6 +158,7 @@ mvn compile
 | Taiko | 已完成 | ETH_TAIKO | Hoodi `167013`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网实测约 2 秒出块；官方桥未公开可审计的静态稳定币合约清单，暂不配置 USDC／USDT |
 | Soneium | 已完成 | ETH_SONEIUM、USDC_E、USDT | Minato `1946`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网两种稳定币均完成全链路测试 |
 | Mode | 已完成 | ETH_MODE、USDC、USDT | Sepolia `919`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网两种稳定币均完成全链路测试 |
+| Lisk | 已完成 | ETH_LISK、USDC_E | Sepolia `4202`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；官方审核资产表未列出 USDT |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -174,7 +175,7 @@ mvn compile
 | Taiko | Ethereum L2（Based Rollup） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.taiko.xyz/) | 已完成；主网 `167000`、Hoodi `167013`，旧 Hekla 已停用；EIP-7702 已验证 |
 | Manta Pacific | Ethereum L2（模块化 Rollup） | ETH | 原生币 | Ethereum / EVM / 模块化 DA | [Docs](https://docs.manta.network/docs/manta-pacific/) | 候选；需核验当前结算与 DA 配置 |
 | MegaETH | Ethereum L2 | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.megaeth.com/) | 候选；新主网，接入前复核节点、归档和最终性稳定性 |
-| Lisk | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.lisk.com/) | 候选；不是旧版独立 Lisk L1 |
+| Lisk | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.lisk.com/) | 已完成；主网 `1135`、Sepolia `4202`，Gas 为 ETH；接入官方审核的 Bridged USDC，未配置 USDT |
 | World Chain | Ethereum L2（OP Stack） | ETH | 原生币；生态支持代付 | Ethereum / EVM | [Docs](https://docs.world.org/world-chain) | 已完成；主网 `480`、Sepolia `4801`，Gas 为 ETH；接入官方 USDC，未配置无官方依据的 USDT |
 | Blast | Ethereum L2（Optimistic Rollup） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.blast.io/) | 候选；原生收益机制不改变 ETH Gas 资产 |
 | ApeChain | Arbitrum Orbit L3 | APE | 自定义原生 Gas 币 | Ethereum / Arbitrum / EVM | [Docs](https://docs.apechain.com/) | 候选；旧表的普通 L2 分类已纠正为 L3 |

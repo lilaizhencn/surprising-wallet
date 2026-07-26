@@ -21,6 +21,7 @@ EVM_CHAINS=(
   "HYPEREVM|HYPE|998|USDC|testnet|false"
   "INK|ETH_INK|763373|USDC_E,USDT0|sepolia|true"
   "LINEA|ETH_LINEA|59141|USDC|sepolia|false"
+  "LISK|ETH_LISK|4202|USDC_E|sepolia|true"
   "MANTLE|MNT|5003||sepolia|false"
   "MODE|ETH_MODE|919|USDC,USDT|sepolia|true"
   "MONAD|MON|10143|USDC,USDT0|testnet|true"
