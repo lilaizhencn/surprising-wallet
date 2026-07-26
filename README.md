@@ -59,12 +59,12 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 30 条链、14 个链族：
+运行模型覆盖 31 条链、14 个链族：
 
 | 链族 | 链 |
 |------|-----|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH |
-| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS |
+| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD |
 | EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO |
 | TRON | TRON |
 | Solana | SOL |
@@ -152,6 +152,7 @@ mvn compile
 | Berachain | 已完成 | BERA、USDC、USDT0 | Bepolia `80069`；EIP-7702 使用 Prague Hardhat 验证；主网和公开 RPC 默认关闭 |
 | Gnosis Chain | 已完成 | XDAI、USDC、USDT | Chiado `10200`；EIP-7702 使用 Prague Hardhat 验证；主网和公开 RPC 默认关闭 |
 | Celo | 已完成 | CELO、USDC、USDT | Celo Sepolia `11142220`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；仅使用 CELO 原生 Gas，CIP-64 Fee Abstraction 未启用 |
+| Monad | 已完成 | MON、USDC、USDT0 | Testnet `10143`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；原生 MON 的 7702 归集因 10 MON reserve 规则保持关闭 |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -219,7 +220,7 @@ mvn compile
 | Meter | 独立 L1 | MTR | MTR 支付 Gas；MTRG 用于治理/质押 | EVM | [Docs](https://docs.meter.io/) | 专项；双币模型 |
 | EthereumPoW | 独立 PoW fork | ETHW | 原生币 | EVM | [Official](https://ethereumpow.org/) | 尽调；旧表的 `ETH` 已纠正为 `ETHW`，需评估节点和生态持续性 |
 | Ethereum Classic | 独立 PoW L1 | ETC | 原生币 | EVM | [Official](https://ethereumclassic.org/) | 候选；确认数和 51% 攻击风险参数需独立设置 |
-| Monad | 独立 L1 | MON | 原生币 | EVM | [Docs](https://docs.monad.xyz/) | 候选 |
+| Monad | 独立 L1 | MON | 原生币 | EVM | [Docs](https://docs.monad.xyz/) | 已完成；主网 `143`、Testnet `10143`，官方 token list 支持 USDC 与 USDT0；EIP-7702 ERC-20 代付归集可用，原生 MON 归集走普通未委托账户路径 |
 | Fuse Network | 独立 EVM 链 | FUSE | 原生币 | EVM / Payments | [Docs](https://docs.fuse.io/) | 候选；旧表的 L2 分类已纠正 |
 | Shido Network | 独立 L1 | SHIDO | 原生币；部分资格账户支持 Gasfree | Cosmos SDK / EVM / WASM | [Docs](https://docs.shido.io/untitled/shido/about) | 候选；旧表的 L2 分类已纠正 |
 | WEMIX3.0 | 独立 L1 | WEMIX | 原生币 | EVM / Gaming | [Docs](https://docs.wemix.com/) | 候选；旧表的 L2 分类已纠正 |

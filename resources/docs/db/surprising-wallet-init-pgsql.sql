@@ -5634,7 +5634,10 @@ VALUES
     ('GNOSIS', 'USDT', 'ERC20', '0x4ECaBa5870353805a9F068101A40E0f32ed605C6', 6, false, true, 1, 1, now(), now()),
     ('CELO', 'CELO', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('CELO', 'USDC', 'ERC20', '0xcebA9300f2b948710d2653dD7B07f33A8B32118C', 6, false, true, 1, 1, now(), now()),
-    ('CELO', 'USDT', 'ERC20', '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e', 6, false, true, 1, 1, now(), now())
+    ('CELO', 'USDT', 'ERC20', '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e', 6, false, true, 1, 1, now(), now()),
+    ('MONAD', 'MON', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('MONAD', 'USDC', 'ERC20', '0x754704Bc059F8C67012fEd69BC8A327a5aafb603', 6, false, true, 1, 1, now(), now()),
+    ('MONAD', 'USDT0', 'ERC20', '0xe7cd86e13AC4309349F30B3435a9d337750fC82D', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5675,6 +5678,10 @@ VALUES
     ('CELO', 'USDC', 'ERC20', '0xcebA9300f2b948710d2653dD7B07f33A8B32118C', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('CELO', 'USDT', 'ERC20', '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('MONAD', 'USDC', 'ERC20', '0x754704Bc059F8C67012fEd69BC8A327a5aafb603', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('MONAD', 'USDT0', 'ERC20', '0xe7cd86e13AC4309349F30B3435a9d337750fC82D', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -5755,7 +5762,15 @@ VALUES
     ('CELO', 'mainnet', 'evm', 9012, 60, 'CELO',
      'https://forno.celo.org', 'https://celoscan.io/tx/',
      40, 40, 1, 0, false, now(), now(), 42220, 'eip1559-l2', 200,
-     false, false, false, false, 0, 200)
+     false, false, false, false, 0, 200),
+    ('MONAD', 'testnet', 'evm', 9013, 60, 'MON',
+     'https://testnet-rpc.monad.xyz', 'https://testnet.monadvision.com/tx/',
+     20, 20, 1, 0, false, now(), now(), 10143, 'eip1559', 500,
+     false, false, false, false, 0, 500),
+    ('MONAD', 'mainnet', 'evm', 9013, 60, 'MON',
+     'https://rpc.monad.xyz', 'https://monadvision.com/tx/',
+     20, 20, 1, 0, false, now(), now(), 143, 'eip1559', 500,
+     false, false, false, false, 0, 500)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
     "runtime_currency_id" = EXCLUDED."runtime_currency_id",
@@ -5879,6 +5894,18 @@ VALUES
     ('CELO', 'mainnet', 'prod', 'official-celo-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://forno.celo.org', 'NONE', NULL, 10, 1000, false,
      'Production Celo mainnet JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('MONAD', 'testnet', 'dev', 'official-monad-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://testnet-rpc.monad.xyz', 'NONE', NULL, 10, 500, false,
+     'Official Monad Testnet JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('MONAD', 'testnet', 'test2', 'official-monad-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://testnet-rpc.monad.xyz', 'NONE', NULL, 10, 500, false,
+     'test2 official Monad Testnet JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('MONAD', 'mainnet', 'prod', 'official-monad-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.monad.xyz', 'NONE', NULL, 10, 1000, false,
+     'Production Monad mainnet JSON-RPC endpoint. EIP-7702 native collection must remain disabled because delegated EOAs cannot reduce balance below the 10 MON reserve.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -6466,6 +6493,10 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0xcebA9300f2b948710d2653dD7B07f33A8B32118C', NULL, NULL, 6, 'native-gas'),
         ('CELO', 'USDT', 'ERC20', 'ERC20',
          '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e', NULL, NULL, 6, 'native-gas'),
+        ('MONAD', 'USDC', 'ERC20', 'ERC20',
+         '0x754704Bc059F8C67012fEd69BC8A327a5aafb603', NULL, NULL, 6, 'native-gas'),
+        ('MONAD', 'USDT0', 'ERC20', 'ERC20',
+         '0xe7cd86e13AC4309349F30B3435a9d337750fC82D', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',

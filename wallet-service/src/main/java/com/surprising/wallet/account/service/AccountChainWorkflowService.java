@@ -106,7 +106,7 @@ public class AccountChainWorkflowService {
             "XMR",
             "HYPERCORE",
             "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C", "HYPEREVM",
-            "MANTLE", "LINEA", "SCROLL", "UNICHAIN", "BERACHAIN", "GNOSIS", "CELO",
+            "MANTLE", "LINEA", "SCROLL", "UNICHAIN", "BERACHAIN", "GNOSIS", "CELO", "MONAD",
             "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
 
     private final ChainJdbcRepository repository;
