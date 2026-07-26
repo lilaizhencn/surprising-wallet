@@ -187,7 +187,7 @@ mvn compile
 | X Layer | Ethereum L2（增强 OP Stack + AggLayer） | OKB | 自定义原生 Gas 币 | Ethereum / EVM | [Docs](https://web3.okx.com/xlayer/docs/developer/quick-start/about-x-layer) | 已完成；主网 `196`、测试网 `1952`，Gas 为 OKB；接入官方推荐 USDC 与 USDT，旧 Polygon CDK ZK 分类已按当前架构纠正 |
 | Degen Chain | Base 上的 Arbitrum Orbit L3 | DEGEN | 自定义原生 Gas 币 | Ethereum / Base / EVM | [Docs](https://docs.degen.tips/) | 已完成；主网 `666666666`，Gas 为 DEGEN；官方 canonical USDC 与 USDT 均已接入，USDT 合约当前链上符号为 `aUSD₮`；公开测试网不可用，本地使用同链 ID 的 Prague Hardhat 验证 |
 | Robinhood Chain | Ethereum L2（Arbitrum） | ETH | 原生币 | Ethereum / EVM / RWA | [Docs](https://docs.robinhood.com/chain/connecting/) | 已完成；主网 `4663`、测试网 `46630`，Gas 为 ETH；接入官方 USDG，官方资产注册表未列出 USDC／USDT |
-| Shibarium | Ethereum L2 | BONE | 自定义原生 Gas 币 | Ethereum / EVM / Shiba | [Docs](https://docs.shib.io/) | 候选；Gas 是 BONE，不是 SHI |
+| Shibarium | Ethereum L2 | BONE | 自定义原生 Gas 币 | Ethereum / EVM / Shiba | [Docs](https://docs.shib.io/) | 暂缓；主网 `109` 与 Puppynet `157` 的官方 RPC 均未通过 EIP-7702 authorization intrinsic gas 门禁（仍返回 `21000`）；主网实测约 10 秒出块；官方 USDC／USDT 地址已核实，待链升级后复测接入 |
 | Katana | Ethereum L2（Agglayer CDK OP Stack） | ETH | 原生币 | Ethereum / EVM / DeFi | [Docs](https://docs.katana.network/katana/technical-reference/network-information/) | 已完成；主网 `747474`、Bokuto `737373`，Gas 为 ETH；接入官方 Vault Bridge USDC 与 USDT |
 | Ink | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.inkonchain.com/) | 已完成；主网 `57073`、Sepolia `763373`，Gas 为 ETH；官方资产为 USDC.e 与 USDT0，不按普通 USDC／USDT 混记 |
 | Sophon | Ethereum L2 Validium（ZK Stack） | SOPH | 自定义原生 Gas 币 | Ethereum / ZKsync Elastic Chain / EVM | [Docs](https://docs.sophon.xyz/tokenomics/soph) | 候选；DA 使用 Avail，不能等同标准 ZK Rollup |
