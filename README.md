@@ -59,12 +59,12 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 47 条链、14 个链族：
+运行模型覆盖 48 条链、14 个链族：
 
 | 链族 | 链 |
 |------|-----|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH |
-| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD, OASIS_EMERALD, CRONOS, SONIC |
+| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD, OASIS_EMERALD, CRONOS, SONIC, PULSECHAIN |
 | EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK, KATANA, MEGAETH, X_LAYER |
 | TRON | TRON |
 | Solana | SOL |
@@ -169,6 +169,7 @@ mvn compile
 | Oasis Emerald | 已完成 | ROSE | Testnet `42261`；主网与测试网官方 Web3 Gateway 均通过 EIP-7702 门禁；主网约 5 秒出块；历史 Wormhole 稳定币路径已弃用，未配置 USDC／USDT |
 | Cronos Chain | 已完成 | CRO、USDC、USDT | Testnet `338`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 0.49 秒出块；USDC 使用 Circle 原生合约 |
 | Sonic | 已完成 | S、USDC、USDT | Testnet `14601`；主网与当前测试网官方 RPC 均通过 EIP-7702 门禁；亚秒级最终性；USDC 使用 Circle 原生合约，USDT 为官方列出的 bridged USDT |
+| PulseChain | 已完成 | PLS、USDC、USDT | Testnet V4 `943`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；稳定币仅接入官方桥映射资产，状态复制的同地址 USDC／USDT 不作为美元稳定币；生产需使用私有 RPC |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -220,7 +221,7 @@ mvn compile
 |---|---|---|---|---|---|---|
 | Cronos Chain | 独立 L1 | CRO | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.cronos.org/) | 已完成；主网 `25`、测试网 `338`，两网官方 RPC 均通过 EIP-7702 门禁，约 0.49 秒出块且由 Tendermint 共识提供即时最终性；接入 Circle 原生 USDC `0x3D7F2C478aAfdB65542BCB44bCeeC05849999d2D` 与 USDT `0x66e428c3f67a68878562e79A0234c1F83c208770` |
 | Sonic | 独立 L1 | S | 原生币 | EVM | [Docs](https://docs.soniclabs.com/) | 已完成；Fantom 的后续主网络；主网 `146`、当前测试网 `14601`，两网官方 RPC 均通过 EIP-7702 门禁；亚秒级最终性；接入 Circle 原生 USDC `0x29219dd400f2Bf60E5a23d13Be72B486D4038894` 与 bridged USDT `0x6047828dc181963ba44974801ff68e538da5eaf9` |
-| PulseChain | 独立 L1（Ethereum fork） | PLS | 原生币 | EVM | [Official](https://pulsechain.com/) | 候选；生态和节点集中度需额外尽调 |
+| PulseChain | 独立 L1（Ethereum fork） | PLS | 原生币 | EVM | [Official](https://pulsechain.com/) | 已完成；主网 `369`、Testnet V4 `943`，两网官方 RPC 均通过 EIP-7702 门禁；约 10 秒出块；接入官方桥映射 USDC `0x15d38573d2Feeb82e7ad5187aB8c1D52810B1f07` 与 USDT `0x0cb6F5a34ad42ec934882A05265A7d5f59b51A2f`；状态复制稳定币无对应储备，不接入；公共 RPC 有波动且节点集中度仍需生产尽调 |
 | Berachain | 独立 L1 | BERA | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.berachain.com/) | 已完成；主网 `80094`、Bepolia `80069`，支持 EIP-7702；稳定币按实际资产接入 USDC 与 USDT0 |
 | Gnosis Chain | EVM 侧链 | xDAI | 稳定币作为原生 Gas | Ethereum 生态 / EVM | [Docs](https://docs.gnosischain.com/) | 已完成；主网 `100`、Chiado `10200`，Gas 资产 xDAI，支持 EIP-7702；接入 USDC 与 USDT |
 | Canto | 独立 L1 | CANTO | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.canto.io/) | 候选 |

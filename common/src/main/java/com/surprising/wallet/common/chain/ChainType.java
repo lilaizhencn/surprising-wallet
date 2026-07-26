@@ -42,6 +42,7 @@ public enum ChainType {
     OASIS_EMERALD("evm", "account"),
     CRONOS("evm", "account"),
     SONIC("evm", "account"),
+    PULSECHAIN("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

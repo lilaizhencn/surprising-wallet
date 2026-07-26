@@ -5677,7 +5677,10 @@ VALUES
     ('CRONOS', 'USDT', 'ERC20', '0x66e428c3f67a68878562e79A0234c1F83c208770', 6, false, true, 1, 1, now(), now()),
     ('SONIC', 'S', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('SONIC', 'USDC', 'ERC20', '0x29219dd400f2Bf60E5a23d13Be72B486D4038894', 6, false, true, 1, 1, now(), now()),
-    ('SONIC', 'USDT', 'ERC20', '0x6047828dc181963ba44974801ff68e538da5eaf9', 6, false, true, 1, 1, now(), now())
+    ('SONIC', 'USDT', 'ERC20', '0x6047828dc181963ba44974801ff68e538da5eaf9', 6, false, true, 1, 1, now(), now()),
+    ('PULSECHAIN', 'PLS', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('PULSECHAIN', 'USDC', 'ERC20', '0x15d38573d2Feeb82e7ad5187aB8c1D52810B1f07', 6, false, true, 1, 1, now(), now()),
+    ('PULSECHAIN', 'USDT', 'ERC20', '0x0cb6F5a34ad42ec934882A05265A7d5f59b51A2f', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5770,6 +5773,10 @@ VALUES
     ('SONIC', 'USDC', 'ERC20', '0x29219dd400f2Bf60E5a23d13Be72B486D4038894', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('SONIC', 'USDT', 'ERC20', '0x6047828dc181963ba44974801ff68e538da5eaf9', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('PULSECHAIN', 'USDC', 'ERC20', '0x15d38573d2Feeb82e7ad5187aB8c1D52810B1f07', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('PULSECHAIN', 'USDT', 'ERC20', '0x0cb6F5a34ad42ec934882A05265A7d5f59b51A2f', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -5982,6 +5989,14 @@ VALUES
     ('SONIC', 'mainnet', 'evm', 9029, 60, 'S',
      'https://rpc.soniclabs.com', 'https://sonicscan.org/tx/',
      1, 1, 1, 0, false, now(), now(), 146, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('PULSECHAIN', 'testnet', 'evm', 9030, 60, 'PLS',
+     'https://rpc.v4.testnet.pulsechain.com', 'https://scan.v4.testnet.pulsechain.com/#/tx/',
+     1, 1, 1, 0, false, now(), now(), 943, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('PULSECHAIN', 'mainnet', 'evm', 9030, 60, 'PLS',
+     'https://rpc.pulsechain.com', 'https://api.scan.pulsechain.com/tx/',
+     1, 1, 1, 0, false, now(), now(), 369, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6310,6 +6325,18 @@ VALUES
     ('SONIC', 'mainnet', 'prod', 'official-sonic-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://rpc.soniclabs.com', 'NONE', NULL, 10, 1000, false,
      'Production Sonic mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('PULSECHAIN', 'testnet', 'dev', 'official-pulsechain-testnet-v4', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.v4.testnet.pulsechain.com', 'NONE', NULL, 10, 1000, false,
+     'Official PulseChain testnet v4 JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('PULSECHAIN', 'testnet', 'test2', 'official-pulsechain-testnet-v4', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.v4.testnet.pulsechain.com', 'NONE', NULL, 10, 1000, false,
+     'test2 official PulseChain testnet v4 JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('PULSECHAIN', 'mainnet', 'prod', 'official-pulsechain-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.pulsechain.com', 'NONE', NULL, 10, 1000, false,
+     'Production PulseChain public JSON-RPC can be unstable. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -6949,6 +6976,10 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0x29219dd400f2Bf60E5a23d13Be72B486D4038894', NULL, NULL, 6, 'native-gas'),
         ('SONIC', 'USDT', 'ERC20', 'ERC20',
          '0x6047828dc181963ba44974801ff68e538da5eaf9', NULL, NULL, 6, 'native-gas'),
+        ('PULSECHAIN', 'USDC', 'ERC20', 'ERC20',
+         '0x15d38573d2Feeb82e7ad5187aB8c1D52810B1f07', NULL, NULL, 6, 'native-gas'),
+        ('PULSECHAIN', 'USDT', 'ERC20', 'ERC20',
+         '0x0cb6F5a34ad42ec934882A05265A7d5f59b51A2f', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',
