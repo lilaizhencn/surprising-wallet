@@ -201,7 +201,7 @@ mvn compile
 |---|---|---|---|---|---|---|
 | opBNB | BNB Smart Chain L2（OP Stack） | BNB | 原生币 | BNB Chain / EVM | [Docs](https://docs.bnbchain.org/bnb-opbnb/) | 暂缓；主网 `204` 与测试网 `5611` 的官方 RPC 均未通过 EIP-7702 authorization intrinsic gas 门禁（仍返回 `21000`）；主网实测约 0.25 秒出块 |
 | Etherlink | Tezos Smart Rollup L2 | XTZ | 原生币 | Tezos / EVM | [Docs](https://docs.etherlink.com/) | 已完成；主网 `42793`、Shadownet `127823`，Gas 为 XTZ；官方 Prague/EIP-7702 已启用，USDC 与 USDT 均完成全链路测试 |
-| Aurora | NEAR 上的 EVM 执行网络 | ETH | ETH 通过 relayer 支付 Gas | NEAR / EVM | [Docs](https://doc.aurora.dev/dev-reference/network-endpoints/) | 候选；旧表写成 NEAR Gas 已纠正 |
+| Aurora | NEAR 上的 EVM 执行网络 | ETH | ETH 通过 relayer 支付 Gas | NEAR / EVM | [Docs](https://doc.aurora.dev/dev-reference/network-endpoints/) | 暂缓；主网 `1313161554` 仍活跃且实测约 0.6 秒出块，但官方主网 RPC 在项目客户端中 TLS 握手中断、测试网 `1313161555` 超时、文档列出的 OMNIA 端点返回 `521`，无法完成 EIP-7702 门禁；USDC／USDT 同时存在 NEAR 原生与 Ethereum bridged 多版本，待 RPC 与资产来源均可稳定验证后接入 |
 | IOTA EVM | IOTA 主网上的 EVM L2 | IOTA | 原生币 | IOTA / EVM | [Official](https://www.iota.org/products/evm) | 候选；与 IOTA Rebased L1 的地址/资产模型分开接入 |
 | Merlin Chain | Bitcoin L2 | BTC | BTC 原生 Gas | Bitcoin / EVM | [Official](https://merlinchain.io/) | 候选；跨链 BTC 映射、精度和提现最终性需专项审计 |
 | B² Network | Bitcoin L2（ZK Rollup + Bitcoin DA/验证） | BTC | BTC 原生 Gas | Bitcoin / EVM | [Docs](https://docs.bsquared.network/for-developers/basic_information) | 候选 |
