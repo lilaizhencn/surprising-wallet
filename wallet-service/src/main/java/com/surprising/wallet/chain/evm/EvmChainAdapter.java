@@ -159,6 +159,7 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.CELO, "CELO", 11142220L, 1L);
         registerProfile(ChainType.MONAD, "MON", 10143L, 1L);
         registerProfile(ChainType.WORLD_CHAIN, "ETH_WORLD", 4801L, 1L);
+        registerProfile(ChainType.INK, "ETH_INK", 763373L, 1L);
     }
     private void registerDbProfiles() {
         for (AccountChainProfile profile : repository.listEnabledChainProfiles()) {

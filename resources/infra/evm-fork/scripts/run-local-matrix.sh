@@ -19,6 +19,7 @@ EVM_CHAINS=(
   "ETH|ETH|11155111|USDC,USDT|sepolia|false"
   "GNOSIS|XDAI|10200|USDC,USDT|chiado|true"
   "HYPEREVM|HYPE|998|USDC|testnet|false"
+  "INK|ETH_INK|763373|USDC_E,USDT0|sepolia|true"
   "LINEA|ETH_LINEA|59141|USDC|sepolia|false"
   "MANTLE|MNT|5003||sepolia|false"
   "MONAD|MON|10143|USDC,USDT0|testnet|true"

@@ -5639,7 +5639,10 @@ VALUES
     ('MONAD', 'USDC', 'ERC20', '0x754704Bc059F8C67012fEd69BC8A327a5aafb603', 6, false, true, 1, 1, now(), now()),
     ('MONAD', 'USDT0', 'ERC20', '0xe7cd86e13AC4309349F30B3435a9d337750fC82D', 6, false, true, 1, 1, now(), now()),
     ('WORLD_CHAIN', 'ETH_WORLD', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('WORLD_CHAIN', 'USDC', 'ERC20', '0x79A02482A880bCE3F13e09Da970dC34db4CD24d1', 6, false, true, 1, 1, now(), now())
+    ('WORLD_CHAIN', 'USDC', 'ERC20', '0x79A02482A880bCE3F13e09Da970dC34db4CD24d1', 6, false, true, 1, 1, now(), now()),
+    ('INK', 'ETH_INK', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('INK', 'USDC_E', 'ERC20', '0xF1815bd50389c46847f0Bda824eC8da914045D14', 6, false, true, 1, 1, now(), now()),
+    ('INK', 'USDT0', 'ERC20', '0x0200C29006150606B650577BBE7B6248F58470c1', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5686,6 +5689,10 @@ VALUES
     ('MONAD', 'USDT0', 'ERC20', '0xe7cd86e13AC4309349F30B3435a9d337750fC82D', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('WORLD_CHAIN', 'USDC', 'ERC20', '0x79A02482A880bCE3F13e09Da970dC34db4CD24d1', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('INK', 'USDC_E', 'ERC20', '0xF1815bd50389c46847f0Bda824eC8da914045D14', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('INK', 'USDT0', 'ERC20', '0x0200C29006150606B650577BBE7B6248F58470c1', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -5782,6 +5789,14 @@ VALUES
     ('WORLD_CHAIN', 'mainnet', 'evm', 9014, 60, 'ETH_WORLD',
      'https://worldchain-mainnet.g.alchemy.com/public', 'https://worldscan.org/tx/',
      40, 40, 1, 0, false, now(), now(), 480, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('INK', 'sepolia', 'evm', 9015, 60, 'ETH_INK',
+     'https://rpc-gel-sepolia.inkonchain.com', 'https://explorer-sepolia.inkonchain.com/tx/',
+     40, 40, 1, 0, false, now(), now(), 763373, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('INK', 'mainnet', 'evm', 9015, 60, 'ETH_INK',
+     'https://rpc-gel.inkonchain.com', 'https://explorer.inkonchain.com/tx/',
+     40, 40, 1, 0, false, now(), now(), 57073, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -5930,6 +5945,18 @@ VALUES
     ('WORLD_CHAIN', 'mainnet', 'prod', 'official-world-chain-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://worldchain-mainnet.g.alchemy.com/public', 'NONE', NULL, 10, 1000, false,
      'Production World Chain mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('INK', 'sepolia', 'dev', 'official-ink-sepolia', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc-gel-sepolia.inkonchain.com', 'NONE', NULL, 10, 500, false,
+     'Official Ink Sepolia JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('INK', 'sepolia', 'test2', 'official-ink-sepolia', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc-gel-sepolia.inkonchain.com', 'NONE', NULL, 10, 500, false,
+     'test2 official Ink Sepolia JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('INK', 'mainnet', 'prod', 'official-ink-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc-gel.inkonchain.com', 'NONE', NULL, 10, 1000, false,
+     'Production Ink mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -6523,6 +6550,10 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0xe7cd86e13AC4309349F30B3435a9d337750fC82D', NULL, NULL, 6, 'native-gas'),
         ('WORLD_CHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x79A02482A880bCE3F13e09Da970dC34db4CD24d1', NULL, NULL, 6, 'native-gas'),
+        ('INK', 'USDC_E', 'ERC20', 'ERC20',
+         '0xF1815bd50389c46847f0Bda824eC8da914045D14', NULL, NULL, 6, 'native-gas'),
+        ('INK', 'USDT0', 'ERC20', 'ERC20',
+         '0x0200C29006150606B650577BBE7B6248F58470c1', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',
