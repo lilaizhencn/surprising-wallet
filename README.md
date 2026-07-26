@@ -190,7 +190,7 @@ mvn compile
 | Shibarium | Ethereum L2 | BONE | 自定义原生 Gas 币 | Ethereum / EVM / Shiba | [Docs](https://docs.shib.io/) | 暂缓；主网 `109` 与 Puppynet `157` 的官方 RPC 均未通过 EIP-7702 authorization intrinsic gas 门禁（仍返回 `21000`）；主网实测约 10 秒出块；官方 USDC／USDT 地址已核实，待链升级后复测接入 |
 | Katana | Ethereum L2（Agglayer CDK OP Stack） | ETH | 原生币 | Ethereum / EVM / DeFi | [Docs](https://docs.katana.network/katana/technical-reference/network-information/) | 已完成；主网 `747474`、Bokuto `737373`，Gas 为 ETH；接入官方 Vault Bridge USDC 与 USDT |
 | Ink | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.inkonchain.com/) | 已完成；主网 `57073`、Sepolia `763373`，Gas 为 ETH；官方资产为 USDC.e 与 USDT0，不按普通 USDC／USDT 混记 |
-| Sophon | Ethereum L2 Validium（ZK Stack） | SOPH | 自定义原生 Gas 币 | Ethereum / ZKsync Elastic Chain / EVM | [Docs](https://docs.sophon.xyz/tokenomics/soph) | 候选；DA 使用 Avail，不能等同标准 ZK Rollup |
+| Sophon | Ethereum L2 Validium（ZK Stack） | SOPH | 自定义原生 Gas 币 | Ethereum / ZKsync Elastic Chain / EVM | [Docs](https://docs.sophon.xyz/tokenomics/soph) | 暂缓；主网 `50104` 对带／不带 `authorizationList` 的 Gas 估算均为 `0x248ad`，未执行 EIP-7702 intrinsic gas 语义；测试网 `531050104` 的两个官方 RPC 均存在证书域名失配；官方 USDC／USDT 地址已核实，待 ZK Stack 交易模型专项适配后接入 |
 | Starknet | Ethereum L2（ZK Rollup） | STRK | 自 v0.14.0 起只允许 STRK 付费 | Ethereum / CairoVM | [Docs](https://docs.starknet.io/learn/protocol/strk) | 专项；旧资料中的 ETH/STRK 双 Gas 已过期，地址和交易模型非 EVM |
 | Fuel Ignition | Ethereum L2（Optimistic Rollup） | ETH | FuelVM 基础资产 | Ethereum / FuelVM / UTXO | [Docs](https://docs.fuel.network/guides/user-quickstart/) | 专项；不是 EVM，使用 Fuel 地址、UTXO 和 GraphQL RPC |
 
