@@ -181,7 +181,7 @@ mvn compile
 | Lisk | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.lisk.com/) | 已完成；主网 `1135`、Sepolia `4202`，Gas 为 ETH；接入官方审核的 Bridged USDC，未配置 USDT |
 | World Chain | Ethereum L2（OP Stack） | ETH | 原生币；生态支持代付 | Ethereum / EVM | [Docs](https://docs.world.org/world-chain) | 已完成；主网 `480`、Sepolia `4801`，Gas 为 ETH；接入官方 USDC，未配置无官方依据的 USDT |
 | Blast | Ethereum L2（Optimistic Rollup） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.blast.io/) | 暂缓；主网 `81457` 与 Sepolia `168587773` 的官方 RPC 均未通过 EIP-7702 authorization intrinsic gas 门禁（仍返回 `21000`）；USDC／USDT 经官方桥统一映射为 USDB，不应按独立稳定币接入 |
-| ApeChain | Arbitrum Orbit L3 | APE | 自定义原生 Gas 币 | Ethereum / Arbitrum / EVM | [Docs](https://docs.apechain.com/) | 候选；旧表的普通 L2 分类已纠正为 L3 |
+| ApeChain | Arbitrum Orbit L3 | APE | 自定义原生 Gas 币 | Ethereum / Arbitrum / EVM | [Docs](https://docs.apechain.com/) | 暂缓；主网 `33139` 的官方 RPC 返回 `invalid opcode: opcode 0xef not defined`，Curtis `33111` 的 authorization gas 估算仍为 `21000`，两者均未通过项目 EIP-7702 门禁；主网实测约 0.65 秒出块 |
 | X Layer | Ethereum L2（增强 OP Stack + AggLayer） | OKB | 自定义原生 Gas 币 | Ethereum / EVM | [Docs](https://web3.okx.com/xlayer/docs/developer/quick-start/about-x-layer) | 已完成；主网 `196`、测试网 `1952`，Gas 为 OKB；接入官方推荐 USDC 与 USDT，旧 Polygon CDK ZK 分类已按当前架构纠正 |
 | Degen Chain | Base 上的 Arbitrum Orbit L3 | DEGEN | 自定义原生 Gas 币 | Ethereum / Base / EVM | [Docs](https://docs.degen.tips/) | 候选；旧表的普通 L2 分类已纠正为 L3 |
 | Robinhood Chain | Ethereum L2（Arbitrum） | ETH | 原生币 | Ethereum / EVM / RWA | [Docs](https://docs.robinhood.com/chain/connecting/) | 候选；主网已上线，不再归入“未确认” |
