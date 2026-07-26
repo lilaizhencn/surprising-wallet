@@ -46,6 +46,7 @@ EVM_CHAINS=(
   "ZETACHAIN|ZETA|7001|USDC_ETH,USDT_ETH|testnet|true"
   "CORE|CORE|1114|USDC,USDT|testnet|true"
   "SOMNIA|SOMI|50312|USDC_E,USDT|testnet|true"
+  "RONIN|RON|202601|USDC|testnet|true"
 )
 
 should_run_chain() {

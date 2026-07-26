@@ -5689,7 +5689,9 @@ VALUES
     ('CORE', 'USDT', 'ERC20', '0x900101d06a7426441ae63e9ab3b9b0f63be145f1', 6, false, true, 1, 1, now(), now()),
     ('SOMNIA', 'SOMI', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('SOMNIA', 'USDC_E', 'ERC20', '0x28bec7e30e6faee657a03e19bf1128aad7632a00', 6, false, true, 1, 1, now(), now()),
-    ('SOMNIA', 'USDT', 'ERC20', '0x67B302E35Aef5EEE8c32D934F5856869EF428330', 6, false, true, 1, 1, now(), now())
+    ('SOMNIA', 'USDT', 'ERC20', '0x67B302E35Aef5EEE8c32D934F5856869EF428330', 6, false, true, 1, 1, now(), now()),
+    ('RONIN', 'RON', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('RONIN', 'USDC', 'ERC20', '0x0B7007c13325C48911F73A2daD5FA5dCBf808aDc', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5798,6 +5800,8 @@ VALUES
     ('SOMNIA', 'USDC_E', 'ERC20', '0x28bec7e30e6faee657a03e19bf1128aad7632a00', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('SOMNIA', 'USDT', 'ERC20', '0x67B302E35Aef5EEE8c32D934F5856869EF428330', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('RONIN', 'USDC', 'ERC20', '0x0B7007c13325C48911F73A2daD5FA5dCBf808aDc', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -6042,6 +6046,14 @@ VALUES
     ('SOMNIA', 'mainnet', 'evm', 9033, 60, 'SOMI',
      'https://api.infra.mainnet.somnia.network', 'https://explorer.somnia.network/tx/',
      1, 1, 1, 0, false, now(), now(), 5031, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('RONIN', 'testnet', 'evm', 9034, 60, 'RON',
+     'https://saigon-testnet.roninchain.com/rpc', 'https://saigon-app.roninchain.com/tx/',
+     1, 1, 1, 0, false, now(), now(), 202601, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('RONIN', 'mainnet', 'evm', 9034, 60, 'RON',
+     'https://api.roninchain.com/rpc', 'https://explorer.roninchain.com/tx/',
+     1, 1, 1, 0, false, now(), now(), 2020, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6418,6 +6430,18 @@ VALUES
     ('SOMNIA', 'mainnet', 'prod', 'official-somnia-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://api.infra.mainnet.somnia.network', 'NONE', NULL, 10, 1000, false,
      'Production Somnia public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('RONIN', 'testnet', 'dev', 'official-ronin-saigon', 'rpc', 'HTTP_JSON_RPC',
+     'https://saigon-testnet.roninchain.com/rpc', 'NONE', NULL, 10, 500, false,
+     'Official Ronin Saigon JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('RONIN', 'testnet', 'test2', 'official-ronin-saigon', 'rpc', 'HTTP_JSON_RPC',
+     'https://saigon-testnet.roninchain.com/rpc', 'NONE', NULL, 10, 500, false,
+     'test2 official Ronin Saigon JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('RONIN', 'mainnet', 'prod', 'official-ronin-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://api.roninchain.com/rpc', 'NONE', NULL, 10, 1000, false,
+     'Production Ronin public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -7073,6 +7097,8 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0x28bec7e30e6faee657a03e19bf1128aad7632a00', NULL, NULL, 6, 'native-gas'),
         ('SOMNIA', 'USDT', 'ERC20', 'ERC20',
          '0x67B302E35Aef5EEE8c32D934F5856869EF428330', NULL, NULL, 6, 'native-gas'),
+        ('RONIN', 'USDC', 'ERC20', 'ERC20',
+         '0x0B7007c13325C48911F73A2daD5FA5dCBf808aDc', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',

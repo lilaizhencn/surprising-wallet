@@ -173,6 +173,7 @@ mvn compile
 | ZetaChain | 已完成 | ZETA、USDC_ETH、USDT_ETH | Athens `7001`；主网与测试网均通过 EIP-7702 门禁；接入 Ethereum 来源且未暂停的主网 ZRC-20，链上符号为 `USDC.ETH/USDT.ETH`；支持 ZetaChain 链内充值、提现与归集，不扩展 ZRC-20 跨链 withdraw |
 | Core | 已完成 | CORE、USDC、USDT | Testnet2 `1114`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 3 秒出块；稳定币使用 Core 官方 LayerZero Bridge 合约 |
 | Somnia | 已完成 | SOMI、USDC_E、USDT | Shannon `50312`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 0.1 秒出块；USDC 使用官方列出的 Stargate Bridged USDC.e，USDT 使用官方合约 |
+| Ronin | 已完成 | RON、USDC | Saigon `202601`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；实测约 1.1 秒出块；USDC 使用 Ronin 官方桥接资产，未确认官方 USDT，故不接入 |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -246,7 +247,7 @@ mvn compile
 | WEMIX3.0 | 独立 L1 | WEMIX | 原生币 | EVM / Gaming | [Docs](https://docs.wemix.com/) | 暂缓；主网 `1111`、测试网 `1112` 与官方 RPC 仍运行，但主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 `gwemix` 客户端支持 type-4 交易后再接入；旧表的 L2 分类已纠正 |
 | Somnia | 独立 L1 | SOMI | 原生币 | EVM / Gaming / Metaverse | [Docs](https://docs.somnia.network/developer/network-info) | 已完成；主网 `5031`、Shannon `50312`，两网官方 RPC 均通过 EIP-7702 门禁；约 0.1 秒出块；接入官方 USDC.e `0x28bec7e30e6faee657a03e19bf1128aad7632a00` 与 USDT `0x67B302E35Aef5EEE8c32D934F5856869EF428330` |
 | BounceBit | 独立 PoS L1 | BB | 原生币 | EVM / BTCFi / CeDeFi | [Docs](https://docs.bouncebit.io/) | 暂缓；链仍在运营，但官方节点实现未发现 Prague/EIP-7702 支持，主网与测试网公开 RPC 因限流或超时无法通过 EIP-7702 能力门禁；BBUSD 不等同于 USDT |
-| Ronin | EVM 应用链/侧链 | RON | 原生币 | EVM / Gaming | [Docs](https://docs.roninchain.com/) | 候选；旧表的 L2 分类已纠正 |
+| Ronin | EVM 应用链/侧链 | RON | 原生币 | EVM / Gaming | [Docs](https://docs.roninchain.com/) | 已完成；主网 `2020`、Saigon `202601`，两网官方 RPC 均通过 EIP-7702 门禁；接入官方桥接 USDC `0x0B7007c13325C48911F73A2daD5FA5dCBf808aDc`，未确认官方 USDT |
 | XDC Network | 独立 L1 | XDC | 原生币 | EVM / Enterprise / RWA | [Docs](https://docs.xdc.community/) | 候选；旧表的 L2 分类已纠正 |
 | Beam | Avalanche L1（原 Subnet） | BEAM | 原生币 | Avalanche / EVM / Gaming | [Docs](https://docs.onbeam.com/service/beam-chain) | 候选；不是 Ethereum L2 |
 | Chiliz Chain | 独立 L1 | CHZ | 原生币 | EVM / Sports | [Docs](https://docs.chiliz.com/) | 候选 |
