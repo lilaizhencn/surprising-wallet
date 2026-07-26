@@ -5674,7 +5674,10 @@ VALUES
     ('OASIS_EMERALD', 'ROSE', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('CRONOS', 'CRO', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('CRONOS', 'USDC', 'ERC20', '0x3D7F2C478aAfdB65542BCB44bCeeC05849999d2D', 6, false, true, 1, 1, now(), now()),
-    ('CRONOS', 'USDT', 'ERC20', '0x66e428c3f67a68878562e79A0234c1F83c208770', 6, false, true, 1, 1, now(), now())
+    ('CRONOS', 'USDT', 'ERC20', '0x66e428c3f67a68878562e79A0234c1F83c208770', 6, false, true, 1, 1, now(), now()),
+    ('SONIC', 'S', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('SONIC', 'USDC', 'ERC20', '0x29219dd400f2Bf60E5a23d13Be72B486D4038894', 6, false, true, 1, 1, now(), now()),
+    ('SONIC', 'USDT', 'ERC20', '0x6047828dc181963ba44974801ff68e538da5eaf9', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5763,6 +5766,10 @@ VALUES
     ('CRONOS', 'USDC', 'ERC20', '0x3D7F2C478aAfdB65542BCB44bCeeC05849999d2D', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('CRONOS', 'USDT', 'ERC20', '0x66e428c3f67a68878562e79A0234c1F83c208770', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('SONIC', 'USDC', 'ERC20', '0x29219dd400f2Bf60E5a23d13Be72B486D4038894', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('SONIC', 'USDT', 'ERC20', '0x6047828dc181963ba44974801ff68e538da5eaf9', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -5967,6 +5974,14 @@ VALUES
     ('CRONOS', 'mainnet', 'evm', 9028, 60, 'CRO',
      'https://evm.cronos.org', 'https://explorer.cronos.org/tx/',
      1, 1, 1, 0, false, now(), now(), 25, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('SONIC', 'testnet', 'evm', 9029, 60, 'S',
+     'https://rpc.testnet.soniclabs.com', 'https://testnet.sonicscan.org/tx/',
+     1, 1, 1, 0, false, now(), now(), 14601, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('SONIC', 'mainnet', 'evm', 9029, 60, 'S',
+     'https://rpc.soniclabs.com', 'https://sonicscan.org/tx/',
+     1, 1, 1, 0, false, now(), now(), 146, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6283,6 +6298,18 @@ VALUES
     ('CRONOS', 'mainnet', 'prod', 'official-cronos-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://evm.cronos.org', 'NONE', NULL, 10, 1000, false,
      'Production Cronos EVM mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('SONIC', 'testnet', 'dev', 'official-sonic-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.testnet.soniclabs.com', 'NONE', NULL, 10, 500, false,
+     'Official Sonic testnet JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('SONIC', 'testnet', 'test2', 'official-sonic-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.testnet.soniclabs.com', 'NONE', NULL, 10, 500, false,
+     'test2 official Sonic testnet JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('SONIC', 'mainnet', 'prod', 'official-sonic-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.soniclabs.com', 'NONE', NULL, 10, 1000, false,
+     'Production Sonic mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -6918,6 +6945,10 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0x3D7F2C478aAfdB65542BCB44bCeeC05849999d2D', NULL, NULL, 6, 'native-gas'),
         ('CRONOS', 'USDT', 'ERC20', 'ERC20',
          '0x66e428c3f67a68878562e79A0234c1F83c208770', NULL, NULL, 6, 'native-gas'),
+        ('SONIC', 'USDC', 'ERC20', 'ERC20',
+         '0x29219dd400f2Bf60E5a23d13Be72B486D4038894', NULL, NULL, 6, 'native-gas'),
+        ('SONIC', 'USDT', 'ERC20', 'ERC20',
+         '0x6047828dc181963ba44974801ff68e538da5eaf9', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',

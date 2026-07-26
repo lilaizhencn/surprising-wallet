@@ -41,6 +41,7 @@ public enum ChainType {
     IOTA_EVM("evm", "account"),
     OASIS_EMERALD("evm", "account"),
     CRONOS("evm", "account"),
+    SONIC("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

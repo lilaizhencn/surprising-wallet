@@ -41,6 +41,7 @@ EVM_CHAINS=(
   "IOTA_EVM|IOTA|1076|USDC_E,USDT|testnet|true"
   "OASIS_EMERALD|ROSE|42261||testnet|true"
   "CRONOS|CRO|338|USDC,USDT|testnet|true"
+  "SONIC|S|14601|USDC,USDT|testnet|true"
 )
 
 should_run_chain() {

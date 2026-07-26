@@ -173,6 +173,7 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.IOTA_EVM, "IOTA", 1076L, 1L);
         registerProfile(ChainType.OASIS_EMERALD, "ROSE", 42261L, 1L);
         registerProfile(ChainType.CRONOS, "CRO", 338L, 1L);
+        registerProfile(ChainType.SONIC, "S", 14601L, 1L);
     }
     private void registerDbProfiles() {
         for (AccountChainProfile profile : repository.listEnabledChainProfiles()) {
