@@ -35,6 +35,7 @@ EVM_CHAINS=(
   "UNICHAIN|ETH_UNICHAIN|1301|USDC|sepolia|false"
   "WORLD_CHAIN|ETH_WORLD|4801|USDC|sepolia|true"
   "X_LAYER|OKB|1952|USDC,USDT|testnet|true"
+  "DEGEN|DEGEN|666666666|USDC,USDT|mainnet|true"
 )
 
 should_run_chain() {

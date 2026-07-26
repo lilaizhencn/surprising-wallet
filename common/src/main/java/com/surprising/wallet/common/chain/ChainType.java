@@ -35,6 +35,7 @@ public enum ChainType {
     KATANA("evm", "account"),
     MEGAETH("evm", "account"),
     X_LAYER("evm", "account"),
+    DEGEN("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),
