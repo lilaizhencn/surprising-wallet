@@ -37,6 +37,7 @@ public enum ChainType {
     X_LAYER("evm", "account"),
     DEGEN("evm", "account"),
     ROBINHOOD_CHAIN("evm", "account"),
+    ETHERLINK("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

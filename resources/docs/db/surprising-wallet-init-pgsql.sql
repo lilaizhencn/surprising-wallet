@@ -5664,7 +5664,10 @@ VALUES
     ('DEGEN', 'USDC', 'ERC20', '0xF1815bd50389c46847f0Bda824eC8da914045D14', 6, false, true, 1, 1, now(), now()),
     ('DEGEN', 'USDT', 'ERC20', '0x674843C06FF83502ddb4D37c2E09C01cdA38cbc8', 6, false, true, 1, 1, now(), now()),
     ('ROBINHOOD_CHAIN', 'ETH_ROBINHOOD', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('ROBINHOOD_CHAIN', 'USDG', 'ERC20', '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', 6, false, true, 1, 1, now(), now())
+    ('ROBINHOOD_CHAIN', 'USDG', 'ERC20', '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', 6, false, true, 1, 1, now(), now()),
+    ('ETHERLINK', 'XTZ', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('ETHERLINK', 'USDC', 'ERC20', '0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9', 6, false, true, 1, 1, now(), now()),
+    ('ETHERLINK', 'USDT', 'ERC20', '0x2C03058C8AFC06713be23e58D2febC8337dbfE6A', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5741,6 +5744,10 @@ VALUES
     ('DEGEN', 'USDT', 'ERC20', '0x674843C06FF83502ddb4D37c2E09C01cdA38cbc8', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('ROBINHOOD_CHAIN', 'USDG', 'ERC20', '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('ETHERLINK', 'USDC', 'ERC20', '0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('ETHERLINK', 'USDT', 'ERC20', '0x2C03058C8AFC06713be23e58D2febC8337dbfE6A', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -5913,6 +5920,14 @@ VALUES
     ('ROBINHOOD_CHAIN', 'mainnet', 'evm', 9024, 60, 'ETH_ROBINHOOD',
      'https://rpc.mainnet.chain.robinhood.com', 'https://robinhoodchain.blockscout.com/tx/',
      40, 40, 1, 0, false, now(), now(), 4663, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('ETHERLINK', 'shadownet', 'evm', 9025, 60, 'XTZ',
+     'https://node.shadownet.etherlink.com', 'https://shadownet.explorer.etherlink.com/tx/',
+     40, 40, 1, 0, false, now(), now(), 127823, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('ETHERLINK', 'mainnet', 'evm', 9025, 60, 'XTZ',
+     'https://node.mainnet.etherlink.com', 'https://explorer.etherlink.com/tx/',
+     40, 40, 1, 0, false, now(), now(), 42793, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6181,6 +6196,18 @@ VALUES
     ('ROBINHOOD_CHAIN', 'mainnet', 'prod', 'official-robinhood-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://rpc.mainnet.chain.robinhood.com', 'NONE', NULL, 10, 1000, false,
      'Production Robinhood Chain mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('ETHERLINK', 'shadownet', 'dev', 'official-etherlink-shadownet', 'rpc', 'HTTP_JSON_RPC',
+     'https://node.shadownet.etherlink.com', 'NONE', NULL, 10, 500, false,
+     'Official Etherlink Shadownet JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('ETHERLINK', 'shadownet', 'test2', 'official-etherlink-shadownet', 'rpc', 'HTTP_JSON_RPC',
+     'https://node.shadownet.etherlink.com', 'NONE', NULL, 10, 500, false,
+     'test2 official Etherlink Shadownet JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('ETHERLINK', 'mainnet', 'prod', 'official-etherlink-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://node.mainnet.etherlink.com', 'NONE', NULL, 10, 1000, false,
+     'Production Etherlink mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -6804,6 +6831,10 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0x674843C06FF83502ddb4D37c2E09C01cdA38cbc8', NULL, NULL, 6, 'native-gas'),
         ('ROBINHOOD_CHAIN', 'USDG', 'ERC20', 'ERC20',
          '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', NULL, NULL, 6, 'native-gas'),
+        ('ETHERLINK', 'USDC', 'ERC20', 'ERC20',
+         '0x796Ea11Fa2dD751eD01b53C372fFDB4AAa8f00F9', NULL, NULL, 6, 'native-gas'),
+        ('ETHERLINK', 'USDT', 'ERC20', 'ERC20',
+         '0x2C03058C8AFC06713be23e58D2febC8337dbfE6A', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',

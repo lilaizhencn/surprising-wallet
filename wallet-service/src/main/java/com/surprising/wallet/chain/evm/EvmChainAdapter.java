@@ -169,6 +169,7 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.X_LAYER, "OKB", 1952L, 1L);
         registerProfile(ChainType.DEGEN, "DEGEN", 666666666L, 1L);
         registerProfile(ChainType.ROBINHOOD_CHAIN, "ETH_ROBINHOOD", 46630L, 1L);
+        registerProfile(ChainType.ETHERLINK, "XTZ", 127823L, 1L);
     }
     private void registerDbProfiles() {
         for (AccountChainProfile profile : repository.listEnabledChainProfiles()) {

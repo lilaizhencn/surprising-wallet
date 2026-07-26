@@ -67,7 +67,7 @@
 |---|---|---|---|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH | Docker regtest 节点 | 外部 RPC 配置 |
 | EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD | Hardhat fork | Sepolia、BSC testnet、Amoy、Berachain Bepolia、Gnosis Chiado、Monad Testnet |
-| EVM L2 / L3 | ARBITRUM, OPTIMISM, BASE, AVAX_C, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK, KATANA, MEGAETH, X_LAYER, DEGEN, ROBINHOOD_CHAIN | Hardhat fork | Sepolia L2、Avalanche Fuji、Celo Sepolia、World Chain Sepolia、Ink Sepolia、Taiko Hoodi、Soneium Minato、Mode Sepolia、Lisk Sepolia、Katana Bokuto、MegaETH Carrot、X Layer Testnet、Degen Chain Mainnet、Robinhood Chain Testnet |
+| EVM L2 / L3 | ARBITRUM, OPTIMISM, BASE, AVAX_C, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK, KATANA, MEGAETH, X_LAYER, DEGEN, ROBINHOOD_CHAIN, ETHERLINK | Hardhat fork | Sepolia L2、Avalanche Fuji、Celo Sepolia、World Chain Sepolia、Ink Sepolia、Taiko Hoodi、Soneium Minato、Mode Sepolia、Lisk Sepolia、Katana Bokuto、MegaETH Carrot、X Layer Testnet、Degen Chain Mainnet、Robinhood Chain Testnet、Etherlink Shadownet |
 | EVM L2 (新增) | MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM | Hardhat fork | Mantle Sepolia、Linea Sepolia、Scroll Sepolia、Unichain Sepolia、HyperEVM testnet |
 | TRON | TRON | DB 测试 | Nile live flow |
 | Solana | SOL | DB 测试 | Devnet live flow |
