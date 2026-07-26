@@ -53,6 +53,7 @@ EVM_CHAINS=(
   "PLASMA|XPL|9746|USDT0|testnet|true"
   "STORY|IP|1315|USDC_E|testnet|true"
   "SEI|SEI|1328|USDC,USDT0|testnet|true"
+  "CONFLUX|CFX|71|USDC_E,USDT0|testnet|true"
 )
 
 should_run_chain() {

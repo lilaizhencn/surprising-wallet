@@ -39,7 +39,10 @@ class Evm7702RpcCapabilityIntegrationTest {
         try {
             BigInteger actualChainId = web3j.ethChainId().send().getChainId();
             assertEquals(expectedChainId, actualChainId);
-            String fundedSender = findFundedSender(web3j);
+            String fundedSender = System.getProperty("evm.7702.funded-sender", "").trim();
+            if (fundedSender.isEmpty()) {
+                fundedSender = findFundedSender(web3j);
+            }
 
             Credentials authority = Credentials.create(Keys.createEcKeyPair());
             Credentials delegate = Credentials.create(Keys.createEcKeyPair());
