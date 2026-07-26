@@ -273,7 +273,7 @@ mvn compile
 
 | 网络 | 层级/网络形态 | Gas 资产 | Gas 模式 | 生态/执行环境 | 官方入口 | 状态与备注 |
 |---|---|---|---|---|---|---|
-| Astar Network | Polkadot Parachain | ASTR | 原生币 | Polkadot / Substrate / EVM + WASM | [Docs](https://docs.astar.network/docs/learn/astar/) | 专项；只接入 Astar Polkadot Parachain，不包含 Astar zkEVM，旧重复项已合并 |
+| Astar Network | Polkadot Parachain | ASTR | 原生币 | Polkadot / Substrate / EVM + WASM | [Docs](https://docs.astar.network/docs/learn/astar/) | 暂缓；Astar Parachain（主网 `592`、Shibuya `81`）仍活跃并支持 Hardhat，但主网 RPC 对 EIP-7702 `authorizationList` 返回 `Invalid params`；Astar zkEVM 已于 2025-03-31 停运，不纳入接入 |
 | Moonbeam | Polkadot Parachain | GLMR | 原生币 | Polkadot / Substrate / EVM | [Docs](https://docs.moonbeam.network/) | 专项；H160 EVM 与 Substrate 账户/跨链资产需统一映射 |
 | Moonriver | Kusama Parachain | MOVR | 原生币 | Kusama / Substrate / EVM | [Docs](https://docs.moonbeam.network/builders/get-started/networks/moonriver/) | 专项；不是 Moonbeam 测试网 |
 | peaq | Polkadot Parachain | PEAQ | 原生币 | Polkadot / Substrate / EVM / DePIN | [Docs](https://docs.peaq.network/) | 专项 |
