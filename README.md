@@ -186,7 +186,7 @@ mvn compile
 | 网络 | 层级/网络形态 | Gas 资产 | Gas 模式 | 生态/执行环境 | 官方入口 | 状态与备注 |
 |---|---|---|---|---|---|---|
 | Celo | Ethereum L2（OP Stack） | CELO；协议支持 USDC、USDT、USDm 等白名单币 | 原生 Fee Abstraction，非 Paymaster | Ethereum / EVM | [Docs](https://docs.celo.org/home/protocol/celo-token) | 已完成；2025-03-26 已由独立 L1 迁移为 L2，旧表的 L1/L2 描述已纠正；已接入 Celo Sepolia `11142220` 与主网 `42220`，USDC、USDT 使用 CELO 支付 Gas，CIP-64 稳定币 Gas 暂不启用 |
-| Abstract | Ethereum L2（ZK Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.abs.xyz/) | 候选；需验证原生账户抽象交易与普通 EOA 路径 |
+| Abstract | ZK Stack L2 | ETH | ETH | Ethereum / ZKsync VM | [Docs](https://docs.abs.xyz/connect-to-abstract) | 暂缓；主网 `2741`、测试网 `11124` 仍活跃，但主网 EIP-7702 live 门禁被 ZKsync VM 拒绝并返回 `invalid sender. can.t start a transaction from a non-account`；官方合约开发要求 `zksolc/hardhat-zksync`，不符合当前标准 Hardhat/EIP-7702 接入路径，且本轮不新增专用架构 |
 | Soneium | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.soneium.org/) | 已完成；主网 `1868`、Minato `1946`，Gas 为 ETH；接入官方列出的 Bridged USDC 与 USDT |
 | ZKsync Era | Ethereum L2（ZK Rollup） | ETH | 原生币；支持 Paymaster | Ethereum / EVM | [Docs](https://docs.zksync.io/) | 候选；交易类型和最终性需专项测试 |
 | Metis Andromeda | Ethereum L2（Optimistic Rollup） | METIS | 自定义原生 Gas 币 | Ethereum / EVM | [Docs](https://docs.metis.io/andromeda) | 候选；不能按 ETH Gas 的通用 OP 链假设处理 |
