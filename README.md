@@ -59,13 +59,13 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 34 条链、14 个链族：
+运行模型覆盖 35 条链、14 个链族：
 
 | 链族 | 链 |
 |------|-----|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH |
 | EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD |
-| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN, INK, TAIKO |
+| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM |
 | TRON | TRON |
 | Solana | SOL |
 | TON | TON |
@@ -156,13 +156,15 @@ mvn compile
 | World Chain | 已完成 | ETH_WORLD、USDC | Sepolia `4801`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；官方资产表未列出 USDT |
 | Ink | 已完成 | ETH_INK、USDC_E、USDT0 | Sepolia `763373`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；稳定币名称按官方合约区分 |
 | Taiko | 已完成 | ETH_TAIKO | Hoodi `167013`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网实测约 2 秒出块；官方桥未公开可审计的静态稳定币合约清单，暂不配置 USDC／USDT |
+| Soneium | 已完成 | ETH_SONEIUM、USDC_E、USDT | Minato `1946`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网两种稳定币均完成全链路测试 |
 
 #### 1. Ethereum 生态 L2 / L3
 
 | 网络 | 层级/网络形态 | Gas 资产 | Gas 模式 | 生态/执行环境 | 官方入口 | 状态与备注 |
 |---|---|---|---|---|---|---|
-| Celo | Ethereum L2（OP Stack） | CELO；协议支持 USDC、USDT、USDm 等白名单币 | 原生 Fee Abstraction，非 Paymaster | Ethereum / EVM | [Docs](https://docs.celo.org/home/protocol/celo-token) | 已完成；2025-03-26 已由独立 L1 迁移为 L2，旧表的 L1/L2 描述已纠正；已接入 Celo Sepolia `11142220` 与主网 `42220`，USDC、USDT 使用 CELO 支付 Gas，CIP-64 稳定币 Gas 暂不启用 || Abstract | Ethereum L2（ZK Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.abs.xyz/) | 候选；需验证原生账户抽象交易与普通 EOA 路径 |
-| Soneium | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.soneium.org/) | 候选 |
+| Celo | Ethereum L2（OP Stack） | CELO；协议支持 USDC、USDT、USDm 等白名单币 | 原生 Fee Abstraction，非 Paymaster | Ethereum / EVM | [Docs](https://docs.celo.org/home/protocol/celo-token) | 已完成；2025-03-26 已由独立 L1 迁移为 L2，旧表的 L1/L2 描述已纠正；已接入 Celo Sepolia `11142220` 与主网 `42220`，USDC、USDT 使用 CELO 支付 Gas，CIP-64 稳定币 Gas 暂不启用 |
+| Abstract | Ethereum L2（ZK Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.abs.xyz/) | 候选；需验证原生账户抽象交易与普通 EOA 路径 |
+| Soneium | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.soneium.org/) | 已完成；主网 `1868`、Minato `1946`，Gas 为 ETH；接入官方列出的 Bridged USDC 与 USDT |
 | ZKsync Era | Ethereum L2（ZK Rollup） | ETH | 原生币；支持 Paymaster | Ethereum / EVM | [Docs](https://docs.zksync.io/) | 候选；交易类型和最终性需专项测试 |
 | Metis Andromeda | Ethereum L2（Optimistic Rollup） | METIS | 自定义原生 Gas 币 | Ethereum / EVM | [Docs](https://docs.metis.io/andromeda) | 候选；不能按 ETH Gas 的通用 OP 链假设处理 |
 | Mode | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.mode.network/) | 候选 |
@@ -208,7 +210,8 @@ mvn compile
 | Sonic | 独立 L1 | S | 原生币 | EVM | [Docs](https://docs.soniclabs.com/) | 候选；Fantom 的后续主网络 |
 | PulseChain | 独立 L1（Ethereum fork） | PLS | 原生币 | EVM | [Official](https://pulsechain.com/) | 候选；生态和节点集中度需额外尽调 |
 | Berachain | 独立 L1 | BERA | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.berachain.com/) | 已完成；主网 `80094`、Bepolia `80069`，支持 EIP-7702；稳定币按实际资产接入 USDC 与 USDT0 |
-| Gnosis Chain | EVM 侧链 | xDAI | 稳定币作为原生 Gas | Ethereum 生态 / EVM | [Docs](https://docs.gnosischain.com/) | 已完成；主网 `100`、Chiado `10200`，Gas 资产 xDAI，支持 EIP-7702；接入 USDC 与 USDT || Canto | 独立 L1 | CANTO | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.canto.io/) | 候选 |
+| Gnosis Chain | EVM 侧链 | xDAI | 稳定币作为原生 Gas | Ethereum 生态 / EVM | [Docs](https://docs.gnosischain.com/) | 已完成；主网 `100`、Chiado `10200`，Gas 资产 xDAI，支持 EIP-7702；接入 USDC 与 USDT |
+| Canto | 独立 L1 | CANTO | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.canto.io/) | 候选 |
 | ZetaChain | 独立 L1 | ZETA | 原生币 | Cosmos SDK / EVM / Omnichain | [Docs](https://www.zetachain.com/docs/) | 候选 |
 | Core | 独立 L1 | CORE | 原生币 | Bitcoin-aligned / EVM | [Docs](https://docs.coredao.org/) | 候选；不是 Bitcoin L2 |
 | Wanchain | 独立 L1 | WAN | 原生币 | EVM / 跨链 | [Docs](https://docs.wanchain.org/) | 候选 |
