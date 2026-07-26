@@ -34,6 +34,7 @@ EVM_CHAINS=(
   "SONEIUM|ETH_SONEIUM|1946|USDC_E,USDT|minato|true"
   "UNICHAIN|ETH_UNICHAIN|1301|USDC|sepolia|false"
   "WORLD_CHAIN|ETH_WORLD|4801|USDC|sepolia|true"
+  "X_LAYER|OKB|1952|USDC,USDT|testnet|true"
 )
 
 should_run_chain() {

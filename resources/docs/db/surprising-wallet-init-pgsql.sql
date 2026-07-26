@@ -5656,7 +5656,10 @@ VALUES
     ('KATANA', 'USDC', 'ERC20', '0x203A662b0BD271A6ed5a60EdFbd04bFce608FD36', 6, false, true, 1, 1, now(), now()),
     ('KATANA', 'USDT', 'ERC20', '0x2DCa96907fde857dd3D816880A0df407eeB2D2F2', 6, false, true, 1, 1, now(), now()),
     ('MEGAETH', 'ETH_MEGAETH', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('MEGAETH', 'USDM', 'ERC20', '0xFAfDdbb3FC7688494971a79cc65DCa3EF82079E7', 18, false, true, 1, 1, now(), now())
+    ('MEGAETH', 'USDM', 'ERC20', '0xFAfDdbb3FC7688494971a79cc65DCa3EF82079E7', 18, false, true, 1, 1, now(), now()),
+    ('X_LAYER', 'OKB', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('X_LAYER', 'USDC', 'ERC20', '0x74b7F16337b8972027F6196A17a631aC6dE26d22', 6, false, true, 1, 1, now(), now()),
+    ('X_LAYER', 'USDT', 'ERC20', '0x1E4a5963aBFD975d8c9021ce480b42188849D41d', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5723,6 +5726,10 @@ VALUES
     ('KATANA', 'USDT', 'ERC20', '0x2DCa96907fde857dd3D816880A0df407eeB2D2F2', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('MEGAETH', 'USDM', 'ERC20', '0xFAfDdbb3FC7688494971a79cc65DCa3EF82079E7', 18, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('X_LAYER', 'USDC', 'ERC20', '0x74b7F16337b8972027F6196A17a631aC6dE26d22', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('X_LAYER', 'USDT', 'ERC20', '0x1E4a5963aBFD975d8c9021ce480b42188849D41d', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -5875,6 +5882,14 @@ VALUES
     ('MEGAETH', 'mainnet', 'evm', 9021, 60, 'ETH_MEGAETH',
      'https://mainnet.megaeth.com/rpc', 'https://megaeth.blockscout.com/tx/',
      40, 40, 1, 0, false, now(), now(), 4326, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('X_LAYER', 'testnet', 'evm', 9022, 60, 'OKB',
+     'https://testrpc.xlayer.tech/terigon', 'https://www.okx.com/web3/explorer/xlayer-test/tx/',
+     40, 40, 1, 0, false, now(), now(), 1952, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('X_LAYER', 'mainnet', 'evm', 9022, 60, 'OKB',
+     'https://rpc.xlayer.tech', 'https://www.okx.com/web3/explorer/xlayer/tx/',
+     40, 40, 1, 0, false, now(), now(), 196, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6107,6 +6122,18 @@ VALUES
     ('MEGAETH', 'mainnet', 'prod', 'official-megaeth-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://mainnet.megaeth.com/rpc', 'NONE', NULL, 10, 1000, false,
      'Production MegaETH mainnet public JSON-RPC endpoint. Use RPC gas estimation because MegaEVM gas costs differ from standard EVM.',
+     now(), now(), NULL),
+    ('X_LAYER', 'testnet', 'dev', 'official-x-layer-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://testrpc.xlayer.tech/terigon', 'NONE', NULL, 10, 500, false,
+     'Official X Layer testnet JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('X_LAYER', 'testnet', 'test2', 'official-x-layer-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://testrpc.xlayer.tech/terigon', 'NONE', NULL, 10, 500, false,
+     'test2 official X Layer testnet JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('X_LAYER', 'mainnet', 'prod', 'official-x-layer-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.xlayer.tech', 'NONE', NULL, 10, 1000, false,
+     'Production X Layer mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -6720,6 +6747,10 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0x2DCa96907fde857dd3D816880A0df407eeB2D2F2', NULL, NULL, 6, 'native-gas'),
         ('MEGAETH', 'USDM', 'ERC20', 'ERC20',
          '0xFAfDdbb3FC7688494971a79cc65DCa3EF82079E7', NULL, NULL, 18, 'native-gas'),
+        ('X_LAYER', 'USDC', 'ERC20', 'ERC20',
+         '0x74b7F16337b8972027F6196A17a631aC6dE26d22', NULL, NULL, 6, 'native-gas'),
+        ('X_LAYER', 'USDT', 'ERC20', 'ERC20',
+         '0x1E4a5963aBFD975d8c9021ce480b42188849D41d', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',

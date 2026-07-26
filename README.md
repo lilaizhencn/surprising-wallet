@@ -59,13 +59,13 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 39 条链、14 个链族：
+运行模型覆盖 40 条链、14 个链族：
 
 | 链族 | 链 |
 |------|-----|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH |
 | EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD |
-| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK, KATANA, MEGAETH |
+| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK, KATANA, MEGAETH, X_LAYER |
 | TRON | TRON |
 | Solana | SOL |
 | TON | TON |
@@ -161,6 +161,7 @@ mvn compile
 | Lisk | 已完成 | ETH_LISK、USDC_E | Sepolia `4202`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；官方审核资产表未列出 USDT |
 | Katana | 已完成 | ETH_KATANA、USDC、USDT | Bokuto `737373`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网 Vault Bridge 稳定币均完成全链路测试 |
 | MegaETH | 已完成 | ETH_MEGAETH、USDM | Carrot `6343`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；USDm 按链上实际使用 18 位精度 |
+| X Layer | 已完成 | OKB、USDC、USDT | Testnet `1952`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；两种稳定币均完成全链路测试 |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -181,7 +182,7 @@ mvn compile
 | World Chain | Ethereum L2（OP Stack） | ETH | 原生币；生态支持代付 | Ethereum / EVM | [Docs](https://docs.world.org/world-chain) | 已完成；主网 `480`、Sepolia `4801`，Gas 为 ETH；接入官方 USDC，未配置无官方依据的 USDT |
 | Blast | Ethereum L2（Optimistic Rollup） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.blast.io/) | 暂缓；主网 `81457` 与 Sepolia `168587773` 的官方 RPC 均未通过 EIP-7702 authorization intrinsic gas 门禁（仍返回 `21000`）；USDC／USDT 经官方桥统一映射为 USDB，不应按独立稳定币接入 |
 | ApeChain | Arbitrum Orbit L3 | APE | 自定义原生 Gas 币 | Ethereum / Arbitrum / EVM | [Docs](https://docs.apechain.com/) | 候选；旧表的普通 L2 分类已纠正为 L3 |
-| X Layer | Ethereum L2（Polygon CDK ZK） | OKB | 自定义原生 Gas 币 | Ethereum / EVM | [Docs](https://web3.okx.com/xlayer/docs/developer/quick-start/about-x-layer) | 候选 |
+| X Layer | Ethereum L2（增强 OP Stack + AggLayer） | OKB | 自定义原生 Gas 币 | Ethereum / EVM | [Docs](https://web3.okx.com/xlayer/docs/developer/quick-start/about-x-layer) | 已完成；主网 `196`、测试网 `1952`，Gas 为 OKB；接入官方推荐 USDC 与 USDT，旧 Polygon CDK ZK 分类已按当前架构纠正 |
 | Degen Chain | Base 上的 Arbitrum Orbit L3 | DEGEN | 自定义原生 Gas 币 | Ethereum / Base / EVM | [Docs](https://docs.degen.tips/) | 候选；旧表的普通 L2 分类已纠正为 L3 |
 | Robinhood Chain | Ethereum L2（Arbitrum） | ETH | 原生币 | Ethereum / EVM / RWA | [Docs](https://docs.robinhood.com/chain/connecting/) | 候选；主网已上线，不再归入“未确认” |
 | Shibarium | Ethereum L2 | BONE | 自定义原生 Gas 币 | Ethereum / EVM / Shiba | [Docs](https://docs.shib.io/) | 候选；Gas 是 BONE，不是 SHI |
