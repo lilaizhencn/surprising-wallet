@@ -52,6 +52,7 @@ public class WalletRuntimeConfigService {
             Map.entry("DEGEN", 2_000L),
             Map.entry("ROBINHOOD_CHAIN", 1_000L),
             Map.entry("ETHERLINK", 1_000L),
+            Map.entry("IOTA_EVM", 15_000L),
             Map.entry("NEAR", 2_000L),
             Map.entry("HYPERCORE", 2_000L),
             Map.entry("ARBITRUM", 2_000L),

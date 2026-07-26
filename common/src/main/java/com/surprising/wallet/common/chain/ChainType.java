@@ -38,6 +38,7 @@ public enum ChainType {
     DEGEN("evm", "account"),
     ROBINHOOD_CHAIN("evm", "account"),
     ETHERLINK("evm", "account"),
+    IOTA_EVM("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

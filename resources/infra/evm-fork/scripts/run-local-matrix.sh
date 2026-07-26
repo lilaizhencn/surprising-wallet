@@ -38,6 +38,7 @@ EVM_CHAINS=(
   "DEGEN|DEGEN|666666666|USDC,USDT|mainnet|true"
   "ROBINHOOD_CHAIN|ETH_ROBINHOOD|46630|USDG|testnet|true"
   "ETHERLINK|XTZ|127823|USDC,USDT|shadownet|true"
+  "IOTA_EVM|IOTA|1076|USDC_E,USDT|testnet|true"
 )
 
 should_run_chain() {
