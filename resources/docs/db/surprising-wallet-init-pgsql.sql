@@ -5671,7 +5671,10 @@ VALUES
     ('IOTA_EVM', 'IOTA', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('IOTA_EVM', 'USDC_E', 'ERC20', '0xFbDa5F676cB37624f28265A144A48B0d6e87d3b6', 6, false, true, 1, 1, now(), now()),
     ('IOTA_EVM', 'USDT', 'ERC20', '0xC1B8045A6ef2934Cf0f78B0dbD489969Fa9Be7E4', 6, false, true, 1, 1, now(), now()),
-    ('OASIS_EMERALD', 'ROSE', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now())
+    ('OASIS_EMERALD', 'ROSE', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('CRONOS', 'CRO', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('CRONOS', 'USDC', 'ERC20', '0x3D7F2C478aAfdB65542BCB44bCeeC05849999d2D', 6, false, true, 1, 1, now(), now()),
+    ('CRONOS', 'USDT', 'ERC20', '0x66e428c3f67a68878562e79A0234c1F83c208770', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5756,6 +5759,10 @@ VALUES
     ('IOTA_EVM', 'USDC_E', 'ERC20', '0xFbDa5F676cB37624f28265A144A48B0d6e87d3b6', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('IOTA_EVM', 'USDT', 'ERC20', '0xC1B8045A6ef2934Cf0f78B0dbD489969Fa9Be7E4', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('CRONOS', 'USDC', 'ERC20', '0x3D7F2C478aAfdB65542BCB44bCeeC05849999d2D', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('CRONOS', 'USDT', 'ERC20', '0x66e428c3f67a68878562e79A0234c1F83c208770', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -5952,6 +5959,14 @@ VALUES
     ('OASIS_EMERALD', 'mainnet', 'evm', 9027, 60, 'ROSE',
      'https://emerald.oasis.io', 'https://explorer.oasis.io/mainnet/emerald/tx/',
      1, 1, 1, 0, false, now(), now(), 42262, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('CRONOS', 'testnet', 'evm', 9028, 60, 'CRO',
+     'https://evm-t3.cronos.org', 'https://explorer.cronos.org/testnet/tx/',
+     1, 1, 1, 0, false, now(), now(), 338, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('CRONOS', 'mainnet', 'evm', 9028, 60, 'CRO',
+     'https://evm.cronos.org', 'https://explorer.cronos.org/tx/',
+     1, 1, 1, 0, false, now(), now(), 25, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6256,6 +6271,18 @@ VALUES
     ('OASIS_EMERALD', 'mainnet', 'prod', 'official-oasis-emerald-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://emerald.oasis.io', 'NONE', NULL, 10, 1000, false,
      'Production Oasis Emerald mainnet Web3 gateway. Enable only after private gateway, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('CRONOS', 'testnet', 'dev', 'official-cronos-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://evm-t3.cronos.org', 'NONE', NULL, 10, 500, false,
+     'Official Cronos EVM testnet JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('CRONOS', 'testnet', 'test2', 'official-cronos-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://evm-t3.cronos.org', 'NONE', NULL, 10, 500, false,
+     'test2 official Cronos EVM testnet JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('CRONOS', 'mainnet', 'prod', 'official-cronos-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://evm.cronos.org', 'NONE', NULL, 10, 1000, false,
+     'Production Cronos EVM mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -6887,6 +6914,10 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0xFbDa5F676cB37624f28265A144A48B0d6e87d3b6', NULL, NULL, 6, 'native-gas'),
         ('IOTA_EVM', 'USDT', 'ERC20', 'ERC20',
          '0xC1B8045A6ef2934Cf0f78B0dbD489969Fa9Be7E4', NULL, NULL, 6, 'native-gas'),
+        ('CRONOS', 'USDC', 'ERC20', 'ERC20',
+         '0x3D7F2C478aAfdB65542BCB44bCeeC05849999d2D', NULL, NULL, 6, 'native-gas'),
+        ('CRONOS', 'USDT', 'ERC20', 'ERC20',
+         '0x66e428c3f67a68878562e79A0234c1F83c208770', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',
