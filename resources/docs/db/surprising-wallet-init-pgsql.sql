@@ -5709,7 +5709,8 @@ VALUES
     ('SEI', 'USDT0', 'ERC20', '0x9151434b16b9763660705744891fA906F660EcC5', 6, false, true, 1, 1, now(), now()),
     ('CONFLUX', 'CFX', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('CONFLUX', 'USDC_E', 'ERC20', '0x6963efed0ab40f6c3d7bda44a05dcf1437c44372', 18, false, true, 1, 1, now(), now()),
-    ('CONFLUX', 'USDT0', 'ERC20', '0xaf37e8b6c9ed7f6318979f56fc287d76c30847ff', 6, false, true, 1, 1, now(), now())
+    ('CONFLUX', 'USDT0', 'ERC20', '0xaf37e8b6c9ed7f6318979f56fc287d76c30847ff', 6, false, true, 1, 1, now(), now()),
+    ('VECTOR_SMART_CHAIN', 'VSG', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -6150,6 +6151,10 @@ VALUES
     ('CONFLUX', 'mainnet', 'evm', 9041, 60, 'CFX',
      'https://evm.confluxrpc.com', 'https://evm.confluxscan.org/tx/',
      400, 400, 400, 0, false, now(), now(), 1030, 'eip1559', 200,
+     false, false, false, false, 0, 200),
+    ('VECTOR_SMART_CHAIN', 'mainnet', 'evm', 9042, 60, 'VSG',
+     'https://rpc.vscblockchain.org', 'https://explorer.vscblockchain.org/tx/',
+     12, 12, 12, 0, false, now(), now(), 420042, 'eip1559', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6622,6 +6627,10 @@ VALUES
     ('CONFLUX', 'mainnet', 'prod', 'official-conflux-espace-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://evm.confluxrpc.com', 'NONE', NULL, 10, 1250, false,
      'Production Conflux eSpace public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('VECTOR_SMART_CHAIN', 'mainnet', 'prod', 'official-vector-smart-chain-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.vscblockchain.org', 'NONE', NULL, 10, 5500, false,
+     'Production Vector Smart Chain public JSON-RPC endpoint. No verified public testnet; enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",

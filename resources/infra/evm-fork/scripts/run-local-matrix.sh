@@ -54,6 +54,7 @@ EVM_CHAINS=(
   "STORY|IP|1315|USDC_E|testnet|true"
   "SEI|SEI|1328|USDC,USDT0|testnet|true"
   "CONFLUX|CFX|71|USDC_E,USDT0|testnet|true"
+  "VECTOR_SMART_CHAIN|VSG|420042||mainnet|true"
 )
 
 should_run_chain() {

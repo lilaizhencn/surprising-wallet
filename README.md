@@ -301,7 +301,7 @@ mvn compile
 
 | 网络 | 当前可确认信息 | Gas 资产 | 官方入口 | 结论/前置条件 |
 |---|---|---|---|---|
-| Vector Smart Chain | 项目宣称独立 EVM L1 | VSG | [Official](https://vectorsmartgas.com/) | 尽调；缺少稳定、完整的官方开发文档和节点运维资料，不进入近期排期 |
+| Vector Smart Chain | 独立 EVM L1 | VSG | [Official](https://vectorsmartgas.com/) | 已接入；主网 `420042` 持续出块且 EIP-7702 门禁通过，仅接入原生 VSG；未发现可信的官方测试网或官方 USDC/USDT 部署，本地以同 chain ID 的 Hardhat 网络验证，确认数保守配置为 `12` |
 | Zedxion Smart Chain | 存在 EVM 浏览器与简略文档 | ZEDXION（需链上复核符号/精度） | [Docs](https://docs.zedscan.net/) | 尽调；文档不足，先核验主网 RPC、节点实现、创世配置和持续出块 |
 | Krown Network | 官网宣称 PoS L1 已上线 | KROWN | [Official](https://krown.network/) | 尽调；需补齐可审计的开发文档、客户端源码、节点与网络参数 |
 | Onyx / XCN Ledger / Goliath | 官方资料同时存在 Base 上的 Orbit L3 与新的 Goliath 网络描述 | XCN | [Onyx Docs](https://docs.onyx.org/readme/about-onyx) / [Goliath Docs](https://docs.goliath.net/developer-guide/getting-started) | 暂停排期；必须先确定目标是旧 L3 还是 Goliath，并核验主网 chain ID；Goliath 文档还存在 EVM 内部 8 位、JSON-RPC 18 位的特殊精度说明 |

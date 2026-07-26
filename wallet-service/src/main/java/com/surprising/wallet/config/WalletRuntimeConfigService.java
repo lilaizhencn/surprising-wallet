@@ -68,6 +68,7 @@ public class WalletRuntimeConfigService {
             Map.entry("STORY", 2_000L),
             Map.entry("SEI", 500L),
             Map.entry("CONFLUX", 1_250L),
+            Map.entry("VECTOR_SMART_CHAIN", 5_500L),
             Map.entry("NEAR", 2_000L),
             Map.entry("HYPERCORE", 2_000L),
             Map.entry("ARBITRUM", 2_000L),
