@@ -59,13 +59,13 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 33 条链、14 个链族：
+运行模型覆盖 34 条链、14 个链族：
 
 | 链族 | 链 |
 |------|-----|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH |
 | EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD |
-| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN, INK |
+| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN, INK, TAIKO |
 | TRON | TRON |
 | Solana | SOL |
 | TON | TON |
@@ -155,6 +155,7 @@ mvn compile
 | Monad | 已完成 | MON、USDC、USDT0 | Testnet `10143`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；原生 MON 的 7702 归集因 10 MON reserve 规则保持关闭 |
 | World Chain | 已完成 | ETH_WORLD、USDC | Sepolia `4801`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；官方资产表未列出 USDT |
 | Ink | 已完成 | ETH_INK、USDC_E、USDT0 | Sepolia `763373`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；稳定币名称按官方合约区分 |
+| Taiko | 已完成 | ETH_TAIKO | Hoodi `167013`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网实测约 2 秒出块；官方桥未公开可审计的静态稳定币合约清单，暂不配置 USDC／USDT |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -167,7 +168,7 @@ mvn compile
 | Mode | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.mode.network/) | 候选 |
 | Boba Ethereum | Ethereum L2（Optimistic Rollup） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.boba.network/) | 候选；Boba 是多网络产品，接入项必须明确为 Ethereum 主网实例 |
 | Arbitrum Nova | Ethereum L2（AnyTrust） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.arbitrum.io/launch-arbitrum-chain/partials/config-data-posting-costs) | 候选；AnyTrust DA 与 Arbitrum One 风险模型不同 |
-| Taiko | Ethereum L2（Based Rollup） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.taiko.xyz/) | 候选 |
+| Taiko | Ethereum L2（Based Rollup） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.taiko.xyz/) | 已完成；主网 `167000`、Hoodi `167013`，旧 Hekla 已停用；EIP-7702 已验证 |
 | Manta Pacific | Ethereum L2（模块化 Rollup） | ETH | 原生币 | Ethereum / EVM / 模块化 DA | [Docs](https://docs.manta.network/docs/manta-pacific/) | 候选；需核验当前结算与 DA 配置 |
 | MegaETH | Ethereum L2 | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.megaeth.com/) | 候选；新主网，接入前复核节点、归档和最终性稳定性 |
 | Lisk | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.lisk.com/) | 候选；不是旧版独立 Lisk L1 |

@@ -28,6 +28,7 @@ public enum ChainType {
     MONAD("evm", "account"),
     WORLD_CHAIN("evm", "account"),
     INK("evm", "account"),
+    TAIKO("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

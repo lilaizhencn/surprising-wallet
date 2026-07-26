@@ -5642,7 +5642,8 @@ VALUES
     ('WORLD_CHAIN', 'USDC', 'ERC20', '0x79A02482A880bCE3F13e09Da970dC34db4CD24d1', 6, false, true, 1, 1, now(), now()),
     ('INK', 'ETH_INK', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('INK', 'USDC_E', 'ERC20', '0xF1815bd50389c46847f0Bda824eC8da914045D14', 6, false, true, 1, 1, now(), now()),
-    ('INK', 'USDT0', 'ERC20', '0x0200C29006150606B650577BBE7B6248F58470c1', 6, false, true, 1, 1, now(), now())
+    ('INK', 'USDT0', 'ERC20', '0x0200C29006150606B650577BBE7B6248F58470c1', 6, false, true, 1, 1, now(), now()),
+    ('TAIKO', 'ETH_TAIKO', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5797,6 +5798,14 @@ VALUES
     ('INK', 'mainnet', 'evm', 9015, 60, 'ETH_INK',
      'https://rpc-gel.inkonchain.com', 'https://explorer.inkonchain.com/tx/',
      40, 40, 1, 0, false, now(), now(), 57073, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('TAIKO', 'hoodi', 'evm', 9016, 60, 'ETH_TAIKO',
+     'https://rpc.hoodi.taiko.xyz', 'https://blockscoutapi.hoodi.taiko.xyz/tx/',
+     40, 40, 1, 0, false, now(), now(), 167013, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('TAIKO', 'mainnet', 'evm', 9016, 60, 'ETH_TAIKO',
+     'https://rpc.mainnet.taiko.xyz', 'https://blockscoutapi.mainnet.taiko.xyz/tx/',
+     40, 40, 1, 0, false, now(), now(), 167000, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -5957,6 +5966,18 @@ VALUES
     ('INK', 'mainnet', 'prod', 'official-ink-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://rpc-gel.inkonchain.com', 'NONE', NULL, 10, 1000, false,
      'Production Ink mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('TAIKO', 'hoodi', 'dev', 'official-taiko-hoodi', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.hoodi.taiko.xyz', 'NONE', NULL, 10, 500, false,
+     'Official Taiko Hoodi JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('TAIKO', 'hoodi', 'test2', 'official-taiko-hoodi', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.hoodi.taiko.xyz', 'NONE', NULL, 10, 500, false,
+     'test2 official Taiko Hoodi JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('TAIKO', 'mainnet', 'prod', 'official-taiko-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.mainnet.taiko.xyz', 'NONE', NULL, 10, 1000, false,
+     'Production Taiko mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
