@@ -39,6 +39,7 @@ public enum ChainType {
     ROBINHOOD_CHAIN("evm", "account"),
     ETHERLINK("evm", "account"),
     IOTA_EVM("evm", "account"),
+    OASIS_EMERALD("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

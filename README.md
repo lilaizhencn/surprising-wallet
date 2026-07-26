@@ -59,12 +59,12 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 44 条链、14 个链族：
+运行模型覆盖 45 条链、14 个链族：
 
 | 链族 | 链 |
 |------|-----|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH |
-| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD |
+| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD, OASIS_EMERALD |
 | EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK, KATANA, MEGAETH, X_LAYER |
 | TRON | TRON |
 | Solana | SOL |
@@ -166,6 +166,7 @@ mvn compile
 | Robinhood Chain | 已完成 | ETH_ROBINHOOD、USDG | Testnet `46630`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网约 0.1 秒出块；官方资产注册表未列出 USDC／USDT |
 | Etherlink | 已完成 | XTZ、USDC、USDT | Shadownet `127823`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网约 0.85 秒出块 |
 | IOTA EVM | 已完成 | IOTA、USDC_E、USDT | Testnet `1076`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网约 13.85 秒出块；稳定币使用 Stargate Bridged USDC.e 与 USDT |
+| Oasis Emerald | 已完成 | ROSE | Testnet `42261`；主网与测试网官方 Web3 Gateway 均通过 EIP-7702 门禁；主网约 5 秒出块；历史 Wormhole 稳定币路径已弃用，未配置 USDC／USDT |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -209,7 +210,7 @@ mvn compile
 | GEB Mainnet（原 BEVM） | Bitcoin L2 / EVM 执行网络 | BTC | BTC 原生 Gas（EVM 侧 18 位精度） | Bitcoin / Substrate / EVM | [Docs](https://documents.geb.network/) | 暂缓；BEVM 主网已演进为 GEB Mainnet `11501`，Signet 为 `11504`，两者仍活跃，但官方 RPC 的 EIP-7702 authorization intrinsic gas 门禁均返回 `21000`；官方 Bridged USDC `0x915247bf09471922e2c6da6f69fc9114708e8a26` 与 Bridged USDT `0xa67ed736649f2958a35fd249a584151056b4b745` 均已链上核实为 6 位精度，待 EVM 执行层升级后复测 |
 | DuckChain | TON 对齐的 Arbitrum Orbit 执行层 | TON | TON 原生 Gas，链上为 18 位精度 | TON / EVM / Arbitrum Orbit | [Docs](https://diary.duckchain.io/2.-users-and-developers/2.3-developer-hub/2.3.2-builder-guide/gas) | 暂不接入；主网 `5545` 的两个官方 RPC 均停在区块 `0x17e9400`（时间 `2026-07-24 10:19:15 CST`），截至 `2026-07-26` 已连续停块超过两天，测试网 `202105` RPC 同时超时，且未发现官方维护公告；当前文档仅承诺 Shanghai opcode 兼容，待网络恢复并升级 EIP-7702 后重新评估 |
 | Neon EVM | 部署在 Solana 上的 EVM 程序 | NEON | Proxy Operator 在 Solana 结算并收取 NEON Gas | Solana / EVM | [Docs](https://docs.neonevm.org/docs/developing/connect_rpc/) | 暂缓；主网 `245022934` 仍活跃，但官方 RPC 的 EIP-7702 门禁返回 `Invalid params`，Devnet `245022926` 返回 `503`、Testnet `245022940` 返回 `530`；官方仍要求 legacy 交易且不支持 EIP-1559，USDC `0xEA6B04272f9f62F997F666F07D3a974134f7FFb9` 是 Solana SPL USDC 的 6 位 ERC-20 接口，官方 Token List 未列 USDT；Proxy Operator、SPL 接口和 Solana 结算语义不能直接沿用现有通用 EVM 资金链路 |
-| Oasis Emerald | Oasis ParaTime 执行环境 | ROSE | 原生币 | Oasis / EVM ParaTime | [Docs](https://docs.oasis.io/build/tools/other-paratimes/emerald/) | 专项；不是 L2，最终性来自 Oasis 共识层 |
+| Oasis Emerald | Oasis ParaTime 执行环境 | ROSE | 原生币 | Oasis / EVM ParaTime | [Docs](https://docs.oasis.io/build/tools/other-paratimes/emerald/network/) | 已完成；主网 `42262`、测试网 `42261`，两网官方 Web3 Gateway 均通过 EIP-7702 门禁，约 5 秒出块且由 Oasis 共识提供即时最终性；历史 Wormhole USDC／USDT 路径已弃用，当前官方桥接重点转向 Sapphire，因此仅接入 ROSE |
 
 #### 3. 独立 EVM L1、侧链与应用链
 

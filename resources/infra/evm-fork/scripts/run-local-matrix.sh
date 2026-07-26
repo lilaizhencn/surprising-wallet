@@ -39,6 +39,7 @@ EVM_CHAINS=(
   "ROBINHOOD_CHAIN|ETH_ROBINHOOD|46630|USDG|testnet|true"
   "ETHERLINK|XTZ|127823|USDC,USDT|shadownet|true"
   "IOTA_EVM|IOTA|1076|USDC_E,USDT|testnet|true"
+  "OASIS_EMERALD|ROSE|42261||testnet|true"
 )
 
 should_run_chain() {

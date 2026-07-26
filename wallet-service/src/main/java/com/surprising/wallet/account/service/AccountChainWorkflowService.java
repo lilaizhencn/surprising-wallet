@@ -108,7 +108,7 @@ public class AccountChainWorkflowService {
             "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C", "HYPEREVM",
             "MANTLE", "LINEA", "SCROLL", "UNICHAIN", "BERACHAIN", "GNOSIS", "CELO", "MONAD",
             "WORLD_CHAIN", "INK", "TAIKO", "SONEIUM", "MODE", "LISK", "KATANA", "MEGAETH",
-            "X_LAYER", "DEGEN", "ROBINHOOD_CHAIN", "ETHERLINK", "IOTA_EVM",
+            "X_LAYER", "DEGEN", "ROBINHOOD_CHAIN", "ETHERLINK", "IOTA_EVM", "OASIS_EMERALD",
             "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
 
     private final ChainJdbcRepository repository;

@@ -5670,7 +5670,8 @@ VALUES
     ('ETHERLINK', 'USDT', 'ERC20', '0x2C03058C8AFC06713be23e58D2febC8337dbfE6A', 6, false, true, 1, 1, now(), now()),
     ('IOTA_EVM', 'IOTA', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('IOTA_EVM', 'USDC_E', 'ERC20', '0xFbDa5F676cB37624f28265A144A48B0d6e87d3b6', 6, false, true, 1, 1, now(), now()),
-    ('IOTA_EVM', 'USDT', 'ERC20', '0xC1B8045A6ef2934Cf0f78B0dbD489969Fa9Be7E4', 6, false, true, 1, 1, now(), now())
+    ('IOTA_EVM', 'USDT', 'ERC20', '0xC1B8045A6ef2934Cf0f78B0dbD489969Fa9Be7E4', 6, false, true, 1, 1, now(), now()),
+    ('OASIS_EMERALD', 'ROSE', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5943,6 +5944,14 @@ VALUES
     ('IOTA_EVM', 'mainnet', 'evm', 9026, 60, 'IOTA',
      'https://json-rpc.evm.iotaledger.net', 'https://explorer.evm.iota.org/tx/',
      40, 40, 1, 0, false, now(), now(), 8822, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('OASIS_EMERALD', 'testnet', 'evm', 9027, 60, 'ROSE',
+     'https://testnet.emerald.oasis.io', 'https://explorer.oasis.io/testnet/emerald/tx/',
+     1, 1, 1, 0, false, now(), now(), 42261, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('OASIS_EMERALD', 'mainnet', 'evm', 9027, 60, 'ROSE',
+     'https://emerald.oasis.io', 'https://explorer.oasis.io/mainnet/emerald/tx/',
+     1, 1, 1, 0, false, now(), now(), 42262, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6235,6 +6244,18 @@ VALUES
     ('IOTA_EVM', 'mainnet', 'prod', 'official-iota-evm-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://json-rpc.evm.iotaledger.net', 'NONE', NULL, 10, 1000, false,
      'Production IOTA EVM mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('OASIS_EMERALD', 'testnet', 'dev', 'official-oasis-emerald-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://testnet.emerald.oasis.io', 'NONE', NULL, 10, 500, false,
+     'Official Oasis Emerald testnet Web3 gateway. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('OASIS_EMERALD', 'testnet', 'test2', 'official-oasis-emerald-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://testnet.emerald.oasis.io', 'NONE', NULL, 10, 500, false,
+     'test2 official Oasis Emerald testnet Web3 gateway. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('OASIS_EMERALD', 'mainnet', 'prod', 'official-oasis-emerald-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://emerald.oasis.io', 'NONE', NULL, 10, 1000, false,
+     'Production Oasis Emerald mainnet Web3 gateway. Enable only after private gateway, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
