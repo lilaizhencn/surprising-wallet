@@ -284,7 +284,7 @@ mvn compile
 | 网络 | 层级/网络形态 | Gas 资产 | Gas 模式 | 生态/执行环境 | 官方入口 | 状态与备注 |
 |---|---|---|---|---|---|---|
 | Sei | 独立 L1 | SEI | 原生币 | Cosmos SDK + Parallel EVM | [Docs](https://docs.sei.io/) | 已完成；主网 `1329`、Atlantic-2 `1328`，两网 EIP-7702 live 门禁均通过；接入官方原生 USDC `0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392` 与 USDT0 `0x9151434b16b9763660705744891fA906F660EcC5`；接口使用 EVM `0x` 地址 |
-| Kava | 独立 L1 | KAVA | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.kava.io/) | 候选；Cosmos Co-Chain 与 EVM Co-Chain 需分别测试 |
+| Kava | 独立 L1 | KAVA | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.kava.io/docs/ethereum/metamask/) | 暂缓；EVM 主网 `2222`、测试网 `2221` 仍活跃，但主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 Kava EVM Co-Chain 支持 type-4 后再接入，本轮不增加 Cosmos/EVM 双地址专用架构 |
 | Injective | 独立 L1 | INJ | 原生币 | Cosmos SDK / WASM / MultiVM | [Docs](https://docs.injective.network/) | 专项；不能只按 EVM 链处理 |
 | Osmosis | 独立 L1 | OSMO | 原生币 | Cosmos SDK / CosmWasm | [Docs](https://docs.osmosis.zone/) | 专项；非 EVM，需 Cosmos SDK 适配 |
 
