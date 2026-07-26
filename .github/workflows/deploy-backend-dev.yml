@@ -13,6 +13,7 @@ on:
       - wallet-service/**
       - wallet-api/**
       - resources/docs/db/**
+      - resources/infra/systemd/surprising-wallet.service
       - pom.xml
       - scripts/deploy/backend-deploy.sh
   workflow_dispatch:

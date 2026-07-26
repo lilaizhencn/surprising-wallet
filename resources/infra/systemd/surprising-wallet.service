@@ -15,6 +15,7 @@ Restart=on-failure
 RestartSec=5
 TimeoutStartSec=120
 TimeoutStopSec=30
+KillMode=process
 SuccessExitStatus=143
 NoNewPrivileges=true
 PrivateTmp=true
