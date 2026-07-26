@@ -184,7 +184,7 @@ mvn compile
 | Metis Andromeda | Ethereum L2（Optimistic Rollup） | METIS | 自定义原生 Gas 币 | Ethereum / EVM | [Docs](https://docs.metis.io/andromeda) | 候选；不能按 ETH Gas 的通用 OP 链假设处理 |
 | Mode | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.mode.network/) | 已完成；主网 `34443`、Sepolia `919`，Gas 为 ETH；接入官方列出的 USDC 与 USDT |
 | Boba Ethereum | Ethereum L2（Optimistic Rollup） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.boba.network/) | 候选；Boba 是多网络产品，接入项必须明确为 Ethereum 主网实例 |
-| Arbitrum Nova | Ethereum L2（AnyTrust） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.arbitrum.io/launch-arbitrum-chain/partials/config-data-posting-costs) | 候选；AnyTrust DA 与 Arbitrum One 风险模型不同 |
+| Arbitrum Nova | Ethereum L2（AnyTrust） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.arbitrum.io/for-devs/dev-tools-and-resources/chain-info) | 不接入；主网 `42170` 的 EIP-7702 live 门禁已通过，但 ArbitrumDAO 已决定最小化 Nova，2026-06-04 至 2026-09-02 为应用、流动性和资金迁往 Arbitrum One 的窗口，之后转为低容量、低优先级、维护模式；网络尚未停运，因此保留状态说明而不删除 |
 | Taiko | Ethereum L2（Based Rollup） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.taiko.xyz/) | 已完成；主网 `167000`、Hoodi `167013`，旧 Hekla 已停用；EIP-7702 已验证 |
 | Manta Pacific | Ethereum L2（模块化 Rollup） | ETH | 原生币 | Ethereum / EVM / 模块化 DA | [Docs](https://docs.manta.network/docs/manta-pacific/) | 候选；需核验当前结算与 DA 配置 |
 | MegaETH | Ethereum L2 | ETH | 原生币 | Ethereum / MegaEVM | [Docs](https://docs.megaeth.com/) | 已完成；主网 `4326`、Carrot `6343`，EVM block 约 1 秒；官方 tokenlist 仅列 USDm，无 USDC／USDT；生产必须使用 MegaETH RPC 估算 Gas，禁止用标准 EVM 本地模拟值 |
