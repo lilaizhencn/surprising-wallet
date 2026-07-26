@@ -240,7 +240,7 @@ mvn compile
 | EthereumPoW | 独立 PoW fork | ETHW | 原生币 | EVM | [Official](https://ethereumpow.org/) | 尽调；旧表的 `ETH` 已纠正为 `ETHW`，需评估节点和生态持续性 |
 | Ethereum Classic | 独立 PoW L1 | ETC | 原生币 | EVM | [Official](https://ethereumclassic.org/) | 暂缓；主网 `61`、Mordor `63` 仍运行，当前官方 EVM 版本为 Shanghai；主网 EIP-7702 live 门禁返回 `invalid opcode: opcode 0xef not defined`，等待包含 EIP-7702 的 Olympia 升级正式激活后再接入；确认数和 51% 攻击风险参数仍需独立设置 |
 | Monad | 独立 L1 | MON | 原生币 | EVM | [Docs](https://docs.monad.xyz/) | 已完成；主网 `143`、Testnet `10143`，官方 token list 支持 USDC 与 USDT0；EIP-7702 ERC-20 代付归集可用，原生 MON 归集走普通未委托账户路径 |
-| Fuse Network | 独立 EVM 链 | FUSE | 原生币 | EVM / Payments | [Docs](https://docs.fuse.io/) | 候选；旧表的 L2 分类已纠正 |
+| Fuse Network | 独立 EVM 链 | FUSE | 原生币 | EVM / Payments | [Docs](https://docs.fuse.io/) | 暂缓；现行主网 `122` 仍运行，但 EIP-7702 live 门禁对 type-4 授权请求返回 `Internal error`；官方 Ember zkEVM／L2 迁移仍缺少已切换生产主网的可审计网络参数，等待新主网正式发布并支持 EIP-7702 后再接入；旧表的 L2 分类已纠正 |
 | Shido Network | 独立 L1 | SHIDO | 原生币；部分资格账户支持 Gasfree | Cosmos SDK / EVM / WASM | [Docs](https://docs.shido.io/untitled/shido/about) | 候选；旧表的 L2 分类已纠正 |
 | WEMIX3.0 | 独立 L1 | WEMIX | 原生币 | EVM / Gaming | [Docs](https://docs.wemix.com/) | 候选；旧表的 L2 分类已纠正 |
 | Somnia | 独立 L1 | SOMI | 原生币 | EVM / Gaming / Metaverse | [Docs](https://docs.somnia.network/developer/network-info) | 候选；旧表的 Gas 名称已纠正为 `SOMI` |
