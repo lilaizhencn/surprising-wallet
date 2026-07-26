@@ -240,7 +240,7 @@ mvn compile
 | Wanchain | 独立 L1 | WAN | 原生币 | EVM / 跨链 | [Docs](https://docs.wanchain.org/) | 暂缓；主网 `888`、测试网 `999` 均活跃，但两网 `eth_estimateGas` 都忽略 type-4 `authorizationList` 并返回普通转账固定值 `21000`，未通过 EIP-7702 门禁；当前无法保证现有 EIP-7702 归集／提现完整工作流，待官方客户端升级后重试 |
 | Elastos Smart Chain | Elastos EVM 侧链 | ELA | 原生币 | Elastos / EVM | [Docs](https://docs.elastos.net/) | 专项；需区分 Elastos Mainchain 与 ESC |
 | Velas | 独立 L1 | VLX | 原生币 | EVM | [Docs](https://docs.velas.com/) | 暂缓；主网 `106`、测试网 `111` 的官方 RPC 仍可访问，但主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 EVM 客户端支持 type-4 交易后再接入；旧表的 `VELAS` Gas 符号已纠正为 `VLX` |
-| Harmony | 独立 L1 | ONE | 原生币 | EVM / Sharding | [Docs](https://docs.harmony.one/) | 尽调；历史桥安全事件和生态活跃度需评估 |
+| Harmony | 独立 L1 | ONE | 原生币 | EVM / Sharding | [Docs](https://docs.harmony.one/home/developers/getting-started/network-and-faucets) | 暂缓；Shard 0 主网 `1666600000` 仍运行且 2026 年仍有主网版本更新，不属于停运链；但 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；同时保留历史桥安全风险，等待 type-4 支持后再评估接入 |
 | ThunderCore | 独立 L1 | TT | 原生币 | EVM | [Docs](https://docs.thundercore.com/) | 暂缓；主网 `108`、测试网 `18` 仍运行，主网约 1 秒出块且官方桥提供 TT-USDC／TT-USDT，但 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待客户端从 London 升级并支持 type-4 交易后再接入 |
 | KCC | 独立 EVM 链 | KCS | 原生币 | EVM / KuCoin 生态 | [Docs](https://docs.kcc.io/) | 暂缓；主网 `321`、测试网 `322` 仍运行，官方桥提供 USDC `0x980a5AfEf3D17aD98635F6C5aebCBAedEd3c3430` 与 USDT `0x0039f574eE5cC39bdD162E9A88e3EB1f111bAF48`，但主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待客户端支持 type-4 交易后再接入 |
 | Telos EVM | Telos 上的 EVM 执行环境 | TLOS | 原生币 | Antelope / EVM | [Docs](https://docs.telos.net/) | 专项；需明确只接 Telos EVM，不混用原生 Telos 地址 |
