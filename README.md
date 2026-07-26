@@ -59,13 +59,13 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 37 条链、14 个链族：
+运行模型覆盖 38 条链、14 个链族：
 
 | 链族 | 链 |
 |------|-----|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH |
 | EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD |
-| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK |
+| EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK, KATANA |
 | TRON | TRON |
 | Solana | SOL |
 | TON | TON |
@@ -159,6 +159,7 @@ mvn compile
 | Soneium | 已完成 | ETH_SONEIUM、USDC_E、USDT | Minato `1946`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网两种稳定币均完成全链路测试 |
 | Mode | 已完成 | ETH_MODE、USDC、USDT | Sepolia `919`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网两种稳定币均完成全链路测试 |
 | Lisk | 已完成 | ETH_LISK、USDC_E | Sepolia `4202`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；官方审核资产表未列出 USDT |
+| Katana | 已完成 | ETH_KATANA、USDC、USDT | Bokuto `737373`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网 Vault Bridge 稳定币均完成全链路测试 |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -183,7 +184,7 @@ mvn compile
 | Degen Chain | Base 上的 Arbitrum Orbit L3 | DEGEN | 自定义原生 Gas 币 | Ethereum / Base / EVM | [Docs](https://docs.degen.tips/) | 候选；旧表的普通 L2 分类已纠正为 L3 |
 | Robinhood Chain | Ethereum L2（Arbitrum） | ETH | 原生币 | Ethereum / EVM / RWA | [Docs](https://docs.robinhood.com/chain/connecting/) | 候选；主网已上线，不再归入“未确认” |
 | Shibarium | Ethereum L2 | BONE | 自定义原生 Gas 币 | Ethereum / EVM / Shiba | [Docs](https://docs.shib.io/) | 候选；Gas 是 BONE，不是 SHI |
-| Katana | Ethereum L2（Agglayer CDK OP Stack） | ETH | 原生币 | Ethereum / EVM / DeFi | [Docs](https://docs.katana.network/katana/technical-reference/network-information/) | 候选 |
+| Katana | Ethereum L2（Agglayer CDK OP Stack） | ETH | 原生币 | Ethereum / EVM / DeFi | [Docs](https://docs.katana.network/katana/technical-reference/network-information/) | 已完成；主网 `747474`、Bokuto `737373`，Gas 为 ETH；接入官方 Vault Bridge USDC 与 USDT |
 | Ink | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.inkonchain.com/) | 已完成；主网 `57073`、Sepolia `763373`，Gas 为 ETH；官方资产为 USDC.e 与 USDT0，不按普通 USDC／USDT 混记 |
 | Sophon | Ethereum L2 Validium（ZK Stack） | SOPH | 自定义原生 Gas 币 | Ethereum / ZKsync Elastic Chain / EVM | [Docs](https://docs.sophon.xyz/tokenomics/soph) | 候选；DA 使用 Avail，不能等同标准 ZK Rollup |
 | Starknet | Ethereum L2（ZK Rollup） | STRK | 自 v0.14.0 起只允许 STRK 付费 | Ethereum / CairoVM | [Docs](https://docs.starknet.io/learn/protocol/strk) | 专项；旧资料中的 ETH/STRK 双 Gas 已过期，地址和交易模型非 EVM |

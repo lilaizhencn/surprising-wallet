@@ -5651,7 +5651,10 @@ VALUES
     ('MODE', 'USDC', 'ERC20', '0xd988097fb8612cc24eeC14542bC03424c656005f', 6, false, true, 1, 1, now(), now()),
     ('MODE', 'USDT', 'ERC20', '0xf0F161fDA2712DB8b566946122a5af183995e2eD', 6, false, true, 1, 1, now(), now()),
     ('LISK', 'ETH_LISK', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('LISK', 'USDC_E', 'ERC20', '0xF242275d3a6527d877f2c927a82D9b057609cc71', 6, false, true, 1, 1, now(), now())
+    ('LISK', 'USDC_E', 'ERC20', '0xF242275d3a6527d877f2c927a82D9b057609cc71', 6, false, true, 1, 1, now(), now()),
+    ('KATANA', 'ETH_KATANA', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('KATANA', 'USDC', 'ERC20', '0x203A662b0BD271A6ed5a60EdFbd04bFce608FD36', 6, false, true, 1, 1, now(), now()),
+    ('KATANA', 'USDT', 'ERC20', '0x2DCa96907fde857dd3D816880A0df407eeB2D2F2', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5712,6 +5715,10 @@ VALUES
     ('MODE', 'USDT', 'ERC20', '0xf0F161fDA2712DB8b566946122a5af183995e2eD', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('LISK', 'USDC_E', 'ERC20', '0xF242275d3a6527d877f2c927a82D9b057609cc71', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('KATANA', 'USDC', 'ERC20', '0x203A662b0BD271A6ed5a60EdFbd04bFce608FD36', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('KATANA', 'USDT', 'ERC20', '0x2DCa96907fde857dd3D816880A0df407eeB2D2F2', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -5848,6 +5855,14 @@ VALUES
     ('LISK', 'mainnet', 'evm', 9019, 60, 'ETH_LISK',
      'https://rpc.api.lisk.com', 'https://blockscout.lisk.com/tx/',
      40, 40, 1, 0, false, now(), now(), 1135, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('KATANA', 'bokuto', 'evm', 9020, 60, 'ETH_KATANA',
+     'https://rpc-bokuto.katanarpc.com', 'https://bokuto.katanascan.com/tx/',
+     40, 40, 1, 0, false, now(), now(), 737373, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('KATANA', 'mainnet', 'evm', 9020, 60, 'ETH_KATANA',
+     'https://rpc.katana.network', 'https://katanascan.com/tx/',
+     40, 40, 1, 0, false, now(), now(), 747474, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6056,6 +6071,18 @@ VALUES
     ('LISK', 'mainnet', 'prod', 'official-lisk-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://rpc.api.lisk.com', 'NONE', NULL, 10, 1000, false,
      'Production Lisk mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('KATANA', 'bokuto', 'dev', 'official-katana-bokuto', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc-bokuto.katanarpc.com', 'NONE', NULL, 10, 500, false,
+     'Official Katana Bokuto JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('KATANA', 'bokuto', 'test2', 'official-katana-bokuto', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc-bokuto.katanarpc.com', 'NONE', NULL, 10, 500, false,
+     'test2 official Katana Bokuto JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('KATANA', 'mainnet', 'prod', 'official-katana-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.katana.network', 'NONE', NULL, 10, 1000, false,
+     'Production Katana mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -6663,6 +6690,10 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0xf0F161fDA2712DB8b566946122a5af183995e2eD', NULL, NULL, 6, 'native-gas'),
         ('LISK', 'USDC_E', 'ERC20', 'ERC20',
          '0xF242275d3a6527d877f2c927a82D9b057609cc71', NULL, NULL, 6, 'native-gas'),
+        ('KATANA', 'USDC', 'ERC20', 'ERC20',
+         '0x203A662b0BD271A6ed5a60EdFbd04bFce608FD36', NULL, NULL, 6, 'native-gas'),
+        ('KATANA', 'USDT', 'ERC20', 'ERC20',
+         '0x2DCa96907fde857dd3D816880A0df407eeB2D2F2', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',
