@@ -238,7 +238,7 @@ mvn compile
 | Telos EVM | Telos 上的 EVM 执行环境 | TLOS | 原生币 | Antelope / EVM | [Docs](https://docs.telos.net/) | 专项；需明确只接 Telos EVM，不混用原生 Telos 地址 |
 | Meter | 独立 L1 | MTR | MTR 支付 Gas；MTRG 用于治理/质押 | EVM | [Docs](https://docs.meter.io/) | 专项；双币模型 |
 | EthereumPoW | 独立 PoW fork | ETHW | 原生币 | EVM | [Official](https://ethereumpow.org/) | 尽调；旧表的 `ETH` 已纠正为 `ETHW`，需评估节点和生态持续性 |
-| Ethereum Classic | 独立 PoW L1 | ETC | 原生币 | EVM | [Official](https://ethereumclassic.org/) | 候选；确认数和 51% 攻击风险参数需独立设置 |
+| Ethereum Classic | 独立 PoW L1 | ETC | 原生币 | EVM | [Official](https://ethereumclassic.org/) | 暂缓；主网 `61`、Mordor `63` 仍运行，当前官方 EVM 版本为 Shanghai；主网 EIP-7702 live 门禁返回 `invalid opcode: opcode 0xef not defined`，等待包含 EIP-7702 的 Olympia 升级正式激活后再接入；确认数和 51% 攻击风险参数仍需独立设置 |
 | Monad | 独立 L1 | MON | 原生币 | EVM | [Docs](https://docs.monad.xyz/) | 已完成；主网 `143`、Testnet `10143`，官方 token list 支持 USDC 与 USDT0；EIP-7702 ERC-20 代付归集可用，原生 MON 归集走普通未委托账户路径 |
 | Fuse Network | 独立 EVM 链 | FUSE | 原生币 | EVM / Payments | [Docs](https://docs.fuse.io/) | 候选；旧表的 L2 分类已纠正 |
 | Shido Network | 独立 L1 | SHIDO | 原生币；部分资格账户支持 Gasfree | Cosmos SDK / EVM / WASM | [Docs](https://docs.shido.io/untitled/shido/about) | 候选；旧表的 L2 分类已纠正 |
