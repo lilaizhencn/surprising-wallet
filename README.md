@@ -267,7 +267,7 @@ mvn compile
 | Plasma | 独立支付 L1 | XPL | 原生 XPL；特定 USDT0 转账可由协议 Paymaster 代付 | EVM / Payments / Stablecoin | [Docs](https://docs.plasma.org/) | 已完成；主网 `9745`、测试网 `9746`，两网官方 RPC 均通过 EIP-7702 门禁；接入 USD₮0 官方 Token 合约 `0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb`；Circle 官方列表未提供 Plasma USDC |
 | Story | 独立 L1 | IP | 原生币 | Cosmos/CometBFT + EVM / IP | [Docs](https://docs.story.foundation/network/connect/mainnet) | 已完成；主网 `1514`、Aeneid `1315`，两网官方 RPC 均通过 EIP-7702 门禁；接入官方支持的 Stargate Bridged USDC.e `0xF1815bd50389c46847f0Bda824eC8da914045D14`；未确认官方 USDT |
 | Energi | 独立 L1 | NRG | 原生币 | EVM | [Official](https://energi.world/energiswap-quick-start/) | 暂缓；主网 `39797` 与官方 RPC 仍在运行，但 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 Energi 客户端支持 type-4 交易后再接入 |
-| ONUS Chain | 独立 EVM 链 | ONUS | 原生币 | EVM | [Docs](https://docs.onuschain.io/chain-setup) | 尽调；官方文档存在，但更新频率和节点独立性需评估 |
+| ONUS Chain | 独立 EVM 链 | ONUS | 原生币 | BNB Application Sidechain / EVM | [Docs](https://docs.onuschain.io/chain-setup) | 不接入；主网 `1975`、测试网 `1945` 的官方文档约 3 年未更新，官方主网 RPC 对 `eth_chainId`、`eth_blockNumber`、`web3_clientVersion` 连续探测均超时，无法证明稳定出块和 EIP-7702 能力；未找到正式停运公告，故保留风险说明而不直接删除 |
 | Flare | 独立 L1 | FLR | 原生币 | Avalanche/Coreth + EVM / Data | [Docs](https://dev.flare.network/network/overview) | 暂缓；主网 `14`、Coston2 `114` 仍活跃，但主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 go-flare/Coreth 支持 type-4 交易后再接入 |
 
 #### 4. Polkadot / Kusama Parachain
