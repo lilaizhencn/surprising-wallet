@@ -23,6 +23,7 @@ public enum ChainType {
     SCROLL("evm", "account"),
     UNICHAIN("evm", "account"),
     BERACHAIN("evm", "account"),
+    GNOSIS("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

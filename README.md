@@ -59,12 +59,12 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 28 条链、14 个链族：
+运行模型覆盖 29 条链、14 个链族：
 
 | 链族 | 链 |
 |------|-----|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH |
-| EVM | ETH, BNB, POLYGON, BERACHAIN |
+| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS |
 | EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM |
 | TRON | TRON |
 | Solana | SOL |
@@ -150,6 +150,7 @@ mvn compile
 | Arbitrum One、Optimism、Base、Avalanche C-Chain | 已完成 | 原生币、链上已配置 ERC-20 | 现有通用 EVM 与 Hardhat 矩阵 |
 | HyperEVM、Mantle、Linea、Scroll、Unichain | 已完成 | 原生币、链上已配置 ERC-20 | 现有通用 EVM 与 Hardhat 矩阵 |
 | Berachain | 已完成 | BERA、USDC、USDT0 | Bepolia `80069`；EIP-7702 使用 Prague Hardhat 验证；主网和公开 RPC 默认关闭 |
+| Gnosis Chain | 已完成 | XDAI、USDC、USDT | Chiado `10200`；EIP-7702 使用 Prague Hardhat 验证；主网和公开 RPC 默认关闭 |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -203,8 +204,7 @@ mvn compile
 | Sonic | 独立 L1 | S | 原生币 | EVM | [Docs](https://docs.soniclabs.com/) | 候选；Fantom 的后续主网络 |
 | PulseChain | 独立 L1（Ethereum fork） | PLS | 原生币 | EVM | [Official](https://pulsechain.com/) | 候选；生态和节点集中度需额外尽调 |
 | Berachain | 独立 L1 | BERA | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.berachain.com/) | 已完成；主网 `80094`、Bepolia `80069`，支持 EIP-7702；稳定币按实际资产接入 USDC 与 USDT0 |
-| Gnosis Chain | EVM 侧链 | xDAI | 稳定币作为原生 Gas | Ethereum 生态 / EVM | [Docs](https://docs.gnosischain.com/) | 候选；GNO 用于质押，xDAI 用于交易费 |
-| Canto | 独立 L1 | CANTO | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.canto.io/) | 候选 |
+| Gnosis Chain | EVM 侧链 | xDAI | 稳定币作为原生 Gas | Ethereum 生态 / EVM | [Docs](https://docs.gnosischain.com/) | 已完成；主网 `100`、Chiado `10200`，Gas 资产 xDAI，支持 EIP-7702；接入 USDC 与 USDT || Canto | 独立 L1 | CANTO | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.canto.io/) | 候选 |
 | ZetaChain | 独立 L1 | ZETA | 原生币 | Cosmos SDK / EVM / Omnichain | [Docs](https://www.zetachain.com/docs/) | 候选 |
 | Core | 独立 L1 | CORE | 原生币 | Bitcoin-aligned / EVM | [Docs](https://docs.coredao.org/) | 候选；不是 Bitcoin L2 |
 | Wanchain | 独立 L1 | WAN | 原生币 | EVM / 跨链 | [Docs](https://docs.wanchain.org/) | 候选 |

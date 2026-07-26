@@ -155,6 +155,7 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.SCROLL, "ETH_SCROLL", 534351L, 1L);
         registerProfile(ChainType.UNICHAIN, "ETH_UNICHAIN", 1301L, 1L);
         registerProfile(ChainType.BERACHAIN, "BERA", 80069L, 1L);
+        registerProfile(ChainType.GNOSIS, "XDAI", 10200L, 1L);
     }
     private void registerDbProfiles() {
         for (AccountChainProfile profile : repository.listEnabledChainProfiles()) {
