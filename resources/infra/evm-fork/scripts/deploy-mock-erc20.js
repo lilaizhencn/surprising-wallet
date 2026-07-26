@@ -16,6 +16,7 @@ const TOKEN_DEFINITIONS = {
   USDC_E: { symbol: "USDC_E", name: "Bridged USD Coin", decimals: 6 },
   USDC_ETH: { symbol: "USDC_ETH", name: "ZetaChain ZRC20 USDC on Ethereum", decimals: 6 },
   USDT: { symbol: "USDT", name: "Tether USD", decimals: 6 },
+  IOUSDT: { symbol: "IOUSDT", name: "IoTeX Tether USD", decimals: 6 },
   USDT_ETH: { symbol: "USDT_ETH", name: "ZetaChain ZRC20 USDT on Ethereum", decimals: 6 },
   USDT0: { symbol: "USDT0", name: "Tether USD0", decimals: 6 },
   USDM: { symbol: "USDM", name: "MegaUSD", decimals: 18 },

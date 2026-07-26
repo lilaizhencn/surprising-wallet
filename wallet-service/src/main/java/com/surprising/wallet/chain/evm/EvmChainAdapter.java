@@ -180,6 +180,7 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.SOMNIA, "SOMI", 50312L, 1L);
         registerProfile(ChainType.RONIN, "RON", 202601L, 1L);
         registerProfile(ChainType.CHILIZ, "CHZ", 88882L, 1L);
+        registerProfile(ChainType.IOTEX, "IOTX", 4690L, 1L);
     }
     private void registerDbProfiles() {
         for (AccountChainProfile profile : repository.listEnabledChainProfiles()) {
