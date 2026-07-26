@@ -194,7 +194,7 @@ mvn compile
 | Boba Ethereum | OP Stack L2 | ETH | ETH | Ethereum / OP Stack | [Official](https://github.com/bobanetwork/boba) | 暂缓；当前 canonical Ethereum L2 主网 `288` 仍活跃，但 EIP-7702 live 门禁返回 `invalid opcode: opcode 0xef not defined`，确认尚未支持 type-4 授权委托；等待 op-geth 主网升级后再接入，历史多链部署不再列为主网 |
 | Arbitrum Nova | Ethereum L2（AnyTrust） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.arbitrum.io/for-devs/dev-tools-and-resources/chain-info) | 不接入；主网 `42170` 的 EIP-7702 live 门禁已通过，但 ArbitrumDAO 已决定最小化 Nova，2026-06-04 至 2026-09-02 为应用、流动性和资金迁往 Arbitrum One 的窗口，之后转为低容量、低优先级、维护模式；网络尚未停运，因此保留状态说明而不删除 |
 | Taiko | Ethereum L2（Based Rollup） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.taiko.xyz/) | 已完成；主网 `167000`、Hoodi `167013`，旧 Hekla 已停用；EIP-7702 已验证 |
-| Manta Pacific | Ethereum L2（模块化 Rollup） | ETH | 原生币 | Ethereum / EVM / 模块化 DA | [Docs](https://docs.manta.network/docs/manta-pacific/) | 候选；需核验当前结算与 DA 配置 |
+| Manta Pacific | Modular/ZK Rollup L2 | ETH | ETH | Ethereum / EVM / Celestia DA | [Docs](https://docs.manta.network/) | 暂缓；主网 `169` 仍活跃，但 EIP-7702 live 门禁返回 `invalid opcode: opcode 0xef not defined`，确认当前执行层尚未支持 type-4 授权委托；等待主网升级后再接入 |
 | MegaETH | Ethereum L2 | ETH | 原生币 | Ethereum / MegaEVM | [Docs](https://docs.megaeth.com/) | 已完成；主网 `4326`、Carrot `6343`，EVM block 约 1 秒；官方 tokenlist 仅列 USDm，无 USDC／USDT；生产必须使用 MegaETH RPC 估算 Gas，禁止用标准 EVM 本地模拟值 |
 | Lisk | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.lisk.com/) | 已完成；主网 `1135`、Sepolia `4202`，Gas 为 ETH；接入官方审核的 Bridged USDC，未配置 USDT |
 | World Chain | Ethereum L2（OP Stack） | ETH | 原生币；生态支持代付 | Ethereum / EVM | [Docs](https://docs.world.org/world-chain) | 已完成；主网 `480`、Sepolia `4801`，Gas 为 ETH；接入官方 USDC，未配置无官方依据的 USDT |
