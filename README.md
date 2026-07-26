@@ -242,7 +242,7 @@ mvn compile
 | Monad | 独立 L1 | MON | 原生币 | EVM | [Docs](https://docs.monad.xyz/) | 已完成；主网 `143`、Testnet `10143`，官方 token list 支持 USDC 与 USDT0；EIP-7702 ERC-20 代付归集可用，原生 MON 归集走普通未委托账户路径 |
 | Fuse Network | 独立 EVM 链 | FUSE | 原生币 | EVM / Payments | [Docs](https://docs.fuse.io/) | 暂缓；现行主网 `122` 仍运行，但 EIP-7702 live 门禁对 type-4 授权请求返回 `Internal error`；官方 Ember zkEVM／L2 迁移仍缺少已切换生产主网的可审计网络参数，等待新主网正式发布并支持 EIP-7702 后再接入；旧表的 L2 分类已纠正 |
 | Shido Network | 独立 L1 | SHIDO | 原生币；部分资格账户支持 Gasfree | Cosmos SDK / EVM / WASM | [Docs](https://docs.shido.io/untitled/shido/about) | 暂缓；主网 `9008` 仍活跃且官方文档持续更新，但 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 Cosmos EVM 客户端支持 type-4 交易后再接入；旧表的 L2 分类已纠正 |
-| WEMIX3.0 | 独立 L1 | WEMIX | 原生币 | EVM / Gaming | [Docs](https://docs.wemix.com/) | 候选；旧表的 L2 分类已纠正 |
+| WEMIX3.0 | 独立 L1 | WEMIX | 原生币 | EVM / Gaming | [Docs](https://docs.wemix.com/) | 暂缓；主网 `1111`、测试网 `1112` 与官方 RPC 仍运行，但主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 `gwemix` 客户端支持 type-4 交易后再接入；旧表的 L2 分类已纠正 |
 | Somnia | 独立 L1 | SOMI | 原生币 | EVM / Gaming / Metaverse | [Docs](https://docs.somnia.network/developer/network-info) | 候选；旧表的 Gas 名称已纠正为 `SOMI` |
 | BounceBit | 独立 PoS L1 | BB | 原生币 | EVM / BTCFi / CeDeFi | [Docs](https://docs.bouncebit.io/) | 候选；不是 Bitcoin L2 |
 | Ronin | EVM 应用链/侧链 | RON | 原生币 | EVM / Gaming | [Docs](https://docs.roninchain.com/) | 候选；旧表的 L2 分类已纠正 |
