@@ -235,7 +235,6 @@ mvn compile
 | Harmony | 独立 L1 | ONE | 原生币 | EVM / Sharding | [Docs](https://docs.harmony.one/) | 尽调；历史桥安全事件和生态活跃度需评估 |
 | ThunderCore | 独立 L1 | TT | 原生币 | EVM | [Docs](https://docs.thundercore.com/) | 暂缓；主网 `108`、测试网 `18` 仍运行，主网约 1 秒出块且官方桥提供 TT-USDC／TT-USDT，但 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待客户端从 London 升级并支持 type-4 交易后再接入 |
 | KCC | 独立 EVM 链 | KCS | 原生币 | EVM / KuCoin 生态 | [Docs](https://docs.kcc.io/) | 暂缓；主网 `321`、测试网 `322` 仍运行，官方桥提供 USDC `0x980a5AfEf3D17aD98635F6C5aebCBAedEd3c3430` 与 USDT `0x0039f574eE5cC39bdD162E9A88e3EB1f111bAF48`，但主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待客户端支持 type-4 交易后再接入 |
-| KardiaChain | 独立 L1 | KAI | 原生币 | EVM | [Docs](https://docs.kardiachain.io/) | 候选 |
 | Telos EVM | Telos 上的 EVM 执行环境 | TLOS | 原生币 | Antelope / EVM | [Docs](https://docs.telos.net/) | 专项；需明确只接 Telos EVM，不混用原生 Telos 地址 |
 | Evmos | 独立 L1 | EVMOS | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.evmos.org/) | 候选 |
 | Meter | 独立 L1 | MTR | MTR 支付 Gas；MTRG 用于治理/质押 | EVM | [Docs](https://docs.meter.io/) | 专项；双币模型 |
