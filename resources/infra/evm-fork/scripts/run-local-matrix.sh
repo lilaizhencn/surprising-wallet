@@ -36,6 +36,7 @@ EVM_CHAINS=(
   "WORLD_CHAIN|ETH_WORLD|4801|USDC|sepolia|true"
   "X_LAYER|OKB|1952|USDC,USDT|testnet|true"
   "DEGEN|DEGEN|666666666|USDC,USDT|mainnet|true"
+  "ROBINHOOD_CHAIN|ETH_ROBINHOOD|46630|USDG|testnet|true"
 )
 
 should_run_chain() {

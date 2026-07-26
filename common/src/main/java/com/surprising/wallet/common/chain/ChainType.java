@@ -36,6 +36,7 @@ public enum ChainType {
     MEGAETH("evm", "account"),
     X_LAYER("evm", "account"),
     DEGEN("evm", "account"),
+    ROBINHOOD_CHAIN("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

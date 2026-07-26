@@ -50,6 +50,7 @@ public class WalletRuntimeConfigService {
             Map.entry("MEGAETH", 1_000L),
             Map.entry("X_LAYER", 1_000L),
             Map.entry("DEGEN", 2_000L),
+            Map.entry("ROBINHOOD_CHAIN", 1_000L),
             Map.entry("NEAR", 2_000L),
             Map.entry("HYPERCORE", 2_000L),
             Map.entry("ARBITRUM", 2_000L),

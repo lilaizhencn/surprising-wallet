@@ -59,7 +59,7 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 41 条链、14 个链族：
+运行模型覆盖 42 条链、14 个链族：
 
 | 链族 | 链 |
 |------|-----|
@@ -163,6 +163,7 @@ mvn compile
 | MegaETH | 已完成 | ETH_MEGAETH、USDM | Carrot `6343`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；USDm 按链上实际使用 18 位精度 |
 | X Layer | 已完成 | OKB、USDC、USDT | Testnet `1952`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；两种稳定币均完成全链路测试 |
 | Degen Chain | 已完成 | DEGEN、USDC、USDT | 主网 `666666666`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；官方 canonical USDT 合约当前链上符号为 `aUSD₮` |
+| Robinhood Chain | 已完成 | ETH_ROBINHOOD、USDG | Testnet `46630`；官方 RPC 与 Prague Hardhat 均验证 EIP-7702；主网约 0.1 秒出块；官方资产注册表未列出 USDC／USDT |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -185,7 +186,7 @@ mvn compile
 | ApeChain | Arbitrum Orbit L3 | APE | 自定义原生 Gas 币 | Ethereum / Arbitrum / EVM | [Docs](https://docs.apechain.com/) | 暂缓；主网 `33139` 的官方 RPC 返回 `invalid opcode: opcode 0xef not defined`，Curtis `33111` 的 authorization gas 估算仍为 `21000`，两者均未通过项目 EIP-7702 门禁；主网实测约 0.65 秒出块 |
 | X Layer | Ethereum L2（增强 OP Stack + AggLayer） | OKB | 自定义原生 Gas 币 | Ethereum / EVM | [Docs](https://web3.okx.com/xlayer/docs/developer/quick-start/about-x-layer) | 已完成；主网 `196`、测试网 `1952`，Gas 为 OKB；接入官方推荐 USDC 与 USDT，旧 Polygon CDK ZK 分类已按当前架构纠正 |
 | Degen Chain | Base 上的 Arbitrum Orbit L3 | DEGEN | 自定义原生 Gas 币 | Ethereum / Base / EVM | [Docs](https://docs.degen.tips/) | 已完成；主网 `666666666`，Gas 为 DEGEN；官方 canonical USDC 与 USDT 均已接入，USDT 合约当前链上符号为 `aUSD₮`；公开测试网不可用，本地使用同链 ID 的 Prague Hardhat 验证 |
-| Robinhood Chain | Ethereum L2（Arbitrum） | ETH | 原生币 | Ethereum / EVM / RWA | [Docs](https://docs.robinhood.com/chain/connecting/) | 候选；主网已上线，不再归入“未确认” |
+| Robinhood Chain | Ethereum L2（Arbitrum） | ETH | 原生币 | Ethereum / EVM / RWA | [Docs](https://docs.robinhood.com/chain/connecting/) | 已完成；主网 `4663`、测试网 `46630`，Gas 为 ETH；接入官方 USDG，官方资产注册表未列出 USDC／USDT |
 | Shibarium | Ethereum L2 | BONE | 自定义原生 Gas 币 | Ethereum / EVM / Shiba | [Docs](https://docs.shib.io/) | 候选；Gas 是 BONE，不是 SHI |
 | Katana | Ethereum L2（Agglayer CDK OP Stack） | ETH | 原生币 | Ethereum / EVM / DeFi | [Docs](https://docs.katana.network/katana/technical-reference/network-information/) | 已完成；主网 `747474`、Bokuto `737373`，Gas 为 ETH；接入官方 Vault Bridge USDC 与 USDT |
 | Ink | Ethereum L2（OP Stack） | ETH | 原生币 | Ethereum / EVM | [Docs](https://docs.inkonchain.com/) | 已完成；主网 `57073`、Sepolia `763373`，Gas 为 ETH；官方资产为 USDC.e 与 USDT0，不按普通 USDC／USDT 混记 |

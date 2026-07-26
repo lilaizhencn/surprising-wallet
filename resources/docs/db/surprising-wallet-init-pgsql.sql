@@ -5662,7 +5662,9 @@ VALUES
     ('X_LAYER', 'USDT', 'ERC20', '0x1E4a5963aBFD975d8c9021ce480b42188849D41d', 6, false, true, 1, 1, now(), now()),
     ('DEGEN', 'DEGEN', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('DEGEN', 'USDC', 'ERC20', '0xF1815bd50389c46847f0Bda824eC8da914045D14', 6, false, true, 1, 1, now(), now()),
-    ('DEGEN', 'USDT', 'ERC20', '0x674843C06FF83502ddb4D37c2E09C01cdA38cbc8', 6, false, true, 1, 1, now(), now())
+    ('DEGEN', 'USDT', 'ERC20', '0x674843C06FF83502ddb4D37c2E09C01cdA38cbc8', 6, false, true, 1, 1, now(), now()),
+    ('ROBINHOOD_CHAIN', 'ETH_ROBINHOOD', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('ROBINHOOD_CHAIN', 'USDG', 'ERC20', '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5737,6 +5739,8 @@ VALUES
     ('DEGEN', 'USDC', 'ERC20', '0xF1815bd50389c46847f0Bda824eC8da914045D14', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('DEGEN', 'USDT', 'ERC20', '0x674843C06FF83502ddb4D37c2E09C01cdA38cbc8', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('ROBINHOOD_CHAIN', 'USDG', 'ERC20', '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -5901,6 +5905,14 @@ VALUES
     ('DEGEN', 'mainnet', 'evm', 9023, 60, 'DEGEN',
      'https://rpc.degen.tips', 'https://explorer.degen.tips/tx/',
      40, 40, 1, 0, false, now(), now(), 666666666, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('ROBINHOOD_CHAIN', 'testnet', 'evm', 9024, 60, 'ETH_ROBINHOOD',
+     'https://rpc.testnet.chain.robinhood.com', 'https://explorer.testnet.chain.robinhood.com/tx/',
+     40, 40, 1, 0, false, now(), now(), 46630, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('ROBINHOOD_CHAIN', 'mainnet', 'evm', 9024, 60, 'ETH_ROBINHOOD',
+     'https://rpc.mainnet.chain.robinhood.com', 'https://robinhoodchain.blockscout.com/tx/',
+     40, 40, 1, 0, false, now(), now(), 4663, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6157,6 +6169,18 @@ VALUES
     ('DEGEN', 'mainnet', 'prod', 'official-degen-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://rpc.degen.tips', 'NONE', NULL, 10, 1000, false,
      'Production Degen Chain mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('ROBINHOOD_CHAIN', 'testnet', 'dev', 'official-robinhood-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.testnet.chain.robinhood.com', 'NONE', NULL, 10, 500, false,
+     'Official Robinhood Chain testnet JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('ROBINHOOD_CHAIN', 'testnet', 'test2', 'official-robinhood-testnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.testnet.chain.robinhood.com', 'NONE', NULL, 10, 500, false,
+     'test2 official Robinhood Chain testnet JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('ROBINHOOD_CHAIN', 'mainnet', 'prod', 'official-robinhood-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.mainnet.chain.robinhood.com', 'NONE', NULL, 10, 1000, false,
+     'Production Robinhood Chain mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -6778,6 +6802,8 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0xF1815bd50389c46847f0Bda824eC8da914045D14', NULL, NULL, 6, 'native-gas'),
         ('DEGEN', 'USDT', 'ERC20', 'ERC20',
          '0x674843C06FF83502ddb4D37c2E09C01cdA38cbc8', NULL, NULL, 6, 'native-gas'),
+        ('ROBINHOOD_CHAIN', 'USDG', 'ERC20', 'ERC20',
+         '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',
