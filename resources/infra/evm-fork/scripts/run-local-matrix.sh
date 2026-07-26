@@ -2,26 +2,36 @@
 set -euo pipefail
 
 EVM_MATRIX_ROOT=$(git rev-parse --show-toplevel)
-source "$EVM_MATRIX_ROOT/scripts/regtest/local-postgres.sh"
+EVM_MATRIX_HARDHAT_ROOT="$EVM_MATRIX_ROOT/resources/infra/evm-fork"
+source "$EVM_MATRIX_ROOT/resources/scripts/regtest/local-postgres.sh"
 EVM_MATRIX_TMP=$(mktemp -d -t surprising-evm-matrix.XXXXXX)
 EVM_MATRIX_BUILD_ROOT=$(mktemp -d /tmp/surprising-wallet-evm-matrix-build.XXXXXX)
 EVM_MATRIX_DB="surprising_wallet_test_evm_matrix_$$"
 EVM_MATRIX_NODE_PID=""
 
 EVM_CHAINS=(
-  "ARBITRUM|ETH_ARB|421614|USDC,USDT"
-  "AVAX_C|AVAX_C|43113|USDC,USDT"
-  "BASE|ETH_BASE|84532|USDC,USDT"
-  "BNB|BNB|97|USDC,USDT"
-  "ETH|ETH|11155111|USDC,USDT"
-  "HYPEREVM|HYPE|998|USDC"
-  "LINEA|ETH_LINEA|59141|USDC"
-  "MANTLE|MNT|5003|"
-  "OPTIMISM|ETH_OP|11155420|USDC,USDT"
-  "POLYGON|POL|80002|USDC,USDT"
-  "SCROLL|ETH_SCROLL|534351|USDC"
-  "UNICHAIN|ETH_UNICHAIN|1301|USDC"
+  "ARBITRUM|ETH_ARB|421614|USDC,USDT|sepolia|false"
+  "AVAX_C|AVAX_C|43113|USDC,USDT|fuji|false"
+  "BASE|ETH_BASE|84532|USDC,USDT|sepolia|false"
+  "BERACHAIN|BERA|80069|USDC,USDT0|bepolia|true"
+  "BNB|BNB|97|USDC,USDT|testnet|false"
+  "ETH|ETH|11155111|USDC,USDT|sepolia|false"
+  "HYPEREVM|HYPE|998|USDC|testnet|false"
+  "LINEA|ETH_LINEA|59141|USDC|sepolia|false"
+  "MANTLE|MNT|5003||sepolia|false"
+  "OPTIMISM|ETH_OP|11155420|USDC,USDT|sepolia|false"
+  "POLYGON|POL|80002|USDC,USDT|amoy|false"
+  "SCROLL|ETH_SCROLL|534351|USDC|sepolia|false"
+  "UNICHAIN|ETH_UNICHAIN|1301|USDC|sepolia|false"
 )
+
+should_run_chain() {
+  local chain=$1
+  if [[ -z "${CHAIN_FILTER:-}" ]]; then
+    return 0
+  fi
+  [[ ",${CHAIN_FILTER}," == *",${chain},"* ]]
+}
 
 stop_node() {
   if [[ -n "$EVM_MATRIX_NODE_PID" ]] && kill -0 "$EVM_MATRIX_NODE_PID" 2>/dev/null; then
@@ -74,8 +84,8 @@ if curl -fsS -m 1 \
   exit 1
 fi
 
-if [[ ! -d "$EVM_MATRIX_ROOT/evm-fork/node_modules" ]]; then
-  npm --prefix "$EVM_MATRIX_ROOT/evm-fork" ci
+if [[ ! -d "$EVM_MATRIX_HARDHAT_ROOT/node_modules" ]]; then
+  npm --prefix "$EVM_MATRIX_HARDHAT_ROOT" ci
 fi
 
 rsync -a \
@@ -86,7 +96,8 @@ rsync -a \
   --exclude artifacts \
   --exclude logs \
   "$EVM_MATRIX_ROOT/" "$EVM_MATRIX_BUILD_ROOT/"
-ln -s "$EVM_MATRIX_ROOT/evm-fork/node_modules" "$EVM_MATRIX_BUILD_ROOT/evm-fork/node_modules"
+ln -s "$EVM_MATRIX_HARDHAT_ROOT/node_modules" \
+  "$EVM_MATRIX_BUILD_ROOT/resources/infra/evm-fork/node_modules"
 
 local_pg_create "$EVM_MATRIX_DB"
 
@@ -115,12 +126,43 @@ wait_for_rpc() {
   done
 }
 
+tested_chain_count=0
 for definition in "${EVM_CHAINS[@]}"; do
-  IFS='|' read -r chain native_symbol chain_id token_symbols <<<"$definition"
+  IFS='|' read -r chain native_symbol chain_id token_symbols network test_eip7702 <<<"$definition"
+  should_run_chain "$chain" || continue
+  tested_chain_count=$((tested_chain_count + 1))
 
   local_pg_psql "$EVM_MATRIX_DB" -q -v ON_ERROR_STOP=1 \
-    -f "$EVM_MATRIX_BUILD_ROOT/docs/db/surprising-wallet-init-pgsql.sql" \
+    -f "$EVM_MATRIX_BUILD_ROOT/resources/docs/db/surprising-wallet-init-pgsql.sql" \
     >"$EVM_MATRIX_TMP/$chain.schema.log"
+
+  local_pg_psql "$EVM_MATRIX_DB" -q -v ON_ERROR_STOP=1 \
+    -v chain="$chain" -v network="$network" -v token_symbols="$token_symbols" <<'SQL'
+UPDATE chain_profile
+SET enabled = false,
+    scan_enabled = false,
+    withdraw_enabled = false,
+    collection_enabled = false,
+    transfer_enabled = false,
+    updated_at = now();
+
+UPDATE chain_profile
+SET enabled = true,
+    scan_enabled = true,
+    withdraw_enabled = true,
+    collection_enabled = true,
+    transfer_enabled = true,
+    updated_at = now()
+WHERE chain = :'chain'
+  AND network = :'network';
+
+UPDATE token_config
+SET enabled = (
+        chain = :'chain'
+        AND symbol = ANY (string_to_array(:'token_symbols', ','))
+    ),
+    updated_at = now();
+SQL
 
   configured_tokens=$(local_pg_psql "$EVM_MATRIX_DB" -Atqc \
     "select coalesce(string_agg(symbol, ',' order by symbol), '') from token_config where chain='$chain' and enabled=true")
@@ -131,9 +173,14 @@ for definition in "${EVM_CHAINS[@]}"; do
     exit 1
   fi
 
+  if [[ "$test_eip7702" == "true" ]]; then
+    HARDHAT_CHAIN_ID="$chain_id" HARDHAT_DISABLE_TELEMETRY_PROMPT=true \
+      npm --prefix "$EVM_MATRIX_BUILD_ROOT/resources/infra/evm-fork" run test:7702
+  fi
+
   hardhat_log="$EVM_MATRIX_TMP/$chain.hardhat.log"
   (
-    cd "$EVM_MATRIX_BUILD_ROOT/evm-fork"
+    cd "$EVM_MATRIX_BUILD_ROOT/resources/infra/evm-fork"
     exec env HARDHAT_CHAIN_ID="$chain_id" HARDHAT_DISABLE_TELEMETRY_PROMPT=true \
       ./node_modules/.bin/hardhat node --hostname 127.0.0.1 --port 8545
   ) >"$hardhat_log" 2>&1 &
@@ -141,13 +188,14 @@ for definition in "${EVM_CHAINS[@]}"; do
   wait_for_rpc "$chain_id" "$hardhat_log"
 
   EVM_CHAIN="$chain" \
+  EVM_NETWORK="$network" \
   TOKEN_SYMBOLS="$token_symbols" \
   PG_URL="$(local_pg_uri "$EVM_MATRIX_DB")" \
   DEPLOYMENT_OUT_DIR="$EVM_MATRIX_TMP/deployments" \
-    npm --prefix "$EVM_MATRIX_BUILD_ROOT/evm-fork" run deploy:mock >/dev/null
+    npm --prefix "$EVM_MATRIX_BUILD_ROOT/resources/infra/evm-fork" run deploy:mock >/dev/null
 
   mvn -q -f "$EVM_MATRIX_BUILD_ROOT/pom.xml" \
-    -pl backendservices/wallet-parent/wallet-service -am \
+    -pl wallet-service -am \
     -Dtest=EvmForkFullChainIntegrationTest,EvmForkMultiUserBusinessFlowIntegrationTest \
     -Dsurefire.failIfNoSpecifiedTests=false \
     -Devm.fork.enabled=true \
@@ -175,4 +223,8 @@ for definition in "${EVM_CHAINS[@]}"; do
   stop_node
 done
 
-printf 'EVM local matrix passed for %s chains\n' "${#EVM_CHAINS[@]}"
+if [[ "$tested_chain_count" == 0 ]]; then
+  printf 'CHAIN_FILTER did not match any configured EVM chain: %s\n' "${CHAIN_FILTER:-}" >&2
+  exit 1
+fi
+printf 'EVM local matrix passed for %s chains\n' "$tested_chain_count"

@@ -222,7 +222,7 @@ class EvmForkFullChainIntegrationTest {
         if (isValidMasterKey(fromEnv)) {
             return fromEnv.trim();
         }
-        Path yaml = projectRoot().resolve("backendservices/wallet-sig2/src/main/resources/application-test.yaml");
+        Path yaml = projectRoot().resolve("wallet-sig2/src/main/resources/application-test.yaml");
         for (String line : Files.readAllLines(yaml)) {
             String trimmed = line.trim();
             if (trimmed.startsWith("masterKey:")) {
@@ -257,8 +257,8 @@ class EvmForkFullChainIntegrationTest {
         Path current = Path.of("").toAbsolutePath();
         while (current != null) {
             if (Files.exists(current.resolve("pom.xml"))
-                    && Files.exists(current.resolve("backendservices"))
-                    && Files.exists(current.resolve("currency-sdks"))) {
+                    && Files.exists(current.resolve("wallet-service"))
+                    && Files.exists(current.resolve("common"))) {
                 return current;
             }
             current = current.getParent();

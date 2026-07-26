@@ -5625,7 +5625,10 @@ VALUES
     ('SCROLL', 'USDC', 'ERC20', '0x7878290DB8C4f02bd06E0E249617871c19508bE6', 6, false, true, 1, 1, now(), now()),
     ('SCROLL', 'USDT', 'ERC20', '0xf55BEC9cafDbE8730f096Aa55dad6D22d44099Df', 6, false, false, 1, 1, now(), now()),
     ('UNICHAIN', 'ETH_UNICHAIN', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('UNICHAIN', 'USDC', 'ERC20', '0x31d0220469e10c4E71834a79b1f276d740d3768F', 6, false, true, 1, 1, now(), now())
+    ('UNICHAIN', 'USDC', 'ERC20', '0x31d0220469e10c4E71834a79b1f276d740d3768F', 6, false, true, 1, 1, now(), now()),
+    ('BERACHAIN', 'BERA', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('BERACHAIN', 'USDC', 'ERC20', '0x549943e04f40284185054145c6E4e9568C1D3241', 6, false, true, 1, 1, now(), now()),
+    ('BERACHAIN', 'USDT0', 'ERC20', '0x779Ded0c9e1022225f8E0630b35a9b54bE713736', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5654,7 +5657,11 @@ VALUES
     ('SCROLL', 'USDT', 'ERC20', '0xf55BEC9cafDbE8730f096Aa55dad6D22d44099Df', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('UNICHAIN', 'USDC', 'ERC20', '0x31d0220469e10c4E71834a79b1f276d740d3768F', 6, true,
-     1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1)
+     1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('BERACHAIN', 'USDC', 'ERC20', '0x549943e04f40284185054145c6E4e9568C1D3241', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('BERACHAIN', 'USDT0', 'ERC20', '0x779Ded0c9e1022225f8E0630b35a9b54bE713736', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
     "contract_address" = EXCLUDED."contract_address",
@@ -5710,6 +5717,14 @@ VALUES
     ('UNICHAIN', 'mainnet', 'evm', 9009, 60, 'ETH_UNICHAIN',
      'https://mainnet.unichain.org', 'https://uniscan.xyz/tx/',
      40, 40, 1, 0, false, now(), now(), 130, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('BERACHAIN', 'bepolia', 'evm', 9010, 60, 'BERA',
+     'https://bepolia.rpc.berachain.com', 'https://testnet.berascan.com/tx/',
+     20, 20, 1, 0, false, now(), now(), 80069, 'eip1559', 200,
+     false, false, false, false, 0, 200),
+    ('BERACHAIN', 'mainnet', 'evm', 9010, 60, 'BERA',
+     'https://rpc.berachain.com', 'https://berascan.com/tx/',
+     20, 20, 1, 0, false, now(), now(), 80094, 'eip1559', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -5798,6 +5813,18 @@ VALUES
     ('UNICHAIN', 'mainnet', 'prod', 'official-unichain-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://mainnet.unichain.org', 'NONE', NULL, 10, 1000, false,
      'Production Unichain mainnet JSON-RPC endpoint. Public endpoint is rate-limited; enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('BERACHAIN', 'bepolia', 'dev', 'official-berachain-bepolia', 'rpc', 'HTTP_JSON_RPC',
+     'https://bepolia.rpc.berachain.com', 'NONE', NULL, 10, 500, false,
+     'Official Berachain Bepolia JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('BERACHAIN', 'bepolia', 'test2', 'official-berachain-bepolia', 'rpc', 'HTTP_JSON_RPC',
+     'https://bepolia.rpc.berachain.com', 'NONE', NULL, 10, 500, false,
+     'test2 official Berachain Bepolia JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('BERACHAIN', 'mainnet', 'prod', 'official-berachain-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://rpc.berachain.com', 'NONE', NULL, 10, 1000, false,
+     'Production Berachain mainnet JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -6373,6 +6400,10 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
          'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
          '41a614f803b6fd780986a42c78ec9c7f77e6ded13c', 6, 'energy-bandwidth'),
+        ('BERACHAIN', 'USDC', 'ERC20', 'ERC20',
+         '0x549943e04f40284185054145c6E4e9568C1D3241', NULL, NULL, 6, 'native-gas'),
+        ('BERACHAIN', 'USDT0', 'ERC20', 'ERC20',
+         '0x779Ded0c9e1022225f8E0630b35a9b54bE713736', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',

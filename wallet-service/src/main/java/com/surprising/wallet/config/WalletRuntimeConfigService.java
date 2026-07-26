@@ -50,6 +50,7 @@ public class WalletRuntimeConfigService {
             Map.entry("ZKSYNC", 2_000L),
             Map.entry("MANTLE", 2_000L),
             Map.entry("UNICHAIN", 2_000L),
+            Map.entry("BERACHAIN", 2_000L),
             Map.entry("TRON", 3_000L),
             Map.entry("BSC", 3_000L),
             Map.entry("POLYGON", 3_000L),

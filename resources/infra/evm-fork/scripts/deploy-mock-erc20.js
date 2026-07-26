@@ -14,6 +14,7 @@ const TOKEN_SYMBOLS = (process.env.TOKEN_SYMBOLS ?? "USDC,USDT")
 const TOKEN_DEFINITIONS = {
   USDC: { symbol: "USDC", name: "USD Coin", decimals: 6 },
   USDT: { symbol: "USDT", name: "Tether USD", decimals: 6 },
+  USDT0: { symbol: "USDT0", name: "Tether USD0", decimals: 6 },
 };
 
 async function upsertTokenConfig(client, chain, token) {
