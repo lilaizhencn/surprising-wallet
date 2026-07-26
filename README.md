@@ -311,7 +311,6 @@ mvn compile
 | 网络 | 原分类 | 当前结论 | 官方依据/备注 |
 |---|---|---|---|
 | Fantom Opera | 独立 L1 | 不新增接入，优先 Sonic | [迁移说明](https://docs.soniclabs.com/migration/overview)：Opera 仍运行，但后续开发已转向 Sonic |
-| Dogechain | Dogecoin 侧链 | 暂停 | 官方资料长期未形成可持续的节点、最终性和运维保证；历史 Gas 为 wDOGE，恢复评估前先证明主网持续性 |
 | zkLink Nova | 聚合 zkEVM L3 | 暂停 | [Official](https://zk.link/)；当前持续运营、官方节点和长期维护信息不足，不能仅凭旧发布材料接入 |
 | Godwoken | Nervos L2 | 暂停 | [Nervos 报告](https://www.nervos.org/assets/pdfs/Nervos_Foundation_Annual_Report_2023.pdf) 已说明原团队解散；即使社区链仍运行也不满足近期接入条件 |
 | Juchain | 未确认 | 暂停 | 未找到可验证的官方开发文档、主网参数和持续运维入口；避免与同名资产/营销页面混淆 |
