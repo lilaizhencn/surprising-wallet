@@ -198,7 +198,7 @@ mvn compile
 
 | 网络 | 层级/网络形态 | Gas 资产 | Gas 模式 | 生态/执行环境 | 官方入口 | 状态与备注 |
 |---|---|---|---|---|---|---|
-| opBNB | BNB Smart Chain L2（OP Stack） | BNB | 原生币 | BNB Chain / EVM | [Docs](https://docs.bnbchain.org/bnb-opbnb/) | 候选 |
+| opBNB | BNB Smart Chain L2（OP Stack） | BNB | 原生币 | BNB Chain / EVM | [Docs](https://docs.bnbchain.org/bnb-opbnb/) | 暂缓；主网 `204` 与测试网 `5611` 的官方 RPC 均未通过 EIP-7702 authorization intrinsic gas 门禁（仍返回 `21000`）；主网实测约 0.25 秒出块 |
 | Etherlink | Tezos Smart Rollup L2 | XTZ | 原生币 | Tezos / EVM | [Docs](https://docs.etherlink.com/) | 候选；结算层不是 Ethereum |
 | Aurora | NEAR 上的 EVM 执行网络 | ETH | ETH 通过 relayer 支付 Gas | NEAR / EVM | [Docs](https://doc.aurora.dev/dev-reference/network-endpoints/) | 候选；旧表写成 NEAR Gas 已纠正 |
 | IOTA EVM | IOTA 主网上的 EVM L2 | IOTA | 原生币 | IOTA / EVM | [Official](https://www.iota.org/products/evm) | 候选；与 IOTA Rebased L1 的地址/资产模型分开接入 |
