@@ -162,6 +162,7 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.INK, "ETH_INK", 763373L, 1L);
         registerProfile(ChainType.TAIKO, "ETH_TAIKO", 167013L, 1L);
         registerProfile(ChainType.SONEIUM, "ETH_SONEIUM", 1946L, 1L);
+        registerProfile(ChainType.MODE, "ETH_MODE", 919L, 1L);
     }
     private void registerDbProfiles() {
         for (AccountChainProfile profile : repository.listEnabledChainProfiles()) {

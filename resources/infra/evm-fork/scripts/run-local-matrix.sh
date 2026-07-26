@@ -22,6 +22,7 @@ EVM_CHAINS=(
   "INK|ETH_INK|763373|USDC_E,USDT0|sepolia|true"
   "LINEA|ETH_LINEA|59141|USDC|sepolia|false"
   "MANTLE|MNT|5003||sepolia|false"
+  "MODE|ETH_MODE|919|USDC,USDT|sepolia|true"
   "MONAD|MON|10143|USDC,USDT0|testnet|true"
   "TAIKO|ETH_TAIKO|167013||hoodi|true"
   "OPTIMISM|ETH_OP|11155420|USDC,USDT|sepolia|false"

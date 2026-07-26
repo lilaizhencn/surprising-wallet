@@ -30,6 +30,7 @@ public enum ChainType {
     INK("evm", "account"),
     TAIKO("evm", "account"),
     SONEIUM("evm", "account"),
+    MODE("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

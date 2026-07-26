@@ -44,6 +44,7 @@ public class WalletRuntimeConfigService {
             Map.entry("INK", 1_000L),
             Map.entry("TAIKO", 2_000L),
             Map.entry("SONEIUM", 2_000L),
+            Map.entry("MODE", 2_000L),
             Map.entry("NEAR", 2_000L),
             Map.entry("HYPERCORE", 2_000L),
             Map.entry("ARBITRUM", 2_000L),

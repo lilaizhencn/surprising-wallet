@@ -5646,7 +5646,10 @@ VALUES
     ('TAIKO', 'ETH_TAIKO', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('SONEIUM', 'ETH_SONEIUM', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('SONEIUM', 'USDC_E', 'ERC20', '0xbA9986D2381edf1DA03B0B9c1f8b00dc4AacC369', 6, false, true, 1, 1, now(), now()),
-    ('SONEIUM', 'USDT', 'ERC20', '0x3A337a6adA9d885b6Ad95ec48F9b75f197b5AE35', 6, false, true, 1, 1, now(), now())
+    ('SONEIUM', 'USDT', 'ERC20', '0x3A337a6adA9d885b6Ad95ec48F9b75f197b5AE35', 6, false, true, 1, 1, now(), now()),
+    ('MODE', 'ETH_MODE', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('MODE', 'USDC', 'ERC20', '0xd988097fb8612cc24eeC14542bC03424c656005f', 6, false, true, 1, 1, now(), now()),
+    ('MODE', 'USDT', 'ERC20', '0xf0F161fDA2712DB8b566946122a5af183995e2eD', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5701,6 +5704,10 @@ VALUES
     ('SONEIUM', 'USDC_E', 'ERC20', '0xbA9986D2381edf1DA03B0B9c1f8b00dc4AacC369', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('SONEIUM', 'USDT', 'ERC20', '0x3A337a6adA9d885b6Ad95ec48F9b75f197b5AE35', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('MODE', 'USDC', 'ERC20', '0xd988097fb8612cc24eeC14542bC03424c656005f', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('MODE', 'USDT', 'ERC20', '0xf0F161fDA2712DB8b566946122a5af183995e2eD', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -5821,6 +5828,14 @@ VALUES
     ('SONEIUM', 'mainnet', 'evm', 9017, 60, 'ETH_SONEIUM',
      'https://rpc.soneium.org', 'https://soneium.blockscout.com/tx/',
      40, 40, 1, 0, false, now(), now(), 1868, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('MODE', 'sepolia', 'evm', 9018, 60, 'ETH_MODE',
+     'https://sepolia.mode.network', 'https://sepolia.explorer.mode.network/tx/',
+     40, 40, 1, 0, false, now(), now(), 919, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('MODE', 'mainnet', 'evm', 9018, 60, 'ETH_MODE',
+     'https://mainnet.mode.network', 'https://explorer.mode.network/tx/',
+     40, 40, 1, 0, false, now(), now(), 34443, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6005,6 +6020,18 @@ VALUES
     ('SONEIUM', 'mainnet', 'prod', 'official-soneium-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://rpc.soneium.org', 'NONE', NULL, 10, 1000, false,
      'Production Soneium mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('MODE', 'sepolia', 'dev', 'official-mode-sepolia', 'rpc', 'HTTP_JSON_RPC',
+     'https://sepolia.mode.network', 'NONE', NULL, 10, 500, false,
+     'Official Mode Sepolia JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('MODE', 'sepolia', 'test2', 'official-mode-sepolia', 'rpc', 'HTTP_JSON_RPC',
+     'https://sepolia.mode.network', 'NONE', NULL, 10, 500, false,
+     'test2 official Mode Sepolia JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('MODE', 'mainnet', 'prod', 'official-mode-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://mainnet.mode.network', 'NONE', NULL, 10, 1000, false,
+     'Production Mode mainnet public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -6606,6 +6633,10 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0xbA9986D2381edf1DA03B0B9c1f8b00dc4AacC369', NULL, NULL, 6, 'native-gas'),
         ('SONEIUM', 'USDT', 'ERC20', 'ERC20',
          '0x3A337a6adA9d885b6Ad95ec48F9b75f197b5AE35', NULL, NULL, 6, 'native-gas'),
+        ('MODE', 'USDC', 'ERC20', 'ERC20',
+         '0xd988097fb8612cc24eeC14542bC03424c656005f', NULL, NULL, 6, 'native-gas'),
+        ('MODE', 'USDT', 'ERC20', 'ERC20',
+         '0xf0F161fDA2712DB8b566946122a5af183995e2eD', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',
