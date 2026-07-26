@@ -16,6 +16,7 @@ on:
       - resources/infra/systemd/surprising-wallet.service
       - pom.xml
       - scripts/deploy/backend-deploy.sh
+      - scripts/deploy/backend-deploy-trigger.sh
   workflow_dispatch:
 
 permissions:
@@ -28,7 +29,7 @@ concurrency:
 jobs:
   trigger:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 2
     steps:
       - uses: actions/checkout@v4
 
@@ -43,10 +44,11 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 0644 "$HOME/.ssh/known_hosts"
 
-      - name: Deploy backend and wait for result
+      - name: Notify server to deploy
         env:
           DEPLOY_HOST: ${{ secrets.BACKEND_DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.BACKEND_DEPLOY_USER }}
         run: |
           ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
             -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST"
+          echo "Backend deployment accepted by server"
