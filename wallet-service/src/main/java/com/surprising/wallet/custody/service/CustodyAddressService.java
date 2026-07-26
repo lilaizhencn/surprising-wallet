@@ -1,5 +1,6 @@
 package com.surprising.wallet.custody.service;
 
+import com.surprising.wallet.custody.model.PageView;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -159,6 +160,27 @@ public class CustodyAddressService {
                 .stream()
                 .map(this::toView)
                 .toList();
+    }
+
+    public PageView<AddressView> page(CustodyPrincipal principal, String chain, String source,
+                                      String status, String search, int limit, int offset) {
+        requireScope(principal, "addresses:read");
+        int pageSize = Math.min(Math.max(limit, 1), 200);
+        int pageOffset = Math.max(offset, 0);
+        String normalizedChain = upperOrEmpty(chain);
+        String normalizedSource = upperOrEmpty(source);
+        String normalizedStatus = upperOrEmpty(status);
+        return new PageView<>(
+                custodyRepository.listAddresses(
+                                principal.tenantId(), normalizedChain, normalizedSource,
+                                normalizedStatus, search, pageSize, pageOffset)
+                        .stream()
+                        .map(this::toView)
+                        .toList(),
+                custodyRepository.countAddresses(
+                        principal.tenantId(), normalizedChain, normalizedSource,
+                        normalizedStatus, search),
+                pageSize, pageOffset);
     }
 
     @Transactional(rollbackFor = Throwable.class)

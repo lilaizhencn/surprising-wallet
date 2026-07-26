@@ -44,14 +44,22 @@
 
 | 模块 | 职责 |
 |---|---|
-| `wallet-api` | Custody/Console REST API、充值扫描任务、提现批处理、归集协调、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
-| `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
+| `wallet-api` | Custody/Console REST API、按链周期触发充值扫描、提现批处理、归集协调、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
+| `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、出块速度扫描策略、运行时总开关与链开关、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-sig1` | BTC-like 2-of-3 第一签服务：对 BTC、BCH、LTC、DOGE 提现交易生成部分签名，轮询 Redis 队列 |
 | `wallet-sig2` | 第二签服务：对 BTC、BCH、LTC、DOGE、ETH、ERC20、TRON 交易完成最终签名并广播 |
 | `common` | 共享基础设施：Redis 封装、链数据模型、钱包密钥管理、Ed25519 密钥派生、Ethereum 密码学工具 |
 | `chain-sdks` | Bitcoin-like 链和 TRON 链 SDK：多签地址、SegWit 交易、UTXO 选择、BIP32、gRPC 客户端、Protobuf 合约、ECKey 密码学 |
 
 所有模块的 parent POM 为根目录 `pom.xml`，继承 Spring Boot starter parent 并提供统一的版本和依赖管理。
+
+## 调度与运行时开关
+
+- Account-Chain 调度器每秒做轻量到期检查，UTXO 调度器每 5 秒检查；只有达到该链扫描周期时才访问 RPC。
+- 扫描周期由 `WalletRuntimeConfigService` 集中维护，快速链为 2-5 秒，ETH 为 12 秒，ADA 为 20 秒，DOGE/LTC/BTC/BCH 为 15/30/60/60 秒，未知新链默认 10 秒。
+- 每次实际执行都实时读取 PostgreSQL 中的 `global.all.enabled`、全局任务开关和 `chain_profile` 链级任务开关，后台修改无需重启。
+- 开关关闭时阻止新的扫描、提现构建、归集和转账动作；已广播交易的确认、对账与回调继续运行，避免资金状态永久停留在中间态。
+- XMR 使用独立串行全流程任务，不再由通用 Account-Chain 扫描任务重复执行。
 
 ## 链族
 

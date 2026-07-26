@@ -1,5 +1,6 @@
 package com.surprising.wallet.custody.service;
 
+import com.surprising.wallet.custody.model.PageView;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.custody.repository.CustodyRepository.AddressRecord;
@@ -174,6 +175,25 @@ public class CustodyWithdrawalService {
                 upperOrEmpty(status), search, limit, offset);
     }
 
+    public PageView<Map<String, Object>> withdrawalPage(
+            CustodyPrincipal principal, String chain, String assetSymbol, String status,
+            String search, int limit, int offset) {
+        requireScope(principal, "withdrawals:read");
+        int pageSize = Math.min(Math.max(limit, 1), 200);
+        int pageOffset = Math.max(offset, 0);
+        String normalizedChain = upperOrEmpty(chain);
+        String normalizedAsset = upperOrEmpty(assetSymbol);
+        String normalizedStatus = upperOrEmpty(status);
+        return new PageView<>(
+                repository.listCustodyWithdrawals(
+                        principal.tenantId(), normalizedChain, normalizedAsset,
+                        normalizedStatus, search, pageSize, pageOffset),
+                repository.countCustodyWithdrawals(
+                        principal.tenantId(), normalizedChain, normalizedAsset,
+                        normalizedStatus, search),
+                pageSize, pageOffset);
+    }
+
     public List<Map<String, Object>> deposits(CustodyPrincipal principal, String chain,
                                                String assetSymbol, String status,
                                                String search, int limit, int offset) {
@@ -181,6 +201,24 @@ public class CustodyWithdrawalService {
         return repository.listCustodyDeposits(
                 principal.tenantId(), upperOrEmpty(chain), upperOrEmpty(assetSymbol),
                 upperOrEmpty(status), search, limit, offset);
+    }
+    public PageView<Map<String, Object>> depositPage(
+            CustodyPrincipal principal, String chain, String assetSymbol, String status,
+            String search, int limit, int offset) {
+        requireScope(principal, "deposits:read");
+        int pageSize = Math.min(Math.max(limit, 1), 200);
+        int pageOffset = Math.max(offset, 0);
+        String normalizedChain = upperOrEmpty(chain);
+        String normalizedAsset = upperOrEmpty(assetSymbol);
+        String normalizedStatus = upperOrEmpty(status);
+        return new PageView<>(
+                repository.listCustodyDeposits(
+                        principal.tenantId(), normalizedChain, normalizedAsset,
+                        normalizedStatus, search, pageSize, pageOffset),
+                repository.countCustodyDeposits(
+                        principal.tenantId(), normalizedChain, normalizedAsset,
+                        normalizedStatus, search),
+                pageSize, pageOffset);
     }
     private WithdrawalView replay(UUID tenantId, String key, String requestHash) {
         IdempotencyRecord existing = repository.findIdempotency(tenantId, key, CREATE_OPERATION)

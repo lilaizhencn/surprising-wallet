@@ -77,7 +77,8 @@ public class TronDepositScanner {
                 detected.add(event);
             }
         }
-        repository.updateScanHeight(ChainType.TRON.name(), "TRON_TRX", bestHeight, blockHeight);
+        long safeHeight = Math.max(0L, blockHeight - requiredConfirmations + 1L);
+        repository.updateScanHeight(ChainType.TRON.name(), "TRON_TRX", blockHeight, safeHeight);
         return detected;
     }
 
@@ -105,7 +106,8 @@ public class TronDepositScanner {
                 detected.add(event);
             }
         }
-        repository.updateScanHeight(ChainType.TRON.name(), "TRON_TRC20", bestHeight, blockHeight);
+        long safeHeight = Math.max(0L, blockHeight - requiredConfirmations + 1L);
+        repository.updateScanHeight(ChainType.TRON.name(), "TRON_TRC20", blockHeight, safeHeight);
         return detected;
     }
 

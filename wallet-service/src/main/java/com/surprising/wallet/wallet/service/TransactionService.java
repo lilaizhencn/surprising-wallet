@@ -87,7 +87,8 @@ public class TransactionService {
         runtimeConfigService.requireTaskEnabled(chainName(currency), WalletRuntimeConfigService.TASK_SCAN,
                 "legacy saveTransaction");
         long requiredConfirmations = blockchainRuntimeService.depositConfirmationThreshold(currency);
-        if (dto.getConfirmNum() != null && dto.getConfirmNum() >= requiredConfirmations) {
+        if (isUnifiedBitcoinLike(currency)
+                || (dto.getConfirmNum() != null && dto.getConfirmNum() >= requiredConfirmations)) {
             creditDepositIfNeeded(dto, currency, requiredConfirmations);
         }
         // String depositKey = WALLET_DEPOSIT_KEY + dto.getBiz();

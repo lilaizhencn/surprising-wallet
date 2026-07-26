@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 /**
- * Account-Chain 入金扫描任务，按固定周期拉取各链充值交易。
+ * Account-Chain 入金扫描任务，按链出块速度拉取充值交易。
  */
 public class AccountChainDepositScanJob {
 
@@ -20,16 +20,18 @@ public class AccountChainDepositScanJob {
     /**
      * Account-Chain 充值扫描任务。
      * <p>
-     * 每 30 秒（offset 11s）执行一次：遍历所有启用的 account-chain 链
+     * 每秒检查一次：仅扫描达到各自出块节流周期且开关有效的 account-chain 链
      * （SOLANA、TRON、APTOS、SUI、TON、XRP、ADA、NEAR 及 EVM 非 7702 链），
      * 调用对应的链适配器逐块扫描充值交易并写入 deposit_record。
      * <p>
      * 注意：BTC/BCH/LTC/DOGE 等 UTXO 链由独立的 {@code ScanBlockJob} 子类处理。
      */
-    @Scheduled(scheduler = "accountTaskScheduler", cron = "11/30 * * * * ?")
+    @Scheduled(
+            scheduler = "accountTaskScheduler",
+            fixedDelayString = "${sw.wallet.account.deposit-schedule-check-delay:1000}")
     public void run() {
         log.debug("AccountChain deposit scan job begin");
-        workflowService.scanDeposits();
+        workflowService.scanDueDeposits();
         log.debug("AccountChain deposit scan job end");
     }
 }

@@ -107,6 +107,7 @@ public class CustodyTenantChainService {
                 .distinct().toList();
         return new ChainView(
                 row.chain(), row.network(), row.family(), row.nativeSymbol(),
+                row.eip7702Enabled(),
                 enabledAssets, tokens, row.status(), "ACTIVE".equals(row.status()),
                 row.scanEnabled(), row.withdrawalEnabled(), row.transferEnabled(),
                 adapter.capabilities(),
@@ -158,6 +159,7 @@ public class CustodyTenantChainService {
             String network,
             String family,
             String nativeSymbol,
+            boolean eip7702Enabled,
             List<String> assetSymbols,
             List<TokenView> tokens,
             String status,

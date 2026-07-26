@@ -92,6 +92,31 @@ class CardanoDepositScanner {
                             tx, confirmations, requiredConfirmations, events);
                 }
             }
+            for (var pending : repository.listPendingDeposits(CHAIN, requiredConfirmations, 500)) {
+                int confirmations = confirmations(latest, pending.blockHeight());
+                if (confirmations <= pending.confirmations()) {
+                    continue;
+                }
+                CardanoBackendClient.requireSuccess(
+                        backend.getTransactionService().getTransactionUtxos(pending.txHash()),
+                        "pending deposit transaction utxos");
+                repository.recordAndCreditDeposit(
+                        new DepositEvent(
+                                ChainType.ADA,
+                                pending.assetSymbol(),
+                                pending.txHash(),
+                                pending.fromAddress(),
+                                pending.toAddress(),
+                                pending.amount(),
+                                pending.blockHeight(),
+                                pending.blockHash(),
+                                confirmations,
+                                pending.contractAddress(),
+                                pending.rawPayload()),
+                        pending.logIndex(),
+                        requiredConfirmations,
+                        pending.accountId());
+            }
             long safeHeight = Math.max(0L, latest - requiredConfirmations + 1L);
             repository.updateScanHeight(CHAIN, SCANNER, latest, safeHeight);
             return events;

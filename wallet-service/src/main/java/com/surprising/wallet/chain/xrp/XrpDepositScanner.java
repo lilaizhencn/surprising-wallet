@@ -259,7 +259,8 @@ class XrpDepositScanner {
     }
     private int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();
-        return batchSize == null || batchSize <= 0 ? 100 : batchSize;
+        int configured = batchSize == null || batchSize <= 0 ? 100 : batchSize;
+        return Math.max(configured, Math.max(1, profile.getDepositConfirmations()));
     }
     private boolean isUserDepositAddress(ChainAddressRecord address) {
         return address.getUserId() != HotWalletRules.DEFAULT_HOT_USER_ID;

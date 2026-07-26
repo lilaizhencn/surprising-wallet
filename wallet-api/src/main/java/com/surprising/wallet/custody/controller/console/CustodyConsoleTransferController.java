@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+import com.surprising.wallet.custody.model.PageView;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.service.CustodyWithdrawalService;
 
@@ -38,7 +39,7 @@ public class CustodyConsoleTransferController {
      * 控制台分页查询充值记录。
      */
     @GetMapping("/deposits")
-    public List<Map<String, Object>> deposits(
+    public PageView<Map<String, Object>> deposits(
             @RequestParam(defaultValue = "") String chain,
             @RequestParam(defaultValue = "") String assetSymbol,
             @RequestParam(defaultValue = "") String status,
@@ -46,7 +47,7 @@ public class CustodyConsoleTransferController {
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
-        return transfers.deposits(
+        return transfers.depositPage(
                 CustodyRequestSupport.requirePrincipal(request),
                 chain, assetSymbol, status, search, limit, offset);
     }
@@ -55,7 +56,7 @@ public class CustodyConsoleTransferController {
      * 控制台分页查询提现记录。
      */
     @GetMapping("/withdrawals")
-    public List<Map<String, Object>> withdrawals(
+    public PageView<Map<String, Object>> withdrawals(
             @RequestParam(defaultValue = "") String chain,
             @RequestParam(defaultValue = "") String assetSymbol,
             @RequestParam(defaultValue = "") String status,
@@ -63,7 +64,7 @@ public class CustodyConsoleTransferController {
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
-        return transfers.withdrawals(
+        return transfers.withdrawalPage(
                 CustodyRequestSupport.requirePrincipal(request),
                 chain, assetSymbol, status, search, limit, offset);
     }

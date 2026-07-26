@@ -68,7 +68,8 @@ class SuiDepositScanner {
                         profile, latest, platformAddresses, events);
             }
         }
-        repository.updateScanHeight(CHAIN, SCANNER, latest, end);
+        long safeHeight = Math.max(0L, end - profile.getDepositConfirmations() + 1L);
+        repository.updateScanHeight(CHAIN, SCANNER, end, safeHeight);
         return events;
     }
     private void addTargets(List<AssetScanTarget> targets, String symbol, String coinType) {
@@ -191,12 +192,15 @@ class SuiDepositScanner {
                 });
     }
     private int scanBatchSize(AccountChainProfile profile) {
+        int requiredConfirmations = Math.max(1, profile.getDepositConfirmations());
         Long maxBlocks = profile.getScanMaxBlocksPerRun();
         if (maxBlocks != null && maxBlocks > 0L) {
-            return (int) Math.min(Integer.MAX_VALUE, maxBlocks);
+            return Math.max(requiredConfirmations,
+                    (int) Math.min(Integer.MAX_VALUE, maxBlocks));
         }
         Integer batchSize = profile.getScanBatchSize();
-        return batchSize == null || batchSize <= 0 ? 50 : batchSize;
+        int configured = batchSize == null || batchSize <= 0 ? 50 : batchSize;
+        return Math.max(requiredConfirmations, configured);
     }
     private record AssetScanTarget(String symbol, String coinType, ChainAddressRecord address) {
     }

@@ -556,14 +556,31 @@ public class ChainJdbcRepository {
                         on conflict (chain, tx_hash) do update set
                             fee_nano = excluded.fee_nano,
                             logical_time = excluded.logical_time,
-                            confirmations = greatest(ton_transaction.confirmations, excluded.confirmations),
-                            status = excluded.status,
+                            confirmations = case
+                                when ton_transaction.status = 'CONFIRMED' then ton_transaction.confirmations
+                                else greatest(ton_transaction.confirmations, excluded.confirmations)
+                            end,
+                            status = case
+                                when ton_transaction.status = 'CONFIRMED' then ton_transaction.status
+                                else excluded.status
+                            end,
                             raw_payload = excluded.raw_payload,
                             updated_at = excluded.updated_at
                         """,
                 tx.getChain(), tx.getTxHash(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),
                 tx.getJettonMaster(), tx.getAmount(), tx.getFeeNano(), tx.getLogicalTime(),
                 tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
+    }
+    public int updateTonDepositTransactionConfirmations(
+            String chain, String txHash, int confirmations, int requiredConfirmations) {
+        return jdbcTemplate.update("""
+                        update ton_transaction
+                           set confirmations = ?,
+                               status = case when ? >= ? then 'CONFIRMED' else 'CONFIRMING' end,
+                               updated_at = ?
+                         where chain = ? and tx_hash = ? and status <> 'CONFIRMED'
+                        """,
+                confirmations, confirmations, requiredConfirmations, toTs(now()), chain, txHash);
     }
     public int markTonTransactionConfirmed(String chain, String txHash) {
         return jdbcTemplate.update("""
@@ -794,9 +811,16 @@ public class ChainJdbcRepository {
                                                    raw_payload, created_at, updated_at)
                         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, 0, 'CANONICAL', ?, ?, ?, ?)
                         on conflict (chain, tx_hash, log_index) do update set
-                            block_height = excluded.block_height,
-                            block_hash = excluded.block_hash,
+                            block_height = case
+                                when deposit_record.canonical_status = 'REORGED' then excluded.block_height
+                                else deposit_record.block_height
+                            end,
+                            block_hash = case
+                                when deposit_record.canonical_status = 'REORGED' then excluded.block_hash
+                                else deposit_record.block_hash
+                            end,
                             confirmations = case
+                                when deposit_record.credited then deposit_record.confirmations
                                 when deposit_record.canonical_status = 'REORGED' then excluded.confirmations
                                 else greatest(deposit_record.confirmations, excluded.confirmations)
                             end,
@@ -839,6 +863,51 @@ public class ChainJdbcRepository {
             return true;
         }
         return false;
+    }
+
+    public List<PendingDepositRecord> listPendingDeposits(String chain, int requiredConfirmations, int limit) {
+        return jdbcTemplate.query("""
+                        select asset_symbol, tx_hash, log_index, from_address, to_address,
+                               contract_address, amount, block_height, block_hash, confirmations,
+                               account_id, raw_payload
+                          from deposit_record
+                         where chain = ?
+                           and credited = false
+                           and canonical_status = 'CANONICAL'
+                           and status in ('DETECTED', 'CONFIRMING')
+                           and confirmations < ?
+                         order by id
+                         limit ?
+                        """,
+                (rs, rowNum) -> new PendingDepositRecord(
+                        rs.getString("asset_symbol"),
+                        rs.getString("tx_hash"),
+                        rs.getLong("log_index"),
+                        rs.getString("from_address"),
+                        rs.getString("to_address"),
+                        rs.getString("contract_address"),
+                        rs.getBigDecimal("amount"),
+                        rs.getLong("block_height"),
+                        rs.getString("block_hash"),
+                        rs.getInt("confirmations"),
+                        rs.getString("account_id"),
+                        rs.getString("raw_payload")),
+                chain, requiredConfirmations, limit);
+    }
+
+    public record PendingDepositRecord(
+            String assetSymbol,
+            String txHash,
+            long logIndex,
+            String fromAddress,
+            String toAddress,
+            String contractAddress,
+            BigDecimal amount,
+            long blockHeight,
+            String blockHash,
+            int confirmations,
+            String accountId,
+            String rawPayload) {
     }
 
     /**
@@ -1155,7 +1224,7 @@ public class ChainJdbcRepository {
 
     public List<UtxoTransaction> listAvailableUtxosBelowConfirmations(String chain, String assetSymbol,
                                                                       long maxConfirmations,
-                                                                      int limit, int offset) {
+                                                                      long afterId, int limit) {
         return jdbcTemplate.query("""
                         select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
                                ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
@@ -1178,11 +1247,12 @@ public class ChainJdbcRepository {
                           and ur.asset_symbol = ?
                           and ur.state = 'AVAILABLE'
                           and ur.confirmations < ?
+                          and ur.id > ?
                         order by ur.id
-                        limit ? offset ?
+                        limit ?
                         """,
                 (rs, rowNum) -> mapUtxoRecord(rs, chain),
-                chain, assetSymbol, maxConfirmations, limit, offset);
+                chain, assetSymbol, maxConfirmations, afterId, limit);
     }
     public BigDecimal sumAvailableUtxoAmount(String chain, String assetSymbol) {
         BigDecimal balance = jdbcTemplate.queryForObject("""

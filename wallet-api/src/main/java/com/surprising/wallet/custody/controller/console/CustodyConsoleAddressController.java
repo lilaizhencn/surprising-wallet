@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.surprising.wallet.custody.model.PageView;
 import com.surprising.wallet.custody.service.CustodyAddressService;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 
@@ -43,7 +44,7 @@ public class CustodyConsoleAddressController {
      * 查询地址列表，支持链、来源、状态、关键字过滤和分页。
      */
     @GetMapping("/addresses")
-    public List<AddressView> addresses(
+    public PageView<AddressView> addresses(
             @RequestParam(defaultValue = "") String chain,
             @RequestParam(defaultValue = "") String source,
             @RequestParam(defaultValue = "") String status,
@@ -51,7 +52,7 @@ public class CustodyConsoleAddressController {
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
-        return addresses.list(CustodyRequestSupport.requirePrincipal(request),
+        return addresses.page(CustodyRequestSupport.requirePrincipal(request),
                 chain, source, status, search, limit, offset);
     }
 

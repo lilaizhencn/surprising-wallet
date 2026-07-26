@@ -574,24 +574,23 @@ class BitcoinLikeChainRuntime {
     }
     private void updateUnifiedUtxoConfirmations(ChainType chainType, AssetRuntimeMetadata asset) {
         int pageSize = 500;
-        int offset = 0;
+        long afterId = 0L;
         String chain = chainType.name();
         while (true) {
             List<UtxoTransaction> utxos = chainRepository.listAvailableUtxosBelowConfirmations(
-                    chain, chain, asset.getConfirmNum(), pageSize, offset);
+                    chain, chain, asset.getConfirmNum(), afterId, pageSize);
             for (UtxoTransaction utxo : utxos) {
                 int confirmations = Math.max(confirmations(chainType, utxo.getTxId()), 0);
                 utxo.setConfirmNum((long) confirmations);
                 chainRepository.updateUtxoConfirmations(chain, utxo.getTxId(), utxo.getSeq(), confirmations);
-                if (chainRepository.depositRecordExists(chain, utxo.getTxId(), utxo.getSeq())
-                        && enrichUtxoMetadata(utxo, asset)) {
+                if (enrichUtxoMetadata(utxo, asset)) {
                     transactionServiceProvider.getObject().saveTransaction(convertUtxoToDto(utxo));
                 }
             }
             if (utxos.size() < pageSize) {
                 break;
             }
-            offset += pageSize;
+            afterId = utxos.getLast().getId();
         }
     }
     private void updatePendingWithdrawConfirmations(ChainType chainType, AssetRuntimeMetadata asset) {

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+import com.surprising.wallet.custody.model.PageView;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.service.WalletConfigManagementService;
@@ -209,7 +210,7 @@ public class WalletConfigManagementController {
      * 查询审计日志。
      */
     @GetMapping("/audit-log")
-    public List<Map<String, Object>> auditLog(
+    public PageView<Map<String, Object>> auditLog(
             @RequestParam(defaultValue = "200") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {

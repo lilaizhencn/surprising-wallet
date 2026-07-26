@@ -1,5 +1,6 @@
 package com.surprising.wallet.custody.controller.console;
 
+import com.surprising.wallet.custody.model.PageView;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -141,7 +142,7 @@ public class CustodyConsoleSecurityController {
      * 查询审计日志，需具备 audit:read 或 TENANT_ADMIN。
      */
     @GetMapping("/audit-log")
-    public List<Map<String, Object>> audit(
+    public PageView<Map<String, Object>> audit(
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
@@ -149,7 +150,12 @@ public class CustodyConsoleSecurityController {
         if (!principal.hasScope("audit:read") && !"TENANT_ADMIN".equals(principal.role())) {
             throw new CustodyForbiddenException("audit:read scope required");
         }
-        return repository.listAudit(principal.tenantId(), limit, offset);
+        int pageSize = Math.min(Math.max(limit, 1), 200);
+        int pageOffset = Math.max(offset, 0);
+        return new PageView<>(
+                repository.listAudit(principal.tenantId(), pageSize, pageOffset),
+                repository.countAudit(principal.tenantId()),
+                pageSize, pageOffset);
     }
 
     /**

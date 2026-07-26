@@ -118,30 +118,33 @@ class TonDepositScanner {
     public List<DepositEvent> scanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "ton scanAndCredit");
         AccountChainProfile profile = profile();
+        long masterchainSeqno = rpc.masterchainInfo().path("last").path("seqno").asLong();
         List<DepositEvent> events = new ArrayList<>();
         List<ChainAddressRecord> nativeAddresses = repository.listChainAddresses(CHAIN, "TON");
         List<TokenDefinition> tokens = repository.listTokens(CHAIN);
         Set<String> platformAddresses = platformAddresses();
         for (ChainAddressRecord address : nativeAddresses) {
             if (isNativeScanRole(address)) {
-                scanNative(address, profile, platformAddresses, events);
+                scanNative(address, profile, masterchainSeqno, platformAddresses, events);
             }
         }
         materializeJettonWallets(nativeAddresses, tokens);
         for (TokenDefinition token : tokens) {
             for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, token.getSymbol())) {
                 if (WALLET_ROLE_DEPOSIT.equals(address.getWalletRole())) {
-                    scanJetton(address, token, profile, platformAddresses, events);
+                    scanJetton(address, token, profile, masterchainSeqno, platformAddresses, events);
                 }
             }
         }
-        long masterchainSeqno = rpc.masterchainInfo().path("last").path("seqno").asLong();
-        repository.updateScanHeight(CHAIN, SCANNER, masterchainSeqno, masterchainSeqno);
+        refreshPendingDeposits(profile, masterchainSeqno);
+        long safeSeqno = Math.max(0L, masterchainSeqno - profile.getDepositConfirmations() + 1L);
+        repository.updateScanHeight(CHAIN, SCANNER, masterchainSeqno, safeSeqno);
         return events;
     }
 
     private void scanNative(ChainAddressRecord tracked, AccountChainProfile profile,
-                            Set<String> platformAddresses, List<DepositEvent> events) {
+                            long masterchainSeqno, Set<String> platformAddresses,
+                            List<DepositEvent> events) {
         JsonNode transactions = rpc.transactions(tracked.getAddress(), scanLimit(profile));
         for (JsonNode tx : transactions) {
             JsonNode in = tx.path("in_msg");
@@ -154,15 +157,16 @@ class TonDepositScanner {
                     || isOperationalNativeMessage(in.path("msg_data").path("body").asText())) {
                 continue;
             }
-            DepositEvent event = event(tx, tracked, "TON", source, destination, amount, null);
+            DepositEvent event = event(
+                    tx, tracked, "TON", source, destination, amount, null, masterchainSeqno);
             persist(event, tx, null, profile, tracked.getAccountId());
             events.add(event);
         }
     }
 
     private void scanJetton(ChainAddressRecord tracked, TokenDefinition token,
-                            AccountChainProfile profile, Set<String> platformAddresses,
-                            List<DepositEvent> events) {
+                            AccountChainProfile profile, long masterchainSeqno,
+                            Set<String> platformAddresses, List<DepositEvent> events) {
         JsonNode transactions = rpc.transactions(tracked.getAddress(), scanLimit(profile));
         for (JsonNode tx : transactions) {
             JsonNode in = tx.path("in_msg");
@@ -177,7 +181,7 @@ class TonDepositScanner {
             }
             DepositEvent event = event(tx, tracked, token.getSymbol(), notification.sender(),
                     tracked.getAddress(), displayAmount(new BigDecimal(notification.amount()), token.getDecimals()),
-                    token.getContractAddress());
+                    token.getContractAddress(), masterchainSeqno);
             persist(event, tx, token.getContractAddress(), profile, tracked.getAccountId());
             events.add(event);
         }
@@ -211,11 +215,12 @@ class TonDepositScanner {
     }
 
     private DepositEvent event(JsonNode tx, ChainAddressRecord tracked, String symbol,
-                               String source, String destination, BigDecimal amount, String master) {
+                               String source, String destination, BigDecimal amount, String master,
+                               long masterchainSeqno) {
         return new DepositEvent(ChainType.TON, symbol,
                 tx.path("transaction_id").path("hash").asText(),
                 source, destination, amount,
-                tx.path("transaction_id").path("lt").asLong(),
+                masterchainSeqno,
                 tx.path("transaction_id").path("hash").asText(), 1, master, tx.toString());
     }
 
@@ -231,11 +236,38 @@ class TonDepositScanner {
                 .amount(event.amount())
                 .feeNano(decimal(tx.path("fee").asText()).longValue())
                 .logicalTime(new BigInteger(tx.path("transaction_id").path("lt").asText("0")))
-                .confirmations(1)
-                .status("CONFIRMED")
+                .confirmations(event.confirmations())
+                .status(event.confirmations() >= profile.getDepositConfirmations()
+                        ? "CONFIRMED" : "CONFIRMING")
                 .rawPayload(tx.toString())
                 .build());
         repository.recordAndCreditDeposit(event, 0, profile.getDepositConfirmations(), accountId);
+    }
+    private void refreshPendingDeposits(AccountChainProfile profile, long masterchainSeqno) {
+        int requiredConfirmations = profile.getDepositConfirmations();
+        for (var pending : repository.listPendingDeposits(CHAIN, requiredConfirmations, 500)) {
+            int confirmations = (int) Math.min(Integer.MAX_VALUE,
+                    Math.max(1L, masterchainSeqno - pending.blockHeight() + 1L));
+            if (confirmations <= pending.confirmations()) {
+                continue;
+            }
+            DepositEvent event = new DepositEvent(
+                    ChainType.TON,
+                    pending.assetSymbol(),
+                    pending.txHash(),
+                    pending.fromAddress(),
+                    pending.toAddress(),
+                    pending.amount(),
+                    pending.blockHeight(),
+                    pending.blockHash(),
+                    confirmations,
+                    pending.contractAddress(),
+                    pending.rawPayload());
+            repository.recordAndCreditDeposit(
+                    event, pending.logIndex(), requiredConfirmations, pending.accountId());
+            repository.updateTonDepositTransactionConfirmations(
+                    CHAIN, pending.txHash(), confirmations, requiredConfirmations);
+        }
     }
     private boolean sameAddress(String first, String second) {
         if (first == null || first.isBlank() || second == null || second.isBlank()) {

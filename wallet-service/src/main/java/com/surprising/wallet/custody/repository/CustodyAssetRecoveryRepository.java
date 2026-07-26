@@ -97,6 +97,21 @@ public class CustodyAssetRecoveryRepository {
                          order by created_at desc limit ? offset ?
                         """, this::map, tenantId, status, status, limit, offset);
     }
+    public long count(UUID tenantId, String status) {
+        Long count;
+        if (tenantId == null) {
+            count = jdbc.queryForObject("""
+                            select count(*) from custody_asset_recovery
+                             where (? = '' or status = ?)
+                            """, Long.class, status, status);
+        } else {
+            count = jdbc.queryForObject("""
+                            select count(*) from custody_asset_recovery
+                             where tenant_id = ? and (? = '' or status = ?)
+                            """, Long.class, tenantId, status, status);
+        }
+        return count == null ? 0L : count;
+    }
 
     public RecoveryRecord verified(UUID id, UUID custodyAddressId,
                                    CustodyAssetRecoveryChainGateway.Verification verification) {

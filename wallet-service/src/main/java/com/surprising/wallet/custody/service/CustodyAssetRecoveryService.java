@@ -1,5 +1,6 @@
 package com.surprising.wallet.custody.service;
 
+import com.surprising.wallet.custody.model.PageView;
 import com.surprising.wallet.custody.repository.CustodyAssetRecoveryRepository;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway;
@@ -102,16 +103,28 @@ public class CustodyAssetRecoveryService {
         return recovery;
     }
 
-    public List<RecoveryRecord> tenantList(CustodyPrincipal principal, String status,
-                                           int limit, int offset) {
+    public PageView<RecoveryRecord> tenantList(CustodyPrincipal principal, String status,
+                                               int limit, int offset) {
         requireTenant(principal);
-        return repository.list(principal.tenantId(), normalizedStatus(status), pageSize(limit), offset(offset));
+        String normalizedStatus = normalizedStatus(status);
+        int pageSize = pageSize(limit);
+        int pageOffset = offset(offset);
+        return new PageView<>(
+                repository.list(principal.tenantId(), normalizedStatus, pageSize, pageOffset),
+                repository.count(principal.tenantId(), normalizedStatus),
+                pageSize, pageOffset);
     }
 
-    public List<RecoveryRecord> platformList(CustodyPrincipal principal, String status,
-                                             int limit, int offset) {
+    public PageView<RecoveryRecord> platformList(CustodyPrincipal principal, String status,
+                                                 int limit, int offset) {
         requirePlatform(principal);
-        return repository.list(null, normalizedStatus(status), pageSize(limit), offset(offset));
+        String normalizedStatus = normalizedStatus(status);
+        int pageSize = pageSize(limit);
+        int pageOffset = offset(offset);
+        return new PageView<>(
+                repository.list(null, normalizedStatus, pageSize, pageOffset),
+                repository.count(null, normalizedStatus),
+                pageSize, pageOffset);
     }
     public RecoveryRecord verify(CustodyPrincipal principal, UUID id, String sourceIp) {
         requirePlatform(principal);

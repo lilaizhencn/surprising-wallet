@@ -37,7 +37,7 @@
   <rect x="30"  y="194" width="320" height="100" class="svc"/>
   <text x="190" y="222" text-anchor="middle" class="label">wallet-api</text>
   <text x="190" y="244" text-anchor="middle" class="desc">Custody / Console REST API</text>
-  <text x="190" y="262" text-anchor="middle" class="desc">充值扫描 · 提现批处理 · 归集协调</text>
+  <text x="190" y="262" text-anchor="middle" class="desc">按链周期扫描 · 提现批处理 · 归集协调</text>
   <text x="190" y="280" text-anchor="middle" class="desc">EIP-7702 · Webhook · Gas 对账</text>
 
   <rect x="375" y="194" width="320" height="100" class="svc"/>

@@ -96,6 +96,34 @@ wallet-api/job/
 - 链上交易要区分 pending、confirmed、failed、reorg 相关状态。
 - 不要用浮点数处理金额，优先使用整数最小单位或 BigDecimal。
 
+## 架构图与数据库基线同步（强制）
+
+每次修改代码后都必须做文档和数据库基线影响判断；存在影响时，同一批改动必须同步对应文件，不允许把同步工作留到后续任务。
+
+### 架构图同步
+
+- 修改模块职责、模块依赖方向、包分层、Job 分类、线程池、Controller/Service/Repository/Gateway 边界时，必须同步：
+  - `resources/docs/zh/architecture.md`
+  - `resources/docs/assets/architecture-diagram.svg`
+- 修改充值、确认、入账、提现、归集、Gas、签名、Webhook、重组或租户映射等核心数据流时，必须同步：
+  - `resources/docs/zh/system-code-flow.md`
+  - `resources/docs/assets/system-code-flow-diagram.svg`
+- 图、图对应的文字说明和实际代码必须表达同一条依赖关系、调用方向和状态流；不得只修改 Markdown 或只修改 SVG。
+
+### init-sql 同步
+
+- `resources/docs/db/surprising-wallet-init-pgsql.sql` 是从空数据库初始化当前目标架构的唯一数据库基线。
+- 新增、删除或修改表、字段、类型、默认值、索引、唯一约束、外键、状态约束、序列、初始化配置或种子数据时，必须在同一批改动中同步 init-sql。
+- 代码开始读取或写入新的表、字段、状态或配置项之前，init-sql 必须已经包含对应定义。
+- 删除代码路径或废弃数据模型时，应直接从 init-sql 移除不再属于目标架构的结构，不保留历史兼容结构。
+- 文档中的表结构、配置示例和链/Token/RPC 初始化数据必须与 init-sql 一致。
+
+### 完成条件
+
+- 受影响但未同步架构图文或 init-sql 的代码改动视为未完成，不得提交。
+- 如果确认本次改动不影响模块/流程架构和数据库基线，可以不修改上述文件，但交付说明中必须明确写出影响判断结果。
+- 代码验证前先完成同步；验证发现结构或流程变化时，必须回到对应图文和 init-sql 补齐后再提交。
+
 ## 验证
 
 - Java 模块优先使用 `mvn -pl <module> -am test` 或 `mvn test`。

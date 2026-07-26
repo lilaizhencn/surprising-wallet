@@ -1,5 +1,8 @@
 package com.surprising.wallet.custody.service;
 
+import com.surprising.wallet.custody.model.PageView;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.config.WalletEnvironmentPolicy;
 import com.surprising.wallet.config.WalletRpcPolicy;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,14 +18,19 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.WebSocket;
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
+import org.web3j.utils.Numeric;
 
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
@@ -40,6 +48,7 @@ public class WalletConfigManagementService {
     private final CustodyRepository custodyRepository;
     private final String environment;
     private final HttpClient httpClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     @Autowired
     public WalletConfigManagementService(JdbcTemplate jdbc,
                                          CustodyRepository custodyRepository,
@@ -423,9 +432,14 @@ public class WalletConfigManagementService {
                 "{\"enabled\":" + command.enabled() + "}");
         return requireToken(id);
     }
-    public List<Map<String, Object>> auditLog(CustodyPrincipal actor, int limit, int offset) {
+    public PageView<Map<String, Object>> auditLog(CustodyPrincipal actor, int limit, int offset) {
         requirePlatformAdmin(actor);
-        return custodyRepository.listPlatformAudit(limit, offset);
+        int pageSize = Math.min(Math.max(limit, 1), 200);
+        int pageOffset = Math.max(offset, 0);
+        return new PageView<>(
+                custodyRepository.listPlatformAudit(pageSize, pageOffset),
+                custodyRepository.countPlatformAudit(),
+                pageSize, pageOffset);
     }
     private List<RpcNodeView> listRpcNodesInternal(long chainId) {
         ChainView chain = requireChain(chainId);
@@ -443,34 +457,16 @@ public class WalletConfigManagementService {
     private List<TokenView> listTokensInternal(String search, String chain, Boolean enabled) {
         String query = normalize(search);
         String chainFilter = normalize(chain);
+        String searchPattern = "%" + query + "%";
         RuntimeSwitches runtime = loadRuntimeSwitches();
-        return jdbc.queryForList("""
-                select t.id, t.chain, t.network, t.symbol,
-                       coalesce(nullif(t.token_standard, ''), t.standard) as standard,
-                       t.contract_address, t.contract_address_base58, t.contract_address_hex,
-                       t.decimals, t.enabled, t.collect_enabled,
-                       coalesce(t.min_deposit_amount, t.min_deposit) as min_deposit,
-                       coalesce(t.min_withdraw_amount, t.min_withdraw) as min_withdraw,
-                       t.collect_threshold, t.gas_strategy, t.confirmation_required,
-                       coalesce(a.active, false) as asset_active,
-                       coalesce(p.enabled, false) as chain_enabled,
-                       coalesce(p.scan_enabled, false) as chain_scan_enabled,
-                       coalesce(p.withdraw_enabled, false) as chain_withdraw_enabled,
-                       coalesce(p.collection_enabled, false) as chain_collection_enabled,
-                       coalesce(p.transfer_enabled, false) as chain_transfer_enabled,
-                       t.created_at, t.updated_at
-                  from token_config t
-                  left join chain_asset a on a.chain = t.chain and a.symbol = t.symbol
-                                           and a.native_asset = false
-                  left join chain_profile p on p.chain = t.chain and p.network = t.network
+        return jdbc.queryForList(TOKEN_SELECT + """
+                 where (? = '' or upper(t.chain) = ?)
+                   and (cast(? as boolean) is null or t.enabled = ?)
+                   and (? = '' or upper(t.symbol) like ? or upper(t.contract_address) like ?)
                  order by t.symbol, t.chain
-                """).stream().map(row -> tokenView(row, runtime))
-                .filter(row -> query.isEmpty()
-                        || normalize(row.symbol()).contains(query)
-                        || normalize(row.contractAddress()).contains(query))
-                .filter(row -> chainFilter.isEmpty() || normalize(row.chain()).equals(chainFilter))
-                .filter(row -> enabled == null || row.enabled() == enabled)
-                .toList();
+                """, chainFilter, chainFilter, enabled, enabled,
+                query, searchPattern, searchPattern).stream()
+                .map(row -> tokenView(row, runtime)).toList();
     }
     private ChainView requireChain(long id) {
         try {
@@ -503,8 +499,11 @@ public class WalletConfigManagementService {
         }
     }
     private TokenView requireToken(long id) {
-        return listTokensInternal("", "", null).stream().filter(token -> token.id() == id).findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("token not found"));
+        List<Map<String, Object>> rows = jdbc.queryForList(TOKEN_SELECT + " where t.id = ?", id);
+        if (rows.isEmpty()) {
+            throw new IllegalArgumentException("token not found");
+        }
+        return tokenView(rows.getFirst(), loadRuntimeSwitches());
     }
     private void validateCanEnable(String chain, String network, Long currentId) {
         if (WalletEnvironmentPolicy.isProduction(environment)
@@ -568,7 +567,7 @@ public class WalletConfigManagementService {
         if (value.runtimeCurrencyId() < 0 || value.bip44CoinType() < 0) {
             throw new IllegalArgumentException("runtimeCurrencyId and bip44CoinType must not be negative");
         }
-        if (value.depositConfirmations() < 0 || value.withdrawConfirmations() < 0
+        if (value.depositConfirmations() < 1 || value.withdrawConfirmations() < 1
                 || value.scanBatchSize() < 1 || value.scanStartHeight() < 0
                 || value.scanMaxBlocksPerRun() < 0) {
             throw new IllegalArgumentException("chain numeric settings are invalid");
@@ -614,6 +613,16 @@ public class WalletConfigManagementService {
         required(value.symbol(), "symbol");
         required(value.standard(), "standard");
         required(value.contractAddress(), "contractAddress");
+        if (!value.symbol().matches("^[A-Z][A-Z0-9_]{1,31}$")) {
+            throw new IllegalArgumentException("symbol must be 2-32 uppercase letters, digits or underscores");
+        }
+        if (!value.standard().matches("^[A-Z][A-Z0-9_-]{1,31}$")) {
+            throw new IllegalArgumentException("standard must be 2-32 uppercase letters, digits, underscores or hyphens");
+        }
+        if (value.contractAddress().length() > 128
+                || value.contractAddress().chars().anyMatch(Character::isWhitespace)) {
+            throw new IllegalArgumentException("contractAddress must be at most 128 characters without whitespace");
+        }
         if (WalletRpcPolicy.containsPlaceholder(value.contractAddress())) {
             throw new IllegalArgumentException("contractAddress cannot contain a placeholder");
         }
@@ -623,21 +632,181 @@ public class WalletConfigManagementService {
         if (!value.enabled() && value.collectEnabled()) {
             throw new IllegalArgumentException("collection cannot be enabled while the token is disabled");
         }
-        long profiles = count("""
-                select count(*) from chain_profile
-                 where upper(chain) = upper(?) and lower(network) = lower(?)
-                """, value.chain(), value.network());
-        if (profiles == 0) {
-            throw new IllegalArgumentException("token must reference an existing chain and network");
+        validateTokenAmount(value.minDeposit(), "minDeposit", value.decimals());
+        validateTokenAmount(value.minWithdraw(), "minWithdraw", value.decimals());
+        validateTokenAmount(value.collectThreshold(), "collectThreshold", value.decimals());
+        if (value.confirmationRequired() != null
+                && (value.confirmationRequired() < 0 || value.confirmationRequired() > 1_000_000)) {
+            throw new IllegalArgumentException("confirmationRequired must be between 0 and 1000000");
         }
+        if (value.gasStrategy() != null && (value.gasStrategy().length() > 64
+                || !value.gasStrategy().matches("^[A-Za-z0-9._:-]*$"))) {
+            throw new IllegalArgumentException("gasStrategy contains unsupported characters");
+        }
+        TokenChainProfile profile = requireTokenChainProfile(value);
         if (value.enabled()) {
-            long active = count("""
-                    select count(*) from chain_profile
-                     where upper(chain) = upper(?) and lower(network) = lower(?) and enabled = true
-                    """, value.chain(), value.network());
-            if (active == 0) {
+            if (!profile.enabled()) {
                 throw new IllegalStateException("enable the matching chain network before enabling this token");
             }
+            if (profile.evm()) {
+                validateEvmTokenContract(value, profile);
+            }
+        }
+    }
+    private TokenChainProfile requireTokenChainProfile(TokenValues value) {
+        return jdbc.query("""
+                        select family, chain_id, enabled from chain_profile
+                         where upper(chain) = upper(?) and lower(network) = lower(?)
+                        """, (rs, rowNum) -> new TokenChainProfile(
+                        rs.getString("family"), rs.getObject("chain_id", Long.class),
+                        rs.getBoolean("enabled")), value.chain(), value.network()).stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "token must reference an existing chain and network"));
+    }
+    private void validateEvmTokenContract(TokenValues value, TokenChainProfile profile) {
+        String address = value.contractAddress();
+        if (!address.matches("(?i)^0x[0-9a-f]{40}$")
+                || address.matches("(?i)^0x0{40}$")) {
+            throw new IllegalArgumentException("EVM contractAddress must be a non-zero 20-byte hex address");
+        }
+        RpcStored rpc = requireTokenValidationRpc(value.chain(), value.network());
+        if (profile.chainId() != null) {
+            BigInteger observedChainId = quantity(evmRpc(rpc, "eth_chainId", "[]"), "chain id");
+            if (!observedChainId.equals(BigInteger.valueOf(profile.chainId()))) {
+                throw new IllegalStateException("token validation RPC chain id does not match chain profile");
+            }
+        }
+        String code = textResult(evmRpc(rpc, "eth_getCode",
+                "[" + json(address) + ",\"latest\"]"), "contract code");
+        if (!code.matches("(?i)^0x[0-9a-f]+$") || code.matches("(?i)^0x0*$")) {
+            throw new IllegalArgumentException("contractAddress has no deployed bytecode on the configured network");
+        }
+        int onChainDecimals = quantity(evmRpc(rpc, "eth_call",
+                "[{\"to\":" + json(address) + ",\"data\":\"0x313ce567\"},\"latest\"]"),
+                "token decimals").intValueExact();
+        if (onChainDecimals != value.decimals()) {
+            throw new IllegalArgumentException("configured decimals do not match the token contract");
+        }
+        String onChainSymbol = abiString(textResult(evmRpc(rpc, "eth_call",
+                "[{\"to\":" + json(address) + ",\"data\":\"0x95d89b41\"},\"latest\"]"),
+                "token symbol"));
+        if (!value.symbol().equalsIgnoreCase(onChainSymbol)) {
+            throw new IllegalArgumentException("configured symbol does not match the token contract");
+        }
+    }
+    private RpcStored requireTokenValidationRpc(String chain, String network) {
+        return jdbc.queryForList("""
+                select id, environment, node_label, purpose, connection_type, rpc_url,
+                       auth_type, auth_header_name, api_key, username, password, priority,
+                       min_request_interval_ms, enabled, renewal_due_at, remark
+                  from chain_rpc_node
+                 where upper(chain) = upper(?) and lower(network) = lower(?)
+                   and lower(environment) = lower(?) and enabled = true
+                   and connection_type ilike '%JSON_RPC%'
+                   and rpc_url ~* '^https?://'
+                 order by case when lower(purpose) = 'rpc' then 0
+                               when lower(purpose) = 'scan' then 1 else 2 end,
+                          priority, id
+                 limit 1
+                """, chain, network, environment).stream().map(row -> new RpcStored(
+                longValue(row.get("id")), string(row.get("environment")),
+                string(row.get("node_label")), string(row.get("purpose")),
+                string(row.get("connection_type")), string(row.get("rpc_url")),
+                string(row.get("auth_type")), nullable(row.get("auth_header_name")),
+                nullable(row.get("api_key")), nullable(row.get("username")),
+                nullable(row.get("password")), intValue(row.get("priority")),
+                intValue(row.get("min_request_interval_ms")), bool(row.get("enabled")),
+                instant(row.get("renewal_due_at")), nullable(row.get("remark"))))
+                .findFirst().orElseThrow(() -> new IllegalStateException(
+                        "an enabled HTTP JSON-RPC node is required to validate an EVM token"));
+    }
+    private JsonNode evmRpc(RpcStored node, String method, String params) {
+        try {
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(node.rpcUrl()))
+                    .timeout(Duration.ofSeconds(8))
+                    .header("Content-Type", "application/json");
+            applyAuth(builder, node);
+            String requestBody = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":"
+                    + json(method) + ",\"params\":" + params + "}";
+            HttpResponse<String> response = httpClient.send(
+                    builder.POST(HttpRequest.BodyPublishers.ofString(requestBody)).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException(
+                        "token contract validation RPC returned HTTP " + response.statusCode());
+            }
+            JsonNode payload = objectMapper.readTree(response.body());
+            if (payload.hasNonNull("error")) {
+                String message = payload.path("error").path("message").asText("RPC error");
+                throw new IllegalStateException("token contract validation failed: "
+                        + message.substring(0, Math.min(message.length(), 240)));
+            }
+            JsonNode result = payload.get("result");
+            if (result == null || result.isNull()) {
+                throw new IllegalStateException("token contract validation RPC returned no result");
+            }
+            return result;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("token contract validation was interrupted", e);
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("token contract validation failed: " + safeError(e), e);
+        }
+    }
+    private static BigInteger quantity(JsonNode result, String field) {
+        String value = textResult(result, field);
+        if (!value.matches("(?i)^0x[0-9a-f]+$")) {
+            throw new IllegalStateException(field + " returned an invalid EVM quantity");
+        }
+        return new BigInteger(Numeric.cleanHexPrefix(value), 16);
+    }
+    private static String textResult(JsonNode result, String field) {
+        if (!result.isTextual() || result.asText().isBlank()) {
+            throw new IllegalStateException(field + " returned an empty result");
+        }
+        return result.asText();
+    }
+    private static String abiString(String encoded) {
+        if (!encoded.matches("(?i)^0x[0-9a-f]*$")) {
+            throw new IllegalStateException("token symbol returned invalid ABI data");
+        }
+        byte[] bytes = Numeric.hexStringToByteArray(encoded);
+        int start;
+        int length;
+        if (bytes.length == 32) {
+            start = 0;
+            length = 32;
+            while (length > 0 && bytes[length - 1] == 0) length--;
+        } else if (bytes.length >= 64) {
+            start = new BigInteger(1, Arrays.copyOfRange(bytes, 0, 32)).intValueExact() + 32;
+            if (start < 32 || start > bytes.length) {
+                throw new IllegalStateException("token symbol returned an invalid ABI offset");
+            }
+            int lengthOffset = start - 32;
+            length = new BigInteger(1,
+                    Arrays.copyOfRange(bytes, lengthOffset, lengthOffset + 32)).intValueExact();
+            if (length < 1 || start + length > bytes.length) {
+                throw new IllegalStateException("token symbol returned an invalid ABI length");
+            }
+        } else {
+            throw new IllegalStateException("token symbol returned incomplete ABI data");
+        }
+        String symbol = new String(bytes, start, length, StandardCharsets.UTF_8).trim();
+        if (symbol.isEmpty()) {
+            throw new IllegalStateException("token symbol returned an empty value");
+        }
+        return symbol;
+    }
+    private static void validateTokenAmount(BigDecimal amount, String field, int decimals) {
+        if (amount == null) return;
+        BigDecimal normalized = amount.stripTrailingZeros();
+        if (amount.signum() < 0 || normalized.precision() > 78
+                || Math.max(normalized.scale(), 0) > Math.min(decimals, 18)) {
+            throw new IllegalArgumentException(field
+                    + " must be non-negative with at most " + Math.min(decimals, 18) + " fraction digits");
         }
     }
     private void upsertAsset(TokenValues value) {
@@ -949,6 +1118,26 @@ public class WalletConfigManagementService {
         return requested != null ? requested : current != null ? current : fallback;
     }
 
+    private static final String TOKEN_SELECT = """
+            select t.id, t.chain, t.network, t.symbol,
+                   coalesce(nullif(t.token_standard, ''), t.standard) as standard,
+                   t.contract_address, t.contract_address_base58, t.contract_address_hex,
+                   t.decimals, t.enabled, t.collect_enabled,
+                   coalesce(t.min_deposit_amount, t.min_deposit) as min_deposit,
+                   coalesce(t.min_withdraw_amount, t.min_withdraw) as min_withdraw,
+                   t.collect_threshold, t.gas_strategy, t.confirmation_required,
+                   coalesce(a.active, false) as asset_active,
+                   coalesce(p.enabled, false) as chain_enabled,
+                   coalesce(p.scan_enabled, false) as chain_scan_enabled,
+                   coalesce(p.withdraw_enabled, false) as chain_withdraw_enabled,
+                   coalesce(p.collection_enabled, false) as chain_collection_enabled,
+                   coalesce(p.transfer_enabled, false) as chain_transfer_enabled,
+                   t.created_at, t.updated_at
+              from token_config t
+              left join chain_asset a on a.chain = t.chain and a.symbol = t.symbol
+                                       and a.native_asset = false
+              left join chain_profile p on p.chain = t.chain and p.network = t.network
+            """;
     private static final String CHAIN_SELECT = """
             select p.id, p.chain, p.network, p.family, p.runtime_currency_id, p.bip44_coin_type,
                    p.native_symbol, p.explorer_url, p.deposit_confirmations, p.withdraw_confirmations,
@@ -1034,6 +1223,11 @@ public class WalletConfigManagementService {
                                String contractAddressHex, int decimals, boolean enabled,
                                boolean collectEnabled, BigDecimal minDeposit, BigDecimal minWithdraw,
                                BigDecimal collectThreshold, String gasStrategy, Integer confirmationRequired) {}
+    private record TokenChainProfile(String family, Long chainId, boolean enabled) {
+        boolean evm() {
+            return family != null && family.toUpperCase(Locale.ROOT).contains("EVM");
+        }
+    }
     private record RuntimeSwitches(boolean wallet, boolean scan, boolean withdraw,
                                    boolean collection, boolean transfer) {}
 }

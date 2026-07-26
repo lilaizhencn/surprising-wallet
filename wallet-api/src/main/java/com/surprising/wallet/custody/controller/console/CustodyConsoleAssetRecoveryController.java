@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
+import com.surprising.wallet.custody.model.PageView;
 import com.surprising.wallet.custody.repository.CustodyAssetRecoveryRepository;
 import com.surprising.wallet.custody.service.CustodyAssetRecoveryService;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
@@ -39,7 +40,7 @@ public class CustodyConsoleAssetRecoveryController {
      * 按状态分页查询当前租户找回记录。
      */
     @GetMapping
-    public List<CustodyAssetRecoveryRepository.RecoveryRecord> list(
+    public PageView<CustodyAssetRecoveryRepository.RecoveryRecord> list(
             @RequestParam(defaultValue = "") String status,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,

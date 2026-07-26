@@ -88,6 +88,7 @@ class SolanaDepositScanner {
                 }
             }
         }
+        refreshPendingDeposits(profile, currentSlot);
         long safeSlot = Math.max(0, currentSlot - profile.getDepositConfirmations() + 1L);
         repository.updateScanHeight(CHAIN, SCANNER, currentSlot, safeSlot);
         return events;
@@ -240,6 +241,35 @@ class SolanaDepositScanner {
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
+    }
+    private void refreshPendingDeposits(AccountChainProfile profile, long currentSlot) {
+        int requiredConfirmations = profile.getDepositConfirmations();
+        for (var pending : repository.listPendingDeposits(CHAIN, requiredConfirmations, 500)) {
+            JsonNode transaction = rpc.getTransaction(pending.txHash());
+            if (transaction == null || transaction.isNull()) {
+                continue;
+            }
+            long slot = transaction.path("slot").asLong(pending.blockHeight());
+            int confirmations = (int) Math.min(Integer.MAX_VALUE,
+                    Math.max(1L, currentSlot - slot + 1L));
+            if (confirmations <= pending.confirmations()) {
+                continue;
+            }
+            DepositEvent event = new DepositEvent(
+                    ChainType.SOLANA,
+                    pending.assetSymbol(),
+                    pending.txHash(),
+                    pending.fromAddress(),
+                    pending.toAddress(),
+                    pending.amount(),
+                    slot,
+                    pending.blockHash(),
+                    confirmations,
+                    pending.contractAddress(),
+                    transaction.toString());
+            repository.recordAndCreditDeposit(
+                    event, pending.logIndex(), requiredConfirmations, pending.accountId());
+        }
     }
     private int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();

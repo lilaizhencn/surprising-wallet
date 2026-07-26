@@ -36,6 +36,12 @@ public class CustodyTenantChainRepository {
                         TokenRecord::chain, LinkedHashMap::new, java.util.stream.Collectors.toList()));
         return jdbc.query("""
                         select p.chain, p.network, p.family, p.native_symbol,
+                               exists(
+                                   select 1 from evm_7702_config e
+                                    where e.chain = p.chain
+                                      and lower(e.network) = lower(p.network)
+                                      and e.enabled = true
+                               ) as eip_7702_enabled,
                                p.scan_enabled, p.withdraw_enabled, p.transfer_enabled,
                                coalesce(tc.status, 'CLOSED') as tenant_status,
                                tc.opened_at, tc.closed_at
@@ -49,6 +55,7 @@ public class CustodyTenantChainRepository {
                 rs.getString("network"),
                 rs.getString("family"),
                 rs.getString("native_symbol"),
+                rs.getBoolean("eip_7702_enabled"),
                 rs.getBoolean("scan_enabled"),
                 rs.getBoolean("withdraw_enabled"),
                 rs.getBoolean("transfer_enabled"),
@@ -154,6 +161,7 @@ public class CustodyTenantChainRepository {
             String network,
             String family,
             String nativeSymbol,
+            boolean eip7702Enabled,
             boolean scanEnabled,
             boolean withdrawalEnabled,
             boolean transferEnabled,

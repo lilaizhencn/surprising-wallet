@@ -6,8 +6,11 @@ import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
+import java.util.Map;
+
 /**
- * 钱包运行时配置服务，读取并缓存系统开关及链级别的任务开关状态。
+ * 钱包运行时配置服务，实时读取系统开关及链级别的任务开关状态。
  *
  * <p>任务类型包括扫描（scan）、提现（withdraw）、归集（collection）、转账（transfer）。
  * 开关优先级：全局总开关 > 全局任务开关 > 链级别任务开关。任何一层关闭即视为禁用。</p>
@@ -28,6 +31,43 @@ public class WalletRuntimeConfigService {
     public static final String TASK_TRANSFER = "transfer";
     /** 提现管理员审批开关键 */
     public static final String WITHDRAWAL_ADMIN_APPROVAL_REQUIRED = "withdrawal.admin.approval.required";
+
+    /**
+     * 按链平均出块速度设置的扫描间隔。调度器只负责高频检查，到期后才访问链 RPC。
+     * 未列出的新链使用 10 秒保守默认值，避免新增链因遗漏配置而完全不扫描。
+     */
+    private static final Map<String, Long> SCAN_INTERVAL_MILLIS = Map.ofEntries(
+            Map.entry("SOLANA", 2_000L),
+            Map.entry("APTOS", 2_000L),
+            Map.entry("SUI", 2_000L),
+            Map.entry("NEAR", 2_000L),
+            Map.entry("HYPERCORE", 2_000L),
+            Map.entry("ARBITRUM", 2_000L),
+            Map.entry("OPTIMISM", 2_000L),
+            Map.entry("BASE", 2_000L),
+            Map.entry("AVAX", 2_000L),
+            Map.entry("FANTOM", 2_000L),
+            Map.entry("ZKSYNC", 2_000L),
+            Map.entry("MANTLE", 2_000L),
+            Map.entry("UNICHAIN", 2_000L),
+            Map.entry("TRON", 3_000L),
+            Map.entry("BSC", 3_000L),
+            Map.entry("POLYGON", 3_000L),
+            Map.entry("LINEA", 3_000L),
+            Map.entry("SCROLL", 3_000L),
+            Map.entry("XRP", 4_000L),
+            Map.entry("TON", 5_000L),
+            Map.entry("CELO", 5_000L),
+            Map.entry("GNOSIS", 5_000L),
+            Map.entry("DOT", 6_000L),
+            Map.entry("XMR", 10_000L),
+            Map.entry("ETH", 12_000L),
+            Map.entry("DOGE", 15_000L),
+            Map.entry("ADA", 20_000L),
+            Map.entry("LTC", 30_000L),
+            Map.entry("BTC", 60_000L),
+            Map.entry("BCH", 60_000L));
+    private static final long DEFAULT_SCAN_INTERVAL_MILLIS = 10_000L;
 
     private final ChainJdbcRepository repository;
 
@@ -73,6 +113,17 @@ public class WalletRuntimeConfigService {
     /** @return 全局总开关是否启用 */
     public boolean isGlobalEnabled() {
         return repository.systemBoolean("global.all.enabled", true);
+    }
+
+    /**
+     * 返回指定链的扫描间隔。间隔集中维护，Account-Chain 与 UTXO 调度共享同一策略。
+     */
+    public long scanIntervalMillis(String chain) {
+        if (chain == null || chain.isBlank()) {
+            return DEFAULT_SCAN_INTERVAL_MILLIS;
+        }
+        return SCAN_INTERVAL_MILLIS.getOrDefault(
+                chain.trim().toUpperCase(Locale.ROOT), DEFAULT_SCAN_INTERVAL_MILLIS);
     }
 
     /** @return 提现是否需要管理员审批 */

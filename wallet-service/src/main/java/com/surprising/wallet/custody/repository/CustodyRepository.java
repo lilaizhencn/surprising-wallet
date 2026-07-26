@@ -728,6 +728,30 @@ public class CustodyRepository {
                 normalizedSearch, normalizedSearch, normalizedSearch, normalizedSearch,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
+    public long countAddresses(UUID tenantId, String chain, String source,
+                               String status, String search) {
+        String normalizedSearch = search == null ? "" : search.trim();
+        Long count = jdbc.queryForObject("""
+                        select count(*)
+                          from custody_address
+                         where tenant_id = ?
+                           and not exists (
+                               select 1 from custody_gas_account g
+                                where g.custody_address_id = custody_address.id
+                           )
+                           and (? = '' or chain = ?)
+                           and (? = '' or source = ?)
+                           and (? = '' or status = ?)
+                           and (? = '' or address ilike '%' || ? || '%'
+                                or subject ilike '%' || ? || '%'
+                                or coalesce(label, '') ilike '%' || ? || '%')
+                        """, Long.class, tenantId,
+                blankToEmpty(chain), blankToEmpty(chain),
+                blankToEmpty(source), blankToEmpty(source),
+                blankToEmpty(status), blankToEmpty(status),
+                normalizedSearch, normalizedSearch, normalizedSearch, normalizedSearch);
+        return count == null ? 0L : count;
+    }
     public List<Map<String, Object>> tenantAssetOverview(UUID tenantId) {
         return jdbc.query("""
                         with tenant_accounts as (
@@ -1919,6 +1943,36 @@ public class CustodyRepository {
                 normalizedSearch, normalizedSearch, normalizedSearch,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
+    public long countCustodyWithdrawals(
+            UUID tenantId, String chain, String assetSymbol, String status, String search) {
+        String normalizedSearch = search == null ? "" : search.trim();
+        Long count = jdbc.queryForObject("""
+                        select count(*)
+                          from custody_withdrawal w
+                          join withdrawal_order wo
+                            on wo.tenant_id = w.tenant_id
+                           and wo.chain = w.chain and wo.order_no = w.order_no
+                          join custody_address a
+                            on a.tenant_id = w.tenant_id and a.id = w.custody_address_id
+                         where w.tenant_id = ?
+                           and (? = '' or w.chain = ?)
+                           and (? = '' or w.asset_symbol = ?)
+                           and (? = '' or wo.status = ?)
+                           and (? = ''
+                                or w.order_no ilike '%' || ? || '%'
+                                or coalesce(w.external_reference, '') ilike '%' || ? || '%'
+                                or w.to_address ilike '%' || ? || '%'
+                                or coalesce(wo.tx_hash, '') ilike '%' || ? || '%'
+                                or a.address ilike '%' || ? || '%'
+                                or a.subject ilike '%' || ? || '%')
+                        """, Long.class, tenantId,
+                blankToEmpty(chain), blankToEmpty(chain),
+                blankToEmpty(assetSymbol), blankToEmpty(assetSymbol),
+                blankToEmpty(status), blankToEmpty(status),
+                normalizedSearch, normalizedSearch, normalizedSearch, normalizedSearch,
+                normalizedSearch, normalizedSearch, normalizedSearch);
+        return count == null ? 0L : count;
+    }
 
     public List<Map<String, Object>> listCustodyDeposits(
             UUID tenantId, String chain, String assetSymbol, String status,
@@ -1929,13 +1983,9 @@ public class CustodyRepository {
                                d.chain, d.asset_symbol, d.tx_hash, d.log_index, d.amount,
                                d.status, d.credited_at, d.created_at, d.updated_at
                           from custody_deposit d
-                          join custody_address a
+                         join custody_address a
                             on a.tenant_id = d.tenant_id and a.id = d.custody_address_id
                          where d.tenant_id = ?
-                           and not exists (
-                               select 1 from custody_gas_account g
-                                where g.custody_address_id = d.custody_address_id
-                           )
                            and (? = '' or d.chain = ?)
                            and (? = '' or d.asset_symbol = ?)
                            and (? = '' or d.status = ?)
@@ -1969,6 +2019,31 @@ public class CustodyRepository {
                 normalizedSearch, normalizedSearch, normalizedSearch,
                 normalizedSearch, normalizedSearch,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    }
+    public long countCustodyDeposits(
+            UUID tenantId, String chain, String assetSymbol, String status, String search) {
+        String normalizedSearch = search == null ? "" : search.trim();
+        Long count = jdbc.queryForObject("""
+                        select count(*)
+                          from custody_deposit d
+                          join custody_address a
+                            on a.tenant_id = d.tenant_id and a.id = d.custody_address_id
+                         where d.tenant_id = ?
+                           and (? = '' or d.chain = ?)
+                           and (? = '' or d.asset_symbol = ?)
+                           and (? = '' or d.status = ?)
+                           and (? = ''
+                                or d.tx_hash ilike '%' || ? || '%'
+                                or a.address ilike '%' || ? || '%'
+                                or a.subject ilike '%' || ? || '%'
+                                or coalesce(a.label, '') ilike '%' || ? || '%')
+                        """, Long.class, tenantId,
+                blankToEmpty(chain), blankToEmpty(chain),
+                blankToEmpty(assetSymbol), blankToEmpty(assetSymbol),
+                blankToEmpty(status), blankToEmpty(status),
+                normalizedSearch, normalizedSearch, normalizedSearch,
+                normalizedSearch, normalizedSearch);
+        return count == null ? 0L : count;
     }
     public List<WithdrawalStatusChange> findWithdrawalStatusChanges(int limit) {
         return jdbc.query("""
@@ -2128,6 +2203,12 @@ public class CustodyRepository {
                     return row;
                 }, tenantId, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
+    public long countAudit(UUID tenantId) {
+        Long count = jdbc.queryForObject(
+                "select count(*) from custody_audit_log where tenant_id = ?",
+                Long.class, tenantId);
+        return count == null ? 0L : count;
+    }
     public List<Map<String, Object>> listPlatformAudit(int limit, int offset) {
         return jdbc.query("""
                         select id, actor_type, actor_id, action, resource_type, resource_id,
@@ -2149,6 +2230,12 @@ public class CustodyRepository {
                     row.put("createdAt", rs.getTimestamp("created_at").toInstant());
                     return row;
                 }, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    }
+    public long countPlatformAudit() {
+        Long count = jdbc.queryForObject(
+                "select count(*) from custody_audit_log where tenant_id is null",
+                Long.class);
+        return count == null ? 0L : count;
     }
     public int cleanupExpiredSecurityRows() {
         int nonces = jdbc.update("delete from custody_api_nonce where expires_at < now()");

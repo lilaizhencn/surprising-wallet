@@ -38,6 +38,8 @@ public class CustodyWithdrawalExecutionService {
     public ExecutionResult execute(UUID tenantId, AddressRecord custodyAddress,
                                    String chain, String symbol, String toAddress,
                                    BigDecimal amount, String orderPrefix) {
+        runtimeConfig.requireTaskEnabled(
+                chain, WalletRuntimeConfigService.TASK_WITHDRAW, "custody withdrawal create");
         AssetMeta asset = requireAsset(chain, symbol);
         validateExternalAddress(chain, toAddress);
         BigDecimal frozenAmount = amount.add(asset.networkFeeReserve());

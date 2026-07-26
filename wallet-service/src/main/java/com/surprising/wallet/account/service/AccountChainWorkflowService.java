@@ -112,6 +112,9 @@ public class AccountChainWorkflowService {
     private final ChainJdbcRepository repository;
     private final WalletRuntimeConfigService runtimeConfigService;
     private final AccountSecp256k1KeyService secp256k1KeyService;
+    /** 各账户链下次允许扫描的时间，避免快速链和慢速链共用同一 RPC 轮询周期。 */
+    private final java.util.concurrent.ConcurrentMap<String, Long> nextDepositScanAtMillis =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     /** EVM 链充值扫描器 */
     private final EvmDepositScanner evmDepositScanner;
@@ -180,6 +183,34 @@ public class AccountChainWorkflowService {
     public void scanDeposits() {
         for (AccountChainProfile profile : enabledAccountProfiles()) {
             scanDeposits(profile);
+        }
+    }
+
+    /**
+     * 仅扫描已到期的账户链。全局扫描开关关闭时清空节流状态，重新开启后下一轮立即生效。
+     * XMR 有独立串行任务，避免与通用账户链任务重复扫描同一钱包。
+     */
+    public void scanDueDeposits() {
+        if (!runtimeConfigService.isGlobalTaskEnabled(WalletRuntimeConfigService.TASK_SCAN)) {
+            nextDepositScanAtMillis.clear();
+            return;
+        }
+        long now = System.currentTimeMillis();
+        for (AccountChainProfile profile : enabledAccountProfiles()) {
+            String chain = profile.getChain();
+            if ("XMR".equalsIgnoreCase(chain)) {
+                continue;
+            }
+            if (!Boolean.TRUE.equals(profile.getScanEnabled())) {
+                nextDepositScanAtMillis.remove(chain);
+                continue;
+            }
+            if (now < nextDepositScanAtMillis.getOrDefault(chain, 0L)) {
+                continue;
+            }
+            scanDeposits(profile);
+            nextDepositScanAtMillis.put(
+                    chain, System.currentTimeMillis() + runtimeConfigService.scanIntervalMillis(chain));
         }
     }
 
@@ -993,13 +1024,15 @@ public class AccountChainWorkflowService {
         return Math.min(next == Long.MAX_VALUE ? fallback : next, latest);
     }
     private long scanBatch(AccountChainProfile profile) {
+        long requiredConfirmations = profile.getDepositConfirmations() == null
+                ? 1L : Math.max(1L, profile.getDepositConfirmations());
         if (profile.getScanMaxBlocksPerRun() != null && profile.getScanMaxBlocksPerRun() > 0) {
-            return profile.getScanMaxBlocksPerRun();
+            return Math.max(requiredConfirmations, profile.getScanMaxBlocksPerRun());
         }
         if (profile.getScanBatchSize() != null && profile.getScanBatchSize() > 0) {
-            return profile.getScanBatchSize();
+            return Math.max(requiredConfirmations, profile.getScanBatchSize());
         }
-        return 20L;
+        return Math.max(requiredConfirmations, 20L);
     }
     private Map<String, TronScanner.TokenConfig> tronTokens() {
         Map<String, TronScanner.TokenConfig> tokens = new LinkedHashMap<>();
