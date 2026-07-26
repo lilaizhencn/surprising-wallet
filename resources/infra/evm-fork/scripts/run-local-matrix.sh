@@ -44,6 +44,7 @@ EVM_CHAINS=(
   "SONIC|S|14601|USDC,USDT|testnet|true"
   "PULSECHAIN|PLS|943|USDC,USDT|testnet|true"
   "ZETACHAIN|ZETA|7001|USDC_ETH,USDT_ETH|testnet|true"
+  "CORE|CORE|1114|USDC,USDT|testnet|true"
 )
 
 should_run_chain() {

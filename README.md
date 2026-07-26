@@ -59,12 +59,12 @@ surprising-wallet/
 | `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
-运行模型覆盖 49 条链、14 个链族：
+运行模型覆盖 50 条链、14 个链族：
 
 | 链族 | 链 |
 |------|-----|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH |
-| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD, OASIS_EMERALD, CRONOS, SONIC, PULSECHAIN, ZETACHAIN |
+| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD, OASIS_EMERALD, CRONOS, SONIC, PULSECHAIN, ZETACHAIN, CORE |
 | EVM L2 | ARBITRUM, OPTIMISM, BASE, AVAX_C, MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK, KATANA, MEGAETH, X_LAYER |
 | TRON | TRON |
 | Solana | SOL |
@@ -171,6 +171,7 @@ mvn compile
 | Sonic | 已完成 | S、USDC、USDT | Testnet `14601`；主网与当前测试网官方 RPC 均通过 EIP-7702 门禁；亚秒级最终性；USDC 使用 Circle 原生合约，USDT 为官方列出的 bridged USDT |
 | PulseChain | 已完成 | PLS、USDC、USDT | Testnet V4 `943`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；稳定币仅接入官方桥映射资产，状态复制的同地址 USDC／USDT 不作为美元稳定币；生产需使用私有 RPC |
 | ZetaChain | 已完成 | ZETA、USDC_ETH、USDT_ETH | Athens `7001`；主网与测试网均通过 EIP-7702 门禁；接入 Ethereum 来源且未暂停的主网 ZRC-20，链上符号为 `USDC.ETH/USDT.ETH`；支持 ZetaChain 链内充值、提现与归集，不扩展 ZRC-20 跨链 withdraw |
+| Core | 已完成 | CORE、USDC、USDT | Testnet2 `1114`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 3 秒出块；稳定币使用 Core 官方 LayerZero Bridge 合约 |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -227,7 +228,7 @@ mvn compile
 | Gnosis Chain | EVM 侧链 | xDAI | 稳定币作为原生 Gas | Ethereum 生态 / EVM | [Docs](https://docs.gnosischain.com/) | 已完成；主网 `100`、Chiado `10200`，Gas 资产 xDAI，支持 EIP-7702；接入 USDC 与 USDT |
 | Canto | 独立 L1 | CANTO | 原生币 | Cosmos SDK / EVM | [Docs](https://docs.canto.io/) | 暂缓；主网 `7700` 仍有区块，但官方主网 RPC 与 Testnet `7701` 端点当前返回 `521/522` 或超时，官方列出的多数备选 EVM RPC 也不可用；唯一可读端点与 Java TLS 不兼容，无法可靠完成主网／测试网 EIP-7702 和全功能门禁，待官方恢复稳定 EVM RPC 后重试 |
 | ZetaChain | 独立 L1 | ZETA | 原生币 | Cosmos SDK / EVM / Omnichain | [Docs](https://www.zetachain.com/docs/) | 已完成；主网 `7000`、Athens `7001`，两网 EVM RPC 均通过 EIP-7702 门禁；实测约 3.7 秒出块；接入 Ethereum 来源 ZRC-20 USDC `0x0cbe0dF132a6c6B4a2974Fa1b7Fb953CF0Cc798a` 与 USDT `0x7c8dDa80bbBE1254a7aACf3219EBe1481c6E01d7`，内部符号 `USDC_ETH/USDT_ETH`；Athens 稳定币均暂停，仅做原生币 live 门禁与本地稳定币测试；本次不扩展 ZRC-20 跨链 withdraw |
-| Core | 独立 L1 | CORE | 原生币 | Bitcoin-aligned / EVM | [Docs](https://docs.coredao.org/) | 候选；不是 Bitcoin L2 |
+| Core | 独立 L1 | CORE | 原生币 | Bitcoin-aligned / EVM | [Docs](https://docs.coredao.org/) | 已完成；不是 Bitcoin L2；主网 `1116`、Testnet2 `1114`，两网官方 RPC 均通过 EIP-7702 门禁；约 3 秒出块；接入官方 LayerZero Bridge USDC `0xa4151b2b3e269645181dccf2d426ce75fcbdeca9` 与 USDT `0x900101d06a7426441ae63e9ab3b9b0f63be145f1`；生产需使用私有 RPC |
 | Wanchain | 独立 L1 | WAN | 原生币 | EVM / 跨链 | [Docs](https://docs.wanchain.org/) | 候选 |
 | Elastos Smart Chain | Elastos EVM 侧链 | ELA | 原生币 | Elastos / EVM | [Docs](https://docs.elastos.net/) | 专项；需区分 Elastos Mainchain 与 ESC |
 | Velas | 独立 L1 | VLX | 原生币 | EVM | [Docs](https://docs.velas.com/) | 候选；旧表的 `VELAS` Gas 符号已纠正为 `VLX` |

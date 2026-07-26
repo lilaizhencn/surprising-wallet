@@ -6,16 +6,20 @@ import org.web3j.crypto.AuthorizationTuple;
 import org.web3j.crypto.Credentials;
 import org.web3j.crypto.Keys;
 import org.web3j.protocol.Web3j;
+import org.web3j.protocol.core.DefaultBlockParameter;
 import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.Request;
 import org.web3j.protocol.core.Response;
+import org.web3j.protocol.core.methods.response.EthBlock;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.utils.Numeric;
 
 import java.math.BigInteger;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -35,9 +39,7 @@ class Evm7702RpcCapabilityIntegrationTest {
         try {
             BigInteger actualChainId = web3j.ethChainId().send().getChainId();
             assertEquals(expectedChainId, actualChainId);
-            String fundedSender = web3j.ethGetBlockByNumber(
-                    DefaultBlockParameterName.LATEST, false).send().getBlock().getMiner();
-            assertTrue(fundedSender != null && fundedSender.matches("^0x[0-9a-fA-F]{40}$"));
+            String fundedSender = findFundedSender(web3j);
 
             Credentials authority = Credentials.create(Keys.createEcKeyPair());
             Credentials delegate = Credentials.create(Keys.createEcKeyPair());
@@ -66,6 +68,36 @@ class Evm7702RpcCapabilityIntegrationTest {
         } finally {
             web3j.shutdown();
         }
+    }
+
+    private static String findFundedSender(Web3j web3j) throws Exception {
+        EthBlock.Block latest = web3j.ethGetBlockByNumber(
+                DefaultBlockParameterName.LATEST, true).send().getBlock();
+        BigInteger latestNumber = latest.getNumber();
+        for (int offset = 0; offset < 20; offset++) {
+            EthBlock.Block block = offset == 0
+                    ? latest
+                    : web3j.ethGetBlockByNumber(
+                            DefaultBlockParameter.valueOf(latestNumber.subtract(BigInteger.valueOf(offset))),
+                            true).send().getBlock();
+            Set<String> candidates = new LinkedHashSet<>();
+            candidates.add(block.getMiner());
+            for (EthBlock.TransactionResult<?> result : block.getTransactions()) {
+                Object transaction = result.get();
+                if (transaction instanceof EthBlock.TransactionObject tx) {
+                    candidates.add(tx.getFrom());
+                }
+            }
+            for (String candidate : candidates) {
+                if (candidate != null
+                        && candidate.matches("^0x[0-9a-fA-F]{40}$")
+                        && web3j.ethGetBalance(candidate, DefaultBlockParameterName.LATEST)
+                                .send().getBalance().signum() > 0) {
+                    return candidate;
+                }
+            }
+        }
+        throw new AssertionError("no funded sender found in the latest 20 blocks");
     }
 
     private static Map<String, String> authorizationJson(AuthorizationTuple tuple) {
