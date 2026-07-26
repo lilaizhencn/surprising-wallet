@@ -49,6 +49,7 @@ public enum ChainType {
     RONIN("evm", "account"),
     CHILIZ("evm", "account"),
     IOTEX("evm", "account"),
+    KAIA("evm", "account"),
     HYPERCORE("hypercore", "account"),
     TRON("tron", "account"),
     XRP("xrp", "account"),

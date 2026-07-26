@@ -5697,7 +5697,9 @@ VALUES
     ('CHILIZ', 'USDT', 'ERC20', '0x37C57a89812a0D492AeEd7691F1610CA0a8f74A1', 6, false, true, 1, 1, now(), now()),
     ('IOTEX', 'IOTX', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('IOTEX', 'USDC_E', 'ERC20', '0xcdf79194c6c285077a58da47641d4dbe51f63542', 6, false, true, 1, 1, now(), now()),
-    ('IOTEX', 'IOUSDT', 'ERC20', '0x6fbcdc1169b5130c59e72e51ed68a84841c98cd1', 6, false, true, 1, 1, now(), now())
+    ('IOTEX', 'IOUSDT', 'ERC20', '0x6fbcdc1169b5130c59e72e51ed68a84841c98cd1', 6, false, true, 1, 1, now(), now()),
+    ('KAIA', 'KAIA', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
+    ('KAIA', 'USDT', 'ERC20', '0xd077a400968890eacc75cdc901f0356c943e4fdb', 6, false, true, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5816,6 +5818,8 @@ VALUES
     ('IOTEX', 'USDC_E', 'ERC20', '0xcdf79194c6c285077a58da47641d4dbe51f63542', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('IOTEX', 'IOUSDT', 'ERC20', '0x6fbcdc1169b5130c59e72e51ed68a84841c98cd1', 6, false,
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+    ('KAIA', 'USDT', 'ERC20', '0xd077a400968890eacc75cdc901f0356c943e4fdb', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
@@ -6084,6 +6088,14 @@ VALUES
     ('IOTEX', 'mainnet', 'evm', 9036, 60, 'IOTX',
      'https://babel-api.mainnet.iotex.io', 'https://iotexscan.io/tx/',
      1, 1, 1, 0, false, now(), now(), 4689, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('KAIA', 'testnet', 'evm', 9037, 60, 'KAIA',
+     'https://public-en-kairos.node.kaia.io', 'https://kairos.kaiascan.io/tx/',
+     1, 1, 1, 0, false, now(), now(), 1001, 'eip1559-l2', 200,
+     false, false, false, false, 0, 200),
+    ('KAIA', 'mainnet', 'evm', 9037, 60, 'KAIA',
+     'https://public-en.node.kaia.io', 'https://kaiascan.io/tx/',
+     1, 1, 1, 0, false, now(), now(), 8217, 'eip1559-l2', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
@@ -6496,6 +6508,18 @@ VALUES
     ('IOTEX', 'mainnet', 'prod', 'official-iotex-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://babel-api.mainnet.iotex.io', 'NONE', NULL, 10, 1000, false,
      'Production IoTeX public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
+     now(), now(), NULL),
+    ('KAIA', 'testnet', 'dev', 'official-kaia-kairos', 'rpc', 'HTTP_JSON_RPC',
+     'https://public-en-kairos.node.kaia.io', 'NONE', NULL, 10, 500, false,
+     'Official Kaia Kairos JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
+     now(), now(), NULL),
+    ('KAIA', 'testnet', 'test2', 'official-kaia-kairos', 'rpc', 'HTTP_JSON_RPC',
+     'https://public-en-kairos.node.kaia.io', 'NONE', NULL, 10, 500, false,
+     'test2 official Kaia Kairos JSON-RPC endpoint. Enable only for explicit live tests.',
+     now(), now(), NULL),
+    ('KAIA', 'mainnet', 'prod', 'official-kaia-mainnet', 'rpc', 'HTTP_JSON_RPC',
+     'https://public-en.node.kaia.io', 'NONE', NULL, 10, 1000, false,
+     'Production Kaia public JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
@@ -7161,6 +7185,8 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0xcdf79194c6c285077a58da47641d4dbe51f63542', NULL, NULL, 6, 'native-gas'),
         ('IOTEX', 'IOUSDT', 'ERC20', 'ERC20',
          '0x6fbcdc1169b5130c59e72e51ed68a84841c98cd1', NULL, NULL, 6, 'native-gas'),
+        ('KAIA', 'USDT', 'ERC20', 'ERC20',
+         '0xd077a400968890eacc75cdc901f0356c943e4fdb', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
          '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
         ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',

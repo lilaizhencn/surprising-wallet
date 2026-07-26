@@ -176,6 +176,7 @@ mvn compile
 | Ronin | 已完成 | RON、USDC | Saigon `202601`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；实测约 1.1 秒出块；USDC 使用 Ronin 官方桥接资产，未确认官方 USDT，故不接入 |
 | Chiliz Chain | 已完成 | CHZ、USDC、USDT | Spicy `88882`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 2 秒出块；稳定币使用官方目录列出的 ChainPort 桥接合约 |
 | IoTeX | 已完成 | IOTX、USDC_E、IOUSDT | Testnet `4690`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 1.7 秒出块；稳定币使用 ioTube 官方映射资产 |
+| Kaia | 已完成 | KAIA、USDT | Kairos `1001`；主网与测试网官方 RPC 均通过 EIP-7702 门禁；约 0.67 秒出块；接入 Kaia 官方列出的主网 USDT，未确认官方 USDC |
 
 #### 1. Ethereum 生态 L2 / L3
 
@@ -255,7 +256,7 @@ mvn compile
 | Chiliz Chain | 独立 L1 | CHZ | 原生币 | EVM / Sports | [Docs](https://docs.chiliz.com/) | 已完成；主网 `88888`、Spicy `88882`，两网官方 RPC 均通过 EIP-7702 门禁；接入官方目录列出的 USDC `0xa37936F56249965d407E39347528a1A91eB1cbef` 与 USDT `0x37C57a89812a0D492AeEd7691F1610CA0a8f74A1` |
 | Conflux | 独立 L1，Core Space + eSpace | CFX | 原生币 | Conflux / EVM eSpace | [Docs](https://doc.confluxnetwork.org/) | 专项；Core Space 与 eSpace 地址及交易模型不同 |
 | IoTeX | 独立 L1 | IOTX | 原生币 | EVM / DePIN | [Docs](https://docs.iotex.io/) | 已完成；主网 `4689`、测试网 `4690`，两网官方 RPC 均通过 EIP-7702 门禁；接入官方 USDC.e `0xcdf79194c6c285077a58da47641d4dbe51f63542` 与 ioUSDT `0x6fbcdc1169b5130c59e72e51ed68a84841c98cd1`；接口使用 EVM `0x` 地址 |
-| Kaia | 独立 L1 | KAIA | 原生币 | EVM / 亚洲支付生态 | [Docs](https://docs.kaia.io/) | 候选；旧 `KLAY` 名称已迁移为 `KAIA` |
+| Kaia | 独立 L1 | KAIA | 原生币 | EVM / 亚洲支付生态 | [Docs](https://docs.kaia.io/) | 已完成；主网 `8217`、Kairos `1001`，两网官方 RPC 均通过 EIP-7702 门禁；接入官方 USDT `0xd077a400968890eacc75cdc901f0356c943e4fdb`；未确认官方 USDC；旧 `KLAY` 名称已迁移为 `KAIA` |
 | MAP Protocol / MAPO | 独立 L1 | MAPO | 原生币 | EVM / Omnichain | [Docs](https://docs.mapprotocol.io/) | 候选；名称统一为 MAP Protocol，链上币符号为 MAPO |
 | Kite AI | 独立 EVM 链 | KITE | 原生币 | EVM / AI Agent Payments | [Docs](https://docs.gokite.ai/kite-chain/1-getting-started/network-information) | 候选；主网 chain ID 2366，已不再是“仅测试网” |
 | Tempo | 独立支付 L1 | 受支持的 USD 稳定币 | 无原生波动币；TIP-20 稳定币直接付费 | EVM / Payments / Stablecoin | [Docs](https://docs.tempo.xyz/protocol/fees) | 专项；钱包、签名器和 Gas 余额判断不能假设单一 native token |
