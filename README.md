@@ -305,7 +305,6 @@ mvn compile
 | Zedxion Smart Chain | 独立 EVM L1 | ZEDX | [Docs](https://docs.zedscan.net/) | 暂缓；主网 `83872`、测试网 `40882` 的官方 RPC 当前持续出块，但主网 RPC 对 EIP-7702 返回 `unknown field authorizationList`；Explorer 时间展示失真，不作为停运依据 |
 | Krown Network | PoS EVM L1 | KROWN | [Official](https://krown.network/) | 已接入；主网 `1983` 的官方 RPC 持续出块，实测约 `12s`/块且 EIP-7702 门禁通过；仅接入原生 KROWN，未找到可信的官方测试网或有权威来源的 USDC/USDT 合约，本地以同 chain ID 的 Hardhat 网络验证，确认数保守配置为 `12` |
 | Onyx / XCN Ledger / Goliath | Goliath 双账本网络（提供 EVM Gateway） | XCN | [Onyx Docs](https://docs.onyx.org/readme/about-onyx) / [Goliath Docs](https://docs.goliath.net/developer-guide/getting-started) | 暂缓；`rpc.onyx.org` 与 `rpc.goliath.net` 当前指向同一主网 `327`，测试网为 `8901`，旧 Onyx 文档中的 `80888` 已不符合实时网络；主网和测试网虽持续出块，但各自最近 `200` 个区块均无交易，EIP-7702 门禁因此无法取得有余额发送方；更关键的是官方规定 XCN 在 EVM 内部使用 `8` 位、JSON-RPC 使用 `18` 位，现有统一原生币账务模型无法安全覆盖充值、提现、手续费和对账，按“不改架构”约束跳过 |
-| Anubis Chain | 新上线的隐私 EVM L1；浏览器显示 DAI 支付 Gas | DAI | [Official](https://anubischain.ai/index.html) | 尽调；隐私交易、普通 EVM 交易边界及稳定币 Gas 实现需要源码和节点级验证 |
 
 #### 8. 暂停或不再新增接入
 
