@@ -233,7 +233,7 @@ mvn compile
 | Elastos Smart Chain | Elastos EVM 侧链 | ELA | 原生币 | Elastos / EVM | [Docs](https://docs.elastos.net/) | 专项；需区分 Elastos Mainchain 与 ESC |
 | Velas | 独立 L1 | VLX | 原生币 | EVM | [Docs](https://docs.velas.com/) | 暂缓；主网 `106`、测试网 `111` 的官方 RPC 仍可访问，但主网 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待 EVM 客户端支持 type-4 交易后再接入；旧表的 `VELAS` Gas 符号已纠正为 `VLX` |
 | Harmony | 独立 L1 | ONE | 原生币 | EVM / Sharding | [Docs](https://docs.harmony.one/) | 尽调；历史桥安全事件和生态活跃度需评估 |
-| ThunderCore | 独立 L1 | TT | 原生币 | EVM | [Docs](https://docs.thundercore.com/) | 候选 |
+| ThunderCore | 独立 L1 | TT | 原生币 | EVM | [Docs](https://docs.thundercore.com/) | 暂缓；主网 `108`、测试网 `18` 仍运行，主网约 1 秒出块且官方桥提供 TT-USDC／TT-USDT，但 EIP-7702 live 门禁实测忽略 `authorizationList`，按普通转账返回 `21000` Gas；等待客户端从 London 升级并支持 type-4 交易后再接入 |
 | KCC | 独立 EVM 链 | KCS | 原生币 | EVM / KuCoin 生态 | [Docs](https://docs.kcc.io/) | 候选 |
 | KardiaChain | 独立 L1 | KAI | 原生币 | EVM | [Docs](https://docs.kardiachain.io/) | 候选 |
 | Telos EVM | Telos 上的 EVM 执行环境 | TLOS | 原生币 | Antelope / EVM | [Docs](https://docs.telos.net/) | 专项；需明确只接 Telos EVM，不混用原生 Telos 地址 |
