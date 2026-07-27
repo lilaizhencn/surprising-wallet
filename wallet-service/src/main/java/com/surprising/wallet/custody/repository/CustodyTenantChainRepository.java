@@ -40,7 +40,7 @@ public class CustodyTenantChainRepository {
                                    select 1 from evm_7702_config e
                                     where e.chain = p.chain
                                       and lower(e.network) = lower(p.network)
-                                      and e.enabled = true
+                                      and e.status = 'ACTIVE'
                                ) as eip_7702_enabled,
                                p.scan_enabled, p.withdraw_enabled, p.transfer_enabled,
                                coalesce(tc.status, 'CLOSED') as tenant_status,
