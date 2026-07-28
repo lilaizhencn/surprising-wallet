@@ -2,7 +2,6 @@ package com.surprising.wallet.custody.service;
 
 import com.surprising.wallet.custody.model.PageView;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.config.WalletEnvironmentPolicy;
 import com.surprising.wallet.config.WalletRpcPolicy;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,14 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.net.http.WebSocket;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -28,7 +22,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import org.web3j.utils.Numeric;
 
@@ -47,23 +40,18 @@ public class WalletConfigManagementService {
     private final JdbcTemplate jdbc;
     private final CustodyRepository custodyRepository;
     private final String environment;
-    private final HttpClient httpClient;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final WalletRpcClient rpcClient;
+
     @Autowired
     public WalletConfigManagementService(JdbcTemplate jdbc,
                                          CustodyRepository custodyRepository,
                                          @Value("${sw.app.env.name:dev}")
-                                         String environment) {
-        this(jdbc, custodyRepository, environment,
-                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build());
-    }
-
-    WalletConfigManagementService(JdbcTemplate jdbc, CustodyRepository custodyRepository,
-                                  String environment, HttpClient httpClient) {
+                                         String environment,
+                                         WalletRpcClient rpcClient) {
         this.jdbc = jdbc;
         this.custodyRepository = custodyRepository;
         this.environment = normalizeLower(environment);
-        this.httpClient = httpClient;
+        this.rpcClient = rpcClient;
     }
 
     public List<ChainView> listChains(CustodyPrincipal actor, String search, Boolean enabled,
@@ -284,42 +272,12 @@ public class WalletConfigManagementService {
         requirePlatformAdmin(actor);
         ChainView chain = requireChain(chainId);
         RpcStored node = requireRpcStored(chain, nodeId);
-        long started = System.nanoTime();
-        try {
-            URI uri = URI.create(node.rpcUrl());
-            if ("ws".equalsIgnoreCase(uri.getScheme()) || "wss".equalsIgnoreCase(uri.getScheme())) {
-                WebSocket.Builder builder = httpClient.newWebSocketBuilder()
-                        .connectTimeout(Duration.ofSeconds(8));
-                applyAuth(builder, node);
-                WebSocket socket = builder.buildAsync(uri, new WebSocket.Listener() { })
-                        .get(8, TimeUnit.SECONDS);
-                socket.abort();
-                return saveRpcTest(nodeId,
-                        new RpcTestView(true, null, elapsedMillis(started), null, Instant.now()));
-            }
-            HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
-                    .timeout(Duration.ofSeconds(8));
-            applyAuth(builder, node);
-            if (node.connectionType().toUpperCase(Locale.ROOT).contains("JSON_RPC")) {
-                builder.header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString(
-                                "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"web3_clientVersion\",\"params\":[]}"));
-            } else {
-                builder.GET();
-            }
-            HttpResponse<Void> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.discarding());
-            long latency = Duration.ofNanos(System.nanoTime() - started).toMillis();
-            boolean success = response.statusCode() >= 200 && response.statusCode() < 400;
-            return saveRpcTest(nodeId, new RpcTestView(success, response.statusCode(), latency,
-                    success ? null : "RPC returned HTTP " + response.statusCode(), Instant.now()));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return saveRpcTest(nodeId, new RpcTestView(
-                    false, null, elapsedMillis(started), "RPC test interrupted", Instant.now()));
-        } catch (Exception e) {
-            return saveRpcTest(nodeId, new RpcTestView(
-                    false, null, elapsedMillis(started), safeError(e), Instant.now()));
-        }
+        WalletRpcClient.ProbeResult result = rpcClient.probe(
+                node.rpcUrl(), node.connectionType(), node.authType(), node.authHeaderName(),
+                node.apiKey(), node.username(), node.password());
+        return saveRpcTest(nodeId, new RpcTestView(
+                result.success(), result.statusCode(), result.latencyMs(),
+                result.error(), result.checkedAt()));
     }
 
     public List<TokenView> listTokens(CustodyPrincipal actor, String search, String chain,
@@ -722,39 +680,9 @@ public class WalletConfigManagementService {
                         "an enabled HTTP JSON-RPC node is required to validate an EVM token"));
     }
     private JsonNode evmRpc(RpcStored node, String method, String params) {
-        try {
-            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(node.rpcUrl()))
-                    .timeout(Duration.ofSeconds(8))
-                    .header("Content-Type", "application/json");
-            applyAuth(builder, node);
-            String requestBody = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":"
-                    + json(method) + ",\"params\":" + params + "}";
-            HttpResponse<String> response = httpClient.send(
-                    builder.POST(HttpRequest.BodyPublishers.ofString(requestBody)).build(),
-                    HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException(
-                        "token contract validation RPC returned HTTP " + response.statusCode());
-            }
-            JsonNode payload = objectMapper.readTree(response.body());
-            if (payload.hasNonNull("error")) {
-                String message = payload.path("error").path("message").asText("RPC error");
-                throw new IllegalStateException("token contract validation failed: "
-                        + message.substring(0, Math.min(message.length(), 240)));
-            }
-            JsonNode result = payload.get("result");
-            if (result == null || result.isNull()) {
-                throw new IllegalStateException("token contract validation RPC returned no result");
-            }
-            return result;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("token contract validation was interrupted", e);
-        } catch (IllegalStateException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IllegalStateException("token contract validation failed: " + safeError(e), e);
-        }
+        return rpcClient.jsonRpc(
+                node.rpcUrl(), node.connectionType(), node.authType(), node.authHeaderName(),
+                node.apiKey(), node.username(), node.password(), method, params);
     }
     private static BigInteger quantity(JsonNode result, String field) {
         String value = textResult(result, field);
@@ -1004,22 +932,6 @@ public class WalletConfigManagementService {
                 || count("select count(*) from withdrawal_order where upper(chain) = upper(?) and upper(asset_symbol) = upper(?)", chain, symbol) > 0
                 || count("select count(*) from collection_record where upper(chain) = upper(?) and upper(asset_symbol) = upper(?)", chain, symbol) > 0;
     }
-    private void applyAuth(HttpRequest.Builder builder, RpcStored node) {
-        String auth = upper(node.authType());
-        if ("BLOCKFROST".equalsIgnoreCase(node.connectionType()) && !blank(node.apiKey())) {
-            builder.header("project_id", node.apiKey());
-        } else if ("BEARER".equals(auth) && !blank(node.apiKey())) {
-            builder.header("Authorization", "Bearer " + node.apiKey());
-        } else if (("API_KEY".equals(auth) || "PROJECT_ID".equals(auth) || "TOKEN".equals(auth)
-                || "API_KEY_OPTIONAL".equals(auth))
-                && !blank(node.apiKey())) {
-            builder.header(blank(node.authHeaderName()) ? "X-API-Key" : node.authHeaderName(), node.apiKey());
-        } else if (("BASIC".equals(auth) || "DIGEST".equals(auth)) && !blank(node.username())) {
-            String value = java.util.Base64.getEncoder().encodeToString(
-                    (node.username() + ":" + node.password()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            builder.header("Authorization", "Basic " + value);
-        }
-    }
     private RpcTestView saveRpcTest(long nodeId, RpcTestView result) {
         jdbc.update("""
                 update chain_rpc_node
@@ -1028,20 +940,6 @@ public class WalletConfigManagementService {
                 """, java.sql.Timestamp.from(result.checkedAt()), result.latencyMs(),
                 result.statusCode(), result.error(), nodeId);
         return result;
-    }
-    private void applyAuth(WebSocket.Builder builder, RpcStored node) {
-        String auth = upper(node.authType());
-        if ("BEARER".equals(auth) && !blank(node.apiKey())) {
-            builder.header("Authorization", "Bearer " + node.apiKey());
-        } else if (("API_KEY".equals(auth) || "PROJECT_ID".equals(auth) || "TOKEN".equals(auth)
-                || "API_KEY_OPTIONAL".equals(auth))
-                && !blank(node.apiKey())) {
-            builder.header(blank(node.authHeaderName()) ? "X-API-Key" : node.authHeaderName(), node.apiKey());
-        } else if ("BASIC".equals(auth) && !blank(node.username())) {
-            String value = java.util.Base64.getEncoder().encodeToString(
-                    (node.username() + ":" + node.password()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            builder.header("Authorization", "Basic " + value);
-        }
     }
     private long count(String sql, Object... args) {
         Long value = jdbc.queryForObject(sql, Long.class, args);
@@ -1072,13 +970,6 @@ public class WalletConfigManagementService {
         if (value == null) return "null";
         return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"")
                 .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\"";
-    }
-    private static long elapsedMillis(long started) {
-        return Duration.ofNanos(System.nanoTime() - started).toMillis();
-    }
-    private static String safeError(Exception error) {
-        String message = error.getMessage();
-        return message == null || message.isBlank() ? error.getClass().getSimpleName() : message;
     }
     private static void required(String value, String field) {
         if (blank(value)) throw new IllegalArgumentException(field + " is required");

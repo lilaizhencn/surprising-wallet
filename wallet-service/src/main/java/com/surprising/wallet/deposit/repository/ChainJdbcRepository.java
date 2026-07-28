@@ -72,6 +72,7 @@ import java.util.stream.Collectors;
 @Repository
 public class ChainJdbcRepository {
     private final JdbcTemplate jdbcTemplate;
+    private final UtxoRepository utxoRepository;
 
     /** 充值入账观察者列表（通过 Spring ObjectProvider 注入） */
     private final List<DepositCreditObserver> depositCreditObservers;
@@ -85,6 +86,7 @@ public class ChainJdbcRepository {
      */
     public ChainJdbcRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+        this.utxoRepository = new UtxoRepository(jdbcTemplate);
         this.depositCreditObservers = List.of();
         this.depositReorgObservers = List.of();
     }
@@ -98,6 +100,7 @@ public class ChainJdbcRepository {
     public ChainJdbcRepository(JdbcTemplate jdbcTemplate,
                                ObjectProvider<DepositCreditObserver> depositCreditObservers) {
         this.jdbcTemplate = jdbcTemplate;
+        this.utxoRepository = new UtxoRepository(jdbcTemplate);
         this.depositCreditObservers = depositCreditObservers.orderedStream().toList();
         this.depositReorgObservers = List.of();
     }
@@ -109,11 +112,23 @@ public class ChainJdbcRepository {
      * @param depositCreditObservers 充值入账观察者
      * @param depositReorgObservers  重组观察者
      */
-    @Autowired
     public ChainJdbcRepository(JdbcTemplate jdbcTemplate,
                                ObjectProvider<DepositCreditObserver> depositCreditObservers,
                                ObjectProvider<DepositReorgObserver> depositReorgObservers) {
+        this(jdbcTemplate, depositCreditObservers, depositReorgObservers,
+                new UtxoRepository(jdbcTemplate));
+    }
+
+    /**
+     * Spring 完整构造器，注入观察者和独立 UTXO 仓储。
+     */
+    @Autowired
+    public ChainJdbcRepository(JdbcTemplate jdbcTemplate,
+                               ObjectProvider<DepositCreditObserver> depositCreditObservers,
+                               ObjectProvider<DepositReorgObserver> depositReorgObservers,
+                               UtxoRepository utxoRepository) {
         this.jdbcTemplate = jdbcTemplate;
+        this.utxoRepository = utxoRepository;
         this.depositCreditObservers = depositCreditObservers.orderedStream().toList();
         this.depositReorgObservers = depositReorgObservers.orderedStream().toList();
     }
@@ -1080,217 +1095,53 @@ public class ChainJdbcRepository {
     public void upsertUtxo(String chain, String assetSymbol, String txHash, int vout, String address,
                            BigDecimal amount, long blockHeight, String blockHash,
                            int confirmations, boolean credited) {
-        jdbcTemplate.update("""
-                        insert into utxo_record(chain, asset_symbol, tx_hash, vout, address, amount, block_height,
-                                                block_hash, confirmations, state, credited, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'AVAILABLE', ?, ?, ?)
-                        on conflict (chain, tx_hash, vout) do update set
-                            address = excluded.address,
-                            amount = excluded.amount,
-                            block_height = excluded.block_height,
-                            block_hash = excluded.block_hash,
-                            confirmations = greatest(utxo_record.confirmations, excluded.confirmations),
-                            state = case
-                                when utxo_record.state in ('LOCKED', 'SPENT') then utxo_record.state
-                                else excluded.state
-                            end,
-                            credited = utxo_record.credited or excluded.credited,
-                            updated_at = excluded.updated_at
-                        """,
-                chain, assetSymbol, txHash, vout, address, amount, blockHeight, blockHash, confirmations, credited,
-                toTs(now()), toTs(now()));
+        utxoRepository.upsert(
+                chain, assetSymbol, txHash, vout, address, amount, blockHeight, blockHash,
+                confirmations, credited);
     }
     public int markUtxoCredited(String chain, String txHash, int vout) {
-        return jdbcTemplate.update("""
-                        update utxo_record
-                        set credited = true, updated_at = ?
-                        where chain = ? and tx_hash = ? and vout = ? and credited = false
-                        """,
-                toTs(now()), chain, txHash, vout);
+        return utxoRepository.markCredited(chain, txHash, vout);
     }
     public int lockUtxo(String chain, String txHash, int vout, String lockRef) {
-        return jdbcTemplate.update("""
-                        update utxo_record
-                        set state = 'LOCKED', lock_ref = ?, updated_at = ?
-                        where chain = ? and tx_hash = ? and vout = ?
-                          and (state = 'AVAILABLE' or (state = 'LOCKED' and lock_ref = ?))
-                        """,
-                lockRef, toTs(now()), chain, txHash, vout, lockRef);
+        return utxoRepository.lock(chain, txHash, vout, lockRef);
     }
     public int lockUtxo(UUID tenantId, String chain, String txHash, int vout, String lockRef) {
-        return jdbcTemplate.update("""
-                        update utxo_record ur
-                           set state = 'LOCKED', lock_ref = ?, updated_at = ?
-                         where ur.chain = ? and ur.tx_hash = ? and ur.vout = ?
-                           and (ur.state = 'AVAILABLE' or (ur.state = 'LOCKED' and ur.lock_ref = ?))
-                           and exists (
-                               select 1 from chain_address a
-                                where a.tenant_id = ? and a.chain = ur.chain
-                                  and lower(a.address) = lower(ur.address) and a.enabled = true
-                           )
-                        """,
-                lockRef, toTs(now()), chain, txHash, vout, lockRef, tenantId);
+        return utxoRepository.lock(tenantId, chain, txHash, vout, lockRef);
     }
     public int releaseUtxos(String chain, String lockRef) {
-        return jdbcTemplate.update("""
-                        update utxo_record
-                        set state = 'AVAILABLE', lock_ref = null, updated_at = ?
-                        where chain = ? and lock_ref = ? and state = 'LOCKED'
-                        """,
-                toTs(now()), chain, lockRef);
+        return utxoRepository.release(chain, lockRef);
     }
     public int markUtxosSpent(String chain, String lockRef, String spentTxHash) {
-        return jdbcTemplate.update("""
-                        update utxo_record
-                        set state = 'SPENT', spent_tx_hash = ?, updated_at = ?
-                        where chain = ? and lock_ref = ? and state = 'LOCKED'
-                        """,
-                spentTxHash, toTs(now()), chain, lockRef);
+        return utxoRepository.markSpent(chain, lockRef, spentTxHash);
     }
     public int updateUtxoConfirmations(String chain, String txHash, int vout, int confirmations) {
-        return jdbcTemplate.update("""
-                        update utxo_record
-                        set confirmations = ?, updated_at = ?
-                        where chain = ? and tx_hash = ? and vout = ? and state = 'AVAILABLE'
-                        """,
-                confirmations, toTs(now()), chain, txHash, vout);
+        return utxoRepository.updateConfirmations(chain, txHash, vout, confirmations);
     }
 
     public List<UtxoTransaction> listSpendableUtxos(String chain, String assetSymbol,
                                                     long requiredConfirmations,
                                                     int limit, int offset) {
-        return jdbcTemplate.query("""
-                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
-                               ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
-                               (
-                                   select cp.runtime_currency_id
-                                   from chain_profile cp
-                                   where cp.chain = ur.chain
-                                     and cp.native_symbol = ur.asset_symbol
-                                     and cp.enabled = true
-                                   order by case cp.network
-                                       when 'regtest' then 0
-                                       when 'testnet' then 1
-                                       when 'testnet3' then 1
-                                       else 2
-                                   end
-                                   limit 1
-                               ) as runtime_currency_id
-                        from utxo_record ur
-                        where ur.chain = ?
-                          and ur.asset_symbol = ?
-                          and ur.state = 'AVAILABLE'
-                          and ur.confirmations >= ?
-                        order by ur.id
-                        limit ? offset ?
-                        """,
-                (rs, rowNum) -> mapUtxoRecord(rs, chain),
+        return utxoRepository.listSpendable(
                 chain, assetSymbol, requiredConfirmations, limit, offset);
     }
 
     public List<UtxoTransaction> listSpendableUtxos(UUID tenantId, String chain, String assetSymbol,
                                                     long requiredConfirmations, int limit, int offset) {
-        return jdbcTemplate.query("""
-                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
-                               ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
-                               (
-                                   select cp.runtime_currency_id
-                                   from chain_profile cp
-                                   where cp.chain = ur.chain
-                                     and cp.native_symbol = ur.asset_symbol
-                                     and cp.enabled = true
-                                   order by case cp.network
-                                       when 'regtest' then 0
-                                       when 'testnet' then 1
-                                       when 'testnet3' then 1
-                                       else 2
-                                   end
-                                   limit 1
-                               ) as runtime_currency_id
-                        from utxo_record ur
-                        where ur.chain = ? and ur.asset_symbol = ?
-                          and ur.state = 'AVAILABLE' and ur.confirmations >= ?
-                          and exists (
-                              select 1 from chain_address a
-                               where a.tenant_id = ? and a.chain = ur.chain
-                                 and lower(a.address) = lower(ur.address) and a.enabled = true
-                          )
-                        order by ur.id
-                        limit ? offset ?
-                        """,
-                (rs, rowNum) -> mapUtxoRecord(rs, chain),
-                chain, assetSymbol, requiredConfirmations, tenantId, limit, offset);
+        return utxoRepository.listSpendable(
+                tenantId, chain, assetSymbol, requiredConfirmations, limit, offset);
     }
 
     public List<UtxoTransaction> listAvailableUtxosBelowConfirmations(String chain, String assetSymbol,
                                                                       long maxConfirmations,
                                                                       long afterId, int limit) {
-        return jdbcTemplate.query("""
-                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
-                               ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
-                               (
-                                   select cp.runtime_currency_id
-                                   from chain_profile cp
-                                   where cp.chain = ur.chain
-                                     and cp.native_symbol = ur.asset_symbol
-                                     and cp.enabled = true
-                                   order by case cp.network
-                                       when 'regtest' then 0
-                                       when 'testnet' then 1
-                                       when 'testnet3' then 1
-                                       else 2
-                                   end
-                                   limit 1
-                               ) as runtime_currency_id
-                        from utxo_record ur
-                        where ur.chain = ?
-                          and ur.asset_symbol = ?
-                          and ur.state = 'AVAILABLE'
-                          and ur.confirmations < ?
-                          and ur.id > ?
-                        order by ur.id
-                        limit ?
-                        """,
-                (rs, rowNum) -> mapUtxoRecord(rs, chain),
+        return utxoRepository.listAvailableBelowConfirmations(
                 chain, assetSymbol, maxConfirmations, afterId, limit);
     }
     public BigDecimal sumAvailableUtxoAmount(String chain, String assetSymbol) {
-        BigDecimal balance = jdbcTemplate.queryForObject("""
-                        select coalesce(sum(amount), 0)
-                        from utxo_record
-                        where chain = ?
-                          and asset_symbol = ?
-                          and state = 'AVAILABLE'
-                        """,
-                BigDecimal.class, chain, assetSymbol);
-        return balance == null ? BigDecimal.ZERO : balance;
+        return utxoRepository.sumAvailableAmount(chain, assetSymbol);
     }
     public List<UtxoTransaction> listUtxosByAddress(String chain, String address, int limit) {
-        return jdbcTemplate.query("""
-                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
-                               ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
-                               (
-                                   select cp.runtime_currency_id
-                                   from chain_profile cp
-                                   where cp.chain = ur.chain
-                                     and cp.native_symbol = ur.asset_symbol
-                                     and cp.enabled = true
-                                   order by case cp.network
-                                       when 'regtest' then 0
-                                       when 'testnet' then 1
-                                       when 'testnet3' then 1
-                                       else 2
-                                   end
-                                   limit 1
-                               ) as runtime_currency_id
-                        from utxo_record ur
-                        where ur.chain = ?
-                          and ur.address = ?
-                        order by ur.id desc
-                        limit ?
-                        """,
-                (rs, rowNum) -> mapUtxoRecord(rs, chain),
-                chain, address, limit);
+        return utxoRepository.listByAddress(chain, address, limit);
     }
     public boolean depositRecordExists(String chain, String txHash, int logIndex) {
         Boolean exists = jdbcTemplate.queryForObject("""
@@ -1302,31 +1153,6 @@ public class ChainJdbcRepository {
                 Boolean.class, chain, txHash, logIndex);
         return Boolean.TRUE.equals(exists);
     }
-    private UtxoTransaction mapUtxoRecord(java.sql.ResultSet rs, String chain) throws java.sql.SQLException {
-        int runtimeCurrencyId = rs.getInt("runtime_currency_id");
-        if (rs.wasNull()) {
-            throw new IllegalStateException(
-                    "missing enabled chain_profile.runtime_currency_id for unified UTXO chain " + chain);
-        }
-        return UtxoTransaction.builder()
-                .id(rs.getLong("id"))
-                .txId(rs.getString("tx_hash"))
-                .seq((short) rs.getInt("vout"))
-                .address(rs.getString("address"))
-                .balance(rs.getBigDecimal("amount"))
-                .blockHeight(rs.getLong("block_height"))
-                .blockHash(rs.getString("block_hash"))
-                .confirmNum(rs.getLong("confirmations"))
-                .spent((byte) 0)
-                .spentTxId(Constants.UNSPENT_TX_ID)
-                .currency(runtimeCurrencyId)
-                .status((byte) Constants.WAITING)
-                .credited(rs.getBoolean("credited"))
-                .createDate(rs.getTimestamp("created_at"))
-                .updateDate(rs.getTimestamp("updated_at"))
-                .build();
-    }
-
     public int createWithdrawalOrder(String orderNo, long userId, String chain, String assetSymbol,
                                      String toAddress, BigDecimal amount, BigDecimal fee) {
         return createWithdrawalOrder(orderNo, userId, chain, assetSymbol, null, null, toAddress, amount, fee);

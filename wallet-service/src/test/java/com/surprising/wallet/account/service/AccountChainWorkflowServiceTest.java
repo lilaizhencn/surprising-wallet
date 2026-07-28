@@ -1,4 +1,4 @@
-package com.surprising.wallet.account;
+package com.surprising.wallet.account.service;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAsset;
@@ -24,8 +24,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.account.service.AccountChainWorkflowService;
-
 class AccountChainWorkflowServiceTest {
     private static final UUID TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000010");
 
@@ -284,7 +282,7 @@ class AccountChainWorkflowServiceTest {
 
     private static AccountChainWorkflowService service(ChainJdbcRepository repository,
                                                        EvmAccountTransactionService evmService) {
-        return new AccountChainWorkflowService(
+        return createService(
                 repository,
                 null,
                 null,
@@ -318,7 +316,7 @@ class AccountChainWorkflowServiceTest {
 
     private static AccountChainWorkflowService service(ChainJdbcRepository repository,
                                                        AptosTransactionService aptosService) {
-        return new AccountChainWorkflowService(
+        return createService(
                 repository,
                 null,
                 null,
@@ -352,11 +350,44 @@ class AccountChainWorkflowServiceTest {
 
     private static AccountChainWorkflowService service(ChainJdbcRepository repository,
                                                        TonTransactionService tonService) {
-        return new AccountChainWorkflowService(
+        return createService(
                 repository,
                 null, null, null, null, null, null, null, null,
                 null, null, null, null, null, tonService, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null);
+    }
+
+    private static AccountChainWorkflowService createService(
+            ChainJdbcRepository repository, Object... dependencies) {
+        EvmAccountTransactionService evmService = null;
+        AptosTransactionService aptosService = null;
+        TonTransactionService tonService = null;
+        for (Object dependency : dependencies) {
+            if (dependency instanceof EvmAccountTransactionService value) {
+                evmService = value;
+            } else if (dependency instanceof AptosTransactionService value) {
+                aptosService = value;
+            } else if (dependency instanceof TonTransactionService value) {
+                tonService = value;
+            }
+        }
+        return new AccountChainWorkflowService(
+                repository,
+                null,
+                null,
+                new AccountChainAssetService(repository, null),
+                null,
+                evmService,
+                null,
+                null,
+                aptosService,
+                null,
+                tonService,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     private static final class FakeRepository extends ChainJdbcRepository {
