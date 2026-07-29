@@ -13,14 +13,14 @@ import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.config.AccountSecp256k1KeyService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import com.surprising.wallet.wallet.repository.HyperCoreRepository;
-import org.ethereum.crypto.EthECKey;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
-import org.spongycastle.util.encoders.Hex;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.web3j.crypto.Keys;
+import org.web3j.crypto.Sign;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -255,8 +255,8 @@ class HyperCoreLocalFullFlowIntegrationTest {
                 .walletRole(role)
                 .enabled(true)
                 .build();
-        String value = "0x" + Hex.toHexString(
-                EthECKey.fromPublicOnly(keys.key(profile, record).getPubKey()).getAddress());
+        String value = "0x" + Keys.getAddress(
+                Sign.publicFromPoint(keys.key(profile, record).decompress().getPubKey()));
         record.setAddress(value);
         record.setOwnerAddress(value);
         record.setAccountId(value);

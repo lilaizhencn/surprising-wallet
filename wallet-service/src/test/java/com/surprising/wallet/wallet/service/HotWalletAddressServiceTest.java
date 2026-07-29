@@ -17,7 +17,6 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HotWalletAddressServiceTest {
     private static final String XPUB_2 =
@@ -45,7 +44,7 @@ class HotWalletAddressServiceTest {
         assertEquals("USDC", address.getAssetSymbol());
         assertEquals("m/44/60/0/1/0", address.getDerivationPath());
         assertEquals(address.getAddress(), address.getOwnerAddress());
-        assertTrue(address.getAddress().matches("^0x[0-9a-f]{40}$"));
+        assertEquals("0x2aced92da0e5dd90498ef43da87274aa7b01be1b", address.getAddress());
     }
 
     @Test
@@ -65,6 +64,7 @@ class HotWalletAddressServiceTest {
         assertEquals("m/44/60/1016/130/1", ethAddress.getDerivationPath());
         assertEquals(ethAddress.getDerivationPath(), bnbAddress.getDerivationPath());
         assertEquals(ethAddress.getAddress(), bnbAddress.getAddress());
+        assertEquals("0x2194d0e84405809794c6ef9e433acc3f781a4c7e", ethAddress.getAddress());
     }
 
     @ParameterizedTest

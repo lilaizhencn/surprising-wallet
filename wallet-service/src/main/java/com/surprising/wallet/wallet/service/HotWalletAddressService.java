@@ -27,12 +27,12 @@ import org.bitcoinj.crypto.ECKey;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.RegTestParams;
 import org.bitcoinj.params.TestNet3Params;
-import org.ethereum.crypto.EthECKey;
 import org.p2p.solanaj.core.PublicKey;
-import org.spongycastle.util.encoders.Hex;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.tron.TronWalletApi;
+import org.web3j.crypto.Keys;
+import org.web3j.crypto.Sign;
 
 import java.util.List;
 import java.util.Locale;
@@ -229,12 +229,16 @@ class HotWalletAddressService {
                 .getChild(Math.toIntExact(addressIndex))
                 .getEcKey();
         String address = switch (format) {
-            case EVM -> "0x" + Hex.toHexString(EthECKey.fromPublicOnly(ecKey.getPubKey()).getAddress());
+            case EVM -> evmAddress(ecKey);
             case TRON -> TronWalletApi.getAddress(ecKey.getPubKey());
             case XRP -> XrpKeyService.address(ecKey);
         };
         return baseRecord(profile, userId, biz, addressIndex, address, address,
                 derivationPath(profile, userId, biz, addressIndex), walletRole);
+    }
+
+    private static String evmAddress(ECKey ecKey) {
+        return "0x" + Keys.getAddress(Sign.publicFromPoint(ecKey.decompress().getPubKey()));
     }
 
     private ChainAddressRecord deriveSolana(AccountChainProfile profile, long userId, int biz,

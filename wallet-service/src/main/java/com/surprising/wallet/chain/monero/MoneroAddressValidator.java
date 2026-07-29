@@ -1,6 +1,6 @@
 package com.surprising.wallet.chain.monero;
 
-import org.ethereum.crypto.HashUtil;
+import org.web3j.crypto.Hash;
 
 import java.math.BigInteger;
 import java.util.Arrays;
@@ -38,7 +38,7 @@ public final class MoneroAddressValidator {
             return false;
         }
         byte[] payload = Arrays.copyOf(decoded, decoded.length - 4);
-        byte[] expected = Arrays.copyOf(HashUtil.sha3(payload), 4);
+        byte[] expected = Arrays.copyOf(Hash.sha3(payload), 4);
         byte[] actual = Arrays.copyOfRange(decoded, decoded.length - 4, decoded.length);
         return Arrays.equals(expected, actual);
     }

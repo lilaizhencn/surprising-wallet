@@ -95,10 +95,6 @@
             <artifactId>chain-sdks</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.madgag.spongycastle</groupId>
-            <artifactId>prov</artifactId>
-        </dependency>
-        <dependency>
             <groupId>com.bloxbean.cardano</groupId>
             <artifactId>net-i2p-crypto-eddsa</artifactId>
         </dependency>
