@@ -10,7 +10,9 @@ if [[ ! -f $DEPLOY_SCRIPT ]]; then
   exit 1
 fi
 
-nohup flock -n "$DEPLOY_LOCK" bash "$DEPLOY_SCRIPT" \
+# Wait for an in-progress deployment instead of silently dropping a later push.
+# Each queued run fetches origin/master, so it always deploys the newest commit.
+nohup flock "$DEPLOY_LOCK" bash "$DEPLOY_SCRIPT" \
   >>"$DEPLOY_LOG" 2>&1 </dev/null &
 
 printf 'backend deployment accepted\n'
