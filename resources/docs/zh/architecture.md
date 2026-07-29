@@ -51,7 +51,7 @@
 | `common` | 共享基础设施：Redis 封装、链数据模型、钱包密钥管理、Ed25519 密钥派生、Ethereum 密码学工具 |
 | `chain-sdks` | Bitcoin-like 链和 TRON 链 SDK：多签地址、SegWit 交易、UTXO 选择、BIP32、gRPC 客户端、Protobuf 合约、ECKey 密码学 |
 
-所有模块的 parent POM 为根目录 `pom.xml`，继承 Spring Boot starter parent 并提供统一的版本和依赖管理。
+所有模块的 parent POM 为根目录 `pom.xml`，继承 Spring Boot starter parent，以 Java 25 作为统一编译和运行基线，并提供统一的版本和依赖管理。
 
 ## 调度与运行时开关
 

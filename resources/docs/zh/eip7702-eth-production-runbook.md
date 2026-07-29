@@ -29,7 +29,7 @@ Gas；每个租户的 Token 只能归集到该租户自己的 `custody_gas_accou
 
 需要以下软件和基础设施：
 
-- Java 21、Maven、Node.js、npm；
+- Java 25、Maven、Node.js、npm；
 - PostgreSQL，目标 SaaS schema 由 `../db/surprising-wallet-init-pgsql.sql` 定义；
 - 两个独立 Ethereum RPC，至少一个用于发送，另一个用于人工 code hash 复核；
 - Collector admin 多签地址；

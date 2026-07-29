@@ -13,10 +13,6 @@
     <name>wallet-api</name>
     <description>Wallet backend service: REST API, scheduled jobs, signature orchestration</description>
 
-    <properties>
-        <java.version>21</java.version>
-    </properties>
-
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>

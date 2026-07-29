@@ -7,7 +7,7 @@
 
 需要安装：
 
-- JDK 21
+- JDK 25
 - Maven 3.8+
 - PostgreSQL 14+
 - Redis 6+

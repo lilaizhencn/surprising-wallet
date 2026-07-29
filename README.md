@@ -82,7 +82,7 @@ surprising-wallet/
 
 ## 本地启动
 
-依赖 JDK 21、Maven、PostgreSQL 和 Redis。
+依赖 JDK 25、Maven、PostgreSQL 和 Redis。
 
 ```bash
 # 初始化数据库

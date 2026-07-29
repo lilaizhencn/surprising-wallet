@@ -196,5 +196,5 @@
   <text x="985" y="600" text-anchor="middle" class="desc">Node.js Runtime 桥接</text>
 
   <!-- 底部 -->
-  <text x="550" y="648" text-anchor="middle" class="desc" fill="#94a3b8" font-size="11">surprising-wallet — 6 Java 模块 · Java 21 · Spring Boot 4.1 · 27 条链 · 14 个链族</text>
+  <text x="550" y="648" text-anchor="middle" class="desc" fill="#94a3b8" font-size="11">surprising-wallet — 6 Java 模块 · Java 25 · Spring Boot 4.1 · 27 条链 · 14 个链族</text>
 </svg>
