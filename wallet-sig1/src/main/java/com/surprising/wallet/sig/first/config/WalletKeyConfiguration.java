@@ -1,39 +1,33 @@
 package com.surprising.wallet.sig.first.config;
 
-import com.surprising.wallet.common.key.WalletKeyConfigStore;
+import com.surprising.wallet.common.key.WalletKeyConfig;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * sig1 模块的密钥配置。
  *
- * <p>从数据库加载 sig1 密钥分片（BIP32 根私钥），以 {@link WalletKeyMaterialProvider} 暴露给签名服务。
+ * <p>从 Spring 配置加载 sig1 密钥分片（BIP32 根私钥），以 {@link WalletKeyMaterialProvider} 暴露给签名服务。
  * 模式固定为 {@link WalletKeyMaterialProvider.Mode#SIG1}，确保只加载 sig1 分片。
  */
 @Configuration
 public class WalletKeyConfiguration {
 
     /**
-     * 创建密钥配置存储，从数据库读取密钥材料。
-     *
-     * @param jdbcTemplate JDBC 模板
-     * @return 密钥配置存储
-     */
-    @Bean
-    WalletKeyConfigStore walletKeyConfigStore(JdbcTemplate jdbcTemplate) {
-        return new WalletKeyConfigStore(jdbcTemplate);
-    }
-
-    /**
      * 创建 sig1 模式的密钥材料提供者。
      *
-     * @param store 密钥配置存储
      * @return sig1 密钥材料提供者
      */
     @Bean
-    WalletKeyMaterialProvider walletKeyMaterialProvider(WalletKeyConfigStore store) {
-        return new WalletKeyMaterialProvider(store, WalletKeyMaterialProvider.Mode.SIG1);
+    WalletKeyMaterialProvider walletKeyMaterialProvider(
+            @Value("${sw.wallet.keys.sig1-seed}") String sig1Seed,
+            @Value("${sw.wallet.keys.sig2-seed}") String sig2Seed,
+            @Value("${sw.wallet.keys.recovery-seed}") String recoverySeed,
+            @Value("${sw.wallet.keys.ed25519-seed}") String ed25519Seed) {
+        return new WalletKeyMaterialProvider(
+                new WalletKeyConfig(sig1Seed, sig2Seed, recoverySeed, ed25519Seed),
+                WalletKeyMaterialProvider.Mode.SIG1);
     }
 }

@@ -2,8 +2,8 @@ package com.surprising.wallet.chain.tron;
 
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.common.key.WalletKeyConfigStore;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.bitcoinj.crypto.ECKey;
@@ -55,8 +55,7 @@ class TronLiveFullFlowIntegrationTest {
                 "run scripts/regtest/run-tron-flow.sh for isolated TRX/TRC20 transactions");
 
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource());
-        WalletKeyMaterialProvider keyMaterial = new WalletKeyMaterialProvider(
-                new WalletKeyConfigStore(jdbcTemplate), WalletKeyMaterialProvider.Mode.WALLET_SERVER);
+        WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         ChainJdbcRepository repository = new ChainJdbcRepository(jdbcTemplate);
         TronDepositScanner depositScanner = new TronDepositScanner(repository, new TronScanner());
         TronTransactionService trxService = new TronTransactionService();

@@ -73,15 +73,6 @@ fi
 local_pg_psql "$DOT_FLOW_DB" -v ON_ERROR_STOP=1 -q \
   -f "$DOT_FLOW_BUILD_ROOT/docs/db/surprising-wallet-init-pgsql.sql"
 local_pg_psql "$DOT_FLOW_DB" -v ON_ERROR_STOP=1 -q <<SQL
-INSERT INTO wallet_key_config
-    (id, sig1_seed, sig2_seed, recovery_seed, ed25519_seed, updated_by)
-VALUES
-    (1,
-     encode(decode(repeat('11', 32), 'hex'), 'base64'),
-     encode(decode(repeat('22', 32), 'hex'), 'base64'),
-     encode(decode(repeat('33', 32), 'hex'), 'base64'),
-     encode(decode('000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f', 'hex'), 'base64'),
-     'polkadot-devnet-test');
 UPDATE chain_profile SET enabled = false WHERE chain = 'DOT';
 UPDATE chain_profile
    SET enabled = true, scan_enabled = true, withdraw_enabled = true,

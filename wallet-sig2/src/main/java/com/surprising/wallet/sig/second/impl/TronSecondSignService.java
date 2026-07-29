@@ -77,7 +77,7 @@ public class TronSecondSignService implements ISignService {
     /**
      * 根据地址和资产信息从 BIP32 派生私钥字节。
      *
-     * <p>wallet-service 和 wallet-sig2 使用相同的 sig2 种子（存储在 wallet_key_config），
+     * <p>wallet-service 和 wallet-sig2 使用 Spring 配置中的同一 sig2 种子，
      * 按路径 m/44'/{coinType}'/{biz}'/{userId}'/{index} 派生。
      *
      * @param address  地址信息（包含 biz、userId、index）

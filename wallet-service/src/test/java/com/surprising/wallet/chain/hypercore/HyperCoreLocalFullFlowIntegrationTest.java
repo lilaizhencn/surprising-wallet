@@ -8,8 +8,8 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.common.key.WalletKeyConfigStore;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.config.AccountSecp256k1KeyService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import com.surprising.wallet.wallet.repository.HyperCoreRepository;
@@ -61,9 +61,8 @@ class HyperCoreLocalFullFlowIntegrationTest {
         HyperCoreRepository hyperCoreRepository = new HyperCoreRepository(jdbc, chainRepository);
         UUID tenantId = ensureTenant(jdbc);
         AccountChainProfile profile = chainRepository.findProfileByChain(CHAIN).orElseThrow();
-        AccountSecp256k1KeyService keys = new AccountSecp256k1KeyService(
-                new WalletKeyMaterialProvider(new WalletKeyConfigStore(jdbc),
-                        WalletKeyMaterialProvider.Mode.WALLET_SERVER));
+        AccountSecp256k1KeyService keys =
+                new AccountSecp256k1KeyService(WalletKeyTestFixture.provider());
 
         try (FakeHyperCoreApi api = new FakeHyperCoreApi()) {
             HyperCoreApiClient client = new HyperCoreApiClient(JSON, api.baseUrl());

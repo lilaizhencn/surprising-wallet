@@ -59,15 +59,6 @@ local_pg_psql "$TRON_FLOW_DB" -v ON_ERROR_STOP=1 -q \
   -f "$TRON_FLOW_BUILD_ROOT/docs/db/surprising-wallet-init-pgsql.sql"
 local_pg_psql "$TRON_FLOW_DB" -v ON_ERROR_STOP=1 -q <<'SQL'
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
-INSERT INTO wallet_key_config
-    (id, sig1_seed, sig2_seed, recovery_seed, ed25519_seed, updated_by)
-VALUES
-    (1,
-     encode(gen_random_bytes(32), 'base64'),
-     encode(gen_random_bytes(32), 'base64'),
-     encode(gen_random_bytes(32), 'base64'),
-     encode(gen_random_bytes(32), 'base64'),
-     'tron-local-test');
 UPDATE chain_profile SET enabled = false WHERE chain = 'TRON';
 UPDATE chain_profile
    SET enabled = true, scan_enabled = true, withdraw_enabled = true,

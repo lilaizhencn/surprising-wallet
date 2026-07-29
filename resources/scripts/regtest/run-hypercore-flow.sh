@@ -38,15 +38,6 @@ local_pg_psql "$HYPERCORE_DB" -q -v ON_ERROR_STOP=1 \
   -f "$HYPERCORE_ROOT/docs/db/surprising-wallet-init-pgsql.sql"
 local_pg_psql "$HYPERCORE_DB" -q -v ON_ERROR_STOP=1 <<'SQL'
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
-INSERT INTO wallet_key_config
-    (id, sig1_seed, sig2_seed, recovery_seed, ed25519_seed, updated_by)
-VALUES
-    (1,
-     encode(gen_random_bytes(32), 'base64'),
-     encode(gen_random_bytes(32), 'base64'),
-     encode(gen_random_bytes(32), 'base64'),
-     encode(gen_random_bytes(32), 'base64'),
-     'hypercore-local-test');
 SQL
 
 rsync -a \

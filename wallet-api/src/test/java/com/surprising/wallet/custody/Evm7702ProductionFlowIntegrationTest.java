@@ -18,7 +18,6 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.key.WalletKeyConfig;
-import com.surprising.wallet.common.key.WalletKeyConfigStore;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.account.coordinator.Evm7702CollectionCoordinator;
 import com.surprising.wallet.account.repository.Evm7702CollectionRepository;
@@ -132,9 +131,8 @@ class Evm7702ProductionFlowIntegrationTest {
                 values (9901, ?, 'local', 'eip7702-test', 'hardhat-prague',
                         'rpc', 'HTTP_JSON_RPC', ?, 1, 0, true)
                 """, chain, RPC);
-        saveTestKeyset(jdbc);
         keyService = new AccountSecp256k1KeyService(new WalletKeyMaterialProvider(
-                new WalletKeyConfigStore(jdbc), WalletKeyMaterialProvider.Mode.WALLET_SERVER));
+                testKeyset(), WalletKeyMaterialProvider.Mode.WALLET_SERVER));
         profile = chainRepository.findProfileByChain(chain).orElseThrow();
         nativeSymbol = profile.getNativeSymbol();
         depositScanner = new EvmDepositScanner(
@@ -948,16 +946,14 @@ class Evm7702ProductionFlowIntegrationTest {
         throw new IllegalStateException("timed out waiting for " + txHash);
     }
 
-    private static void saveTestKeyset(JdbcTemplate jdbc) {
+    private static WalletKeyConfig testKeyset() {
         String[] seeds = new String[4];
         for (int i = 0; i < seeds.length; i++) {
             byte[] bytes = new byte[32];
             Arrays.fill(bytes, (byte) (0x31 + i));
             seeds[i] = Base64.getEncoder().encodeToString(bytes);
         }
-        new WalletKeyConfigStore(jdbc).save(
-                new WalletKeyConfig(seeds[0], seeds[1], seeds[2], seeds[3], null, null, "test"),
-                "eip7702-integration");
+        return new WalletKeyConfig(seeds[0], seeds[1], seeds[2], seeds[3]);
     }
 
     private static void setField(Object target, String name, Object value) throws Exception {

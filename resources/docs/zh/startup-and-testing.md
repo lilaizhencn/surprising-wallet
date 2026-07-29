@@ -74,9 +74,19 @@ mvn -pl wallet-service -am test -DskipTests
 
 ## 5. 密钥与运行配置
 
-四个根 Seed 统一保存在单行 `wallet_key_config`：sig1、sig2、recovery 三个 BIP32 Seed，以及一个 Ed25519 Seed。四个值必须互不相同，统一使用 Base64 编码的 32 字节数据，并通过平台超级管理员的 Wallet keys 页面原子保存。当前阶段数据库明文存储，页面允许查看原文。
+四个根 Seed 通过 Spring `sw.wallet.keys` 配置：sig1、sig2、recovery 三个 BIP32 Seed，以及一个 Ed25519 Seed。四个值必须互不相同，统一使用 Base64 编码的 32 字节数据。当前测试环境的值直接放在三个应用各自唯一的 `application.yaml`，不再写数据库，也不再通过 Console 查看或修改。
 
-wallet-api 从 Keyset 派生三组 public root；sig1/sig2 分别使用各自需要的 private root。已有派生地址后，管理接口禁止变更整套 Keyset。
+wallet-api 从 Keyset 派生三组 public root；sig1/sig2 分别只保留各自需要的 private root。修改配置必须重启对应进程，启动时会立即校验；已有派生地址后不得更换整套 Keyset，否则既有地址将无法签名。
+
+```yaml
+sw:
+  wallet:
+    keys:
+      sig1-seed: <Base64 编码的 32 字节 Seed>
+      sig2-seed: <Base64 编码的 32 字节 Seed>
+      recovery-seed: <Base64 编码的 32 字节 Seed>
+      ed25519-seed: <Base64 编码的 32 字节 Seed>
+```
 
 wallet-api 常用环境变量：
 
@@ -102,7 +112,7 @@ export SW_CUSTODY_CORS_ORIGINS='https://console.example.com'
 
 链运行配置不再通过 YAML/env 配置：
 
-| 配置 | 数据库来源 |
+| 配置 | 来源 |
 |---|---|
 | 全局扫描/提现/归集/划转开关 | `wallet_system_config` |
 | 单链扫描/提现/归集/划转开关 | `chain_profile.scan_enabled/withdraw_enabled/collection_enabled/transfer_enabled` |
@@ -110,7 +120,7 @@ export SW_CUSTODY_CORS_ORIGINS='https://console.example.com'
 | 单链扫描批量 | `chain_profile.scan_batch_size` |
 | 链网络、确认数、链 ID、gas policy | `chain_profile` |
 | RPC/fullnode/indexer/faucet 节点 | `chain_rpc_node` |
-| 四个钱包根 Seed | `wallet_key_config` |
+| 四个钱包根 Seed | Spring `sw.wallet.keys`（当前测试环境为各应用的 `application.yaml`） |
 | 每链默认热提钱包 | `chain_address` 中原生资产 `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT` |
 
 部署前必须按环境提前确认 scanner checkpoint。全新系统通常把 `chain_scan_height.best_height/safe_height` 设置到当前最新安全块附近，让服务只扫描部署后的新区块；如果要补历史充值，再按业务窗口把高度往前调。不要从创世块或很早的历史高度开始扫，这会让服务长时间追块并消耗大量 RPC 配额。
@@ -131,11 +141,11 @@ TokDou 钱包页面读取 wallet-api：
 
 | 文件 | 用途 |
 |---|---|
-| `wallet-api/src/main/resources/application.yaml` | 本地 wallet-api 配置 |
-| `wallet-api/src/main/resources/application-test.yaml` | 测试 profile 配置 |
-| `wallet-api/src/main/resources/application-prod.yaml` | 生产占位配置 |
-| `wallet-sig1/src/main/resources/application.yaml` | 第一签服务配置 |
-| `wallet-sig2/src/main/resources/application.yaml` | 第二签服务配置 |
+| `wallet-api/src/main/resources/application.yaml` | wallet-api 唯一配置，包含数据库、Redis、密钥、调度及业务参数 |
+| `wallet-sig1/src/main/resources/application.yaml` | 第一签服务唯一配置，包含 Redis、密钥及调度参数 |
+| `wallet-sig2/src/main/resources/application.yaml` | 第二签服务唯一配置，包含 Redis、密钥及调度参数 |
+
+项目不再使用 `application-{profile}.yaml`。每个属性旁均有用途和配置说明；修改运行环境时直接调整三份 `application.yaml` 并重启对应进程，三个进程的网络和四个 Seed 必须保持一致。
 
 本地必配项：
 
@@ -144,12 +154,12 @@ TokDou 钱包页面读取 wallet-api：
 - `chain_profile` 中每条启用链只能启用一个 network
 - 启用链至少有一个匹配当前 `sw.app.env.name` 的 `chain_rpc_node`
 - 启用的 `chain_rpc_node` 必须配置真实 RPC URL 和认证信息；启动时会拒绝 `CHANGE_ME`、`YOUR_*`、`REPLACE_ME` 等占位符
-- 平台 Wallet keys 页面已原子配置 `wallet_key_config` 四个 Base64 32 字节 Seed
+- `sw.wallet.keys` 已配置四个互不相同的 Base64 32 字节 Seed
 - 每条启用链必须且只能有一条默认热提钱包地址：`chain_address` 原生资产、`user_id=0`、`biz=0`、`address_index=0`、`wallet_role=DEPOSIT`
-- Keyset 配置完成后再启动 sig1 和 sig2
+- wallet-api、sig1、sig2 使用同一套 Keyset 配置后再启动
 - 钱包后台配置页使用的 `SW_WALLET_ADMIN_USERNAME`、`SW_WALLET_ADMIN_PASSWORD`
 
-启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量。Keyset 已配置时，wallet-api 会从它推导每条启用链的 `0/0/0` 默认热提地址并和 `chain_address` 比对；缺失、重复或地址/path 不一致会直接启动失败。Keyset 未配置时只开放管理能力，地址派生和签名不可用。启用的 RPC 节点如果仍包含占位符 URL 或认证信息，也会直接启动失败。
+启动校验会打印每条链的网络、任务开关、扫描起点、扫描批量和 RPC 节点数量。wallet-api 会从配置的 Keyset 推导每条启用链的 `0/0/0` 默认热提地址并和 `chain_address` 比对；Seed 缺失/非法，或地址缺失、重复、path 不一致都会直接启动失败。启用的 RPC 节点如果仍包含占位符 URL 或认证信息，也会直接启动失败。
 
 ## 7. 启动服务
 

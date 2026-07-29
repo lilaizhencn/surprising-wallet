@@ -1,29 +1,41 @@
+# wallet-sig1 唯一运行配置（当前用于 test2）；修改后需重启进程。
 server:
-  port: 8004
+  # 服务端口；同机部署时不要与 wallet-api/wallet-sig2 冲突。
+  port: ${SW_SIG1_HTTP_PORT:8004}
 
 spring:
   task:
     scheduling:
       pool:
+        # sig1 定时轮询独立线程池大小。
         size: 4
+      # 线程名前缀，用于日志和线程栈定位。
       thread-name-prefix: sig1-scheduler-
   application:
+    # Spring 应用名。
     name: wallet-sig1
-  datasource:
-    driver-class-name: org.postgresql.Driver
-    url: ${SW_DB_URL:jdbc:postgresql://127.0.0.1:5432/wallet}
-    username: ${SW_DB_USERNAME:wallet}
-    password: ${SW_DB_PASSWORD:}
   data:
     redis:
-      host: 127.0.0.1
-      port: 6379
-      password:
+      # 签名队列 Redis 主机；当前指向 test2。
+      host: ${SW_REDIS_HOST:172.31.6.134}
+      # Redis TCP 端口。
+      port: ${SW_REDIS_PORT:6379}
+      # Redis 密码；空值表示测试实例未启用认证。
+      password: ${SW_REDIS_PASSWORD:}
 
 logging:
   level:
+    # 根日志级别；常规运行使用 INFO。
     default: INFO
 
 sw:
   wallet:
+    # 与 wallet-api、wallet-sig2 保持一致；本进程只保留 sig1 私钥。
+    # 每个值必须是 Base64 编码的 32 字节 Seed，且四个值不能重复。
+    keys:
+      sig1-seed: YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=
+      sig2-seed: YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=
+      recovery-seed: Y2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2M=
+      ed25519-seed: ZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGQ=
+    # 当前钱包网络类别；必须与 wallet-api、wallet-sig2 一致。
     network: test

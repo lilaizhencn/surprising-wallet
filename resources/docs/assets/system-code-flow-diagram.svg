@@ -32,8 +32,8 @@
 
   <rect x="40" y="90" width="150" height="58" class="seed"/>
   <text x="115" y="114" text-anchor="middle" class="bold">4 × 32B Seed</text>
-  <text x="115" y="132" text-anchor="middle" class="small">Base64 · 原子保存</text>
-  <text x="115" y="147" text-anchor="middle" class="small">wallet_key_config</text>
+  <text x="115" y="132" text-anchor="middle" class="small">Base64 · 启动校验</text>
+  <text x="115" y="147" text-anchor="middle" class="small">application.yaml</text>
 
   <line x1="190" y1="119" x2="220" y2="119" class="arrow"/>
 

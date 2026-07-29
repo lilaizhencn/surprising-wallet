@@ -1,9 +1,0 @@
-sw:
-  app:
-    env:
-      name: prod
-  wallet:
-    admin:
-      username: ${SW_WALLET_ADMIN_USERNAME:}
-      password: ${SW_WALLET_ADMIN_PASSWORD:}
-    network: main

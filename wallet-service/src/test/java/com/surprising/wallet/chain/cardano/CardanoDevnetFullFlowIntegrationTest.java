@@ -15,8 +15,8 @@ import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
-import com.surprising.wallet.common.key.WalletKeyConfigStore;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.config.ChainRpcNodeService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Assumptions;
@@ -52,8 +52,7 @@ class CardanoDevnetFullFlowIntegrationTest {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource());
         ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
         UUID tenantId = CardanoTenantIntegrationFixture.ensureTenant(jdbc);
-        WalletKeyMaterialProvider keyMaterial = new WalletKeyMaterialProvider(
-                new WalletKeyConfigStore(jdbc), WalletKeyMaterialProvider.Mode.WALLET_SERVER);
+        WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         CardanoKeyService keys = new CardanoKeyService(keyMaterial);
         ChainRpcNodeService rpcNodes = new ChainRpcNodeService(repository);
         setField(rpcNodes, "environmentName", "dev");

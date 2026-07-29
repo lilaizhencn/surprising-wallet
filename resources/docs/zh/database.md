@@ -24,7 +24,7 @@ wallet-api 启动时由 Spring 应用 `custody-schema.sql`，重复执行安全�
 
 ## 种子数据范围
 
-初始化文件包含 `chain_profile`、`chain_asset`、`token_config`、`wallet_system_config`、`chain_rpc_node` 的静态配置数据。`wallet_key_config` 只建表，不写入任何 Seed。
+初始化文件包含 `chain_profile`、`chain_asset`、`token_config`、`wallet_system_config`、`chain_rpc_node` 的静态配置数据。钱包根 Seed 不属于数据库基线，通过 Spring `sw.wallet.keys` 配置加载。
 
 初始化文件允许保留未启用的 RPC 和 token 模板行；脚本末尾会把仍带占位 URL、密钥或 token 合约的 `chain_rpc_node`、`token_config`、`chain_asset` 统一设为禁用/不活跃。填入真实值后，再在对应环境启用节点、token 和资产。
 
@@ -37,7 +37,6 @@ wallet-api 启动时由 Spring 应用 `custody-schema.sql`，重复执行安全�
 | `chain_profile` | 链 key、链族、网络、确认数、扫描/提现/归集/划转开关、扫描起始高度、BIP44 coin type |
 | `chain_rpc_node` | 每条链/网络/环境/purpose 的 RPC/fullnode/indexer/faucet 节点、优先级、认证、请求间隔、备注 |
 | `wallet_system_config` | 全局扫描/提现/归集/划转总开关，以及可选提现后台审核开关 |
-| `wallet_key_config` | 单行、原子保存 sig1/sig2/recovery 三个 BIP32 Seed 和一个 Ed25519 Seed；当前阶段为明文 Base64 |
 | `chain_asset` | 链原生资产和链内资产定义 |
 | `token_config` | token 合约、decimals、启用状态、最小充值/提现、归集策略 |
 | `chain_address` | UTXO/账户链地址注册表；每条启用链的默认热提钱包固定为原生资产 `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT` |
@@ -74,12 +73,12 @@ wallet-api 启动时由 Spring 应用 `custody-schema.sql`，重复执行安全�
 
 wallet-api 启动时会检查：
 
-- `wallet_key_config` 存在时，四个字段必须是互不相同、Base64 编码的 32 字节 Seed。
+- Spring `sw.wallet.keys` 的四个 Seed 必须互不相同，且均为 Base64 编码的 32 字节数据；缺失或非法时应用启动失败。
 - 同一 `chain` 同一时刻只能启用一个 network。
 - 非生产环境可以同时保存 devnet 和 testnet 等多套 profile，并按测试场景切换启用；`sw.app.env.name=prod` 时只允许启用生产网络。
 - 每个启用 profile 必须有当前环境可用的必需 `chain_rpc_node`；例如 DOT 需要 `rpc` 和 `runtime`，启用 DOT token 时还需要 `asset_rpc`。
 - XMR `regtest` 还必须同时配置 `rpc`、`faucet` 和 `daemon` 节点，确保非生产获取测试币流程在启动后立即可用。
-- Keyset 未配置时 wallet-api 允许启动管理端，但地址派生和签名不可用；sig1/sig2 必须在 Keyset 配置后启动。
+- wallet-api、sig1、sig2 必须在 Keyset 配置完成后启动，数据库不提供 Keyset 兜底。
 - 启用的 `chain_rpc_node` 不能包含 `CHANGE_ME`、`YOUR_*`、`REPLACE_ME` 等占位符 URL 或认证信息。
 - 启用的 `token_config` 和非原生 `chain_asset` 必须配置真实合约地址/asset id，不能为空或包含占位符。
 - 启用的 `token_config.network` 如果有值，必须匹配同链任意一个当前启用的 `chain_profile.network`。

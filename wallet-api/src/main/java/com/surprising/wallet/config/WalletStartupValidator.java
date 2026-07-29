@@ -46,28 +46,21 @@ public class WalletStartupValidator implements ApplicationRunner {
      */
     @Override
     public void run(ApplicationArguments args) {
-        boolean keysetConfigured = validateKeyset();
+        validateKeyset();
         validateEnabledAssetsAndTokens();
         validateProfiles();
-        if (!keysetConfigured) {
-            log.warn("wallet keyset is not configured; address derivation and signing are unavailable");
-        }
         logRuntimeMatrix();
     }
 
     /**
      * 校验签名公钥材料是否都已加载，确保地址派生与签名服务可用。
      */
-    private boolean validateKeyset() {
-        if (!keyMaterial.isConfigured()) {
-            return false;
-        }
+    private void validateKeyset() {
         keyMaterial.sig1PublicRoot();
         keyMaterial.sig2PublicRoot();
         keyMaterial.recoveryPublicRoot();
         keyMaterial.ed25519();
-        log.info("wallet keyset check passed: four seeds loaded from wallet_key_config");
-        return true;
+        log.info("wallet keyset check passed: four seeds loaded from Spring configuration");
     }
 
     /**

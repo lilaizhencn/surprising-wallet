@@ -3,6 +3,20 @@
 
 ![系统代码流程](../assets/system-code-flow-diagram.svg)
 
+## 密钥加载与角色隔离
+
+```text
+各进程唯一 application.yaml / 未来 Nacos 或 KMS
+  -> Spring sw.wallet.keys
+  -> WalletKeyConfig
+  -> 启动时校验 4 个 Base64 32 字节 Seed 且互不相同
+  -> wallet-api：sig2 私钥 + 三组 public root + Ed25519
+  -> wallet-sig1：仅 sig1 私钥 + 三组 public root
+  -> wallet-sig2：仅 sig2 私钥 + 三组 public root
+```
+
+密钥不再写入 PostgreSQL，也没有运行时查询、明文展示或热更新接口。配置变更必须重启对应进程；已有派生地址后更换 Seed 会导致签名材料与地址不一致，因此必须作为受审计的整体密钥迁移处理。
+
 ## 多租户托管流程
 
 托管控制面不管理交易所内部的用户模型。租户传 `chainId`、自己的 `subject` 和可选的 `addressVersion`，服务根据该链唯一启用的网络返回稳定地址。

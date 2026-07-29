@@ -4,8 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
-import com.surprising.wallet.common.key.WalletKeyConfigStore;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -49,11 +49,7 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
         ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
         AptosRpcClient rpc = new AptosRpcClient(new ObjectMapper(),
                 env("APTOS_RPC_URL", "https://fullnode.testnet.aptoslabs.com/v1"), "");
-        String masterSeed = System.getenv("SW_ED25519_SEED");
-        AptosKeyService keys = masterSeed == null || masterSeed.isBlank()
-                ? new AptosKeyService(new WalletKeyMaterialProvider(
-                new WalletKeyConfigStore(jdbc), WalletKeyMaterialProvider.Mode.WALLET_SERVER))
-                : new AptosKeyService(masterSeed);
+        AptosKeyService keys = new AptosKeyService(WalletKeyTestFixture.provider());
         AptosAddressService addresses = new AptosAddressService(keys, repository);
         AptosTransactionService transactions = new AptosTransactionService(
                 rpc, new AptosTransactionSigner(keys), repository);

@@ -7,8 +7,8 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.common.key.WalletKeyConfigStore;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -45,8 +45,7 @@ class NearSandboxFullFlowIntegrationTest {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource());
         ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
         UUID tenantId = NearTenantIntegrationFixture.ensureTenant(jdbc);
-        WalletKeyMaterialProvider keyMaterial = new WalletKeyMaterialProvider(
-                new WalletKeyConfigStore(jdbc), WalletKeyMaterialProvider.Mode.WALLET_SERVER);
+        WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         NearKeyService keys = new NearKeyService(keyMaterial);
         NearRpcClient rpc = new NearRpcClient(JSON,
                 System.getProperty("near.sandbox.rpc", "http://127.0.0.1:3032"));

@@ -23,8 +23,8 @@
 
   <rect x="30"  y="70" width="200" height="78" class="lib"/>
   <text x="130" y="98" text-anchor="middle" class="label">common</text>
-  <text x="130" y="118" text-anchor="middle" class="desc">跨模块契约 · 签名 DTO · 密钥配置</text>
-  <text x="130" y="135" text-anchor="middle" class="desc">无 Web / Redis 基础设施依赖</text>
+  <text x="130" y="118" text-anchor="middle" class="desc">跨模块契约 · 签名 DTO · 密钥校验</text>
+  <text x="130" y="135" text-anchor="middle" class="desc">无 Web / JDBC / Redis 依赖</text>
 
   <rect x="250" y="70" width="200" height="78" class="lib"/>
   <text x="350" y="98" text-anchor="middle" class="label">chain-sdks</text>
@@ -48,7 +48,7 @@
 
   <rect x="720" y="194" width="340" height="100" class="svc"/>
   <text x="890" y="222" text-anchor="middle" class="label">wallet-sig1 · wallet-sig2</text>
-  <text x="890" y="244" text-anchor="middle" class="desc">2-of-3 多签 · Redis 队列轮询</text>
+  <text x="890" y="244" text-anchor="middle" class="desc">单一 application.yaml · Redis 队列轮询</text>
   <text x="890" y="262" text-anchor="middle" class="desc">BTC/BCH/LTC/DOGE → 第一签 → 第二签</text>
   <text x="890" y="280" text-anchor="middle" class="desc">ETH/ERC20/TRON 最终签名与广播</text>
 

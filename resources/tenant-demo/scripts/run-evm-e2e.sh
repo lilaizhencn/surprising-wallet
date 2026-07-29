@@ -134,15 +134,6 @@ local_pg_psql "$EVM_SAAS_DB" -q -v ON_ERROR_STOP=1 \
   -v chain="$EVM_SAAS_CHAIN" -v network="$EVM_SAAS_NETWORK" \
   -v chain_id="$EVM_SAAS_CHAIN_ID" -v symbols="$EVM_SAAS_TOKEN_SYMBOLS" <<'SQL'
 create extension if not exists pgcrypto;
-insert into wallet_key_config
-    (id, sig1_seed, sig2_seed, recovery_seed, ed25519_seed, updated_by)
-values
-    (1,
-     encode(gen_random_bytes(32), 'base64'),
-     encode(gen_random_bytes(32), 'base64'),
-     encode(gen_random_bytes(32), 'base64'),
-     encode(gen_random_bytes(32), 'base64'),
-     'evm-saas-local-test');
 update chain_profile
    set enabled=false, scan_enabled=false, withdraw_enabled=false,
        collection_enabled=false, transfer_enabled=false, updated_at=now();

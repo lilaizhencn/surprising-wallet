@@ -11,7 +11,7 @@ class WalletSeedCodecTest {
     @Test
     void acceptsFourDifferentBase64Encoded32ByteSeeds() {
         WalletKeyConfig config = new WalletKeyConfig(
-                seed(1), seed(2), seed(3), seed(4), null, null, "test");
+                seed(1), seed(2), seed(3), seed(4));
 
         assertDoesNotThrow(() -> WalletSeedCodec.validate(config));
     }
@@ -21,7 +21,7 @@ class WalletSeedCodecTest {
         assertThrows(IllegalArgumentException.class,
                 () -> WalletSeedCodec.decode("sig1Seed", Base64.getEncoder().encodeToString(new byte[31])));
         WalletKeyConfig duplicate = new WalletKeyConfig(
-                seed(1), seed(1), seed(3), seed(4), null, null, "test");
+                seed(1), seed(1), seed(3), seed(4));
         assertThrows(IllegalArgumentException.class, () -> WalletSeedCodec.validate(duplicate));
     }
 

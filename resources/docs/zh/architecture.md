@@ -32,7 +32,6 @@
 | `chain_profile` | 链 key、链族、启用网络、确认策略、扫描/提现/归集/划转开关、扫描起始高度、BIP44 coin type |
 | `chain_rpc_node` | 每条链的 RPC/fullnode/indexer/faucet 节点、环境标签、优先级、认证和备注 |
 | `wallet_system_config` | 全局扫描/提现/归集/划转总开关 |
-| `wallet_key_config` | 原子保存 sig1、sig2、recovery 三个 BIP32 Seed 和一个 Ed25519 Seed 的单行 Keyset |
 | `chain_asset` | 原生资产和链内资产定义 |
 | `token_config` | token 合约/配置、decimals、归集/提现策略 |
 | `ledger_balance` | 按链隔离的用户/系统余额状态 |
@@ -98,7 +97,7 @@ HyperEVM 复用 EVM 通用路径。HyperCore 使用独立的账户层适配器�
 
 ## 签名模型
 
-单行 `wallet_key_config` 原子保存四个 Base64 编码的 32 字节 Seed。Bitcoin-like 链使用其中三组 BIP32 root：
+四个 Base64 编码的 32 字节 Seed 从 Spring `sw.wallet.keys` 配置加载，并在应用启动时一次性校验长度、编码和互异性。三个进程各自只保留一份 `application.yaml`，当前文件直接保存测试环境配置；生产环境上线前应迁移到 Nacos 或 KMS。Bitcoin-like 链使用其中三组 BIP32 root：
 
 ```text
 BIP32 root #1 -> pubKey1，在线第一签私钥 root
@@ -139,7 +138,7 @@ Collection：
 
 ## 启动配置校验
 
-wallet-api 启动时会检查 `chain_profile`、`chain_rpc_node`、`wallet_key_config`、默认热提钱包和 `wallet_system_config`。Keyset 尚未配置时，wallet-api 保持可启动，以便平台超级管理员完成首次配置；依赖密钥的运行路径不可用。Keyset 已配置时，默认热提钱包会通过代码推导后与 `chain_address` 比对，缺失或不一致会启动失败。同一链同一时刻只能启用一个网络；非生产环境可以同时保存 devnet/testnet profile 并切换启用，生产环境只允许启用生产网络。启用 profile 必须至少有一个匹配当前环境的 RPC 节点。校验结果会按链打印状态，缺失配置或关闭开关会输出 WARN。
+wallet-api 启动时会先校验 `sw.wallet.keys` 四个 Seed，再检查 `chain_profile`、`chain_rpc_node`、默认热提钱包和 `wallet_system_config`。密钥配置缺失或非法会直接启动失败；校验通过后，默认热提钱包会通过代码推导并与 `chain_address` 比对，缺失或不一致同样会启动失败。同一链同一时刻只能启用一个网络；非生产环境可以同时保存 devnet/testnet profile 并切换启用，生产环境只允许启用生产网络。启用 profile 必须至少有一个匹配当前环境的 RPC 节点。校验结果会按链打印状态，缺失配置或关闭开关会输出 WARN。
 
 ## 运行目录
 

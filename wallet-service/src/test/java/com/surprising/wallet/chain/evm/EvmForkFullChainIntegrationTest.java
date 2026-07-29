@@ -222,7 +222,7 @@ class EvmForkFullChainIntegrationTest {
         if (isValidMasterKey(fromEnv)) {
             return fromEnv.trim();
         }
-        Path yaml = projectRoot().resolve("wallet-sig2/src/main/resources/application-test.yaml");
+        Path yaml = projectRoot().resolve("wallet-sig2/src/main/resources/application.yaml");
         for (String line : Files.readAllLines(yaml)) {
             String trimmed = line.trim();
             if (trimmed.startsWith("masterKey:")) {

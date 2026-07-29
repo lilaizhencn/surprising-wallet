@@ -8,12 +8,16 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DatabaseSeedSafetyTest {
     @Test
     void unverifiedNewChainsStayDisabledInFreshDatabaseSeed() throws Exception {
         String sql = databaseSeed();
+
+        assertFalse(sql.contains("wallet_key_config"),
+                "wallet root seeds must never be modeled or stored in the database baseline");
 
         Map<String, String> nativeSymbols = Map.of(
                 "ADA", "ADA",

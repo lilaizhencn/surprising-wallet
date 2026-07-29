@@ -1,104 +1,168 @@
 # ============================================================
-# wallet-server configuration
+# wallet-api 唯一运行配置（当前用于 test2 测试环境）
+# 不再使用 Spring Profile 分文件；修改后需重启进程生效。
 # ============================================================
 
 server:
+  # HTTP 监听端口；同机部署多个服务时必须避免冲突。
   port: ${SW_HTTP_PORT:8002}
 
 logging:
   level:
+    # 根日志级别；排障时可临时改为 DEBUG，常规运行保持 INFO。
     default: INFO
 
 spring:
   application:
+    # Spring 应用名，用于日志、指标和未来配置中心标识。
     name: wallet-api
   task:
     scheduling:
       pool:
+        # Spring 默认调度池；业务 Job 另有按类别隔离的专用线程池。
         size: 4
+      # 默认调度线程名前缀，便于日志定位。
       thread-name-prefix: wallet-scheduler-
   datasource:
+    # PostgreSQL JDBC 驱动。
     driver-class-name: org.postgresql.Driver
-    url: ${SW_DB_URL:jdbc:postgresql://127.0.0.1:5432/wallet}
+    # 测试数据库地址；可用 SW_DB_URL 临时覆盖，格式为 jdbc:postgresql://host:port/database。
+    url: ${SW_DB_URL:jdbc:postgresql://172.31.6.134:5432/wallet}
+    # 测试数据库账号。
     username: ${SW_DB_USERNAME:wallet}
-    password: ${SW_DB_PASSWORD:}
+    # 测试数据库密码；上线前迁移到安全配置中心。
+    password: ${SW_DB_PASSWORD:wallet123}
     hikari:
+      # 最大数据库连接数；需同时考虑 PostgreSQL 上限和服务实例数。
       maximum-pool-size: 20
   sql:
     init:
+      # 禁止 Spring 自动执行 schema；数据库结构仅以 docs/db 初始化基线为准。
       mode: never
   data:
     redis:
-      host: ${SW_REDIS_HOST:127.0.0.1}
+      # Redis 主机，用于签名队列及缓存；当前指向 test2。
+      host: ${SW_REDIS_HOST:172.31.6.134}
+      # Redis TCP 端口。
       port: ${SW_REDIS_PORT:6379}
+      # Redis 密码；空值表示测试实例未启用认证。
       password: ${SW_REDIS_PASSWORD:}
   web:
     error:
       whitelabel:
+        # 关闭 Spring 默认错误页面，由项目异常处理器输出统一响应。
         enabled: false
 
 # ============================================================
-# Application specific config
+# 钱包业务配置
 # ============================================================
 sw:
   app:
     env:
-      name: ${SW_APP_ENV:dev}
+      # 当前环境标识；用于 RPC 节点筛选和生产网络保护。
+      name: ${SW_APP_ENV:test2}
   rpc:
     provider:
+      # 单个 RPC provider 的最大并发请求数；测试环境保守设为 1。
       max-concurrent-requests: 1
   warning:
+    # 告警联系人；填写值班手机号或通知系统接收标识。
     contacts: "13261645368"
   wallet:
+    # 测试钱包根 Seed：必须是 4 个互不相同的 Base64 编码 32 字节值。
+    # 三个进程必须使用完全相同的配置；更换后既有派生地址将无法签名。
+    keys:
+      sig1-seed: YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=
+      sig2-seed: YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=
+      recovery-seed: Y2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2M=
+      ed25519-seed: ZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGQ=
     admin:
+      # 旧钱包后台基础账号；仅用于仍依赖该账号的管理入口。
       username: ${SW_WALLET_ADMIN_USERNAME:admin}
+      # 管理账号密码；空值时相关登录能力不可用。
       password: ${SW_WALLET_ADMIN_PASSWORD:}
+    # 钱包网络类别；当前测试环境使用 test，生产上线改为 main。
     network: test
-    # Local-chain transaction simulator. It is disabled by default and refuses
-    # non-loopback RPC endpoints or production-like environments when enabled.
+    # 开发测试水龙头。只能连接 loopback RPC，生产环境会拒绝启用。
     dev-faucet:
+      # 是否启用自动测试币补给；非本地链测试时应关闭。
       enabled: true
+      # 扫描到待补给请求后的首次延迟，ISO-8601 Duration。
       delay: ${SW_WALLET_DEV_FAUCET_DELAY:PT10S}
+      # 补给失败后的重试间隔。
       retry-delay: ${SW_WALLET_DEV_FAUCET_RETRY_DELAY:PT30S}
+      # 单次 RPC 请求超时。
       request-timeout: ${SW_WALLET_DEV_FAUCET_REQUEST_TIMEOUT:PT10S}
+      # 每轮最多处理的补给请求数。
       batch-size: ${SW_WALLET_DEV_FAUCET_BATCH_SIZE:20}
+      # 单个请求最大尝试次数。
       max-attempts: ${SW_WALLET_DEV_FAUCET_MAX_ATTEMPTS:3}
       bitcoin:
+        # Bitcoin regtest JSON-RPC 地址，必须为 loopback。
         rpc-url: http://127.0.0.1:18444
+        # regtest RPC 用户名。
         rpc-username: wallet
+        # regtest RPC 密码。
         rpc-password: wallet123
+        # Bitcoin Core 中负责出资的测试钱包名。
         wallet: ${SW_WALLET_DEV_FAUCET_BTC_WALLET:regtest-funder}
+        # 转账后自动挖出的确认区块数。
         confirmation-blocks: ${SW_WALLET_DEV_FAUCET_BTC_CONFIRMATION_BLOCKS:6}
+        # 向系统 Gas 地址补给的 BTC 数量。
         gas-amount: ${SW_WALLET_DEV_FAUCET_BTC_GAS_AMOUNT:0.10000000}
         customer:
+          # 普通测试地址单次随机补给下限。
           min: ${SW_WALLET_DEV_FAUCET_BTC_CUSTOMER_MIN:0.01000000}
+          # 普通测试地址单次随机补给上限。
           max: ${SW_WALLET_DEV_FAUCET_BTC_CUSTOMER_MAX:0.10000000}
+          # BTC 金额小数位。
           scale: 8
       evm:
+        # Hardhat/本地 EVM JSON-RPC 地址，必须为 loopback。
         rpc-url: ${SW_WALLET_DEV_FAUCET_EVM_RPC_URL:http://127.0.0.1:8545}
+        # 已解锁或可由本地节点代签的测试出资地址。
         from-address: ${SW_WALLET_DEV_FAUCET_EVM_FROM_ADDRESS:}
+        # 向系统 Gas 地址补给的原生币数量。
         gas-amount: ${SW_WALLET_DEV_FAUCET_ETH_GAS_AMOUNT:1.000000}
         customer:
+          # 普通测试地址原生币补给下限。
           min: ${SW_WALLET_DEV_FAUCET_ETH_CUSTOMER_MIN:0.100000}
+          # 普通测试地址原生币补给上限。
           max: ${SW_WALLET_DEV_FAUCET_ETH_CUSTOMER_MAX:1.000000}
+          # EVM 测试补给业务金额小数位。
           scale: 6
         usdt:
+          # USDT 测试补给下限。
           min: ${SW_WALLET_DEV_FAUCET_USDT_CUSTOMER_MIN:10.00}
+          # USDT 测试补给上限。
           max: ${SW_WALLET_DEV_FAUCET_USDT_CUSTOMER_MAX:100.00}
+          # USDT 展示金额小数位。
           scale: 2
         usdc:
+          # USDC 测试补给下限。
           min: ${SW_WALLET_DEV_FAUCET_USDC_CUSTOMER_MIN:10.00}
+          # USDC 测试补给上限。
           max: ${SW_WALLET_DEV_FAUCET_USDC_CUSTOMER_MAX:100.00}
+          # USDC 展示金额小数位。
           scale: 2
     dev-eip7702-bootstrap:
+      # 是否在启动时初始化本地 EIP-7702 测试合约。
       enabled: ${SW_WALLET_DEV_EIP7702_BOOTSTRAP_ENABLED:false}
+      # 初始化目标链代码。
       chain: ${SW_WALLET_DEV_EIP7702_CHAIN:ETH}
+      # 初始化目标网络名，必须和 chain_profile 一致。
       network: ${SW_WALLET_DEV_EIP7702_NETWORK:devtest}
     custody:
+      # 测试环境托管敏感字段加密主密钥（64 位十六进制）；上线必须迁移 KMS。
       secret-master-key: 339c28dcd013766105fe1c470b03b9e5637d99c4c260d04bbf2ead36f763b944
+      # Console 会话有效期。
       session-ttl: ${SW_CUSTODY_SESSION_TTL:PT12H}
+      # HTTP 测试环境为 false；HTTPS 上线必须设为 true。
       session-cookie-secure: false
+      # HMAC API 请求允许的最大时钟偏差。
       api-clock-skew: ${SW_CUSTODY_API_CLOCK_SKEW:PT5M}
       platform-admin:
+        # 首个平台管理员邮箱；为空时不自动创建管理员。
         email: ${SW_CUSTODY_PLATFORM_ADMIN_EMAIL:}
+        # 首个平台管理员密码；与邮箱同时配置才会生效。
         password: ${SW_CUSTODY_PLATFORM_ADMIN_PASSWORD:}

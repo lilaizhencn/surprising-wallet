@@ -162,7 +162,6 @@ ALTER TABLE IF EXISTS ONLY public.wallet_transfer_order DROP CONSTRAINT IF EXIST
 ALTER TABLE IF EXISTS ONLY public.wallet_transfer_order DROP CONSTRAINT IF EXISTS wallet_transfer_order_pkey;
 ALTER TABLE IF EXISTS ONLY public.wallet_system_config DROP CONSTRAINT IF EXISTS wallet_system_config_pkey;
 ALTER TABLE IF EXISTS ONLY public.wallet_public_key DROP CONSTRAINT IF EXISTS wallet_public_key_pkey;
-ALTER TABLE IF EXISTS ONLY public.wallet_key_config DROP CONSTRAINT IF EXISTS wallet_key_config_pkey;
 ALTER TABLE IF EXISTS ONLY public.utxo_record DROP CONSTRAINT IF EXISTS utxo_record_pkey;
 ALTER TABLE IF EXISTS ONLY public.utxo_record DROP CONSTRAINT IF EXISTS utxo_record_chain_tx_hash_vout_key;
 ALTER TABLE IF EXISTS ONLY public.withdrawal_order DROP CONSTRAINT IF EXISTS uq_withdrawal_order_chain_order_no;
@@ -320,7 +319,6 @@ DROP TABLE IF EXISTS public.wallet_user;
 DROP TABLE IF EXISTS public.wallet_transfer_order;
 DROP TABLE IF EXISTS public.wallet_system_config;
 DROP TABLE IF EXISTS public.wallet_public_key;
-DROP TABLE IF EXISTS public.wallet_key_config;
 DROP SEQUENCE IF EXISTS public.utxo_record_id_seq;
 DROP TABLE IF EXISTS public.utxo_record;
 DROP SEQUENCE IF EXISTS public.tron_tx_id_seq;
@@ -2309,23 +2307,6 @@ ALTER SEQUENCE public.utxo_record_id_seq OWNED BY public.utxo_record.id;
 
 
 --
--- Name: wallet_key_config; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.wallet_key_config (
-    id smallint NOT NULL,
-    sig1_seed text NOT NULL,
-    sig2_seed text NOT NULL,
-    recovery_seed text NOT NULL,
-    ed25519_seed text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_by character varying(128) NOT NULL,
-    CONSTRAINT wallet_key_config_singleton_check CHECK ((id = 1))
-);
-
-
---
 -- Name: wallet_public_key; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3722,14 +3703,6 @@ ALTER TABLE ONLY public.utxo_record
 
 ALTER TABLE ONLY public.utxo_record
     ADD CONSTRAINT utxo_record_pkey PRIMARY KEY (id);
-
-
---
--- Name: wallet_key_config wallet_key_config_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.wallet_key_config
-    ADD CONSTRAINT wallet_key_config_pkey PRIMARY KEY (id);
 
 
 --

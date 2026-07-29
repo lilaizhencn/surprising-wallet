@@ -4,8 +4,8 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.common.key.WalletKeyConfigStore;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.config.ChainRpcNodeService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import com.surprising.wallet.wallet.service.HotWalletAddressService;
@@ -39,8 +39,7 @@ class PolkadotDevnetFullFlowIntegrationTest {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource());
         ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
         UUID tenantId = PolkadotTenantIntegrationFixture.ensureTenant(jdbc);
-        WalletKeyMaterialProvider keyMaterial = new WalletKeyMaterialProvider(
-                new WalletKeyConfigStore(jdbc), WalletKeyMaterialProvider.Mode.WALLET_SERVER);
+        WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         PolkadotKeyService keys = new PolkadotKeyService(keyMaterial);
         ChainRpcNodeService rpcNodes = new ChainRpcNodeService(repository);
         setField(rpcNodes, "environmentName", "dev");
