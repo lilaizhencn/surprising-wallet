@@ -1,8 +1,8 @@
 package com.surprising.wallet.chain.aptos;
 
-import com.surprising.wallet.common.key.Ed25519Chain;
-import com.surprising.wallet.common.key.Ed25519DerivedKey;
-import com.surprising.wallet.common.key.Ed25519KeyProvider;
+import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
+import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
+import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;

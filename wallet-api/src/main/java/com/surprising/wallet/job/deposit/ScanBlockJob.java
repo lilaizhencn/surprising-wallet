@@ -2,7 +2,7 @@ package com.surprising.wallet.job.deposit;
 
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.dto.TransactionDTO;
-import com.surprising.wallet.common.pojo.BestBlockHeight;
+import com.surprising.wallet.job.deposit.model.BestBlockHeight;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;

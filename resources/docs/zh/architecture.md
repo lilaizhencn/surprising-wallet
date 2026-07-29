@@ -44,14 +44,27 @@
 
 | 模块 | 职责 |
 |---|---|
-| `wallet-api` | Custody/Console REST API、按链周期触发充值扫描、提现批处理、归集协调、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
-| `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、出块速度扫描策略、运行时总开关与链开关、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
+| `wallet-api` | Custody/Console REST API、Servlet/Cookie 与 HTTP 异常映射、按链周期触发充值扫描、提现批处理、归集协调、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
+| `wallet-service` | 不依赖 Servlet/Web 的业务服务：链领域与持久化模型、链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、出块速度扫描策略、运行时总开关与链开关、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
 | `wallet-sig1` | BTC-like 2-of-3 第一签服务：对 BTC、BCH、LTC、DOGE 提现交易生成部分签名，轮询 Redis 队列 |
 | `wallet-sig2` | 第二签服务：对 BTC、BCH、LTC、DOGE、ETH、ERC20、TRON 交易完成最终签名并广播 |
-| `common` | 共享基础设施：Redis 封装、链数据模型、钱包密钥管理、Ed25519 密钥派生、Ethereum 密码学工具 |
-| `chain-sdks` | Bitcoin-like 链和 TRON 链 SDK：多签地址、SegWit 交易、UTXO 选择、BIP32、gRPC 客户端、Protobuf 合约、ECKey 密码学 |
+| `common` | 无 Web/Redis 耦合、且至少被两个上层模块使用的共享契约：运行时链/资产契约、签名交易 DTO、钱包密钥配置与加载、通用常量 |
+| `chain-sdks` | 与业务和数据库无关的链 SDK：BitcoinJ 网络参数、Bitcoin-like RPC DTO、多签地址、SegWit 交易、UTXO 选择、BIP32、SLIP-0010 Ed25519 派生与签名、TRON gRPC/Protobuf/ECKey |
 
 所有模块的 parent POM 为根目录 `pom.xml`，继承 Spring Boot starter parent，以 Java 25 作为统一编译和运行基线，并提供统一的版本和依赖管理。
+
+模块依赖遵循 `wallet-api -> wallet-service -> common -> chain-sdks`，业务模块也可直接使用
+`chain-sdks` 的链类型。Servlet 请求、Cookie
+读写和 HTTP 状态映射只存在于 `wallet-api`；`wallet-service` 接收 token、链、资产等普通值并抛出
+业务异常。需要 Redis 的可执行模块直接注入 Spring Data Redis 的 `StringRedisTemplate`，由
+Spring Boot 自动配置连接工厂；`common` 不再提供静态 Redis 封装，也不携带 Redis、Servlet 或
+Spring Web 依赖。`wallet-api`、`wallet-service`、`wallet-sig1` 和 `wallet-sig2` 分别声明自身
+实际使用的 starter，避免依赖传递造成的隐式可用。
+
+仅由 `wallet-service` 使用的链领域对象、数据库记录和转账请求模型位于
+`com.surprising.wallet.chain.model`。Bitcoin-like RPC DTO 与 Ed25519 链枚举、派生结果和
+SLIP-0010 密钥提供者位于 `chain-sdks`；`common` 不直接声明 BitcoinJ 或 EdDSA，也不再通过
+全局 `Constants.NET_PARAMS` 暴露链 SDK 类型。数据库/JDBC 模型不得进入 `chain-sdks`。
 
 ## 调度与运行时开关
 

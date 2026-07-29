@@ -2,7 +2,7 @@ package com.surprising.wallet.chain.aptos;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.key.Ed25519DerivedKey;
+import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;

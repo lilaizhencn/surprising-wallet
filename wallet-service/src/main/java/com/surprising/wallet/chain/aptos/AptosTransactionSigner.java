@@ -3,7 +3,7 @@ package com.surprising.wallet.chain.aptos;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.surprising.wallet.common.key.Ed25519DerivedKey;
+import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

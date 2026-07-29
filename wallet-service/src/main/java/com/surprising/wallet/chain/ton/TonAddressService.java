@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain.ton;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.HotWalletRules;
+import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

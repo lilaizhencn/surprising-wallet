@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.surprising.wallet.custody.model.CustodyPrincipal.ActorType;
 import com.surprising.wallet.custody.repository.CustodyRepository.AuthUser;
 import com.surprising.wallet.custody.repository.CustodyRepository.SessionRecord;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -20,7 +19,6 @@ import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodySecurityProperties;
-import com.surprising.wallet.custody.model.CustodySessionCookie;
 import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 
 /**
@@ -68,8 +66,8 @@ public class CustodyAuthService {
                 .orElseThrow(() -> new CustodyUnauthorizedException("invalid credentials"));
         return authenticate(user, password, sourceIp, userAgent, ActorType.PLATFORM_USER);
     }
-    public CustodyPrincipal requireSession(HttpServletRequest request, boolean platformRoute) {
-        String token = CustodySessionCookie.read(request.getCookies());
+    public CustodyPrincipal requireSession(String token, boolean platformRoute) {
+        requireSessionToken(token);
         String tokenHash = crypto.sha256(token);
         SessionRecord session = repository.findActiveSession(tokenHash)
                 .orElseThrow(() -> new CustodyUnauthorizedException("session expired or invalid"));
@@ -89,11 +87,18 @@ public class CustodyAuthService {
                 session.role(),
                 consoleScopes(session.role()));
     }
-    public void logout(HttpServletRequest request) {
-        repository.revokeSession(crypto.sha256(CustodySessionCookie.read(request.getCookies())));
+    public void logout(String token) {
+        requireSessionToken(token);
+        repository.revokeSession(crypto.sha256(token));
     }
     public boolean sessionCookieSecure() {
         return properties.isSessionCookieSecure();
+    }
+
+    private static void requireSessionToken(String token) {
+        if (token == null || !token.startsWith("cs_") || token.length() < 32) {
+            throw new CustodyUnauthorizedException("session token required");
+        }
     }
 
     @EventListener(ApplicationReadyEvent.class)

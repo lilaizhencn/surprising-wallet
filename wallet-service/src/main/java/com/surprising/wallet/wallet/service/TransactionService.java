@@ -1,8 +1,6 @@
 package com.surprising.wallet.wallet.service;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.starters.redis.REDIS;
-import com.surprising.wallet.common.currency.BizEnum;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
@@ -16,6 +14,7 @@ import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +37,7 @@ import static com.surprising.wallet.common.utils.Constants.WALLET_DEPOSIT_KEY;
 @Slf4j
 @Component
 public class TransactionService {
+    private static final int INTERNAL_BIZ = 0;
     /**
      * 地址服务，负责解析地址归属关系，用于内部转账识别。
      */
@@ -62,6 +62,9 @@ public class TransactionService {
     @Autowired
     WalletRuntimeConfigService runtimeConfigService;
 
+    @Autowired
+    StringRedisTemplate redis;
+
     /**
      * 充值，把充值交易推送到各自的业务线队列
      */
@@ -79,7 +82,7 @@ public class TransactionService {
         log.info("saveTransaction dto: {} begin", dto.getTxId());
         AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata(dto.getCurrency());
         // Wallet app deposit addresses currently use biz=0; only hot/internal addresses are skipped.
-        if (BizEnum.INTERNAL.getIndex() == dto.getBiz()
+        if (dto.getBiz() != null && dto.getBiz() == INTERNAL_BIZ
                 && isInternalAddress(dto, currency)) {
             log.warn("internal类型的转账不需要通知 交易id:{}", dto.getTxId());
             return;
@@ -94,7 +97,7 @@ public class TransactionService {
         // String depositKey = WALLET_DEPOSIT_KEY + dto.getBiz();
         String depositKey = WALLET_DEPOSIT_KEY;
         String val = JSONObject.toJSONString(dto);
-        REDIS.rPush(depositKey, val);
+        redis.opsForList().rightPush(depositKey, val);
         log.info("saveTransaction dto: {} end", dto.getTxId());
     }
 
@@ -215,7 +218,7 @@ public class TransactionService {
             // String key = Constants.WALLET_WITHDRAW_TX_BIZ_KEY + record.getBiz();
             String key = Constants.WALLET_WITHDRAW_TX_BIZ_KEY;
             String val = JSONObject.toJSONString(record);
-            REDIS.lPush(key, val);
+            redis.opsForList().leftPush(key, val);
         });
         log.info("广播签名后的交易 成功 更新数据库完成 币种id:{} 交易id:{}", currency.getName(), transaction.getTxId());
         return true;

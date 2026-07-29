@@ -1,12 +1,12 @@
 package com.surprising.wallet.config;
 
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
-import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sdk.bitcoinj.core.LegacyMultiSignAddressGenerator;
 import com.surprising.wallet.sdk.bitcoinj.core.SegwitMultiSignAddressGenerator;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.crypto.ECKey;
+import org.bitcoinj.params.TestNet3Params;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -99,7 +99,7 @@ class PubKeyConfig {
      * @return 地址元数据，包含地址、路径、见证脚本等信息
      */
     public AddressMetadata genThreeTwoAddressMetadata(int currency, int userId, int biz, int index) {
-        return genThreeTwoAddressMetadata(Constants.NET_PARAMS, currency, userId, biz, index);
+        return genThreeTwoAddressMetadata(TestNet3Params.get(), currency, userId, biz, index);
     }
 
     /**

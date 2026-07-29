@@ -1,12 +1,12 @@
 package com.surprising.wallet.job.withdraw;
 
-import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -46,6 +46,8 @@ public class FeeRateUpdater {
     /** 运行时开关服务。 */
     @Autowired
     private WalletRuntimeConfigService runtimeConfigService;
+    @Autowired
+    private StringRedisTemplate redis;
 
     /**
      * 每 2 分钟更新 BTC 费率。
@@ -61,13 +63,14 @@ public class FeeRateUpdater {
             try {
                 int feeRate = fetchFeeRate();
                 String key = Constants.WALLET_FEE + currency.getIndex();
-                REDIS.set(key, String.valueOf(feeRate));
+                redis.opsForValue().set(key, String.valueOf(feeRate));
                 log.info("费率更新: {} = {} sat/vB", key, feeRate);
             } catch (Exception e) {
                 String key = Constants.WALLET_FEE + currency.getIndex();
-                Integer current = REDIS.getInt(key);
+                String currentValue = redis.opsForValue().get(key);
+                Integer current = currentValue == null ? null : Integer.valueOf(currentValue);
                 if (current == null || current <= 0) {
-                    REDIS.set(key, String.valueOf(DEFAULT_FEE_RATE));
+                    redis.opsForValue().set(key, String.valueOf(DEFAULT_FEE_RATE));
                     log.warn("费率 API 不可用，使用默认值: {} = {} sat/vB", key, DEFAULT_FEE_RATE);
                 } else {
                     log.info("费率 API 不可用，保留当前值: {} = {} sat/vB", key, current);
@@ -114,7 +117,7 @@ public class FeeRateUpdater {
      */
     public void forceUpdate(int feeRate) {
         String key = Constants.WALLET_FEE + btc().getIndex();
-        REDIS.set(key, String.valueOf(Math.max(feeRate, MIN_FEE_RATE)));
+        redis.opsForValue().set(key, String.valueOf(Math.max(feeRate, MIN_FEE_RATE)));
         log.warn("手动强制费率: {} = {} sat/vB", key, feeRate);
     }
 

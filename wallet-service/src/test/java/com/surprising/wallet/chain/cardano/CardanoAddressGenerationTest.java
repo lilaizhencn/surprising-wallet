@@ -2,9 +2,9 @@ package com.surprising.wallet.chain.cardano;
 
 import com.bloxbean.cardano.client.crypto.KeyGenUtil;
 import com.bloxbean.cardano.client.crypto.SecretKey;
-import com.surprising.wallet.common.key.Ed25519Chain;
-import com.surprising.wallet.common.key.Ed25519DerivedKey;
-import com.surprising.wallet.common.key.Ed25519KeyProvider;
+import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
+import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
+import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

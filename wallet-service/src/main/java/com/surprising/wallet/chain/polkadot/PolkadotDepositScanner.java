@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain.polkadot;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainAsset;
+import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;

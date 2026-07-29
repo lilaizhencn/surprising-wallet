@@ -86,7 +86,7 @@ public class CustodyPlatformController {
      */
     @PostMapping("/auth/logout")
     public Map<String, Object> logout(HttpServletRequest request, HttpServletResponse response) {
-        auth.logout(request);
+        auth.logout(CustodySessionCookie.read(request.getCookies()));
         CustodySessionCookie.clear(response, auth.sessionCookieSecure());
         return Map.of("ok", true);
     }

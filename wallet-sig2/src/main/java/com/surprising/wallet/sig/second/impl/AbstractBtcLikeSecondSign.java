@@ -2,11 +2,11 @@ package com.surprising.wallet.sig.second.impl;
 import com.alibaba.fastjson.JSONArray;import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;import com.surprising.wallet.common.pojo.WithdrawTransaction;
-import com.surprising.wallet.common.utils.Constants;import com.surprising.wallet.sdk.bitcoinj.core.WitnessSigner;
+import com.surprising.wallet.sdk.bitcoinj.core.WitnessSigner;
 import com.surprising.wallet.sig.second.BipNodeUtil;import com.surprising.wallet.sig.second.ISignService;
 import lombok.extern.slf4j.Slf4j;import org.bitcoinj.base.Coin;import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;import org.bitcoinj.core.TransactionInput;import org.bitcoinj.core.TransactionWitness;
-import org.bitcoinj.crypto.ECKey;import org.bitcoinj.crypto.TransactionSignature;import org.bitcoinj.script.Script;
+import org.bitcoinj.crypto.ECKey;import org.bitcoinj.crypto.TransactionSignature;import org.bitcoinj.params.TestNet3Params;import org.bitcoinj.script.Script;
 import java.nio.ByteBuffer;import java.util.HexFormat;import java.util.List;
 /**
  * BTC-like 链（BTC、LTC）P2WSH（SegWit 多签）二签抽象基类。
@@ -28,10 +28,10 @@ abstract public class AbstractBtcLikeSecondSign implements ISignService {
     /**
      * 返回当前链的网络参数。
      *
-     * @return 网络参数，默认从 {@link Constants#NET_PARAMS} 获取
+     * @return BTC 测试网参数
      */
     protected NetworkParameters getNetworkParameters() {
-        return Constants.NET_PARAMS;
+        return TestNet3Params.get();
     }
 
     /**

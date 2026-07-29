@@ -1,6 +1,7 @@
 package com.surprising.wallet.common.key;
 
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
+import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 
 /**
  * 钱包密钥材料提供者，负责从配置存储中加载、缓存并提供各类密钥材料（BIP32 根密钥、Ed25519 密钥等）。

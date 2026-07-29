@@ -2,7 +2,6 @@ package com.surprising.wallet.sig.first.jobs;
 
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.sig.first.SignContent;
-import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
@@ -12,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
@@ -38,6 +38,7 @@ public class FirstSignJob {
     private static final Duration DELAY = Duration.ofSeconds(10);
 
     private final TaskScheduler taskScheduler;
+    private final StringRedisTemplate redis;
 
     @Autowired
     SignContent signContent;
@@ -53,11 +54,7 @@ public class FirstSignJob {
         String tmp = Constants.WALLET_WITHDRAW_SIG_FIRST_TMP_KEY;
 
         try {
-            if (ObjectUtils.isEmpty(Constants.NET_PARAMS)) {
-                log.info("第一次签名服务校验钱包环境 没有初始化");
-                return;
-            }
-            String txStr = REDIS.rPoplPush(key, tmp);
+            String txStr = redis.opsForList().rightPopAndLeftPush(key, tmp);
             if (ObjectUtils.isEmpty(txStr)) {
                 return;
             }
@@ -85,8 +82,8 @@ public class FirstSignJob {
                 log.warn("签名验证失败 推送到签名失败队列");
                 rKey = Constants.WALLET_WITHDRAW_SIG_DONE_KEY;
             }
-            REDIS.lPush(rKey, JSONObject.toJSONString(transaction));
-            REDIS.lPop(tmp);
+            redis.opsForList().leftPush(rKey, JSONObject.toJSONString(transaction));
+            redis.opsForList().leftPop(tmp);
             log.info("签名验证推送完成 key:{}", rKey);
 
         } catch (DataAccessException e) {

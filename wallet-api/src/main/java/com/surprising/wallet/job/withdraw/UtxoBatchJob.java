@@ -1,7 +1,6 @@
 package com.surprising.wallet.job.withdraw;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
@@ -17,6 +16,7 @@ import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -44,6 +44,8 @@ abstract public class UtxoBatchJob {
     /** 提现任务开关服务。 */
     @Autowired
     protected WalletRuntimeConfigService runtimeConfigService;
+    @Autowired
+    protected StringRedisTemplate redis;
 
     /** 单签链标记集合，目前默认空。 */
     private static final Set<AssetRuntimeMetadata> SINGLE_SIG_CURRENCY = Collections.emptySet();
@@ -86,10 +88,10 @@ abstract public class UtxoBatchJob {
                 String val = JSONObject.toJSONString(transaction);
 
                 if (SINGLE_SIG_CURRENCY.contains(currency)) {
-                    REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_SECOND_KEY, val);
+                    redis.opsForList().leftPush(Constants.WALLET_WITHDRAW_SIG_SECOND_KEY, val);
                     log.info("交易推送到第二次签名服务{}", transaction.getId());
                 } else {
-                    REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, val);
+                    redis.opsForList().leftPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, val);
                     log.info("交易推送到第一次签名服务{}", transaction.getId());
                 }
                 log.info("构建交易成功 id:{}", transaction.getId());
@@ -126,7 +128,8 @@ abstract public class UtxoBatchJob {
             totalAmount = totalAmount.add(record.getBalance()).add(record.getFee());
             withdrawAmount = withdrawAmount.add(record.getBalance());
         }
-        Integer redisFeeRate = REDIS.getInt(Constants.WALLET_FEE + currency.getIndex());
+        String redisFeeRateValue = redis.opsForValue().get(Constants.WALLET_FEE + currency.getIndex());
+        Integer redisFeeRate = redisFeeRateValue == null ? null : Integer.valueOf(redisFeeRateValue);
         int feeRate = redisFeeRate == null || redisFeeRate <= 0 ? defaultFeeRate() : redisFeeRate;
         long depositConfirmationThreshold = blockchainRuntimeService.depositConfirmationThreshold(currency);
         int offset = 0;

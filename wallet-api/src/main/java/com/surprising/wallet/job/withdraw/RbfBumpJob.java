@@ -1,7 +1,6 @@
 package com.surprising.wallet.job.withdraw;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -12,6 +11,7 @@ import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -58,6 +58,8 @@ public class RbfBumpJob {
     private BlockchainRuntimeService blockchainRuntimeService;
     @Autowired
     private WalletRuntimeConfigService runtimeConfigService;
+    @Autowired
+    private StringRedisTemplate redis;
 
     /**
      * 每 30 秒检查一次 RBF 触发队列，发现请求即执行重报流程。
@@ -68,11 +70,11 @@ public class RbfBumpJob {
             log.warn("RBF bump skipped: BTC withdraw switch disabled");
             return;
         }
-        Long len = REDIS.lLen(WALLET_WITHDRAW_RBF_KEY);
-        if (len == 0) return;
+        Long len = redis.opsForList().size(WALLET_WITHDRAW_RBF_KEY);
+        if (len == null || len == 0) return;
 
         while (len > 0) {
-            String txIdStr = REDIS.rPop(WALLET_WITHDRAW_RBF_KEY);
+            String txIdStr = redis.opsForList().rightPop(WALLET_WITHDRAW_RBF_KEY);
             if (txIdStr == null) break;
 
             try {
@@ -131,7 +133,10 @@ public class RbfBumpJob {
 
         // 5. 提高费率
         long oldFeeRate = sigJson.getLongValue("feeRate");
-        Integer configuredFeeRate = REDIS.getInt(Constants.WALLET_FEE + currency.getIndex());
+        String configuredFeeRateValue =
+                redis.opsForValue().get(Constants.WALLET_FEE + currency.getIndex());
+        Integer configuredFeeRate =
+                configuredFeeRateValue == null ? null : Integer.valueOf(configuredFeeRateValue);
         long newFeeRate = configuredFeeRate == null ? 0L : configuredFeeRate;
 
         if (newFeeRate <= oldFeeRate) {
@@ -149,7 +154,7 @@ public class RbfBumpJob {
 
         // 6. 重新推送签名队列
         String val = JSONObject.toJSONString(tx);
-        REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, val);
+        redis.opsForList().leftPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, val);
 
         log.info("RBF bump 完成: txId={}, 新费率={} sat/vB, 已推送首签队列",
                 txId, newFeeRate);

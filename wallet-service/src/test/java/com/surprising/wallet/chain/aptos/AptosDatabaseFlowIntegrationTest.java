@@ -1,6 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
-import com.surprising.wallet.common.chain.AptosTransactionRecord;
+import com.surprising.wallet.chain.model.AptosTransactionRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;

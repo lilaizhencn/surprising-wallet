@@ -1,9 +1,9 @@
 package com.surprising.wallet.chain.ton;
 
 import com.iwebpp.crypto.TweetNaclFast;
-import com.surprising.wallet.common.key.Ed25519Chain;
-import com.surprising.wallet.common.key.Ed25519DerivedKey;
-import com.surprising.wallet.common.key.Ed25519KeyProvider;
+import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
+import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
+import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -19,7 +19,7 @@ import org.ton.ton4j.utils.Utils;
  * <p>生成的 {@link WalletV4R2} 实例可直接用于 ton4j 的消息签名和 BOC 构造。
  * 子钱包 ID（subwallet_id）使用标准常量 {@link #WALLET_V4R2_SUBWALLET_ID}。
  *
- * @see com.surprising.wallet.common.key.Ed25519KeyProvider
+ * @see com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider
  * @see com.surprising.wallet.common.key.WalletKeyMaterialProvider
  * @see WalletV4R2
  */

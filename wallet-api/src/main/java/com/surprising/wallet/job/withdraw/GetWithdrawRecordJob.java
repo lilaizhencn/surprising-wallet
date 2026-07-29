@@ -1,7 +1,6 @@
 package com.surprising.wallet.job.withdraw;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.wallet.service.TransactionService;
@@ -9,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -28,6 +28,8 @@ public class GetWithdrawRecordJob {
     /** 提现交易服务，负责把请求转为待签名订单。 */
     @Autowired
     private TransactionService txService;
+    @Autowired
+    private StringRedisTemplate redis;
 
     /**
      * 执行一次取数与提交：读取待提现队列、去重、入流水并对失败请求回写重试队列。
@@ -38,7 +40,7 @@ public class GetWithdrawRecordJob {
         String failKey = Constants.WALLET_WITHDRAW_FAIL_KEY;
         try {
             long count = 100L;
-            List<String> withdrawStr = REDIS.lRange(key, 0L, count);
+            List<String> withdrawStr = redis.opsForList().range(key, 0L, count);
             if (!CollectionUtils.isEmpty(withdrawStr)) {
                 Set<WithdrawRecord> withdrawRecordSet = withdrawStr.parallelStream().map(str -> {
                     JSONObject json = JSONObject.parseObject(str);
@@ -54,10 +56,10 @@ public class GetWithdrawRecordJob {
                         log.error("执行提现服务失败 币种:{} 提现地址:{}", record.getCurrency(), record.getAddress(), e);
                     }
                     if (!success) {
-                        REDIS.lPush(failKey, JSONObject.toJSONString(record));
+                        redis.opsForList().leftPush(failKey, JSONObject.toJSONString(record));
                     }
                 });
-                REDIS.lTrim(key, withdrawStr.size(), -1L);
+                redis.opsForList().trim(key, withdrawStr.size(), -1L);
             }
         } catch (DataAccessException e) {
             log.info("get waiting for withdraw error", e);

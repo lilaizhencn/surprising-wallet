@@ -6,7 +6,7 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.common.chain.NearTransactionRecord;
+import com.surprising.wallet.chain.model.NearTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;

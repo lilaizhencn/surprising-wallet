@@ -2,7 +2,6 @@ package com.surprising.wallet.sig.first.test;
 
 import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.pojo.*;
-import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sig.first.config.PubKeyConfig;
 import com.surprising.wallet.sig.first.service.BtcFirstSignService;
@@ -25,9 +24,6 @@ public class FullSigningTest {
     static final String PK3 = ROOT3.pubSerialize(0, false);
 
     public static void main(String[] args) throws Exception {
-        System.setProperty("sw.wallet.network", "test");
-        Constants c0 = new Constants(); c0.NETWORK = "test"; c0.init();
-
         // Init sig2 with a different root.
         Class.forName("com.surprising.wallet.sig.second.BipNodeUtil")
             .getMethod("initialize", Bip32Node.class).invoke(null, ROOT2);

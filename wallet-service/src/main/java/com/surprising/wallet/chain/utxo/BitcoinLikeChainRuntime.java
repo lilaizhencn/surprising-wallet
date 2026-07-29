@@ -3,21 +3,21 @@ package com.surprising.wallet.chain.utxo;
 import com.alibaba.fastjson.JSONObject;
 import com.googlecode.jsonrpc4j.JsonRpcClientException;
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.BitcoinLikeChainProfile;
+import com.surprising.wallet.chain.model.BitcoinLikeChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.ChainAsset;
+import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.common.chain.HotWalletRules;
+import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
-import com.surprising.wallet.common.pojo.rpc.BtcLikeBlock;
-import com.surprising.wallet.common.pojo.rpc.BtcLikeRawTransaction;
-import com.surprising.wallet.common.pojo.rpc.ScriptPubKey;
-import com.surprising.wallet.common.pojo.rpc.TxOutput;
+import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeBlock;
+import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeRawTransaction;
+import com.surprising.wallet.sdk.bitcoinj.rpc.model.ScriptPubKey;
+import com.surprising.wallet.sdk.bitcoinj.rpc.model.TxOutput;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashAddressCodec;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashFeePolicy;
@@ -395,7 +395,14 @@ class BitcoinLikeChainRuntime {
         AccountChainProfile profile = chainRepository.findProfileByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
         ChainAsset asset = chainRepository.findAsset(profile.getChain(), profile.getNativeSymbol()).orElse(null);
-        return AssetRuntimeMetadata.fromProfile(profile, asset);
+        return AssetRuntimeMetadata.fromProfile(
+                profile.getRuntimeCurrencyId(),
+                profile.getChain(),
+                profile.getNativeSymbol(),
+                profile.getDepositConfirmations(),
+                profile.getBip44CoinType(),
+                asset == null ? null : asset.getDecimals(),
+                asset == null ? null : asset.getContractAddress());
     }
     private int nextAddressIndex(AssetRuntimeMetadata asset, long userId, int biz) {
         return chainRepository.findMaxChainAddressIndex(

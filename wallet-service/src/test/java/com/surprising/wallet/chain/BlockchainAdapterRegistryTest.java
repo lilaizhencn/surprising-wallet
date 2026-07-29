@@ -2,8 +2,8 @@ package com.surprising.wallet.chain;
 
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.common.chain.TransferQuote;
-import com.surprising.wallet.common.chain.TransferRequest;
+import com.surprising.wallet.chain.model.TransferQuote;
+import com.surprising.wallet.chain.model.TransferRequest;
 import com.surprising.wallet.chain.btc.BtcChainAdapter;
 import com.surprising.wallet.chain.evm.EvmChainAdapter;
 import com.surprising.wallet.chain.evm.EvmGasEstimator;

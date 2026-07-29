@@ -1,8 +1,8 @@
 package com.surprising.wallet.chain.solana;
 
-import com.surprising.wallet.common.key.Ed25519Chain;
-import com.surprising.wallet.common.key.Ed25519DerivedKey;
-import com.surprising.wallet.common.key.Ed25519KeyProvider;
+import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
+import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
+import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import org.p2p.solanaj.core.Account;
 import org.p2p.solanaj.utils.TweetNaclFast;

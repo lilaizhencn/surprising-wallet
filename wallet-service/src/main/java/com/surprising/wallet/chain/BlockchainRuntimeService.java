@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainAsset;
+import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.dto.TransactionDTO;
@@ -128,7 +128,7 @@ public class BlockchainRuntimeService {
     public AssetRuntimeMetadata assetMetadata(String chain) {
         AccountChainProfile profile = repository.findProfileByChain(normalizeChain(chain))
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for chain " + chain));
-        return AssetRuntimeMetadata.fromProfile(profile, nativeAsset(profile));
+        return assetMetadata(profile, nativeAsset(profile));
     }
     public boolean isBitcoinLikeRuntime(String chain) {
         AccountChainProfile profile = repository.findProfileByChain(normalizeChain(chain))
@@ -157,8 +157,20 @@ public class BlockchainRuntimeService {
         AccountChainProfile profile = repository.findProfileByRuntimeCurrencyId(runtimeCurrencyId)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for runtime_currency_id " + runtimeCurrencyId));
-        return AssetRuntimeMetadata.fromProfile(profile, nativeAsset(profile));
+        return assetMetadata(profile, nativeAsset(profile));
     }
+
+    private AssetRuntimeMetadata assetMetadata(AccountChainProfile profile, ChainAsset asset) {
+        return AssetRuntimeMetadata.fromProfile(
+                profile.getRuntimeCurrencyId(),
+                profile.getChain(),
+                profile.getNativeSymbol(),
+                profile.getDepositConfirmations(),
+                profile.getBip44CoinType(),
+                asset == null ? null : asset.getDecimals(),
+                asset == null ? null : asset.getContractAddress());
+    }
+
     private ChainAsset nativeAsset(AccountChainProfile profile) {
         return repository.findAsset(profile.getChain(), profile.getNativeSymbol()).orElse(null);
     }

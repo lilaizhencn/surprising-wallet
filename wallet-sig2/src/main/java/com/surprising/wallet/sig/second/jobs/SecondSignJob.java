@@ -1,7 +1,6 @@
 package com.surprising.wallet.sig.second.jobs;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
@@ -12,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.Transaction;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
@@ -42,6 +42,7 @@ public class SecondSignJob {
     private static final HexFormat HEX = HexFormat.of();
 
     private final TaskScheduler taskScheduler;
+    private final StringRedisTemplate redis;
 
     @PostConstruct
     void schedule() {
@@ -54,11 +55,7 @@ public class SecondSignJob {
         String tmp = Constants.WALLET_WITHDRAW_SIG_SECOND_TMP_KEY;
 
         try {
-            if (ObjectUtils.isEmpty(Constants.NET_PARAMS)) {
-                log.info("第二次签名服务校验钱包环境 没有初始化");
-                return;
-            }
-            String txStr = REDIS.rPoplPush(key, tmp);
+            String txStr = redis.opsForList().rightPopAndLeftPush(key, tmp);
             if (ObjectUtils.isEmpty(txStr)) {
                 return;
             }
@@ -90,8 +87,9 @@ public class SecondSignJob {
                 }
             }
             transaction.setSignature(signature.toJSONString());
-            REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_DONE_KEY, JSONObject.toJSONString(transaction));
-            REDIS.lPop(tmp);
+            redis.opsForList().leftPush(
+                    Constants.WALLET_WITHDRAW_SIG_DONE_KEY, JSONObject.toJSONString(transaction));
+            redis.opsForList().leftPop(tmp);
 
         } catch (DataAccessException e) {
             log.info("Signature second job redis error", e);

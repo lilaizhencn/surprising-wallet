@@ -2,10 +2,10 @@ package com.surprising.wallet.sig.first.service;
 import com.alibaba.fastjson.JSONArray;import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;import com.surprising.wallet.common.pojo.*;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
-import com.surprising.wallet.common.utils.Constants;import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
+import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sdk.bitcoinj.core.WitnessTransactionBuilder;import com.surprising.wallet.sig.first.config.PubKeyConfig;
 import lombok.extern.slf4j.Slf4j;import org.bitcoinj.base.Coin;import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.crypto.ECKey;import org.springframework.beans.factory.annotation.Autowired;
+import org.bitcoinj.crypto.ECKey;import org.bitcoinj.params.TestNet3Params;import org.springframework.beans.factory.annotation.Autowired;
 import java.math.BigDecimal;import java.util.ArrayList;import java.util.List;
 /**
  * BTC-like 链（BTC、LTC）P2WSH（SegWit 多签）一签抽象基类。
@@ -39,9 +39,9 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
     /**
      * 返回当前链的网络参数。
      *
-     * @return 网络参数，默认从 {@link Constants#NET_PARAMS} 获取
+     * @return BTC 测试网参数
      */
-    protected NetworkParameters getNetworkParameters() { return Constants.NET_PARAMS; }
+    protected NetworkParameters getNetworkParameters() { return TestNet3Params.get(); }
 
     /**
      * 对 BTC-like P2WSH 提现交易执行第一次签名。

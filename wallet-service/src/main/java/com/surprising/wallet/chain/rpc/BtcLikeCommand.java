@@ -1,8 +1,8 @@
 package com.surprising.wallet.chain.rpc;
 
 import com.googlecode.jsonrpc4j.JsonRpcMethod;
-import com.surprising.wallet.common.pojo.rpc.BtcLikeBlock;
-import com.surprising.wallet.common.pojo.rpc.BtcLikeRawTransaction;
+import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeBlock;
+import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeRawTransaction;
 /**
  * BTC-like 链的 JSON-RPC 通用命令接口（BTC/BCH/LTC/DOGE）。
  *

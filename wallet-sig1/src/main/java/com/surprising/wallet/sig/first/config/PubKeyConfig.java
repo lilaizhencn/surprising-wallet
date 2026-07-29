@@ -1,10 +1,10 @@
 package com.surprising.wallet.sig.first.config;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata; import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
-import com.surprising.wallet.common.utils.Constants; import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
+import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sdk.bitcoinj.core.LegacyMultiSignAddressGenerator;
 import com.surprising.wallet.sdk.bitcoinj.core.SegwitMultiSignAddressGenerator;
-import lombok.Data; import lombok.extern.slf4j.Slf4j; import org.bitcoinj.crypto.ECKey;
+import lombok.Data; import lombok.extern.slf4j.Slf4j; import org.bitcoinj.crypto.ECKey; import org.bitcoinj.params.TestNet3Params;
 import org.springframework.beans.factory.annotation.Autowired; import org.springframework.stereotype.Component;
 /**
  * 多签公钥配置，管理 sig1、sig2、recovery 三组 BIP32 公钥的派生与脚本生成。
@@ -70,7 +70,7 @@ public class PubKeyConfig {
         ECKey k2=node2().getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
         ECKey k3=node3().getChild(44).getChild(ce.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex()).getEcKey();
         SegwitMultiSignAddressGenerator g=new SegwitMultiSignAddressGenerator(); g.addECKey(k1);g.addECKey(k2);g.addECKey(k3);
-        String addr=g.generateAddress(Constants.NET_PARAMS,2);
+        String addr=g.generateAddress(TestNet3Params.get(),2);
         log.info("P2WSH witnessScript: bech32={}, addrRef={}",addr,a.getAddress());
         return g.getWitnessScriptStr();
     }

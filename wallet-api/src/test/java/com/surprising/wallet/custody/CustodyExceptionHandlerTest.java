@@ -5,7 +5,6 @@ import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.lang.reflect.Method;
 import java.util.Map;
@@ -18,8 +17,8 @@ class CustodyExceptionHandlerTest {
 
     @Test
     void preservesWalletBusinessErrorForCustodyClients() {
-        var response = handler.responseStatus(
-                new ResponseStatusException(HttpStatus.BAD_REQUEST, "insufficient available balance"));
+        var response = handler.invalid(
+                new IllegalArgumentException("insufficient available balance"));
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertError(response.getBody(), "INVALID_REQUEST", "insufficient available balance");

@@ -2,7 +2,7 @@ package com.surprising.wallet.chain.evm;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.EvmTransactionRecord;
+import com.surprising.wallet.chain.model.EvmTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.config.ChainRpcNodeService;
 import com.surprising.wallet.config.AccountSecp256k1KeyService;

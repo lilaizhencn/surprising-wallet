@@ -1,7 +1,6 @@
 package com.surprising.wallet.job.withdraw;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
@@ -10,6 +9,7 @@ import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -48,6 +48,8 @@ public class UtxoSigningRecoveryJob {
     /** 任务开关服务。 */
     @Autowired
     private WalletRuntimeConfigService runtimeConfigService;
+    @Autowired
+    private StringRedisTemplate redis;
 
     /**
      * 每 30 秒扫描一次待签名悬挂交易，回推至首次签名队列，避免重启后遗留交易丢失。
@@ -67,7 +69,8 @@ public class UtxoSigningRecoveryJob {
                         continue;
                     }
                     currency.applyTo(tx);
-                    REDIS.lPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, JSONObject.toJSONString(tx));
+                    redis.opsForList().leftPush(
+                            Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, JSONObject.toJSONString(tx));
                     log.info("requeued stale {} signing transaction id={}", chain, tx.getId());
                 }
             } catch (Throwable e) {

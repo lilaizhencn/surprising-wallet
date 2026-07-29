@@ -8,10 +8,8 @@ import com.surprising.wallet.chain.near.NearKeyService;
 import com.surprising.wallet.chain.polkadot.PolkadotKeyService;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.security.SecureRandom;
@@ -54,12 +52,12 @@ public class CustodyWithdrawalExecutionService {
                 chain, symbol, sourceAddress, spend.accountId(), toAddress,
                 amount, asset.networkFeeReserve());
         if (created != 1) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "duplicate withdrawal order");
+            throw new IllegalStateException("duplicate withdrawal order");
         }
         if (!chains.freezeLedgerBalance(tenantId, chain, symbol, spend.accountId(), frozenAmount)) {
             chains.updateWithdrawalStatus(
                     tenantId, chain, orderNo, "FAILED", sourceAddress, null, "insufficient balance");
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "insufficient available balance");
+            throw new IllegalArgumentException("insufficient available balance");
         }
 
         boolean approvalRequired = runtimeConfig.isWithdrawalAdminApprovalRequired();
@@ -87,8 +85,8 @@ public class CustodyWithdrawalExecutionService {
                  limit 1
                 """, chain, symbol);
         if (rows.isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "asset withdrawal is not enabled: " + chain + "/" + symbol);
+            throw new IllegalArgumentException(
+                    "asset withdrawal is not enabled: " + chain + "/" + symbol);
         }
         Map<String, Object> row = rows.getFirst();
         boolean nativeAsset = Boolean.TRUE.equals(row.get("native_asset"));
@@ -123,7 +121,7 @@ public class CustodyWithdrawalExecutionService {
                  limit 1
                 """, symbol, tenantId, custodyAddressId, chain, requiredAmount);
         if (rows.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "insufficient available balance");
+            throw new IllegalArgumentException("insufficient available balance");
         }
         Map<String, Object> row = rows.getFirst();
         return new SpendAccount(String.valueOf(row.get("account_id")), String.valueOf(row.get("address")));
@@ -138,36 +136,36 @@ public class CustodyWithdrawalExecutionService {
     private static String normalizeOrderPrefix(String value) {
         String prefix = value == null ? "" : value.replaceAll("[^A-Za-z0-9_-]", "");
         if (prefix.isBlank() || prefix.length() > 56) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid withdrawal order prefix");
+            throw new IllegalArgumentException("invalid withdrawal order prefix");
         }
         return prefix;
     }
     private static void validateExternalAddress(String chain, String address) {
         String value = address == null ? "" : address.trim();
         if (value.isBlank() || value.length() > 160) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "valid withdrawal address is required");
+            throw new IllegalArgumentException("valid withdrawal address is required");
         }
         if ((ChainType.valueOf(chain).isEvm() || "HYPERCORE".equals(chain))
                 && !value.matches("^0x[0-9a-fA-F]{40}$")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid EVM address");
+            throw new IllegalArgumentException("invalid EVM address");
         }
         if ("TRON".equals(chain) && !value.matches("^T[1-9A-HJ-NP-Za-km-z]{33}$")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid TRON address");
+            throw new IllegalArgumentException("invalid TRON address");
         }
         if ("XRP".equals(chain) && !value.matches("^r[1-9A-HJ-NP-Za-km-z]{25,34}$")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid XRP address");
+            throw new IllegalArgumentException("invalid XRP address");
         }
         if ("XMR".equals(chain) && !MoneroAddressValidator.isValid(value)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid XMR address");
+            throw new IllegalArgumentException("invalid XMR address");
         }
         if ("ADA".equals(chain) && !CardanoKeyService.isValidAddress(value)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid ADA address");
+            throw new IllegalArgumentException("invalid ADA address");
         }
         if ("DOT".equals(chain) && !PolkadotKeyService.isValidSs58Address(value)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid DOT address");
+            throw new IllegalArgumentException("invalid DOT address");
         }
         if ("NEAR".equals(chain) && !NearKeyService.isValidAccountId(value)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid NEAR address");
+            throw new IllegalArgumentException("invalid NEAR address");
         }
     }
     private static BigDecimal atomicToDecimal(Object value, int decimals) {

@@ -1,13 +1,13 @@
 package com.surprising.wallet.job.withdraw;
 
 import com.alibaba.fastjson.JSONObject;
-import com.surprising.starters.redis.REDIS;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.wallet.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -30,6 +30,8 @@ public class RetryFailedWithdraw {
     /** 全局任务开关服务。 */
     @Autowired
     private WalletRuntimeConfigService runtimeConfigService;
+    @Autowired
+    private StringRedisTemplate redis;
 
     /**
      * 每分钟从失败队列取出待重试请求，调用提现流程，失败继续回填等待下一轮处理。
@@ -45,10 +47,10 @@ public class RetryFailedWithdraw {
         String failKeyTmp = Constants.WALLET_WITHDRAW_FAIL_KEY_TMP;
 
         try {
-            Long len = REDIS.lLen(failKey);
-            while (len > 0) {
+            Long len = redis.opsForList().size(failKey);
+            while (len != null && len > 0) {
                 log.info("重新尝试失败的交易 开始");
-                String str = REDIS.rPoplPush(failKey, failKeyTmp);
+                String str = redis.opsForList().rightPopAndLeftPush(failKey, failKeyTmp);
                 boolean success = false;
                 try {
                     JSONObject json = JSONObject.parseObject(str);
@@ -58,9 +60,9 @@ public class RetryFailedWithdraw {
                     log.error("重新尝试失败的交易 异常 记录:{}", str, e);
                 }
                 if (success) {
-                    REDIS.lPop(failKeyTmp);
+                    redis.opsForList().leftPop(failKeyTmp);
                 } else {
-                    REDIS.rPoplPush(failKeyTmp, failKey);
+                    redis.opsForList().rightPopAndLeftPush(failKeyTmp, failKey);
                 }
                 len = len - 1;
             }

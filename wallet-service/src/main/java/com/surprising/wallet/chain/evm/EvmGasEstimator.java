@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain.evm;
 
-import com.surprising.wallet.common.chain.ChainProfile;
-import com.surprising.wallet.common.chain.TransferRequest;
+import com.surprising.wallet.chain.model.ChainProfile;
+import com.surprising.wallet.chain.model.TransferRequest;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;

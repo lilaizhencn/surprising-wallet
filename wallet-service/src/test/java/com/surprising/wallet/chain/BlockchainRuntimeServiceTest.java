@@ -2,8 +2,8 @@ package com.surprising.wallet.chain;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.common.chain.TransferQuote;
-import com.surprising.wallet.common.chain.TransferRequest;
+import com.surprising.wallet.chain.model.TransferQuote;
+import com.surprising.wallet.chain.model.TransferRequest;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Test;

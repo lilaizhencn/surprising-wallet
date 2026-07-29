@@ -1,8 +1,8 @@
 package com.surprising.wallet.chain.ltc;
 
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.common.chain.TransferQuote;
-import com.surprising.wallet.common.chain.TransferRequest;
+import com.surprising.wallet.chain.model.TransferQuote;
+import com.surprising.wallet.chain.model.TransferRequest;
 import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinFeePolicy;
 import org.junit.jupiter.api.Test;

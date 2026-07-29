@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
@@ -68,14 +67,6 @@ public class CustodyExceptionHandler {
     }
 
     /**
-     * WebFlux/控制器层定义的响应状态统一透传。
-     */
-    @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<Map<String, Object>> responseStatus(ResponseStatusException e) {
-        return error(e.getStatusCode(), codeFor(e.getStatusCode()), e.getReason());
-    }
-
-    /**
      * 缺失 Header 直接返回 400，避免后续 NPE。
      */
     @ExceptionHandler(MissingRequestHeaderException.class)
@@ -100,20 +91,6 @@ public class CustodyExceptionHandler {
     public ResponseEntity<Map<String, Object>> invalidParameter(MethodArgumentTypeMismatchException e) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST",
                 "invalid request parameter: " + e.getName());
-    }
-
-    /**
-     * 根据 HTTP 状态映射统一错误码。
-     */
-    private static String codeFor(HttpStatusCode status) {
-        return switch (status.value()) {
-            case 400 -> "INVALID_REQUEST";
-            case 401 -> "UNAUTHORIZED";
-            case 403 -> "FORBIDDEN";
-            case 404 -> "NOT_FOUND";
-            case 409 -> "INVALID_STATE";
-            default -> status.is4xxClientError() ? "INVALID_REQUEST" : "INTERNAL_ERROR";
-        };
     }
 
     /**

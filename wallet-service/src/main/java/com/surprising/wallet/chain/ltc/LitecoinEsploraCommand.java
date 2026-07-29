@@ -2,10 +2,10 @@ package com.surprising.wallet.chain.ltc;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.surprising.wallet.common.pojo.rpc.BtcLikeBlock;
-import com.surprising.wallet.common.pojo.rpc.BtcLikeRawTransaction;
-import com.surprising.wallet.common.pojo.rpc.ScriptPubKey;
-import com.surprising.wallet.common.pojo.rpc.TxOutput;
+import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeBlock;
+import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeRawTransaction;
+import com.surprising.wallet.sdk.bitcoinj.rpc.model.ScriptPubKey;
+import com.surprising.wallet.sdk.bitcoinj.rpc.model.TxOutput;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.chain.rpc.BtcLikeCommand;
 import com.surprising.wallet.config.ChainRpcNodeService;

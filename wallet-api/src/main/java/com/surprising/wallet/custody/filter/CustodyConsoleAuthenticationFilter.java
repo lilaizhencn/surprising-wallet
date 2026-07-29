@@ -17,6 +17,7 @@ import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyHttpErrors;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
+import com.surprising.wallet.custody.model.CustodySessionCookie;
 import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 
 /**
@@ -63,7 +64,8 @@ public class CustodyConsoleAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         try {
             boolean platform = request.getRequestURI().startsWith("/custody/platform/v1/");
-            CustodyPrincipal principal = auth.requireSession(request, platform);
+            CustodyPrincipal principal =
+                    auth.requireSession(CustodySessionCookie.read(request.getCookies()), platform);
             request.setAttribute(CustodyRequestSupport.PRINCIPAL_ATTRIBUTE, principal);
             filterChain.doFilter(request, response);
         } catch (CustodyForbiddenException e) {

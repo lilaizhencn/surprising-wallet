@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain.polkadot;
 
-import com.surprising.wallet.common.key.Ed25519Chain;
-import com.surprising.wallet.common.key.Ed25519KeyProvider;
+import com.surprising.wallet.sdk.ed25519.Ed25519Chain;
+import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 import org.bitcoinj.base.Base58;
 import org.junit.jupiter.api.Test;
 

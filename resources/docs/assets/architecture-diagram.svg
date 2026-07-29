@@ -23,26 +23,26 @@
 
   <rect x="30"  y="70" width="200" height="78" class="lib"/>
   <text x="130" y="98" text-anchor="middle" class="label">common</text>
-  <text x="130" y="118" text-anchor="middle" class="desc">Redis · 链模型 · 密钥管理</text>
-  <text x="130" y="135" text-anchor="middle" class="desc">Ed25519 · Ethereum 密码学</text>
+  <text x="130" y="118" text-anchor="middle" class="desc">跨模块契约 · 签名 DTO · 密钥配置</text>
+  <text x="130" y="135" text-anchor="middle" class="desc">无 Web / Redis 基础设施依赖</text>
 
   <rect x="250" y="70" width="200" height="78" class="lib"/>
   <text x="350" y="98" text-anchor="middle" class="label">chain-sdks</text>
-  <text x="350" y="118" text-anchor="middle" class="desc">UTXO 多签 · BIP32 · SegWit</text>
-  <text x="350" y="135" text-anchor="middle" class="desc">TRON gRPC · ECKey · Keccak</text>
+  <text x="350" y="118" text-anchor="middle" class="desc">BitcoinJ · UTXO 多签 · BIP32</text>
+  <text x="350" y="135" text-anchor="middle" class="desc">RPC DTO · Ed25519 · TRON gRPC</text>
 
   <!-- ====== 第二层：应用服务 ====== -->
   <text x="30" y="180" class="sep"> 应用服务</text>
 
   <rect x="30"  y="194" width="320" height="100" class="svc"/>
   <text x="190" y="222" text-anchor="middle" class="label">wallet-api</text>
-  <text x="190" y="244" text-anchor="middle" class="desc">Custody / Console REST API</text>
+  <text x="190" y="244" text-anchor="middle" class="desc">REST · Servlet / Cookie · HTTP 映射</text>
   <text x="190" y="262" text-anchor="middle" class="desc">按链周期扫描 · 提现批处理 · 归集协调</text>
   <text x="190" y="280" text-anchor="middle" class="desc">EIP-7702 · Webhook · Gas 对账</text>
 
   <rect x="375" y="194" width="320" height="100" class="svc"/>
   <text x="535" y="222" text-anchor="middle" class="label">wallet-service</text>
-  <text x="535" y="244" text-anchor="middle" class="desc">链适配器 · 扫链 · 账本 · 提现</text>
+  <text x="535" y="244" text-anchor="middle" class="desc">领域/持久化模型 · 链适配器 · 账本</text>
   <text x="535" y="262" text-anchor="middle" class="desc">UTXO 选择 · Gas 估算 · 归集</text>
   <text x="535" y="280" text-anchor="middle" class="desc">27 条链，14 个链族</text>
 
@@ -52,9 +52,13 @@
   <text x="890" y="262" text-anchor="middle" class="desc">BTC/BCH/LTC/DOGE → 第一签 → 第二签</text>
   <text x="890" y="280" text-anchor="middle" class="desc">ETH/ERC20/TRON 最终签名与广播</text>
 
-  <!-- libs → services -->
-  <line x1="130" y1="148" x2="190" y2="194" class="arrow"/>
+  <!-- providers → consumers -->
+  <line x1="250" y1="109" x2="230" y2="109" class="arrow"/>
+  <line x1="130" y1="148" x2="455" y2="194" class="arrow"/>
   <line x1="350" y1="148" x2="535" y2="194" class="arrow"/>
+  <line x1="535" y1="194" x2="270" y2="194" class="arrow"/>
+  <line x1="130" y1="148" x2="810" y2="194" class="arrow"/>
+  <line x1="350" y1="148" x2="890" y2="194" class="arrow"/>
 
   <!-- ====== 第三层：27 条链 ====== -->
   <text x="30" y="328" class="sep"> 区块链适配（27 条链）</text>
@@ -181,7 +185,7 @@
 
   <rect x="280" y="558" width="170" height="58" class="infra"/>
   <text x="365" y="580" text-anchor="middle" class="label">Redis</text>
-  <text x="365" y="600" text-anchor="middle" class="desc">签名队列 · 缓存</text>
+  <text x="365" y="600" text-anchor="middle" class="desc">Spring Data · 签名队列</text>
 
   <rect x="470" y="558" width="200" height="58" class="infra"/>
   <text x="570" y="580" text-anchor="middle" class="label">Docker Regtest</text>

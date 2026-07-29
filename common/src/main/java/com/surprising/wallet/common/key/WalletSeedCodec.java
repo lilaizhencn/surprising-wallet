@@ -1,6 +1,7 @@
 package com.surprising.wallet.common.key;
 
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
+import com.surprising.wallet.sdk.ed25519.Ed25519KeyProvider;
 
 import java.util.Base64;
 import java.util.HashSet;

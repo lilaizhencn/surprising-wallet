@@ -3,7 +3,7 @@ package com.surprising.wallet.chain;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.common.chain.HotWalletRules;
+import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.chain.cardano.CardanoKeyService;
 import com.surprising.wallet.chain.monero.MoneroAddressValidator;

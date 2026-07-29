@@ -6,7 +6,7 @@ import com.google.common.primitives.UnsignedLong;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.common.chain.XrpTransactionRecord;
+import com.surprising.wallet.chain.model.XrpTransactionRecord;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;

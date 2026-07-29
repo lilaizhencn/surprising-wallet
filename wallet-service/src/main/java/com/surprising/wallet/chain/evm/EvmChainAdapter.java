@@ -1,12 +1,12 @@
 package com.surprising.wallet.chain.evm;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainProfile;
+import com.surprising.wallet.chain.model.ChainProfile;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.common.chain.TransferQuote;
-import com.surprising.wallet.common.chain.TransferRequest;
+import com.surprising.wallet.chain.model.TransferQuote;
+import com.surprising.wallet.chain.model.TransferRequest;
 import com.surprising.wallet.chain.BlockchainAdapter;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.springframework.beans.factory.annotation.Autowired;

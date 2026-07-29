@@ -17,10 +17,7 @@ import org.springframework.context.annotation.Bean;
  * 任一服务被攻破都无法单方面签名交易。
  */
 @EnableScheduling
-@SpringBootApplication(scanBasePackages = {
-        "com.surprising.wallet.sig.second",
-        "com.surprising.wallet.common"
-})
+@SpringBootApplication(scanBasePackages = "com.surprising.wallet.sig.second")
 public class WalletSig2Application {
 
     /**

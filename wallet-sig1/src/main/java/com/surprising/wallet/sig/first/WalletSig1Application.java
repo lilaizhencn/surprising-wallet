@@ -14,11 +14,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * 任一服务被攻破都无法单方面签名交易，满足多签安全模型。
  */
 @EnableScheduling
-@SpringBootApplication(
-        scanBasePackages = {
-                "com.surprising"
-        }
-)
+@SpringBootApplication(scanBasePackages = "com.surprising.wallet.sig.first")
 public class WalletSig1Application {
 
     /**
@@ -31,4 +27,3 @@ public class WalletSig1Application {
     }
 
 }
-

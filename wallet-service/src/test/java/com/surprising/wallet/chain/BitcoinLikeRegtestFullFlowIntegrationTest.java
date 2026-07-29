@@ -3,10 +3,10 @@ package com.surprising.wallet.chain;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainAsset;
+import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.common.chain.LedgerBalanceRecord;
+import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
@@ -761,7 +761,14 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         ChainAsset asset = repository.findAsset(profile.getChain(), profile.getNativeSymbol())
                 .orElseThrow(() -> new IllegalStateException(
                         "missing chain_asset for " + profile.getChain() + "/" + profile.getNativeSymbol()));
-        return AssetRuntimeMetadata.fromProfile(profile, asset);
+        return AssetRuntimeMetadata.fromProfile(
+                profile.getRuntimeCurrencyId(),
+                profile.getChain(),
+                profile.getNativeSymbol(),
+                profile.getDepositConfirmations(),
+                profile.getBip44CoinType(),
+                asset.getDecimals(),
+                asset.getContractAddress());
     }
 
     private static void ensureTestTenant(JdbcTemplate jdbc) {

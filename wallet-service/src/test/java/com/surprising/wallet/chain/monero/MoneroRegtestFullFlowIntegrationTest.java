@@ -2,7 +2,7 @@ package com.surprising.wallet.chain.monero;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.LedgerBalanceRecord;
+import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.config.ChainRpcNodeService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Assumptions;
