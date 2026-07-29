@@ -2,11 +2,11 @@
 set -euo pipefail
 
 CUSTODY_DB_ROOT=$(git rev-parse --show-toplevel)
-source "$CUSTODY_DB_ROOT/scripts/regtest/local-postgres.sh"
+source "$CUSTODY_DB_ROOT/resources/scripts/regtest/local-postgres.sh"
 
 CUSTODY_DB_BUILD_ROOT=$(mktemp -d /tmp/surprising-wallet-custody-db-tests.XXXXXX)
 CUSTODY_DB_NAME="surprising_wallet_test_custody_$$"
-CUSTODY_DB_TESTS=${CUSTODY_DB_TESTS:-CustodyDepositProjectionIntegrationTest,CustodyOperationsIntegrationTest,CustodyTenantIsolationIntegrationTest,Evm7702ProductionFlowIntegrationTest}
+CUSTODY_DB_TESTS=${CUSTODY_DB_TESTS:-CustodyDepositProjectionIntegrationTest,CustodyOperationsIntegrationTest,CustodyTenantIsolationIntegrationTest,CustodyDepositFinalityIntegrationTest,CustodyAssetRecoveryIntegrationTest,Evm7702ProductionFlowIntegrationTest}
 
 cleanup() {
   local status=$?
@@ -41,7 +41,7 @@ SW_TEST_CUSTODY_DB_URL="$(local_pg_jdbc_url "$CUSTODY_DB_NAME")" \
 SW_TEST_CUSTODY_DB_USERNAME="$REGTEST_PG_USER" \
 SW_TEST_CUSTODY_DB_PASSWORD="$REGTEST_PG_PASSWORD" \
 mvn -q -f "$CUSTODY_DB_BUILD_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-server -am \
+  -pl wallet-api -am \
   -Dtest="$CUSTODY_DB_TESTS" \
   -Dsurefire.failIfNoSpecifiedTests=false \
   "$@" \

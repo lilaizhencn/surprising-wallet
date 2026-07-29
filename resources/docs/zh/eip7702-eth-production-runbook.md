@@ -109,7 +109,7 @@ authorization list 和 type-4 raw transaction，在同一笔交易里首次委�
 
 ```bash
 CUSTODY_DB_TESTS=Evm7702ProductionFlowIntegrationTest \
-scripts/regtest/run-custody-db-tests.sh \
+resources/scripts/regtest/run-custody-db-tests.sh \
   -Devm.7702.production.enabled=true \
   -Devm.7702.collector='<COLLECTOR_ADDRESS>' \
   -Devm.7702.delegate='<DELEGATE_ADDRESS>'

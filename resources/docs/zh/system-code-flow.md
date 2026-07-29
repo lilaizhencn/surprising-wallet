@@ -19,11 +19,11 @@
   -> 在同一事务中写 deposit_record 并增加 ledger_balance
   -> 写 custody_deposit 投影
   -> 写持久化 custody_event
-  -> 为每个端点生成 webhook_delivery
-  -> 签名回调 DEPOSIT.CONFIRMED，并带回 subject 和充值地址
+  -> 仅当充值地址由公开 API 创建时，为每个端点生成 webhook_delivery
+  -> 签名回调 DEPOSIT.CONFIRMED，并带回 subject 和充值地址；Console 地址不自动投递
 ```
 
-Console 可附带标签和元数据手动创建地址；公开 API 不接收这些管理字段。地址仍计入租户资产总额。创建地址本身不产生 Webhook。所有 Console/API 查询和变更都强制应用租户隔离。
+Console 可附带标签和元数据手动创建地址；公开 API 不接收这些管理字段。地址仍计入租户资产总额，但其后续充值不自动投递 Webhook。创建地址本身也不产生 Webhook。所有 Console/API 查询和变更都强制应用租户隔离。
 
 提现请求使用永久幂等键，复用现有的资金锁定、广播和确认流程，并从持久化投递记录发送签名生命周期 Webhook。
 

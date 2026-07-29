@@ -601,6 +601,13 @@ class CustodyOperationsIntegrationTest {
             CustodyTenantChainService service = new CustodyTenantChainService(
                     chainRepository, custody,
                     new BlockchainAdapterRegistry(List.of(new TronChainAdapter())));
+            jdbc.update("""
+                    update chain_profile
+                       set scan_enabled = true,
+                           withdraw_enabled = true,
+                           transfer_enabled = true
+                     where chain = 'TRON' and enabled = true
+                    """);
             UUID tenantId = createTenant();
             UUID administratorId = UUID.randomUUID();
             String slug = jdbc.queryForObject(

@@ -137,7 +137,7 @@ scripts/regtest/all-chain-regtest.sh test-evm
 scripts/regtest/all-chain-regtest.sh test-hypercore
 
 # 本机 PostgreSQL 18 托管数据库测试
-scripts/regtest/run-custody-db-tests.sh
+resources/scripts/regtest/run-custody-db-tests.sh
 
 # 最终多链并发系统测试
 scripts/regtest/run-multichain-system-test.sh

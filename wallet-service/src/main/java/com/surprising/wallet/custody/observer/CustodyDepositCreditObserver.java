@@ -193,7 +193,7 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
 
         repository.insertEventWithDeliveries(
                 eventId, owner.tenantId(), EVENT_TYPE, "DEPOSIT", referenceId, payload,
-                true);
+                "API".equals(owner.source()));
     }
 
     private BigDecimal applyOpenDeficits(AddressOwner owner, DepositEvent event, String accountId,

@@ -118,7 +118,7 @@ operation nonce 都为 `1`。
 
 ```bash
 CUSTODY_DB_TESTS=Evm7702ProductionFlowIntegrationTest \
-scripts/regtest/run-custody-db-tests.sh \
+resources/scripts/regtest/run-custody-db-tests.sh \
   -Devm.7702.production.enabled=true \
   -Devm.7702.test.chain=BNB \
   -Devm.7702.test.chain-id=97 \

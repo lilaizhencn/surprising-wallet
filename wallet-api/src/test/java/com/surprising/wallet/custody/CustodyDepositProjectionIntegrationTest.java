@@ -263,6 +263,11 @@ class CustodyDepositProjectionIntegrationTest {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         UUID tenantId = UUID.randomUUID();
         UUID custodyAddressId = UUID.randomUUID();
+        jdbc.update("""
+                update chain_profile
+                   set scan_enabled = true
+                 where chain = 'ETH' and enabled = true
+                """);
         int namespace = jdbc.queryForObject(
                 "select nextval('custody_derivation_namespace_seq')::integer", Integer.class);
         int subject = jdbc.queryForObject(

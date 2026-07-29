@@ -219,7 +219,7 @@ scripts/regtest/all-chain-regtest.sh test-db
 使用本机 PostgreSQL 18 中自动创建并清理的临时数据库，验证托管充值投影和事务回滚边界：
 
 ```bash
-scripts/regtest/run-custody-db-tests.sh
+resources/scripts/regtest/run-custody-db-tests.sh
 ```
 
 脚本不会启动独立数据库实例，只会复用 `127.0.0.1:5432`，且拒绝 PostgreSQL 18

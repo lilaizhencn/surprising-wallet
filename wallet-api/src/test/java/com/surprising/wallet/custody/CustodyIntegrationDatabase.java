@@ -1,6 +1,7 @@
 package com.surprising.wallet.custody;
 
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.support.EncodedResource;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
@@ -38,15 +39,25 @@ final class CustodyIntegrationDatabase {
     static void reset(DriverManagerDataSource dataSource) throws Exception {
         try (Connection connection = dataSource.getConnection()) {
             requirePostgreSql18(connection);
-            ScriptUtils.executeSqlScript(connection, new FileSystemResource(
+            var resource = new EncodedResource(new FileSystemResource(
                     projectRoot().resolve("resources/docs/db/surprising-wallet-init-pgsql.sql")));
+            ScriptUtils.executeSqlScript(
+                    connection,
+                    resource,
+                    false,
+                    false,
+                    ScriptUtils.DEFAULT_COMMENT_PREFIXES,
+                    ScriptUtils.EOF_STATEMENT_SEPARATOR,
+                    ScriptUtils.DEFAULT_BLOCK_COMMENT_START_DELIMITER,
+                    ScriptUtils.DEFAULT_BLOCK_COMMENT_END_DELIMITER);
         }
     }
 
     private static String requiredEnvironment(String name) {
         String value = System.getenv(name);
         if (value == null || value.isBlank()) {
-            throw new IllegalStateException(name + " is required; use scripts/regtest/run-custody-db-tests.sh");
+            throw new IllegalStateException(name
+                    + " is required; use resources/scripts/regtest/run-custody-db-tests.sh");
         }
         return value.trim();
     }

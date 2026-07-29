@@ -167,6 +167,11 @@ class CustodyDepositFinalityIntegrationTest {
         UUID tenantId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         UUID custodyAddressId = UUID.randomUUID();
+        jdbc.update("""
+                update chain_profile
+                   set scan_enabled = true
+                 where chain = 'ETH' and enabled = true
+                """);
         int namespace = value("select nextval('custody_derivation_namespace_seq')::integer", Integer.class);
         int subject = value("select nextval('custody_derivation_subject_index_seq')::integer", Integer.class);
         String address = "0x" + suffix + suffix.substring(0, 8);
