@@ -2,6 +2,7 @@ package com.surprising.wallet.custody.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -24,6 +25,7 @@ class WalletRpcClient {
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
 
+    @Autowired
     WalletRpcClient(ObjectMapper objectMapper) {
         this(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(), objectMapper);
     }
