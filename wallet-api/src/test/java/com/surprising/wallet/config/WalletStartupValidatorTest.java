@@ -3,6 +3,7 @@ package com.surprising.wallet.config;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -10,6 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -41,6 +43,32 @@ class WalletStartupValidatorTest {
                 List.of()));
 
         assertDoesNotThrow(validator::validateProfiles);
+    }
+
+    @Test
+    void enabledEvmProfileAcceptsExplicitGasAndFeeModels() throws Exception {
+        AccountChainProfile profile = evmProfile("BASE", "sepolia", "ETH_BASE",
+                "eip1559", "op-stack");
+        WalletStartupValidator validator = validator(new FakeRepository(
+                List.of(profile),
+                List.of(node("BASE", "sepolia", "rpc", "base-sepolia",
+                        "https://base-sepolia-rpc.publicnode.com")),
+                List.of()));
+
+        assertDoesNotThrow(validator::validateProfiles);
+    }
+
+    @Test
+    void enabledEvmProfileRejectsAmbiguousOldL2GasPolicy() throws Exception {
+        AccountChainProfile profile = evmProfile("BASE", "sepolia", "ETH_BASE",
+                "eip1559-l2", "op-stack");
+        WalletStartupValidator validator = validator(new FakeRepository(
+                List.of(profile), List.of(), List.of()));
+
+        IllegalStateException error = assertThrows(
+                IllegalStateException.class, validator::validateProfiles);
+
+        assertTrue(error.getMessage().contains("invalid fee policy"));
     }
 
     @Test
@@ -310,7 +338,7 @@ class WalletStartupValidatorTest {
     }
 
     private static WalletStartupValidator validator(ChainJdbcRepository repository) throws Exception {
-        return validator(repository, null);
+        return validator(repository, new FakeJdbcTemplate(List.of(), List.of()));
     }
 
     private static WalletStartupValidator validator(ChainJdbcRepository repository,
@@ -332,6 +360,25 @@ class WalletStartupValidatorTest {
                 .network(network)
                 .family(chain.toLowerCase())
                 .nativeSymbol(chain)
+                .enabled(true)
+                .scanEnabled(true)
+                .withdrawEnabled(true)
+                .collectionEnabled(true)
+                .transferEnabled(true)
+                .build();
+    }
+
+    private static AccountChainProfile evmProfile(
+            String chain, String network, String nativeSymbol,
+            String gasPolicy, String feeModel) {
+        return AccountChainProfile.builder()
+                .chain(chain)
+                .network(network)
+                .family("evm")
+                .nativeSymbol(nativeSymbol)
+                .chainId(84532L)
+                .gasPolicy(gasPolicy)
+                .feeModel(feeModel)
                 .enabled(true)
                 .scanEnabled(true)
                 .withdrawEnabled(true)
@@ -427,6 +474,27 @@ class WalletStartupValidatorTest {
             return tokens.stream()
                     .filter(token -> token.getChain().equalsIgnoreCase(chain))
                     .toList();
+        }
+
+        @Override
+        public Optional<ChainAsset> findAsset(String chain, String symbol) {
+            return profiles.stream()
+                    .filter(profile -> profile.getChain().equalsIgnoreCase(chain))
+                    .filter(profile -> profile.getNativeSymbol().equalsIgnoreCase(symbol))
+                    .findFirst()
+                    .map(profile -> ChainAsset.builder()
+                            .chain(chain)
+                            .symbol(symbol)
+                            .decimals(18)
+                            .nativeAsset(true)
+                            .active(true)
+                            .build());
+        }
+
+        @Override
+        public int countActiveNativeAssets(String chain) {
+            return profiles.stream()
+                    .anyMatch(profile -> profile.getChain().equalsIgnoreCase(chain)) ? 1 : 0;
         }
     }
 

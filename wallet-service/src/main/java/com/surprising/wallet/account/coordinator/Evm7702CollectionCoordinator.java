@@ -3,6 +3,7 @@ package com.surprising.wallet.account.coordinator;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
 import com.surprising.wallet.chain.evm.Evm7702ReceiptParser;
+import com.surprising.wallet.chain.evm.EvmFeeSupport;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,20 +46,35 @@ public class Evm7702CollectionCoordinator {
     }
 
     @Transactional(rollbackFor = Throwable.class)
-    public void complete(Evm7702CollectionRepository.PendingBatch batch,
+    public void complete(String chain, Evm7702CollectionRepository.PendingBatch batch,
                          String txHash, BigInteger gasUsed, BigInteger effectiveGasPrice,
                          BigInteger l2Fee, BigInteger l1Fee, BigInteger operatorFee,
                          BigInteger blockNumber, String blockHash,
                          List<Evm7702ReceiptParser.ItemResult> results) {
+        BigDecimal actualFee = actualFee(chain, l2Fee, l1Fee, operatorFee);
         repository.completeBatch(
                 batch.tenantId(), batch.batchId(), txHash, gasUsed, effectiveGasPrice,
-                l2Fee, l1Fee, operatorFee,
+                l2Fee, l1Fee, operatorFee, actualFee,
                 blockNumber, blockHash, results);
-        BigDecimal actualFee = new BigDecimal(l2Fee.add(l1Fee).add(operatorFee))
-                .movePointLeft(18).stripTrailingZeros();
         custodyRepository.settleGasUsage(
                 batch.tenantId(), "COLLECTION_BATCH", batch.batchId(),
                 actualFee, "EVM_RECEIPT", txHash);
+    }
+
+    private BigDecimal actualFee(
+            String chain, BigInteger l2Fee, BigInteger l1Fee, BigInteger operatorFee) {
+        var profile = chainRepository.findProfileByChain(chain)
+                .orElseThrow(() -> new IllegalStateException(
+                        "missing enabled chain_profile for " + chain));
+        var asset = chainRepository.findAsset(chain, profile.getNativeSymbol())
+                .orElseThrow(() -> new IllegalStateException(
+                        "missing active native chain_asset for " + chain));
+        if (!Boolean.TRUE.equals(asset.getNativeAsset()) || asset.getDecimals() == null) {
+            throw new IllegalStateException("invalid native chain_asset for " + chain);
+        }
+        return EvmFeeSupport.atomicToNative(
+                l2Fee.add(l1Fee).add(operatorFee), asset.getDecimals(),
+                java.math.RoundingMode.UP);
     }
 
     @FunctionalInterface

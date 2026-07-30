@@ -3,6 +3,7 @@ package com.surprising.wallet.account.coordinator;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
 import com.surprising.wallet.chain.evm.Evm7702PayoutReceiptParser;
+import com.surprising.wallet.chain.evm.EvmFeeSupport;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -111,12 +112,12 @@ public class Evm7702WithdrawalCoordinator {
         }
         Evm7702WithdrawalRepository.BatchState state =
                 repository.requireBatchState(batch.tenantId(), batch.batchId());
+        BigDecimal actualFee = actualFee(batch.chain(), l2Fee, l1Fee, operatorFee);
         repository.completeBatchMetadata(
                 batch, txHash, gasUsed, effectiveGasPrice, l2Fee, l1Fee, operatorFee,
+                actualFee,
                 blockNumber, blockHash, failures, results.size(), state.operationNonce(),
                 payoutDelegateAddress);
-        BigDecimal actualFee = new BigDecimal(l2Fee.add(l1Fee).add(operatorFee))
-                .movePointLeft(18).stripTrailingZeros();
         custodyRepository.settleGasUsage(
                 batch.tenantId(), "WITHDRAWAL_BATCH", batch.batchId(),
                 actualFee, "EVM_RECEIPT", txHash);
@@ -153,14 +154,29 @@ public class Evm7702WithdrawalCoordinator {
                 throw new IllegalStateException("unable to retry reverted payout withdrawal");
             }
         }
+        BigDecimal actualFee = actualFee(batch.chain(), l2Fee, l1Fee, operatorFee);
         repository.completeRevertedBatchMetadata(
                 batch, txHash, gasUsed, effectiveGasPrice, l2Fee, l1Fee,
-                operatorFee, blockNumber, blockHash, errorHash);
-        BigDecimal actualFee = new BigDecimal(l2Fee.add(l1Fee).add(operatorFee))
-                .movePointLeft(18).stripTrailingZeros();
+                operatorFee, actualFee, blockNumber, blockHash, errorHash);
         custodyRepository.settleGasUsage(
                 batch.tenantId(), "WITHDRAWAL_BATCH", batch.batchId(),
                 actualFee, "EVM_REVERTED_RECEIPT", txHash);
+    }
+
+    private BigDecimal actualFee(
+            String chain, BigInteger l2Fee, BigInteger l1Fee, BigInteger operatorFee) {
+        var profile = chainRepository.findProfileByChain(chain)
+                .orElseThrow(() -> new IllegalStateException(
+                        "missing enabled chain_profile for " + chain));
+        var asset = chainRepository.findAsset(chain, profile.getNativeSymbol())
+                .orElseThrow(() -> new IllegalStateException(
+                        "missing active native chain_asset for " + chain));
+        if (!Boolean.TRUE.equals(asset.getNativeAsset()) || asset.getDecimals() == null) {
+            throw new IllegalStateException("invalid native chain_asset for " + chain);
+        }
+        return EvmFeeSupport.atomicToNative(
+                l2Fee.add(l1Fee).add(operatorFee), asset.getDecimals(),
+                java.math.RoundingMode.UP);
     }
 
     @FunctionalInterface

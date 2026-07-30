@@ -10,6 +10,7 @@ import com.surprising.wallet.chain.evm.Evm7702PayoutItem;
 import com.surprising.wallet.chain.evm.Evm7702PayoutReceiptParser;
 import com.surprising.wallet.chain.evm.Evm7702PayoutRequest;
 import com.surprising.wallet.chain.evm.Evm7702PayoutSigner;
+import com.surprising.wallet.chain.evm.EvmFeeSupport;
 import com.surprising.wallet.config.AccountSecp256k1KeyService;
 import com.surprising.wallet.config.ChainRpcNodeService;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
@@ -66,12 +67,8 @@ import com.surprising.wallet.account.repository.Evm7702WithdrawalRepository;
 public class Evm7702WithdrawalWorkflowService {
     private static final Logger log = LoggerFactory.getLogger(Evm7702WithdrawalWorkflowService.class);
     private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
-    private static final String OP_STACK_GAS_PRICE_ORACLE =
-            "0x420000000000000000000000000000000000000F";
     private static final BigInteger ITEM_GAS = BigInteger.valueOf(120_000L);
     private static final BigInteger MIN_BATCH_GAS = BigInteger.valueOf(80_000L);
-    private static final BigInteger ONE_GWEI = BigInteger.valueOf(1_000_000_000L);
-    private static final BigDecimal WEI_PER_NATIVE = new BigDecimal("1000000000000000000");
     private final Evm7702WithdrawalRepository repository;
     private final Evm7702WithdrawalCoordinator coordinator;
     private final ChainJdbcRepository chainRepository;
@@ -234,17 +231,15 @@ public class Evm7702WithdrawalWorkflowService {
                 }
                 BigInteger effectiveGasPrice = receipt.getEffectiveGasPrice() == null
                         ? BigInteger.ZERO : Numeric.decodeQuantity(receipt.getEffectiveGasPrice());
-                BigInteger arbitrumL1Gas = arbitrumL1Gas(profile, receipt);
-                BigInteger l2Fee = receipt.getGasUsed().subtract(arbitrumL1Gas)
-                        .multiply(effectiveGasPrice);
-                BigInteger l1Fee = opStackL1Fee(profile, receipt)
-                        .add(arbitrumL1Gas.multiply(effectiveGasPrice));
-                BigInteger operatorFee = send(
-                        () -> opStackOperatorFee(web3j, profile, receipt));
+                EvmFeeSupport.FeeComponents fee = EvmFeeSupport.actualFee(
+                        web3j, profile, receipt.getFrom(), receipt.getGasUsed(),
+                        effectiveGasPrice, receipt.getBlockNumber(), receipt.getL1Fee(),
+                        receipt.getGasUsedForL1(), receipt.getOperatorFeeScalar(),
+                        receipt.getOperatorFeeConstant());
                 if (!receipt.isStatusOK()) {
                     coordinator.completeReverted(
                             batch, batch.txHash(), receipt.getGasUsed(), effectiveGasPrice,
-                            l2Fee, l1Fee, operatorFee, receipt.getBlockNumber(),
+                            fee.executionFee(), fee.l1Fee(), fee.operatorFee(), receipt.getBlockNumber(),
                             receipt.getBlockHash(), Hash.sha3String(
                                     "outer-reverted:" + batch.txHash().toLowerCase()));
                     continue;
@@ -261,7 +256,7 @@ public class Evm7702WithdrawalWorkflowService {
                                 batch.tenantId(), batch.batchId()).delegateVersion());
                 coordinator.complete(
                         batch, batch.txHash(), receipt.getGasUsed(), effectiveGasPrice,
-                        l2Fee, l1Fee, operatorFee, receipt.getBlockNumber(),
+                        fee.executionFee(), fee.l1Fee(), fee.operatorFee(), receipt.getBlockNumber(),
                         receipt.getBlockHash(), parsed.items(), config.payoutDelegateAddress());
             }
         } finally {
@@ -332,9 +327,9 @@ public class Evm7702WithdrawalWorkflowService {
         request.requireNotExpired(Instant.now());
         String calldata = payoutCodec.encode(
                 request, payoutSigner.sign(config.chainId(), request, authority));
-        BigInteger gasPrice = web3j.ethGasPrice().send().getGasPrice();
-        BigInteger priority = gasPrice.min(ONE_GWEI).max(BigInteger.ONE);
-        BigInteger maxFee = gasPrice.multiply(BigInteger.TWO).add(priority);
+        EvmFeeSupport.FeeQuote feeQuote = EvmFeeSupport.quote(web3j, profile);
+        BigInteger priority = feeQuote.maxPriorityFeePerGas();
+        BigInteger maxFee = feeQuote.maxFeePerGas();
         BigInteger relayerPendingNonce = web3j.ethGetTransactionCount(
                 relayer.getAddress(), DefaultBlockParameterName.PENDING).send().getTransactionCount();
         BigInteger estimated = estimateGas(
@@ -376,13 +371,29 @@ public class Evm7702WithdrawalWorkflowService {
                         prepared.authorizationIncluded(), prepared.authorizationNonce(),
                         prepared.operationNonce(), prepared.signatureDeadline());
         BigInteger reservedFeeAtomic = prepared.gasLimit().multiply(prepared.maxFeePerGas())
-                .add(opStackL1FeeEstimate(
+                .add(EvmFeeSupport.estimateSeparateL1Fee(
                         web3j, profile, prepared.relayer().getAddress(), signed.rawTransaction()))
-                .add(opStackOperatorFeeEstimate(
+                .add(EvmFeeSupport.estimateOperatorFee(
                         web3j, profile, prepared.relayer().getAddress(), prepared.gasLimit()));
-        BigDecimal reservedFee = new BigDecimal(reservedFeeAtomic)
-                .divide(WEI_PER_NATIVE, 18, RoundingMode.UP).stripTrailingZeros();
+        send(() -> {
+            EvmFeeSupport.requireBalance(
+                    web3j, prepared.relayer().getAddress(), reservedFeeAtomic, "EIP-7702 relayer");
+            return null;
+        });
+        BigDecimal reservedFee = EvmFeeSupport.atomicToNative(
+                reservedFeeAtomic, nativeDecimals(profile), RoundingMode.UP);
         return new Evm7702WithdrawalCoordinator.SignedAttempt(signed, attempt, reservedFee);
+    }
+
+    private int nativeDecimals(AccountChainProfile profile) {
+        var asset = chainRepository.findAsset(profile.getChain(), profile.getNativeSymbol())
+                .orElseThrow(() -> new IllegalStateException(
+                        "missing active native chain_asset for " + profile.getChain()));
+        if (!Boolean.TRUE.equals(asset.getNativeAsset()) || asset.getDecimals() == null) {
+            throw new IllegalStateException(
+                    "invalid native chain_asset for " + profile.getChain());
+        }
+        return asset.getDecimals();
     }
 
     private Evm7702CollectionRepository.RuntimeConfig requireVersionedConfig(
@@ -469,108 +480,6 @@ public class Evm7702WithdrawalWorkflowService {
         result.put("r", Numeric.encodeQuantity(tuple.getR()));
         result.put("s", Numeric.encodeQuantity(tuple.getS()));
         return result;
-    }
-    private BigInteger opStackL1Fee(AccountChainProfile profile, EvmTransactionReceipt receipt) {
-        if (!isOpStackL2(profile)) return BigInteger.ZERO;
-        if (receipt.getL1Fee() == null || receipt.getL1Fee().isBlank()) {
-            if ("local".equalsIgnoreCase(profile.getNetwork())) return BigInteger.ZERO;
-            throw new IllegalStateException("OP Stack receipt is missing l1Fee");
-        }
-        return Numeric.decodeQuantity(receipt.getL1Fee());
-    }
-
-    private BigInteger opStackOperatorFee(
-            Web3j web3j, AccountChainProfile profile,
-            EvmTransactionReceipt receipt) throws Exception {
-        if (!isOpStackL2(profile) || (!positiveQuantity(receipt.getOperatorFeeScalar())
-                && !positiveQuantity(receipt.getOperatorFeeConstant()))) {
-            return BigInteger.ZERO;
-        }
-        Function function = new Function(
-                "getOperatorFee", List.of(new Uint256(receipt.getGasUsed())),
-                List.of(new TypeReference<Uint256>() { }));
-        EthCall response = web3j.ethCall(
-                Transaction.createEthCallTransaction(
-                        receipt.getFrom(), OP_STACK_GAS_PRICE_ORACLE,
-                        FunctionEncoder.encode(function)),
-                DefaultBlockParameter.valueOf(receipt.getBlockNumber())).send();
-        if (response.hasError()) {
-            throw new IllegalStateException(
-                    "OP Stack getOperatorFee failed: " + response.getError().getMessage());
-        }
-        List<Type> values = FunctionReturnDecoder.decode(
-                response.getValue(), function.getOutputParameters());
-        if (values.size() != 1) {
-            throw new IllegalStateException("OP Stack getOperatorFee returned malformed data");
-        }
-        return (BigInteger) values.getFirst().getValue();
-    }
-
-    private BigInteger arbitrumL1Gas(
-            AccountChainProfile profile, EvmTransactionReceipt receipt) {
-        if (!"ARBITRUM".equalsIgnoreCase(profile.getChain())) return BigInteger.ZERO;
-        if (receipt.getGasUsedForL1() == null || receipt.getGasUsedForL1().isBlank()) {
-            if ("local".equalsIgnoreCase(profile.getNetwork())) return BigInteger.ZERO;
-            throw new IllegalStateException("Arbitrum receipt is missing gasUsedForL1");
-        }
-        BigInteger value = Numeric.decodeQuantity(receipt.getGasUsedForL1());
-        if (value.signum() < 0 || value.compareTo(receipt.getGasUsed()) > 0) {
-            throw new IllegalStateException("Arbitrum gasUsedForL1 exceeds total gasUsed");
-        }
-        return value;
-    }
-
-    private BigInteger opStackL1FeeEstimate(
-            Web3j web3j, AccountChainProfile profile, String from,
-            String signedTransaction) {
-        if (!isOpStackL2(profile) || "local".equalsIgnoreCase(profile.getNetwork())) {
-            return BigInteger.ZERO;
-        }
-        Function function = new Function(
-                "getL1Fee", List.of(new DynamicBytes(
-                        Numeric.hexStringToByteArray(signedTransaction))),
-                List.of(new TypeReference<Uint256>() { }));
-        return opStackOracleUint256(web3j, from, function, "getL1Fee");
-    }
-
-    private BigInteger opStackOperatorFeeEstimate(
-            Web3j web3j, AccountChainProfile profile, String from,
-            BigInteger gasLimit) {
-        if (!isOpStackL2(profile) || "local".equalsIgnoreCase(profile.getNetwork())) {
-            return BigInteger.ZERO;
-        }
-        Function function = new Function(
-                "getOperatorFee", List.of(new Uint256(gasLimit)),
-                List.of(new TypeReference<Uint256>() { }));
-        return opStackOracleUint256(web3j, from, function, "getOperatorFee");
-    }
-
-    private BigInteger opStackOracleUint256(
-            Web3j web3j, String from, Function function, String operation) {
-        EthCall response = send(() -> web3j.ethCall(
-                Transaction.createEthCallTransaction(
-                        from, OP_STACK_GAS_PRICE_ORACLE, FunctionEncoder.encode(function)),
-                DefaultBlockParameterName.LATEST).send());
-        if (response.hasError()) {
-            throw new IllegalStateException(
-                    "OP Stack " + operation + " failed: " + response.getError().getMessage());
-        }
-        List<Type> values = FunctionReturnDecoder.decode(
-                response.getValue(), function.getOutputParameters());
-        if (values.size() != 1) {
-            throw new IllegalStateException(
-                    "OP Stack " + operation + " returned malformed data");
-        }
-        return (BigInteger) values.getFirst().getValue();
-    }
-    private boolean isOpStackL2(AccountChainProfile profile) {
-        return "eip1559-l2".equalsIgnoreCase(profile.getGasPolicy())
-                && ("BASE".equalsIgnoreCase(profile.getChain())
-                || "OPTIMISM".equalsIgnoreCase(profile.getChain()));
-    }
-    private boolean positiveQuantity(String value) {
-        return value != null && !value.isBlank()
-                && Numeric.decodeQuantity(value).signum() > 0;
     }
     private boolean isTransactionKnown(Web3j web3j, String txHash) throws Exception {
         if (web3j.ethGetTransactionReceipt(txHash).send().getTransactionReceipt().isPresent()) {

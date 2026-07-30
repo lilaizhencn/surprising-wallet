@@ -177,7 +177,7 @@
 
   <!-- EIP-7702 note -->
   <rect x="285" y="620" width="680" height="22" class="db"/>
-  <text x="625" y="635" text-anchor="middle" class="small">EIP-7702 委托归集 (ETH/BNB/ARB/OP/BASE/POLYGON): 单笔交易批量归集 N 个用户地址 · 免 Gas 垫付 · 签约委托</text>
+  <text x="625" y="635" text-anchor="middle" class="small">EIP-7702: relayer 支付当前链原生 Gas · 签名前校验链上余额 · type-4 激活 / type-2 已委托 · 批量归集</text>
 
   <!-- ====== PHASE 5: 提现 ====== -->
   <rect x="20" y="664" width="1140" height="148" class="phase-bg"/>
@@ -191,7 +191,7 @@
 
   <rect x="255" y="702" width="190" height="56" class="withdraw"/>
   <text x="350" y="726" text-anchor="middle" class="bold">Gas &amp; 费用预留</text>
-  <text x="350" y="744" text-anchor="middle" class="small">估算 · fee · dust 校验</text>
+  <text x="350" y="744" text-anchor="middle" class="small">native_symbol · gas_policy · fee_model</text>
 
   <line x1="445" y1="730" x2="480" y2="730" class="arrow"/>
 
@@ -216,7 +216,7 @@
   <text x="455" y="780" text-anchor="middle" class="small">TRON: 带宽/能量估算 · Gas 预充值 · waiting_gas 状态</text>
 
   <rect x="705" y="766" width="430" height="20" class="db"/>
-  <text x="920" y="780" text-anchor="middle" class="small">EIP-7702 批量提现: 单笔交易批量提现 · authorization 签名 · 非托管</text>
+  <text x="920" y="780" text-anchor="middle" class="small">EIP-7702 批量提现: 执行费 + L1/DA + Operator Fee · relayer 余额保护</text>
 
   <!-- ====== BOTTOM INFRA ====== -->
   <rect x="20" y="830" width="1140" height="46" class="phase-bg"/>

@@ -155,7 +155,7 @@ public class ChainJdbcRepository {
         List<BitcoinLikeChainProfile> results = jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
                                rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
+                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size, scan_enabled, withdraw_enabled,
                                collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
                         from chain_profile
                         where chain = ? and network = ? and enabled = true
@@ -168,7 +168,7 @@ public class ChainJdbcRepository {
         List<AccountChainProfile> results = jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
                                rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
+                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size, scan_enabled, withdraw_enabled,
                                collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
                         from chain_profile
                         where chain = ? and network = ? and enabled = true
@@ -181,7 +181,7 @@ public class ChainJdbcRepository {
         List<AccountChainProfile> results = jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
                                rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
+                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size, scan_enabled, withdraw_enabled,
                                collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
                         from chain_profile
                         where runtime_currency_id = ? and enabled = true
@@ -202,7 +202,7 @@ public class ChainJdbcRepository {
         List<AccountChainProfile> results = jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
                                rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
+                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size, scan_enabled, withdraw_enabled,
                                collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
                         from chain_profile
                         where upper(chain) = upper(?) and enabled = true
@@ -2348,11 +2348,20 @@ public class ChainJdbcRepository {
                 chain, symbol);
         return results.stream().findFirst();
     }
+
+    public int countActiveNativeAssets(String chain) {
+        Integer count = jdbcTemplate.queryForObject("""
+                select count(*)
+                  from chain_asset
+                 where chain = ? and active = true and native_asset = true
+                """, Integer.class, chain);
+        return count == null ? 0 : count;
+    }
     public List<AccountChainProfile> listEnabledChainProfiles() {
         return jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
                                rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
+                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size, scan_enabled, withdraw_enabled,
                                collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
                         from chain_profile
                         where enabled = true
@@ -2364,7 +2373,7 @@ public class ChainJdbcRepository {
         return jdbcTemplate.query("""
                         select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
                                rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
+                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size, scan_enabled, withdraw_enabled,
                                collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
                         from chain_profile
                         order by chain, network
@@ -2481,6 +2490,7 @@ public class ChainJdbcRepository {
                 .enabled(rs.getBoolean("enabled"))
                 .chainId(rs.getObject("chain_id", Long.class))
                 .gasPolicy(rs.getString("gas_policy"))
+                .feeModel(rs.getString("fee_model"))
                 .scanBatchSize(rs.getObject("scan_batch_size", Integer.class))
                 .scanEnabled(rs.getBoolean("scan_enabled"))
                 .withdrawEnabled(rs.getBoolean("withdraw_enabled"))

@@ -19,7 +19,8 @@ import lombok.NoArgsConstructor;
  *   <li>{@code depositConfirmations} / {@code withdrawConfirmations} - 入金/出金确认数</li>
  *   <li>{@code defaultFee} / {@code dustThreshold} - 默认手续费和粉尘阈值</li>
  *   <li>{@code chainId} - 链 ID（EVM 兼容链使用）</li>
- *   <li>{@code gasPolicy} - Gas 费策略</li>
+ *   <li>{@code gasPolicy} - EVM 交易信封与 Gas 报价策略</li>
+ *   <li>{@code feeModel} - EVM 总费用模型（执行费、L1 数据费、Operator Fee）</li>
  *   <li>{@code scanBatchSize} / {@code scanMaxBlocksPerRun} - 扫描批次大小和最大区块范围</li>
  *   <li>{@code scanEnabled} / {@code withdrawEnabled} / {@code collectionEnabled} / {@code transferEnabled} - 功能开关</li>
  * </ul>
@@ -41,6 +42,7 @@ public class AccountChainProfile {
     private Boolean enabled;
     private Long chainId;
     private String gasPolicy;
+    private String feeModel;
     private Integer scanBatchSize;
     private Boolean scanEnabled;
     private Boolean withdrawEnabled;

@@ -384,11 +384,11 @@ public class Evm7702WithdrawalRepository {
     public void completeBatchMetadata(PendingBatch batch, String txHash,
                                       BigInteger gasUsed, BigInteger effectiveGasPrice,
                                       BigInteger l2Fee, BigInteger l1Fee, BigInteger operatorFee,
+                                      BigDecimal actualFee,
                                       BigInteger blockNumber, String blockHash,
                                       int failures, int itemCount, BigInteger operationNonce,
                                       String payoutDelegateAddress) {
         BigInteger totalFee = l2Fee.add(l1Fee).add(operatorFee);
-        BigDecimal actualFee = new BigDecimal(totalFee).movePointLeft(18).stripTrailingZeros();
         String status = failures == 0 ? "CONFIRMED" : failures == itemCount ? "FAILED" : "PARTIAL_FAILED";
         if (jdbc.update("""
                 update evm_withdrawal_batch
@@ -429,10 +429,10 @@ public class Evm7702WithdrawalRepository {
     public void completeRevertedBatchMetadata(PendingBatch batch, String txHash,
                                                BigInteger gasUsed, BigInteger effectiveGasPrice,
                                                BigInteger l2Fee, BigInteger l1Fee,
-                                               BigInteger operatorFee, BigInteger blockNumber,
+                                               BigInteger operatorFee, BigDecimal actualFee,
+                                               BigInteger blockNumber,
                                                String blockHash, String errorHash) {
         BigInteger totalFee = l2Fee.add(l1Fee).add(operatorFee);
-        BigDecimal actualFee = new BigDecimal(totalFee).movePointLeft(18).stripTrailingZeros();
         if (jdbc.update("""
                 update evm_withdrawal_batch
                    set status = 'FAILED', actual_gas_used = ?, effective_gas_price = ?,

@@ -4,6 +4,8 @@ import com.surprising.wallet.custody.model.PageView;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.surprising.wallet.config.WalletEnvironmentPolicy;
 import com.surprising.wallet.config.WalletRpcPolicy;
+import com.surprising.wallet.common.chain.EvmFeeModel;
+import com.surprising.wallet.common.chain.EvmGasPolicy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -105,16 +107,17 @@ public class WalletConfigManagementService {
                 insert into chain_profile(
                     chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
                     explorer_url, deposit_confirmations, withdraw_confirmations, default_fee_rate,
-                    dust_threshold, enabled, chain_id, gas_policy, scan_batch_size,
+                    dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size,
                     scan_enabled, withdraw_enabled, collection_enabled, transfer_enabled,
                     scan_start_height, scan_max_blocks_per_run, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
                 returning id
                 """, Long.class,
                 values.chain(), values.network(), values.family(), values.runtimeCurrencyId(),
                 values.bip44CoinType(), values.nativeSymbol(), values.explorerUrl(),
                 values.depositConfirmations(), values.withdrawConfirmations(), values.defaultFeeRate(),
                 values.dustThreshold(), values.enabled(), values.chainId(), values.gasPolicy(),
+                values.feeModel(),
                 values.scanBatchSize(), values.scanEnabled(), values.withdrawEnabled(),
                 values.collectionEnabled(), values.transferEnabled(), values.scanStartHeight(),
                 values.scanMaxBlocksPerRun());
@@ -144,7 +147,7 @@ public class WalletConfigManagementService {
                    set chain = ?, network = ?, family = ?, runtime_currency_id = ?,
                        bip44_coin_type = ?, native_symbol = ?, explorer_url = ?,
                        deposit_confirmations = ?, withdraw_confirmations = ?, default_fee_rate = ?,
-                       dust_threshold = ?, enabled = ?, chain_id = ?, gas_policy = ?,
+                       dust_threshold = ?, enabled = ?, chain_id = ?, gas_policy = ?, fee_model = ?,
                        scan_batch_size = ?, scan_enabled = ?, withdraw_enabled = ?,
                        collection_enabled = ?, transfer_enabled = ?, scan_start_height = ?,
                        scan_max_blocks_per_run = ?, updated_at = now()
@@ -153,6 +156,7 @@ public class WalletConfigManagementService {
                 values.bip44CoinType(), values.nativeSymbol(), values.explorerUrl(),
                 values.depositConfirmations(), values.withdrawConfirmations(), values.defaultFeeRate(),
                 values.dustThreshold(), values.enabled(), values.chainId(), values.gasPolicy(),
+                values.feeModel(),
                 values.scanBatchSize(), values.scanEnabled(), values.withdrawEnabled(),
                 values.collectionEnabled(), values.transferEnabled(), values.scanStartHeight(),
                 values.scanMaxBlocksPerRun(), id);
@@ -522,6 +526,13 @@ public class WalletConfigManagementService {
         required(value.network(), "network");
         required(value.family(), "family");
         required(value.nativeSymbol(), "nativeSymbol");
+        if ("EVM".equalsIgnoreCase(value.family())) {
+            EvmGasPolicy.parse(value.gasPolicy());
+            EvmFeeModel.parse(value.feeModel());
+            if (value.chainId() == null || value.chainId() <= 0) {
+                throw new IllegalArgumentException("EVM chainId must be positive");
+            }
+        }
         if (value.runtimeCurrencyId() < 0 || value.bip44CoinType() < 0) {
             throw new IllegalArgumentException("runtimeCurrencyId and bip44CoinType must not be negative");
         }
@@ -791,6 +802,8 @@ public class WalletConfigManagementService {
                 or(command.enabled(), current == null ? null : current.enabled(), false),
                 or(command.chainId(), current == null ? null : current.chainId()),
                 or(command.gasPolicy(), current == null ? null : current.gasPolicy()),
+                or(command.feeModel(), current == null ? null : current.feeModel(),
+                        EvmFeeModel.STANDARD.configValue()),
                 or(command.scanBatchSize(), current == null ? null : current.scanBatchSize(), 100),
                 or(command.scanEnabled(), current == null ? null : current.scanEnabled(), false),
                 or(command.withdrawEnabled(), current == null ? null : current.withdrawEnabled(), false),
@@ -855,7 +868,8 @@ public class WalletConfigManagementService {
                 nullable(row.get("explorer_url")), intValue(row.get("deposit_confirmations")),
                 intValue(row.get("withdraw_confirmations")), nullableLong(row.get("default_fee_rate")),
                 nullableLong(row.get("dust_threshold")), bool(row.get("enabled")), nullableLong(row.get("chain_id")),
-                nullable(row.get("gas_policy")), intValue(row.get("scan_batch_size")),
+                nullable(row.get("gas_policy")), string(row.get("fee_model")),
+                intValue(row.get("scan_batch_size")),
                 bool(row.get("scan_enabled")), bool(row.get("withdraw_enabled")),
                 bool(row.get("collection_enabled")), bool(row.get("transfer_enabled")),
                 longValue(row.get("scan_start_height")), longValue(row.get("scan_max_blocks_per_run")),
@@ -994,18 +1008,25 @@ public class WalletConfigManagementService {
     private static int intValue(Object value) { return value == null ? 0 : ((Number) value).intValue(); }
     private static Integer nullableInteger(Object value) { return value == null ? null : ((Number) value).intValue(); }
     private static long longValue(Object value) { return value == null ? 0 : ((Number) value).longValue(); }
-    private static Long nullableLong(Object value) { return value == null ? null : ((Number) value).longValue(); }    private static Instant instant(Object value) {
+    private static Long nullableLong(Object value) { return value == null ? null : ((Number) value).longValue(); }
+    private static Instant instant(Object value) {
         if (value == null) return null;
         if (value instanceof Instant result) return result;
         if (value instanceof java.sql.Timestamp timestamp) return timestamp.toInstant();
         if (value instanceof java.time.OffsetDateTime offset) return offset.toInstant();
         return null;
     }
-    private static <T> T or(T requested, T current) { return requested == null ? current : requested; }    private static int or(Integer requested, Integer current, int fallback) {
+    private static <T> T or(T requested, T current) { return requested == null ? current : requested; }
+    private static int or(Integer requested, Integer current, int fallback) {
         return requested != null ? requested : current != null ? current : fallback;
-    }    private static long or(Long requested, Long current, long fallback) {
+    }
+    private static String or(String requested, String current, String fallback) {
         return requested != null ? requested : current != null ? current : fallback;
-    }    private static boolean or(Boolean requested, Boolean current, boolean fallback) {
+    }
+    private static long or(Long requested, Long current, long fallback) {
+        return requested != null ? requested : current != null ? current : fallback;
+    }
+    private static boolean or(Boolean requested, Boolean current, boolean fallback) {
         return requested != null ? requested : current != null ? current : fallback;
     }
 
@@ -1032,7 +1053,7 @@ public class WalletConfigManagementService {
     private static final String CHAIN_SELECT = """
             select p.id, p.chain, p.network, p.family, p.runtime_currency_id, p.bip44_coin_type,
                    p.native_symbol, p.explorer_url, p.deposit_confirmations, p.withdraw_confirmations,
-                   p.default_fee_rate, p.dust_threshold, p.enabled, p.chain_id, p.gas_policy,
+                   p.default_fee_rate, p.dust_threshold, p.enabled, p.chain_id, p.gas_policy, p.fee_model,
                    p.scan_batch_size, p.scan_enabled, p.withdraw_enabled, p.collection_enabled,
                    p.transfer_enabled, p.scan_start_height, p.scan_max_blocks_per_run,
                    coalesce((select string_agg(t.symbol, ',' order by t.symbol)
@@ -1047,7 +1068,7 @@ public class WalletConfigManagementService {
                                Integer bip44CoinType, String nativeSymbol, String explorerUrl,
                                Integer depositConfirmations, Integer withdrawConfirmations,
                                Long defaultFeeRate, Long dustThreshold, Boolean enabled, Long chainId,
-                               String gasPolicy, Integer scanBatchSize, Boolean scanEnabled,
+                               String gasPolicy, String feeModel, Integer scanBatchSize, Boolean scanEnabled,
                                Boolean withdrawEnabled, Boolean collectionEnabled, Boolean transferEnabled,
                                Long scanStartHeight, Long scanMaxBlocksPerRun) {}
     public record ChainSwitchCommand(Boolean enabled, Boolean scanEnabled, Boolean withdrawEnabled,
@@ -1055,7 +1076,7 @@ public class WalletConfigManagementService {
     public record ChainView(long id, String chain, String network, String family, int runtimeCurrencyId,
                             int bip44CoinType, String nativeSymbol, String explorerUrl,
                             int depositConfirmations, int withdrawConfirmations, Long defaultFeeRate,
-                            Long dustThreshold, boolean enabled, Long chainId, String gasPolicy,
+                            Long dustThreshold, boolean enabled, Long chainId, String gasPolicy, String feeModel,
                             int scanBatchSize, boolean scanEnabled, boolean withdrawEnabled,
                             boolean collectionEnabled, boolean transferEnabled, long scanStartHeight,
                             long scanMaxBlocksPerRun, List<String> tokenSymbols, int tokenCount, int rpcCount,
@@ -1065,7 +1086,7 @@ public class WalletConfigManagementService {
     private record ChainValues(String chain, String network, String family, int runtimeCurrencyId,
                                int bip44CoinType, String nativeSymbol, String explorerUrl,
                                int depositConfirmations, int withdrawConfirmations, Long defaultFeeRate,
-                               Long dustThreshold, boolean enabled, Long chainId, String gasPolicy,
+                               Long dustThreshold, boolean enabled, Long chainId, String gasPolicy, String feeModel,
                                int scanBatchSize, boolean scanEnabled, boolean withdrawEnabled,
                                boolean collectionEnabled, boolean transferEnabled, long scanStartHeight,
                                long scanMaxBlocksPerRun) {}

@@ -429,6 +429,7 @@ public class Evm7702CollectionRepository {
     public void completeBatch(UUID tenantId, UUID batchId, String txHash,
                               BigInteger gasUsed, BigInteger effectiveGasPrice,
                               BigInteger l2Fee, BigInteger l1Fee, BigInteger operatorFee,
+                              BigDecimal actualFee,
                               BigInteger blockNumber, String blockHash,
                               List<com.surprising.wallet.chain.evm.Evm7702ReceiptParser.ItemResult> results) {
         List<BatchItemIdentity> expected = listBatchItemIdentities(tenantId, batchId);
@@ -496,8 +497,6 @@ public class Evm7702CollectionRepository {
             }
         }
         BigInteger totalFee = l2Fee.add(l1Fee).add(operatorFee);
-        BigDecimal actualFee = new BigDecimal(totalFee)
-                .movePointLeft(18).stripTrailingZeros();
         String batchStatus = failures == 0 ? "CONFIRMED"
                 : failures == results.size() ? "FAILED" : "PARTIAL_FAILED";
         if (jdbc.update("""

@@ -2,6 +2,9 @@ package com.surprising.wallet.config;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainRpcNode;
+import com.surprising.wallet.common.chain.EvmFeeModel;
+import com.surprising.wallet.common.chain.EvmGasPolicy;
+import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
@@ -168,9 +171,69 @@ public class WalletStartupValidator implements ApplicationRunner {
                         "production environment cannot enable test network profile: "
                                 + profile.getChain() + "/" + profile.getNetwork());
             }
+            validateEvmProfile(profile);
             validateRequiredRpcPurposes(profile);
         }
+        validateActiveEip7702Profiles(enabledProfiles);
         return enabledProfiles;
+    }
+
+    private void validateEvmProfile(AccountChainProfile profile) {
+        if (!"evm".equalsIgnoreCase(profile.getFamily())) {
+            return;
+        }
+        if (profile.getChainId() == null || profile.getChainId() <= 0) {
+            throw new IllegalStateException("enabled EVM chain_profile requires positive chain_id: "
+                    + profile.getChain() + "/" + profile.getNetwork());
+        }
+        try {
+            EvmGasPolicy.parse(profile.getGasPolicy());
+            EvmFeeModel.parse(profile.getFeeModel());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("enabled EVM chain_profile has invalid fee policy: "
+                    + profile.getChain() + "/" + profile.getNetwork(), e);
+        }
+        ChainAsset nativeAsset = repository.findAsset(
+                        profile.getChain(), profile.getNativeSymbol())
+                .orElseThrow(() -> new IllegalStateException(
+                        "enabled EVM chain_profile requires an active native chain_asset: "
+                                + profile.getChain() + "/" + profile.getNativeSymbol()));
+        if (repository.countActiveNativeAssets(profile.getChain()) != 1) {
+            throw new IllegalStateException(
+                    "enabled EVM chain_profile requires exactly one active native chain_asset: "
+                            + profile.getChain());
+        }
+        if (!Boolean.TRUE.equals(nativeAsset.getNativeAsset())) {
+            throw new IllegalStateException("EVM native_symbol points to a token chain_asset: "
+                    + profile.getChain() + "/" + profile.getNativeSymbol());
+        }
+        Integer decimals = nativeAsset.getDecimals();
+        if (decimals == null || decimals < 0 || decimals > 18) {
+            throw new IllegalStateException("EVM native asset decimals must be between 0 and 18: "
+                    + profile.getChain() + "/" + profile.getNativeSymbol());
+        }
+    }
+
+    private void validateActiveEip7702Profiles(List<AccountChainProfile> enabledProfiles) {
+        Map<String, AccountChainProfile> profiles = enabledProfiles.stream()
+                .collect(Collectors.toMap(
+                        profile -> normalized(profile.getChain()) + "/" + normalized(profile.getNetwork()),
+                        profile -> profile));
+        for (Map<String, Object> row : jdbcTemplate.queryForList("""
+                select chain, network
+                  from evm_7702_chain_config
+                 where status = 'ACTIVE'
+                """)) {
+            String chain = stringValue(row.get("chain"));
+            String network = stringValue(row.get("network"));
+            AccountChainProfile profile = profiles.get(normalized(chain) + "/" + normalized(network));
+            if (profile == null || !"evm".equalsIgnoreCase(profile.getFamily())) {
+                throw new IllegalStateException(
+                        "ACTIVE EIP-7702 config requires the matching enabled EVM profile: "
+                                + chain + "/" + network);
+            }
+            EvmFeeModel.parse(profile.getFeeModel());
+        }
     }
 
     /**

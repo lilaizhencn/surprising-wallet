@@ -74,14 +74,24 @@ chain RPC/indexer
 external withdrawal request
   -> asset lookup from chain_profile/chain_asset/token_config
   -> ledger lock
-  -> chain transaction builder
+  -> EVM: native_symbol + gas_policy + fee_model
+  -> eth_estimateGas + sender/relayer 链上原生币余额校验
+  -> chain transaction builder（legacy / EIP-1559 / EIP-7702 type-4）
   -> signer service or local Ed25519 signer
   -> broadcast
-  -> confirm
+  -> receipt confirm（执行费 + L1/DA 费 + Operator Fee）
   -> ledger finalize
 ```
 
 同一个提现订单重试时，应返回或复用已有交易状态，不应重复广播新交易。
+
+EVM 的三类配置必须分开解释：
+
+- `native_symbol` 指定实际支付 Gas 的链原生资产及账务符号，例如 BNB、POL、MNT、ETH_ARB；Gas 金额换算读取对应 `chain_asset.decimals`，不能固定按 18 位处理。
+- `gas_policy` 只决定交易报价和信封类型：`legacy-gas-price` 或 `eip1559`。
+- `fee_model` 决定总费用组成：`standard`、`op-stack`、`op-stack-l1`、`arbitrum-nitro`、`scroll`。OP Stack/Scroll 必须计入回执的 L1 数据费，OP Stack 还可能有 Operator Fee；Arbitrum 的父链成本已进入 Nitro gas 计量，拆分审计时不得二次扣费。
+
+发送普通 EVM 交易前，服务先通过 `eth_estimateGas` 估算并加安全余量，再按最终签名交易查询链级 L1/Operator 费用，校验发送方链上原生币余额。确认时以回执实际费用覆盖预估值；需要独立 L1 费用但回执缺失对应字段时中止结算并保留人工审计，禁止静默少扣。
 
 ## 归集流程
 
@@ -96,6 +106,8 @@ collect job
 ```
 
 token 归集使用 token 专属策略，同时使用链服务中的原生 gas 策略。
+
+EIP-7702 的外层交易由 relayer 支付当前链的原生 Gas，授权账户本身可以归集全部原生余额。签名交易写入加密 outbox 之前，系统同时完成租户 Gas 账户预留和 relayer 链上余额校验；任一不足都回滚未广播批次。type-4 只用于包含新 authorization 的批次，已委托账户继续使用 type-2 外层交易。确认阶段和普通 EVM 交易复用同一 `fee_model`，分别记录执行费、L1/DA 费、Operator Fee 与总费用。
 
 ## 扫描调度与开关判定
 
@@ -117,6 +129,9 @@ EVM 链：
 
 - 共享 EVM engine，通过 chain profile 区分链。
 - ERC20 token 行为来自 `token_config`。
+- 原生 Gas 币种由 `chain_profile.native_symbol` 与唯一启用的原生 `chain_asset` 共同约束。
+- `gas_policy` 与 `fee_model` 分离，启动校验会拒绝模糊或未知的 EVM 费用策略。
+- EIP-7702 relayer 与普通发送方都必须通过真实链上原生币余额校验后才能广播。
 - Fork 测试每次一条链运行在 `127.0.0.1:8545`。
 
 TRON：
