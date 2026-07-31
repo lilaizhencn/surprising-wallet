@@ -11,7 +11,13 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * 验证 {@code EvmLogScannerTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class EvmLogScannerTest {
+    /**
+     * 验证 {@code shouldDecodeErc20TransferLog} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldDecodeErc20TransferLog() {
         Log log = new Log();

@@ -80,28 +80,84 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Hardhat Prague + PostgreSQL production-path test with two isolated tenants. */
+/**
+ * 验证 {@code Evm7702ProductionFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class Evm7702ProductionFlowIntegrationTest {
+    /**
+     * 保存 {@code RPC}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private static final String RPC = "http://127.0.0.1:8545";
+    /**
+     * 保存 {@code GAS_PRICE}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final BigInteger GAS_PRICE = BigInteger.valueOf(2_000_000_000L);
+    /**
+     * 保存 {@code HARDHAT_ADMIN}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final Credentials HARDHAT_ADMIN = Credentials.create(
             "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
 
+    /**
+     * 保存 {@code jdbc}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private JdbcTemplate jdbc;
+    /**
+     * 保存 {@code chainRepository}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private ChainJdbcRepository chainRepository;
+    /**
+     * 保存 {@code keyService}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private AccountSecp256k1KeyService keyService;
+    /**
+     * 保存 {@code profile}，用于承载当前测试夹具的配置或运行数据。
+     */
     private AccountChainProfile profile;
+    /**
+     * 保存 {@code collectionRepository}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private Evm7702CollectionRepository collectionRepository;
+    /**
+     * 保存 {@code workflow}，用于承载当前测试夹具的配置或运行数据。
+     */
     private Evm7702CollectionWorkflowService workflow;
+    /**
+     * 保存 {@code custodyRepository}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private CustodyRepository custodyRepository;
+    /**
+     * 保存 {@code depositScanner}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private EvmDepositScanner depositScanner;
+    /**
+     * 保存 {@code withdrawalService}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private CustodyWithdrawalService withdrawalService;
+    /**
+     * 保存 {@code withdrawalWorkflow}，记录测试开关、处理状态、确认结果或重试信息。
+     */
     private Evm7702WithdrawalWorkflowService withdrawalWorkflow;
+    /**
+     * 保存 {@code reconciliationJob}，用于承载当前测试夹具的配置或运行数据。
+     */
     private CustodyWithdrawalReconciliationJob reconciliationJob;
+    /**
+     * 保存 {@code chain}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private String chain;
+    /**
+     * 保存 {@code nativeSymbol}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private String nativeSymbol;
+    /**
+     * 保存 {@code chainId}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private long chainId;
 
+    /**
+     * 验证 {@code setUp} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @BeforeEach
     void setUp() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("evm.7702.production.enabled"),
@@ -171,6 +227,9 @@ class Evm7702ProductionFlowIntegrationTest {
                 custodyRepository, objectMapper);
     }
 
+    /**
+     * 验证 {@code shouldCollectRealDepositsInOneTxPerTenantAndSettleGasOnce} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldCollectRealDepositsInOneTxPerTenantAndSettleGasOnce() throws Exception {
         String collector = requiredProperty("evm.7702.collector");
@@ -508,6 +567,9 @@ class Evm7702ProductionFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code simulateLostBroadcastResponse} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void simulateLostBroadcastResponse(UUID tenantId) {
         jdbc.update("""
                 update evm_collection_batch
@@ -527,6 +589,9 @@ class Evm7702ProductionFlowIntegrationTest {
                 """, tenantId);
     }
 
+    /**
+     * 验证 {@code simulateLostPayoutBroadcastResponse} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void simulateLostPayoutBroadcastResponse(UUID tenantId) {
         jdbc.update("""
                 update evm_withdrawal_batch
@@ -559,6 +624,9 @@ class Evm7702ProductionFlowIntegrationTest {
                 """, tenantId, tenantId);
     }
 
+    /**
+     * 验证 {@code configureToken} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void configureToken(String symbol, String contractAddress) {
         assertEquals(1, jdbc.update("""
                 update token_config set contract_address = ?, contract_address_hex = ?,
@@ -572,6 +640,9 @@ class Evm7702ProductionFlowIntegrationTest {
                 """, contractAddress, chain, symbol));
     }
 
+    /**
+     * 验证 {@code assertCreditedDeposits} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void assertCreditedDeposits(String symbol, int expected) {
         assertEquals(expected, jdbc.queryForObject("""
                 select count(*) from deposit_record
@@ -587,6 +658,9 @@ class Evm7702ProductionFlowIntegrationTest {
                 """, Integer.class, chain, symbol));
     }
 
+    /**
+     * 验证 {@code createWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private WithdrawalFixture createWithdrawal(
             TenantFixture tenant, AuthorityFixture source, String symbol,
             String recipient, BigDecimal amount, String suffix) {
@@ -614,6 +688,9 @@ class Evm7702ProductionFlowIntegrationTest {
                 symbol, recipient, amount);
     }
 
+    /**
+     * 验证 {@code assertSharedConfirmedPayout} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void assertSharedConfirmedPayout(
             String txHash, WithdrawalFixture... withdrawals) {
         assertTrue(withdrawals.length > 1);
@@ -640,6 +717,9 @@ class Evm7702ProductionFlowIntegrationTest {
                 Integer.class, expectedBatchId));
     }
 
+    /**
+     * 验证 {@code withdrawalStatus} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private String withdrawalStatus(WithdrawalFixture withdrawal) {
         return jdbc.queryForObject("""
                 select status from withdrawal_order
@@ -647,6 +727,9 @@ class Evm7702ProductionFlowIntegrationTest {
                 """, String.class, withdrawal.tenantId(), withdrawal.orderId());
     }
 
+    /**
+     * 验证 {@code createTenant} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private TenantFixture createTenant(String slug, int namespace, int itemCount, long userBase) throws Exception {
         UUID tenantId = UUID.randomUUID();
         jdbc.update("insert into custody_tenant(id, slug, name, derivation_namespace) values (?, ?, ?, ?)",
@@ -697,6 +780,9 @@ class Evm7702ProductionFlowIntegrationTest {
         return new TenantFixture(tenantId, hotRecord.getAddress(), List.copyOf(authorities));
     }
 
+    /**
+     * 验证 {@code createCollectionCandidates} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void createCollectionCandidates(String symbol, int expected) {
         List<CollectionCandidateRecord> candidates = chainRepository.listCollectableLedgerBalances(
                 chain, BigDecimal.ZERO, 20);
@@ -715,6 +801,9 @@ class Evm7702ProductionFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code assertTenantCompleted} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void assertTenantCompleted(Web3j web3j, TenantFixture tenant, String txHash) throws Exception {
         assertEquals(tenant.authorities().size(), confirmedCollections(tenant.tenantId()));
         assertEquals(1, jdbc.queryForObject("""
@@ -762,6 +851,9 @@ class Evm7702ProductionFlowIntegrationTest {
         assertEquals(0, actualFee.compareTo((BigDecimal) fees.get("actual_fee")));
     }
 
+    /**
+     * 验证 {@code collectionTx} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private String collectionTx(UUID tenantId, String symbol) {
         return jdbc.queryForObject("""
                 select canonical_tx_hash from evm_collection_batch
@@ -769,6 +861,9 @@ class Evm7702ProductionFlowIntegrationTest {
                 """, String.class, tenantId, symbol);
     }
 
+    /**
+     * 验证 {@code assertAssetCollectionBatch} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void assertAssetCollectionBatch(
             Web3j web3j, TenantFixture tenant, String symbol, String txHash,
             List<AuthorityFixture> authorities) throws Exception {
@@ -794,16 +889,25 @@ class Evm7702ProductionFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code batchCount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private int batchCount(UUID tenantId) {
         return jdbc.queryForObject(
                 "select count(*) from evm_collection_batch where tenant_id = ?", Integer.class, tenantId);
     }
 
+    /**
+     * 验证 {@code confirmedCollections} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private int confirmedCollections(UUID tenantId) {
         return jdbc.queryForObject("select count(*) from collection_record where tenant_id = ? and status = 'CONFIRMED'",
                 Integer.class, tenantId);
     }
 
+    /**
+     * 验证 {@code settledBatchGasUsages} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private int settledBatchGasUsages(UUID tenantId) {
         return jdbc.queryForObject("""
                 select count(*) from custody_gas_usage
@@ -811,6 +915,9 @@ class Evm7702ProductionFlowIntegrationTest {
                 """, Integer.class, tenantId);
     }
 
+    /**
+     * 验证 {@code insertChainAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private long insertChainAddress(ChainAddressRecord record, UUID tenantId) {
         return jdbc.queryForObject("""
                 insert into chain_address(
@@ -824,6 +931,9 @@ class Evm7702ProductionFlowIntegrationTest {
                 record.getWalletRole(), tenantId);
     }
 
+    /**
+     * 验证 {@code insertCustodyAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private UUID insertCustodyAddress(UUID tenantId, long chainAddressId,
                                       String address, String subject, long child) {
         UUID id = UUID.randomUUID();
@@ -837,6 +947,9 @@ class Evm7702ProductionFlowIntegrationTest {
         return id;
     }
 
+    /**
+     * 验证 {@code keyRecord} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private ChainAddressRecord keyRecord(UUID tenantId, long userId, int biz,
                                          long index, String role) {
         ChainAddressRecord template = ChainAddressRecord.builder()
@@ -850,11 +963,17 @@ class Evm7702ProductionFlowIntegrationTest {
         return template;
     }
 
+    /**
+     * 验证 {@code credentials} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private Credentials credentials(ChainAddressRecord record) {
         org.bitcoinj.crypto.ECKey key = keyService.key(profile, record);
         return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(key.getPrivKey(), 64));
     }
 
+    /**
+     * 验证 {@code deployMockToken} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private Deployment deployMockToken(Web3j web3j, BigInteger nonce, String symbol) throws Exception {
         JsonNode artifact = new ObjectMapper().readTree(Files.readString(projectRoot().resolve(
                 "resources/infra/evm-fork/artifacts/contracts/MockERC20.sol/MockERC20.json")));
@@ -868,6 +987,9 @@ class Evm7702ProductionFlowIntegrationTest {
         return new Deployment(receipt.getContractAddress());
     }
 
+    /**
+     * 验证 {@code deployContract} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private Deployment deployContract(Web3j web3j, BigInteger nonce, String artifactPath)
             throws Exception {
         JsonNode artifact = new ObjectMapper().readTree(
@@ -878,6 +1000,9 @@ class Evm7702ProductionFlowIntegrationTest {
         return new Deployment(sendRaw(web3j, raw).getContractAddress());
     }
 
+    /**
+     * 验证 {@code deployPayoutDelegate} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private Deployment deployPayoutDelegate(
             Web3j web3j, BigInteger nonce, String executor) throws Exception {
         JsonNode artifact = new ObjectMapper().readTree(Files.readString(projectRoot().resolve(
@@ -889,18 +1014,27 @@ class Evm7702ProductionFlowIntegrationTest {
         return new Deployment(sendRaw(web3j, raw).getContractAddress());
     }
 
+    /**
+     * 验证 {@code sendLegacyCall} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private TransactionReceipt sendLegacyCall(
             Web3j web3j, BigInteger nonce, String to, String data) throws Exception {
         return sendRaw(web3j, RawTransaction.createTransaction(
                 nonce, GAS_PRICE, BigInteger.valueOf(800_000L), to, BigInteger.ZERO, data));
     }
 
+    /**
+     * 验证 {@code sendLegacyNative} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private TransactionReceipt sendLegacyNative(
             Web3j web3j, BigInteger nonce, String to, BigInteger value) throws Exception {
         return sendRaw(web3j, RawTransaction.createEtherTransaction(
                 nonce, GAS_PRICE, BigInteger.valueOf(100_000L), to, value));
     }
 
+    /**
+     * 验证 {@code sendRaw} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private TransactionReceipt sendRaw(Web3j web3j, RawTransaction raw) throws Exception {
         byte[] signed = TransactionEncoder.signMessage(raw, chainId, HARDHAT_ADMIN);
         EthSendTransaction response = web3j.ethSendRawTransaction(Numeric.toHexString(signed)).send();
@@ -908,15 +1042,24 @@ class Evm7702ProductionFlowIntegrationTest {
         return waitReceipt(web3j, response.getTransactionHash());
     }
 
+    /**
+     * 验证 {@code encodeMint} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String encodeMint(String recipient, BigInteger amount) {
         return FunctionEncoder.encode(new Function(
                 "mint", List.of(new Address(recipient), new Uint256(amount)), List.of()));
     }
 
+    /**
+     * 验证 {@code tokenBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private BigInteger tokenBalance(Web3j web3j, String owner) throws Exception {
         return tokenBalance(web3j, owner, "USDT");
     }
 
+    /**
+     * 验证 {@code tokenBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private BigInteger tokenBalance(Web3j web3j, String owner, String symbol) throws Exception {
         String token = jdbc.queryForObject(
                 "select contract_address from token_config where chain = ? and symbol = ? and network = 'local'",
@@ -930,12 +1073,18 @@ class Evm7702ProductionFlowIntegrationTest {
                 call.getValue(), function.getOutputParameters()).getFirst().getValue();
     }
 
+    /**
+     * 验证 {@code codeHash} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String codeHash(Web3j web3j, String address) throws Exception {
         String code = web3j.ethGetCode(address, DefaultBlockParameterName.LATEST).send().getCode();
         assertNotEquals("0x", code);
         return Numeric.toHexString(Hash.sha3(Numeric.hexStringToByteArray(code)));
     }
 
+    /**
+     * 验证 {@code waitReceipt} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TransactionReceipt waitReceipt(Web3j web3j, String txHash) throws Exception {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
         while (Instant.now().isBefore(deadline)) {
@@ -946,6 +1095,9 @@ class Evm7702ProductionFlowIntegrationTest {
         throw new IllegalStateException("timed out waiting for " + txHash);
     }
 
+    /**
+     * 验证 {@code testKeyset} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static WalletKeyConfig testKeyset() {
         String[] seeds = new String[4];
         for (int i = 0; i < seeds.length; i++) {
@@ -956,12 +1108,18 @@ class Evm7702ProductionFlowIntegrationTest {
         return new WalletKeyConfig(seeds[0], seeds[1], seeds[2], seeds[3]);
     }
 
+    /**
+     * 验证 {@code setField} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void setField(Object target, String name, Object value) throws Exception {
         Field field = target.getClass().getDeclaredField(name);
         field.setAccessible(true);
         field.set(target, value);
     }
 
+    /**
+     * 验证 {@code requiredProperty} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String requiredProperty(String name) {
         String value = System.getProperty(name, "").trim();
         if (!value.matches("^0x[0-9a-fA-F]{40}$")) {
@@ -970,6 +1128,9 @@ class Evm7702ProductionFlowIntegrationTest {
         return value;
     }
 
+    /**
+     * 验证 {@code projectRoot} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Path projectRoot() {
         Path current = Path.of("").toAbsolutePath();
         while (current != null) {
@@ -981,6 +1142,9 @@ class Evm7702ProductionFlowIntegrationTest {
         throw new IllegalStateException("cannot locate project root");
     }
 
+    /**
+     * 验证 {@code concat} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static List<AuthorityFixture> concat(
             List<AuthorityFixture> first, List<AuthorityFixture> second) {
         ArrayList<AuthorityFixture> result = new ArrayList<>(first);
@@ -988,6 +1152,9 @@ class Evm7702ProductionFlowIntegrationTest {
         return result;
     }
 
+    /**
+     * 测试辅助类 {@code TypeReferenceUint256}，为相关测试提供隔离环境或共享数据。
+     */
     private static final class TypeReferenceUint256 extends org.web3j.abi.TypeReference<Uint256> {
     }
 

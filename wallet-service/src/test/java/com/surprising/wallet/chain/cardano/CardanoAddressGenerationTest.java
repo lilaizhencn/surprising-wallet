@@ -13,10 +13,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code CardanoAddressGenerationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class CardanoAddressGenerationTest {
+    /**
+     * 保存 {@code MASTER_SEED}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final String MASTER_SEED =
             "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
+    /**
+     * 验证 {@code derivesStableShelleyEnterpriseAddresses} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void derivesStableShelleyEnterpriseAddresses() {
         CardanoKeyService first = new CardanoKeyService(MASTER_SEED);
@@ -33,6 +42,9 @@ class CardanoAddressGenerationTest {
         assertTrue(CardanoKeyService.isValidAddress(mainnet));
     }
 
+    /**
+     * 验证 {@code rejectsCorruptedAddresses} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void rejectsCorruptedAddresses() {
         CardanoKeyService service = new CardanoKeyService(MASTER_SEED);
@@ -45,6 +57,9 @@ class CardanoAddressGenerationTest {
         assertFalse(CardanoKeyService.isValidAddress(null));
     }
 
+    /**
+     * 验证 {@code keepsCardanoKeySpaceSeparatedFromOtherEd25519Chains} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void keepsCardanoKeySpaceSeparatedFromOtherEd25519Chains() {
         Ed25519KeyProvider provider = new Ed25519KeyProvider(
@@ -58,6 +73,9 @@ class CardanoAddressGenerationTest {
                 provider.derive(Ed25519Chain.NEAR, 9).publicKey()));
     }
 
+    /**
+     * 验证 {@code signingKeyMatchesAddressPublicKey} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void signingKeyMatchesAddressPublicKey() throws Exception {
         CardanoKeyService service = new CardanoKeyService(MASTER_SEED);
@@ -70,6 +88,9 @@ class CardanoAddressGenerationTest {
                 CardanoKeyService.enterpriseAddress(signerPublicKey, false)));
     }
 
+    /**
+     * 验证 {@code keepsDevnetActorAddressesStable} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void keepsDevnetActorAddressesStable() {
         CardanoKeyService service = new CardanoKeyService(MASTER_SEED);

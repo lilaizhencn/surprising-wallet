@@ -36,9 +36,18 @@ public
 class HyperCoreRepository {
     /** HyperCore 链标识 */
     private static final String CHAIN = "HYPERCORE";
+    /**
+     * 保存 {@code jdbcTemplate}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final JdbcTemplate jdbcTemplate;
+    /**
+     * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository chainRepository;
 
+    /**
+     * 记录或保存 {@code recordObservedBalance} 对应的数据，并遵守幂等和事务约束。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public Optional<BigDecimal> recordObservedBalance(ChainAddressRecord address, String symbol,
                                                       BigDecimal observedBalance, String rawPayload) {
@@ -83,6 +92,9 @@ class HyperCoreRepository {
         return Optional.of(delta);
     }
 
+    /**
+     * 写入或更新 {@code upsertBalanceSnapshot} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     private void upsertBalanceSnapshot(ChainAddressRecord address, String symbol,
                                        BigDecimal observed, String rawPayload) {
         jdbcTemplate.update("""
@@ -101,6 +113,9 @@ class HyperCoreRepository {
                 tsNow(), tsNow(), tsNow());
     }
 
+    /**
+     * 写入或更新 {@code upsertTokenMetadata} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void upsertTokenMetadata(String network, String name, Integer tokenIndex, String tokenId,
                                     Integer szDecimals, Integer weiDecimals, Boolean canonical,
                                     String evmContract, String fullName) {
@@ -123,6 +138,9 @@ class HyperCoreRepository {
                 Boolean.TRUE.equals(canonical), evmContract, fullName, tsNow(), tsNow());
     }
 
+    /**
+     * 写入或更新 {@code upsertSpotAsset} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void upsertSpotAsset(String network, Integer spotIndex, String name,
                                 Integer baseTokenIndex, Integer quoteTokenIndex, Boolean canonical) {
         jdbcTemplate.update("""
@@ -140,6 +158,9 @@ class HyperCoreRepository {
                 Boolean.TRUE.equals(canonical), tsNow(), tsNow());
     }
 
+    /**
+     * 构建或生成 {@code createAction} 对应的结果，并执行输入和状态校验。
+     */
     public void createAction(String actionId, String actionType, String assetSymbol,
                              String fromAddress, String toAddress, BigDecimal amount,
                              long nonce, String requestPayload) {
@@ -153,6 +174,9 @@ class HyperCoreRepository {
                 actionId, actionType, CHAIN, assetSymbol, fromAddress, toAddress, amount, nonce,
                 requestPayload, tsNow(), tsNow());
     }
+    /**
+     * 写入或更新 {@code markActionAccepted} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void markActionAccepted(String actionId, String responsePayload) {
         jdbcTemplate.update("""
                         update hypercore_action_record
@@ -163,6 +187,9 @@ class HyperCoreRepository {
                          where action_id = ?
                         """, responsePayload, tsNow(), actionId);
     }
+    /**
+     * 写入或更新 {@code markActionFailed} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void markActionFailed(String actionId, String errorMessage) {
         jdbcTemplate.update("""
                         update hypercore_action_record
@@ -172,6 +199,9 @@ class HyperCoreRepository {
                          where action_id = ?
                         """, errorMessage, tsNow(), actionId);
     }
+    /**
+     * 执行 {@code actionAccepted} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public boolean actionAccepted(String actionId) {
         Boolean exists = jdbcTemplate.queryForObject("""
                         select exists(
@@ -181,6 +211,9 @@ class HyperCoreRepository {
                         """, Boolean.class, actionId);
         return Boolean.TRUE.equals(exists);
     }
+    /**
+     * 编码 {@code tokenNameBySymbol} 对应的数据，生成链上或接口所需的表示。
+     */
     public Optional<String> tokenNameBySymbol(String network, String symbol) {
         List<String> values = jdbcTemplate.queryForList("""
                         select name
@@ -191,6 +224,9 @@ class HyperCoreRepository {
                         """, String.class, network, symbol);
         return values.stream().findFirst();
     }
+    /**
+     * 执行 {@code tsNow} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static Timestamp tsNow() {
         return Timestamp.from(Instant.now());
     }

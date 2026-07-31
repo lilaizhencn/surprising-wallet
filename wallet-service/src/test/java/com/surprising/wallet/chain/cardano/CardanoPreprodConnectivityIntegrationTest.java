@@ -6,7 +6,13 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code CardanoPreprodConnectivityIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class CardanoPreprodConnectivityIntegrationTest {
+    /**
+     * 验证 {@code readsLatestBlockFromBlockfrostPreprod} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void readsLatestBlockFromBlockfrostPreprod() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("cardano.preprod.enabled"),
@@ -22,6 +28,9 @@ class CardanoPreprodConnectivityIntegrationTest {
         assertTrue(result.getValue().getHeight() > 0, "Cardano preprod latest block height should be positive");
     }
 
+    /**
+     * 验证 {@code envOrProperty} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String envOrProperty(String env, String property) {
         String value = System.getProperty(property);
         if (value == null || value.isBlank()) {

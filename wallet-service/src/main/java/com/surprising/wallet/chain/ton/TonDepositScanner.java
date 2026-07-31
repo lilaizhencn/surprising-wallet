@@ -91,6 +91,9 @@ class TonDepositScanner {
     /** TON API 索引器客户端（用于 Jetton Wallet 物化） */
     private final TonApiClient tonApi;
 
+    /**
+     * 构造 {@code TonDepositScanner}，初始化该组件运行所需的状态和依赖。
+     */
     @Autowired
     public TonDepositScanner(TonCenterClient rpc, TonAddressService addressService,
                              ChainJdbcRepository repository, TonApiClient tonApi) {
@@ -100,11 +103,17 @@ class TonDepositScanner {
         this.tonApi = tonApi;
     }
 
+    /**
+     * 构造 {@code TonDepositScanner}，初始化该组件运行所需的状态和依赖。
+     */
     TonDepositScanner(TonCenterClient rpc, TonAddressService addressService,
                       ChainJdbcRepository repository) {
         this(rpc, addressService, repository, null);
     }
 
+    /**
+     * 保存 {@code runtimeConfigService}，用于保存运行配置和策略参数。
+     */
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
 
@@ -142,6 +151,9 @@ class TonDepositScanner {
         return events;
     }
 
+    /**
+     * 扫描或观察 {@code scanNative} 对应的链上状态，并转换为业务可用结果。
+     */
     private void scanNative(ChainAddressRecord tracked, AccountChainProfile profile,
                             long masterchainSeqno, Set<String> platformAddresses,
                             List<DepositEvent> events) {
@@ -164,6 +176,9 @@ class TonDepositScanner {
         }
     }
 
+    /**
+     * 扫描或观察 {@code scanJetton} 对应的链上状态，并转换为业务可用结果。
+     */
     private void scanJetton(ChainAddressRecord tracked, TokenDefinition token,
                             AccountChainProfile profile, long masterchainSeqno,
                             Set<String> platformAddresses, List<DepositEvent> events) {
@@ -186,9 +201,15 @@ class TonDepositScanner {
             events.add(event);
         }
     }
+    /**
+     * 解析或转换 {@code parseJettonNotification} 对应的数据，并校验其格式和边界。
+     */
     JettonNotification parseJettonNotification(String bodyBase64) {
         return parseJettonDepositBody(bodyBase64);
     }
+    /**
+     * 解析或转换 {@code parseJettonDepositBody} 对应的数据，并校验其格式和边界。
+     */
     JettonNotification parseJettonDepositBody(String bodyBase64) {
         if (bodyBase64 == null || bodyBase64.isBlank()) {
             return null;
@@ -214,6 +235,9 @@ class TonDepositScanner {
         }
     }
 
+    /**
+     * 执行 {@code event} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private DepositEvent event(JsonNode tx, ChainAddressRecord tracked, String symbol,
                                String source, String destination, BigDecimal amount, String master,
                                long masterchainSeqno) {
@@ -224,6 +248,9 @@ class TonDepositScanner {
                 tx.path("transaction_id").path("hash").asText(), 1, master, tx.toString());
     }
 
+    /**
+     * 记录或保存 {@code persist} 对应的数据，并遵守幂等和事务约束。
+     */
     private void persist(DepositEvent event, JsonNode tx, String master,
                          AccountChainProfile profile, String accountId) {
         repository.recordTonTransaction(TonTransactionRecord.builder()
@@ -243,6 +270,9 @@ class TonDepositScanner {
                 .build());
         repository.recordAndCreditDeposit(event, 0, profile.getDepositConfirmations(), accountId);
     }
+    /**
+     * 写入或更新 {@code refreshPendingDeposits} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     private void refreshPendingDeposits(AccountChainProfile profile, long masterchainSeqno) {
         int requiredConfirmations = profile.getDepositConfirmations();
         for (var pending : repository.listPendingDeposits(CHAIN, requiredConfirmations, 500)) {
@@ -269,6 +299,9 @@ class TonDepositScanner {
                     CHAIN, pending.txHash(), confirmations, requiredConfirmations);
         }
     }
+    /**
+     * 执行 {@code sameAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private boolean sameAddress(String first, String second) {
         if (first == null || first.isBlank() || second == null || second.isBlank()) {
             return false;
@@ -279,6 +312,9 @@ class TonDepositScanner {
             return false;
         }
     }
+    /**
+     * 判断 {@code isPlatformAddress} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private boolean isPlatformAddress(String address, Set<String> platformAddresses) {
         if (address == null || address.isBlank()) {
             return false;
@@ -289,6 +325,9 @@ class TonDepositScanner {
             return false;
         }
     }
+    /**
+     * 执行 {@code platformAddresses} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Set<String> platformAddresses() {
         Set<String> addresses = new HashSet<>();
         for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
@@ -297,6 +336,9 @@ class TonDepositScanner {
         }
         return addresses;
     }
+    /**
+     * 添加 {@code addNormalized} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     private void addNormalized(Set<String> addresses, String address) {
         if (address == null || address.isBlank()) {
             return;
@@ -308,6 +350,9 @@ class TonDepositScanner {
         }
     }
 
+    /**
+     * 执行 {@code materializeJettonWallets} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private void materializeJettonWallets(List<ChainAddressRecord> nativeAddresses,
                                           List<TokenDefinition> tokens) {
         if (tonApi == null) {
@@ -334,6 +379,9 @@ class TonDepositScanner {
             }
         }
     }
+    /**
+     * 判断 {@code isOperationalNativeMessage} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private boolean isOperationalNativeMessage(String bodyBase64) {
         if (bodyBase64 == null || bodyBase64.isBlank()) {
             return false;
@@ -351,6 +399,9 @@ class TonDepositScanner {
             return false;
         }
     }
+    /**
+     * 判断 {@code isNativeScanRole} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private static boolean isNativeScanRole(ChainAddressRecord address) {
         if (address == null) {
             return false;
@@ -358,25 +409,43 @@ class TonDepositScanner {
         return WALLET_ROLE_DEPOSIT.equals(address.getWalletRole())
                 || WALLET_ROLE_CONTRACT_DEPLOYER.equals(address.getWalletRole());
     }
+    /**
+     * 转换或计算 {@code decimal} 对应的值，统一金额、格式和边界规则。
+     */
     private static BigDecimal decimal(String value) {
         return value == null || value.isBlank() ? BigDecimal.ZERO : new BigDecimal(value);
     }
+    /**
+     * 执行 {@code displayAmount} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static BigDecimal displayAmount(BigDecimal atomicAmount, int decimals) {
         return atomicAmount.movePointLeft(decimals);
     }
+    /**
+     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
+     */
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
+    /**
+     * 扫描或观察 {@code scanLimit} 对应的链上状态，并转换为业务可用结果。
+     */
     private int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 100 : batchSize;
     }
+    /**
+     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
+    /**
+     * 判断 {@code isTestnet} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private boolean isTestnet() {
         if (repository == null) {
             return true;

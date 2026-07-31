@@ -106,10 +106,16 @@ class XrpTransactionService {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "xrp sendNative");
         return sendNativeInternal(from, toAddress, amount);
     }
+    /**
+     * 发送或广播 {@code sendNativeInternal} 对应的链上请求，并返回节点处理结果。
+     */
     private String sendNativeInternal(ChainAddressRecord from, String toAddress, BigDecimal amount) {
         return sendNativeInternal(from, toAddress, amount, NATIVE_SYMBOL);
     }
 
+    /**
+     * 发送或广播 {@code sendNativeInternal} 对应的链上请求，并返回节点处理结果。
+     */
     private String sendNativeInternal(ChainAddressRecord from, String toAddress, BigDecimal amount,
                                       String recordSymbol) {
         validateAddress(toAddress);
@@ -138,6 +144,9 @@ class XrpTransactionService {
         return sendIssuedCurrencyInternal(from, token, toAddress, amount);
     }
 
+    /**
+     * 发送或广播 {@code sendIssuedCurrencyInternal} 对应的链上请求，并返回节点处理结果。
+     */
     private String sendIssuedCurrencyInternal(ChainAddressRecord from, TokenDefinition token,
                                              String toAddress, BigDecimal amount) {
         validateAddress(toAddress);
@@ -244,6 +253,9 @@ class XrpTransactionService {
         }
         return candidate.min(spendable).stripTrailingZeros();
     }
+    /**
+     * 执行 {@code missingIssuedCurrencyTrustLines} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private int missingIssuedCurrencyTrustLines(String address) {
         Map<String, TokenDefinition> tokens = new HashMap<>();
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
@@ -312,6 +324,9 @@ class XrpTransactionService {
             throw e;
         }
     }
+    /**
+     * 校验 {@code ensureCollectionDestinationTrustLine} 对应的输入或状态，失败时抛出明确异常。
+     */
     private void ensureCollectionDestinationTrustLine(TokenDefinition token, String hotAddress) {
         XrpIssuedCurrency issued = XrpIssuedCurrency.fromToken(token);
         if (hotAddress.equals(issued.issuer()) || hasTrustLine(hotAddress, issued)) {
@@ -405,6 +420,9 @@ class XrpTransactionService {
     public boolean hasIssuedCurrencyTrustLine(String address, String symbol) {
         return hasTrustLine(address, XrpIssuedCurrency.fromToken(token(symbol)));
     }
+    /**
+     * 执行 {@code payment} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Payment payment(ChainAddressRecord from, String toAddress, CurrencyAmount amount) {
         long feeDrops = feeDrops();
         long sequence = rpc.accountSequence(from.getAddress());
@@ -418,6 +436,9 @@ class XrpTransactionService {
                 .lastLedgerSequence(UnsignedInteger.valueOf(lastLedger))
                 .build();
     }
+    /**
+     * 为 {@code signAndSubmit} 对应的交易或消息生成签名，并保持原始数据不被改变。
+     */
     private String signAndSubmit(ChainAddressRecord from, Payment payment) {
         AccountChainProfile profile = profile();
         PrivateKey privateKey = keyService.privateKey(profile, from);
@@ -432,6 +453,9 @@ class XrpTransactionService {
             privateKey.destroy();
         }
     }
+    /**
+     * 为 {@code signAndSubmit} 对应的交易或消息生成签名，并保持原始数据不被改变。
+     */
     private String signAndSubmit(ChainAddressRecord from, TrustSet trustSet) {
         AccountChainProfile profile = profile();
         PrivateKey privateKey = keyService.privateKey(profile, from);
@@ -446,6 +470,9 @@ class XrpTransactionService {
             privateKey.destroy();
         }
     }
+    /**
+     * 构建或生成 {@code createTrustLine} 对应的结果，并执行输入和状态校验。
+     */
     private String createTrustLine(ChainAddressRecord address, XrpIssuedCurrency issued) {
         ensureActivated(address.getAddress());
         long feeDrops = feeDrops();
@@ -470,6 +497,9 @@ class XrpTransactionService {
         return txHash;
     }
 
+    /**
+     * 校验 {@code requiredTrustLineTopUp} 对应的前置条件，不满足时抛出明确异常。
+     */
     private BigDecimal requiredTrustLineTopUp(Optional<XrpRpcClient.AccountState> currentAccount,
                                               boolean trustLineExists) {
         if (trustLineExists) {
@@ -489,11 +519,17 @@ class XrpTransactionService {
                 .max(BigDecimal.ZERO)
                 .stripTrailingZeros();
     }
+    /**
+     * 执行 {@code defaultHotAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private ChainAddressRecord defaultHotAddress() {
         return repository.listDefaultHotAddressCandidates(CHAIN, NATIVE_SYMBOL).stream()
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("missing XRP default hot wallet address"));
     }
+    /**
+     * 编码 {@code token} 对应的数据，生成链上或接口所需的表示。
+     */
     private TokenDefinition token(String symbol) {
         String value = symbol == null ? "" : symbol.trim();
         return repository.listTokens(CHAIN).stream()
@@ -501,6 +537,9 @@ class XrpTransactionService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("XRPL issued currency not configured: " + symbol));
     }
+    /**
+     * 处理 {@code waitForValidated} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private Confirmation waitForValidated(String txHash, String operation) {
         AccountChainProfile profile = profile();
         RuntimeException lastFailure = null;
@@ -520,6 +559,9 @@ class XrpTransactionService {
         }
         throw new IllegalStateException(operation + " was submitted but not confirmed in time: " + txHash);
     }
+    /**
+     * 转换或计算 {@code sleepBeforeConfirmationRetry} 对应的值，统一金额、格式和边界规则。
+     */
     private void sleepBeforeConfirmationRetry() {
         try {
             Thread.sleep(PREPARATION_CONFIRM_SLEEP.toMillis());
@@ -529,6 +571,9 @@ class XrpTransactionService {
         }
     }
 
+    /**
+     * 设置或更新 {@code updateSystemTransaction} 对应的状态，并保持相关业务字段一致。
+     */
     private void updateSystemTransaction(String txHash, String symbol, String issuer,
                                          String currencyCode, Confirmation confirmation) {
         JsonNode tx = txNode(confirmation.raw());
@@ -551,6 +596,9 @@ class XrpTransactionService {
                 .rawPayload(confirmation.raw().toString())
                 .build());
     }
+    /**
+     * 处理 {@code confirmation} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private Confirmation confirmation(AccountChainProfile profile, String txHash) {
         JsonNode result = rpc.transaction(txHash);
         if (!result.path("validated").asBoolean(false)) {
@@ -567,6 +615,9 @@ class XrpTransactionService {
         return new Confirmation(confirmations >= Math.max(1, profile.getWithdrawConfirmations()),
                 ledger, confirmations, result);
     }
+    /**
+     * 设置或更新 {@code updateConfirmedTransaction} 对应的状态，并保持相关业务字段一致。
+     */
     private void updateConfirmedTransaction(String txHash, Confirmation confirmation) {
         JsonNode tx = txNode(confirmation.raw());
         JsonNode amountNode = deliveredAmount(confirmation.raw());
@@ -600,6 +651,9 @@ class XrpTransactionService {
         }
         repository.recordXrpTransaction(builder.build());
     }
+    /**
+     * 校验 {@code matchesIssuedCurrency} 对应的输入或状态，失败时抛出明确异常。
+     */
     private boolean matchesIssuedCurrency(TokenDefinition token, String issuer, String currency) {
         try {
             return XrpIssuedCurrency.fromToken(token).matches(issuer, currency);
@@ -608,6 +662,9 @@ class XrpTransactionService {
         }
     }
 
+    /**
+     * 记录或保存 {@code recordTransaction} 对应的数据，并遵守幂等和事务约束。
+     */
     private void recordTransaction(String txHash, String from, String to, String symbol,
                                    String issuer, String currencyCode, BigDecimal amount,
                                    long feeDrops, String status, String rawPayload) {
@@ -626,48 +683,81 @@ class XrpTransactionService {
                 .rawPayload(rawPayload)
                 .build());
     }
+    /**
+     * 校验 {@code ensureTrustLine} 对应的输入或状态，失败时抛出明确异常。
+     */
     private void ensureTrustLine(String address, XrpIssuedCurrency issued, String side) {
         if (!hasTrustLine(address, issued)) {
             throw new IllegalStateException("XRPL " + side + " account has no trustline for "
                     + issued.symbol() + " issuer=" + issued.issuer());
         }
     }
+    /**
+     * 判断 {@code hasTrustLine} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private boolean hasTrustLine(String address, XrpIssuedCurrency issued) {
         return rpc.accountLines(address, issued.issuer()).findValues("currency").stream()
                 .anyMatch(node -> issued.currencyCode().equalsIgnoreCase(node.asText()));
     }
+    /**
+     * 校验 {@code ensureActivated} 对应的输入或状态，失败时抛出明确异常。
+     */
     private void ensureActivated(String address) {
         if (rpc.accountInfo(address).isEmpty()) {
             throw new IllegalStateException("XRPL account is not activated: " + address);
         }
     }
+    /**
+     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
+     */
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
+    /**
+     * 转换或计算 {@code feeDrops} 对应的值，统一金额、格式和边界规则。
+     */
     private long feeDrops() {
         Long configured = profile().getDefaultFee();
         return configured == null || configured <= 0 ? rpc.feeDrops() : Math.max(10L, configured);
     }
+    /**
+     * 转换或计算 {@code feeAsXrp} 对应的值，统一金额、格式和边界规则。
+     */
     private BigDecimal feeAsXrp() {
         return fromDrops(BigDecimal.valueOf(feeDrops()));
     }
+    /**
+     * 编码 {@code toDrops} 对应的数据，生成链上或接口所需的表示。
+     */
     private long toDrops(BigDecimal amount) {
         return amount.movePointRight(XRP_DECIMALS)
                 .setScale(0, RoundingMode.UNNECESSARY)
                 .longValueExact();
     }
+    /**
+     * 解析 {@code fromDrops} 对应的输入，并转换为当前业务模型。
+     */
     private BigDecimal fromDrops(BigDecimal drops) {
         return drops.movePointLeft(XRP_DECIMALS).stripTrailingZeros();
     }
+    /**
+     * 执行 {@code txNode} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private JsonNode txNode(JsonNode result) {
         JsonNode txJson = result.path("tx_json");
         return txJson.isMissingNode() || txJson.isNull() ? result : txJson;
     }
+    /**
+     * 执行 {@code metaNode} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private JsonNode metaNode(JsonNode result) {
         JsonNode meta = result.path("meta");
         return meta.isMissingNode() || meta.isNull() ? result.path("metaData") : meta;
     }
+    /**
+     * 执行 {@code deliveredAmount} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private JsonNode deliveredAmount(JsonNode result) {
         JsonNode meta = metaNode(result);
         JsonNode delivered = meta.path("delivered_amount");
@@ -676,9 +766,15 @@ class XrpTransactionService {
         }
         return txNode(result).path("Amount");
     }
+    /**
+     * 校验 {@code validateAddress} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void validateAddress(String address) {
         Address.of(address).validateAddress();
     }
+    /**
+     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);

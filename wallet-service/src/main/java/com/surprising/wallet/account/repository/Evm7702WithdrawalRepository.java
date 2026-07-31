@@ -20,21 +20,38 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Tenant-scoped persistence, locking and encrypted outbox for EIP-7702 payout batches. */
+/**
+ * 负责钱包业务数据的查询、持久化、租户隔离和事务边界管理。
+ */
 @Repository
 public class Evm7702WithdrawalRepository {
+    /**
+     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final JdbcTemplate jdbc;
+    /**
+     * 保存 {@code configRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final Evm7702CollectionRepository configRepository;
+    /**
+     * 构造 {@code Evm7702WithdrawalRepository}，初始化该组件运行所需的状态和依赖。
+     */
     public Evm7702WithdrawalRepository(JdbcTemplate jdbc,
                                        Evm7702CollectionRepository configRepository) {
         this.jdbc = jdbc;
         this.configRepository = configRepository;
     }
 
+    /**
+     * 校验 {@code requireRuntimeConfigVersion} 对应的前置条件，不满足时抛出明确异常。
+     */
     public Evm7702CollectionRepository.RuntimeConfig requireRuntimeConfigVersion(
             String chain, String network, int version) {
         return configRepository.requireRuntimeConfigVersion(chain, network, version);
     }
+    /**
+     * 获取或查询 {@code listRuntimeTargets} 对应的数据，供调用方读取当前状态。
+     */
     public List<RuntimeTarget> listRuntimeTargets() {
         return jdbc.query("""
                 select p.chain, p.network,
@@ -58,6 +75,9 @@ public class Evm7702WithdrawalRepository {
                 rs.getString("chain"), rs.getString("network"), rs.getBoolean("active")));
     }
 
+    /**
+     * 执行 {@code claimNextBatch} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public Optional<Batch> claimNextBatch(String chain, String network) {
         Evm7702CollectionRepository.RuntimeConfig config =
@@ -184,6 +204,9 @@ public class Evm7702WithdrawalRepository {
                 deadline, group.hotChainAddress(), config, List.copyOf(items)));
     }
 
+    /**
+     * 记录或保存 {@code saveSignedAttempt} 对应的数据，并遵守幂等和事务约束。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void saveSignedAttempt(Batch batch, PreparedAttempt attempt) {
         if (!batch.tenantId().equals(attempt.tenantId()) || !batch.id().equals(attempt.batchId())) {
@@ -220,6 +243,9 @@ public class Evm7702WithdrawalRepository {
                 attempt.encryptionKeyVersion());
     }
 
+    /**
+     * 写入或更新 {@code markSubmitted} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void markSubmitted(UUID tenantId, UUID batchId, String txHash) {
         if (jdbc.update("""
@@ -251,6 +277,9 @@ public class Evm7702WithdrawalRepository {
                    and w.status = 'SIGNING' and w.tx_hash is null
                 """, txHash, tenantId, batchId);
     }
+    /**
+     * 写入或更新 {@code markBroadcastUnknown} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void markBroadcastUnknown(UUID tenantId, UUID batchId, String code, String message) {
         jdbc.update("""
                 update evm_withdrawal_batch
@@ -263,6 +292,9 @@ public class Evm7702WithdrawalRepository {
                  where tenant_id = ? and batch_id = ? and status = 'CREATED'
                 """, code, truncate(message, 1000), tenantId, batchId);
     }
+    /**
+     * 获取或查询 {@code listUnknownAttempts} 对应的数据，供调用方读取当前状态。
+     */
     public List<UnknownAttempt> listUnknownAttempts(String chain, String network, int limit) {
         return jdbc.query("""
                 select b.tenant_id, b.id batch_id, a.tx_hash,
@@ -281,6 +313,9 @@ public class Evm7702WithdrawalRepository {
                 rs.getString("tx_hash"), rs.getString("signed_tx_ciphertext"),
                 rs.getInt("rebroadcast_count")), chain, network, Math.min(Math.max(limit, 1), 100));
     }
+    /**
+     * 记录或保存 {@code recordRecoveryAttempt} 对应的数据，并遵守幂等和事务约束。
+     */
     public void recordRecoveryAttempt(UnknownAttempt attempt) {
         jdbc.update("""
                 update evm_withdrawal_batch_attempt
@@ -290,6 +325,9 @@ public class Evm7702WithdrawalRepository {
                  where tenant_id = ? and batch_id = ? and tx_hash = ? and status = 'UNKNOWN'
                 """, attempt.tenantId(), attempt.batchId(), attempt.txHash());
     }
+    /**
+     * 写入或更新 {@code markRecoveryError} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void markRecoveryError(UnknownAttempt attempt, String code, String message) {
         jdbc.update("""
                 update evm_withdrawal_batch_attempt set error_code = ?, error_message = ?
@@ -300,6 +338,9 @@ public class Evm7702WithdrawalRepository {
                  where tenant_id = ? and id = ? and status = 'BROADCAST_UNKNOWN'
                 """, code, truncate(message, 1000), attempt.tenantId(), attempt.batchId());
     }
+    /**
+     * 获取或查询 {@code listPendingBatches} 对应的数据，供调用方读取当前状态。
+     */
     public List<PendingBatch> listPendingBatches(String chain, String network, int limit) {
         return jdbc.query("""
                 select b.tenant_id, b.id, b.chain, b.canonical_tx_hash, b.status,
@@ -318,6 +359,9 @@ public class Evm7702WithdrawalRepository {
                 rs.getString("hot_wallet"), rs.getInt("required_confirmations")),
                 chain, network, Math.min(Math.max(limit, 1), 200));
     }
+    /**
+     * 获取或查询 {@code listBatchItems} 对应的数据，供调用方读取当前状态。
+     */
     public List<BatchItemIdentity> listBatchItems(UUID tenantId, UUID batchId) {
         return jdbc.query("""
                 select item.tenant_id, item.item_index, item.withdrawal_order_id, item.custody_withdrawal_id,
@@ -339,6 +383,9 @@ public class Evm7702WithdrawalRepository {
                 rs.getString("debit_account_id"), rs.getString("status")), tenantId, batchId);
     }
 
+    /**
+     * 写入或更新 {@code markItemResult} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public int markItemResult(UUID tenantId, UUID batchId, int itemIndex,
                               Evm7702PayoutReceiptParser.ItemResult result, String status) {
         return jdbc.update("""
@@ -349,12 +396,18 @@ public class Evm7702WithdrawalRepository {
                 """, result.actualReceived(), status, result.logIndex(),
                 result.success() ? null : result.errorHash(), tenantId, batchId, itemIndex);
     }
+    /**
+     * 执行 {@code countFailedAttempts} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public int countFailedAttempts(long withdrawalOrderId) {
         return Optional.ofNullable(jdbc.queryForObject("""
                 select count(*) from evm_withdrawal_batch_item
                  where withdrawal_order_id = ? and status in ('RETRYABLE', 'FAILED')
                 """, Integer.class, withdrawalOrderId)).orElse(0);
     }
+    /**
+     * 写入或更新 {@code markWithdrawalRetrying} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public int markWithdrawalRetrying(BatchItemIdentity item, String error) {
         return jdbc.update("""
                 update withdrawal_order
@@ -362,6 +415,9 @@ public class Evm7702WithdrawalRepository {
                  where tenant_id = ? and id = ? and status = 'SENT'
                 """, truncate(error, 1000), item.tenantId(), item.withdrawalOrderId());
     }
+    /**
+     * 写入或更新 {@code markWithdrawalFailed} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public int markWithdrawalFailed(BatchItemIdentity item, String error) {
         return jdbc.update("""
                 update withdrawal_order
@@ -370,6 +426,9 @@ public class Evm7702WithdrawalRepository {
                 """, truncate(error, 1000), item.tenantId(), item.withdrawalOrderId());
     }
 
+    /**
+     * 写入或更新 {@code markRevertedItem} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public int markRevertedItem(UUID tenantId, UUID batchId, int itemIndex, String status,
                                 String errorHash) {
         return jdbc.update("""
@@ -380,6 +439,9 @@ public class Evm7702WithdrawalRepository {
                 """, status, errorHash, tenantId, batchId, itemIndex);
     }
 
+    /**
+     * 执行 {@code completeBatchMetadata} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void completeBatchMetadata(PendingBatch batch, String txHash,
                                       BigInteger gasUsed, BigInteger effectiveGasPrice,
@@ -425,6 +487,9 @@ public class Evm7702WithdrawalRepository {
                 batch.tenantId(), batch.batchId());
     }
 
+    /**
+     * 执行 {@code completeRevertedBatchMetadata} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void completeRevertedBatchMetadata(PendingBatch batch, String txHash,
                                                BigInteger gasUsed, BigInteger effectiveGasPrice,
@@ -477,6 +542,9 @@ public class Evm7702WithdrawalRepository {
                 """, txHash, batch.tenantId(), batch.batchId());
     }
 
+    /**
+     * 删除或释放 {@code releaseUnbroadcastBatch} 对应的资源，并收敛相关业务状态。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void releaseUnbroadcastBatch(Batch batch, String code, String message) {
         int attempts = Optional.ofNullable(jdbc.queryForObject("""
@@ -500,6 +568,9 @@ public class Evm7702WithdrawalRepository {
                  where tenant_id = ? and id = ? and status = 'LOCKED'
                 """, code, truncate(message, 1000), batch.tenantId(), batch.id());
     }
+    /**
+     * 校验 {@code requireBatchState} 对应的前置条件，不满足时抛出明确异常。
+     */
     public BatchState requireBatchState(UUID tenantId, UUID batchId) {
         return jdbc.query("""
                 select operation_nonce, delegate_version, authorization_included
@@ -509,6 +580,9 @@ public class Evm7702WithdrawalRepository {
                 rs.getInt("delegate_version"), rs.getBoolean("authorization_included")),
                 tenantId, batchId).stream().findFirst().orElseThrow();
     }
+    /**
+     * 执行 {@code mapCandidate} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private CandidateGroup mapCandidate(ResultSet rs) throws SQLException {
         ChainAddressRecord hot = ChainAddressRecord.builder()
                 .id(rs.getLong("chain_address_id")).chain(rs.getString("hot_chain"))
@@ -520,6 +594,9 @@ public class Evm7702WithdrawalRepository {
         return new CandidateGroup(rs.getObject("tenant_id", UUID.class), rs.getString("asset_symbol"),
                 rs.getString("from_address"), rs.getString("token_contract"), rs.getInt("decimals"), hot);
     }
+    /**
+     * 执行 {@code mapClaimedItem} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private ClaimedItem mapClaimedItem(ResultSet rs, UUID tenantId, int decimals) throws SQLException {
         BigDecimal amount = rs.getBigDecimal("amount");
         BigInteger atomic;
@@ -536,10 +613,16 @@ public class Evm7702WithdrawalRepository {
                 rs.getString("debit_account_id"), Numeric.hexStringToByteArray(
                         withdrawalHash(tenantId, rs.getObject("custody_withdrawal_id", UUID.class))));
     }
+    /**
+     * 处理 {@code withdrawalHash} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private static String withdrawalHash(UUID tenantId, UUID custodyWithdrawalId) {
         return Numeric.toHexString(Hash.sha3(
                 (tenantId + ":WITHDRAWAL:" + custodyWithdrawalId).getBytes(StandardCharsets.UTF_8)));
     }
+    /**
+     * 转换或计算 {@code truncate} 对应的值，统一金额、格式和边界规则。
+     */
     private static String truncate(String value, int max) {
         if (value == null) return null;
         return value.length() <= max ? value : value.substring(0, max);
@@ -557,6 +640,9 @@ public class Evm7702WithdrawalRepository {
             withdrawalId = withdrawalId.clone();
         }
 
+        /**
+         * 处理 {@code withdrawalId} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+         */
         @Override
         public byte[] withdrawalId() {
             return withdrawalId.clone();
@@ -594,6 +680,9 @@ public class Evm7702WithdrawalRepository {
             withdrawalId = withdrawalId.clone();
         }
 
+        /**
+         * 处理 {@code withdrawalId} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+         */
         @Override
         public byte[] withdrawalId() {
             return withdrawalId.clone();

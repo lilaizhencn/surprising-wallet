@@ -11,10 +11,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code AptosAddressGenerationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class AptosAddressGenerationTest {
+    /**
+     * 保存 {@code MASTER_SEED}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final String MASTER_SEED =
             "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
+    /**
+     * 验证 {@code derivesStableAptosAddressesFromUnifiedEd25519Tree} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void derivesStableAptosAddressesFromUnifiedEd25519Tree() {
         AptosKeyService first = new AptosKeyService(MASTER_SEED);
@@ -29,6 +38,9 @@ class AptosAddressGenerationTest {
         assertEquals("m/44'/637'/1'/0'/0'", first.derive(1).derivationPath());
     }
 
+    /**
+     * 验证 {@code aptosPathIsSeparatedFromOtherEd25519Chains} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void aptosPathIsSeparatedFromOtherEd25519Chains() {
         Ed25519KeyProvider provider = new Ed25519KeyProvider(

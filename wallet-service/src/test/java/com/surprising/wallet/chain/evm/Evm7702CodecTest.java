@@ -16,16 +16,40 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code Evm7702CodecTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class Evm7702CodecTest {
+    /**
+     * 保存 {@code AUTHORITY}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final Credentials AUTHORITY = Credentials.create(
             "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d");
+    /**
+     * 保存 {@code RELAYER}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final Credentials RELAYER = Credentials.create(
             "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
+    /**
+     * 保存 {@code COLLECTOR}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String COLLECTOR = "0x1111111111111111111111111111111111111111";
+    /**
+     * 保存 {@code DELEGATE}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String DELEGATE = "0x2222222222222222222222222222222222222222";
+    /**
+     * 保存 {@code TOKEN}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String TOKEN = "0x3333333333333333333333333333333333333333";
+    /**
+     * 保存 {@code RECIPIENT}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String RECIPIENT = "0x4444444444444444444444444444444444444444";
 
+    /**
+     * 验证 {@code shouldSignRecoverableEip712RequestAndEncodeBatch} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldSignRecoverableEip712RequestAndEncodeBatch() throws SignatureException {
         byte[] batchId = Hash.sha3("tenant-a:batch-1".getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -48,6 +72,9 @@ class Evm7702CodecTest {
         assertTrue(calldata.startsWith(expectedSelector));
     }
 
+    /**
+     * 验证 {@code shouldCreateChainBoundAuthorizationAndType4Transaction} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldCreateChainBoundAuthorizationAndType4Transaction() throws Exception {
         Evm7702AuthorizationService authorizationService = new Evm7702AuthorizationService();

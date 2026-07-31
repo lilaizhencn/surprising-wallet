@@ -37,18 +37,36 @@ public class DevEip7702RelayerBootstrap implements ApplicationRunner {
     /** 角色标识，用于查找/持久化钱包地址。 */
     static final String RELAYER_ROLE = "EIP7702_RELAYER";
 
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository repository;
+    /**
+     * 保存 {@code addressService}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final HotWalletAddressService addressService;
 
+    /**
+     * 保存 {@code environment}，用于承载当前对象的运行配置或业务数据。
+     */
     @Value("${sw.app.env.name:dev}")
     private String environment;
 
+    /**
+     * 保存 {@code chain}，表示链、网络、资产或代币配置。
+     */
     @Value("${sw.wallet.dev-eip7702-bootstrap.chain:ETH}")
     private String chain;
 
+    /**
+     * 保存 {@code network}，表示链、网络、资产或代币配置。
+     */
     @Value("${sw.wallet.dev-eip7702-bootstrap.network:devtest}")
     private String network;
 
+    /**
+     * 执行或处理 {@code run} 对应的业务流程，并维护状态和异常边界。
+     */
     @Override
     @Transactional(rollbackFor = Throwable.class)
     public void run(ApplicationArguments args) {

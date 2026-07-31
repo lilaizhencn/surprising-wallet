@@ -19,6 +19,9 @@ import java.util.Locale;
  * @param decimals     小数位
  */
 public record XrpIssuedCurrency(String symbol, String issuer, String currencyCode, int decimals) {
+    /**
+     * 解析 {@code fromToken} 对应的输入，并转换为当前业务模型。
+     */
     public static XrpIssuedCurrency fromToken(TokenDefinition token) {        if (token == null || !StringUtils.hasText(token.getContractAddress())) {
             throw new IllegalArgumentException("XRPL issued currency must be configured as issuer:currency");
         }
@@ -34,9 +37,15 @@ public record XrpIssuedCurrency(String symbol, String issuer, String currencyCod
                 parts[1].trim().toUpperCase(Locale.ROOT),
                 token.getDecimals());
     }
+    /**
+     * 校验 {@code matches} 对应的输入或状态，失败时抛出明确异常。
+     */
     public boolean matches(String issuer, String currency) {
         return this.issuer.equals(issuer) && this.currencyCode.equalsIgnoreCase(currency);
     }
+    /**
+     * 转换或计算 {@code amount} 对应的值，统一金额、格式和边界规则。
+     */
     public IssuedCurrencyAmount amount(BigDecimal value) {
         return IssuedCurrencyAmount.builder()
                 .issuer(Address.of(issuer))

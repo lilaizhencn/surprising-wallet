@@ -36,21 +36,33 @@ class SuiChainAdapter implements BlockchainAdapter {
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
 
+    /**
+     * 获取或查询 {@code chainType} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public ChainType chainType() {
         return ChainType.SUI;
     }
 
+    /**
+     * 获取或查询 {@code capabilities} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public java.util.Set<Capability> capabilities() {
         return java.util.Set.of(Capability.NATIVE_QUOTE, Capability.TOKEN_QUOTE);
     }
 
+    /**
+     * 获取或查询 {@code family} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String family() {
         return "sui";
     }
 
+    /**
+     * 获取或查询 {@code describe} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String describe() {
         return "Sui Ed25519 object/coin transaction, SUI and Coin<T> wallet engine.";

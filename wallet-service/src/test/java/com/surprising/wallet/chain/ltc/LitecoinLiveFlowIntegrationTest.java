@@ -20,27 +20,56 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Real Litecoin testnet gate. The test is skipped by default and becomes strict
- * when {@code -Dltc.live.enabled=true} is supplied.
+ * 验证 {@code LitecoinLiveFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
  */
 class LitecoinLiveFlowIntegrationTest {
+    /**
+     * 保存 {@code DEPOSIT_TX}，用于标识测试中的交易、区块或业务记录。
+     */
     private static final String DEPOSIT_TX =
             "24aecf832537eb6b9e77722541ab812f3c6f887a75ff40aee83170bd35497f9f";
+    /**
+     * 保存 {@code DEPOSIT_ADDRESS}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String DEPOSIT_ADDRESS =
             "tltc1qeh6wxfsj4cfwh5dmp0nnpqj52s9u5gkc59gyj94qllg7wnjxx6qsnda7vj";
+    /**
+     * 保存 {@code WITHDRAW_ADDRESS}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String WITHDRAW_ADDRESS =
             "tltc1qydpzhcujqtca9uuepts0k996jfv483xlnkf8majw0f0umaht9j6q2aktvc";
+    /**
+     * 保存 {@code HOT_ADDRESS}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String HOT_ADDRESS =
             "tltc1qku2kf64evgw0m79sypm3tp39js97d2e6j6xl6ntf089nvzpkxvnsnc54wn";
+    /**
+     * 保存 {@code ESPLORA}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String ESPLORA = "https://litecoinspace.org/testnet/api";
 
+    /**
+     * 保存 {@code JSON}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final ObjectMapper JSON = new ObjectMapper();
+    /**
+     * 保存 {@code HTTP}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)
             .build();
+    /**
+     * 保存 {@code withdrawTx}，记录测试开关、处理状态、确认结果或重试信息。
+     */
     private static String withdrawTx;
+    /**
+     * 保存 {@code collectionTx}，记录测试开关、处理状态、确认结果或重试信息。
+     */
     private static String collectionTx;
 
+    /**
+     * 验证 {@code requireLiveConfiguration} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @BeforeAll
     static void requireLiveConfiguration() {
         Assumptions.assumeTrue(Boolean.getBoolean("ltc.live.enabled"),
@@ -49,6 +78,9 @@ class LitecoinLiveFlowIntegrationTest {
         collectionTx = requiredProperty("ltc.live.collection.txid");
     }
 
+    /**
+     * 验证 {@code realDepositMustBeCreditedExactlyOnce} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void realDepositMustBeCreditedExactlyOnce() throws Exception {
         JsonNode tx = esplora("/tx/" + DEPOSIT_TX);
@@ -77,6 +109,9 @@ class LitecoinLiveFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code realWithdrawalMustBeConfirmedAndSettledOnce} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void realWithdrawalMustBeConfirmedAndSettledOnce() throws Exception {
         JsonNode tx = esplora("/tx/" + withdrawTx);
@@ -106,6 +141,9 @@ class LitecoinLiveFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code realCollectionMustBeConfirmedAndIdempotent} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void realCollectionMustBeConfirmedAndIdempotent() throws Exception {
         JsonNode tx = esplora("/tx/" + collectionTx);
@@ -135,6 +173,9 @@ class LitecoinLiveFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code unifiedUtxoLockAndReleaseMustBeGuarded} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void unifiedUtxoLockAndReleaseMustBeGuarded() throws Exception {
         try (Connection connection = connection()) {
@@ -164,6 +205,9 @@ class LitecoinLiveFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code connection} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Connection connection() throws Exception {
         String url = env("LTC_LIVE_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet");
         String user = env("LTC_LIVE_DB_USER", "wallet");
@@ -171,6 +215,9 @@ class LitecoinLiveFlowIntegrationTest {
         return DriverManager.getConnection(url, user, password);
     }
 
+    /**
+     * 验证 {@code esplora} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static JsonNode esplora(String path) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(URI.create(ESPLORA + path))
                 .version(HttpClient.Version.HTTP_1_1)
@@ -182,6 +229,9 @@ class LitecoinLiveFlowIntegrationTest {
         return JSON.readTree(response.body());
     }
 
+    /**
+     * 验证 {@code confirmations} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static long confirmations(JsonNode tx) throws Exception {
         long tip = Long.parseLong(HTTP.send(
                 HttpRequest.newBuilder(URI.create(ESPLORA + "/blocks/tip/height")).GET().build(),
@@ -189,6 +239,9 @@ class LitecoinLiveFlowIntegrationTest {
         return tip - tx.path("status").path("block_height").asLong() + 1L;
     }
 
+    /**
+     * 验证 {@code hasOutput} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static boolean hasOutput(JsonNode tx, String address, long value) {
         for (JsonNode output : tx.path("vout")) {
             if (address.equals(output.path("scriptpubkey_address").asText())
@@ -199,6 +252,9 @@ class LitecoinLiveFlowIntegrationTest {
         return false;
     }
 
+    /**
+     * 验证 {@code scalarLong} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static long scalarLong(Connection connection, String sql, Object... args) throws Exception {
         try (PreparedStatement statement = prepare(connection, sql, args);
              ResultSet resultSet = statement.executeQuery()) {
@@ -207,6 +263,9 @@ class LitecoinLiveFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code scalarDecimal} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal scalarDecimal(Connection connection, String sql, Object... args) throws Exception {
         try (PreparedStatement statement = prepare(connection, sql, args);
              ResultSet resultSet = statement.executeQuery()) {
@@ -215,6 +274,9 @@ class LitecoinLiveFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code scalarString} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String scalarString(Connection connection, String sql, Object... args) throws Exception {
         try (PreparedStatement statement = prepare(connection, sql, args);
              ResultSet resultSet = statement.executeQuery()) {
@@ -223,12 +285,18 @@ class LitecoinLiveFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code update} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static int update(Connection connection, String sql, Object... args) throws Exception {
         try (PreparedStatement statement = prepare(connection, sql, args)) {
             return statement.executeUpdate();
         }
     }
 
+    /**
+     * 验证 {@code prepare} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static PreparedStatement prepare(Connection connection, String sql, Object... args) throws Exception {
         PreparedStatement statement = connection.prepareStatement(sql);
         for (int i = 0; i < args.length; i++) {
@@ -237,6 +305,9 @@ class LitecoinLiveFlowIntegrationTest {
         return statement;
     }
 
+    /**
+     * 验证 {@code requiredProperty} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String requiredProperty(String name) {
         String value = System.getProperty(name);
         assertNotNull(value, "missing system property " + name);
@@ -244,6 +315,9 @@ class LitecoinLiveFlowIntegrationTest {
         return value;
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;

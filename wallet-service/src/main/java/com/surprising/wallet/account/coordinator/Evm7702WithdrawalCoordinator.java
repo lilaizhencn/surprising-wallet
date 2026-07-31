@@ -14,14 +14,34 @@ import java.util.List;
 
 import com.surprising.wallet.account.repository.Evm7702WithdrawalRepository;
 
-/** Atomically coordinates nonce/outbox, batch Gas and per-withdrawal ledger settlement. */
+/**
+ * 协调 EIP-7702 批量提现的事务边界。
+ *
+ * <p>负责 nonce 预留、Gas 预留释放、逐笔提现状态推进、失败重试和最终账务结算，
+ * 防止回执结果与提现锁定余额发生不一致。</p>
+ */
 @Service
 public class Evm7702WithdrawalCoordinator {
+    /**
+     * 定义 {@code MAX_ITEM_FAILURES} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final int MAX_ITEM_FAILURES = 3;
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final Evm7702WithdrawalRepository repository;
+    /**
+     * 保存 {@code custodyRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final CustodyRepository custodyRepository;
+    /**
+     * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository chainRepository;
 
+    /**
+     * 构造 {@code Evm7702WithdrawalCoordinator}，初始化该组件运行所需的状态和依赖。
+     */
     public Evm7702WithdrawalCoordinator(Evm7702WithdrawalRepository repository,
                                         CustodyRepository custodyRepository,
                                         ChainJdbcRepository chainRepository) {
@@ -30,6 +50,9 @@ public class Evm7702WithdrawalCoordinator {
         this.chainRepository = chainRepository;
     }
 
+    /**
+     * 预留中继 nonce，保存已签名提现批次，并将逐笔网络费统一迁移到批次 Gas 预留。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public Evm7702BatchTransactionService.SignedBatchTransaction persistSignedAttempt(
             Evm7702WithdrawalRepository.Batch batch, String relayerAddress,
@@ -53,6 +76,9 @@ public class Evm7702WithdrawalCoordinator {
         return signedAttempt.signedTransaction();
     }
 
+    /**
+     * 按回执逐笔校验和结算提现；成功项入账，失败项按次数进入重试或最终失败状态。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void complete(Evm7702WithdrawalRepository.PendingBatch batch,
                          String txHash, BigInteger gasUsed, BigInteger effectiveGasPrice,
@@ -123,6 +149,9 @@ public class Evm7702WithdrawalCoordinator {
                 actualFee, "EVM_RECEIPT", txHash);
     }
 
+    /**
+     * 处理整笔 EIP-7702 提现交易回滚，释放达到最终失败阈值的锁定余额并记录批次回执。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void completeReverted(Evm7702WithdrawalRepository.PendingBatch batch,
                                  String txHash, BigInteger gasUsed,
@@ -163,6 +192,9 @@ public class Evm7702WithdrawalCoordinator {
                 actualFee, "EVM_REVERTED_RECEIPT", txHash);
     }
 
+    /**
+     * 按链上原子费用和数据库中的原生资产精度计算提现批次账务费用。
+     */
     private BigDecimal actualFee(
             String chain, BigInteger l2Fee, BigInteger l1Fee, BigInteger operatorFee) {
         var profile = chainRepository.findProfileByChain(chain)
@@ -179,8 +211,14 @@ public class Evm7702WithdrawalCoordinator {
                 java.math.RoundingMode.UP);
     }
 
+    /**
+     * 创建带有已预留 nonce 的签名提现尝试。
+     */
     @FunctionalInterface
     public interface SignedAttemptFactory {
+        /**
+         * 使用已预留 nonce 创建签名交易及其持久化信息。
+         */
         SignedAttempt create(BigInteger reservedNonce);
     }
 

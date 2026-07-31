@@ -41,14 +41,38 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code TronLiveFullFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class TronLiveFullFlowIntegrationTest {
+    /**
+     * 保存 {@code TEST_TENANT_ID}，用于标识测试中的交易、区块或业务记录。
+     */
     private static final UUID TEST_TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000002");
+    /**
+     * 保存 {@code CHAIN}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String CHAIN = ChainType.TRON.name();
+    /**
+     * 保存 {@code TRX_DECIMALS}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final int TRX_DECIMALS = 6;
+    /**
+     * 保存 {@code TOKEN_DECIMALS}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final int TOKEN_DECIMALS = 6;
+    /**
+     * 保存 {@code SUN}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final BigDecimal SUN = new BigDecimal("1000000");
+    /**
+     * 保存 {@code FEE_LIMIT_SUN}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final long FEE_LIMIT_SUN = 100_000_000L;
 
+    /**
+     * 验证 {@code shouldExecuteLocalTrxAndTrc20FullFlow} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldExecuteLocalTrxAndTrc20FullFlow() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("tron.live.flow.enabled"),
@@ -159,6 +183,9 @@ class TronLiveFullFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code executeTokenFlow} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TokenFlowResult executeTokenFlow(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
                                                     TronDepositScanner depositScanner, TronTridentClient client,
                                                     TronTransactionService trxService, TronTrc20Service trc20Service,
@@ -233,6 +260,9 @@ class TronLiveFullFlowIntegrationTest {
                 estimatedEnergy, estimatedFee);
     }
 
+    /**
+     * 验证 {@code appendTokenReport} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void appendTokenReport(Map<String, String> report, String prefix, TokenFlowResult result) {
         report.put(prefix + "DepositBTxid", result.depositForCollectionTxId());
         report.put(prefix + "DepositCTxid", result.depositForWithdrawalTxId());
@@ -244,6 +274,9 @@ class TronLiveFullFlowIntegrationTest {
         report.put(prefix + "EstimatedFeeTrx", result.estimatedFee().toPlainString());
     }
 
+    /**
+     * 验证 {@code scanAndAssertTokenDeposit} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void scanAndAssertTokenDeposit(TronDepositScanner scanner, TronTridentClient client,
                                                   JdbcTemplate jdbcTemplate, TxResult tx, Actor actor,
                                                   TokenSpec token, BigDecimal expectedAmount,
@@ -259,6 +292,9 @@ class TronLiveFullFlowIntegrationTest {
                 "TRC20 duplicate scan must not double credit");
     }
 
+    /**
+     * 验证 {@code withdrawTrx} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TxResult withdrawTrx(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
                                         TronTridentClient client, TronTransactionService service,
                                         String orderNo, Actor from, String to, BigDecimal amount) throws Exception {
@@ -276,6 +312,9 @@ class TronLiveFullFlowIntegrationTest {
         return tx;
     }
 
+    /**
+     * 验证 {@code collectTrx} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TxResult collectTrx(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
                                        TronTridentClient client, TronTransactionService service,
                                        String collectionNo, Actor from, Actor to, BigDecimal amount) throws Exception {
@@ -307,6 +346,9 @@ class TronLiveFullFlowIntegrationTest {
         return tx;
     }
 
+    /**
+     * 验证 {@code withdrawTrc20} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TxResult withdrawTrc20(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
                                           TronTridentClient client, TronTrc20Service service,
                                           String orderNo, Actor from, String to, BigDecimal amount,
@@ -325,6 +367,9 @@ class TronLiveFullFlowIntegrationTest {
         return tx;
     }
 
+    /**
+     * 验证 {@code collectTrc20} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TxResult collectTrc20(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
                                          TronTridentClient client, TronTrc20Service service,
                                          String collectionNo, Actor from, Actor to, BigDecimal amount,
@@ -357,6 +402,9 @@ class TronLiveFullFlowIntegrationTest {
         return tx;
     }
 
+    /**
+     * 验证 {@code sendTrx} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TxResult sendTrx(TronTridentClient client, TronTransactionService service,
                                     Actor from, String to, BigDecimal amount) throws Exception {
         var signed = service.signTrxTransfer(client, from.keyPair(), to, toSun(amount));
@@ -365,6 +413,9 @@ class TronLiveFullFlowIntegrationTest {
         return new TxResult(signed.txId(), info.getBlockNumber(), feeTrx(info));
     }
 
+    /**
+     * 验证 {@code sendTrc20} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TxResult sendTrc20(TronTridentClient client, TronTrc20Service service, Actor from,
                                       String contract, String to, BigDecimal amount, int decimals) throws Exception {
         var signed = service.signTransfer(client, from.keyPair(), contract, to, amount, decimals, FEE_LIMIT_SUN);
@@ -374,6 +425,9 @@ class TronLiveFullFlowIntegrationTest {
         return new TxResult(signed.txId(), info.getBlockNumber(), feeTrx(info));
     }
 
+    /**
+     * 验证 {@code waitTransaction} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Response.TransactionInfo waitTransaction(TronTridentClient client, String txId) throws Exception {
         long deadline = System.nanoTime() + Duration.ofSeconds(120).toNanos();
         while (System.nanoTime() < deadline) {
@@ -393,6 +447,9 @@ class TronLiveFullFlowIntegrationTest {
         throw new IllegalStateException("transactionInfo timeout: " + txId);
     }
 
+    /**
+     * 验证 {@code trc20Balance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal trc20Balance(TronTridentClient client, String owner, String contract, int decimals) {
         Function balanceOf = new Function("balanceOf",
                 List.of(new Address(owner)),
@@ -408,6 +465,9 @@ class TronLiveFullFlowIntegrationTest {
         return Trc20AbiCodec.fromRawAmount(raw, decimals);
     }
 
+    /**
+     * 验证 {@code estimateTransferEnergy} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static long estimateTransferEnergy(TronTridentClient client, Actor owner, String to, BigDecimal amount,
                                                TokenSpec token) {
         Function transfer = new Function("transfer",
@@ -419,6 +479,9 @@ class TronLiveFullFlowIntegrationTest {
         return estimate.getEnergyRequired();
     }
 
+    /**
+     * 验证 {@code prepareDatabase} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void prepareDatabase(JdbcTemplate jdbcTemplate, List<Actor> actors, String runId) {
         jdbcTemplate.update("""
                 insert into custody_tenant(id, slug, name)
@@ -441,6 +504,9 @@ class TronLiveFullFlowIntegrationTest {
         jdbcTemplate.update("delete from gas_topup_task where task_no like ?", runId + "%");
     }
 
+    /**
+     * 验证 {@code insertAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void insertAddress(JdbcTemplate jdbcTemplate, Actor actor, String role) {
         jdbcTemplate.update("""
                         insert into chain_address(tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
@@ -461,6 +527,9 @@ class TronLiveFullFlowIntegrationTest {
                 actor.path(), role);
     }
 
+    /**
+     * 验证 {@code upsertToken} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void upsertToken(JdbcTemplate jdbcTemplate, String network, TokenSpec token) {
         String contractHex = TronAddressCodec.base58ToHex(token.contract());
         jdbcTemplate.update("""
@@ -488,6 +557,9 @@ class TronLiveFullFlowIntegrationTest {
                 token.decimals());
     }
 
+    /**
+     * 验证 {@code insertWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void insertWithdrawal(JdbcTemplate jdbcTemplate, String orderNo, Actor from, String to,
                                          String asset, BigDecimal amount, String status) {
         jdbcTemplate.update("""
@@ -500,6 +572,9 @@ class TronLiveFullFlowIntegrationTest {
                 from.address(), to, amount, status);
     }
 
+    /**
+     * 验证 {@code updateWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void updateWithdrawal(JdbcTemplate jdbcTemplate, String orderNo, String status,
                                          String txId, BigDecimal fee) {
         jdbcTemplate.update("""
@@ -509,6 +584,9 @@ class TronLiveFullFlowIntegrationTest {
                         """, status, txId, fee, orderNo);
     }
 
+    /**
+     * 验证 {@code insertGasTask} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void insertGasTask(JdbcTemplate jdbcTemplate, String taskNo, String target, String source,
                                       BigDecimal amount, String status) {
         jdbcTemplate.update("""
@@ -521,6 +599,9 @@ class TronLiveFullFlowIntegrationTest {
                         """, taskNo, CHAIN, target, source, amount, status);
     }
 
+    /**
+     * 验证 {@code updateGasTaskConfirmed} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void updateGasTaskConfirmed(JdbcTemplate jdbcTemplate, String taskNo, String txId) {
         jdbcTemplate.update("""
                         update gas_topup_task
@@ -529,11 +610,17 @@ class TronLiveFullFlowIntegrationTest {
                         """, txId, taskNo);
     }
 
+    /**
+     * 验证 {@code assertChainLedgerTrx} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertChainLedgerTrx(TronTridentClient client, JdbcTemplate jdbcTemplate, Actor actor) {
         assertBalanceEquals(trxBalance(client, actor.address()), ledger(jdbcTemplate, "TRX", actor.address()),
                 actor.name() + " TRX ledger must match chain");
     }
 
+    /**
+     * 验证 {@code assertTokenLedger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertTokenLedger(TronTridentClient client, JdbcTemplate jdbcTemplate, Actor actor,
                                           TokenSpec token, BigDecimal expected) {
         assertBalanceEquals(expected, ledger(jdbcTemplate, token.symbol(), actor.address()),
@@ -543,6 +630,9 @@ class TronLiveFullFlowIntegrationTest {
                 actor.name() + " " + token.symbol() + " ledger must match chain");
     }
 
+    /**
+     * 验证 {@code assertNoNegativeOrLockedLedger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertNoNegativeOrLockedLedger(JdbcTemplate jdbcTemplate, Actor... actors) {
         for (Actor actor : actors) {
             Integer badRows = jdbcTemplate.queryForObject("""
@@ -554,6 +644,9 @@ class TronLiveFullFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code assertDepositCount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertDepositCount(JdbcTemplate jdbcTemplate, String txId, String to, int expected) {
         Integer count = jdbcTemplate.queryForObject("""
                         select count(*) from deposit_record
@@ -563,6 +656,9 @@ class TronLiveFullFlowIntegrationTest {
         assertEquals(expected, count);
     }
 
+    /**
+     * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal ledger(JdbcTemplate jdbcTemplate, String asset, String account) {
         List<BigDecimal> rows = jdbcTemplate.queryForList("""
                         select available_balance from ledger_balance
@@ -571,37 +667,61 @@ class TronLiveFullFlowIntegrationTest {
         return rows.isEmpty() ? BigDecimal.ZERO : rows.getFirst();
     }
 
+    /**
+     * 验证 {@code trxBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal trxBalance(TronTridentClient client, String address) {
         return new BigDecimal(client.getBalanceSun(address)).divide(SUN, TRX_DECIMALS, RoundingMode.DOWN)
                 .stripTrailingZeros();
     }
 
+    /**
+     * 验证 {@code feeTrx} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal feeTrx(Response.TransactionInfo info) {
         return new BigDecimal(info.getFee()).divide(SUN, TRX_DECIMALS, RoundingMode.DOWN).stripTrailingZeros();
     }
 
+    /**
+     * 验证 {@code toSun} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static long toSun(BigDecimal trx) {
         return trx.movePointRight(TRX_DECIMALS).toBigIntegerExact().longValueExact();
     }
 
+    /**
+     * 验证 {@code tokenMap} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Map<String, TronScanner.TokenConfig> tokenMap(TokenSpec token) {
         String contractHex = TronAddressCodec.base58ToHex(token.contract());
         return Map.of(contractHex, new TronScanner.TokenConfig(token.symbol(), contractHex, token.decimals()));
     }
 
+    /**
+     * 验证 {@code platform} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Set<String> platform(Actor actor) {
         return Set.of(actor.address().toLowerCase(Locale.ROOT));
     }
 
+    /**
+     * 验证 {@code ledgerAccount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String ledgerAccount(Actor actor) {
         return actor.address().toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * 验证 {@code assertBalanceEquals} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertBalanceEquals(BigDecimal expected, BigDecimal actual, String message) {
         assertEquals(0, expected.setScale(6, RoundingMode.DOWN).compareTo(actual.setScale(6, RoundingMode.DOWN)),
                 message + ", expected=" + expected + ", actual=" + actual);
     }
 
+    /**
+     * 验证 {@code actor} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Actor actor(Bip32Node sig2Root, String name, int userId) {
         String path = "m/44/23/1/" + userId + "/0";
         ECKey ecKey = deriveEcKey(sig2Root, path);
@@ -609,11 +729,17 @@ class TronLiveFullFlowIntegrationTest {
         return new Actor(name, userId, path, keyPair, keyPair.toBase58CheckAddress());
     }
 
+    /**
+     * 验证 {@code actorFromPrivateKey} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Actor actorFromPrivateKey(String name, int userId, String privateKey) {
         KeyPair keyPair = new KeyPair(privateKey);
         return new Actor(name, userId, "local-test-source", keyPair, keyPair.toBase58CheckAddress());
     }
 
+    /**
+     * 验证 {@code requiredProperty} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String requiredProperty(String name) {
         String value = System.getProperty(name, "").trim();
         if (value.isEmpty()) {
@@ -622,6 +748,9 @@ class TronLiveFullFlowIntegrationTest {
         return value;
     }
 
+    /**
+     * 验证 {@code requiredEnvironment} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String requiredEnvironment(String name) {
         String value = System.getenv().getOrDefault(name, "").trim();
         if (value.isEmpty()) {
@@ -630,6 +759,9 @@ class TronLiveFullFlowIntegrationTest {
         return value;
     }
 
+    /**
+     * 验证 {@code deriveEcKey} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static ECKey deriveEcKey(Bip32Node sig2Root, String path) {
         String[] parts = path.substring(2).split("/");
         Bip32Node node = sig2Root;
@@ -639,6 +771,9 @@ class TronLiveFullFlowIntegrationTest {
         return node.getEcKey();
     }
 
+    /**
+     * 验证 {@code dataSource} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static DriverManagerDataSource dataSource() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
         dataSource.setDriverClassName("org.postgresql.Driver");
@@ -648,6 +783,9 @@ class TronLiveFullFlowIntegrationTest {
         return dataSource;
     }
 
+    /**
+     * 验证 {@code writeReport} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void writeReport(String runId, Map<String, String> values) throws Exception {
         Path report = Path.of("target", "tron-live-flow-report.properties");
         Files.createDirectories(report.getParent());

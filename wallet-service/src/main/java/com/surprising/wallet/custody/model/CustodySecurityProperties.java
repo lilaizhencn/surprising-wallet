@@ -34,30 +34,57 @@ public class CustodySecurityProperties {
     /** 平台初始管理员账号配置 */
     private final PlatformAdmin platformAdmin = new PlatformAdmin();
 
+    /**
+     * 获取或查询 {@code getSecretMasterKey} 对应的数据，供调用方读取当前状态。
+     */
     public String getSecretMasterKey() {
         return secretMasterKey;
     }
+    /**
+     * 设置或更新 {@code setSecretMasterKey} 对应的状态，并保持相关业务字段一致。
+     */
     public void setSecretMasterKey(String secretMasterKey) {
         this.secretMasterKey = secretMasterKey == null ? "" : secretMasterKey.trim();
     }
+    /**
+     * 获取或查询 {@code getSessionTtl} 对应的数据，供调用方读取当前状态。
+     */
     public Duration getSessionTtl() {
         return sessionTtl;
     }
+    /**
+     * 设置或更新 {@code setSessionTtl} 对应的状态，并保持相关业务字段一致。
+     */
     public void setSessionTtl(Duration sessionTtl) {
         this.sessionTtl = sessionTtl == null ? Duration.ofHours(12) : sessionTtl;
     }
+    /**
+     * 获取或查询 {@code getApiClockSkew} 对应的数据，供调用方读取当前状态。
+     */
     public Duration getApiClockSkew() {
         return apiClockSkew;
     }
+    /**
+     * 设置或更新 {@code setApiClockSkew} 对应的状态，并保持相关业务字段一致。
+     */
     public void setApiClockSkew(Duration apiClockSkew) {
         this.apiClockSkew = apiClockSkew == null ? Duration.ofMinutes(5) : apiClockSkew;
     }
+    /**
+     * 获取或查询 {@code getPlatformAdmin} 对应的数据，供调用方读取当前状态。
+     */
     public PlatformAdmin getPlatformAdmin() {
         return platformAdmin;
     }
+    /**
+     * 判断 {@code isSessionCookieSecure} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     public boolean isSessionCookieSecure() {
         return sessionCookieSecure;
     }
+    /**
+     * 设置或更新 {@code setSessionCookieSecure} 对应的状态，并保持相关业务字段一致。
+     */
     public void setSessionCookieSecure(boolean sessionCookieSecure) {
         this.sessionCookieSecure = sessionCookieSecure;
     }
@@ -68,18 +95,30 @@ public class CustodySecurityProperties {
         /** 管理员密码（明文，应用启动后应立即修改） */
         private String password = "";
 
+        /**
+         * 获取或查询 {@code getEmail} 对应的数据，供调用方读取当前状态。
+         */
         public String getEmail() {
             return email;
         }
 
+        /**
+         * 设置或更新 {@code setEmail} 对应的状态，并保持相关业务字段一致。
+         */
         public void setEmail(String email) {
             this.email = email == null ? "" : email.trim();
         }
 
+        /**
+         * 获取或查询 {@code getPassword} 对应的数据，供调用方读取当前状态。
+         */
         public String getPassword() {
             return password;
         }
 
+        /**
+         * 设置或更新 {@code setPassword} 对应的状态，并保持相关业务字段一致。
+         */
         public void setPassword(String password) {
             this.password = password == null ? "" : password;
         }

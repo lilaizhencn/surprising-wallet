@@ -7,7 +7,13 @@ import java.math.BigDecimal;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code TronWaitingGasStateTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class TronWaitingGasStateTest {
+    /**
+     * 验证 {@code insufficientGas_shouldCreateDeterministicTopupTask} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void insufficientGas_shouldCreateDeterministicTopupTask() {
         TronWaitingGasStateService service = new TronWaitingGasStateService();
@@ -18,6 +24,9 @@ class TronWaitingGasStateTest {
         assertTrue(decision.topupAmount().compareTo(BigDecimal.ZERO) > 0);
     }
 
+    /**
+     * 验证 {@code sufficientGas_shouldNotCreateTopupTask} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void sufficientGas_shouldNotCreateTopupTask() {
         TronWaitingGasStateService service = new TronWaitingGasStateService();

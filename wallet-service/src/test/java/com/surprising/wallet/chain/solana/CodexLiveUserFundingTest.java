@@ -48,11 +48,26 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code CodexLiveUserFundingTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class CodexLiveUserFundingTest {
+    /**
+     * 保存 {@code USER_EMAIL}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String USER_EMAIL = "lilaizhencn@gmail.com";
+    /**
+     * 保存 {@code BASE_USDC}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String BASE_USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+    /**
+     * 保存 {@code SOLANA_USDC}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String SOLANA_USDC = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 
+    /**
+     * 验证 {@code fundUserThroughExternalAddresses} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void fundUserThroughExternalAddresses() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("codex.live.user-funding"),
@@ -76,6 +91,9 @@ class CodexLiveUserFundingTest {
         System.out.println(report);
     }
 
+    /**
+     * 验证 {@code scanKnownFundedUserDeposits} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void scanKnownFundedUserDeposits() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("codex.live.user-scan"),
@@ -104,6 +122,9 @@ class CodexLiveUserFundingTest {
         System.out.println(report);
     }
 
+    /**
+     * 验证 {@code fundEth} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void fundEth(JdbcTemplate jdbc, ChainJdbcRepository repository, long userId, StringBuilder report)
             throws Exception {
         AccountChainProfile profile = repository.findProfileByChain("ETH").orElseThrow();
@@ -132,6 +153,9 @@ class CodexLiveUserFundingTest {
         }
     }
 
+    /**
+     * 验证 {@code fundBaseUsdc} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void fundBaseUsdc(JdbcTemplate jdbc, ChainJdbcRepository repository, long userId, StringBuilder report)
             throws Exception {
         AccountChainProfile profile = repository.findProfileByChain("BASE").orElseThrow();
@@ -165,6 +189,9 @@ class CodexLiveUserFundingTest {
         }
     }
 
+    /**
+     * 验证 {@code fundSolana} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void fundSolana(JdbcTemplate jdbc, ChainJdbcRepository repository, long userId, StringBuilder report)
             throws Exception {
         String seed = env("SW_ED25519_SEED", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
@@ -196,6 +223,9 @@ class CodexLiveUserFundingTest {
         report.append("SOLANA_USDC_EXTERNAL_TO_USER_TX=").append(tokenExternalToUser).append('\n');
     }
 
+    /**
+     * 验证 {@code scanEvmBlock} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void scanEvmBlock(JdbcTemplate jdbc, ChainJdbcRepository repository, ChainType chainType,
                               long blockHeight, StringBuilder report) throws Exception {
         AccountChainProfile profile = repository.findProfileByChain(chainType.name()).orElseThrow();
@@ -209,6 +239,9 @@ class CodexLiveUserFundingTest {
                 .append('\n');
     }
 
+    /**
+     * 验证 {@code credentials} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private Credentials credentials(AccountChainProfile profile, ChainAddressRecord from) {
         ECKey ecKey = Bip32Node.decode(env("SW_SIG2_MASTER_KEY", ""))
                 .getChild(44)
@@ -220,6 +253,9 @@ class CodexLiveUserFundingTest {
         return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(ecKey.getPrivKey(), 64));
     }
 
+    /**
+     * 验证 {@code sendNative} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private String sendNative(Web3j web3j, long chainId, Credentials from, String to, BigDecimal amount)
             throws Exception {
         BigInteger nonce = nonce(web3j, from.getAddress());
@@ -230,6 +266,9 @@ class CodexLiveUserFundingTest {
         return sendRaw(web3j, chainId, from, tx);
     }
 
+    /**
+     * 验证 {@code sendErc20} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private String sendErc20(Web3j web3j, long chainId, Credentials from, String contract,
                              String to, BigDecimal amount, int decimals) throws Exception {
         BigInteger nonce = nonce(web3j, from.getAddress());
@@ -244,6 +283,9 @@ class CodexLiveUserFundingTest {
         return sendRaw(web3j, chainId, from, tx);
     }
 
+    /**
+     * 验证 {@code sendRaw} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private String sendRaw(Web3j web3j, long chainId, Credentials from, RawTransaction tx) throws Exception {
         byte[] signed = TransactionEncoder.signMessage(tx, chainId, from);
         EthSendTransaction sent = web3j.ethSendRawTransaction(Numeric.toHexString(signed)).send();
@@ -253,10 +295,16 @@ class CodexLiveUserFundingTest {
         return sent.getTransactionHash();
     }
 
+    /**
+     * 验证 {@code nonce} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private BigInteger nonce(Web3j web3j, String address) throws Exception {
         return web3j.ethGetTransactionCount(address, DefaultBlockParameterName.PENDING).send().getTransactionCount();
     }
 
+    /**
+     * 验证 {@code waitReceipt} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private TransactionReceipt waitReceipt(Web3j web3j, String txHash, Duration timeout) throws Exception {
         Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
@@ -272,6 +320,9 @@ class CodexLiveUserFundingTest {
         throw new IllegalStateException("receipt timeout: " + txHash);
     }
 
+    /**
+     * 验证 {@code sendSol} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private String sendSol(SolanaRpcClient rpc, Account from, String to, long lamports) {
         Transaction transaction = new Transaction()
                 .addInstruction(SystemProgram.transfer(
@@ -279,6 +330,9 @@ class CodexLiveUserFundingTest {
         return signAndSend(rpc, transaction, List.of(from));
     }
 
+    /**
+     * 验证 {@code sendSpl} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private String sendSpl(SolanaRpcClient rpc, SolanaAddressService addresses, Account from, String mintAddress,
                            String toOwnerAddress, long atomicAmount, int decimals) {
         PublicKey mint = new PublicKey(mintAddress);
@@ -299,12 +353,18 @@ class CodexLiveUserFundingTest {
         return signAndSend(rpc, transaction, List.of(from));
     }
 
+    /**
+     * 验证 {@code signAndSend} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private String signAndSend(SolanaRpcClient rpc, Transaction transaction, List<Account> signers) {
         transaction.setRecentBlockHash(rpc.getLatestBlockhash());
         transaction.sign(signers);
         return rpc.sendTransaction(transaction.serialize());
     }
 
+    /**
+     * 验证 {@code jdbc} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private JdbcTemplate jdbc() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 env("CODEX_DB_URL", "jdbc:postgresql://172.31.6.134:5432/wallet"),
@@ -313,12 +373,18 @@ class CodexLiveUserFundingTest {
         return new JdbcTemplate(dataSource);
     }
 
+    /**
+     * 验证 {@code userId} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private long userId(JdbcTemplate jdbc, String email) {
         return jdbc.queryForObject(
                 "select id from wallet_user where lower(email)=lower(?) and status='ACTIVE'",
                 Long.class, email);
     }
 
+    /**
+     * 验证 {@code rpcUrl} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private String rpcUrl(JdbcTemplate jdbc, String chain, String network) {
         return jdbc.queryForObject("""
                         select rpc_url
@@ -333,6 +399,9 @@ class CodexLiveUserFundingTest {
                         """, String.class, chain, network);
     }
 
+    /**
+     * 验证 {@code rewindEvmScanner} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void rewindEvmScanner(JdbcTemplate jdbc, String chain, long blockHeight) {
         long previous = Math.max(0L, blockHeight - 1L);
         jdbc.update("""
@@ -355,12 +424,18 @@ class CodexLiveUserFundingTest {
                         """, chain, previous, previous);
     }
 
+    /**
+     * 验证 {@code setPrivateField} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void setPrivateField(Object target, String fieldName, Object value) throws Exception {
         java.lang.reflect.Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;

@@ -34,18 +34,48 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
  */
 @Service
 public class CustodyAddressService {
+    /**
+     * 定义 {@code RESERVED_SUBJECT_PREFIX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final String RESERVED_SUBJECT_PREFIX = "__sw_";
+    /**
+     * 定义 {@code DEFAULT_ADDRESS_VERSION} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     static final long DEFAULT_ADDRESS_VERSION = 0L;
+    /**
+     * 定义 {@code MAX_ADDRESS_VERSION} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final long MAX_ADDRESS_VERSION = Integer.MAX_VALUE;
+    /**
+     * 保存 {@code custodyRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final CustodyRepository custodyRepository;
+    /**
+     * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository chainRepository;
+    /**
+     * 保存 {@code runtime}，用于记录时间边界或审计时间。
+     */
     private final BlockchainRuntimeService runtime;
+    /**
+     * 保存 {@code tenantChains}，表示链、网络、资产或代币配置。
+     */
     private final CustodyTenantChainService tenantChains;
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper;
 
+    /**
+     * 保存 {@code evm7702Repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     @Autowired(required = false)
     private Evm7702CollectionRepository evm7702Repository;
 
+    /**
+     * 构造 {@code CustodyAddressService}，初始化该组件运行所需的状态和依赖。
+     */
     public CustodyAddressService(CustodyRepository custodyRepository,
                                  ChainJdbcRepository chainRepository,
                                  BlockchainRuntimeService runtime,
@@ -58,6 +88,9 @@ public class CustodyAddressService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 构建或生成 {@code create} 对应的结果，并执行输入和状态校验。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public AddressView create(CustodyPrincipal principal, CreateAddressCommand command,
                               String source, String sourceIp) {
@@ -67,6 +100,9 @@ public class CustodyAddressService {
                 addressVersion, addressVersion);
     }
 
+    /**
+     * 构建或生成 {@code createSystemAtChildIndex} 对应的结果，并执行输入和状态校验。
+     */
     @Transactional(rollbackFor = Throwable.class)
     AddressView createSystemAtChildIndex(CustodyPrincipal principal, CreateAddressCommand command,
                                          long childIndex, String sourceIp) {
@@ -75,6 +111,9 @@ public class CustodyAddressService {
                 DEFAULT_ADDRESS_VERSION, childIndex);
     }
 
+    /**
+     * 构建或生成 {@code createInternal} 对应的结果，并执行输入和状态校验。
+     */
     private AddressView createInternal(CustodyPrincipal principal, CreateAddressCommand command,
                                        String source, String sourceIp, boolean allowReservedSubject,
                                        long addressVersion, long childIndex) {
@@ -146,6 +185,9 @@ public class CustodyAddressService {
         return result;
     }
 
+    /**
+     * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
+     */
     public List<AddressView> list(CustodyPrincipal principal, String chain, String source,
                                   String status, String search, int limit, int offset) {
         requireScope(principal, "addresses:read");
@@ -162,6 +204,9 @@ public class CustodyAddressService {
                 .toList();
     }
 
+    /**
+     * 执行 {@code page} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public PageView<AddressView> page(CustodyPrincipal principal, String chain, String source,
                                       String status, String search, int limit, int offset) {
         requireScope(principal, "addresses:read");
@@ -183,6 +228,9 @@ public class CustodyAddressService {
                 pageSize, pageOffset);
     }
 
+    /**
+     * 设置或更新 {@code update} 对应的状态，并保持相关业务字段一致。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public AddressView update(CustodyPrincipal principal, UUID addressId,
                               UpdateAddressCommand command, String sourceIp) {
@@ -225,10 +273,16 @@ public class CustodyAddressService {
                 json(details));
         return toView(saved);
     }
+    /**
+     * 获取或查询 {@code assets} 对应的数据，并向调用方返回当前业务状态。
+     */
     public List<Map<String, Object>> assets(CustodyPrincipal principal) {
         requireScope(principal, "assets:read");
         return custodyRepository.tenantAssetOverview(principal.tenantId());
     }
+    /**
+     * 编码 {@code toView} 对应的数据，生成链上或接口所需的表示。
+     */
     private AddressView toView(AddressRecord record) {
         return new AddressView(
                 record.id(),
@@ -245,6 +299,9 @@ public class CustodyAddressService {
                 record.createdAt());
     }
 
+    /**
+     * 获取或查询 {@code readMetadata} 对应的数据，供调用方读取当前状态。
+     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> readMetadata(String json) {
         try {
@@ -253,6 +310,9 @@ public class CustodyAddressService {
             throw new IllegalStateException("stored address metadata is invalid", e);
         }
     }
+    /**
+     * 执行 {@code metadataJson} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private String metadataJson(Map<String, Object> metadata) {
         Map<String, Object> value = metadata == null ? Map.of() : metadata;
         String json = json(value);
@@ -261,6 +321,9 @@ public class CustodyAddressService {
         }
         return json;
     }
+    /**
+     * 编码 {@code json} 对应的数据，生成链上或接口所需的表示。
+     */
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -269,6 +332,9 @@ public class CustodyAddressService {
         }
     }
 
+    /**
+     * 添加 {@code addressAuditDetails} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     public String addressAuditDetails(String chain, String source, String subject,
                                long addressVersion, long childIndex) {
         Map<String, Object> details = new LinkedHashMap<>();
@@ -279,6 +345,9 @@ public class CustodyAddressService {
         details.put("childIndex", childIndex);
         return json(details);
     }
+    /**
+     * 校验 {@code requireAddressVersion} 对应的前置条件，不满足时抛出明确异常。
+     */
     public static long requireAddressVersion(Long value) {
         long addressVersion = value == null ? DEFAULT_ADDRESS_VERSION : value;
         if (addressVersion < 0 || addressVersion > MAX_ADDRESS_VERSION) {
@@ -287,6 +356,9 @@ public class CustodyAddressService {
         }
         return addressVersion;
     }
+    /**
+     * 校验 {@code requireChain} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static String requireChain(String value) {
         String chain = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!chain.matches("^[A-Z][A-Z0-9_]{1,31}$")) {
@@ -294,6 +366,9 @@ public class CustodyAddressService {
         }
         return chain;
     }
+    /**
+     * 执行 {@code optional} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String optional(String value, int max, String field) {
         String result = value == null ? "" : value.trim();
         if (result.length() > max) {
@@ -301,6 +376,9 @@ public class CustodyAddressService {
         }
         return result.isBlank() ? null : result;
     }
+    /**
+     * 校验 {@code requireSubject} 对应的前置条件，不满足时抛出明确异常。
+     */
     public static String requireSubject(String value, boolean allowReserved) {
         String subject = value == null ? "" : value.trim();
         if (!subject.matches("^[A-Za-z0-9_][A-Za-z0-9._:-]{0,159}$")) {
@@ -312,6 +390,9 @@ public class CustodyAddressService {
         }
         return subject;
     }
+    /**
+     * 转换或计算 {@code normalizeSource} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalizeSource(String value) {
         String source = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!"API".equals(source) && !"CONSOLE".equals(source)) {
@@ -319,9 +400,15 @@ public class CustodyAddressService {
         }
         return source;
     }
+    /**
+     * 转换或计算 {@code upperOrEmpty} 对应的值，统一金额、格式和边界规则。
+     */
     private static String upperOrEmpty(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
+    /**
+     * 校验 {@code requireScope} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static void requireScope(CustodyPrincipal principal, String scope) {
         if (principal == null || principal.tenantId() == null || !principal.hasScope(scope)) {
             throw new CustodyForbiddenException(scope + " scope required");

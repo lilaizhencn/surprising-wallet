@@ -326,6 +326,9 @@ class BitcoinLikeChainRuntime {
         updateUnifiedUtxoConfirmations(chainType, asset);
         updatePendingWithdrawConfirmations(chainType, asset);
     }
+    /**
+     * 处理 {@code reconcileCreditedDeposits} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private void reconcileCreditedDeposits(ChainType chainType) {
         long latest = bestHeight(chainType);
         long minimumHeight = Math.max(0L, latest - FINALITY_AUDIT_DEPTH + 1L);
@@ -404,12 +407,18 @@ class BitcoinLikeChainRuntime {
                 asset == null ? null : asset.getDecimals(),
                 asset == null ? null : asset.getContractAddress());
     }
+    /**
+     * 执行 {@code nextAddressIndex} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private int nextAddressIndex(AssetRuntimeMetadata asset, long userId, int biz) {
         return chainRepository.findMaxChainAddressIndex(
                         asset.chain(), asset.assetSymbol(), userId, biz, "DEPOSIT")
                 .map(value -> Math.toIntExact(value + 1))
                 .orElse(0);
     }
+    /**
+     * 构建或生成 {@code buildAddress} 对应的结果，并执行输入和状态校验。
+     */
     private Address buildAddress(ChainType chainType, long userId, int biz, int index) {
         AssetRuntimeMetadata asset = assetMetadata(chainType);
         PubKeyConfig.AddressMetadata metadata;
@@ -447,6 +456,9 @@ class BitcoinLikeChainRuntime {
                 .updateDate(Date.from(Instant.now()))
                 .build();
     }
+    /**
+     * 编码 {@code toChainAddressRecord} 对应的数据，生成链上或接口所需的表示。
+     */
     private ChainAddressRecord toChainAddressRecord(Address address, AssetRuntimeMetadata asset) {
         return ChainAddressRecord.builder()
                 .chain(asset.chain())
@@ -463,6 +475,9 @@ class BitcoinLikeChainRuntime {
                 .build();
     }
 
+    /**
+     * 获取或查询 {@code getUtxos} 对应的数据，供调用方读取当前状态。
+     */
     private List<UtxoTransaction> getUtxos(
             ChainType chainType, String txid, long height, long bestHeight, AssetRuntimeMetadata asset) {
         BtcLikeRawTransaction rawTransaction = getRawTransaction(chainType, txid);
@@ -475,6 +490,9 @@ class BitcoinLikeChainRuntime {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 编码 {@code toUtxo} 对应的数据，生成链上或接口所需的表示。
+     */
     private UtxoTransaction toUtxo(
             ChainType chainType, TxOutput output, String txid, long height, long bestHeight, AssetRuntimeMetadata asset) {
         ScriptPubKey pubKey = output.getScriptPubKey();
@@ -504,6 +522,9 @@ class BitcoinLikeChainRuntime {
                 .updateDate(Date.from(Instant.now()))
                 .build();
     }
+    /**
+     * 执行 {@code extractOutputAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private String extractOutputAddress(ChainType chainType, ScriptPubKey pubKey) {
         if (pubKey == null) {
             return null;
@@ -519,12 +540,18 @@ class BitcoinLikeChainRuntime {
         }
         return null;
     }
+    /**
+     * 转换或计算 {@code normalizeScannedAddress} 对应的值，统一金额、格式和边界规则。
+     */
     private String normalizeScannedAddress(ChainType chainType, String address) {
         if (chainType != ChainType.BCH) {
             return address;
         }
         return normalizeBchAddress(address, networkParameters(chainType));
     }
+    /**
+     * 转换或计算 {@code normalizeBchAddress} 对应的值，统一金额、格式和边界规则。
+     */
     private String normalizeBchAddress(String address, NetworkParameters params) {
         if (address == null || address.isBlank()) {
             return null;
@@ -544,6 +571,9 @@ class BitcoinLikeChainRuntime {
             return null;
         }
     }
+    /**
+     * 获取或查询 {@code getRawTransaction} 对应的数据，供调用方读取当前状态。
+     */
     private BtcLikeRawTransaction getRawTransaction(ChainType chainType, String txid) {
         try {
             return command(chainType).getRawTransaction(txid, true);
@@ -557,10 +587,16 @@ class BitcoinLikeChainRuntime {
             return null;
         }
     }
+    /**
+     * 处理 {@code confirmations} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private Integer confirmations(ChainType chainType, String txId) {
         BtcLikeRawTransaction transaction = getRawTransaction(chainType, txId);
         return transaction == null ? 0 : transaction.getConfirmations();
     }
+    /**
+     * 设置或更新 {@code updateWithdrawTransaction} 对应的状态，并保持相关业务字段一致。
+     */
     private void updateWithdrawTransaction(ChainType chainType, String txId, AssetRuntimeMetadata asset) {
         Optional<WithdrawTransaction> existing =
                 chainRepository.findBitcoinLikeSigningTransactionByTxId(asset, txId);
@@ -579,6 +615,9 @@ class BitcoinLikeChainRuntime {
         }
         settlementService.settleConfirmed(transaction, txId, asset);
     }
+    /**
+     * 设置或更新 {@code updateUnifiedUtxoConfirmations} 对应的状态，并保持相关业务字段一致。
+     */
     private void updateUnifiedUtxoConfirmations(ChainType chainType, AssetRuntimeMetadata asset) {
         int pageSize = 500;
         long afterId = 0L;
@@ -600,6 +639,9 @@ class BitcoinLikeChainRuntime {
             afterId = utxos.getLast().getId();
         }
     }
+    /**
+     * 设置或更新 {@code updatePendingWithdrawConfirmations} 对应的状态，并保持相关业务字段一致。
+     */
     private void updatePendingWithdrawConfirmations(ChainType chainType, AssetRuntimeMetadata asset) {
         List<WithdrawTransaction> pending = chainRepository.findSentBitcoinLikeSigningTransactions(asset);
         for (WithdrawTransaction transaction : pending) {
@@ -614,6 +656,9 @@ class BitcoinLikeChainRuntime {
             }
         }
     }
+    /**
+     * 写入或更新 {@code markConfirming} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     private void markConfirming(ChainType chainType, JSONObject signature, String txId) {
         String chain = chainType.name();
         List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
@@ -624,6 +669,9 @@ class BitcoinLikeChainRuntime {
                     tenantId, chain, record.getWithdrawId(), "CONFIRMING", null, txId, null);
         });
     }
+    /**
+     * 执行 {@code enrichUtxoMetadata} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private boolean enrichUtxoMetadata(UtxoTransaction utxo, AssetRuntimeMetadata asset) {
         Address address = addressService.getAddress(utxo.getAddress(), asset);
         if (address == null) {
@@ -633,6 +681,9 @@ class BitcoinLikeChainRuntime {
         utxo.setCurrency(asset.getIndex());
         return true;
     }
+    /**
+     * 记录或保存 {@code persistScannedUtxos} 对应的数据，并遵守幂等和事务约束。
+     */
     private void persistScannedUtxos(ChainType chainType, List<UtxoTransaction> utxos) {
         String chain = chainType.name();
         for (UtxoTransaction utxo : utxos) {
@@ -649,6 +700,9 @@ class BitcoinLikeChainRuntime {
                     Boolean.TRUE.equals(utxo.getCredited()));
         }
     }
+    /**
+     * 解析或转换 {@code convertUtxoToDto} 对应的数据，并校验其格式和边界。
+     */
     private TransactionDTO convertUtxoToDto(UtxoTransaction utxo) {
         return TransactionDTO.builder()
                 .address(utxo.getAddress())
@@ -661,6 +715,9 @@ class BitcoinLikeChainRuntime {
                 .biz(utxo.getBiz())
                 .build();
     }
+    /**
+     * 执行 {@code transactionExists} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private boolean transactionExists(ChainType chainType, String txId) {
         try {
             return getRawTransaction(chainType, txId) != null;
@@ -668,17 +725,26 @@ class BitcoinLikeChainRuntime {
             return false;
         }
     }
+    /**
+     * 执行 {@code txId} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private String txId(WithdrawTransaction transaction) {
         JSONObject signature = JSONObject.parseObject(transaction.getSignature());
         String raw = signature.getString("rawTransaction");
         Transaction signCompleteTx = Transaction.read(java.nio.ByteBuffer.wrap(java.util.HexFormat.of().parseHex(raw)));
         return signCompleteTx.getTxId().toString();
     }
+    /**
+     * 执行 {@code rejectReservedHotAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private void rejectReservedHotAddress(long userId, int biz) {
         if (HotWalletRules.isDefaultHotUser(userId, biz)) {
             throw new IllegalArgumentException("userId=0,biz=0 is reserved for the unique default hot wallet address");
         }
     }
+    /**
+     * 执行 {@code bitcoinLikeProfile} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private BitcoinLikeChainProfile bitcoinLikeProfile(ChainType chainType) {
         AccountChainProfile enabled = chainRepository.findProfileByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
@@ -686,6 +752,9 @@ class BitcoinLikeChainRuntime {
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for " + chainType.name() + "/" + enabled.getNetwork()));
     }
+    /**
+     * 获取或查询 {@code networkParameters} 对应的数据，并向调用方返回当前业务状态。
+     */
     private NetworkParameters networkParameters(ChainType chainType) {
         String network = bitcoinLikeProfile(chainType).getNetwork();
         boolean mainnet = "main".equalsIgnoreCase(network) || "mainnet".equalsIgnoreCase(network);
@@ -705,6 +774,9 @@ class BitcoinLikeChainRuntime {
             default -> throw new IllegalStateException("unsupported bitcoin-like chain " + chainType);
         };
     }
+    /**
+     * 执行 {@code command} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private BtcLikeCommand command(ChainType chainType) {
         return switch (chainType) {
             case BTC -> btcCommand;

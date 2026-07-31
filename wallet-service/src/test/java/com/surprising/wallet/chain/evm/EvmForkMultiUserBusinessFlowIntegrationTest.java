@@ -45,16 +45,29 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Multi-user EVM business-flow validation on a real local fork.
- * The test exercises deposit scanning, withdrawal freezing, retry recovery,
- * collection recovery, nonce reservation and ledger-vs-chain reconciliation.
+ * 验证 {@code EvmForkMultiUserBusinessFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
  */
 class EvmForkMultiUserBusinessFlowIntegrationTest {
+    /**
+     * 保存 {@code TEST_TENANT_ID}，用于标识测试中的交易、区块或业务记录。
+     */
     private static final UUID TEST_TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000001");
+    /**
+     * 保存 {@code LOCAL_RPC}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private static final String LOCAL_RPC = "http://127.0.0.1:8545";
+    /**
+     * 保存 {@code WEI_PER_NATIVE}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final BigDecimal WEI_PER_NATIVE = new BigDecimal("1000000000000000000");
+    /**
+     * 保存 {@code GAS_BUFFER}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final BigDecimal GAS_BUFFER = new BigDecimal("0.01");
 
+    /**
+     * 验证 {@code shouldValidateMultiUserBusinessFlowAndRecoveryOnFork} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldValidateMultiUserBusinessFlowAndRecoveryOnFork() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("evm.multiuser.enabled"),
@@ -160,6 +173,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code executeFailedThenRecoveredNativeWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void executeFailedThenRecoveredNativeWithdrawal(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
                                                                    Web3j web3j, ChainType chain, String nativeSymbol,
                                                                    Actor user, String recipient, BigDecimal amount,
@@ -188,6 +204,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         recordEvmTx(repository, chain, nativeSymbol, null, user.address(), recipient, amount, tx);
     }
 
+    /**
+     * 验证 {@code executeTokenWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void executeTokenWithdrawal(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository, Web3j web3j,
                                                ChainType chain, String nativeSymbol, Actor user, String contract,
                                                String tokenSymbol, int tokenDecimals, String recipient, BigDecimal amount,
@@ -210,6 +229,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         recordEvmTx(repository, chain, tokenSymbol, contract, user.address(), recipient, amount, tx);
     }
 
+    /**
+     * 验证 {@code executeNativeCollection} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void executeNativeCollection(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository, Web3j web3j,
                                                 ChainType chain, String nativeSymbol, Actor user, Actor hotWallet,
                                                 BigDecimal amount, long chainId) throws Exception {
@@ -229,6 +251,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         recordEvmTx(repository, chain, nativeSymbol, null, user.address(), hotWallet.address(), amount, tx);
     }
 
+    /**
+     * 验证 {@code executeInterruptedTokenCollectionRecovery} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void executeInterruptedTokenCollectionRecovery(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
                                                                   Web3j web3j, ChainType chain, String nativeSymbol,
                                                                   Actor user, Actor hotWallet, String contract,
@@ -250,6 +275,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         recordEvmTx(repository, chain, tokenSymbol, contract, user.address(), hotWallet.address(), amount, tx);
     }
 
+    /**
+     * 验证 {@code recoverTokenCollection} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static SignedTx recoverTokenCollection(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository, Web3j web3j,
                                                    ChainType chain, String nativeSymbol, Actor user, Actor hotWallet,
                                                    String contract, String tokenSymbol, int tokenDecimals, BigDecimal amount,
@@ -274,6 +302,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return tx;
     }
 
+    /**
+     * 验证 {@code settleFrozen} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void settleFrozen(ChainJdbcRepository repository, String chain, String asset, String account,
                                      BigDecimal frozen, BigDecimal actualDebit) {
         BigDecimal lockedDebit = actualDebit.min(frozen);
@@ -290,6 +321,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code prepareDatabase} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void prepareDatabase(JdbcTemplate jdbcTemplate, ChainType chain, String nativeSymbol, Actors actors) {
         jdbcTemplate.update("""
                 insert into custody_tenant(id, slug, name)
@@ -332,6 +366,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code scanNativeDeposit} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void scanNativeDeposit(EvmDepositScanner scanner, ChainType chain, String nativeSymbol,
                                           int confirmations, TransactionReceipt receipt) throws Exception {
         List<DepositEvent> events = scanner.scanAndCreditNative(chain, nativeSymbol, LOCAL_RPC, confirmations,
@@ -339,6 +376,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         assertFalse(events.isEmpty(), "native deposit scanner must find the test deposit");
     }
 
+    /**
+     * 验证 {@code scanTokenDeposit} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void scanTokenDeposit(EvmDepositScanner scanner, ChainType chain, int confirmations,
                                          TransactionReceipt receipt) throws Exception {
         List<DepositEvent> events = scanner.scanAndCreditErc20(chain, LOCAL_RPC, confirmations,
@@ -346,6 +386,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         assertFalse(events.isEmpty(), "ERC20 scanner must find the test deposit");
     }
 
+    /**
+     * 验证 {@code reserveNonce} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger reserveNonce(ChainJdbcRepository repository, Web3j web3j,
                                            ChainType chain, Actor actor) throws Exception {
         BigInteger nonce = pendingNonce(web3j, actor.credentials());
@@ -359,6 +402,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return nonce;
     }
 
+    /**
+     * 验证 {@code recordEvmTx} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void recordEvmTx(ChainJdbcRepository repository, ChainType chain, String asset, String contract,
                                     String from, String to, BigDecimal amount, SignedTx tx) {
         if (tx == null) {
@@ -381,6 +427,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
                 .build());
     }
 
+    /**
+     * 验证 {@code createOrder} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void createOrder(JdbcTemplate jdbcTemplate, String orderNo, long userId, ChainType chain,
                                     String asset, String from, String to, BigDecimal amount) {
         jdbcTemplate.update("""
@@ -392,6 +441,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
                 from.toLowerCase(Locale.ROOT), to.toLowerCase(Locale.ROOT), amount);
     }
 
+    /**
+     * 验证 {@code updateOrder} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void updateOrder(JdbcTemplate jdbcTemplate, String orderNo, String status, String txHash,
                                     BigDecimal fee, String error) {
         jdbcTemplate.update("""
@@ -401,6 +453,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
                         """, status, txHash, fee, error, orderNo);
     }
 
+    /**
+     * 验证 {@code assertDepositCount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertDepositCount(JdbcTemplate jdbcTemplate, ChainType chain, String asset,
                                            String address, int expected) {
         Integer count = jdbcTemplate.queryForObject("""
@@ -411,6 +466,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         assertEquals(expected, count);
     }
 
+    /**
+     * 验证 {@code countNonConfirmedOrders} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static int countNonConfirmedOrders(JdbcTemplate jdbcTemplate, ChainType chain) {
         Integer count = jdbcTemplate.queryForObject("""
                         select count(*) from withdrawal_order
@@ -419,6 +477,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return count == null ? 0 : count;
     }
 
+    /**
+     * 验证 {@code assertAddressMatchesChain} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertAddressMatchesChain(JdbcTemplate jdbcTemplate, Web3j web3j, ChainType chain,
                                                   String nativeSymbol, List<TokenContract> tokens, Actor actor) throws Exception {
         assertBalanceEquals(getNativeBalance(web3j, actor.address()),
@@ -432,6 +493,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         assertBalanceEquals(BigDecimal.ZERO, lockedOrZero(jdbcTemplate, chain, "USDC", actor.address()));
     }
 
+    /**
+     * 验证 {@code tokenContracts} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static List<TokenContract> tokenContracts(JdbcTemplate jdbcTemplate, ChainType chain) {
         return jdbcTemplate.query("""
                         select symbol, contract_address, decimals
@@ -444,6 +508,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
                 chain.name());
     }
 
+    /**
+     * 验证 {@code actors} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Actors actors(ChainType chain) throws Exception {
         int base = 94_000 + chain.ordinal() * 100;
         return new Actors(
@@ -454,6 +521,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
                 actor("HOT", 810_090L, base + 90));
     }
 
+    /**
+     * 验证 {@code actor} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Actor actor(String label, long userId, int derivationIndex) throws Exception {
         String path = "m/44/2/1/" + derivationIndex + "/0";
         Bip32Node node = Bip32Node.decode(sig2Master())
@@ -466,6 +536,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return new Actor(label, "STABILITY_" + label, userId, derivationIndex, path, credentials, credentials.getAddress());
     }
 
+    /**
+     * 验证 {@code sig2Master} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String sig2Master() throws Exception {
         String fromProperty = System.getProperty("evm.sig2.master");
         if (isValidMasterKey(fromProperty)) {
@@ -488,6 +561,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return testMasterKey();
     }
 
+    /**
+     * 验证 {@code isValidMasterKey} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static boolean isValidMasterKey(String value) {
         if (value == null || value.isBlank() || value.contains("${")) {
             return false;
@@ -500,12 +576,18 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code testMasterKey} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String testMasterKey() {
         byte[] seed = new byte[32];
         Arrays.fill(seed, (byte) 0x42);
         return Bip32Node.getMasterKey(seed).privSerialize(Bip32Node.TYPE_BITCOIN, true);
     }
 
+    /**
+     * 验证 {@code projectRoot} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Path projectRoot() {
         Path current = Path.of("").toAbsolutePath();
         while (current != null) {
@@ -519,10 +601,16 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         throw new IllegalStateException("cannot locate project root");
     }
 
+    /**
+     * 验证 {@code orderNo} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String orderNo(ChainType chain, String user, String asset, String flow) {
         return "EVM-STABILITY-" + chain.name() + "-" + user + "-" + asset + "-" + flow;
     }
 
+    /**
+     * 验证 {@code sendUnlockedNative} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TransactionReceipt sendUnlockedNative(Web3j web3j, String from, String to, BigDecimal amount) throws Exception {
         BigInteger gasPrice = web3j.ethGasPrice().send().getGasPrice();
         EthSendTransaction sent = web3j.ethSendTransaction(
@@ -531,6 +619,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return waitReceipt(web3j, sent);
     }
 
+    /**
+     * 验证 {@code sendUnlockedTokenCall} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TransactionReceipt sendUnlockedTokenCall(Web3j web3j, String from, String contract, String data) throws Exception {
         BigInteger gasPrice = web3j.ethGasPrice().send().getGasPrice();
         EthSendTransaction sent = web3j.ethSendTransaction(
@@ -539,6 +630,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return waitReceipt(web3j, sent);
     }
 
+    /**
+     * 验证 {@code sendSignedNative} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static SignedTx sendSignedNative(Web3j web3j, Credentials from, String to, BigDecimal amount,
                                              long chainId, BigInteger nonce, BigInteger gasLimit) throws Exception {
         BigDecimal before = getNativeBalance(web3j, from.getAddress());
@@ -549,6 +643,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return new SignedTx(receipt, nonce, before.subtract(after).subtract(amount));
     }
 
+    /**
+     * 验证 {@code sendSignedTokenTransfer} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static SignedTx sendSignedTokenTransfer(Web3j web3j, Credentials from, String contract, String to,
                                                     BigDecimal amount, int tokenDecimals,
                                                     long chainId, BigInteger nonce) throws Exception {
@@ -561,12 +658,18 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return new SignedTx(receipt, nonce, before.subtract(after));
     }
 
+    /**
+     * 验证 {@code sendSigned} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TransactionReceipt sendSigned(Web3j web3j, RawTransaction raw, Credentials credentials, long chainId) throws Exception {
         byte[] signed = TransactionEncoder.signMessage(raw, chainId, credentials);
         EthSendTransaction sent = web3j.ethSendRawTransaction(Numeric.toHexString(signed)).send();
         return waitReceipt(web3j, sent);
     }
 
+    /**
+     * 验证 {@code waitReceipt} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TransactionReceipt waitReceipt(Web3j web3j, EthSendTransaction sent) throws Exception {
         if (sent.hasError()) {
             throw new IllegalStateException("transaction failed before broadcast: " + sent.getError().getMessage());
@@ -584,12 +687,18 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         throw new IllegalStateException("transaction receipt timeout: " + txHash);
     }
 
+    /**
+     * 验证 {@code estimateNativeGas} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger estimateNativeGas(Web3j web3j, String from, String to, BigDecimal amount) throws Exception {
         var tx = org.web3j.protocol.core.methods.request.Transaction.createEtherTransaction(
                 from, null, null, null, to, nativeToWei(amount));
         return web3j.ethEstimateGas(tx).send().getAmountUsed();
     }
 
+    /**
+     * 验证 {@code estimateTokenGas} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger estimateTokenGas(Web3j web3j, String from, String contract, String to,
                                                BigDecimal amount, int tokenDecimals) throws Exception {
         var tx = org.web3j.protocol.core.methods.request.Transaction.createFunctionCallTransaction(
@@ -597,11 +706,17 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return web3j.ethEstimateGas(tx).send().getAmountUsed();
     }
 
+    /**
+     * 验证 {@code encodeTransfer} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String encodeTransfer(String to, BigDecimal amount, int tokenDecimals) {
         return FunctionEncoder.encode(new Function("transfer",
                 List.of(new Address(to), new Uint256(tokenToUnits(amount, tokenDecimals))), List.of()));
     }
 
+    /**
+     * 验证 {@code tokenBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal tokenBalance(Web3j web3j, String token, String account, int tokenDecimals) throws Exception {
         Function function = new Function("balanceOf",
                 List.of(new Address(account)), List.of(TypeReference.create(Uint256.class)));
@@ -614,15 +729,24 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return new BigDecimal(raw).divide(decimalFactor(tokenDecimals), 18, RoundingMode.DOWN);
     }
 
+    /**
+     * 验证 {@code getNativeBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal getNativeBalance(Web3j web3j, String account) throws Exception {
         return weiToNative(web3j.ethGetBalance(account, DefaultBlockParameterName.LATEST).send().getBalance());
     }
 
+    /**
+     * 验证 {@code pendingNonce} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger pendingNonce(Web3j web3j, Credentials credentials) throws Exception {
         return web3j.ethGetTransactionCount(credentials.getAddress(), DefaultBlockParameterName.PENDING)
                 .send().getTransactionCount();
     }
 
+    /**
+     * 验证 {@code ledgerOrZero} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal ledgerOrZero(JdbcTemplate jdbcTemplate, ChainType chain, String asset, String account) {
         List<BigDecimal> values = jdbcTemplate.queryForList("""
                         select available_balance from ledger_balance
@@ -631,10 +755,16 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return values.isEmpty() ? BigDecimal.ZERO : values.getFirst();
     }
 
+    /**
+     * 验证 {@code locked} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal locked(JdbcTemplate jdbcTemplate, ChainType chain, String asset, String account) {
         return lockedOrZero(jdbcTemplate, chain, asset, account);
     }
 
+    /**
+     * 验证 {@code lockedOrZero} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal lockedOrZero(JdbcTemplate jdbcTemplate, ChainType chain, String asset, String account) {
         List<BigDecimal> values = jdbcTemplate.queryForList("""
                         select locked_balance from ledger_balance
@@ -643,30 +773,51 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         return values.isEmpty() ? BigDecimal.ZERO : values.getFirst();
     }
 
+    /**
+     * 验证 {@code assertBalanceEquals} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertBalanceEquals(BigDecimal expected, BigDecimal actual) {
         assertEquals(0, expected.setScale(18, RoundingMode.DOWN).compareTo(actual.setScale(18, RoundingMode.DOWN)));
     }
 
+    /**
+     * 验证 {@code fee} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal fee(SignedTx tx) {
         return tx.nativeFee();
     }
 
+    /**
+     * 验证 {@code nativeToWei} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger nativeToWei(BigDecimal amount) {
         return amount.multiply(WEI_PER_NATIVE).toBigIntegerExact();
     }
 
+    /**
+     * 验证 {@code tokenToUnits} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger tokenToUnits(BigDecimal amount, int tokenDecimals) {
         return amount.multiply(decimalFactor(tokenDecimals)).toBigIntegerExact();
     }
 
+    /**
+     * 验证 {@code decimalFactor} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal decimalFactor(int tokenDecimals) {
         return BigDecimal.TEN.pow(tokenDecimals);
     }
 
+    /**
+     * 验证 {@code weiToNative} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal weiToNative(BigInteger wei) {
         return new BigDecimal(wei).divide(WEI_PER_NATIVE, 18, RoundingMode.DOWN);
     }
 
+    /**
+     * 验证 {@code dataSource} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static DriverManagerDataSource dataSource() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
         dataSource.setDriverClassName("org.postgresql.Driver");

@@ -7,7 +7,13 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * 验证 {@code SuiPtbTransactionBuilderTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class SuiPtbTransactionBuilderTest {
+    /**
+     * 验证 {@code matchesSuiCliTransactionDataBcs} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void matchesSuiCliTransactionDataBcs() {
         String sender = "0xb1dd7ca2c37b738349ee47736224d840f61a00eefd88b686cfd2245af8865f51";

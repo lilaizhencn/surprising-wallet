@@ -31,11 +31,19 @@ import com.surprising.wallet.account.service.Evm7702CollectionWorkflowService;
 import com.surprising.wallet.account.service.Evm7702WithdrawalWorkflowService.EvmReceiptResponse;
 import com.surprising.wallet.account.service.Evm7702WithdrawalWorkflowService.EvmTransactionReceipt;
 
-/** Live read-only gate proving OP Stack receipts expose the L1 fee used for settlement. */
+/**
+ * 验证 {@code Evm7702OpStackFeeIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class Evm7702OpStackFeeIntegrationTest {
+    /**
+     * 保存 {@code GAS_PRICE_ORACLE}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final String GAS_PRICE_ORACLE =
             "0x420000000000000000000000000000000000000F";
 
+    /**
+     * 验证 {@code shouldReadExactL1FeeFromRecentStandardTransactionReceipt} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldReadExactL1FeeFromRecentStandardTransactionReceipt() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("evm.7702.op-stack-fee.enabled"),
@@ -97,12 +105,18 @@ class Evm7702OpStackFeeIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code requiredProperty} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String requiredProperty(String name) {
         String value = System.getProperty(name, "").trim();
         if (value.isEmpty()) throw new IllegalArgumentException("missing -D" + name);
         return value;
     }
 
+    /**
+     * 验证 {@code oracleUint256} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger oracleUint256(
             Web3j web3j, String from, Function function) throws Exception {
         EthCall response = web3j.ethCall(

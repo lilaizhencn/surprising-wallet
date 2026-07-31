@@ -16,13 +16,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Second signer for Dogecoin legacy P2SH 2-of-3 transactions.
+ * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
  */
 @Component
 public class DogeSecondSignService implements ISignService {
+    /**
+     * 保存 {@code network}，表示链、网络、资产或代币配置。
+     */
     @Value("${sw.doge.network:testnet}")
     private String network;
 
+    /**
+     * 为 {@code signTransaction} 对应的交易或消息生成签名，并保持原始数据不被改变。
+     */
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
         AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
@@ -49,11 +55,17 @@ public class DogeSecondSignService implements ISignService {
         }
     }
 
+    /**
+     * 获取或查询 {@code chain} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String chain() {
         return "DOGE";
     }
 
+    /**
+     * 获取或查询 {@code networkParameters} 对应的数据，并向调用方返回当前业务状态。
+     */
     private DogecoinNetworkParameters networkParameters() {
         if ("main".equalsIgnoreCase(network) || "mainnet".equalsIgnoreCase(network)) {
             return DogecoinNetworkParameters.mainnet();

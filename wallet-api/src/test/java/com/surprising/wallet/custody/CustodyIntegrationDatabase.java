@@ -13,14 +13,26 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.regex.Pattern;
 
+/**
+ * 测试辅助类 {@code CustodyIntegrationDatabase}，为相关测试提供隔离环境或共享数据。
+ */
 final class CustodyIntegrationDatabase {
+    /**
+     * 保存 {@code LOCAL_TEST_DATABASE_URL}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final Pattern LOCAL_TEST_DATABASE_URL = Pattern.compile(
             "^jdbc:postgresql://(?:127\\.0\\.0\\.1|localhost):5432/"
                     + "surprising_wallet_test_[a-z0-9_]+(?:\\?.*)?$");
 
+    /**
+     * 验证 {@code CustodyIntegrationDatabase} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private CustodyIntegrationDatabase() {
     }
 
+    /**
+     * 验证 {@code dataSource} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static DriverManagerDataSource dataSource() {
         String url = requiredEnvironment("SW_TEST_CUSTODY_DB_URL");
         if (!LOCAL_TEST_DATABASE_URL.matcher(url).matches()) {
@@ -36,6 +48,9 @@ final class CustodyIntegrationDatabase {
         return dataSource;
     }
 
+    /**
+     * 验证 {@code reset} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static void reset(DriverManagerDataSource dataSource) throws Exception {
         try (Connection connection = dataSource.getConnection()) {
             requirePostgreSql18(connection);
@@ -53,6 +68,9 @@ final class CustodyIntegrationDatabase {
         }
     }
 
+    /**
+     * 验证 {@code requiredEnvironment} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String requiredEnvironment(String name) {
         String value = System.getenv(name);
         if (value == null || value.isBlank()) {
@@ -62,6 +80,9 @@ final class CustodyIntegrationDatabase {
         return value.trim();
     }
 
+    /**
+     * 验证 {@code requirePostgreSql18} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void requirePostgreSql18(Connection connection) throws Exception {
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery("show server_version_num")) {
@@ -71,6 +92,9 @@ final class CustodyIntegrationDatabase {
         }
     }
 
+    /**
+     * 验证 {@code projectRoot} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Path projectRoot() throws IOException {
         Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath();
         while (current != null) {

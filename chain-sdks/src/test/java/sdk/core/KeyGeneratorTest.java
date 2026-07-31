@@ -8,8 +8,14 @@ import org.bitcoinj.params.TestNet3Params;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
+/**
+ * 验证 {@code KeyGeneratorTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 public class KeyGeneratorTest {
 
+    /**
+     * 验证 {@code main} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     public static void main(String[] args) {
         int coinType = 0;
         boolean isMainnet = false;// false = 生成测试网的密钥对，true=生成主网的密钥对
@@ -56,6 +62,9 @@ public class KeyGeneratorTest {
     }
 
 
+    /**
+     * 验证 {@code getSeed} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     public static byte[] getSeed(int size) {
         if (size <= 0) {
             throw new IllegalArgumentException("size must be greater than 0");

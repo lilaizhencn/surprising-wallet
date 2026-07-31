@@ -60,15 +60,24 @@ class SolanaRpcClient {
     /** 测试用固定 RPC URL（非 null 时优先使用） */
     private final String fixedRpcUrl;
 
+    /**
+     * 构造 {@code SolanaRpcClient}，初始化该组件运行所需的状态和依赖。
+     */
     @Autowired
     public SolanaRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
         this(new ObjectMapper(), repository, rpcNodeService, null);
     }
 
+    /**
+     * 构造 {@code SolanaRpcClient}，初始化该组件运行所需的状态和依赖。
+     */
     SolanaRpcClient(ObjectMapper objectMapper, String rpcUrl) {
         this(objectMapper, null, null, rpcUrl);
     }
 
+    /**
+     * 构造 {@code SolanaRpcClient}，初始化该组件运行所需的状态和依赖。
+     */
     private SolanaRpcClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
                             ChainRpcNodeService rpcNodeService, String fixedRpcUrl) {
         this.objectMapper = objectMapper;
@@ -222,6 +231,9 @@ class SolanaRpcClient {
         return call("getTokenAccountBalance", List.of(tokenAccount, commitment()))
                 .path("value").path("amount").asLong();
     }
+    /**
+     * 执行 {@code call} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public JsonNode call(String method, List<?> params) {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("jsonrpc", "2.0");
@@ -242,6 +254,9 @@ class SolanaRpcClient {
             throw new IllegalStateException("Solana RPC serialization/IO failed for " + method, e);
         }
     }
+    /**
+     * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
+     */
     private JsonNode execute(String method, String requestBody, String rpcUrl, ChainRpcNode node) {
         try {
             for (int attempt = 1; attempt <= 6; attempt++) {
@@ -282,11 +297,17 @@ class SolanaRpcClient {
             throw new IllegalStateException("Solana RPC interrupted for " + method, e);
         }
     }
+    /**
+     * 执行 {@code commitment} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private ObjectNode commitment() {
         ObjectNode config = objectMapper.createObjectNode();
         config.put("commitment", "confirmed");
         return config;
     }
+    /**
+     * 构建或生成 {@code buildHttpClient} 对应的结果，并执行输入和状态校验。
+     */
     private static HttpClient buildHttpClient() {
         try {
             SSLContext sslContext = SSLContext.getInstance("TLSv1.2");

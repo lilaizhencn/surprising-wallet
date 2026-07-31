@@ -15,7 +15,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code UtxoOptimizerTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class UtxoOptimizerTest {
+    /**
+     * 验证 {@code optimizerShouldPreferBestExactSubsetAndRemainDeterministic} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void optimizerShouldPreferBestExactSubsetAndRemainDeterministic() {
         UtxoOptimizer optimizer = new UtxoOptimizer();
@@ -33,6 +39,9 @@ class UtxoOptimizerTest {
         assertTrue(selection.getInputSat() >= selection.getTargetSat() + selection.getFeeSat());
     }
 
+    /**
+     * 验证 {@code optimizerShouldMergeDustChangeIntoFee} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void optimizerShouldMergeDustChangeIntoFee() {
         UtxoOptimizer optimizer = new UtxoOptimizer();
@@ -45,6 +54,9 @@ class UtxoOptimizerTest {
         assertTrue(selection.isExactMatch());
     }
 
+    /**
+     * 验证 {@code batchSettlementPlannerShouldKeepPerUserOutputsAndAtomicTotals} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void batchSettlementPlannerShouldKeepPerUserOutputsAndAtomicTotals() {
         MultiUserSettlementPlanner planner = new MultiUserSettlementPlanner();

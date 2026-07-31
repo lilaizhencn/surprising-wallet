@@ -32,17 +32,35 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
  */
 @Service
 public class WalletConfigOverviewService {
+    /**
+     * 定义 {@code SWITCH_KEYS} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final Map<String, String> SWITCH_KEYS = Map.of(
             "wallet", "global.all.enabled",
             "scan", "global.scan.enabled",
             "withdraw", "global.withdraw.enabled",
             "collection", "global.collection.enabled",
             "transfer", "global.transfer.enabled");
+    /**
+     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final JdbcTemplate jdbc;
+    /**
+     * 保存 {@code custodyRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final CustodyRepository custodyRepository;
+    /**
+     * 保存 {@code keysetConfigured}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
+     */
     private final BooleanSupplier keysetConfigured;
+    /**
+     * 保存 {@code environment}，用于承载当前对象的运行配置或业务数据。
+     */
     private final String environment;
 
+    /**
+     * 构造 {@code WalletConfigOverviewService}，初始化该组件运行所需的状态和依赖。
+     */
     @Autowired
     public WalletConfigOverviewService(JdbcTemplate jdbc,
                                        CustodyRepository custodyRepository,
@@ -55,6 +73,9 @@ public class WalletConfigOverviewService {
         this.environment = normalizeEnvironment(environment);
     }
 
+    /**
+     * 构造 {@code WalletConfigOverviewService}，初始化该组件运行所需的状态和依赖。
+     */
     public WalletConfigOverviewService(JdbcTemplate jdbc,
                                 CustodyRepository custodyRepository,
                                 BooleanSupplier keysetConfigured,
@@ -64,6 +85,9 @@ public class WalletConfigOverviewService {
         this.keysetConfigured = keysetConfigured;
         this.environment = normalizeEnvironment(environment);
     }
+    /**
+     * 执行 {@code summary} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public SummaryView summary(CustodyPrincipal actor) {
         requirePlatformAdmin(actor);
         GlobalSwitches switches = loadSwitches();
@@ -120,6 +144,9 @@ public class WalletConfigOverviewService {
                 Instant.now());
     }
 
+    /**
+     * 设置或更新 {@code updateGlobalSwitches} 对应的状态，并保持相关业务字段一致。
+     */
     @Transactional
     public SummaryView updateGlobalSwitches(CustodyPrincipal actor,
                                             UpdateGlobalSwitchesCommand command,
@@ -152,6 +179,9 @@ public class WalletConfigOverviewService {
                 sourceIp, details);
         return summary(actor);
     }
+    /**
+     * 获取或查询 {@code loadSwitches} 对应的数据，供调用方读取当前状态。
+     */
     private GlobalSwitches loadSwitches() {
         Map<String, Boolean> values = new HashMap<>();
         for (Map<String, Object> row : jdbc.queryForList("""
@@ -176,6 +206,9 @@ public class WalletConfigOverviewService {
                 values.getOrDefault(SWITCH_KEYS.get("collection"), true),
                 values.getOrDefault(SWITCH_KEYS.get("transfer"), true));
     }
+    /**
+     * 获取或查询 {@code loadProfiles} 对应的数据，供调用方读取当前状态。
+     */
     private List<ProfileRow> loadProfiles() {
         return jdbc.queryForList("""
                 select id, chain, network, family, enabled,
@@ -193,6 +226,9 @@ public class WalletConfigOverviewService {
                 booleanValue(row.get("collection_enabled"), false),
                 booleanValue(row.get("transfer_enabled"), false))).toList();
     }
+    /**
+     * 获取或查询 {@code loadTokens} 对应的数据，供调用方读取当前状态。
+     */
     private List<TokenRow> loadTokens() {
         return jdbc.queryForList("""
                 select chain, network, symbol, enabled,
@@ -206,6 +242,9 @@ public class WalletConfigOverviewService {
                 stringValue(row.get("contract_address")),
                 booleanValue(row.get("enabled"), false))).toList();
     }
+    /**
+     * 获取或查询 {@code loadAssets} 对应的数据，供调用方读取当前状态。
+     */
     private List<AssetRow> loadAssets() {
         return jdbc.queryForList("""
                 select chain, symbol, contract_address, active
@@ -218,6 +257,9 @@ public class WalletConfigOverviewService {
                 stringValue(row.get("contract_address")),
                 booleanValue(row.get("active"), false))).toList();
     }
+    /**
+     * 获取或查询 {@code loadRpcNodes} 对应的数据，供调用方读取当前状态。
+     */
     private List<RpcRow> loadRpcNodes() {
         return jdbc.queryForList("""
                 select chain, network, environment, enabled
@@ -230,6 +272,9 @@ public class WalletConfigOverviewService {
                 booleanValue(row.get("enabled"), false))).toList();
     }
 
+    /**
+     * 获取或查询 {@code findAnomalies} 对应的数据，供调用方读取当前状态。
+     */
     private List<AnomalyView> findAnomalies(boolean keysetConfigured,
                                             boolean production,
                                             List<ProfileRow> profiles,
@@ -323,6 +368,9 @@ public class WalletConfigOverviewService {
         return List.copyOf(anomalies);
     }
 
+    /**
+     * 获取或查询 {@code chainStatus} 对应的数据，并向调用方返回当前业务状态。
+     */
     private ChainStatusView chainStatus(ProfileRow profile,
                                         GlobalSwitches global,
                                         boolean keysetConfigured,
@@ -388,21 +436,33 @@ public class WalletConfigOverviewService {
                 profile.enabled(), configured, effective, tokenCount, rpcNodeCount,
                 status, List.copyOf(blockers));
     }
+    /**
+     * 写入或更新 {@code enabledTokenCounts} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     private Map<String, Integer> enabledTokenCounts(List<TokenRow> tokens) {
         Map<String, Integer> counts = new HashMap<>();
         tokens.stream().filter(TokenRow::enabled).forEach(token ->
                 counts.merge(profileKey(token.chain(), token.network()), 1, Integer::sum));
         return counts;
     }
+    /**
+     * 写入或更新 {@code enabledRpcCounts} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     private Map<String, Integer> enabledRpcCounts(List<RpcRow> nodes) {
         Map<String, Integer> counts = new HashMap<>();
         nodes.stream().filter(RpcRow::enabled).filter(this::currentEnvironment).forEach(node ->
                 counts.merge(profileKey(node.chain(), node.network()), 1, Integer::sum));
         return counts;
     }
+    /**
+     * 获取或查询 {@code currentEnvironment} 对应的数据，并向调用方返回当前业务状态。
+     */
     private boolean currentEnvironment(RpcRow row) {
         return environment.equalsIgnoreCase(row.environment());
     }
+    /**
+     * 写入或更新 {@code upsertSwitch} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     private void upsertSwitch(String key, boolean value) {
         jdbc.update("""
                 insert into wallet_system_config(
@@ -416,37 +476,67 @@ public class WalletConfigOverviewService {
                 """, key, Boolean.toString(value));
     }
 
+    /**
+     * 执行 {@code effective} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static boolean effective(boolean wallet, boolean globalTask,
                                      boolean profile, boolean profileTask) {
         return wallet && globalTask && profile && profileTask;
     }
+    /**
+     * 执行 {@code sameContract} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static boolean sameContract(String left, String right) {
         return !left.isBlank() && !right.isBlank() && left.trim().equalsIgnoreCase(right.trim());
     }
+    /**
+     * 获取或查询 {@code profileKey} 对应的数据，并向调用方返回当前业务状态。
+     */
     private static String profileKey(String chain, String network) {
         return normalize(chain) + "|" + normalize(network);
     }
+    /**
+     * 获取或查询 {@code assetKey} 对应的数据，并向调用方返回当前业务状态。
+     */
     private static String assetKey(String chain, String symbol) {
         return normalize(chain) + "|" + normalize(symbol);
     }
+    /**
+     * 转换或计算 {@code normalize} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalize(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
+    /**
+     * 转换或计算 {@code normalizeEnvironment} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalizeEnvironment(String value) {
         return value == null || value.isBlank() ? "dev" : value.trim();
     }
+    /**
+     * 转换或计算 {@code stringValue} 对应的值，统一金额、格式和边界规则。
+     */
     private static String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
+    /**
+     * 转换或计算 {@code longValue} 对应的值，统一金额、格式和边界规则。
+     */
     private static long longValue(Object value) {
         return value instanceof Number number ? number.longValue() : Long.parseLong(stringValue(value));
     }
+    /**
+     * 转换或计算 {@code booleanValue} 对应的值，统一金额、格式和边界规则。
+     */
     private static boolean booleanValue(Object value, boolean defaultValue) {
         if (value == null) {
             return defaultValue;
         }
         return value instanceof Boolean bool ? bool : Boolean.parseBoolean(String.valueOf(value));
     }
+    /**
+     * 校验 {@code requirePlatformAdmin} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static void requirePlatformAdmin(CustodyPrincipal actor) {
         if (actor == null || !actor.isPlatformAdmin()) {
             throw new CustodyForbiddenException("platform administrator required");
@@ -494,6 +584,9 @@ public class WalletConfigOverviewService {
             boolean withdrawEnabled,
             boolean collectionEnabled,
             boolean transferEnabled) {
+        /**
+         * 执行 {@code anyEnabled} 对应的辅助逻辑，完成数据处理并维护状态边界。
+         */
         public boolean anyEnabled() {
             return scanEnabled || withdrawEnabled || collectionEnabled || transferEnabled;
         }

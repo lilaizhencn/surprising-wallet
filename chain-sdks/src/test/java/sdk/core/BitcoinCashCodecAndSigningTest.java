@@ -12,7 +12,13 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * 验证 {@code BitcoinCashCodecAndSigningTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class BitcoinCashCodecAndSigningTest {
+    /**
+     * 验证 {@code cashAddrRoundTripAndForkIdSignaturesMustPass} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test void cashAddrRoundTripAndForkIdSignaturesMustPass(){
         var params=BitcoinCashNetworkParameters.testnet();
         ECKey k1=ECKey.fromPrivate(BigInteger.TWO),k2=ECKey.fromPrivate(BigInteger.valueOf(3)),k3=ECKey.fromPrivate(BigInteger.valueOf(4));
@@ -37,6 +43,9 @@ class BitcoinCashCodecAndSigningTest {
         assertEquals(0x41, chunks.get(2).data[chunks.get(2).data.length-1] & 0xff);
     }
 
+    /**
+     * 验证 {@code regtestCashAddrAndChecksumMustBeIndependent} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test void regtestCashAddrAndChecksumMustBeIndependent(){
         var params=BitcoinCashNetworkParameters.regtest();
         var key=ECKey.fromPrivate(BigInteger.valueOf(7));
@@ -64,6 +73,9 @@ class BitcoinCashCodecAndSigningTest {
                         "bchreg",nodeAddress.substring("bchreg:".length())).hash()));
     }
 
+    /**
+     * 验证 {@code feePlanMustSupportWithdrawalChangeAndOneOutputCollection} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test void feePlanMustSupportWithdrawalChangeAndOneOutputCollection(){
         var withdrawal=BitcoinCashFeePolicy.calculateSpendPlan(
                 1_000_000_000L,100_000_000L,1,1,1,546);

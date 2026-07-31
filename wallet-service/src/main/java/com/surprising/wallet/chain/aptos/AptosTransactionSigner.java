@@ -45,8 +45,14 @@ public class AptosTransactionSigner {
     /** FA 元数据类型参数 */
     private static final String FUNGIBLE_ASSET_METADATA_TYPE = "0x1::fungible_asset::Metadata";
 
+    /**
+     * 定义 {@code HEX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final HexFormat HEX = HexFormat.of();
 
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** Aptos 密钥服务 */

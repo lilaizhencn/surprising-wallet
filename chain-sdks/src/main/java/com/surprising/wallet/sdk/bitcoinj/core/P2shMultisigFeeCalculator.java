@@ -1,13 +1,18 @@
 package com.surprising.wallet.sdk.bitcoinj.core;
 
 /**
- * Conservative serialized-size estimator for compressed-key legacy P2SH
- * multisig transactions.
+ * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
  */
 public final class P2shMultisigFeeCalculator {
+    /**
+     * 构造 {@code P2shMultisigFeeCalculator}，初始化该组件运行所需的状态和依赖。
+     */
     private P2shMultisigFeeCalculator() {
     }
 
+    /**
+     * 计算或估算 {@code estimateBytes} 对应的金额、费用或资源消耗。
+     */
     public static long estimateBytes(int inputs, int outputs, int requiredSignatures, int totalPubKeys) {
         if (inputs <= 0 || outputs <= 0 || requiredSignatures <= 0
                 || totalPubKeys < requiredSignatures || totalPubKeys > 16) {
@@ -25,6 +30,9 @@ public final class P2shMultisigFeeCalculator {
                 + varIntSize(outputs) + outputs * outputBytes + 4L;
     }
 
+    /**
+     * 执行 {@code varIntSize} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static long varIntSize(long value) {
         if (value < 0xfdL) {
             return 1L;

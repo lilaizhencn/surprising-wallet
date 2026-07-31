@@ -20,9 +20,14 @@ import com.surprising.wallet.account.service.Evm7702CollectionWorkflowService;
 import com.surprising.wallet.account.service.Evm7702WithdrawalWorkflowService.EvmReceiptResponse;
 import com.surprising.wallet.account.service.Evm7702WithdrawalWorkflowService.EvmTransactionReceipt;
 
-/** Live read-only gate proving Nitro receipts bake parent-chain data cost into gasUsed. */
+/**
+ * 验证 {@code Evm7702ArbitrumFeeIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class Evm7702ArbitrumFeeIntegrationTest {
 
+    /**
+     * 验证 {@code shouldSplitBakedInParentChainFeeFromRecentSequencerReceipt} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldSplitBakedInParentChainFeeFromRecentSequencerReceipt() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("evm.7702.arbitrum-fee.enabled"),
@@ -70,6 +75,9 @@ class Evm7702ArbitrumFeeIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code requiredProperty} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String requiredProperty(String name) {
         String value = System.getProperty(name, "").trim();
         if (value.isEmpty()) throw new IllegalArgumentException("missing -D" + name);

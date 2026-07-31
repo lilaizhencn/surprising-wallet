@@ -1,10 +1,12 @@
 package com.surprising.wallet.common.utils;
 
 /**
- * @author lilaizhen
- * @data 28/03/2018
+ * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
  */
 public final class Constants {
+    /**
+     * 构造 {@code Constants}，初始化该组件运行所需的状态和依赖。
+     */
     private Constants() {
     }
     /**
@@ -15,7 +17,13 @@ public final class Constants {
      * 读取等待提现
      */
     public final static String WALLET_WITHDRAW_WAIT_KEY = "sw:wallet:withdraw:wait";
+    /**
+     * 定义 {@code WALLET_WITHDRAW_FAIL_KEY} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     public final static String WALLET_WITHDRAW_FAIL_KEY = "sw:wallet:withdraw:fail";
+    /**
+     * 定义 {@code WALLET_WITHDRAW_FAIL_KEY_TMP} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     public final static String WALLET_WITHDRAW_FAIL_KEY_TMP = "sw:wallet:withdraw:fail:tmp";
     /**
      * 等待第一次签名
@@ -44,6 +52,9 @@ public final class Constants {
      * 签名完成之后，发到各自的业务线
      */
     public final static String WALLET_WITHDRAW_TX_BIZ_KEY = "sw:wallet:withdraw:tx:biz:";
+    /**
+     * 定义 {@code UNSPENT_TX_ID} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     public static final String UNSPENT_TX_ID = "unspent";
     /**
      * status 状态
@@ -61,6 +72,9 @@ public final class Constants {
     public static final short DELETE = -1;
 
 
+    /**
+     * 定义 {@code WITHDRAW} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     public static final String WITHDRAW = "withdraw";
 
 }

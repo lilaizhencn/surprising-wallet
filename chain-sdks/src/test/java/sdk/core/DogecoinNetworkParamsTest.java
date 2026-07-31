@@ -8,7 +8,13 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * 验证 {@code DogecoinNetworkParamsTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class DogecoinNetworkParamsTest {
+    /**
+     * 验证 {@code mainnetAndTestnetMustUseDogecoinCorePrefixes} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void mainnetAndTestnetMustUseDogecoinCorePrefixes() {
         var mainnet = DogecoinNetworkParameters.mainnet();
@@ -36,6 +42,9 @@ class DogecoinNetworkParamsTest {
         assertEquals(60, regtest.getSpendableCoinbaseDepth());
     }
 
+    /**
+     * 验证 {@code regtestP2pkhMustNotBeParsedAsDogecoinTestnet} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void regtestP2pkhMustNotBeParsedAsDogecoinTestnet() {
         String address = LegacyAddress.fromPubKeyHash(
@@ -46,6 +55,9 @@ class DogecoinNetworkParamsTest {
                 LegacyAddress.fromBase58(DogecoinNetworkParameters.testnet(), address));
     }
 
+    /**
+     * 验证 {@code feeAndDustMustFollowDogecoinRecommendation} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void feeAndDustMustFollowDogecoinRecommendation() {
         assertEquals(1_000_000L, DogecoinFeePolicy.RECOMMENDED_FEE_KOINU_PER_KB);

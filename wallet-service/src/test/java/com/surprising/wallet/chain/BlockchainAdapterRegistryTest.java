@@ -23,7 +23,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code BlockchainAdapterRegistryTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class BlockchainAdapterRegistryTest {
+    /**
+     * 验证 {@code registryShouldResolveBtcEvmTronAndFutureAdapters} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void registryShouldResolveBtcEvmTronAndFutureAdapters() {
         InMemoryTokenRegistry tokenRegistry = new InMemoryTokenRegistry();

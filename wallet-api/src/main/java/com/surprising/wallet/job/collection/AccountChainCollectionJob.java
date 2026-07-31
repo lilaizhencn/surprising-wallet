@@ -6,6 +6,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/**
+ * 负责定时任务入口和调度编排，实际业务处理委托给服务层。
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

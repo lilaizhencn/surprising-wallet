@@ -6,7 +6,13 @@ import org.tron.trident.proto.Chain;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code TronNileConnectivityIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class TronNileConnectivityIntegrationTest {
+    /**
+     * 验证 {@code nileNode_shouldReturnLatestBlock} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void nileNode_shouldReturnLatestBlock() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("tron.live.enabled"),

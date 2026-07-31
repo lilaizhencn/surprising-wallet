@@ -82,6 +82,9 @@ public class AptosRpcClient {
         this(objectMapper, null, null, rpcUrl, faucetUrl);
     }
 
+    /**
+     * 构造 {@code AptosRpcClient}，初始化该组件运行所需的状态和依赖。
+     */
     private AptosRpcClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
                            ChainRpcNodeService rpcNodeService, String fixedRpcUrl, String fixedFaucetUrl) {
         this.objectMapper = objectMapper;

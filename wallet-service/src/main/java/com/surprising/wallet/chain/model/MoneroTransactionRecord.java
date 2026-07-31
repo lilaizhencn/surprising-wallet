@@ -27,17 +27,56 @@ import java.math.BigDecimal;
 @Value
 @Builder
 public class MoneroTransactionRecord {
+    /**
+     * 保存 {@code chain}，表示链、网络、资产或代币配置。
+     */
     String chain;
+    /**
+     * 保存 {@code txHash}，用于标识交易、区块或业务记录。
+     */
     String txHash;
+    /**
+     * 保存 {@code direction}，用于承载当前对象的运行配置或业务数据。
+     */
     String direction;
+    /**
+     * 保存 {@code accountIndex}，用于承载当前对象的运行配置或业务数据。
+     */
     Integer accountIndex;
+    /**
+     * 保存 {@code subaddressIndex}，表示链、网络、资产或代币配置。
+     */
     Integer subaddressIndex;
+    /**
+     * 保存 {@code address}，表示链、网络、资产或代币配置。
+     */
     String address;
+    /**
+     * 保存 {@code assetSymbol}，表示链、网络、资产或代币配置。
+     */
     String assetSymbol;
+    /**
+     * 保存 {@code amount}，用于保存金额、费用或链上执行状态。
+     */
     BigDecimal amount;
+    /**
+     * 保存 {@code feeAtomic}，用于保存金额、费用或链上执行状态。
+     */
     Long feeAtomic;
+    /**
+     * 保存 {@code blockHeight}，用于标识交易、区块或业务记录。
+     */
     Long blockHeight;
+    /**
+     * 保存 {@code confirmations}，记录开关、处理状态、确认结果或重试信息。
+     */
     Integer confirmations;
+    /**
+     * 保存 {@code status}，记录开关、处理状态、确认结果或重试信息。
+     */
     String status;
+    /**
+     * 保存 {@code rawPayload}，用于承载当前对象的运行配置或业务数据。
+     */
     String rawPayload;
 }

@@ -10,7 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code TronAddressCodecTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class TronAddressCodecTest {
+    /**
+     * 验证 {@code base58AndHex_shouldRoundTrip} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void base58AndHex_shouldRoundTrip() {
         String address = TronTridentKeyFactory.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(42), true));
@@ -20,6 +26,9 @@ class TronAddressCodecTest {
         assertEquals(address, TronAddressCodec.hexToBase58(hex));
     }
 
+    /**
+     * 验证 {@code topicAddress_shouldDecodeToBase58} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void topicAddress_shouldDecodeToBase58() {
         String address = TronTridentKeyFactory.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(43), true));
@@ -28,6 +37,9 @@ class TronAddressCodecTest {
         assertEquals(address, TronAddressCodec.topicAddressToBase58(topic));
     }
 
+    /**
+     * 验证 {@code invalidAddress_shouldFail} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void invalidAddress_shouldFail() {
         assertFalse(TronAddressCodec.isValidBase58("bad-address"));

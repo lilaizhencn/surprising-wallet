@@ -34,6 +34,9 @@ import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
 @Repository
 @ConditionalOnProperty(prefix = "sw.wallet.dev-faucet", name = "enabled", havingValue = "true")
 public class DevFaucetRepository {
+    /**
+     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final JdbcTemplate jdbc;
 
     /**
@@ -44,6 +47,9 @@ public class DevFaucetRepository {
     public DevFaucetRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
+    /**
+     * 执行 {@code discover} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public List<Candidate> discover(int limit) {
         return jdbc.query("""
                 select candidate.tenant_id, candidate.custody_address_id, candidate.chain,
@@ -127,6 +133,9 @@ public class DevFaucetRepository {
                 rs.getString("contract_address"),
                 rs.getInt("decimals")), limit);
     }
+    /**
+     * 构建或生成 {@code create} 对应的结果，并执行输入和状态校验。
+     */
     public boolean create(Candidate candidate, BigDecimal amount) {
         return jdbc.update("""
                 insert into custody_dev_faucet_funding(
@@ -139,6 +148,9 @@ public class DevFaucetRepository {
                 candidate.purpose(), candidate.address(), candidate.contractAddress(),
                 candidate.decimals(), amount) == 1;
     }
+    /**
+     * 执行 {@code due} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public List<DevFaucetFunding> due(int limit, int maxAttempts) {
         return jdbc.query("""
                 select id, tenant_id, custody_address_id, chain, network, asset_symbol,
@@ -162,6 +174,9 @@ public class DevFaucetRepository {
                 rs.getBigDecimal("requested_amount"),
                 rs.getInt("attempts")), maxAttempts, limit);
     }
+    /**
+     * 写入或更新 {@code markSending} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public boolean markSending(UUID id) {
         return jdbc.update("""
                 update custody_dev_faucet_funding
@@ -170,6 +185,9 @@ public class DevFaucetRepository {
                  where id = ? and status in ('PENDING', 'FAILED')
                 """, id) == 1;
     }
+    /**
+     * 写入或更新 {@code markSent} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void markSent(UUID id, String txHash) {
         jdbc.update("""
                 update custody_dev_faucet_funding
@@ -177,6 +195,9 @@ public class DevFaucetRepository {
                  where id = ? and status = 'SENDING'
                 """, txHash, id);
     }
+    /**
+     * 写入或更新 {@code markFailed} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void markFailed(UUID id, String error, Duration retryDelay) {
         jdbc.update("""
                 update custody_dev_faucet_funding
@@ -184,6 +205,9 @@ public class DevFaucetRepository {
                  where id = ? and status = 'SENDING'
                 """, truncate(error), Timestamp.from(Instant.now().plus(retryDelay)), id);
     }
+    /**
+     * 写入或更新 {@code markUnknown} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void markUnknown(UUID id, String error) {
         jdbc.update("""
                 update custody_dev_faucet_funding
@@ -191,6 +215,9 @@ public class DevFaucetRepository {
                  where id = ? and status = 'SENDING'
                 """, truncate(error), id);
     }
+    /**
+     * 执行 {@code recoverStaleSending} 对应的签名或签名恢复，保证交易数据可验证。
+     */
     public int recoverStaleSending(Duration age) {
         return jdbc.update("""
                 update custody_dev_faucet_funding
@@ -201,6 +228,9 @@ public class DevFaucetRepository {
                  where status = 'SENDING' and updated_at < ?
                 """, Timestamp.from(Instant.now().minus(age)));
     }
+    /**
+     * 处理 {@code reconcileConfirmed} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public int reconcileConfirmed() {
         return jdbc.update("""
                 update custody_dev_faucet_funding funding
@@ -216,6 +246,9 @@ public class DevFaucetRepository {
                    and deposit.status = 'CONFIRMED'
                 """);
     }
+    /**
+     * 转换或计算 {@code truncate} 对应的值，统一金额、格式和边界规则。
+     */
     private static String truncate(String value) {
                 String safe = value == null ? "unknown error" : value;
         return safe.length() <= 1000 ? safe : safe.substring(0, 1000);

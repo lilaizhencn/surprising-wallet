@@ -30,11 +30,23 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code TonDatabaseFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class TonDatabaseFlowIntegrationTest {
+    /**
+     * 保存 {@code JETTON_INTERNAL_TRANSFER}，记录测试开关、处理状态、确认结果或重试信息。
+     */
     private static final long JETTON_INTERNAL_TRANSFER = 0x178d4519L;
+    /**
+     * 保存 {@code MASTER_SEED}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final String MASTER_SEED =
             "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
+    /**
+     * 验证 {@code addressRestartDepositReplayLedgerLocksAndSeqnoReservationAreSafe} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void addressRestartDepositReplayLedgerLocksAndSeqnoReservationAreSafe() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("ton.db.enabled"),
@@ -149,40 +161,79 @@ class TonDatabaseFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    /**
+     * 测试替身 {@code FakeTonApiClient}，用于隔离外部依赖并验证调用参数和状态变化。
+     */
     private static final class FakeTonApiClient extends TonApiClient {
+        /**
+         * 保存 {@code keys}，用于测试签名、认证或密钥相关逻辑。
+         */
         private final TonKeyService keys;
+        /**
+         * 保存 {@code nextIndex}，用于承载当前测试夹具的配置或运行数据。
+         */
         private long nextIndex = 2_000_000L;
 
+        /**
+         * 验证 {@code FakeTonApiClient} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private FakeTonApiClient(TonKeyService keys) {
             super(new ObjectMapper(), "http://ton-api.invalid", "");
             this.keys = keys;
         }
 
+        /**
+         * 验证 {@code resolveJettonWallet} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public String resolveJettonWallet(String ownerAddress, String jettonMaster) {
             return keys.wallet(nextIndex++).getAddress().toString(true, true, true, true);
         }
     }
 
+    /**
+     * 测试替身 {@code FakeTonCenterClient}，用于隔离外部依赖并验证调用参数和状态变化。
+     */
     private static final class FakeTonCenterClient extends TonCenterClient {
+        /**
+         * 保存 {@code mapper}，用于访问当前测试所依赖的仓储、客户端或服务。
+         */
         private final ObjectMapper mapper = new ObjectMapper();
+        /**
+         * 保存 {@code transactions}，用于标识测试中的交易、区块或业务记录。
+         */
         private final Map<String, ArrayNode> transactions = new HashMap<>();
+        /**
+         * 保存 {@code logicalTime}，用于记录测试时间边界或审计时间。
+         */
         private long logicalTime = 10_000L;
 
+        /**
+         * 验证 {@code FakeTonCenterClient} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private FakeTonCenterClient() {
             super(new ObjectMapper(), "http://ton-center.invalid", "");
         }
 
+        /**
+         * 验证 {@code transactions} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public JsonNode transactions(String address, int limit) {
             return transactions.getOrDefault(Address.of(address).toRaw(), mapper.createArrayNode());
         }
 
+        /**
+         * 验证 {@code masterchainInfo} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public JsonNode masterchainInfo() {
             ObjectNode result = mapper.createObjectNode();
@@ -190,6 +241,9 @@ class TonDatabaseFlowIntegrationTest {
             return result;
         }
 
+        /**
+         * 验证 {@code addJettonTransfer} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private void addJettonTransfer(String destination, String sender, BigInteger amount) {
             Cell body = CellBuilder.beginCell()
                     .storeUint(JETTON_INTERNAL_TRANSFER, 32)

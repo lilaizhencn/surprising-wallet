@@ -19,17 +19,38 @@ import java.util.HexFormat;
 import java.util.List;
 
 /**
- * Two-stage legacy P2SH multisig transaction builder for Dogecoin-like chains.
+ * 负责构建交易、脚本或请求对象，并执行必要的输入校验。
  */
 public final class LegacyMultisigTransactionBuilder {
+    /**
+     * 定义 {@code HEX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final HexFormat HEX = HexFormat.of();
+    /**
+     * 定义 {@code RBF_SEQUENCE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final long RBF_SEQUENCE = 0xfffffffdL;
 
+    /**
+     * 保存 {@code params}，用于承载当前对象的运行配置或业务数据。
+     */
     private final NetworkParameters params;
+    /**
+     * 保存 {@code inputs}，用于承载当前对象的运行配置或业务数据。
+     */
     private final List<InputMeta> inputs = new ArrayList<>();
+    /**
+     * 保存 {@code outputs}，用于承载当前对象的运行配置或业务数据。
+     */
     private final List<OutputMeta> outputs = new ArrayList<>();
+    /**
+     * 保存 {@code cachedTx}，用于保存业务集合或索引状态。
+     */
     private Transaction cachedTx;
 
+    /**
+     * 构造 {@code LegacyMultisigTransactionBuilder}，初始化该组件运行所需的状态和依赖。
+     */
     public LegacyMultisigTransactionBuilder(NetworkParameters params) {
         if (params == null) {
             throw new IllegalArgumentException("network must not be null");
@@ -37,6 +58,9 @@ public final class LegacyMultisigTransactionBuilder {
         this.params = params;
     }
 
+    /**
+     * 添加 {@code addInput} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     public void addInput(String txId, int index, String redeemScriptHex, Coin value) {
         if (txId == null || txId.isBlank() || redeemScriptHex == null || redeemScriptHex.isBlank()
                 || value == null || value.signum() <= 0) {
@@ -46,6 +70,9 @@ public final class LegacyMultisigTransactionBuilder {
         cachedTx = null;
     }
 
+    /**
+     * 添加 {@code addOutput} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     public void addOutput(String address, Coin value) {
         if (address == null || address.isBlank() || value == null || value.signum() <= 0) {
             throw new IllegalArgumentException("invalid output");
@@ -54,6 +81,9 @@ public final class LegacyMultisigTransactionBuilder {
         cachedTx = null;
     }
 
+    /**
+     * 构建或生成 {@code buildFirstSign} 对应的结果，并执行输入和状态校验。
+     */
     public String buildFirstSign(List<ECKey> keys) {
         validateKeyCount(keys);
         Transaction tx = createUnsignedTransaction();
@@ -75,6 +105,9 @@ public final class LegacyMultisigTransactionBuilder {
         return HEX.formatHex(tx.bitcoinSerialize());
     }
 
+    /**
+     * 构建或生成 {@code buildSecondSign} 对应的结果，并执行输入和状态校验。
+     */
     public String buildSecondSign(String firstSignedHex, List<ECKey> keys, List<String> redeemScriptHexes) {
         Transaction tx = Transaction.read(ByteBuffer.wrap(HEX.parseHex(firstSignedHex)));
         if (keys == null || redeemScriptHexes == null
@@ -103,14 +136,23 @@ public final class LegacyMultisigTransactionBuilder {
         return HEX.formatHex(tx.bitcoinSerialize());
     }
 
+    /**
+     * 获取或查询 {@code getTransaction} 对应的数据，供调用方读取当前状态。
+     */
     public Transaction getTransaction() {
         return cachedTx;
     }
 
+    /**
+     * 获取或查询 {@code getTxId} 对应的数据，供调用方读取当前状态。
+     */
     public String getTxId() {
         return cachedTx == null ? null : cachedTx.getTxId().toString();
     }
 
+    /**
+     * 构建或生成 {@code createUnsignedTransaction} 对应的结果，并执行输入和状态校验。
+     */
     private Transaction createUnsignedTransaction() {
         if (inputs.isEmpty() || outputs.isEmpty()) {
             throw new IllegalArgumentException("transaction requires inputs and outputs");
@@ -127,6 +169,9 @@ public final class LegacyMultisigTransactionBuilder {
         return tx;
     }
 
+    /**
+     * 校验 {@code validateKeyCount} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void validateKeyCount(List<ECKey> keys) {
         if (keys == null || keys.size() != inputs.size()) {
             throw new IllegalArgumentException("key count must equal input count");

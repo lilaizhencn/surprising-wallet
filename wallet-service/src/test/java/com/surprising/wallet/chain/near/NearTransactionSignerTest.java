@@ -10,8 +10,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code NearTransactionSignerTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class NearTransactionSignerTest {
 
+    /**
+     * 验证 {@code serializesTransferTransactionWithBorshLayout} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void serializesTransferTransactionWithBorshLayout() {
         byte[] publicKey = new byte[32];
@@ -39,6 +45,9 @@ class NearTransactionSignerTest {
         assertEquals(3, tx[actionsOffset + 4]);
     }
 
+    /**
+     * 验证 {@code serializesFunctionCallTransactionWithBorshLayout} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void serializesFunctionCallTransactionWithBorshLayout() {
         byte[] publicKey = new byte[32];
@@ -72,6 +81,9 @@ class NearTransactionSignerTest {
         assertEquals(1, tx[gasOffset + 8]);
     }
 
+    /**
+     * 验证 {@code serializesDeployContractAndInitWithBorshLayout} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void serializesDeployContractAndInitWithBorshLayout() {
         byte[] publicKey = new byte[32];
@@ -105,6 +117,9 @@ class NearTransactionSignerTest {
         assertEquals("init".length(), littleEndianU32(tx, functionActionOffset + 1));
     }
 
+    /**
+     * 验证 {@code signsAndEncodesSignedTransaction} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void signsAndEncodesSignedTransaction() {
         NearKeyService keyService = new NearKeyService("000102030405060708090a0b0c0d0e0f");
@@ -123,6 +138,9 @@ class NearTransactionSignerTest {
         assertTrue(Base64.getDecoder().decode(signed.signedTransactionBase64()).length > 65);
     }
 
+    /**
+     * 验证 {@code littleEndianU32} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static int littleEndianU32(byte[] data, int offset) {
         return (data[offset] & 0xff)
                 | ((data[offset + 1] & 0xff) << 8)
@@ -130,6 +148,9 @@ class NearTransactionSignerTest {
                 | ((data[offset + 3] & 0xff) << 24);
     }
 
+    /**
+     * 验证 {@code littleEndianU64} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static long littleEndianU64(byte[] data, int offset) {
         long value = 0;
         for (int i = 7; i >= 0; i--) {

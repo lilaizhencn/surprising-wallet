@@ -13,16 +13,46 @@ import java.nio.ByteBuffer;
 import java.util.HexFormat;
 import java.util.List;
 
+/**
+ * 验证 {@code FullSigningTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 public class FullSigningTest {
+    /**
+     * 保存 {@code ROOT1}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final Bip32Node ROOT1 = testRoot((byte) 0x11);
+    /**
+     * 保存 {@code ROOT2}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final Bip32Node ROOT2 = testRoot((byte) 0x22);
+    /**
+     * 保存 {@code ROOT3}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final Bip32Node ROOT3 = testRoot((byte) 0x33);
+    /**
+     * 保存 {@code SIG1_MK}，用于承载当前测试夹具的配置或运行数据。
+     */
     static final String SIG1_MK = ROOT1.privSerialize(0, false);
+    /**
+     * 保存 {@code SIG2_MK}，用于承载当前测试夹具的配置或运行数据。
+     */
     static final String SIG2_MK = ROOT2.privSerialize(0, false);
+    /**
+     * 保存 {@code PK1}，用于承载当前测试夹具的配置或运行数据。
+     */
     static final String PK1 = ROOT1.pubSerialize(0, false);
+    /**
+     * 保存 {@code PK2}，用于承载当前测试夹具的配置或运行数据。
+     */
     static final String PK2 = ROOT2.pubSerialize(0, false);
+    /**
+     * 保存 {@code PK3}，用于承载当前测试夹具的配置或运行数据。
+     */
     static final String PK3 = ROOT3.pubSerialize(0, false);
 
+    /**
+     * 验证 {@code main} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     public static void main(String[] args) throws Exception {
         // Init sig2 with a different root.
         Class.forName("com.surprising.wallet.sig.second.BipNodeUtil")
@@ -112,7 +142,7 @@ public class FullSigningTest {
         System.out.println("*** FULL SIGN TX (HEX) ***");
         System.out.println(fullTx);
         System.out.println("");
-        
+
         if (java.util.Arrays.equals(s1, s2)) {
             System.out.println("❌ 两个签名相同 — 使用了同一把私钥，2-of-3 多签无效！");
             System.exit(1);
@@ -121,6 +151,9 @@ public class FullSigningTest {
         }
     }
 
+    /**
+     * 验证 {@code set} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static void set(Object obj, String field, Object val) {
         try { for (Class<?> c = obj.getClass(); c != null; c = c.getSuperclass()) {
             try { java.lang.reflect.Field f = c.getDeclaredField(field);
@@ -129,6 +162,9 @@ public class FullSigningTest {
         }} catch(Exception e) { throw new RuntimeException(e); }
     }
 
+    /**
+     * 验证 {@code testRoot} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Bip32Node testRoot(byte fill) {
         byte[] seed = new byte[32];
         java.util.Arrays.fill(seed, fill);

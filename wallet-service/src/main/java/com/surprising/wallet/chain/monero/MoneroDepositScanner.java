@@ -41,6 +41,9 @@ class MoneroDepositScanner {
 
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
+    /**
+     * 扫描或观察 {@code scanAndCredit} 对应的链上状态，并转换为业务可用结果。
+     */
     public void scanAndCredit(AccountChainProfile profile) {
         String network = profile == null ? null : profile.getNetwork();
         walletRpcClient.refresh(network, "rpc");

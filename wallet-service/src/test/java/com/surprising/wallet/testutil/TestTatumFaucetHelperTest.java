@@ -16,7 +16,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code TestTatumFaucetHelperTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class TestTatumFaucetHelperTest {
+    /**
+     * 验证 {@code helperShouldSendApiKeyAndJsonBody} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void helperShouldSendApiKeyAndJsonBody() throws Exception {
         CapturedRequest captured = new CapturedRequest();
@@ -38,6 +44,9 @@ class TestTatumFaucetHelperTest {
         }
     }
 
+    /**
+     * 验证 {@code helperShouldRetryRateLimitedRequest} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void helperShouldRetryRateLimitedRequest() throws Exception {
         AtomicInteger calls = new AtomicInteger();
@@ -63,6 +72,9 @@ class TestTatumFaucetHelperTest {
         }
     }
 
+    /**
+     * 验证 {@code handle} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void handle(HttpExchange exchange, CapturedRequest captured) throws IOException {
         captured.method = exchange.getRequestMethod();
         captured.apiKey = exchange.getRequestHeaders().getFirst("x-api-key");
@@ -75,9 +87,21 @@ class TestTatumFaucetHelperTest {
         exchange.close();
     }
 
+    /**
+     * 测试辅助类 {@code CapturedRequest}，为相关测试提供隔离环境或共享数据。
+     */
     private static final class CapturedRequest {
+        /**
+         * 保存 {@code method}，用于承载当前测试夹具的配置或运行数据。
+         */
         private String method;
+        /**
+         * 保存 {@code apiKey}，用于测试签名、认证或密钥相关逻辑。
+         */
         private String apiKey;
+        /**
+         * 保存 {@code body}，用于承载当前测试夹具的配置或运行数据。
+         */
         private String body;
     }
 }

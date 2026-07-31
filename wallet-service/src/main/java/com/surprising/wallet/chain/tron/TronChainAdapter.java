@@ -23,26 +23,41 @@ class TronChainAdapter implements BlockchainAdapter {
     /** 能量/带宽估算器 */
     private final TronEnergyEstimator energyEstimator = new TronEnergyEstimator();
 
+    /**
+     * 获取或查询 {@code chainType} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public ChainType chainType() {
         return ChainType.TRON;
     }
 
+    /**
+     * 获取或查询 {@code capabilities} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public java.util.Set<Capability> capabilities() {
         return java.util.Set.of(Capability.NATIVE_QUOTE, Capability.TOKEN_QUOTE);
     }
 
+    /**
+     * 获取或查询 {@code family} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String family() {
         return "tron";
     }
 
+    /**
+     * 获取或查询 {@code describe} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String describe() {
         return "TRON adapter with TRX and TRC20 resource accounting.";
     }
 
+    /**
+     * 计算或估算 {@code quoteNativeTransfer} 对应的金额、费用或资源消耗。
+     */
     @Override
     public TransferQuote quoteNativeTransfer(TransferRequest request) {
         long bandwidth = energyEstimator.estimateBandwidth(false);
@@ -51,6 +66,9 @@ class TronChainAdapter implements BlockchainAdapter {
                 "tron native transfer");
     }
 
+    /**
+     * 计算或估算 {@code quoteTokenTransfer} 对应的金额、费用或资源消耗。
+     */
     @Override
     public TransferQuote quoteTokenTransfer(TransferRequest request) {
         long energy = energyEstimator.estimateBandwidth(true);

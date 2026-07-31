@@ -40,10 +40,22 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
 import com.surprising.wallet.custody.service.CustodyTenantChainService;
 
+/**
+ * 验证 {@code CustodyOperationsIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class CustodyOperationsIntegrationTest {
+    /**
+     * 保存 {@code jdbc}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private JdbcTemplate jdbc;
+    /**
+     * 保存 {@code transactions}，用于标识测试中的交易、区块或业务记录。
+     */
     private TransactionTemplate transactions;
 
+    /**
+     * 验证 {@code setUp} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @BeforeEach
     void setUp() throws Exception {
         DriverManagerDataSource dataSource = CustodyIntegrationDatabase.dataSource();
@@ -52,6 +64,9 @@ class CustodyOperationsIntegrationTest {
         CustodyIntegrationDatabase.reset(dataSource);
     }
 
+    /**
+     * 验证 {@code tenantLoginLookupUsesGloballyUniqueEmail} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void tenantLoginLookupUsesGloballyUniqueEmail() {
         transactions.executeWithoutResult(status -> {
@@ -79,6 +94,9 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code webhookAttemptsKeepAutomaticAndManualHistory} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void webhookAttemptsKeepAutomaticAndManualHistory() {
         transactions.executeWithoutResult(status -> {
@@ -128,6 +146,9 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code webhookDeliveriesCanBeFilteredAndFailedBatchRetryIsEndpointScoped} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void webhookDeliveriesCanBeFilteredAndFailedBatchRetryIsEndpointScoped() {
         transactions.executeWithoutResult(transaction -> {
@@ -163,6 +184,9 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code recoveredWebhookLeaseFencesTheStaleWorker} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void recoveredWebhookLeaseFencesTheStaleWorker() {
         transactions.executeWithoutResult(status -> {
@@ -223,6 +247,9 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code gasAccountUsesTheRealNativeLedgerBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void gasAccountUsesTheRealNativeLedgerBalance() {
         transactions.executeWithoutResult(status -> {
@@ -276,6 +303,9 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code transferListsReturnFullAddressesAndApplyTenantScopedFilters} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void transferListsReturnFullAddressesAndApplyTenantScopedFilters() {
         transactions.executeWithoutResult(status -> {
@@ -323,6 +353,9 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code gasReservationUsesTenantGasAccountAndPreservesAuditTrail} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void gasReservationUsesTenantGasAccountAndPreservesAuditTrail() {
         transactions.executeWithoutResult(status -> {
@@ -441,6 +474,9 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code overdueGasSettlementRecoversAfterTopUpAndRemainsIdempotent} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void overdueGasSettlementRecoversAfterTopUpAndRemainsIdempotent() {
         transactions.executeWithoutResult(status -> {
@@ -534,6 +570,9 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code platformTenantManagementSupportsSearchDetailUpdateUnlockAndSessionRevocation} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void platformTenantManagementSupportsSearchDetailUpdateUnlockAndSessionRevocation() {
         transactions.executeWithoutResult(status -> {
@@ -592,6 +631,9 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code tenantChainMustBeOpenedBeforeOperationsAndCanBeClosedAgain} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void tenantChainMustBeOpenedBeforeOperationsAndCanBeClosedAgain() {
         transactions.executeWithoutResult(status -> {
@@ -668,6 +710,9 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code userAddressCreationIsIdempotentAndSharedAcrossEvmChains} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void userAddressCreationIsIdempotentAndSharedAcrossEvmChains() {
         transactions.executeWithoutResult(status -> {
@@ -750,6 +795,9 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code dashboardListsOpenedNativeAssetsBeforeTheyHaveAddressesOrBalances} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void dashboardListsOpenedNativeAssetsBeforeTheyHaveAddressesOrBalances() {
         transactions.executeWithoutResult(status -> {
@@ -791,6 +839,9 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code assetDashboardAggregatesStablecoinsAcrossChainsWithoutFloatingPointMath} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void assetDashboardAggregatesStablecoinsAcrossChainsWithoutFloatingPointMath() {
         transactions.executeWithoutResult(status -> {
@@ -866,6 +917,9 @@ class CustodyOperationsIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code createTenant} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private UUID createTenant() {
         UUID tenantId = UUID.randomUUID();
         int namespace = jdbc.queryForObject(
@@ -878,6 +932,9 @@ class CustodyOperationsIntegrationTest {
         return tenantId;
     }
 
+    /**
+     * 验证 {@code insertTestAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private TestAddress insertTestAddress(UUID tenantId, String chain, String assetSymbol,
                                           String subjectLabel, String address) {
         int namespace = jdbc.queryForObject(
@@ -906,6 +963,9 @@ class CustodyOperationsIntegrationTest {
         return new TestAddress(custodyAddressId, address, Integer.toUnsignedLong(subject));
     }
 
+    /**
+     * 验证 {@code insertTestDeposit} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void insertTestDeposit(UUID tenantId, TestAddress address, String assetSymbol,
                                    String txHash, String status) {
         Long depositRecordId = jdbc.queryForObject("""
@@ -926,6 +986,9 @@ class CustodyOperationsIntegrationTest {
                 assetSymbol, txHash, status);
     }
 
+    /**
+     * 验证 {@code insertTestWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void insertTestWithdrawal(CustodyRepository repository, UUID tenantId,
                                       TestAddress address, String orderNo,
                                       String externalReference, String destination,
@@ -946,6 +1009,9 @@ class CustodyOperationsIntegrationTest {
     private record TestAddress(UUID id, String address, long userId) {
     }
 
+    /**
+     * 验证 {@code insertWebhookEndpoint} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private UUID insertWebhookEndpoint(UUID tenantId, String name) {
         UUID endpointId = UUID.randomUUID();
         jdbc.update("""
@@ -957,6 +1023,9 @@ class CustodyOperationsIntegrationTest {
         return endpointId;
     }
 
+    /**
+     * 验证 {@code insertWebhookDelivery} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private UUID insertWebhookDelivery(UUID tenantId, UUID endpointId, String status) {
         UUID eventId = UUID.randomUUID();
         UUID deliveryId = UUID.randomUUID();
@@ -976,6 +1045,9 @@ class CustodyOperationsIntegrationTest {
         return deliveryId;
     }
 
+    /**
+     * 验证 {@code quiesceExistingWebhookQueue} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void quiesceExistingWebhookQueue() {
         jdbc.update("""
                 update custody_webhook_delivery
@@ -987,14 +1059,26 @@ class CustodyOperationsIntegrationTest {
                 """);
     }
 
+    /**
+     * 测试替身 {@code StableEvmRuntime}，用于隔离外部依赖并验证调用参数和状态变化。
+     */
     private static final class StableEvmRuntime extends BlockchainRuntimeService {
+        /**
+         * 保存 {@code jdbc}，用于访问当前测试所依赖的仓储、客户端或服务。
+         */
         private final JdbcTemplate jdbc;
 
+        /**
+         * 验证 {@code StableEvmRuntime} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private StableEvmRuntime(JdbcTemplate jdbc) {
             super(null, null, null);
             this.jdbc = jdbc;
         }
 
+        /**
+         * 验证 {@code requireRuntime} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public RuntimeChain requireRuntime(String chain) {
             ChainType chainType = ChainType.valueOf(chain);
@@ -1004,6 +1088,9 @@ class CustodyOperationsIntegrationTest {
                     "evm", "integration-test", Set.of());
         }
 
+        /**
+         * 验证 {@code generateDepositAddressAtIndex} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public Address generateDepositAddressAtIndex(
                 String chain, long userId, int biz, long childIndex) {

@@ -109,10 +109,16 @@ class XrpAddressService {
                             .orElseThrow();
                 });
     }
+    /**
+     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
+     */
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
+    /**
+     * 执行 {@code derivationPath} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private String derivationPath(AccountChainProfile profile, long userId, int biz, long index) {
         return String.format("m/44/%d/%d/%d/%d",
                 profile.getBip44CoinType(), biz, userId, index);

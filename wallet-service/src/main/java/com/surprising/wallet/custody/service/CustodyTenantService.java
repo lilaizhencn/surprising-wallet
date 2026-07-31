@@ -26,9 +26,21 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
  */
 @Service
 public class CustodyTenantService {
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final CustodyRepository repository;
+    /**
+     * 保存 {@code passwords}，用于保存签名、认证或密钥相关材料。
+     */
     private final CustodyPasswordService passwords;
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper;
+    /**
+     * 构造 {@code CustodyTenantService}，初始化该组件运行所需的状态和依赖。
+     */
     public CustodyTenantService(CustodyRepository repository, CustodyPasswordService passwords,
                                 ObjectMapper objectMapper) {
         this.repository = repository;
@@ -36,6 +48,9 @@ public class CustodyTenantService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 构建或生成 {@code create} 对应的结果，并执行输入和状态校验。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public TenantRecord create(CustodyPrincipal actor, CreateTenantCommand command, String sourceIp) {
         requirePlatformAdmin(actor);
@@ -53,6 +68,9 @@ public class CustodyTenantService {
         return result;
     }
 
+    /**
+     * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
+     */
     public TenantPage list(CustodyPrincipal actor, String search, String status,
                            int limit, int offset) {
         requirePlatformAdmin(actor);
@@ -68,6 +86,9 @@ public class CustodyTenantService {
                 normalizedOffset);
     }
 
+    /**
+     * 执行 {@code detail} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public TenantDetail detail(CustodyPrincipal actor, UUID tenantId) {
         requirePlatformAdmin(actor);
@@ -89,6 +110,9 @@ public class CustodyTenantService {
                 repository.listAudit(tenantId, 50, 0));
     }
 
+    /**
+     * 设置或更新 {@code update} 对应的状态，并保持相关业务字段一致。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public TenantRecord update(CustodyPrincipal actor, UUID tenantId,
                                UpdateTenantCommand command, String sourceIp) {
@@ -109,6 +133,9 @@ public class CustodyTenantService {
         return repository.requireTenant(tenantId);
     }
 
+    /**
+     * 设置或更新 {@code updateStatus} 对应的状态，并保持相关业务字段一致。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public TenantRecord updateStatus(CustodyPrincipal actor, UUID tenantId, String status, String sourceIp) {
         requirePlatformAdmin(actor);
@@ -127,6 +154,9 @@ public class CustodyTenantService {
         return repository.requireTenant(tenantId);
     }
 
+    /**
+     * 执行 {@code unlockAdministrator} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public Map<String, Object> unlockAdministrator(
             CustodyPrincipal actor, UUID tenantId, UUID userId, String sourceIp) {
@@ -139,11 +169,17 @@ public class CustodyTenantService {
                 json(Map.of("email", administrator.get("email"))));
         return administrator;
     }
+    /**
+     * 校验 {@code requirePlatformAdmin} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void requirePlatformAdmin(CustodyPrincipal actor) {
         if (actor == null || !actor.isPlatformAdmin()) {
             throw new CustodyForbiddenException("platform administrator required");
         }
     }
+    /**
+     * 编码 {@code json} 对应的数据，生成链上或接口所需的表示。
+     */
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -151,6 +187,9 @@ public class CustodyTenantService {
             throw new IllegalStateException("failed to serialize audit detail", e);
         }
     }
+    /**
+     * 转换或计算 {@code normalizeSlug} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalizeSlug(String value) {
         String slug = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         if (!slug.matches("^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")) {
@@ -159,6 +198,9 @@ public class CustodyTenantService {
         }
         return slug;
     }
+    /**
+     * 转换或计算 {@code normalizeEmail} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalizeEmail(String value) {
         String email = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         if (email.length() > 254 || !email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
@@ -166,6 +208,9 @@ public class CustodyTenantService {
         }
         return email;
     }
+    /**
+     * 校验 {@code required} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static String required(String value, String field, int maxLength) {
         String normalized = value == null ? "" : value.trim();
         if (normalized.isBlank() || normalized.length() > maxLength) {
@@ -173,6 +218,9 @@ public class CustodyTenantService {
         }
         return normalized;
     }
+    /**
+     * 执行 {@code optional} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String optional(String value, int maxLength) {
         String normalized = value == null ? "" : value.trim();
         if (normalized.length() > maxLength) {
@@ -181,6 +229,9 @@ public class CustodyTenantService {
         }
         return normalized;
     }
+    /**
+     * 执行 {@code optionalTenantStatus} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String optionalTenantStatus(String value) {
         String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!normalized.isEmpty() && !SetHolder.TENANT_STATUSES.contains(normalized)) {
@@ -189,6 +240,9 @@ public class CustodyTenantService {
         }
         return normalized;
     }
+    /**
+     * 转换或计算 {@code normalizeDisplayCurrency} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalizeDisplayCurrency(String value) {
         String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!normalized.matches("^[A-Z0-9]{3,12}$")) {
@@ -197,7 +251,13 @@ public class CustodyTenantService {
         }
         return normalized;
     }
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     private static final class SetHolder {
+        /**
+         * 定义 {@code TENANT_STATUSES} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         private static final java.util.Set<String> TENANT_STATUSES = java.util.Set.of("ACTIVE", "SUSPENDED");
     }
 

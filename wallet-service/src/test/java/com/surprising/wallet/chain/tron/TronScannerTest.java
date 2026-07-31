@@ -11,7 +11,13 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * 验证 {@code TronScannerTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class TronScannerTest {
+    /**
+     * 验证 {@code transactionInfoLog_shouldDecodeTrc20Transfer} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void transactionInfoLog_shouldDecodeTrc20Transfer() {
         String contractHex = TronTridentKeyFactory.toHexAddress(ECKey.fromPrivate(BigInteger.valueOf(70), true));
@@ -42,6 +48,9 @@ class TronScannerTest {
         assertEquals(12345L, events.getFirst().blockHeight());
     }
 
+    /**
+     * 验证 {@code transactionInfoLog_shouldDecodeNileTwentyByteContractAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void transactionInfoLog_shouldDecodeNileTwentyByteContractAddress() {
         String contractHex = "41eca9bc828a3005b9a3b909f2cc5c2a54794de05f";
@@ -69,6 +78,9 @@ class TronScannerTest {
         assertEquals(0, events.getFirst().amount().compareTo(new java.math.BigDecimal("30")));
     }
 
+    /**
+     * 验证 {@code topic} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String topic(String base58Address) {
         return "000000000000000000000000" + TronAddressCodec.base58ToHex(base58Address).substring(2);
     }

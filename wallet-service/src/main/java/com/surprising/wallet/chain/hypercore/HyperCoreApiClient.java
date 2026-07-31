@@ -30,21 +30,45 @@ class HyperCoreApiClient {
 
     /** 链标识常量 */
     static final String CHAIN = "HYPERCORE";
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper;
+    /**
+     * 保存 {@code httpClient}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final HttpClient httpClient;
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository repository;
+    /**
+     * 保存 {@code rpcNodeService}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainRpcNodeService rpcNodeService;
+    /**
+     * 保存 {@code fixedBaseUrl}，用于承载当前对象的运行配置或业务数据。
+     */
     private final String fixedBaseUrl;
 
+    /**
+     * 构造 {@code HyperCoreApiClient}，初始化该组件运行所需的状态和依赖。
+     */
     @Autowired
     public HyperCoreApiClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
         this(new ObjectMapper(), repository, rpcNodeService, null);
     }
 
+    /**
+     * 构造 {@code HyperCoreApiClient}，初始化该组件运行所需的状态和依赖。
+     */
     HyperCoreApiClient(ObjectMapper objectMapper, String fixedBaseUrl) {
         this(objectMapper, null, null, fixedBaseUrl);
     }
 
+    /**
+     * 构造 {@code HyperCoreApiClient}，初始化该组件运行所需的状态和依赖。
+     */
     private HyperCoreApiClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
                                ChainRpcNodeService rpcNodeService, String fixedBaseUrl) {
         this.objectMapper = objectMapper;
@@ -56,12 +80,21 @@ class HyperCoreApiClient {
                 .version(HttpClient.Version.HTTP_1_1)
                 .build();
     }
+    /**
+     * 执行 {@code postInfo} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public JsonNode postInfo(ObjectNode body) {
         return post("info", "/info", body);
     }
+    /**
+     * 执行 {@code postExchange} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public JsonNode postExchange(ObjectNode body) {
         return post("exchange", "/exchange", body);
     }
+    /**
+     * 执行 {@code post} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private JsonNode post(String purpose, String path, ObjectNode body) {
         try {
             String requestBody = objectMapper.writeValueAsString(body);
@@ -77,6 +110,9 @@ class HyperCoreApiClient {
             throw new IllegalStateException("HyperCore request serialization failed", e);
         }
     }
+    /**
+     * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
+     */
     private JsonNode execute(String path, String requestBody, String baseUrl, ChainRpcNode node) {
         String url = endpoint(baseUrl, path);
         try {
@@ -109,6 +145,9 @@ class HyperCoreApiClient {
             throw new IllegalStateException("HyperCore HTTP request interrupted for " + path, e);
         }
     }
+    /**
+     * 执行 {@code endpoint} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String endpoint(String baseUrl, String path) {
         String value = baseUrl == null ? "" : baseUrl.trim().replaceAll("/+$", "");
         if (value.endsWith(path)) {
@@ -119,6 +158,9 @@ class HyperCoreApiClient {
         }
         return value + path;
     }
+    /**
+     * 执行 {@code abbreviate} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String abbreviate(String value) {
         if (value == null || value.isBlank()) {
             return "<empty>";

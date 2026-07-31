@@ -34,13 +34,34 @@ import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
  */
 @Service
 public class CustodyAuthService {
+    /**
+     * 定义 {@code MAX_FAILURES} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final int MAX_FAILURES = 5;
+    /**
+     * 定义 {@code LOCK_DURATION} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final Duration LOCK_DURATION = Duration.ofMinutes(15);
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final CustodyRepository repository;
+    /**
+     * 保存 {@code passwords}，用于保存签名、认证或密钥相关材料。
+     */
     private final CustodyPasswordService passwords;
+    /**
+     * 保存 {@code crypto}，用于承载当前对象的运行配置或业务数据。
+     */
     private final CustodyCryptoService crypto;
+    /**
+     * 保存 {@code properties}，用于承载当前对象的运行配置或业务数据。
+     */
     private final CustodySecurityProperties properties;
 
+    /**
+     * 构造 {@code CustodyAuthService}，初始化该组件运行所需的状态和依赖。
+     */
     public CustodyAuthService(CustodyRepository repository, CustodyPasswordService passwords,
                               CustodyCryptoService crypto, CustodySecurityProperties properties) {
         this.repository = repository;
@@ -49,6 +70,9 @@ public class CustodyAuthService {
         this.properties = properties;
     }
 
+    /**
+     * 执行 {@code tenantLogin} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Transactional(
             rollbackFor = Throwable.class,
             noRollbackFor = {CustodyUnauthorizedException.class, CustodyForbiddenException.class})
@@ -59,6 +83,9 @@ public class CustodyAuthService {
         return authenticate(user, password, sourceIp, userAgent, ActorType.TENANT_USER);
     }
 
+    /**
+     * 执行 {@code platformLogin} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Transactional(
             rollbackFor = Throwable.class,
             noRollbackFor = {CustodyUnauthorizedException.class, CustodyForbiddenException.class})    public LoginResult platformLogin(String email, String password, String sourceIp, String userAgent) {
@@ -66,6 +93,9 @@ public class CustodyAuthService {
                 .orElseThrow(() -> new CustodyUnauthorizedException("invalid credentials"));
         return authenticate(user, password, sourceIp, userAgent, ActorType.PLATFORM_USER);
     }
+    /**
+     * 校验 {@code requireSession} 对应的前置条件，不满足时抛出明确异常。
+     */
     public CustodyPrincipal requireSession(String token, boolean platformRoute) {
         requireSessionToken(token);
         String tokenHash = crypto.sha256(token);
@@ -87,20 +117,32 @@ public class CustodyAuthService {
                 session.role(),
                 consoleScopes(session.role()));
     }
+    /**
+     * 执行 {@code logout} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public void logout(String token) {
         requireSessionToken(token);
         repository.revokeSession(crypto.sha256(token));
     }
+    /**
+     * 执行 {@code sessionCookieSecure} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public boolean sessionCookieSecure() {
         return properties.isSessionCookieSecure();
     }
 
+    /**
+     * 校验 {@code requireSessionToken} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static void requireSessionToken(String token) {
         if (token == null || !token.startsWith("cs_") || token.length() < 32) {
             throw new CustodyUnauthorizedException("session token required");
         }
     }
 
+    /**
+     * 执行 {@code bootstrapPlatformAdmin} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @EventListener(ApplicationReadyEvent.class)
     public void bootstrapPlatformAdmin() {
         String email = properties.getPlatformAdmin().getEmail();
@@ -111,6 +153,9 @@ public class CustodyAuthService {
         repository.insertPlatformAdmin(UUID.randomUUID(), normalizeEmail(email), passwords.hash(password));
     }
 
+    /**
+     * 执行 {@code authenticate} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private LoginResult authenticate(AuthUser user, String password, String sourceIp, String userAgent,
                                      ActorType actorType) {
         Instant now = Instant.now();
@@ -145,6 +190,9 @@ public class CustodyAuthService {
                 user.role(),
                 consoleScopes(user.role()));
     }
+    /**
+     * 校验 {@code validatedSessionTtl} 对应的前置条件，不满足时抛出明确异常。
+     */
     private Duration validatedSessionTtl() {
         Duration ttl = properties.getSessionTtl();
         if (ttl.isNegative() || ttl.isZero() || ttl.compareTo(Duration.ofDays(7)) > 0) {
@@ -152,6 +200,9 @@ public class CustodyAuthService {
         }
         return ttl;
     }
+    /**
+     * 执行 {@code consoleScopes} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static Set<String> consoleScopes(String role) {
         return switch (role) {
             case "PLATFORM_ADMIN", "TENANT_ADMIN" -> Set.of("*");
@@ -163,6 +214,9 @@ public class CustodyAuthService {
                     "withdrawals:read", "webhooks:read", "audit:read", "chains:read");
         };
     }
+    /**
+     * 转换或计算 {@code normalizeEmail} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalizeEmail(String email) {
         String value = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
         if (value.length() > 254 || !value.contains("@")) {

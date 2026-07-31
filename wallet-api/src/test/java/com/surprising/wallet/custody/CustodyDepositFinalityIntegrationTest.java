@@ -27,10 +27,22 @@ import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
 
+/**
+ * 验证 {@code CustodyDepositFinalityIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class CustodyDepositFinalityIntegrationTest {
+    /**
+     * 保存 {@code jdbc}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private JdbcTemplate jdbc;
+    /**
+     * 保存 {@code transactions}，用于标识测试中的交易、区块或业务记录。
+     */
     private TransactionTemplate transactions;
 
+    /**
+     * 验证 {@code setUp} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @BeforeEach
     void setUp() throws Exception {
         DriverManagerDataSource dataSource = CustodyIntegrationDatabase.dataSource();
@@ -39,6 +51,9 @@ class CustodyDepositFinalityIntegrationTest {
         CustodyIntegrationDatabase.reset(dataSource);
     }
 
+    /**
+     * 验证 {@code creditedDepositReorgCreatesCompensationDeficitAndRecreditsOnce} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void creditedDepositReorgCreatesCompensationDeficitAndRecreditsOnce() {
         transactions.executeWithoutResult(status -> {
@@ -139,6 +154,9 @@ class CustodyDepositFinalityIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code credit} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void credit(ChainJdbcRepository chains, Fixture fixture, String txHash,
                         BigDecimal amount, long height, String blockHash) {
         chains.observeCanonicalBlock("ETH", "evm-canonical", height, blockHash, "0xparent");
@@ -147,6 +165,9 @@ class CustodyDepositFinalityIntegrationTest {
                 0L, 12, fixture.accountId()));
     }
 
+    /**
+     * 验证 {@code repository} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private ChainJdbcRepository repository() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         CustodyRepository custody = new CustodyRepository(jdbc);
@@ -162,6 +183,9 @@ class CustodyDepositFinalityIntegrationTest {
                 beans.getBeanProvider(DepositReorgObserver.class));
     }
 
+    /**
+     * 验证 {@code fixture} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private Fixture fixture() {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         UUID tenantId = UUID.randomUUID();
@@ -209,6 +233,9 @@ class CustodyDepositFinalityIntegrationTest {
         return new Fixture(tenantId, custodyAddressId, address, address);
     }
 
+    /**
+     * 验证 {@code event} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private DepositEvent event(String address, String txHash, BigDecimal amount,
                                long height, String blockHash) {
         return new DepositEvent(ChainType.ETH, "ETH", txHash,
@@ -216,6 +243,9 @@ class CustodyDepositFinalityIntegrationTest {
                 amount, height, blockHash, 12, null, "{\"integration\":true}");
     }
 
+    /**
+     * 验证 {@code balance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private BigDecimal balance(Fixture fixture) {
         return value("""
                 select available_balance from ledger_balance
@@ -223,6 +253,9 @@ class CustodyDepositFinalityIntegrationTest {
                 """, BigDecimal.class, fixture.tenantId(), fixture.accountId());
     }
 
+    /**
+     * 验证 {@code openDeficit} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private BigDecimal openDeficit(Fixture fixture) {
         return value("""
                 select deficit_amount - recovered_amount from custody_reorg_deficit
@@ -230,10 +263,16 @@ class CustodyDepositFinalityIntegrationTest {
                 """, BigDecimal.class, fixture.tenantId());
     }
 
+    /**
+     * 验证 {@code assertAmount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertAmount(String expected, BigDecimal actual) {
         assertEquals(0, new BigDecimal(expected).compareTo(actual));
     }
 
+    /**
+     * 验证 {@code value} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private <T> T value(String sql, Class<T> type, Object... args) {
         return jdbc.queryForObject(sql, type, args);
     }

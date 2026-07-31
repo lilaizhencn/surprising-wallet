@@ -44,11 +44,17 @@ class DogeChainAdapter implements BlockchainAdapter {
         this.runtime = runtime;
     }
 
+    /**
+     * 获取或查询 {@code chainType} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public ChainType chainType() {
         return ChainType.DOGE;
     }
 
+    /**
+     * 获取或查询 {@code capabilities} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public java.util.Set<Capability> capabilities() {
         return java.util.EnumSet.of(
@@ -59,11 +65,17 @@ class DogeChainAdapter implements BlockchainAdapter {
                 Capability.BALANCE_REFRESH, Capability.SIGNED_TRANSACTION_BROADCAST);
     }
 
+    /**
+     * 获取或查询 {@code family} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String family() {
         return "dogecoin";
     }
 
+    /**
+     * 获取或查询 {@code describe} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String describe() {
         return "Dogecoin UTXO adapter with legacy P2SH multisig address derivation and RPC-backed scanning.";

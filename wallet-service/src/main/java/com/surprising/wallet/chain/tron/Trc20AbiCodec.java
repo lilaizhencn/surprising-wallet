@@ -20,9 +20,18 @@ import java.util.Locale;
  * 金额计算使用整数（最小单位），不使用浮点。
  */
 public final class Trc20AbiCodec {
+    /**
+     * 定义 {@code TRANSFER_TOPIC} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     public static final String TRANSFER_TOPIC = "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+    /**
+     * 构造 {@code Trc20AbiCodec}，初始化该组件运行所需的状态和依赖。
+     */
     private Trc20AbiCodec() {
     }
+    /**
+     * 编码或序列化 {@code encodeTransfer} 对应的数据，生成链上或接口需要的表示。
+     */
     public static String encodeTransfer(String recipientBase58, BigDecimal amount, int decimals) {
         BigInteger rawAmount = toRawAmount(amount, decimals);
         List<Type> inputs = List.of(
@@ -31,6 +40,9 @@ public final class Trc20AbiCodec {
         );
         return Numeric.cleanHexPrefix(FunctionEncoder.encode(new Function("transfer", inputs, List.of())));
     }
+    /**
+     * 解析或转换 {@code decodeTransferLog} 对应的数据，并校验其格式和边界。
+     */
     public static TransferLog decodeTransferLog(String contractHex, List<String> topics, String data, int decimals) {
         if (topics.size() < 3) {
             throw new IllegalArgumentException("TRC20 Transfer log requires at least 3 topics");
@@ -44,6 +56,9 @@ public final class Trc20AbiCodec {
         BigInteger raw = Numeric.toBigInt(Numeric.cleanHexPrefix(data));
         return new TransferLog(TronAddressCodec.hexToBase58(contractHex), from, to, fromRawAmount(raw, decimals), raw);
     }
+    /**
+     * 编码 {@code toRawAmount} 对应的数据，生成链上或接口所需的表示。
+     */
     public static BigInteger toRawAmount(BigDecimal amount, int decimals) {
         BigDecimal scaled = amount.movePointRight(decimals).stripTrailingZeros();
         if (scaled.scale() > 0) {
@@ -55,6 +70,9 @@ public final class Trc20AbiCodec {
         }
         return raw;
     }
+    /**
+     * 解析 {@code fromRawAmount} 对应的输入，并转换为当前业务模型。
+     */
     public static BigDecimal fromRawAmount(BigInteger rawAmount, int decimals) {
         if (rawAmount.signum() < 0) {
             throw new IllegalArgumentException("raw amount must not be negative");

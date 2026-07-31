@@ -28,9 +28,21 @@ import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
  */
 @Service
 public class CustodyApiKeyService {
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final CustodyRepository repository;
+    /**
+     * 保存 {@code crypto}，用于承载当前对象的运行配置或业务数据。
+     */
     private final CustodyCryptoService crypto;
+    /**
+     * 保存 {@code properties}，用于承载当前对象的运行配置或业务数据。
+     */
     private final CustodySecurityProperties properties;
+    /**
+     * 构造 {@code CustodyApiKeyService}，初始化该组件运行所需的状态和依赖。
+     */
     public CustodyApiKeyService(CustodyRepository repository, CustodyCryptoService crypto,
                                 CustodySecurityProperties properties) {
         this.repository = repository;
@@ -38,6 +50,9 @@ public class CustodyApiKeyService {
         this.properties = properties;
     }
 
+    /**
+     * 构建或生成 {@code create} 对应的结果，并执行输入和状态校验。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public CreatedApiKey create(UUID tenantId, UUID actorId, String name, String sourceIp) {
         String normalizedName = name == null ? "" : name.trim();
@@ -53,10 +68,16 @@ public class CustodyApiKeyService {
                 "API_KEY", id.toString(), sourceIp, "{\"keyId\":\"" + keyId + "\"}");
         return new CreatedApiKey(saved.id(), keyId, secret, saved.name(), saved.createdAt());
     }
+    /**
+     * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> list(UUID tenantId) {
         return repository.listApiKeys(tenantId);
     }
 
+    /**
+     * 删除或释放 {@code revoke} 对应的资源，并收敛相关业务状态。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void revoke(UUID tenantId, UUID actorId, UUID keyId, String sourceIp) {
         repository.revokeApiKey(tenantId, keyId);
@@ -64,6 +85,9 @@ public class CustodyApiKeyService {
                 "API_KEY", keyId.toString(), sourceIp, "{}");
     }
 
+    /**
+     * 执行 {@code authenticate} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public CustodyPrincipal authenticate(String keyId, long timestampSeconds, String nonce,
                                          String signature, String method, String requestTarget,
                                          byte[] body, String sourceIp) {
@@ -109,6 +133,9 @@ public class CustodyApiKeyService {
                 Set.of("*"));
     }
 
+    /**
+     * 判断 {@code canonicalRequest} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     public String canonicalRequest(long timestampSeconds, String nonce, String method,
                                    String requestTarget, byte[] body) {
         return timestampSeconds + "\n"

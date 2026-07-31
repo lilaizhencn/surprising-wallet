@@ -4,10 +4,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * Calculates TRX gas top-up decisions for TRC20 signing and collection.
- * The result is bounded by maxGasTopup to prevent runaway gas funding loops.
+ * 负责 TRON 链地址、扫描、资源费用或交易处理。
  */
 public class TronGasEstimator {
+    /**
+     * 执行 {@code decideTopup} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public GasDecision decideTopup(BigDecimal currentTrxBalance, BigDecimal estimatedRequiredTrx, TronGasPolicy policy) {        if (currentTrxBalance.compareTo(estimatedRequiredTrx) >= 0
                 && currentTrxBalance.compareTo(policy.targetGasBalance()) >= 0) {
             return new GasDecision(false, BigDecimal.ZERO, "sufficient gas");
@@ -21,6 +23,9 @@ public class TronGasEstimator {
         }
         return new GasDecision(topup.signum() > 0, topup, "top up TRX for TRC20 energy/bandwidth");
     }
+    /**
+     * 计算或估算 {@code estimateTrc20FeeTrx} 对应的金额、费用或资源消耗。
+     */
     public BigDecimal estimateTrc20FeeTrx(long energyUsed, long energyPriceSun, TronGasPolicy policy) {
         BigDecimal energyFee = BigDecimal.valueOf(energyUsed)
                 .multiply(BigDecimal.valueOf(energyPriceSun))

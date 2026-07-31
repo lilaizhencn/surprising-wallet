@@ -20,6 +20,9 @@ import java.util.UUID;
  */
 @Repository
 public class CustodyTenantChainRepository {
+    /**
+     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final JdbcTemplate jdbc;
 
     /**
@@ -30,6 +33,9 @@ public class CustodyTenantChainRepository {
     public CustodyTenantChainRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
+    /**
+     * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
+     */
     public List<ChainRecord> list(UUID tenantId) {
         Map<String, List<TokenRecord>> tokensByChain = tokens().stream()
                 .collect(java.util.stream.Collectors.groupingBy(
@@ -64,6 +70,9 @@ public class CustodyTenantChainRepository {
                 instantOrNull(rs.getTimestamp("closed_at")),
                 tokensByChain.getOrDefault(rs.getString("chain"), List.of())), tenantId);
     }
+    /**
+     * 编码 {@code tokens} 对应的数据，生成链上或接口所需的表示。
+     */
     public List<TokenRecord> tokens() {
         return jdbc.query("""
                 select p.chain, a.symbol,
@@ -83,12 +92,18 @@ public class CustodyTenantChainRepository {
                 rs.getString("contract_address"), rs.getInt("decimals"),
                 rs.getBoolean("platform_enabled")));
     }
+    /**
+     * 执行 {@code platformChainEnabled} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public boolean platformChainEnabled(String chain) {
         Boolean enabled = jdbc.queryForObject("""
                 select exists(select 1 from chain_profile where chain = ? and enabled = true)
                 """, Boolean.class, chain);
         return Boolean.TRUE.equals(enabled);
     }
+    /**
+     * 执行 {@code active} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public boolean active(UUID tenantId, String chain) {
         Boolean active = jdbc.queryForObject("""
                 select exists(
@@ -100,6 +115,9 @@ public class CustodyTenantChainRepository {
                 """, Boolean.class, tenantId, chain);
         return Boolean.TRUE.equals(active);
     }
+    /**
+     * 设置或更新 {@code setStatus} 对应的状态，并保持相关业务字段一致。
+     */
     public void setStatus(UUID tenantId, String chain, String status, UUID actorId) {
         jdbc.update("""
                 insert into custody_tenant_chain(
@@ -124,13 +142,22 @@ public class CustodyTenantChainRepository {
                 """, tenantId, chain, status,
                 status, actorId, status, status, actorId, status);
     }
+    /**
+     * 处理 {@code depositEnabled} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public boolean depositEnabled(UUID tenantId, String chain, String symbol) {
         return assetOperationEnabled(tenantId, chain, symbol, true);
     }
+    /**
+     * 处理 {@code withdrawalEnabled} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public boolean withdrawalEnabled(UUID tenantId, String chain, String symbol) {
         return assetOperationEnabled(tenantId, chain, symbol, false);
     }
 
+    /**
+     * 获取或查询 {@code assetOperationEnabled} 对应的数据，并向调用方返回当前业务状态。
+     */
     private boolean assetOperationEnabled(UUID tenantId, String chain, String symbol,
                                           boolean deposit) {
         Boolean enabled = jdbc.queryForObject("""
@@ -152,6 +179,9 @@ public class CustodyTenantChainRepository {
                 """, Boolean.class, tenantId, chain, symbol, deposit);
         return Boolean.TRUE.equals(enabled);
     }
+    /**
+     * 转换或计算 {@code instantOrNull} 对应的值，统一金额、格式和边界规则。
+     */
     private static Instant instantOrNull(Timestamp value) {
         return value == null ? null : value.toInstant();
     }

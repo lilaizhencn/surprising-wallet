@@ -17,17 +17,24 @@ import java.util.Date;
 import java.util.List;
 
 /**
- * Atomically settles confirmed database-driven Bitcoin-like withdrawals and
- * collections across withdrawal_order, collection_record, utxo_record and
- * ledger_balance.
+ * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
  */
 @Service
 public class BitcoinLikeSettlementService {
+    /**
+     * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository chainRepository;
+    /**
+     * 构造 {@code BitcoinLikeSettlementService}，初始化该组件运行所需的状态和依赖。
+     */
     public BitcoinLikeSettlementService(ChainJdbcRepository chainRepository) {
         this.chainRepository = chainRepository;
     }
 
+    /**
+     * 设置或更新 {@code settleConfirmed} 对应的状态，并保持相关业务字段一致。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void settleConfirmed(WithdrawTransaction transaction, String txId, AssetRuntimeMetadata currency) {
         ChainType chainType = ChainType.valueOf(currency.chain());

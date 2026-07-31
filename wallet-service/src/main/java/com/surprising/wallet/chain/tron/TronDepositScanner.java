@@ -22,18 +22,27 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * RPC-backed TRON deposit scanner.
- * Native TRX and TRC20 events are parsed from TRON protobuf objects instead of
- * reusing EVM log scanners because TRON uses 21-byte addresses and protobuf
- * contract payloads for native transfers.
+ * 负责扫描链上区块、交易或事件，并转换为钱包领域事件。
  */
 @Service
 @RequiredArgsConstructor
 public class TronDepositScanner {
+    /**
+     * 定义 {@code SUN_PER_TRX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final BigDecimal SUN_PER_TRX = new BigDecimal("1000000");
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository repository;
+    /**
+     * 保存 {@code tronScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final TronScanner tronScanner;
 
+    /**
+     * 扫描或观察 {@code scanAndCreditTrx} 对应的链上状态，并转换为业务可用结果。
+     */
     public List<DepositEvent> scanAndCreditTrx(TronTridentClient client,
                                                long blockHeight,
                                                Set<String> platformAddresses,
@@ -82,6 +91,9 @@ public class TronDepositScanner {
         return detected;
     }
 
+    /**
+     * 扫描或观察 {@code scanAndCreditTrc20} 对应的链上状态，并转换为业务可用结果。
+     */
     public List<DepositEvent> scanAndCreditTrc20(TronTridentClient client,
                                                  long blockHeight,
                                                  Map<String, TronScanner.TokenConfig> tokensByContractHex,
@@ -111,16 +123,28 @@ public class TronDepositScanner {
         return detected;
     }
 
+    /**
+     * 执行 {@code unpackTransfer} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static Contract.TransferContract unpackTransfer(Chain.Transaction.Contract contract)
             throws InvalidProtocolBufferException {
         return contract.getParameter().unpack(Contract.TransferContract.class);
     }
+    /**
+     * 校验 {@code containsAddress} 对应的输入或状态，失败时抛出明确异常。
+     */
     private static boolean containsAddress(Set<String> addresses, String address) {
         return addresses.contains(address.toLowerCase(Locale.ROOT));
     }
+    /**
+     * 处理 {@code confirmations} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private static int confirmations(long bestHeight, long blockHeight) {
         return Math.toIntExact(Math.max(0, bestHeight - blockHeight + 1));
     }
+    /**
+     * 执行 {@code transactionFee} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static BigDecimal transactionFee(TronTridentClient client, String txId) {
         try {
             Response.TransactionInfo info = client.getTransactionInfo(txId, NodeType.FULL_NODE);

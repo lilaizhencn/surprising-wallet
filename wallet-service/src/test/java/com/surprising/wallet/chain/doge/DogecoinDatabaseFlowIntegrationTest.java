@@ -17,10 +17,12 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * PostgreSQL-backed DOGE idempotency, ledger, UTXO lock/release, and recovery
- * model validation. It is opt-in because the default Maven build is hermetic.
+ * 验证 {@code DogecoinDatabaseFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
  */
 class DogecoinDatabaseFlowIntegrationTest {
+    /**
+     * 验证 {@code syntheticFlowMustRemainIdempotentAndNonNegative} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void syntheticFlowMustRemainIdempotentAndNonNegative() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("doge.db.enabled"),
@@ -85,6 +87,9 @@ class DogecoinDatabaseFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;

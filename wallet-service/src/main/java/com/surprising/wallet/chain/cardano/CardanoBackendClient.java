@@ -35,6 +35,9 @@ class CardanoBackendClient {
 
     /** RPC 节点故障转移服务 */
     private final ChainRpcNodeService rpcNodeService;
+    /**
+     * 执行 {@code withBackend} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public <T> T withBackend(BackendRequest<T> request) {
         AccountChainProfile profile = repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for ADA"));
@@ -47,6 +50,9 @@ class CardanoBackendClient {
             }
         });
     }
+    /**
+     * 校验 {@code requireSuccess} 对应的前置条件，不满足时抛出明确异常。
+     */
     public static <T> T requireSuccess(Result<T> result, String operation) {
         if (result == null) {
             throw new IllegalStateException("Cardano " + operation + " returned no result");
@@ -56,9 +62,15 @@ class CardanoBackendClient {
         }
         return result.getValue();
     }
+    /**
+     * 判断 {@code isNotFound} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     static boolean isNotFound(Result<?> result) {
         return result != null && !result.isSuccessful() && result.code() == 404;
     }
+    /**
+     * 执行 {@code backend} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private BackendService backend(ChainRpcNode node, String network) {
         String apiKey = node.getApiKey() == null ? "" : node.getApiKey().trim();
         if (apiKey.isBlank()) {
@@ -66,6 +78,9 @@ class CardanoBackendClient {
         }
         return new BFBackendService(blockfrostUrl(node.getRpcUrl(), network), apiKey);
     }
+    /**
+     * 执行 {@code blockfrostUrl} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String blockfrostUrl(String configuredUrl, String network) {
         String value = configuredUrl == null ? "" : configuredUrl.trim();
         if (!value.isBlank()) {
@@ -79,8 +94,14 @@ class CardanoBackendClient {
         };
     }
 
+    /**
+     * 封装钱包业务数据和字段约束，作为模块之间传递的明确模型。
+     */
     @FunctionalInterface
     public interface BackendRequest<T> {
+        /**
+         * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
+         */
         T execute(BackendService backend, ChainRpcNode node, AccountChainProfile profile) throws ApiException;
     }
 }

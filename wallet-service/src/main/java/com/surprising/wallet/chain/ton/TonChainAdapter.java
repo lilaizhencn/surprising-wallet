@@ -37,31 +37,49 @@ class TonChainAdapter implements BlockchainAdapter {
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
 
+    /**
+     * 构造 {@code TonChainAdapter}，初始化该组件运行所需的状态和依赖。
+     */
     public TonChainAdapter(TonDepositScanner scanner, ChainJdbcRepository repository) {
         this.scanner = scanner;
         this.repository = repository;
     }
 
+    /**
+     * 获取或查询 {@code chainType} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public ChainType chainType() {
         return ChainType.TON;
     }
 
+    /**
+     * 获取或查询 {@code capabilities} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public java.util.Set<Capability> capabilities() {
         return java.util.Set.of(Capability.NATIVE_QUOTE, Capability.TOKEN_QUOTE);
     }
 
+    /**
+     * 获取或查询 {@code family} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String family() {
         return "ton";
     }
 
+    /**
+     * 获取或查询 {@code describe} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String describe() {
         return "TON WalletV4R2 message engine with seqno, comments, Cell/BOC and TEP-74 Jettons.";
     }
 
+    /**
+     * 计算或估算 {@code quoteNativeTransfer} 对应的金额、费用或资源消耗。
+     */
     @Override
     public TransferQuote quoteNativeTransfer(TransferRequest request) {
         return new TransferQuote(ChainType.TON, request.assetSymbol(), request.fromAddress(),
@@ -70,6 +88,9 @@ class TonChainAdapter implements BlockchainAdapter {
                 "TON native internal message");
     }
 
+    /**
+     * 计算或估算 {@code quoteTokenTransfer} 对应的金额、费用或资源消耗。
+     */
     @Override
     public TransferQuote quoteTokenTransfer(TransferRequest request) {
         TokenDefinition token = repository.findToken(CHAIN, request.assetSymbol())
@@ -80,6 +101,9 @@ class TonChainAdapter implements BlockchainAdapter {
                 "Jetton wallet transfer message");
     }
 
+    /**
+     * 扫描或观察 {@code scanDeposits} 对应的链上状态，并转换为业务可用结果。
+     */
     @Override
     public List<DepositEvent> scanDeposits(long height) {
         return scanner.scanAndCredit();

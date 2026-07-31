@@ -24,12 +24,21 @@ import static com.surprising.wallet.custody.repository.CustodyRepository.Session
  */
 @Repository
 public class CustodySecurityRepository {
+    /**
+     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final JdbcTemplate jdbc;
 
+    /**
+     * 构造 {@code CustodySecurityRepository}，初始化该组件运行所需的状态和依赖。
+     */
     public CustodySecurityRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
+    /**
+     * 删除或释放 {@code revokeTenantSessions} 对应的资源，并收敛相关业务状态。
+     */
     public int revokeTenantSessions(UUID tenantId) {
         return jdbc.update("""
                 update custody_session
@@ -38,6 +47,9 @@ public class CustodySecurityRepository {
                 """, tenantId);
     }
 
+    /**
+     * 获取或查询 {@code findTenantUser} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<AuthUser> findTenantUser(String email) {
         return jdbc.query("""
                         select u.id, u.tenant_id, t.slug as tenant_slug, t.status as tenant_status,
@@ -49,6 +61,9 @@ public class CustodySecurityRepository {
                         """, (rs, rowNum) -> mapAuthUser(rs), email).stream().findFirst();
     }
 
+    /**
+     * 获取或查询 {@code findPlatformUser} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<AuthUser> findPlatformUser(String email) {
         return jdbc.query("""
                         select u.id, u.tenant_id, null::varchar as tenant_slug,
@@ -61,6 +76,9 @@ public class CustodySecurityRepository {
                         """, (rs, rowNum) -> mapAuthUser(rs), email).stream().findFirst();
     }
 
+    /**
+     * 执行 {@code platformAdminExists} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public boolean platformAdminExists() {
         Long count = jdbc.queryForObject("""
                 select count(*) from custody_tenant_user
@@ -69,6 +87,9 @@ public class CustodySecurityRepository {
         return count != null && count > 0;
     }
 
+    /**
+     * 记录或保存 {@code insertPlatformAdmin} 对应的数据，并遵守幂等和事务约束。
+     */
     public void insertPlatformAdmin(UUID userId, String email, String passwordHash) {
         jdbc.update("""
                 insert into custody_tenant_user(
@@ -78,6 +99,9 @@ public class CustodySecurityRepository {
                 """, userId, email.toLowerCase(Locale.ROOT), passwordHash);
     }
 
+    /**
+     * 记录或保存 {@code recordLoginFailure} 对应的数据，并遵守幂等和事务约束。
+     */
     public void recordLoginFailure(UUID userId, Instant lockedUntil) {
         jdbc.update("""
                         update custody_tenant_user
@@ -88,6 +112,9 @@ public class CustodySecurityRepository {
                         """, timestampOrNull(lockedUntil), userId);
     }
 
+    /**
+     * 记录或保存 {@code recordLoginSuccess} 对应的数据，并遵守幂等和事务约束。
+     */
     public void recordLoginSuccess(UUID userId) {
         jdbc.update("""
                         update custody_tenant_user
@@ -97,6 +124,9 @@ public class CustodySecurityRepository {
                         """, userId);
     }
 
+    /**
+     * 记录或保存 {@code insertSession} 对应的数据，并遵守幂等和事务约束。
+     */
     public void insertSession(UUID sessionId, UUID userId, UUID tenantId, String tokenHash,
                               String sourceIp, String userAgent, Instant expiresAt) {
         jdbc.update("""
@@ -107,6 +137,9 @@ public class CustodySecurityRepository {
                 Timestamp.from(expiresAt));
     }
 
+    /**
+     * 获取或查询 {@code findActiveSession} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<SessionRecord> findActiveSession(String tokenHash) {
         return jdbc.query("""
                         select s.id as session_id, s.tenant_user_id, s.tenant_id, t.slug as tenant_slug,
@@ -132,6 +165,9 @@ public class CustodySecurityRepository {
                 tokenHash).stream().findFirst();
     }
 
+    /**
+     * 获取或查询 {@code listTenantUsers} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listTenantUsers(UUID tenantId) {
         return jdbc.query("""
                         select id, email, display_name, role, status, failed_login_count,
@@ -161,6 +197,9 @@ public class CustodySecurityRepository {
                 }, tenantId);
     }
 
+    /**
+     * 执行 {@code unlockTenantAdministrator} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public Map<String, Object> unlockTenantAdministrator(UUID tenantId, UUID userId) {
         if (jdbc.update("""
                         update custody_tenant_user
@@ -177,6 +216,9 @@ public class CustodySecurityRepository {
                         "tenant administrator not found"));
     }
 
+    /**
+     * 编码 {@code touchSession} 对应的数据，生成链上或接口所需的表示。
+     */
     public void touchSession(UUID sessionId) {
         jdbc.update("""
                         update custody_session
@@ -186,6 +228,9 @@ public class CustodySecurityRepository {
                         """, sessionId);
     }
 
+    /**
+     * 删除或释放 {@code revokeSession} 对应的资源，并收敛相关业务状态。
+     */
     public void revokeSession(String tokenHash) {
         jdbc.update("""
                 update custody_session set revoked_at = now()
@@ -193,6 +238,9 @@ public class CustodySecurityRepository {
                 """, tokenHash);
     }
 
+    /**
+     * 记录或保存 {@code insertApiKey} 对应的数据，并遵守幂等和事务约束。
+     */
     public ApiKeyRecord insertApiKey(UUID id, UUID tenantId, String keyId, String name,
                                      String encryptedSecret, UUID createdBy) {
         jdbc.update("""
@@ -203,6 +251,9 @@ public class CustodySecurityRepository {
         return requireApiKey(keyId);
     }
 
+    /**
+     * 获取或查询 {@code findActiveApiKey} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<ApiKeyRecord> findActiveApiKey(String keyId) {
         return jdbc.query("""
                         select k.id, k.tenant_id, t.slug as tenant_slug, t.status as tenant_status,
@@ -216,6 +267,9 @@ public class CustodySecurityRepository {
                         """, (rs, rowNum) -> mapApiKey(rs), keyId).stream().findFirst();
     }
 
+    /**
+     * 校验 {@code requireApiKey} 对应的前置条件，不满足时抛出明确异常。
+     */
     public ApiKeyRecord requireApiKey(String keyId) {
         return jdbc.query("""
                         select k.id, k.tenant_id, t.slug as tenant_slug, t.status as tenant_status,
@@ -228,6 +282,9 @@ public class CustodySecurityRepository {
                 .orElseThrow(() -> new IllegalArgumentException("API key not found"));
     }
 
+    /**
+     * 获取或查询 {@code listApiKeys} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listApiKeys(UUID tenantId) {
         return jdbc.query("""
                         select id, key_id, name, status, last_used_at, last_used_ip,
@@ -250,6 +307,9 @@ public class CustodySecurityRepository {
                 }, tenantId);
     }
 
+    /**
+     * 删除或释放 {@code revokeApiKey} 对应的资源，并收敛相关业务状态。
+     */
     public void revokeApiKey(UUID tenantId, UUID keyId) {
         if (jdbc.update("""
                         update custody_api_key
@@ -260,6 +320,9 @@ public class CustodySecurityRepository {
         }
     }
 
+    /**
+     * 编码 {@code touchApiKey} 对应的数据，生成链上或接口所需的表示。
+     */
     public void touchApiKey(UUID keyId, String sourceIp) {
         jdbc.update("""
                         update custody_api_key
@@ -273,6 +336,9 @@ public class CustodySecurityRepository {
                         """, sourceIp, keyId, sourceIp);
     }
 
+    /**
+     * 执行 {@code reserveNonce} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public boolean reserveNonce(String keyId, String nonce, Instant expiresAt) {
         try {
             return jdbc.update("""
@@ -284,6 +350,9 @@ public class CustodySecurityRepository {
         }
     }
 
+    /**
+     * 执行 {@code activeIpRules} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public List<String> activeIpRules(UUID tenantId) {
         return jdbc.query("""
                 select cidr::text from custody_ip_rule
@@ -292,6 +361,9 @@ public class CustodySecurityRepository {
                 """, (rs, rowNum) -> rs.getString(1), tenantId);
     }
 
+    /**
+     * 获取或查询 {@code listIpRules} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listIpRules(UUID tenantId) {
         return jdbc.query("""
                         select id, label, cidr::text as cidr, enabled, created_at, updated_at
@@ -310,6 +382,9 @@ public class CustodySecurityRepository {
                 }, tenantId);
     }
 
+    /**
+     * 记录或保存 {@code insertIpRule} 对应的数据，并遵守幂等和事务约束。
+     */
     public Map<String, Object> insertIpRule(
             UUID tenantId, UUID ruleId, String label, String cidr, UUID createdBy) {
         return jdbc.queryForMap("""
@@ -319,6 +394,9 @@ public class CustodySecurityRepository {
                         """, ruleId, tenantId, label, cidr, createdBy);
     }
 
+    /**
+     * 删除或清理 {@code deleteIpRule} 对应的数据，并处理相关状态收敛。
+     */
     public void deleteIpRule(UUID tenantId, UUID ruleId) {
         if (jdbc.update(
                 "delete from custody_ip_rule where tenant_id = ? and id = ?",
@@ -327,6 +405,9 @@ public class CustodySecurityRepository {
         }
     }
 
+    /**
+     * 设置或更新 {@code setIpAllowlistEnabled} 对应的状态，并保持相关业务字段一致。
+     */
     public void setIpAllowlistEnabled(UUID tenantId, boolean enabled) {
         if (enabled && activeIpRules(tenantId).isEmpty()) {
             throw new IllegalStateException(
@@ -341,6 +422,9 @@ public class CustodySecurityRepository {
         }
     }
 
+    /**
+     * 执行 {@code mapAuthUser} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private AuthUser mapAuthUser(ResultSet rs) throws SQLException {
         return new AuthUser(
                 rs.getObject("id", UUID.class),
@@ -356,6 +440,9 @@ public class CustodySecurityRepository {
                 instantOrNull(rs.getTimestamp("locked_until")));
     }
 
+    /**
+     * 执行 {@code mapApiKey} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private ApiKeyRecord mapApiKey(ResultSet rs) throws SQLException {
         return new ApiKeyRecord(
                 rs.getObject("id", UUID.class),
@@ -371,14 +458,23 @@ public class CustodySecurityRepository {
                 rs.getTimestamp("created_at").toInstant());
     }
 
+    /**
+     * 转换或计算 {@code instantOrNull} 对应的值，统一金额、格式和边界规则。
+     */
     private static Instant instantOrNull(Timestamp timestamp) {
         return timestamp == null ? null : timestamp.toInstant();
     }
 
+    /**
+     * 执行 {@code timestampOrNull} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static Timestamp timestampOrNull(Instant instant) {
         return instant == null ? null : Timestamp.from(instant);
     }
 
+    /**
+     * 转换或计算 {@code truncate} 对应的值，统一金额、格式和边界规则。
+     */
     private static String truncate(String value, int maxLength) {
         if (value == null || value.length() <= maxLength) {
             return value;

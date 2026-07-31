@@ -25,9 +25,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Read-only live RPC gate proving authorizationList is accepted by eth_estimateGas. */
+/**
+ * 验证 {@code Evm7702RpcCapabilityIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class Evm7702RpcCapabilityIntegrationTest {
 
+    /**
+     * 验证 {@code shouldAcceptType4AuthorizationListDuringGasEstimation} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldAcceptType4AuthorizationListDuringGasEstimation() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("evm.7702.rpc-capability.enabled"),
@@ -73,6 +78,9 @@ class Evm7702RpcCapabilityIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code findFundedSender} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String findFundedSender(Web3j web3j) throws Exception {
         EthBlock.Block latest = web3j.ethGetBlockByNumber(
                 DefaultBlockParameterName.LATEST, true).send().getBlock();
@@ -103,6 +111,9 @@ class Evm7702RpcCapabilityIntegrationTest {
         throw new AssertionError("no funded sender found in the latest 20 blocks");
     }
 
+    /**
+     * 验证 {@code authorizationJson} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Map<String, String> authorizationJson(AuthorizationTuple tuple) {
         Map<String, String> result = new LinkedHashMap<>();
         result.put("chainId", Numeric.encodeQuantity(tuple.getChainId()));
@@ -114,12 +125,18 @@ class Evm7702RpcCapabilityIntegrationTest {
         return result;
     }
 
+    /**
+     * 验证 {@code requiredProperty} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String requiredProperty(String name) {
         String value = System.getProperty(name, "").trim();
         if (value.isEmpty()) throw new IllegalArgumentException("missing -D" + name);
         return value;
     }
 
+    /**
+     * 测试辅助类 {@code QuantityResponse}，为相关测试提供隔离环境或共享数据。
+     */
     public static class QuantityResponse extends Response<String> {
     }
 }

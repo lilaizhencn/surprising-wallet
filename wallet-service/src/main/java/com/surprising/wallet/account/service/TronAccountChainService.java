@@ -28,15 +28,39 @@ import java.math.BigDecimal;
 @Service
 @RequiredArgsConstructor
 class TronAccountChainService {
+    /**
+     * 定义 {@code TRX_SUN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final BigDecimal TRX_SUN = new BigDecimal("1000000");
 
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository repository;
+    /**
+     * 保存 {@code secp256k1KeyService}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
+     */
     private final AccountSecp256k1KeyService secp256k1KeyService;
+    /**
+     * 保存 {@code assets}，表示链、网络、资产或代币配置。
+     */
     private final AccountChainAssetService assets;
+    /**
+     * 保存 {@code tronClientFactory}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final TronClientFactory tronClientFactory;
+    /**
+     * 保存 {@code tronTransactionService}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final TronTransactionService tronTransactionService;
+    /**
+     * 保存 {@code tronTrc20Service}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final TronTrc20Service tronTrc20Service;
 
+    /**
+     * 发送或广播 {@code broadcast} 对应的链上请求，并返回节点处理结果。
+     */
     String broadcast(
             AccountChainProfile profile,
             WithdrawalOrderRecord order,
@@ -72,6 +96,9 @@ class TronAccountChainService {
         }
     }
 
+    /**
+     * 执行或处理 {@code processCollection} 对应的业务流程，并维护状态和异常边界。
+     */
     void processCollection(
             AccountChainProfile profile,
             ChainCollectionRecord record,
@@ -123,6 +150,9 @@ class TronAccountChainService {
         }
     }
 
+    /**
+     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     void confirmWithdrawal(
             AccountChainProfile profile,
             WithdrawalOrderRecord order,
@@ -143,6 +173,9 @@ class TronAccountChainService {
                 assets.withdrawalDebitAmount(order));
     }
 
+    /**
+     * 处理 {@code confirmCollection} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     void confirmCollection(
             AccountChainProfile profile,
             ChainCollectionRecord record) throws Exception {
@@ -160,6 +193,9 @@ class TronAccountChainService {
                 record.getCollectionNo(), record.getTxHash());
     }
 
+    /**
+     * 处理 {@code confirmedTransaction} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private Response.TransactionInfo confirmedTransaction(
             AccountChainProfile profile, String txHash) throws Exception {
         if (txHash == null || txHash.isBlank()) {
@@ -184,6 +220,9 @@ class TronAccountChainService {
         }
     }
 
+    /**
+     * 记录或保存 {@code recordConfirmed} 对应的数据，并遵守幂等和事务约束。
+     */
     private void recordConfirmed(
             String chain,
             String txHash,
@@ -207,6 +246,9 @@ class TronAccountChainService {
                 .build());
     }
 
+    /**
+     * 记录或保存 {@code recordSent} 对应的数据，并遵守幂等和事务约束。
+     */
     private void recordSent(
             String chain,
             String txHash,
@@ -229,12 +271,18 @@ class TronAccountChainService {
                 .build());
     }
 
+    /**
+     * 执行 {@code tronKey} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private KeyPair tronKey(
             AccountChainProfile profile, ChainAddressRecord from) {
         ECKey ecKey = secp256k1KeyService.key(profile, from);
         return TronTridentKeyFactory.fromBitcoinEcKey(ecKey);
     }
 
+    /**
+     * 转换或计算 {@code feeLimitSun} 对应的值，统一金额、格式和边界规则。
+     */
     private long feeLimitSun(AccountChainProfile profile) {
         Long configured = profile.getDefaultFee();
         return configured == null || configured <= 0

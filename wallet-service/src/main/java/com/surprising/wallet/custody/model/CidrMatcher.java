@@ -9,7 +9,13 @@ import java.net.UnknownHostException;
  * 支持 IPv4 和 IPv6，支持子网前缀长度（如 192.168.1.0/24）。
  */
 public final class CidrMatcher {
+    /**
+     * 构造 {@code CidrMatcher}，初始化该组件运行所需的状态和依赖。
+     */
     private CidrMatcher() {    }
+    /**
+     * 校验 {@code matches} 对应的输入或状态，失败时抛出明确异常。
+     */
     public static boolean matches(String cidr, String address) {
         if (cidr == null || cidr.isBlank() || address == null || address.isBlank()) {
             return false;

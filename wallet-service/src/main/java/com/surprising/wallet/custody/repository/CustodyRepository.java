@@ -38,7 +38,13 @@ import java.util.UUID;
  */
 @Repository
 public class CustodyRepository {
+    /**
+     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final JdbcTemplate jdbc;
+    /**
+     * 保存 {@code securityRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final CustodySecurityRepository securityRepository;
 
     /**
@@ -50,12 +56,18 @@ public class CustodyRepository {
         this(jdbc, new CustodySecurityRepository(jdbc));
     }
 
+    /**
+     * 构造 {@code CustodyRepository}，初始化该组件运行所需的状态和依赖。
+     */
     @Autowired
     public CustodyRepository(JdbcTemplate jdbc, CustodySecurityRepository securityRepository) {
         this.jdbc = jdbc;
         this.securityRepository = securityRepository;
     }
 
+    /**
+     * 构建或生成 {@code createTenant} 对应的结果，并执行输入和状态校验。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public TenantRecord createTenant(UUID tenantId, String slug, String name, UUID adminId,
                                      String adminEmail, String adminDisplayName, String passwordHash) {
@@ -70,6 +82,9 @@ public class CustodyRepository {
                         """, adminId, tenantId, adminEmail, adminDisplayName, passwordHash);
         return requireTenant(tenantId);
     }
+    /**
+     * 获取或查询 {@code findTenantBySlug} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<TenantRecord> findTenantBySlug(String slug) {
         return jdbc.query("""
                         select id, slug, name, status, derivation_namespace, ip_allowlist_enabled,
@@ -88,6 +103,9 @@ public class CustodyRepository {
                         rs.getTimestamp("updated_at").toInstant()),
                 slug).stream().findFirst();
     }
+    /**
+     * 校验 {@code requireTenant} 对应的前置条件，不满足时抛出明确异常。
+     */
     public TenantRecord requireTenant(UUID tenantId) {
         return jdbc.query("""
                         select id, slug, name, status, derivation_namespace, ip_allowlist_enabled,
@@ -108,6 +126,9 @@ public class CustodyRepository {
                 new IllegalArgumentException("tenant not found"));
     }
 
+    /**
+     * 获取或查询 {@code listTenants} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listTenants(
             String search, String status, int limit, int offset) {
         return jdbc.query("""
@@ -202,6 +223,9 @@ public class CustodyRepository {
                 }, blankToEmpty(search), blankToEmpty(status),
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
+    /**
+     * 执行 {@code countTenants} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long countTenants(String search, String status) {
         Long count = jdbc.queryForObject("""
                 select count(*)
@@ -217,6 +241,9 @@ public class CustodyRepository {
                 blankToEmpty(status), blankToEmpty(status));
         return count == null ? 0L : count;
     }
+    /**
+     * 执行 {@code tenantOperationsSummary} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public Map<String, Object> tenantOperationsSummary(UUID tenantId) {
         return jdbc.query("""
                         select
@@ -271,6 +298,9 @@ public class CustodyRepository {
                     return row;
                 }, tenantId);
     }
+    /**
+     * 设置或更新 {@code updateTenantProfile} 对应的状态，并保持相关业务字段一致。
+     */
     public void updateTenantProfile(UUID tenantId, String name, String displayCurrency) {
         if (jdbc.update("""
                         update custody_tenant
@@ -280,6 +310,9 @@ public class CustodyRepository {
             throw new IllegalArgumentException("tenant not found");
         }
     }
+    /**
+     * 设置或更新 {@code updateTenantStatus} 对应的状态，并保持相关业务字段一致。
+     */
     public void updateTenantStatus(UUID tenantId, String status) {
         if (jdbc.update("""
                         update custody_tenant
@@ -289,87 +322,165 @@ public class CustodyRepository {
             throw new IllegalArgumentException("tenant not found");
         }
     }
+    /**
+     * 删除或释放 {@code revokeTenantSessions} 对应的资源，并收敛相关业务状态。
+     */
     public int revokeTenantSessions(UUID tenantId) {
         return securityRepository.revokeTenantSessions(tenantId);
     }
+    /**
+     * 获取或查询 {@code findTenantUser} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<AuthUser> findTenantUser(String email) {
         return securityRepository.findTenantUser(email);
     }
+    /**
+     * 获取或查询 {@code findPlatformUser} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<AuthUser> findPlatformUser(String email) {
         return securityRepository.findPlatformUser(email);
     }
+    /**
+     * 执行 {@code platformAdminExists} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public boolean platformAdminExists() {
         return securityRepository.platformAdminExists();
     }
+    /**
+     * 记录或保存 {@code insertPlatformAdmin} 对应的数据，并遵守幂等和事务约束。
+     */
     public void insertPlatformAdmin(UUID userId, String email, String passwordHash) {
         securityRepository.insertPlatformAdmin(userId, email, passwordHash);
     }
+    /**
+     * 记录或保存 {@code recordLoginFailure} 对应的数据，并遵守幂等和事务约束。
+     */
     public void recordLoginFailure(UUID userId, Instant lockedUntil) {
         securityRepository.recordLoginFailure(userId, lockedUntil);
     }
+    /**
+     * 记录或保存 {@code recordLoginSuccess} 对应的数据，并遵守幂等和事务约束。
+     */
     public void recordLoginSuccess(UUID userId) {
         securityRepository.recordLoginSuccess(userId);
     }
 
+    /**
+     * 记录或保存 {@code insertSession} 对应的数据，并遵守幂等和事务约束。
+     */
     public void insertSession(UUID sessionId, UUID userId, UUID tenantId, String tokenHash,
                               String sourceIp, String userAgent, Instant expiresAt) {
         securityRepository.insertSession(
                 sessionId, userId, tenantId, tokenHash, sourceIp, userAgent, expiresAt);
     }
+    /**
+     * 获取或查询 {@code findActiveSession} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<SessionRecord> findActiveSession(String tokenHash) {
         return securityRepository.findActiveSession(tokenHash);
     }
+    /**
+     * 获取或查询 {@code listTenantUsers} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listTenantUsers(UUID tenantId) {
         return securityRepository.listTenantUsers(tenantId);
     }
+    /**
+     * 执行 {@code unlockTenantAdministrator} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public Map<String, Object> unlockTenantAdministrator(UUID tenantId, UUID userId) {
         return securityRepository.unlockTenantAdministrator(tenantId, userId);
     }
+    /**
+     * 编码 {@code touchSession} 对应的数据，生成链上或接口所需的表示。
+     */
     public void touchSession(UUID sessionId) {
         securityRepository.touchSession(sessionId);
     }
+    /**
+     * 删除或释放 {@code revokeSession} 对应的资源，并收敛相关业务状态。
+     */
     public void revokeSession(String tokenHash) {
         securityRepository.revokeSession(tokenHash);
     }
 
+    /**
+     * 记录或保存 {@code insertApiKey} 对应的数据，并遵守幂等和事务约束。
+     */
     public ApiKeyRecord insertApiKey(UUID id, UUID tenantId, String keyId, String name,
                                      String encryptedSecret, UUID createdBy) {
         return securityRepository.insertApiKey(
                 id, tenantId, keyId, name, encryptedSecret, createdBy);
     }
+    /**
+     * 获取或查询 {@code findActiveApiKey} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<ApiKeyRecord> findActiveApiKey(String keyId) {
         return securityRepository.findActiveApiKey(keyId);
     }
+    /**
+     * 校验 {@code requireApiKey} 对应的前置条件，不满足时抛出明确异常。
+     */
     public ApiKeyRecord requireApiKey(String keyId) {
         return securityRepository.requireApiKey(keyId);
     }
+    /**
+     * 获取或查询 {@code listApiKeys} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listApiKeys(UUID tenantId) {
         return securityRepository.listApiKeys(tenantId);
     }
+    /**
+     * 删除或释放 {@code revokeApiKey} 对应的资源，并收敛相关业务状态。
+     */
     public void revokeApiKey(UUID tenantId, UUID keyId) {
         securityRepository.revokeApiKey(tenantId, keyId);
     }
+    /**
+     * 编码 {@code touchApiKey} 对应的数据，生成链上或接口所需的表示。
+     */
     public void touchApiKey(UUID keyId, String sourceIp) {
         securityRepository.touchApiKey(keyId, sourceIp);
     }
+    /**
+     * 执行 {@code reserveNonce} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public boolean reserveNonce(String keyId, String nonce, Instant expiresAt) {
         return securityRepository.reserveNonce(keyId, nonce, expiresAt);
     }
+    /**
+     * 执行 {@code activeIpRules} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public List<String> activeIpRules(UUID tenantId) {
         return securityRepository.activeIpRules(tenantId);
     }
+    /**
+     * 获取或查询 {@code listIpRules} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listIpRules(UUID tenantId) {
         return securityRepository.listIpRules(tenantId);
     }
+    /**
+     * 记录或保存 {@code insertIpRule} 对应的数据，并遵守幂等和事务约束。
+     */
     public Map<String, Object> insertIpRule(UUID tenantId, UUID ruleId, String label, String cidr, UUID createdBy) {
         return securityRepository.insertIpRule(tenantId, ruleId, label, cidr, createdBy);
     }
+    /**
+     * 删除或清理 {@code deleteIpRule} 对应的数据，并处理相关状态收敛。
+     */
     public void deleteIpRule(UUID tenantId, UUID ruleId) {
         securityRepository.deleteIpRule(tenantId, ruleId);
     }
+    /**
+     * 设置或更新 {@code setIpAllowlistEnabled} 对应的状态，并保持相关业务字段一致。
+     */
     public void setIpAllowlistEnabled(UUID tenantId, boolean enabled) {
         securityRepository.setIpAllowlistEnabled(tenantId, enabled);
     }
+    /**
+     * 获取或查询 {@code resolveDerivationSubject} 对应的数据，并向调用方返回当前业务状态。
+     */
     public int resolveDerivationSubject(UUID tenantId, String subject) {
         String mappingKey = tenantId + "\n" + subject;
         jdbc.query(
@@ -394,6 +505,9 @@ public class CustodyRepository {
         }
         return allocated;
     }
+    /**
+     * 执行 {@code lockSubjectAddressAllocation} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public void lockSubjectAddressAllocation(UUID tenantId, String chain, String subject) {
         String allocationKey = tenantId + "\n" + chain + "\n" + subject;
         jdbc.query(
@@ -402,6 +516,9 @@ public class CustodyRepository {
                 allocationKey);
     }
 
+    /**
+     * 记录或保存 {@code insertAddress} 对应的数据，并遵守幂等和事务约束。
+     */
     public AddressRecord insertAddress(UUID id, UUID tenantId, long chainAddressId, String chain,
                                        String network, String address, String memo,
                                        String subject, String label, String metadataJson,
@@ -419,6 +536,9 @@ public class CustodyRepository {
                 derivationChild, createdBy);
         return requireAddress(tenantId, id);
     }
+    /**
+     * 执行 {@code assignChainAddressTenant} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public void assignChainAddressTenant(UUID tenantId, long chainAddressId) {
         if (jdbc.update("""
                         update chain_address
@@ -428,6 +548,9 @@ public class CustodyRepository {
             throw new IllegalStateException("chain address belongs to another tenant");
         }
     }
+    /**
+     * 校验 {@code requireAddress} 对应的前置条件，不满足时抛出明确异常。
+     */
     public AddressRecord requireAddress(UUID tenantId, UUID addressId) {
         return jdbc.query("""
                         select id, tenant_id, chain_address_id, chain, network, address, memo,
@@ -441,6 +564,9 @@ public class CustodyRepository {
                 .orElseThrow(() -> new IllegalArgumentException("custody address not found"));
     }
 
+    /**
+     * 获取或查询 {@code findAddressBySubjectAndVersion} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<AddressRecord> findAddressBySubjectAndVersion(
             UUID tenantId, String chain, String subject, long addressVersion) {
         return jdbc.query("""
@@ -455,6 +581,9 @@ public class CustodyRepository {
                 tenantId, chain, subject, addressVersion)
                 .stream().findFirst();
     }
+    /**
+     * 判断 {@code isGasAddress} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     public boolean isGasAddress(UUID tenantId, UUID addressId) {
         Boolean result = jdbc.queryForObject("""
                         select exists (
@@ -465,6 +594,9 @@ public class CustodyRepository {
         return Boolean.TRUE.equals(result);
     }
 
+    /**
+     * 判断 {@code hasOpenReorgDeficit} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     public boolean hasOpenReorgDeficit(UUID tenantId, UUID custodyAddressId,
                                        String chain, String assetSymbol) {
         Boolean result = jdbc.queryForObject("""
@@ -486,6 +618,9 @@ public class CustodyRepository {
         return Boolean.TRUE.equals(result);
     }
 
+    /**
+     * 设置或更新 {@code updateAddress} 对应的状态，并保持相关业务字段一致。
+     */
     public AddressRecord updateAddress(UUID tenantId, UUID addressId, String label,
                                        String metadataJson, String status) {
         if (jdbc.update("""
@@ -501,6 +636,9 @@ public class CustodyRepository {
         return requireAddress(tenantId, addressId);
     }
 
+    /**
+     * 获取或查询 {@code listAddresses} 对应的数据，供调用方读取当前状态。
+     */
     public List<AddressRecord> listAddresses(UUID tenantId, String chain, String source,
                                              String status, String search, int limit, int offset) {
         String normalizedSearch = search == null ? "" : search.trim();
@@ -531,6 +669,9 @@ public class CustodyRepository {
                 normalizedSearch, normalizedSearch, normalizedSearch, normalizedSearch,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
+    /**
+     * 执行 {@code countAddresses} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long countAddresses(UUID tenantId, String chain, String source,
                                String status, String search) {
         String normalizedSearch = search == null ? "" : search.trim();
@@ -555,6 +696,9 @@ public class CustodyRepository {
                 normalizedSearch, normalizedSearch, normalizedSearch, normalizedSearch);
         return count == null ? 0L : count;
     }
+    /**
+     * 执行 {@code tenantAssetOverview} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public List<Map<String, Object>> tenantAssetOverview(UUID tenantId) {
         return jdbc.query("""
                         with tenant_accounts as (
@@ -614,10 +758,16 @@ public class CustodyRepository {
                     return row;
                 }, tenantId, tenantId);
     }
+    /**
+     * 获取或查询 {@code findGasAccount} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<GasAccountRecord> findGasAccount(UUID tenantId, String chain) {
         return gasAccounts(tenantId, chain).stream().findFirst();
     }
 
+    /**
+     * 记录或保存 {@code insertGasAccount} 对应的数据，并遵守幂等和事务约束。
+     */
     public GasAccountRecord insertGasAccount(
             UUID id, UUID tenantId, UUID custodyAddressId, String chain, String network,
             String nativeSymbol, java.math.BigDecimal lowBalanceThreshold, UUID createdBy) {
@@ -632,16 +782,25 @@ public class CustodyRepository {
         return findGasAccount(tenantId, chain)
                 .orElseThrow(() -> new IllegalStateException("failed to create gas account"));
     }
+    /**
+     * 校验 {@code requireGasAccount} 对应的前置条件，不满足时抛出明确异常。
+     */
     public GasAccountRecord requireGasAccount(UUID tenantId, UUID gasAccountId) {
         return gasAccounts(tenantId, "").stream()
                 .filter(account -> account.id().equals(gasAccountId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("gas account not found"));
     }
+    /**
+     * 获取或查询 {@code listGasAccounts} 对应的数据，供调用方读取当前状态。
+     */
     public List<GasAccountRecord> listGasAccounts(UUID tenantId) {
         return gasAccounts(tenantId, "");
     }
 
+    /**
+     * 设置或更新 {@code updateGasAccount} 对应的状态，并保持相关业务字段一致。
+     */
     public GasAccountRecord updateGasAccount(
             UUID tenantId, UUID gasAccountId, java.math.BigDecimal lowBalanceThreshold,
             String status) {
@@ -655,6 +814,9 @@ public class CustodyRepository {
         return requireGasAccount(tenantId, gasAccountId);
     }
 
+    /**
+     * 获取或查询 {@code listGasTopups} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listGasTopups(
             UUID tenantId, UUID gasAccountId, int limit, int offset) {
         return jdbc.query("""
@@ -682,6 +844,9 @@ public class CustodyRepository {
                 }, tenantId, gasAccountId,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
+    /**
+     * 执行 {@code gasPricingMetadata} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public GasPricingMetadata gasPricingMetadata(String chain, String assetSymbol) {
         return jdbc.query("""
                         select p.family, p.native_symbol, coalesce(p.default_fee_rate, 1) default_fee_rate,
@@ -711,6 +876,9 @@ public class CustodyRepository {
                         "enabled chain gas pricing is unavailable for " + chain));
     }
 
+    /**
+     * 执行 {@code reserveGasUsage} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public GasUsageRecord reserveGasUsage(
             UUID tenantId, UUID custodyWithdrawalId, String orderNo, String chain,
@@ -719,6 +887,9 @@ public class CustodyRepository {
                 orderNo, chain, reservedAmount);
     }
 
+    /**
+     * 执行 {@code reserveGasUsage} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public GasUsageRecord reserveGasUsage(
             UUID tenantId, String operationType, UUID operationId, String referenceNo,
@@ -759,12 +930,18 @@ public class CustodyRepository {
         return requireGasUsage(tenantId, operationType, operationId);
     }
 
+    /**
+     * 删除或释放 {@code releaseGasUsage} 对应的资源，并收敛相关业务状态。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public GasUsageRecord releaseGasUsage(UUID custodyWithdrawalId, String reason) {
         GasUsageRecord usage = requireWithdrawalGasUsage(custodyWithdrawalId);
         return releaseGasUsage(usage.tenantId(), usage.operationType(), usage.operationId(), reason);
     }
 
+    /**
+     * 删除或释放 {@code releaseGasUsage} 对应的资源，并收敛相关业务状态。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public GasUsageRecord releaseGasUsage(UUID tenantId, String operationType,
                                           UUID operationId, String reason) {
@@ -796,6 +973,9 @@ public class CustodyRepository {
         return requireGasUsage(tenantId, operationType, operationId);
     }
 
+    /**
+     * 设置或更新 {@code settleGasUsage} 对应的状态，并保持相关业务字段一致。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public GasUsageRecord settleGasUsage(
             UUID custodyWithdrawalId, java.math.BigDecimal actualAmount,
@@ -805,6 +985,9 @@ public class CustodyRepository {
                 actualAmount, pricingSource, txHash);
     }
 
+    /**
+     * 设置或更新 {@code settleGasUsage} 对应的状态，并保持相关业务字段一致。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public GasUsageRecord settleGasUsage(
             UUID tenantId, String operationType, UUID operationId,
@@ -884,6 +1067,9 @@ public class CustodyRepository {
         return requireGasUsage(tenantId, operationType, operationId);
     }
 
+    /**
+     * 获取或查询 {@code listGasUsage} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listGasUsage(
             UUID tenantId, UUID gasAccountId, int limit, int offset) {
         return jdbc.query("""
@@ -916,6 +1102,9 @@ public class CustodyRepository {
                 }, tenantId, gasAccountId,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
+    /**
+     * 获取或查询 {@code listOverdueGasUsage} 对应的数据，供调用方读取当前状态。
+     */
     public List<GasUsageRecord> listOverdueGasUsage(int limit) {
         return jdbc.query("""
                         select id, tenant_id, gas_account_id, operation_type, operation_id,
@@ -946,11 +1135,17 @@ public class CustodyRepository {
                         instantOrNull(rs.getTimestamp("settled_at"))),
                 Math.min(Math.max(limit, 1), 200));
     }
+    /**
+     * 校验 {@code requireGasUsage} 对应的前置条件，不满足时抛出明确异常。
+     */
     private GasUsageRecord requireGasUsage(UUID tenantId, String operationType, UUID operationId) {
         return findGasUsage(tenantId, operationType, operationId)
                 .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
     }
 
+    /**
+     * 校验 {@code requireGasUsageForUpdate} 对应的前置条件，不满足时抛出明确异常。
+     */
     private GasUsageRecord requireGasUsageForUpdate(
             UUID tenantId, String operationType, UUID operationId) {
         return jdbc.query("""
@@ -982,6 +1177,9 @@ public class CustodyRepository {
                 tenantId, operationType, operationId).stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
     }
+    /**
+     * 获取或查询 {@code findGasUsage} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<GasUsageRecord> findGasUsage(UUID custodyWithdrawalId) {
         return jdbc.query("""
                         select tenant_id from custody_gas_usage
@@ -991,6 +1189,9 @@ public class CustodyRepository {
                 .flatMap(tenantId -> findGasUsage(tenantId, "WITHDRAWAL", custodyWithdrawalId));
     }
 
+    /**
+     * 获取或查询 {@code findGasUsage} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<GasUsageRecord> findGasUsage(
             UUID tenantId, String operationType, UUID operationId) {
         return jdbc.query("""
@@ -1020,11 +1221,17 @@ public class CustodyRepository {
                         instantOrNull(rs.getTimestamp("settled_at"))),
                 tenantId, operationType, operationId).stream().findFirst();
     }
+    /**
+     * 校验 {@code requireWithdrawalGasUsage} 对应的前置条件，不满足时抛出明确异常。
+     */
     private GasUsageRecord requireWithdrawalGasUsage(UUID custodyWithdrawalId) {
         return findGasUsage(custodyWithdrawalId)
                 .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
     }
 
+    /**
+     * 校验 {@code requireGasOperation} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void requireGasOperation(UUID tenantId, String operationType,
                                      UUID operationId, String chain) {
         String type = operationType == null ? "" : operationType.trim().toUpperCase(java.util.Locale.ROOT);
@@ -1047,6 +1254,9 @@ public class CustodyRepository {
             throw new IllegalArgumentException("gas operation does not belong to tenant and chain");
         }
     }
+    /**
+     * 执行 {@code gasFundingSource} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static GasFundingSource gasFundingSource(GasAccountRecord gasAccount) {
         return new GasFundingSource(
                 gasAccount.custodyAddressId(), gasAccount.accountId());
@@ -1054,6 +1264,9 @@ public class CustodyRepository {
     private record GasFundingSource(UUID custodyAddressId, String accountId) {
     }
 
+    /**
+     * 处理 {@code confirmedNetworkFee} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public Optional<NetworkFee> confirmedNetworkFee(
             String chain, String orderNo, String txHash, int nativeDecimals) {
         if (txHash == null || txHash.isBlank()) {
@@ -1143,18 +1356,27 @@ public class CustodyRepository {
                 .map(value -> new NetworkFee(value.stripTrailingZeros(), pricingSource));
     }
 
+    /**
+     * 执行 {@code atomicFee} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Optional<java.math.BigDecimal> atomicFee(
             String sql, String chain, String txHash, int decimals) {
         return decimalFee(sql, chain, txHash)
                 .map(value -> value.movePointLeft(decimals));
     }
 
+    /**
+     * 转换或计算 {@code decimalFee} 对应的值，统一金额、格式和边界规则。
+     */
     private Optional<java.math.BigDecimal> decimalFee(
             String sql, String first, String second) {
         return jdbc.query(sql,
                         (rs, rowNum) -> rs.getBigDecimal(1), first, second)
                 .stream().filter(java.util.Objects::nonNull).findFirst();
     }
+    /**
+     * 执行 {@code onboardingStatus} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public Map<String, Object> onboardingStatus(UUID tenantId) {
         return jdbc.queryForObject("""
                         select
@@ -1241,6 +1463,9 @@ public class CustodyRepository {
                     return result;
                 }, tenantId);
     }
+    /**
+     * 执行 {@code gasAccounts} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private List<GasAccountRecord> gasAccounts(UUID tenantId, String chain) {
         return jdbc.query("""
                         select g.id, g.tenant_id, g.custody_address_id, g.chain, g.network,
@@ -1302,6 +1527,9 @@ public class CustodyRepository {
                         rs.getTimestamp("updated_at").toInstant()),
                 tenantId, blankToEmpty(chain), blankToEmpty(chain));
     }
+    /**
+     * 获取或查询 {@code findIdempotency} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<IdempotencyRecord> findIdempotency(UUID tenantId, String key, String operation) {
         return jdbc.query("""
                         select request_hash, response_status, response_body::text as response_body, expires_at
@@ -1316,6 +1544,9 @@ public class CustodyRepository {
                 tenantId, key, operation).stream().findFirst();
     }
 
+    /**
+     * 执行 {@code beginIdempotency} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public boolean beginIdempotency(UUID tenantId, String key, String operation,
                                     String requestHash, Instant expiresAt) {
         return jdbc.query("""
@@ -1335,6 +1566,9 @@ public class CustodyRepository {
                 .stream().findFirst().orElse(false);
     }
 
+    /**
+     * 执行 {@code completeIdempotency} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public void completeIdempotency(UUID tenantId, String key, String operation,
                                     int responseStatus, String responseJson) {
         if (jdbc.update("""
@@ -1347,6 +1581,9 @@ public class CustodyRepository {
         }
     }
 
+    /**
+     * 记录或保存 {@code insertWebhookEndpoint} 对应的数据，并遵守幂等和事务约束。
+     */
     public WebhookEndpointRecord insertWebhookEndpoint(
             UUID id, UUID tenantId, String name, String url, String encryptedSecret,
             String verificationTokenHash, UUID createdBy) {
@@ -1359,6 +1596,9 @@ public class CustodyRepository {
                 verificationTokenHash, createdBy);
         return requireWebhookEndpoint(tenantId, id);
     }
+    /**
+     * 校验 {@code requireWebhookEndpoint} 对应的前置条件，不满足时抛出明确异常。
+     */
     public WebhookEndpointRecord requireWebhookEndpoint(UUID tenantId, UUID endpointId) {
         return jdbc.query("""
                         select id, tenant_id, name, url, secret_ciphertext,
@@ -1370,6 +1610,9 @@ public class CustodyRepository {
                 .stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("webhook endpoint not found"));
     }
+    /**
+     * 获取或查询 {@code listWebhookEndpoints} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listWebhookEndpoints(UUID tenantId) {
         return jdbc.query("""
                         select e.id, e.name, e.url, e.status,
@@ -1401,6 +1644,9 @@ public class CustodyRepository {
                     return row;
                 }, tenantId);
     }
+    /**
+     * 写入或更新 {@code markWebhookVerified} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void markWebhookVerified(UUID tenantId, UUID endpointId) {
         if (jdbc.update("""
                         update custody_webhook_endpoint
@@ -1412,6 +1658,9 @@ public class CustodyRepository {
             throw new IllegalStateException("webhook endpoint is not pending verification");
         }
     }
+    /**
+     * 设置或更新 {@code setWebhookStatus} 对应的状态，并保持相关业务字段一致。
+     */
     public void setWebhookStatus(UUID tenantId, UUID endpointId, String status) {
         if (jdbc.update("""
                         update custody_webhook_endpoint
@@ -1422,6 +1671,9 @@ public class CustodyRepository {
         }
     }
 
+    /**
+     * 获取或查询 {@code listWebhookDeliveries} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listWebhookDeliveries(UUID tenantId, UUID endpointId,
                                                             String status, int limit, int offset) {
         String endpointPredicate = endpointId == null ? "" : "and d.endpoint_id = ?";
@@ -1473,6 +1725,9 @@ public class CustodyRepository {
                 }, parameters.toArray());
     }
 
+    /**
+     * 执行 {@code claimWebhookDeliveries} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public List<WebhookDeliveryTask> claimWebhookDeliveries(String workerId, int limit) {
         List<WebhookDeliveryTask> tasks = jdbc.query("""
@@ -1560,6 +1815,9 @@ public class CustodyRepository {
         return tasks;
     }
 
+    /**
+     * 写入或更新 {@code markWebhookDelivered} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void markWebhookDelivered(WebhookDeliveryTask task, int httpStatus, String response,
                                      long durationMs) {
@@ -1588,6 +1846,9 @@ public class CustodyRepository {
         }
     }
 
+    /**
+     * 写入或更新 {@code markWebhookFailed} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void markWebhookFailed(WebhookDeliveryTask task, Integer httpStatus, String error,
                                   String response, Instant nextAttempt, boolean terminal,
@@ -1613,6 +1874,9 @@ public class CustodyRepository {
                 terminal ? null : Timestamp.from(nextAttempt), Math.max(durationMs, 0L),
                 task.attemptId());
     }
+    /**
+     * 处理 {@code retryWebhookDelivery} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public void retryWebhookDelivery(UUID tenantId, UUID deliveryId) {
         if (jdbc.update("""
                         update custody_webhook_delivery
@@ -1626,6 +1890,9 @@ public class CustodyRepository {
             throw new IllegalStateException("failed or retryable webhook delivery not found");
         }
     }
+    /**
+     * 处理 {@code retryFailedWebhookDeliveries} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public int retryFailedWebhookDeliveries(UUID tenantId, UUID endpointId) {
         return jdbc.update("""
                         update custody_webhook_delivery
@@ -1639,6 +1906,9 @@ public class CustodyRepository {
                         """, tenantId, endpointId);
     }
 
+    /**
+     * 获取或查询 {@code listWebhookDeliveryAttempts} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listWebhookDeliveryAttempts(
             UUID tenantId, UUID deliveryId, int limit, int offset) {
         return jdbc.query("""
@@ -1670,6 +1940,9 @@ public class CustodyRepository {
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
 
+    /**
+     * 记录或保存 {@code insertCustodyWithdrawal} 对应的数据，并遵守幂等和事务约束。
+     */
     public void insertCustodyWithdrawal(
             UUID id, UUID tenantId, UUID custodyAddressId, String orderNo,
             String externalReference, String idempotencyKey, String chain,
@@ -1689,6 +1962,9 @@ public class CustodyRepository {
                 createdByType, createdById, tenantId, chain, orderNo);
     }
 
+    /**
+     * 获取或查询 {@code listCustodyWithdrawals} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listCustodyWithdrawals(
             UUID tenantId, String chain, String assetSymbol, String status,
             String search, int limit, int offset) {
@@ -1746,6 +2022,9 @@ public class CustodyRepository {
                 normalizedSearch, normalizedSearch, normalizedSearch,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
+    /**
+     * 执行 {@code countCustodyWithdrawals} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long countCustodyWithdrawals(
             UUID tenantId, String chain, String assetSymbol, String status, String search) {
         String normalizedSearch = search == null ? "" : search.trim();
@@ -1777,6 +2056,9 @@ public class CustodyRepository {
         return count == null ? 0L : count;
     }
 
+    /**
+     * 获取或查询 {@code listCustodyDeposits} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listCustodyDeposits(
             UUID tenantId, String chain, String assetSymbol, String status,
             String search, int limit, int offset) {
@@ -1823,6 +2105,9 @@ public class CustodyRepository {
                 normalizedSearch, normalizedSearch,
                 Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
+    /**
+     * 执行 {@code countCustodyDeposits} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long countCustodyDeposits(
             UUID tenantId, String chain, String assetSymbol, String status, String search) {
         String normalizedSearch = search == null ? "" : search.trim();
@@ -1848,6 +2133,9 @@ public class CustodyRepository {
                 normalizedSearch, normalizedSearch);
         return count == null ? 0L : count;
     }
+    /**
+     * 获取或查询 {@code findWithdrawalStatusChanges} 对应的数据，供调用方读取当前状态。
+     */
     public List<WithdrawalStatusChange> findWithdrawalStatusChanges(int limit) {
         return jdbc.query("""
                         select w.id, w.tenant_id, w.custody_address_id, w.order_no,
@@ -1884,6 +2172,9 @@ public class CustodyRepository {
                 Math.min(Math.max(limit, 1), 200));
     }
 
+    /**
+     * 设置或更新 {@code applyWithdrawalStatusChange} 对应的状态，并保持相关业务字段一致。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public boolean applyWithdrawalStatusChange(WithdrawalStatusChange change,
                                                UUID eventId, String eventType, String payloadJson) {
@@ -1932,6 +2223,9 @@ public class CustodyRepository {
         return true;
     }
 
+    /**
+     * 记录或保存 {@code insertEventWithDeliveries} 对应的数据，并遵守幂等和事务约束。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public UUID insertEventWithDeliveries(UUID eventId, UUID tenantId, String eventType,
                                           String aggregateType, String aggregateId,
@@ -1974,6 +2268,9 @@ public class CustodyRepository {
         return persisted;
     }
 
+    /**
+     * 执行 {@code audit} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public void audit(UUID tenantId, String actorType, String actorId, String action,
                       String resourceType, String resourceId, String sourceIp, String detailsJson) {
         jdbc.update("""
@@ -1984,6 +2281,9 @@ public class CustodyRepository {
                         """, UUID.randomUUID(), tenantId, actorType, actorId, action, resourceType,
                 resourceId, sourceIp, detailsJson == null ? "{}" : detailsJson);
     }
+    /**
+     * 获取或查询 {@code listAudit} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listAudit(UUID tenantId, int limit, int offset) {
         return jdbc.query("""
                         select id, actor_type, actor_id, action, resource_type, resource_id,
@@ -2006,12 +2306,18 @@ public class CustodyRepository {
                     return row;
                 }, tenantId, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
+    /**
+     * 执行 {@code countAudit} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long countAudit(UUID tenantId) {
         Long count = jdbc.queryForObject(
                 "select count(*) from custody_audit_log where tenant_id = ?",
                 Long.class, tenantId);
         return count == null ? 0L : count;
     }
+    /**
+     * 获取或查询 {@code listPlatformAudit} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> listPlatformAudit(int limit, int offset) {
         return jdbc.query("""
                         select id, actor_type, actor_id, action, resource_type, resource_id,
@@ -2034,12 +2340,18 @@ public class CustodyRepository {
                     return row;
                 }, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
     }
+    /**
+     * 执行 {@code countPlatformAudit} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long countPlatformAudit() {
         Long count = jdbc.queryForObject(
                 "select count(*) from custody_audit_log where tenant_id is null",
                 Long.class);
         return count == null ? 0L : count;
     }
+    /**
+     * 执行 {@code cleanupExpiredSecurityRows} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public int cleanupExpiredSecurityRows() {
         int nonces = jdbc.update("delete from custody_api_nonce where expires_at < now()");
         int sessions = jdbc.update("""
@@ -2050,6 +2362,9 @@ public class CustodyRepository {
         int idempotency = jdbc.update("delete from custody_idempotency_key where expires_at < now()");
         return nonces + sessions + idempotency;
     }
+    /**
+     * 执行 {@code mapAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private AddressRecord mapAddress(java.sql.ResultSet rs) throws SQLException {
         return new AddressRecord(
                 rs.getObject("id", UUID.class),
@@ -2070,6 +2385,9 @@ public class CustodyRepository {
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant());
     }
+    /**
+     * 执行 {@code mapWebhookEndpoint} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private WebhookEndpointRecord mapWebhookEndpoint(java.sql.ResultSet rs) throws SQLException {
         return new WebhookEndpointRecord(
                 rs.getObject("id", UUID.class),
@@ -2084,18 +2402,30 @@ public class CustodyRepository {
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant());
     }
+    /**
+     * 转换或计算 {@code instantOrNull} 对应的值，统一金额、格式和边界规则。
+     */
     private static Instant instantOrNull(Timestamp timestamp) {
         return timestamp == null ? null : timestamp.toInstant();
     }
+    /**
+     * 执行 {@code timestampOrNull} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static Timestamp timestampOrNull(Instant instant) {
         return instant == null ? null : Timestamp.from(instant);
     }
+    /**
+     * 转换或计算 {@code truncate} 对应的值，统一金额、格式和边界规则。
+     */
     private static String truncate(String value, int maxLength) {
         if (value == null) {
             return "";
         }
         return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
+    /**
+     * 校验 {@code blankToEmpty} 对应的输入或状态，失败时抛出明确异常。
+     */
     private static String blankToEmpty(String value) {
         return value == null ? "" : value.trim();
     }
@@ -2197,6 +2527,9 @@ public class CustodyRepository {
             Instant createdAt,
             Instant updatedAt
     ) {
+        /**
+         * 执行 {@code lowBalance} 对应的辅助逻辑，完成数据处理并维护状态边界。
+         */
         public boolean lowBalance() {
             return "ACTIVE".equals(status)
                     && availableBalance.compareTo(lowBalanceThreshold) < 0;

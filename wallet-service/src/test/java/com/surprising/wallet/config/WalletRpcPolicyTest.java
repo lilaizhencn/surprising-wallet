@@ -9,7 +9,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.config.WalletRpcPolicy;
 
+/**
+ * 验证 {@code WalletRpcPolicyTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class WalletRpcPolicyTest {
+    /**
+     * 验证 {@code returnsChainSpecificRequiredPurposes} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void returnsChainSpecificRequiredPurposes() {
         assertEquals(List.of("rpc"), WalletRpcPolicy.requiredPurposes("ETH", "mainnet", true));
@@ -22,6 +28,9 @@ class WalletRpcPolicyTest {
                 WalletRpcPolicy.requiredPurposes("HYPERCORE", "mainnet", false));
     }
 
+    /**
+     * 验证 {@code appliesCredentialAndPlaceholderRules} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void appliesCredentialAndPlaceholderRules() {
         assertTrue(WalletRpcPolicy.requiresApiKey("BEARER", "HTTP_JSON_RPC"));

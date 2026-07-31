@@ -16,11 +16,23 @@ import com.surprising.wallet.sdk.bitcoinj.core.P2shMultisigFeeCalculator;
  * <p>默认费率：{@link #DEFAULT_SAT_PER_BYTE} = 1 sat/byte；默认粉尘阈值：{@link #DUST_THRESHOLD_SAT} = 546 satoshis。</p>
  */
 public final class BitcoinCashFeePolicy {
+    /**
+     * 定义 {@code DEFAULT_SAT_PER_BYTE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     public static final long DEFAULT_SAT_PER_BYTE = 1L;
+    /**
+     * 定义 {@code DUST_THRESHOLD_SAT} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     public static final long DUST_THRESHOLD_SAT = 546L;
 
+    /**
+     * 构造 {@code BitcoinCashFeePolicy}，初始化该组件运行所需的状态和依赖。
+     */
     private BitcoinCashFeePolicy() { }
 
+    /**
+     * 计算或估算 {@code calculateSpendPlan} 对应的金额、费用或资源消耗。
+     */
     public static SpendPlan calculateSpendPlan(
             long inputValue,
             long recipientValue,

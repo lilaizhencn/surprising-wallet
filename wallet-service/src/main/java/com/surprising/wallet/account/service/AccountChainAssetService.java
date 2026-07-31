@@ -25,9 +25,18 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 class AccountChainAssetService {
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository repository;
+    /**
+     * 保存 {@code xrpTransactionService}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final XrpTransactionService xrpTransactionService;
 
+    /**
+     * 处理 {@code collectionAmount} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     BigDecimal collectionAmount(AccountChainProfile profile,
                                 CollectionCandidateRecord candidate,
                                 BigDecimal evmFeeReserve) {
@@ -51,6 +60,9 @@ class AccountChainAssetService {
         return amount.subtract(reserve).max(BigDecimal.ZERO);
     }
 
+    /**
+     * 校验 {@code requireAddress} 对应的前置条件，不满足时抛出明确异常。
+     */
     ChainAddressRecord requireAddress(String chain, String symbol, String address) {
         if (address == null || address.isBlank()) {
             throw new IllegalStateException("missing source address");
@@ -62,6 +74,9 @@ class AccountChainAssetService {
                                 + chain + "/" + symbol + " " + address));
     }
 
+    /**
+     * 校验 {@code requireAddress} 对应的前置条件，不满足时抛出明确异常。
+     */
     ChainAddressRecord requireAddress(
             UUID tenantId, String chain, String symbol, String address) {
         if (address == null || address.isBlank()) {
@@ -76,37 +91,58 @@ class AccountChainAssetService {
                                 + chain + "/" + symbol + " " + address));
     }
 
+    /**
+     * 校验 {@code requireToken} 对应的前置条件，不满足时抛出明确异常。
+     */
     TokenDefinition requireToken(String chain, String symbol) {
         return repository.findToken(chain, symbol)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing token_config for " + chain + "/" + symbol));
     }
 
+    /**
+     * 获取或查询 {@code assetDecimals} 对应的数据，并向调用方返回当前业务状态。
+     */
     int assetDecimals(String chain, String symbol) {
         return repository.findAsset(chain, symbol)
                 .map(ChainAsset::getDecimals)
                 .orElseGet(() -> requireToken(chain, symbol).getDecimals());
     }
 
+    /**
+     * 编码 {@code toAtomicDecimal} 对应的数据，生成链上或接口所需的表示。
+     */
     BigDecimal toAtomicDecimal(BigDecimal amount, int decimals) {
         return new BigDecimal(toAtomicBigInteger(amount, decimals));
     }
 
+    /**
+     * 编码 {@code toAtomicBigInteger} 对应的数据，生成链上或接口所需的表示。
+     */
     BigInteger toAtomicBigInteger(BigDecimal amount, int decimals) {
         return amount.movePointRight(decimals)
                 .setScale(0, RoundingMode.UNNECESSARY)
                 .toBigIntegerExact();
     }
 
+    /**
+     * 编码 {@code toAtomicLong} 对应的数据，生成链上或接口所需的表示。
+     */
     long toAtomicLong(BigDecimal amount, int decimals) {
         return toAtomicBigInteger(amount, decimals).longValueExact();
     }
 
+    /**
+     * 判断 {@code isNative} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     boolean isNative(AccountChainProfile profile, String symbol) {
         return symbol != null
                 && symbol.equalsIgnoreCase(profile.getNativeSymbol());
     }
 
+    /**
+     * 执行 {@code debitAccountId} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     String debitAccountId(
             WithdrawalOrderRecord order, ChainAddressRecord from) {
         String debitAccountId = order.getDebitAccountId();
@@ -115,6 +151,9 @@ class AccountChainAssetService {
                 : debitAccountId;
     }
 
+    /**
+     * 处理 {@code withdrawalDebitAmount} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     BigDecimal withdrawalDebitAmount(WithdrawalOrderRecord order) {
         BigDecimal amount = order.getAmount() == null
                 ? BigDecimal.ZERO
@@ -125,6 +164,9 @@ class AccountChainAssetService {
         return amount.add(fee);
     }
 
+    /**
+     * 执行 {@code nativeCollectionFeeReserve} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private BigDecimal nativeCollectionFeeReserve(
             AccountChainProfile profile,
             CollectionCandidateRecord candidate,

@@ -27,19 +27,38 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * LitecoinSpace/Esplora adapter used when a high-throughput Litecoin Core RPC is
- * unavailable. It exposes only the Bitcoin-like calls required by the scanner
- * and broadcaster; unsupported decoder calls fail explicitly.
+ * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
  */
 @Component
 public class LitecoinEsploraCommand implements BtcLikeCommand {
+    /**
+     * 定义 {@code LITOSHI} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final BigDecimal LITOSHI = new BigDecimal("100000000");
+    /**
+     * 保存 {@code httpClient}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final HttpClient httpClient;
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper;
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository repository;
+    /**
+     * 保存 {@code rpcNodeService}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainRpcNodeService rpcNodeService;
+    /**
+     * 保存 {@code cachedTipHeight}，用于保存业务集合或索引状态。
+     */
     private volatile long cachedTipHeight;
 
+    /**
+     * 构造 {@code LitecoinEsploraCommand}，初始化该组件运行所需的状态和依赖。
+     */
     public LitecoinEsploraCommand(ChainJdbcRepository repository,
                                   ChainRpcNodeService rpcNodeService) {
         this.repository = repository;
@@ -50,6 +69,9 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
                 .build();
     }
 
+    /**
+     * 获取或查询 {@code getBlockCount} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public long getBlockCount() {
         cachedTipHeight = withNode(node -> isJsonRpc(node)
@@ -58,6 +80,9 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
         return cachedTipHeight;
     }
 
+    /**
+     * 获取或查询 {@code getBlockHash} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public String getBlockHash(long height) {
         return withNode(node -> isJsonRpc(node)
@@ -65,12 +90,18 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
                 : getText(node, "/block-height/" + height));
     }
 
+    /**
+     * 获取或查询 {@code getBlock} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public BtcLikeBlock getBlock(String hash) {
         return withNode(node -> isJsonRpc(node)
                 ? callJsonRpc(node, "getblock", BtcLikeBlock.class, hash)
                 : getEsploraBlock(node, hash));
     }
+    /**
+     * 获取或查询 {@code getEsploraBlock} 对应的数据，供调用方读取当前状态。
+     */
     private BtcLikeBlock getEsploraBlock(ChainRpcNode node, String hash) {
         JsonNode txids = getJson(node, "/block/" + hash + "/txids");
         BtcLikeBlock block = new BtcLikeBlock();
@@ -81,17 +112,26 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
         return block;
     }
 
+    /**
+     * 获取或查询 {@code getRawTransaction} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public BtcLikeRawTransaction getRawTransaction(String txid, boolean verbose) {
         return getRawTransaction(txid, verbose ? 1 : 0);
     }
 
+    /**
+     * 获取或查询 {@code getRawTransaction} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public BtcLikeRawTransaction getRawTransaction(String txid, int verbose) {
         return withNode(node -> isJsonRpc(node)
                 ? callJsonRpc(node, "getrawtransaction", BtcLikeRawTransaction.class, txid, verbose)
                 : getEsploraRawTransaction(node, txid));
     }
+    /**
+     * 获取或查询 {@code getEsploraRawTransaction} 对应的数据，供调用方读取当前状态。
+     */
     private BtcLikeRawTransaction getEsploraRawTransaction(ChainRpcNode node, String txid) {
         JsonNode tx = getJson(node, "/tx/" + txid);
         BtcLikeRawTransaction result = new BtcLikeRawTransaction();
@@ -130,6 +170,9 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
         return result;
     }
 
+    /**
+     * 获取或查询 {@code getRawTransactionStr} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public String getRawTransactionStr(String txid) {
         return withNode(node -> isJsonRpc(node)
@@ -137,6 +180,9 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
                 : getText(node, "/tx/" + txid + "/hex"));
     }
 
+    /**
+     * 解析或转换 {@code decodeRawTransactionStr} 对应的数据，并校验其格式和边界。
+     */
     @Override
     public BtcLikeRawTransaction decodeRawTransactionStr(String txHex) {
         return withNode(node -> {
@@ -147,6 +193,9 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
         });
     }
 
+    /**
+     * 解析或转换 {@code decodeRawTransactionToString} 对应的数据，并校验其格式和边界。
+     */
     @Override
     public String decodeRawTransactionToString(String txHex) {
         return withNode(node -> {
@@ -157,6 +206,9 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
         });
     }
 
+    /**
+     * 发送或广播 {@code sendRawTransaction} 对应的链上请求，并返回节点处理结果。
+     */
     @Override
     public String sendRawTransaction(String hex) {
         return withNode(node -> {
@@ -171,6 +223,9 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
             return send(request).trim();
         });
     }
+    /**
+     * 获取或查询 {@code getJson} 对应的数据，供调用方读取当前状态。
+     */
     private JsonNode getJson(ChainRpcNode node, String path) {
         try {
             return objectMapper.readTree(getText(node, path));
@@ -178,6 +233,9 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
             throw new IllegalStateException("invalid Esplora JSON response for " + path, e);
         }
     }
+    /**
+     * 获取或查询 {@code getText} 对应的数据，供调用方读取当前状态。
+     */
     private String getText(ChainRpcNode node, String path) {
         HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl(node) + path))
                 .timeout(Duration.ofSeconds(30))
@@ -185,12 +243,18 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
                 .build();
         return send(request);
     }
+    /**
+     * 执行 {@code withNode} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private <T> T withNode(Function<ChainRpcNode, T> request) {
         String network = repository.findProfileByChain("LTC")
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for LTC"))
                 .getNetwork();
         return rpcNodeService.withFailover("LTC", network, request);
     }
+    /**
+     * 执行 {@code baseUrl} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private String baseUrl(ChainRpcNode node) {
         String baseUrl = node.getRpcUrl();
         if (baseUrl.endsWith("/")) {
@@ -198,9 +262,15 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
         }
         return baseUrl;
     }
+    /**
+     * 判断 {@code isJsonRpc} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private boolean isJsonRpc(ChainRpcNode node) {
         return "HTTP_JSON_RPC".equalsIgnoreCase(node.getConnectionType());
     }
+    /**
+     * 执行 {@code callJsonRpc} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private <T> T callJsonRpc(ChainRpcNode node, String method, Class<T> responseType, Object... params) {
         try {
             Map<String, String> headers = new HashMap<>();
@@ -217,6 +287,9 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
             throw new IllegalStateException("Litecoin JSON-RPC call failed: " + method, e);
         }
     }
+    /**
+     * 发送或广播 {@code send} 对应的链上请求，并返回节点处理结果。
+     */
     private String send(HttpRequest request) {
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());

@@ -36,9 +36,21 @@ import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
 public class CustodyDepositCreditObserver implements DepositCreditObserver {
     /** Webhook 事件类型：充值已确认 */
     private static final String EVENT_TYPE = "DEPOSIT.CONFIRMED";
+    /**
+     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final JdbcTemplate jdbc;
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper;
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final CustodyRepository repository;
+    /**
+     * 保存 {@code tenantChains}，表示链、网络、资产或代币配置。
+     */
     private final CustodyTenantChainRepository tenantChains;
 
     /**
@@ -58,6 +70,9 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
         this.tenantChains = tenantChains;
     }
 
+    /**
+     * 执行 {@code onDepositCredited} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Override
     public void onDepositCredited(DepositEvent event, long logIndex, String accountId) {
         String chain = event.chainType().name();
@@ -196,6 +211,9 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
                 "API".equals(owner.source()));
     }
 
+    /**
+     * 设置或更新 {@code applyOpenDeficits} 对应的状态，并保持相关业务字段一致。
+     */
     private BigDecimal applyOpenDeficits(AddressOwner owner, DepositEvent event, String accountId,
                                          String creditReference, BigDecimal creditAmount) {
         List<Deficit> deficits = jdbc.query("""
@@ -252,6 +270,9 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
         }
         return appliedTotal;
     }
+    /**
+     * 编码 {@code json} 对应的数据，生成链上或接口所需的表示。
+     */
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);

@@ -41,17 +41,47 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class EvmAccountTransactionService {
+    /**
+     * 定义 {@code NATIVE_GAS_FLOOR} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final BigInteger NATIVE_GAS_FLOOR = BigInteger.valueOf(21_000L);
+    /**
+     * 定义 {@code TOKEN_GAS_FLOOR} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final BigInteger TOKEN_GAS_FLOOR = BigInteger.valueOf(65_000L);
+    /**
+     * 定义 {@code GAS_LIMIT_MULTIPLIER} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final BigDecimal GAS_LIMIT_MULTIPLIER = new BigDecimal("1.20");
+    /**
+     * 定义 {@code BLOCK_GAS_RATIO} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final BigDecimal BLOCK_GAS_RATIO = new BigDecimal("0.90");
+    /**
+     * 定义 {@code COLLECTION_FEE_SAFETY_MULTIPLIER} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final BigInteger COLLECTION_FEE_SAFETY_MULTIPLIER = BigInteger.TWO;
 
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository repository;
+    /**
+     * 保存 {@code rpcNodeService}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainRpcNodeService rpcNodeService;
+    /**
+     * 保存 {@code keyService}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
+     */
     private final AccountSecp256k1KeyService keyService;
+    /**
+     * 保存 {@code transactionBuilder}，用于标识交易、区块或业务记录。
+     */
     private final EvmTransactionBuilder transactionBuilder;
 
+    /**
+     * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
+     */
     public String sendNative(
             String chain, ChainAddressRecord from, String toAddress, BigDecimal amount) {
         AccountChainProfile profile = profile(chain);
@@ -61,6 +91,9 @@ public class EvmAccountTransactionService {
                 null, amount, NATIVE_GAS_FLOOR, decimals);
     }
 
+    /**
+     * 发送或广播 {@code sendToken} 对应的链上请求，并返回节点处理结果。
+     */
     public String sendToken(
             String chain, ChainAddressRecord from, TokenDefinition token,
             String toAddress, BigDecimal amount) {
@@ -71,6 +104,9 @@ public class EvmAccountTransactionService {
                 nativeDecimals(profile));
     }
 
+    /**
+     * 发送或广播 {@code send} 对应的链上请求，并返回节点处理结果。
+     */
     private String send(
             AccountChainProfile profile, ChainAddressRecord from, String transactionTo,
             BigInteger value, String data, String symbol, String contract,
@@ -116,6 +152,9 @@ public class EvmAccountTransactionService {
         });
     }
 
+    /**
+     * 执行 {@code reservedFee} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private BigInteger reservedFee(
             Web3j web3j, AccountChainProfile profile, String from, String signedRaw,
             BigInteger gasLimit, EvmFeeSupport.FeeQuote quote) {
@@ -146,6 +185,9 @@ public class EvmAccountTransactionService {
         });
     }
 
+    /**
+     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public boolean confirmWithdrawal(
             String chain, String orderNo, String symbol,
             String accountId, BigDecimal debitAmount) {
@@ -153,6 +195,9 @@ public class EvmAccountTransactionService {
                 chain, orderNo, symbol, accountId, debitAmount);
     }
 
+    /**
+     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public boolean confirmWithdrawal(
             java.util.UUID tenantId, String chain, String orderNo, String symbol,
             String accountId, BigDecimal debitAmount) {
@@ -169,6 +214,9 @@ public class EvmAccountTransactionService {
                 tenantId, chain, orderNo, txHash, symbol, accountId, debitAmount);
     }
 
+    /**
+     * 处理 {@code confirmCollection} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public boolean confirmCollection(
             java.util.UUID tenantId, String chain, String collectionNo) {
         String txHash = repository.findCollectionTxHash(tenantId, chain, collectionNo).orElseThrow();
@@ -183,6 +231,9 @@ public class EvmAccountTransactionService {
         return repository.markCollectionConfirmed(tenantId, chain, collectionNo, txHash) == 1;
     }
 
+    /**
+     * 处理 {@code confirmedReceipt} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private Optional<EvmTransactionReceipt> confirmedReceipt(String chain, String txHash) {
         AccountChainProfile profile = profile(chain);
         return withWeb3(profile, (web3j, http) -> {
@@ -204,6 +255,9 @@ public class EvmAccountTransactionService {
         });
     }
 
+    /**
+     * 写入或更新 {@code markConfirmed} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     private void markConfirmed(
             String chain, String txHash, EvmTransactionReceipt receipt) {
         AccountChainProfile profile = profile(chain);
@@ -233,6 +287,9 @@ public class EvmAccountTransactionService {
         });
     }
 
+    /**
+     * 计算或估算 {@code estimateGas} 对应的金额、费用或资源消耗。
+     */
     private BigInteger estimateGas(
             Web3j web3j, AccountChainProfile profile, String from, String to,
             BigInteger value, String data, EvmFeeSupport.FeeQuote quote) throws Exception {
@@ -249,6 +306,9 @@ public class EvmAccountTransactionService {
         return requireNonNegative(response.getAmountUsed(), "eth_estimateGas");
     }
 
+    /**
+     * 执行 {@code bufferedGasLimit} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private BigInteger bufferedGasLimit(Web3j web3j, BigInteger estimated) throws Exception {
         BigInteger buffered = new BigDecimal(estimated).multiply(GAS_LIMIT_MULTIPLIER)
                 .setScale(0, RoundingMode.UP).toBigIntegerExact();
@@ -265,6 +325,9 @@ public class EvmAccountTransactionService {
         return buffered;
     }
 
+    /**
+     * 获取或查询 {@code rawTransaction} 对应的数据，并向调用方返回当前业务状态。
+     */
     private RawTransaction rawTransaction(
             AccountChainProfile profile, BigInteger nonce, EvmFeeSupport.FeeQuote quote,
             BigInteger gasLimit, String to, BigInteger value, String data) {
@@ -277,6 +340,9 @@ public class EvmAccountTransactionService {
                 quote.maxPriorityFeePerGas(), quote.maxFeePerGas());
     }
 
+    /**
+     * 为 {@code sign} 对应的交易或消息生成签名，并保持原始数据不被改变。
+     */
     private String sign(
             AccountChainProfile profile, RawTransaction transaction, Credentials credentials) {
         byte[] signed = EvmFeeSupport.gasPolicy(profile).isEip1559()
@@ -285,6 +351,9 @@ public class EvmAccountTransactionService {
         return Numeric.toHexString(signed);
     }
 
+    /**
+     * 发送或广播 {@code broadcast} 对应的链上请求，并返回节点处理结果。
+     */
     private String broadcast(Web3j web3j, String signedRaw) throws Exception {
         EthSendTransaction sent = web3j.ethSendRawTransaction(signedRaw).send();
         if (sent.hasError()) {
@@ -296,16 +365,25 @@ public class EvmAccountTransactionService {
         return sent.getTransactionHash();
     }
 
+    /**
+     * 执行 {@code credentials} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Credentials credentials(AccountChainProfile profile, ChainAddressRecord from) {
         ECKey ecKey = keyService.key(profile, from);
         return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(ecKey.getPrivKey(), 64));
     }
 
+    /**
+     * 执行 {@code pendingNonce} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private BigInteger pendingNonce(Web3j web3j, String address) throws Exception {
         return web3j.ethGetTransactionCount(address, DefaultBlockParameterName.PENDING)
                 .send().getTransactionCount();
     }
 
+    /**
+     * 记录或保存 {@code record} 对应的数据，并遵守幂等和事务约束。
+     */
     private void record(
             String chain, String hash, String from, String to, String symbol, String contract,
             BigDecimal amount, BigDecimal fee, long nonce, String status, String rawPayload) {
@@ -325,6 +403,9 @@ public class EvmAccountTransactionService {
                 .build());
     }
 
+    /**
+     * 执行 {@code withWeb3} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private <T> T withWeb3(AccountChainProfile profile, Web3Request<T> request) {
         return rpcNodeService.withFailover(profile.getChain(), profile.getNetwork(), node -> {
             HttpService http = new HttpService(node.getRpcUrl());
@@ -341,12 +422,18 @@ public class EvmAccountTransactionService {
         });
     }
 
+    /**
+     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
+     */
     private AccountChainProfile profile(String chain) {
         return repository.findProfileByChain(chain)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for " + chain));
     }
 
+    /**
+     * 执行 {@code nativeDecimals} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private int nativeDecimals(AccountChainProfile profile) {
         var asset = repository.findAsset(profile.getChain(), nativeSymbol(profile))
                 .orElseThrow(() -> new IllegalStateException(
@@ -358,6 +445,9 @@ public class EvmAccountTransactionService {
         return asset.getDecimals();
     }
 
+    /**
+     * 编码 {@code toAtomic} 对应的数据，生成链上或接口所需的表示。
+     */
     private BigInteger toAtomic(BigDecimal amount, int decimals) {
         if (amount == null || amount.signum() <= 0) {
             throw new IllegalArgumentException("EVM transfer amount must be positive");
@@ -365,6 +455,9 @@ public class EvmAccountTransactionService {
         return amount.movePointRight(decimals).toBigIntegerExact();
     }
 
+    /**
+     * 执行 {@code nativeSymbol} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private String nativeSymbol(AccountChainProfile profile) {
         if (profile.getNativeSymbol() == null || profile.getNativeSymbol().isBlank()) {
             throw new IllegalStateException(
@@ -373,6 +466,9 @@ public class EvmAccountTransactionService {
         return profile.getNativeSymbol();
     }
 
+    /**
+     * 执行 {@code quantity} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private BigInteger quantity(String value, String field) {
         if (value == null || value.isBlank()) {
             throw new IllegalStateException(field + " is missing");
@@ -380,6 +476,9 @@ public class EvmAccountTransactionService {
         return requireNonNegative(Numeric.decodeQuantity(value), field);
     }
 
+    /**
+     * 校验 {@code requireNonNegative} 对应的前置条件，不满足时抛出明确异常。
+     */
     private BigInteger requireNonNegative(BigInteger value, String field) {
         if (value == null || value.signum() < 0) {
             throw new IllegalStateException(field + " is missing or negative");
@@ -387,52 +486,103 @@ public class EvmAccountTransactionService {
         return value;
     }
 
+    /**
+     * 转换或计算 {@code normalize} 对应的值，统一金额、格式和边界规则。
+     */
     private String normalize(String address) {
         return address == null ? null : address.toLowerCase(java.util.Locale.ROOT);
     }
 
+    /**
+     * 封装钱包业务数据和字段约束，作为模块之间传递的明确模型。
+     */
     @FunctionalInterface
     private interface Web3Request<T> {
+        /**
+         * 设置或更新 {@code apply} 对应的状态，并保持相关业务字段一致。
+         */
         T apply(Web3j web3j, HttpService http) throws Exception;
     }
 
+    /**
+     * 封装钱包业务数据和字段约束，作为模块之间传递的明确模型。
+     */
     public static class ReceiptResponse extends Response<EvmTransactionReceipt> {
     }
 
+    /**
+     * 负责 EVM 链交易、费用、扫描或 EIP-7702 相关处理。
+     */
     public static class EvmTransactionReceipt extends TransactionReceipt {
+        /**
+         * 保存 {@code l1Fee}，用于保存金额、费用或链上执行状态。
+         */
         private String l1Fee;
+        /**
+         * 保存 {@code gasUsedForL1}，用于保存金额、费用或链上执行状态。
+         */
         private String gasUsedForL1;
+        /**
+         * 保存 {@code operatorFeeScalar}，用于保存金额、费用或链上执行状态。
+         */
         private String operatorFeeScalar;
+        /**
+         * 保存 {@code operatorFeeConstant}，用于保存金额、费用或链上执行状态。
+         */
         private String operatorFeeConstant;
 
+        /**
+         * 获取或查询 {@code getL1Fee} 对应的数据，供调用方读取当前状态。
+         */
         public String getL1Fee() {
             return l1Fee;
         }
 
+        /**
+         * 设置或更新 {@code setL1Fee} 对应的状态，并保持相关业务字段一致。
+         */
         public void setL1Fee(String l1Fee) {
             this.l1Fee = l1Fee;
         }
 
+        /**
+         * 获取或查询 {@code getGasUsedForL1} 对应的数据，供调用方读取当前状态。
+         */
         public String getGasUsedForL1() {
             return gasUsedForL1;
         }
 
+        /**
+         * 设置或更新 {@code setGasUsedForL1} 对应的状态，并保持相关业务字段一致。
+         */
         public void setGasUsedForL1(String gasUsedForL1) {
             this.gasUsedForL1 = gasUsedForL1;
         }
 
+        /**
+         * 获取或查询 {@code getOperatorFeeScalar} 对应的数据，供调用方读取当前状态。
+         */
         public String getOperatorFeeScalar() {
             return operatorFeeScalar;
         }
 
+        /**
+         * 设置或更新 {@code setOperatorFeeScalar} 对应的状态，并保持相关业务字段一致。
+         */
         public void setOperatorFeeScalar(String operatorFeeScalar) {
             this.operatorFeeScalar = operatorFeeScalar;
         }
 
+        /**
+         * 获取或查询 {@code getOperatorFeeConstant} 对应的数据，供调用方读取当前状态。
+         */
         public String getOperatorFeeConstant() {
             return operatorFeeConstant;
         }
 
+        /**
+         * 设置或更新 {@code setOperatorFeeConstant} 对应的状态，并保持相关业务字段一致。
+         */
         public void setOperatorFeeConstant(String operatorFeeConstant) {
             this.operatorFeeConstant = operatorFeeConstant;
         }

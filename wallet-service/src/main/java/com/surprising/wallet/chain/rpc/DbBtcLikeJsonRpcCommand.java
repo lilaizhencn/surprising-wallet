@@ -42,50 +42,80 @@ abstract class DbBtcLikeJsonRpcCommand implements BtcLikeCommand {
         this.rpcNodeService = rpcNodeService;
     }
 
+    /**
+     * 获取或查询 {@code getBlockCount} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public long getBlockCount() {
         return call("getblockcount", Long.class);
     }
 
+    /**
+     * 获取或查询 {@code getBlockHash} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public String getBlockHash(long height) {
         return call("getblockhash", String.class, height);
     }
 
+    /**
+     * 获取或查询 {@code getBlock} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public BtcLikeBlock getBlock(String hash) {
         return call("getblock", BtcLikeBlock.class, hash);
     }
 
+    /**
+     * 获取或查询 {@code getRawTransaction} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public BtcLikeRawTransaction getRawTransaction(String txid, boolean verbose) {
         return getRawTransaction(txid, verbose ? 1 : 0);
     }
 
+    /**
+     * 获取或查询 {@code getRawTransaction} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public BtcLikeRawTransaction getRawTransaction(String txid, int verbose) {
         return call("getrawtransaction", BtcLikeRawTransaction.class, txid, verbose);
     }
 
+    /**
+     * 获取或查询 {@code getRawTransactionStr} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public String getRawTransactionStr(String txid) {
         return call("getrawtransaction", String.class, txid);
     }
 
+    /**
+     * 解析或转换 {@code decodeRawTransactionStr} 对应的数据，并校验其格式和边界。
+     */
     @Override
     public BtcLikeRawTransaction decodeRawTransactionStr(String txHex) {
         return call("decoderawtransaction", BtcLikeRawTransaction.class, txHex);
     }
 
+    /**
+     * 解析或转换 {@code decodeRawTransactionToString} 对应的数据，并校验其格式和边界。
+     */
     @Override
     public String decodeRawTransactionToString(String txHex) {
         return call("decoderawtransaction", String.class, txHex);
     }
 
+    /**
+     * 发送或广播 {@code sendRawTransaction} 对应的链上请求，并返回节点处理结果。
+     */
     @Override
     public String sendRawTransaction(String hex) {
         return call("sendrawtransaction", String.class, hex);
     }
+    /**
+     * 执行 {@code call} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private <T> T call(String method, Class<T> responseType, Object... params) {
         String network = repository.findProfileByChain(chain)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chain))

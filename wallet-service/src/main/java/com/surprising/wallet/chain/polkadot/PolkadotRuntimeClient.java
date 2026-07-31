@@ -56,23 +56,44 @@ class PolkadotRuntimeClient {
 
     /** RPC 节点故障转移服务 */
     private final ChainRpcNodeService rpcNodeService;
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper = new ObjectMapper();
+    /**
+     * 保存 {@code httpClient}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .version(HttpClient.Version.HTTP_1_1)
             .build();
+    /**
+     * 执行 {@code latestFinalizedHeight} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long latestFinalizedHeight() {
         return latestFinalizedHeight(PURPOSE_NATIVE_RPC);
     }
+    /**
+     * 执行 {@code latestAssetHubFinalizedHeight} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long latestAssetHubFinalizedHeight() {
         return latestFinalizedHeight(PURPOSE_ASSET_RPC);
     }
+    /**
+     * 执行 {@code nativeBalance} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public BigInteger nativeBalance(String address) {
         return nativeBalance(address, PURPOSE_NATIVE_RPC);
     }
+    /**
+     * 获取或查询 {@code assetHubNativeBalance} 对应的数据，并向调用方返回当前业务状态。
+     */
     public BigInteger assetHubNativeBalance(String address) {
         return nativeBalance(address, PURPOSE_ASSET_RPC);
     }
+    /**
+     * 获取或查询 {@code assetBalance} 对应的数据，并向调用方返回当前业务状态。
+     */
     public BigInteger assetBalance(String assetId, String address) {
         ObjectNode body = baseBody();
         body.put("ss58Prefix", ss58Prefix(profile()));
@@ -81,6 +102,9 @@ class PolkadotRuntimeClient {
         return amountPlanck(callRuntime("/v1/polkadot/asset-balance", PURPOSE_ASSET_RPC, body)
                 .path("balance"));
     }
+    /**
+     * 获取或查询 {@code assetInfo} 对应的数据，并向调用方返回当前业务状态。
+     */
     public AssetInfo assetInfo(String assetId) {
         ObjectNode body = baseBody();
         body.put("assetId", normalizeAssetId(assetId));
@@ -95,6 +119,9 @@ class PolkadotRuntimeClient {
                 result.path("decimals").asInt(0));
     }
 
+    /**
+     * 构建或生成 {@code createAsset} 对应的结果，并执行输入和状态校验。
+     */
     public AssetCreateResult createAsset(String secretSeedHex, String expectedFrom,
                                          String assetId, String name, String symbol,
                                          int decimals, BigInteger minBalance,
@@ -120,20 +147,32 @@ class PolkadotRuntimeClient {
                 result.toString());
     }
 
+    /**
+     * 扫描或观察 {@code scanNativeTransfers} 对应的链上状态，并转换为业务可用结果。
+     */
     public List<TransferEvent> scanNativeTransfers(long fromBlock, long toBlock,
                                                    Collection<String> addresses) {
         return scanTransfers(PURPOSE_NATIVE_RPC, fromBlock, toBlock, addresses, List.of(), true, false);
     }
 
+    /**
+     * 扫描或观察 {@code scanAssetTransfers} 对应的链上状态，并转换为业务可用结果。
+     */
     public List<TransferEvent> scanAssetTransfers(long fromBlock, long toBlock,
                                                   Collection<String> addresses,
                                                   Map<String, TokenDefinition> tokensByAssetId) {
         return scanTransfers(PURPOSE_ASSET_RPC, fromBlock, toBlock, addresses,
                 tokensByAssetId.keySet(), false, true);
     }
+    /**
+     * 执行 {@code latestFinalizedHeight} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private long latestFinalizedHeight(String rpcPurpose) {
         return callRuntime("/v1/polkadot/latest-finalized", rpcPurpose, baseBody()).path("height").asLong();
     }
+    /**
+     * 执行 {@code nativeBalance} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private BigInteger nativeBalance(String address, String rpcPurpose) {
         ObjectNode body = baseBody();
         body.put("ss58Prefix", ss58Prefix(profile()));
@@ -142,6 +181,9 @@ class PolkadotRuntimeClient {
                 .path("free"));
     }
 
+    /**
+     * 扫描或观察 {@code scanTransfers} 对应的链上状态，并转换为业务可用结果。
+     */
     private List<TransferEvent> scanTransfers(String rpcPurpose, long fromBlock, long toBlock,
                                               Collection<String> addresses,
                                               Collection<String> assetIds,
@@ -175,23 +217,35 @@ class PolkadotRuntimeClient {
         return events;
     }
 
+    /**
+     * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
+     */
     public SubmittedTransaction sendNative(String secretSeedHex, String expectedFrom,
                                            String toAddress, BigInteger amountPlanck) {
         return sendNative(secretSeedHex, expectedFrom, toAddress, amountPlanck, true);
     }
 
+    /**
+     * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
+     */
     public SubmittedTransaction sendNative(String secretSeedHex, String expectedFrom,
                                            String toAddress, BigInteger amountPlanck,
                                            boolean keepAlive) {
         return sendNative(secretSeedHex, expectedFrom, toAddress, amountPlanck, keepAlive, PURPOSE_NATIVE_RPC);
     }
 
+    /**
+     * 发送或广播 {@code sendAssetHubNative} 对应的链上请求，并返回节点处理结果。
+     */
     public SubmittedTransaction sendAssetHubNative(String secretSeedHex, String expectedFrom,
                                                    String toAddress, BigInteger amountPlanck,
                                                    boolean keepAlive) {
         return sendNative(secretSeedHex, expectedFrom, toAddress, amountPlanck, keepAlive, PURPOSE_ASSET_RPC);
     }
 
+    /**
+     * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
+     */
     private SubmittedTransaction sendNative(String secretSeedHex, String expectedFrom,
                                             String toAddress, BigInteger amountPlanck,
                                             boolean keepAlive, String rpcPurpose) {
@@ -207,11 +261,17 @@ class PolkadotRuntimeClient {
         return submitted(result);
     }
 
+    /**
+     * 发送或广播 {@code sendAsset} 对应的链上请求，并返回节点处理结果。
+     */
     public SubmittedTransaction sendAsset(String secretSeedHex, String expectedFrom,
                                           String assetId, String toAddress, BigInteger amountAtomic) {
         return sendAsset(secretSeedHex, expectedFrom, assetId, toAddress, amountAtomic, true);
     }
 
+    /**
+     * 发送或广播 {@code sendAsset} 对应的链上请求，并返回节点处理结果。
+     */
     public SubmittedTransaction sendAsset(String secretSeedHex, String expectedFrom,
                                           String assetId, String toAddress, BigInteger amountAtomic,
                                           boolean keepAlive) {
@@ -227,12 +287,21 @@ class PolkadotRuntimeClient {
         JsonNode result = callRuntime("/v1/polkadot/asset-transfer", PURPOSE_ASSET_RPC, body);
         return submitted(result);
     }
+    /**
+     * 执行 {@code transactionFinalized} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public boolean transactionFinalized(String txHash, int maxRecentBlocks) {
         return transactionFinalized(txHash, maxRecentBlocks, PURPOSE_NATIVE_RPC);
     }
+    /**
+     * 获取或查询 {@code assetTransactionFinalized} 对应的数据，并向调用方返回当前业务状态。
+     */
     public boolean assetTransactionFinalized(String txHash, int maxRecentBlocks) {
         return transactionFinalized(txHash, maxRecentBlocks, PURPOSE_ASSET_RPC);
     }
+    /**
+     * 执行 {@code transactionFinalized} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private boolean transactionFinalized(String txHash, int maxRecentBlocks, String rpcPurpose) {
         ObjectNode body = baseBody();
         body.put("txHash", txHash);
@@ -240,6 +309,9 @@ class PolkadotRuntimeClient {
         return callRuntime("/v1/polkadot/transaction-status", rpcPurpose, body)
                 .path("finalized").asBoolean(false);
     }
+    /**
+     * 执行 {@code callRuntime} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private JsonNode callRuntime(String path, String rpcPurpose, ObjectNode body) {
         AccountChainProfile profile = profile();
         List<ChainRpcNode> substrateNodes = rpcNodeService.enabledNodes(CHAIN, profile.getNetwork(), rpcPurpose);
@@ -265,6 +337,9 @@ class PolkadotRuntimeClient {
                 ? new IllegalStateException("all Polkadot substrate rpc nodes failed for purpose=" + rpcPurpose)
                 : last;
     }
+    /**
+     * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
+     */
     private JsonNode execute(ChainRpcNode node, String path, ObjectNode body) {
         try {
             String baseUrl = trim(node.getRpcUrl());
@@ -301,15 +376,24 @@ class PolkadotRuntimeClient {
             throw new IllegalStateException("Polkadot runtime interrupted: " + path, e);
         }
     }
+    /**
+     * 执行 {@code baseBody} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private ObjectNode baseBody() {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("chain", CHAIN);
         return body;
     }
+    /**
+     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
+     */
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
+    /**
+     * 执行 {@code ss58Prefix} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     static int ss58Prefix(AccountChainProfile profile) {
         if (profile.getChainId() != null && profile.getChainId() >= 0 && profile.getChainId() <= 16_383) {
             return profile.getChainId().intValue();
@@ -320,23 +404,38 @@ class PolkadotRuntimeClient {
         }
         return 42;
     }
+    /**
+     * 转换或计算 {@code normalizeAssetId} 对应的值，统一金额、格式和边界规则。
+     */
     static String normalizeAssetId(String value) {
         String assetId = trim(value);
         return assetId.isBlank() ? "" : assetId;
     }
+    /**
+     * 转换或计算 {@code amountPlanck} 对应的值，统一金额、格式和边界规则。
+     */
     static BigInteger amountPlanck(JsonNode node) {
         String value = node == null || node.isMissingNode() || node.isNull() ? "0" : node.asText("0");
         return new BigInteger(value);
     }
+    /**
+     * 发送或广播 {@code submitted} 对应的链上请求，并返回节点处理结果。
+     */
     private static SubmittedTransaction submitted(JsonNode result) {
         return new SubmittedTransaction(result.path("txHash").asText(),
                 result.path("blockHeight").asLong(0L),
                 result.path("status").asText("FINALIZED"),
                 result.toString());
     }
+    /**
+     * 执行 {@code trim} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String trim(String value) {
         return value == null ? "" : value.trim();
     }
+    /**
+     * 执行 {@code abbreviate} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String abbreviate(String value) {
         if (value == null || value.isBlank()) {
             return "<empty>";

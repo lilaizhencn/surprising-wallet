@@ -22,15 +22,39 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code SuiLiveNativeFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class SuiLiveNativeFlowIntegrationTest {
+    /**
+     * 保存 {@code RUN_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long RUN_INDEX = 1_400_000L
             + Math.floorMod(UUID.randomUUID().getLeastSignificantBits(), 100_000L) * 3L;
+    /**
+     * 保存 {@code OWNER_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long OWNER_INDEX = RUN_INDEX + 1L;
+    /**
+     * 保存 {@code EXTERNAL_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long EXTERNAL_INDEX = RUN_INDEX + 2L;
+    /**
+     * 保存 {@code HOT_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long HOT_INDEX = 0L;
+    /**
+     * 保存 {@code ONE_SUI}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long ONE_SUI = 1_000_000_000L;
+    /**
+     * 保存 {@code COLLECTION_MIST}，记录测试开关、处理状态、确认结果或重试信息。
+     */
     private static final long COLLECTION_MIST = 200_000_000L;
 
+    /**
+     * 验证 {@code liveSuiDepositWithdrawAreIdempotent} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void liveSuiDepositWithdrawAreIdempotent() {
         Assumptions.assumeTrue(Boolean.getBoolean("sui.live.enabled"),
@@ -110,6 +134,9 @@ class SuiLiveNativeFlowIntegrationTest {
         System.out.println("SUI_COLLECTION_TX=" + collectionDigest);
     }
 
+    /**
+     * 验证 {@code fund} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String fund(String address) {
         String faucetUrl = env("SUI_FAUCET_URL", "https://faucet.testnet.sui.io/v2/gas");
         String body = "{\"FixedAmountRequest\":{\"recipient\":\"" + SuiHex.normalizeAddress(address) + "\"}}";
@@ -143,6 +170,9 @@ class SuiLiveNativeFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code fundWithCurl} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String fundWithCurl(String address, String faucetUrl, String body) {
         try {
             Process process = new ProcessBuilder("curl", "-sS", "-X", "POST", faucetUrl,
@@ -164,6 +194,9 @@ class SuiLiveNativeFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code waitForBalanceAtLeast} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void waitForBalanceAtLeast(SuiRpcClient rpc, String address, long amount, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
@@ -175,10 +208,16 @@ class SuiLiveNativeFlowIntegrationTest {
         throw new IllegalStateException("Sui faucet balance did not arrive for " + address);
     }
 
+    /**
+     * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String accountId) {
         return repository.findLedgerBalance("SUI", "SUI", accountId).orElseThrow();
     }
 
+    /**
+     * 验证 {@code sleep} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);
@@ -188,6 +227,9 @@ class SuiLiveNativeFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;

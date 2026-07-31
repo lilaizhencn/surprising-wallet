@@ -52,21 +52,33 @@ class SolanaChainAdapter implements BlockchainAdapter {
         this.repository = repository;
     }
 
+    /**
+     * 获取或查询 {@code chainType} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public ChainType chainType() {
         return ChainType.SOLANA;
     }
 
+    /**
+     * 获取或查询 {@code capabilities} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public java.util.Set<Capability> capabilities() {
         return java.util.Set.of(Capability.NATIVE_QUOTE, Capability.TOKEN_QUOTE);
     }
 
+    /**
+     * 获取或查询 {@code family} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String family() {
         return "solana";
     }
 
+    /**
+     * 获取或查询 {@code describe} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String describe() {
         return "Solana Ed25519, blockhash transaction, native SOL and SPL/ATA wallet engine.";
@@ -113,6 +125,9 @@ class SolanaChainAdapter implements BlockchainAdapter {
     public List<DepositEvent> scanDeposits(long height) {
         return scanner.scanAndCredit();
     }
+    /**
+     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
+     */
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));

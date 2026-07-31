@@ -39,11 +39,17 @@ class BtcChainAdapter implements BlockchainAdapter {
         this.runtime = runtime;
     }
 
+    /**
+     * 获取或查询 {@code chainType} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public ChainType chainType() {
         return ChainType.BTC;
     }
 
+    /**
+     * 获取或查询 {@code capabilities} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public java.util.Set<Capability> capabilities() {
         return java.util.EnumSet.of(
@@ -54,11 +60,17 @@ class BtcChainAdapter implements BlockchainAdapter {
                 Capability.BALANCE_REFRESH, Capability.SIGNED_TRANSACTION_BROADCAST);
     }
 
+    /**
+     * 获取或查询 {@code family} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String family() {
         return "bitcoin";
     }
 
+    /**
+     * 获取或查询 {@code describe} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String describe() {
         return "Isolated BTC UTXO adapter with SegWit fee estimation and multisig-safe planning.";

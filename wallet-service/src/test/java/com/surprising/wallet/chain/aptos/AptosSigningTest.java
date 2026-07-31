@@ -6,10 +6,19 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code AptosSigningTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class AptosSigningTest {
+    /**
+     * 保存 {@code MASTER_SEED}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final String MASTER_SEED =
             "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
+    /**
+     * 验证 {@code buildsSignedNativeTransferJsonFromBcsRawTransaction} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void buildsSignedNativeTransferJsonFromBcsRawTransaction() {
         AptosKeyService keys = new AptosKeyService(MASTER_SEED);
@@ -32,6 +41,9 @@ class AptosSigningTest {
         assertTrue(signed.rawTransaction().length > 0);
     }
 
+    /**
+     * 验证 {@code buildsFungibleAssetTransferWithMetadataObject} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void buildsFungibleAssetTransferWithMetadataObject() {
         AptosKeyService keys = new AptosKeyService(MASTER_SEED);

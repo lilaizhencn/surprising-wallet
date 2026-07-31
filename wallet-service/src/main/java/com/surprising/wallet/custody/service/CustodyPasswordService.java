@@ -17,11 +17,29 @@ import java.util.Base64;
  */
 @Service
 public class CustodyPasswordService {
+    /**
+     * 定义 {@code ALGORITHM} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final String ALGORITHM = "PBKDF2WithHmacSHA256";
+    /**
+     * 定义 {@code PREFIX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final String PREFIX = "pbkdf2-sha256";
+    /**
+     * 定义 {@code ITERATIONS} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final int ITERATIONS = 210_000;
+    /**
+     * 定义 {@code KEY_BITS} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final int KEY_BITS = 256;
+    /**
+     * 定义 {@code RANDOM} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final SecureRandom RANDOM = new SecureRandom();
+    /**
+     * 判断 {@code hash} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     public String hash(String password) {
         validatePassword(password);
         byte[] salt = new byte[16];
@@ -31,6 +49,9 @@ public class CustodyPasswordService {
                 + Base64.getEncoder().encodeToString(salt) + "$"
                 + Base64.getEncoder().encodeToString(hash);
     }
+    /**
+     * 验证 {@code verify} 对应的签名、交易或数据证明是否有效。
+     */
     public boolean verify(String password, String encoded) {
         if (password == null || encoded == null) {
             return false;
@@ -52,11 +73,17 @@ public class CustodyPasswordService {
             return false;
         }
     }
+    /**
+     * 校验 {@code validatePassword} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void validatePassword(String password) {
         if (password == null || password.length() < 12 || password.length() > 256) {
             throw new IllegalArgumentException("password must contain between 12 and 256 characters");
         }
     }
+    /**
+     * 构建或生成 {@code derive} 对应的结果，并执行输入和状态校验。
+     */
     private byte[] derive(char[] password, byte[] salt, int iterations, int keyBits) {
         PBEKeySpec spec = new PBEKeySpec(password, salt, iterations, keyBits);
         try {

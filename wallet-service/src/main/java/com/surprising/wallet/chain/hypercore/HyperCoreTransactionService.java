@@ -50,8 +50,14 @@ class HyperCoreTransactionService {
     /** Secp256k1 密钥服务 */
     private final AccountSecp256k1KeyService keyService;
 
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * 发送或广播 {@code sendUsd} 对应的链上请求，并返回节点处理结果。
+     */
     public String sendUsd(AccountChainProfile profile, ChainAddressRecord from,
                           String destination, BigDecimal amount) {
         long nonce = nextNonce(from);
@@ -65,6 +71,9 @@ class HyperCoreTransactionService {
         return submit("usdSend", "USDC", from.getAddress(), destination, amount, nonce, action, signature);
     }
 
+    /**
+     * 发送或广播 {@code sendSpot} 对应的链上请求，并返回节点处理结果。
+     */
     public String sendSpot(AccountChainProfile profile, ChainAddressRecord from,
                            TokenDefinition token, String destination, BigDecimal amount) {
         long nonce = nextNonce(from);
@@ -79,6 +88,9 @@ class HyperCoreTransactionService {
         return submit("spotSend", token.getSymbol(), from.getAddress(), destination, amount, nonce, action, signature);
     }
 
+    /**
+     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo,
                                      String actionId, String assetSymbol,
                                      String debitAccountId, BigDecimal debitAmount) {
@@ -88,12 +100,18 @@ class HyperCoreTransactionService {
         return chainRepository.confirmWithdrawalAndSettle(tenantId, CHAIN, orderNo, actionId,
                 assetSymbol, debitAccountId, debitAmount);
     }
+    /**
+     * 处理 {@code confirmCollection} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public boolean confirmCollection(java.util.UUID tenantId, String collectionNo, String actionId) {
         return hyperCoreRepository.actionAccepted(actionId)
                 && chainRepository.markCollectionConfirmed(
                         tenantId, CHAIN, collectionNo, actionId) == 1;
     }
 
+    /**
+     * 发送或广播 {@code submit} 对应的链上请求，并返回节点处理结果。
+     */
     private String submit(String actionType, String symbol, String fromAddress, String destination,
                           BigDecimal amount, long nonce, ObjectNode action, ObjectNode signature) {
         String actionId = "HC-" + actionType + "-" + fromAddress.toLowerCase(Locale.ROOT) + "-" + nonce;
@@ -116,23 +134,38 @@ class HyperCoreTransactionService {
             throw e;
         }
     }
+    /**
+     * 执行 {@code wireToken} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private String wireToken(AccountChainProfile profile, TokenDefinition token) {
         return hyperCoreRepository.tokenNameBySymbol(profile.getNetwork(), token.getSymbol())
                 .orElse(token.getSymbol());
     }
+    /**
+     * 执行 {@code nextNonce} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private long nextNonce(ChainAddressRecord from) {
         return chainRepository.reserveAccountSequence(
                 CHAIN,
                 normalizeAddress(from.getAddress()),
                 System.currentTimeMillis());
     }
+    /**
+     * 判断 {@code isMainnet} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private static boolean isMainnet(AccountChainProfile profile) {
         String network = profile.getNetwork() == null ? "" : profile.getNetwork().toLowerCase(Locale.ROOT);
         return network.equals("mainnet") || network.equals("main");
     }
+    /**
+     * 转换或计算 {@code amountString} 对应的值，统一金额、格式和边界规则。
+     */
     private static String amountString(BigDecimal amount) {
         return amount.stripTrailingZeros().toPlainString();
     }
+    /**
+     * 转换或计算 {@code normalizeAddress} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalizeAddress(String address) {
         return address == null ? "" : address.trim().toLowerCase(Locale.ROOT);
     }

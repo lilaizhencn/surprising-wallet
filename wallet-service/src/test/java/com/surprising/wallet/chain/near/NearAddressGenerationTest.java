@@ -11,10 +11,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code NearAddressGenerationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class NearAddressGenerationTest {
+    /**
+     * 保存 {@code MASTER_SEED}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final String MASTER_SEED =
             "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
+    /**
+     * 验证 {@code derivesStableImplicitAccountsFromUnifiedEd25519Tree} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void derivesStableImplicitAccountsFromUnifiedEd25519Tree() {
         NearKeyService first = new NearKeyService(MASTER_SEED);
@@ -36,6 +45,9 @@ class NearAddressGenerationTest {
         assertFalse(NearKeyService.isValidAccountId("alice..testnet"));
     }
 
+    /**
+     * 验证 {@code nearPathIsSeparatedFromOtherEd25519Chains} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void nearPathIsSeparatedFromOtherEd25519Chains() {
         Ed25519KeyProvider provider = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(MASTER_SEED));

@@ -32,16 +32,40 @@ import java.util.Map;
 public
 class EvmChainAdapter implements BlockchainAdapter {
 
+    /**
+     * 保存 {@code nonceManager}，用于保存金额、费用或链上执行状态。
+     */
     private final EvmNonceManager nonceManager;
+    /**
+     * 保存 {@code tokenRegistry}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final TokenRegistry tokenRegistry;
+    /**
+     * 保存 {@code gasEstimator}，用于保存金额、费用或链上执行状态。
+     */
     private final EvmGasEstimator gasEstimator;
+    /**
+     * 保存 {@code transactionBuilder}，用于标识交易、区块或业务记录。
+     */
     private final EvmTransactionBuilder transactionBuilder;
+    /**
+     * 保存 {@code logScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final EvmLogScanner logScanner;
+    /**
+     * 保存 {@code depositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final EvmDepositScanner depositScanner;
     /** 链配置缓存，key 为 ChainType */
     private final Map<ChainType, ChainProfile> profiles = new EnumMap<>(ChainType.class);
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository repository;
 
+    /**
+     * 构造 {@code EvmChainAdapter}，初始化该组件运行所需的状态和依赖。
+     */
     @Autowired
     public EvmChainAdapter(EvmNonceManager nonceManager, TokenRegistry tokenRegistry,
                            EvmGasEstimator gasEstimator, EvmTransactionBuilder transactionBuilder,
@@ -57,6 +81,9 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerDbProfiles();
     }
 
+    /**
+     * 构造 {@code EvmChainAdapter}，初始化该组件运行所需的状态和依赖。
+     */
     public EvmChainAdapter(EvmNonceManager nonceManager, TokenRegistry tokenRegistry,
                            EvmGasEstimator gasEstimator, EvmTransactionBuilder transactionBuilder,
                            EvmLogScanner logScanner) {
@@ -70,11 +97,17 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfiles();
     }
 
+    /**
+     * 获取或查询 {@code chainType} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public ChainType chainType() {
         return ChainType.ETH;
     }
 
+    /**
+     * 获取或查询 {@code capabilities} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public java.util.Set<Capability> capabilities() {
         return depositScanner == null
@@ -84,21 +117,33 @@ class EvmChainAdapter implements BlockchainAdapter {
                         Capability.DEPOSIT_SCAN);
     }
 
+    /**
+     * 校验 {@code supports} 对应的输入或状态，失败时抛出明确异常。
+     */
     @Override
     public boolean supports(ChainType chainType) {
         return chainType != null && chainType.isEvm();
     }
 
+    /**
+     * 获取或查询 {@code family} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String family() {
         return "evm";
     }
 
+    /**
+     * 获取或查询 {@code describe} 对应的数据，并向调用方返回当前业务状态。
+     */
     @Override
     public String describe() {
         return "Unified EVM engine with nonce manager, gas estimator, transaction builder, ERC20 processor and log scanner.";
     }
 
+    /**
+     * 计算或估算 {@code quoteNativeTransfer} 对应的金额、费用或资源消耗。
+     */
     @Override
     public TransferQuote quoteNativeTransfer(TransferRequest request) {
         ChainProfile profile = profileOf(request.chainType());
@@ -110,6 +155,9 @@ class EvmChainAdapter implements BlockchainAdapter {
                 0L, transactionBuilder.buildNativePayload(), true, "native evm transfer");
     }
 
+    /**
+     * 计算或估算 {@code quoteTokenTransfer} 对应的金额、费用或资源消耗。
+     */
     @Override
     public TransferQuote quoteTokenTransfer(TransferRequest request) {
         ChainProfile profile = profileOf(request.chainType());
@@ -124,6 +172,9 @@ class EvmChainAdapter implements BlockchainAdapter {
                 payload, true, "erc20 transfer");
     }
 
+    /**
+     * 扫描或观察 {@code scanDeposits} 对应的链上状态，并转换为业务可用结果。
+     */
     @Override
     public List<DepositEvent> scanDeposits(long height) {
         if (depositScanner == null) {
@@ -135,9 +186,15 @@ class EvmChainAdapter implements BlockchainAdapter {
             throw new IllegalStateException("EVM deposit scan failed at height " + height, e);
         }
     }
+    /**
+     * 获取或查询 {@code getProfile} 对应的数据，供调用方读取当前状态。
+     */
     public ChainProfile getProfile(ChainType chainType) {
         return profileOf(chainType);
     }
+    /**
+     * 添加 {@code registerProfiles} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     private void registerProfiles() {
         registerProfile(ChainType.ETH, "ETH", 11155111L, 1L);
         // The current runtime is testnet-only. Keep the adapter chainIds aligned
@@ -189,6 +246,9 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.VECTOR_SMART_CHAIN, "VSG", 420042L, 12L);
         registerProfile(ChainType.KROWN, "KROWN", 1983L, 12L);
     }
+    /**
+     * 添加 {@code registerDbProfiles} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     private void registerDbProfiles() {
         for (AccountChainProfile profile : repository.listEnabledChainProfiles()) {
             if (!"evm".equalsIgnoreCase(profile.getFamily())) {
@@ -211,6 +271,9 @@ class EvmChainAdapter implements BlockchainAdapter {
                     .build());
         }
     }
+    /**
+     * 添加 {@code registerProfile} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     private void registerProfile(ChainType chainType, String nativeSymbol, Long chainId, Long gasFloorGwei) {
         profiles.put(chainType, ChainProfile.builder()
                 .chainType(chainType)
@@ -222,6 +285,9 @@ class EvmChainAdapter implements BlockchainAdapter {
                 .chainId(chainId)
                 .build());
     }
+    /**
+     * 获取或查询 {@code profileOf} 对应的数据，并向调用方返回当前业务状态。
+     */
     private ChainProfile profileOf(ChainType chainType) {
         ChainProfile profile = profiles.get(chainType);
         if (profile == null) {

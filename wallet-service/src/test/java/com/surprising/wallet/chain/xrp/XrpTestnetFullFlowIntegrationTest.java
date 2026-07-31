@@ -39,16 +39,46 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code XrpTestnetFullFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class XrpTestnetFullFlowIntegrationTest {
+    /**
+     * 保存 {@code CHAIN}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String CHAIN = "XRP";
+    /**
+     * 保存 {@code RPC_URL}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private static final String RPC_URL = "https://s.altnet.rippletest.net:51234/";
+    /**
+     * 保存 {@code FAUCET_URL}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String FAUCET_URL = "https://faucet.altnet.rippletest.net";
+    /**
+     * 保存 {@code USDC}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String USDC = "USDC";
+    /**
+     * 保存 {@code USDC_CURRENCY}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String USDC_CURRENCY = "5553444300000000000000000000000000000000";
+    /**
+     * 保存 {@code USDT}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String USDT = "USDT";
+    /**
+     * 保存 {@code USDT_CURRENCY}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String USDT_CURRENCY = "5553445400000000000000000000000000000000";
+    /**
+     * 保存 {@code SIGNATURES}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final BcSignatureService SIGNATURES = new BcSignatureService();
 
+    /**
+     * 验证 {@code shouldExecuteNativeAndIssuedCurrencyFullFlow} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldExecuteNativeAndIssuedCurrencyFullFlow() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("xrp.live.flow.enabled"),
@@ -127,6 +157,9 @@ class XrpTestnetFullFlowIntegrationTest {
         issuer.privateKey().destroy();
     }
 
+    /**
+     * 验证 {@code issuedCurrencyFlow} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void issuedCurrencyFlow(
             UUID tenantId, UUID custodyAddressId, JdbcTemplate jdbc, ChainJdbcRepository repository,
             XrpAddressService addresses, XrpTransactionService transactions, XrpDepositScanner scanner,
@@ -168,6 +201,9 @@ class XrpTestnetFullFlowIntegrationTest {
         assertIssuedBalance(rpc, hot.getAddress(), issuerAddress, currency, new BigDecimal("30"));
     }
 
+    /**
+     * 验证 {@code withdrawNative} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void withdrawNative(UUID tenantId, ChainJdbcRepository repository,
                                        XrpTransactionService transactions,
                                        XrpRpcClient rpc, String orderNo, ChainAddressRecord from,
@@ -182,6 +218,9 @@ class XrpTestnetFullFlowIntegrationTest {
                 orderNo, CHAIN, from.getAccountId(), amount));
     }
 
+    /**
+     * 验证 {@code withdrawToken} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void withdrawToken(UUID tenantId, ChainJdbcRepository repository,
                                       XrpTransactionService transactions,
                                       XrpRpcClient rpc, String orderNo, ChainAddressRecord from,
@@ -196,6 +235,9 @@ class XrpTestnetFullFlowIntegrationTest {
                 orderNo, token.getSymbol(), from.getAccountId(), amount));
     }
 
+    /**
+     * 验证 {@code createAndFreeze} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void createAndFreeze(UUID tenantId, ChainJdbcRepository repository, String orderNo,
                                         ChainAddressRecord from, ChainAddressRecord to,
                                         String symbol, BigDecimal amount) {
@@ -209,6 +251,9 @@ class XrpTestnetFullFlowIntegrationTest {
                 tenantId, CHAIN, orderNo, from.getAddress()));
     }
 
+    /**
+     * 验证 {@code collect} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String collect(
             UUID tenantId, UUID custodyAddressId, ChainJdbcRepository repository,
             XrpTransactionService transactions, XrpRpcClient rpc, String collectionNo,
@@ -231,6 +276,9 @@ class XrpTestnetFullFlowIntegrationTest {
         return txHash;
     }
 
+    /**
+     * 验证 {@code assertInternalCollectionNotCredited} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertInternalCollectionNotCredited(JdbcTemplate jdbc, String txHash) {
         assertEquals(0, jdbc.queryForObject("""
                 select count(*) from deposit_record
@@ -238,6 +286,9 @@ class XrpTestnetFullFlowIntegrationTest {
                 """, Integer.class, txHash));
     }
 
+    /**
+     * 验证 {@code sendIssued} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String sendIssued(XrpRpcClient rpc, KeyPair issuer, String destination,
                                      String currency, BigDecimal amount) {
         IssuedCurrencyAmount issued = IssuedCurrencyAmount.builder()
@@ -258,6 +309,9 @@ class XrpTestnetFullFlowIntegrationTest {
         return rpc.submit(signed.signedTransactionBytes().hexValue());
     }
 
+    /**
+     * 验证 {@code enableDefaultRipple} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String enableDefaultRipple(XrpRpcClient rpc, KeyPair issuer) {
         String issuerAddress = issuer.publicKey().deriveAddress().value();
         AccountSet accountSet = AccountSet.builder()
@@ -272,6 +326,9 @@ class XrpTestnetFullFlowIntegrationTest {
         return rpc.submit(signed.signedTransactionBytes().hexValue());
     }
 
+    /**
+     * 验证 {@code fund} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void fund(FaucetClient faucet, XrpRpcClient rpc, String address) {
         if (rpc.accountInfo(address).isEmpty()) {
             faucet.fundAccount(FundAccountRequest.of(Address.of(address)));
@@ -279,6 +336,9 @@ class XrpTestnetFullFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code waitAccount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void waitAccount(XrpRpcClient rpc, String address) {
         for (int attempt = 0; attempt < 30; attempt++) {
             if (rpc.accountInfo(address).isPresent()) {
@@ -289,6 +349,9 @@ class XrpTestnetFullFlowIntegrationTest {
         throw new IllegalStateException("XRPL faucet funding did not validate: " + address);
     }
 
+    /**
+     * 验证 {@code waitValidated} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static JsonNode waitValidated(XrpRpcClient rpc, String txHash) {
         RuntimeException last = null;
         for (int attempt = 0; attempt < 30; attempt++) {
@@ -306,6 +369,9 @@ class XrpTestnetFullFlowIntegrationTest {
         throw new IllegalStateException("XRPL transaction did not validate: " + txHash, last);
     }
 
+    /**
+     * 验证 {@code assertIssuedBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertIssuedBalance(XrpRpcClient rpc, String address, String issuer,
                                             String currency, BigDecimal expected) {
         BigDecimal balance = BigDecimal.ZERO;
@@ -318,19 +384,31 @@ class XrpTestnetFullFlowIntegrationTest {
         assertAmount(expected, balance);
     }
 
+    /**
+     * 验证 {@code xrpBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal xrpBalance(XrpRpcClient rpc, String address) {
         return rpc.accountBalanceDrops(address).movePointLeft(6);
     }
 
+    /**
+     * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String symbol, String accountId) {
         return repository.findLedgerBalance(CHAIN, symbol, accountId)
                 .orElseThrow(() -> new IllegalStateException("missing ledger " + symbol + "/" + accountId));
     }
 
+    /**
+     * 验证 {@code assertAmount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertAmount(BigDecimal expected, BigDecimal actual) {
         assertEquals(0, expected.compareTo(actual), "expected=" + expected + ", actual=" + actual);
     }
 
+    /**
+     * 验证 {@code upsertMockToken} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void upsertMockToken(JdbcTemplate jdbc, String issuer, String symbol, String currency) {
         jdbc.update("""
                 update token_config
@@ -341,6 +419,9 @@ class XrpTestnetFullFlowIntegrationTest {
                 """, issuer + ":" + currency, issuer, symbol, symbol);
     }
 
+    /**
+     * 验证 {@code dataSource} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static DriverManagerDataSource dataSource() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
         dataSource.setDriverClassName("org.postgresql.Driver");
@@ -350,6 +431,9 @@ class XrpTestnetFullFlowIntegrationTest {
         return dataSource;
     }
 
+    /**
+     * 验证 {@code sleep} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void sleep(Duration duration) {
         try {
             Thread.sleep(duration.toMillis());

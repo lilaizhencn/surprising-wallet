@@ -12,8 +12,13 @@ import org.web3j.abi.datatypes.generated.Uint256;
 import java.util.ArrayList;
 import java.util.List;
 
-/** ABI codec for Eip7702BatchCollector.collectBatch. */
+/**
+ * 负责链上地址、交易或合约数据的编码、解码和格式校验。
+ */
 public class Evm7702ContractCodec {
+    /**
+     * 编码或序列化 {@code encodeCollectBatch} 对应的数据，生成链上或接口需要的表示。
+     */
     public String encodeCollectBatch(List<Evm7702CollectionRequest> requests, List<byte[]> signatures) {        if (requests == null || requests.isEmpty() || requests.size() > 100
                 || signatures == null || signatures.size() != requests.size()) {
             throw new IllegalArgumentException("batch must contain 1..100 requests and matching signatures");
@@ -40,7 +45,13 @@ public class Evm7702ContractCodec {
                 List.of());
         return FunctionEncoder.encode(function);
     }
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     public static final class CollectionRequestStruct extends StaticStruct {
+        /**
+         * 构造 {@code CollectionRequestStruct}，初始化该组件运行所需的状态和依赖。
+         */
         CollectionRequestStruct(Evm7702CollectionRequest request) {
             super(
                     new Bytes32(request.batchId()),

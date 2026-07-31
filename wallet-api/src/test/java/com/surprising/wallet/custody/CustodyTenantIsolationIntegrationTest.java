@@ -16,9 +16,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 
+/**
+ * 验证 {@code CustodyTenantIsolationIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class CustodyTenantIsolationIntegrationTest {
+    /**
+     * 保存 {@code jdbc}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private JdbcTemplate jdbc;
 
+    /**
+     * 验证 {@code setUp} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @BeforeEach
     void setUp() throws Exception {
         DriverManagerDataSource dataSource = CustodyIntegrationDatabase.dataSource();
@@ -26,6 +35,9 @@ class CustodyTenantIsolationIntegrationTest {
         jdbc = new JdbcTemplate(dataSource);
     }
 
+    /**
+     * 验证 {@code collectionStateCannotBeReadClaimedOrUpdatedByAnotherTenant} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void collectionStateCannotBeReadClaimedOrUpdatedByAnotherTenant() {
         UUID ownerTenant = createTenant();
@@ -63,6 +75,9 @@ class CustodyTenantIsolationIntegrationTest {
                 ownerTenant, "ETH", collectionNo).orElseThrow());
     }
 
+    /**
+     * 验证 {@code collectionApiRejectsMissingTenantContext} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void collectionApiRejectsMissingTenantContext() {
         ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
@@ -76,6 +91,9 @@ class CustodyTenantIsolationIntegrationTest {
                 () -> repository.findCollectionStatus(null, "ETH", "missing-tenant"));
     }
 
+    /**
+     * 验证 {@code gasReservationCannotUseLedgerBalanceOwnedByAnotherTenant} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void gasReservationCannotUseLedgerBalanceOwnedByAnotherTenant() {
         UUID gasTenant = createTenant();
@@ -126,6 +144,9 @@ class CustodyTenantIsolationIntegrationTest {
                 """, Integer.class, gasTenant, withdrawalId));
     }
 
+    /**
+     * 验证 {@code singleTransactionWithdrawalSettlesOnceAndOnlyForItsTenant} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void singleTransactionWithdrawalSettlesOnceAndOnlyForItsTenant() {
         UUID ownerTenant = createTenant();
@@ -178,6 +199,9 @@ class CustodyTenantIsolationIntegrationTest {
                 """, BigDecimal.class, ownerTenant, accountId)));
     }
 
+    /**
+     * 验证 {@code bitcoinLikeSigningBatchAndUtxosStayWithinOneTenant} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void bitcoinLikeSigningBatchAndUtxosStayWithinOneTenant() {
         UUID firstTenant = createTenant();
@@ -220,6 +244,9 @@ class CustodyTenantIsolationIntegrationTest {
                 firstTenant, "BTC", "first-utxo", 0, "owner-lock"));
     }
 
+    /**
+     * 验证 {@code createTenant} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private UUID createTenant() {
         UUID tenantId = UUID.randomUUID();
         int namespace = jdbc.queryForObject(
@@ -232,6 +259,9 @@ class CustodyTenantIsolationIntegrationTest {
         return tenantId;
     }
 
+    /**
+     * 验证 {@code createAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private UUID createAddress(UUID tenantId, String accountId) {
         int namespace = jdbc.queryForObject(
                 "select derivation_namespace from custody_tenant where id = ?",
@@ -258,6 +288,9 @@ class CustodyTenantIsolationIntegrationTest {
         return custodyAddressId;
     }
 
+    /**
+     * 验证 {@code createChainAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void createChainAddress(UUID tenantId, String chain, String accountId) {
         int namespace = jdbc.queryForObject(
                 "select derivation_namespace from custody_tenant where id = ?",

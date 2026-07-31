@@ -36,6 +36,9 @@ class MoneroTransactionService {
 
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
+    /**
+     * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
+     */
     public String sendNative(AccountChainProfile profile, ChainAddressRecord from, String toAddress, BigDecimal amount) {
         MoneroWalletRpcClient.Transfer transfer = walletRpcClient.transfer(
                 Math.toIntExact(from.getAddressIndex()), toAddress, amount, network(profile), "rpc");
@@ -57,6 +60,9 @@ class MoneroTransactionService {
         return transfer.txHash();
     }
 
+    /**
+     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public void confirmWithdrawal(AccountChainProfile profile, String orderNo, String txHash,
                                   String debitAccountId, BigDecimal debitAmount,
                                   String toAddress, BigDecimal amount) {
@@ -64,6 +70,9 @@ class MoneroTransactionService {
                 profile, orderNo, txHash, debitAccountId, debitAmount, toAddress, amount);
     }
 
+    /**
+     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public void confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
                                   String orderNo, String txHash,
                                   String debitAccountId, BigDecimal debitAmount,
@@ -77,6 +86,9 @@ class MoneroTransactionService {
         }
     }
 
+    /**
+     * 处理 {@code collectNative} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public void collectNative(java.util.UUID tenantId, AccountChainProfile profile, String collectionNo,
                               ChainAddressRecord from, String toAddress, BigDecimal amount) {
         if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
@@ -92,6 +104,9 @@ class MoneroTransactionService {
         }
     }
 
+    /**
+     * 处理 {@code confirmCollection} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public void confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
                                   String collectionNo) {
         repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
@@ -100,6 +115,9 @@ class MoneroTransactionService {
                         tenantId, CHAIN, collectionNo, txHash));
     }
 
+    /**
+     * 执行 {@code creditInternalRecipient} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private void creditInternalRecipient(AccountChainProfile profile, MoneroWalletRpcClient.Transfer transfer,
                                          String toAddress, BigDecimal amount) {
         if (toAddress == null || toAddress.isBlank()) {
@@ -122,11 +140,17 @@ class MoneroTransactionService {
                         Math.max(1, profile.getDepositConfirmations()),
                         recipient.getAccountId()));
     }
+    /**
+     * 扫描或观察 {@code scannerLogIndex} 对应的链上状态，并转换为业务可用结果。
+     */
     private static long scannerLogIndex(ChainAddressRecord recipient) {
         long subaddressIndex = recipient.getAddressIndex() == null ? 0L : recipient.getAddressIndex();
         return subaddressIndex << 32;
     }
 
+    /**
+     * 处理 {@code confirmedTransfer} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private MoneroWalletRpcClient.Transfer confirmedTransfer(AccountChainProfile profile,
                                                             String txHash,
                                                             int requiredConfirmations) {
@@ -156,6 +180,9 @@ class MoneroTransactionService {
                 .build());
         return confirmations >= required ? transfer : null;
     }
+    /**
+     * 获取或查询 {@code network} 对应的数据，并向调用方返回当前业务状态。
+     */
     private static String network(AccountChainProfile profile) {
         return profile == null ? null : profile.getNetwork();
     }

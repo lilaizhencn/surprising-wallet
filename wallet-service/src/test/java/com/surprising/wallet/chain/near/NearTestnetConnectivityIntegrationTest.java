@@ -6,7 +6,13 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code NearTestnetConnectivityIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class NearTestnetConnectivityIntegrationTest {
+    /**
+     * 验证 {@code readsFinalBlockFromOfficialTestnetRpc} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void readsFinalBlockFromOfficialTestnetRpc() {
         Assumptions.assumeTrue(Boolean.getBoolean("near.testnet.enabled"),

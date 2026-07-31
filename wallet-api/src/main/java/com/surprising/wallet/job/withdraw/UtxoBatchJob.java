@@ -44,6 +44,9 @@ abstract public class UtxoBatchJob {
     /** 提现任务开关服务。 */
     @Autowired
     protected WalletRuntimeConfigService runtimeConfigService;
+    /**
+     * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
+     */
     @Autowired
     protected StringRedisTemplate redis;
 

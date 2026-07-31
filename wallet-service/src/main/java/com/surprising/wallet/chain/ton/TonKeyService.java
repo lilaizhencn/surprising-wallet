@@ -85,12 +85,21 @@ class TonKeyService {
         }
         return provider().derive(Ed25519Chain.TON, biz, userId, derivationIndex);
     }
+    /**
+     * 执行 {@code keyPair} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public TweetNaclFast.Signature.KeyPair keyPair(long derivationIndex) {
         return Utils.generateSignatureKeyPairFromSeed(derive(derivationIndex).privateSeed());
     }
+    /**
+     * 执行 {@code keyPair} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public TweetNaclFast.Signature.KeyPair keyPair(long userId, int biz, long derivationIndex) {
         return Utils.generateSignatureKeyPairFromSeed(derive(userId, biz, derivationIndex).privateSeed());
     }
+    /**
+     * 执行 {@code wallet} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public WalletV4R2 wallet(long derivationIndex) {
         return WalletV4R2.builder()
                 .keyPair(keyPair(derivationIndex))
@@ -98,6 +107,9 @@ class TonKeyService {
                 .wc(0)
                 .build();
     }
+    /**
+     * 执行 {@code wallet} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public WalletV4R2 wallet(long userId, int biz, long derivationIndex) {
         return WalletV4R2.builder()
                 .keyPair(keyPair(userId, biz, derivationIndex))
@@ -105,6 +117,9 @@ class TonKeyService {
                 .wc(0)
                 .build();
     }
+    /**
+     * 获取或查询 {@code provider} 对应的数据，并向调用方返回当前业务状态。
+     */
     private Ed25519KeyProvider provider() {
         return testProvider != null ? testProvider : keyMaterial.ed25519();
     }

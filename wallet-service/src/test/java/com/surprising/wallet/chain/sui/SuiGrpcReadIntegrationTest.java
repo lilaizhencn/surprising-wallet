@@ -8,7 +8,13 @@ import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code SuiGrpcReadIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class SuiGrpcReadIntegrationTest {
+    /**
+     * 验证 {@code readsOfficialTestnetThroughGrpc} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void readsOfficialTestnetThroughGrpc() {
         Assumptions.assumeTrue(Boolean.getBoolean("sui.grpc.live.enabled"),

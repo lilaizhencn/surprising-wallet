@@ -13,11 +13,26 @@ import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code TonLocalFundingIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class TonLocalFundingIntegrationTest {
+    /**
+     * 保存 {@code OWNER_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long OWNER_INDEX = 1_100_001L;
+    /**
+     * 保存 {@code MIN_OWNER_BALANCE}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final long MIN_OWNER_BALANCE = 1_000_000_000L;
+    /**
+     * 保存 {@code FUNDING_AMOUNT}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final long FUNDING_AMOUNT = 15_000_000_000L;
 
+    /**
+     * 验证 {@code fundsScopedTenantWalletFromLocalDeterministicWallet} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void fundsScopedTenantWalletFromLocalDeterministicWallet() {
         Assumptions.assumeTrue(Boolean.getBoolean("ton.local.funding.enabled"),
@@ -58,6 +73,9 @@ class TonLocalFundingIntegrationTest {
         waitFor(() -> rpc.balance(target) >= MIN_OWNER_BALANCE, Duration.ofMinutes(5));
     }
 
+    /**
+     * 验证 {@code waitFor} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void waitFor(Check check, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
@@ -74,13 +92,22 @@ class TonLocalFundingIntegrationTest {
         throw new IllegalStateException("TON local funding timed out after " + timeout);
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    /**
+     * 测试辅助类 {@code Check}，为相关测试提供隔离环境或共享数据。
+     */
     @FunctionalInterface
     private interface Check {
+        /**
+         * 验证 {@code done} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         boolean done();
     }
 }

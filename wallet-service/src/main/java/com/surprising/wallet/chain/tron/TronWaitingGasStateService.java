@@ -3,11 +3,12 @@ package com.surprising.wallet.chain.tron;
 import java.math.BigDecimal;
 
 /**
- * Encapsulates the WAITING_GAS decision for TRC20 withdrawals and collections.
- * Business funds remain locked while this state is active; only a bounded TRX
- * top-up task is allowed to move the original task forward.
+ * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
  */
 public class TronWaitingGasStateService {
+    /**
+     * 执行 {@code evaluate} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public WaitingGasDecision evaluate(String chain, String taskNo, String address,
                                        BigDecimal currentTrxBalance,
                                        BigDecimal estimatedRequiredTrx,

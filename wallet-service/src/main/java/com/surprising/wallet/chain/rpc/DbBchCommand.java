@@ -12,6 +12,9 @@ import org.springframework.stereotype.Component;
 @Component
 public
 class DbBchCommand extends DbBtcLikeJsonRpcCommand implements BchCommand {
+    /**
+     * 构造 {@code DbBchCommand}，初始化该组件运行所需的状态和依赖。
+     */
     public DbBchCommand(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {        super("BCH", repository, rpcNodeService);
     }
 }

@@ -14,9 +14,18 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * 验证 {@code NearDepositScannerTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class NearDepositScannerTest {
+    /**
+     * 保存 {@code MAPPER}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /**
+     * 验证 {@code extractsNativeTransfersFromChunkTransactions} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void extractsNativeTransfersFromChunkTransactions() throws Exception {
         JsonNode chunk = json("""
@@ -58,6 +67,9 @@ class NearDepositScannerTest {
         assertEquals(0, transfer.actionIndex());
     }
 
+    /**
+     * 验证 {@code extractsNep141TransfersFromFunctionCallActions} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void extractsNep141TransfersFromFunctionCallActions() throws Exception {
         String args = Base64.getEncoder().encodeToString("""
@@ -102,6 +114,9 @@ class NearDepositScannerTest {
         assertEquals(1, transfer.actionIndex());
     }
 
+    /**
+     * 验证 {@code extractsNep141TransferCallDeposits} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void extractsNep141TransferCallDeposits() throws Exception {
         String args = Base64.getEncoder().encodeToString("""
@@ -138,6 +153,9 @@ class NearDepositScannerTest {
         assertEquals(new BigDecimal("7.1"), transfer.amount());
     }
 
+    /**
+     * 验证 {@code json} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static JsonNode json(String value) {
         try {
             return MAPPER.readTree(value);

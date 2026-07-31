@@ -35,20 +35,38 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class FirstSignJob {
 
+    /**
+     * 定义 {@code DELAY} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final Duration DELAY = Duration.ofSeconds(10);
 
+    /**
+     * 保存 {@code taskScheduler}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final TaskScheduler taskScheduler;
+    /**
+     * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
+     */
     private final StringRedisTemplate redis;
 
+    /**
+     * 保存 {@code signContent}，用于承载当前对象的运行配置或业务数据。
+     */
     @Autowired
     SignContent signContent;
 
+    /**
+     * 执行 {@code schedule} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @PostConstruct
     void schedule() {
         taskScheduler.scheduleWithFixedDelay(this::execute, DELAY);
         log.info("FirstSignJob scheduled with fixed delay {}ms", DELAY.toMillis());
     }
 
+    /**
+     * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
+     */
     void execute() {
         String key = Constants.WALLET_WITHDRAW_SIG_FIRST_KEY;
         String tmp = Constants.WALLET_WITHDRAW_SIG_FIRST_TMP_KEY;

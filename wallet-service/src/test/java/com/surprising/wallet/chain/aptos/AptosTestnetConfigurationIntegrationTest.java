@@ -19,8 +19,14 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code AptosTestnetConfigurationIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class AptosTestnetConfigurationIntegrationTest {
 
+    /**
+     * 验证 {@code configuredFaMetadataAndLiveScannerMatchTestnet} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void configuredFaMetadataAndLiveScannerMatchTestnet() {
         Assumptions.assumeTrue(Boolean.getBoolean("aptos.testnet.config.live.enabled"),
@@ -55,6 +61,9 @@ class AptosTestnetConfigurationIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;

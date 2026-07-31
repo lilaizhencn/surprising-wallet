@@ -28,16 +28,25 @@ class InMemoryTokenRegistry implements TokenRegistry {
     /** 按 "chain:contractAddress" 键索引的代币缓存 */
     private final Map<String, TokenDefinition> byContract = new ConcurrentHashMap<>();
 
+    /**
+     * 获取或查询 {@code find} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public Optional<TokenDefinition> find(String chain, String symbol) {
         return Optional.ofNullable(byKey.get(key(chain, symbol)));
     }
 
+    /**
+     * 获取或查询 {@code findByContract} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public Optional<TokenDefinition> findByContract(String chain, String contractAddress) {
         return Optional.ofNullable(byContract.get(key(chain, contractAddress)));
     }
 
+    /**
+     * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
+     */
     @Override
     public List<TokenDefinition> list(String chain) {
         ArrayList<TokenDefinition> tokens = new ArrayList<>();
@@ -65,9 +74,15 @@ class InMemoryTokenRegistry implements TokenRegistry {
             byContract.put(key(tokenDefinition.getChain(), tokenDefinition.getContractAddress()), tokenDefinition);
         }
     }
+    /**
+     * 执行 {@code key} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String key(String chain, String value) {
         return normalize(chain) + ":" + normalize(value);
     }
+    /**
+     * 转换或计算 {@code normalize} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalize(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }

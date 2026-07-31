@@ -30,6 +30,9 @@ public class TronClientFactory {
 
     /** RPC 节点故障转移服务 */
     private final ChainRpcNodeService rpcNodeService;
+    /**
+     * 构建或生成 {@code create} 对应的结果，并执行输入和状态校验。
+     */
     public TronTridentClient create() {
         AccountChainProfile profile = repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for TRON"));
@@ -39,12 +42,18 @@ public class TronClientFactory {
                 rpcNodeService.enabledNodes(CHAIN, profile.getNetwork(), "solidity"), fullNode);
         return new TronTridentClient(fullNode, solidityNode, rpcNodeService);
     }
+    /**
+     * 执行 {@code first} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static ChainRpcNode first(List<ChainRpcNode> nodes, String message) {
         if (nodes == null || nodes.isEmpty()) {
             throw new IllegalStateException(message);
         }
         return nodes.get(0);
     }
+    /**
+     * 执行 {@code firstOrSame} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static ChainRpcNode firstOrSame(List<ChainRpcNode> nodes, ChainRpcNode fallback) {
         return nodes == null || nodes.isEmpty() ? fallback : nodes.get(0);
     }

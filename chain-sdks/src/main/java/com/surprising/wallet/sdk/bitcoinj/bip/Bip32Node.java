@@ -39,18 +39,54 @@ import java.util.Map;
  * 深度、父指纹、序号、链码和密钥数据。
  */
 public class Bip32Node {
+    /**
+     * 定义 {@code TYPE_BITCOIN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     public static final int TYPE_BITCOIN = 0;
+    /**
+     * 定义 {@code TYPE_LITECOIN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     public static final int TYPE_LITECOIN = 1;
 
+    /**
+     * 定义 {@code BIP_SEED} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final byte[] BIP_SEED = "Bitcoin seed".getBytes(StandardCharsets.US_ASCII);
+    /**
+     * 定义 {@code BIT_MAIN_PRIV} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final byte[] BIT_MAIN_PRIV = {(byte) 0x04, (byte) 0x88, (byte) 0xAD, (byte) 0xE4};
+    /**
+     * 定义 {@code BIT_MAIN_PUB} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final byte[] BIT_MAIN_PUB = {(byte) 0x04, (byte) 0x88, (byte) 0xB2, (byte) 0x1E};
+    /**
+     * 定义 {@code BIT_TEST_PRIV} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final byte[] BIT_TEST_PRIV = {(byte) 0x04, (byte) 0x35, (byte) 0x83, (byte) 0x94};
+    /**
+     * 定义 {@code BIT_TEST_PUB} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final byte[] BIT_TEST_PUB = {(byte) 0x04, (byte) 0x35, (byte) 0x87, (byte) 0xCF};
+    /**
+     * 定义 {@code LITE_MAIN_PRIV} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final byte[] LITE_MAIN_PRIV = {(byte) 0x01, (byte) 0x9D, (byte) 0x9C, (byte) 0xFE};
+    /**
+     * 定义 {@code LITE_MAIN_PUB} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final byte[] LITE_MAIN_PUB = {(byte) 0x01, (byte) 0x9D, (byte) 0xA4, (byte) 0x62};
+    /**
+     * 定义 {@code LITE_TEST_PRIV} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final byte[] LITE_TEST_PRIV = {(byte) 0x04, (byte) 0x36, (byte) 0xEF, (byte) 0x7D};
+    /**
+     * 定义 {@code LITE_TEST_PUB} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final byte[] LITE_TEST_PUB = {(byte) 0x04, (byte) 0x36, (byte) 0xF6, (byte) 0xE1};
+    /**
+     * 定义 {@code HEADERS} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final Map<String, byte[]> HEADERS = new HashMap<>();
 
     static {
@@ -64,16 +100,37 @@ public class Bip32Node {
         HEADERS.put("LITE_TEST_PUB", LITE_TEST_PUB);
     }
 
+    /**
+     * 保存 {@code ecKey}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
+     */
     private final ECKey ecKey;
+    /**
+     * 保存 {@code chainCode}，表示链、网络、资产或代币配置。
+     */
     private final byte[] chainCode;
+    /**
+     * 保存 {@code depth}，用于承载当前对象的运行配置或业务数据。
+     */
     private final int depth;
+    /**
+     * 保存 {@code parent}，用于承载当前对象的运行配置或业务数据。
+     */
     private final int parent;
+    /**
+     * 保存 {@code sequence}，用于承载当前对象的运行配置或业务数据。
+     */
     private final int sequence;
 
+    /**
+     * 构造 {@code Bip32Node}，初始化该组件运行所需的状态和依赖。
+     */
     public Bip32Node(ECKey ecKey, byte[] chainCode) {
         this(ecKey, chainCode, 0, 0, 0);
     }
 
+    /**
+     * 构造 {@code Bip32Node}，初始化该组件运行所需的状态和依赖。
+     */
     public Bip32Node(ECKey ecKey, byte[] chainCode, int depth, int parent, int sequence) {
         if (ecKey == null || chainCode == null || chainCode.length != 32) {
             throw new IllegalArgumentException("key and 32-byte chain code are required");
@@ -85,6 +142,9 @@ public class Bip32Node {
         this.sequence = sequence;
     }
 
+    /**
+     * 获取或查询 {@code getMasterKey} 对应的数据，供调用方读取当前状态。
+     */
     public static Bip32Node getMasterKey(byte[] seed) {
         byte[] result = Tools.hmacSha512(seed, BIP_SEED);
         byte[] left = Arrays.copyOfRange(result, 0, 32);
@@ -97,14 +157,23 @@ public class Bip32Node {
         return new Bip32Node(ECKey.fromPrivate(key, true), right, 0, 0, 0);
     }
 
+    /**
+     * 获取或查询 {@code getChild} 对应的数据，供调用方读取当前状态。
+     */
     public Bip32Node getChild(int sequence) {
         return getChildNode(this, sequence);
     }
 
+    /**
+     * 获取或查询 {@code getChildH} 对应的数据，供调用方读取当前状态。
+     */
     public Bip32Node getChildH(int sequence) {
         return getChildNode(this, getHSeq(sequence));
     }
 
+    /**
+     * 获取或查询 {@code getChildNode} 对应的数据，供调用方读取当前状态。
+     */
     public static Bip32Node getChildNode(Bip32Node node, int sequence) {
         if (node == null) {
             throw new IllegalArgumentException("node must not be null");
@@ -154,6 +223,9 @@ public class Bip32Node {
                 node.getDepth() + 1, node.fingerprint(), sequence);
     }
 
+    /**
+     * 执行 {@code fingerprint} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public int fingerprint() {
         byte[] encoded = DigestHash.sha256hash160(ecKey.getPubKey());
         int result = 0;
@@ -164,6 +236,9 @@ public class Bip32Node {
         return result;
     }
 
+    /**
+     * 执行 {@code privSerialize} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public String privSerialize(int coinType, boolean isMainNet) {
         if (!ecKey.hasPrivKey()) {
             throw new IllegalStateException("node does not contain a private key");
@@ -171,10 +246,16 @@ public class Bip32Node {
         return serialize(coinType, isMainNet, true);
     }
 
+    /**
+     * 执行 {@code pubSerialize} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public String pubSerialize(int coinType, boolean isMainNet) {
         return serialize(coinType, isMainNet, false);
     }
 
+    /**
+     * 编码或序列化 {@code serialize} 对应的数据，生成链上或接口需要的表示。
+     */
     private String serialize(int coinType, boolean isMainNet, boolean isPrivate) {
         byte[] result = new byte[78];
         int pos = 0;
@@ -200,15 +281,24 @@ public class Bip32Node {
         return Tools.byteToString(result);
     }
 
+    /**
+     * 获取或查询 {@code getHeaderKey} 对应的数据，供调用方读取当前状态。
+     */
     private static String getHeaderKey(int coinType, boolean isMainNet, boolean isPrivate) {
         String coin = coinType == TYPE_BITCOIN ? "BIT" : "LITE";
         return coin + "_" + (isMainNet ? "MAIN" : "TEST") + "_" + (isPrivate ? "PRIV" : "PUB");
     }
 
+    /**
+     * 获取或查询 {@code getAddress} 对应的数据，供调用方读取当前状态。
+     */
     public String getAddress(NetworkParameters params) {
         return Tools.ecKeyToAddress(ecKey, params);
     }
 
+    /**
+     * 解析或转换 {@code decode} 对应的数据，并校验其格式和边界。
+     */
     public static Bip32Node decode(String serialized) {
         try {
             byte[] data = Base58.decodeChecked(serialized);
@@ -247,16 +337,25 @@ public class Bip32Node {
         }
     }
 
+    /**
+     * 判断 {@code isPrivateHeader} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private static boolean isPrivateHeader(byte[] header) {
         return Arrays.areEqual(header, BIT_MAIN_PRIV) || Arrays.areEqual(header, BIT_TEST_PRIV)
                 || Arrays.areEqual(header, LITE_MAIN_PRIV) || Arrays.areEqual(header, LITE_TEST_PRIV);
     }
 
+    /**
+     * 判断 {@code isPublicHeader} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private static boolean isPublicHeader(byte[] header) {
         return Arrays.areEqual(header, BIT_MAIN_PUB) || Arrays.areEqual(header, BIT_TEST_PUB)
                 || Arrays.areEqual(header, LITE_MAIN_PUB) || Arrays.areEqual(header, LITE_TEST_PUB);
     }
 
+    /**
+     * 获取或查询 {@code getHSeq} 对应的数据，供调用方读取当前状态。
+     */
     public static int getHSeq(int sequence) {
         if (sequence < 0 || sequence >= 0x80000000L) {
             throw new IllegalArgumentException("invalid hardened child index");
@@ -264,6 +363,9 @@ public class Bip32Node {
         return sequence | 0x80000000;
     }
 
+    /**
+     * 执行 {@code writeInt32BE} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static void writeInt32BE(int value, byte[] out, int offset) {
         out[offset] = (byte) ((value >>> 24) & 0xff);
         out[offset + 1] = (byte) ((value >>> 16) & 0xff);
@@ -271,6 +373,9 @@ public class Bip32Node {
         out[offset + 3] = (byte) (value & 0xff);
     }
 
+    /**
+     * 获取或查询 {@code readInt32BE} 对应的数据，供调用方读取当前状态。
+     */
     private static int readInt32BE(byte[] in, int offset) {
         return ((in[offset] & 0xff) << 24)
                 | ((in[offset + 1] & 0xff) << 16)
@@ -278,22 +383,37 @@ public class Bip32Node {
                 | (in[offset + 3] & 0xff);
     }
 
+    /**
+     * 获取或查询 {@code getEcKey} 对应的数据，供调用方读取当前状态。
+     */
     public ECKey getEcKey() {
         return ecKey;
     }
 
+    /**
+     * 获取或查询 {@code getChainCode} 对应的数据，供调用方读取当前状态。
+     */
     public byte[] getChainCode() {
         return Arrays.copyOf(chainCode, chainCode.length);
     }
 
+    /**
+     * 获取或查询 {@code getDepth} 对应的数据，供调用方读取当前状态。
+     */
     public int getDepth() {
         return depth;
     }
 
+    /**
+     * 获取或查询 {@code getParent} 对应的数据，供调用方读取当前状态。
+     */
     public int getParent() {
         return parent;
     }
 
+    /**
+     * 获取或查询 {@code getSequence} 对应的数据，供调用方读取当前状态。
+     */
     public int getSequence() {
         return sequence;
     }

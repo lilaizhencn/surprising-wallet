@@ -7,6 +7,9 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
+/**
+ * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -29,25 +32,88 @@ import java.time.Instant;
  */
 @AllArgsConstructor
 public class ChainRpcNode {
+    /**
+     * 保存 {@code id}，用于标识交易、区块或业务记录。
+     */
     private Long id;
+    /**
+     * 保存 {@code chain}，表示链、网络、资产或代币配置。
+     */
     private String chain;
+    /**
+     * 保存 {@code network}，表示链、网络、资产或代币配置。
+     */
     private String network;
+    /**
+     * 保存 {@code environment}，用于承载当前对象的运行配置或业务数据。
+     */
     private String environment;
+    /**
+     * 保存 {@code nodeLabel}，用于承载当前对象的运行配置或业务数据。
+     */
     private String nodeLabel;
+    /**
+     * 保存 {@code purpose}，用于承载当前对象的运行配置或业务数据。
+     */
     private String purpose;
+    /**
+     * 保存 {@code connectionType}，用于承载当前对象的运行配置或业务数据。
+     */
     private String connectionType;
+    /**
+     * 保存 {@code rpcUrl}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private String rpcUrl;
+    /**
+     * 保存 {@code authType}，用于保存签名、认证或密钥相关材料。
+     */
     private String authType;
+    /**
+     * 保存 {@code authHeaderName}，用于保存签名、认证或密钥相关材料。
+     */
     private String authHeaderName;
+    /**
+     * 保存 {@code apiKey}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
+     */
     private String apiKey;
+    /**
+     * 保存 {@code apiKeyRef}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
+     */
     private String apiKeyRef;
+    /**
+     * 保存 {@code username}，用于承载当前对象的运行配置或业务数据。
+     */
     private String username;
+    /**
+     * 保存 {@code usernameRef}，用于承载当前对象的运行配置或业务数据。
+     */
     private String usernameRef;
+    /**
+     * 保存 {@code password}，用于保存签名、认证或密钥相关材料。
+     */
     private String password;
+    /**
+     * 保存 {@code passwordRef}，用于保存签名、认证或密钥相关材料。
+     */
     private String passwordRef;
+    /**
+     * 保存 {@code priority}，用于承载当前对象的运行配置或业务数据。
+     */
     private Integer priority;
+    /**
+     * 保存 {@code minRequestIntervalMs}，用于承载当前对象的运行配置或业务数据。
+     */
     private Integer minRequestIntervalMs;
+    /**
+     * 保存 {@code enabled}，记录开关、处理状态、确认结果或重试信息。
+     */
     private Boolean enabled;
+    /**
+     * 保存 {@code renewalDueAt}，用于承载当前对象的运行配置或业务数据。
+     */
     private Instant renewalDueAt;
+    /**
+     * 保存 {@code remark}，用于承载当前对象的运行配置或业务数据。
+     */
     private String remark;
 }

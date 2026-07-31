@@ -11,8 +11,14 @@ import java.math.RoundingMode;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+/**
+ * 验证 {@code EvmFeeSupportTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class EvmFeeSupportTest {
 
+    /**
+     * 验证 {@code standardFeeUsesReceiptExecutionGasOnly} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void standardFeeUsesReceiptExecutionGasOnly() {
         EvmFeeSupport.FeeComponents fee = EvmFeeSupport.actualFee(
@@ -26,6 +32,9 @@ class EvmFeeSupportTest {
         assertEquals(BigInteger.valueOf(210_000), fee.total());
     }
 
+    /**
+     * 验证 {@code separateL1ModelAddsReceiptL1FeeWithoutGuessingFromGasPrice} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void separateL1ModelAddsReceiptL1FeeWithoutGuessingFromGasPrice() {
         EvmFeeSupport.FeeComponents fee = EvmFeeSupport.actualFee(
@@ -38,6 +47,9 @@ class EvmFeeSupportTest {
         assertEquals(BigInteger.valueOf(210_100), fee.total());
     }
 
+    /**
+     * 验证 {@code arbitrumSplitsParentChainGasWithoutDoubleChargingIt} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void arbitrumSplitsParentChainGasWithoutDoubleChargingIt() {
         EvmFeeSupport.FeeComponents fee = EvmFeeSupport.actualFee(
@@ -50,6 +62,9 @@ class EvmFeeSupportTest {
         assertEquals(BigInteger.valueOf(150_000), fee.total());
     }
 
+    /**
+     * 验证 {@code separateL1ModelFailsClosedWhenReceiptOmitsL1Fee} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void separateL1ModelFailsClosedWhenReceiptOmitsL1Fee() {
         IllegalStateException error = assertThrows(IllegalStateException.class,
@@ -61,6 +76,9 @@ class EvmFeeSupportTest {
         assertEquals("scroll receipt is missing l1Fee", error.getMessage());
     }
 
+    /**
+     * 验证 {@code nativeUnitConversionUsesConfiguredDecimals} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void nativeUnitConversionUsesConfiguredDecimals() {
         assertEquals("1.234567",
@@ -72,6 +90,9 @@ class EvmFeeSupportTest {
                         .toPlainString());
     }
 
+    /**
+     * 验证 {@code policyParsersRejectAmbiguousLegacyL2Value} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void policyParsersRejectAmbiguousLegacyL2Value() {
         assertEquals(EvmGasPolicy.EIP1559, EvmGasPolicy.parse("eip1559"));
@@ -80,6 +101,9 @@ class EvmFeeSupportTest {
         assertThrows(IllegalArgumentException.class, () -> EvmFeeModel.parse("unknown"));
     }
 
+    /**
+     * 验证 {@code profile} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private AccountChainProfile profile(String feeModel) {
         return AccountChainProfile.builder()
                 .chain("TEST")

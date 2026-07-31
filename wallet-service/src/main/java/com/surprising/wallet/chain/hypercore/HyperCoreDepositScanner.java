@@ -43,7 +43,13 @@ class HyperCoreDepositScanner {
     /** 链通用数据库仓库 */
     private final ChainJdbcRepository chainRepository;
 
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper = new ObjectMapper();
+    /**
+     * 扫描或观察 {@code scanAndCredit} 对应的链上状态，并转换为业务可用结果。
+     */
     public void scanAndCredit(AccountChainProfile profile) {
         syncSpotMetadata(profile.getNetwork());
         List<ChainAddressRecord> addresses = chainRepository.listChainAddresses(CHAIN).stream()
@@ -68,12 +74,18 @@ class HyperCoreDepositScanner {
                             CHAIN, address.getAssetSymbol(), address.getAddress(), delta));
         }
     }
+    /**
+     * 执行 {@code spotState} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public JsonNode spotState(String address) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("type", "spotClearinghouseState");
         body.put("user", address);
         return apiClient.postInfo(body);
     }
+    /**
+     * 执行 {@code syncSpotMetadata} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public void syncSpotMetadata(String network) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("type", "spotMeta");
@@ -110,6 +122,9 @@ class HyperCoreDepositScanner {
                     spot.path("isCanonical").asBoolean(false));
         }
     }
+    /**
+     * 执行 {@code balancesBySymbol} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Map<String, BigDecimal> balancesBySymbol(JsonNode state) {
         Map<String, BigDecimal> balances = new LinkedHashMap<>();
         for (JsonNode balance : state.path("balances")) {
@@ -123,6 +138,9 @@ class HyperCoreDepositScanner {
         }
         return balances;
     }
+    /**
+     * 转换或计算 {@code decimal} 对应的值，统一金额、格式和边界规则。
+     */
     private static BigDecimal decimal(String value) {
         if (value == null || value.isBlank()) {
             return BigDecimal.ZERO;

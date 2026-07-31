@@ -37,6 +37,9 @@ import static com.surprising.wallet.common.utils.Constants.WALLET_DEPOSIT_KEY;
 @Slf4j
 @Component
 public class TransactionService {
+    /**
+     * 定义 {@code INTERNAL_BIZ} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final int INTERNAL_BIZ = 0;
     /**
      * 地址服务，负责解析地址归属关系，用于内部转账识别。
@@ -62,6 +65,9 @@ public class TransactionService {
     @Autowired
     WalletRuntimeConfigService runtimeConfigService;
 
+    /**
+     * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
+     */
     @Autowired
     StringRedisTemplate redis;
 

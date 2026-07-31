@@ -32,14 +32,26 @@ import java.util.Set;
  * <p>验证结果通过{@link ValidationResult}返回，包含有效性标志、错误列表、输入/签名计数和交易ID。</p>
  */
 public class TransactionBroadcastValidator {
+    /**
+     * 定义 {@code HEX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final HexFormat HEX = HexFormat.of();
 
+    /**
+     * 保存 {@code params}，用于承载当前对象的运行配置或业务数据。
+     */
     private final NetworkParameters params;
 
+    /**
+     * 构造 {@code TransactionBroadcastValidator}，初始化该组件运行所需的状态和依赖。
+     */
     public TransactionBroadcastValidator(NetworkParameters params) {
         this.params = params;
     }
 
+    /**
+     * 校验 {@code validate} 对应的前置条件，不满足时抛出明确异常。
+     */
     public ValidationResult validate(String hex) {
         List<String> errors = new ArrayList<>();
         int inputCount = 0;
@@ -110,13 +122,34 @@ public class TransactionBroadcastValidator {
         return new ValidationResult(errors.isEmpty(), errors, inputCount, signatureCount, txId);
     }
 
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     public static class ValidationResult {
+        /**
+         * 保存 {@code valid}，用于标识交易、区块或业务记录。
+         */
         public final boolean valid;
+        /**
+         * 保存 {@code errors}，用于承载当前对象的运行配置或业务数据。
+         */
         public final List<String> errors;
+        /**
+         * 保存 {@code inputCount}，用于承载当前对象的运行配置或业务数据。
+         */
         public final int inputCount;
+        /**
+         * 保存 {@code signatureCount}，用于保存签名、认证或密钥相关材料。
+         */
         public final int signatureCount;
+        /**
+         * 保存 {@code txId}，用于标识交易、区块或业务记录。
+         */
         public final String txId;
 
+        /**
+         * 构造 {@code ValidationResult}，初始化该组件运行所需的状态和依赖。
+         */
         public ValidationResult(boolean valid, List<String> errors, int inputCount, int signatureCount, String txId) {
             this.valid = valid;
             this.errors = errors == null ? new ArrayList<>() : errors;
@@ -125,6 +158,9 @@ public class TransactionBroadcastValidator {
             this.txId = txId;
         }
 
+        /**
+         * 将对象转换为便于日志记录和排障的字符串表示。
+         */
         @Override
         public String toString() {
             return "ValidationResult{valid=" + valid + ", txId='" + txId + "', inputCount="

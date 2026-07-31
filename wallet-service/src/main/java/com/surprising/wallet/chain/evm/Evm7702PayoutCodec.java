@@ -11,8 +11,13 @@ import org.web3j.abi.datatypes.generated.Uint256;
 
 import java.util.List;
 
-/** ABI codec for Eip7702PayoutDelegate.payoutBatch. */
+/**
+ * 负责链上地址、交易或合约数据的编码、解码和格式校验。
+ */
 public class Evm7702PayoutCodec {
+    /**
+     * 编码或序列化 {@code encode} 对应的数据，生成链上或接口需要的表示。
+     */
     public String encode(Evm7702PayoutRequest request, byte[] signature) {        if (signature == null || signature.length != 65) {
             throw new IllegalArgumentException("payout authority signature must contain 65 bytes");
         }
@@ -26,7 +31,13 @@ public class Evm7702PayoutCodec {
                 List.of());
         return FunctionEncoder.encode(function);
     }
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     public static final class PayoutItemStruct extends StaticStruct {
+        /**
+         * 构造 {@code PayoutItemStruct}，初始化该组件运行所需的状态和依赖。
+         */
         PayoutItemStruct(Evm7702PayoutItem item) {
             super(new Bytes32(item.withdrawalId()), new Uint256(item.itemIndex()),
                     new Address(item.token()), new Address(item.recipient()),

@@ -36,14 +36,35 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
  */
 @Service
 public class CustodyWebhookService {
+    /**
+     * 定义 {@code DELIVERY_STATUSES} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final java.util.Set<String> DELIVERY_STATUSES = java.util.Set.of(
             "PENDING", "DELIVERING", "DELIVERED", "RETRY", "FAILED");
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final CustodyRepository repository;
+    /**
+     * 保存 {@code crypto}，用于承载当前对象的运行配置或业务数据。
+     */
     private final CustodyCryptoService crypto;
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper;
+    /**
+     * 保存 {@code httpClient}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final HttpClient httpClient;
+    /**
+     * 保存 {@code production}，用于承载当前对象的运行配置或业务数据。
+     */
     private final boolean production;
 
+    /**
+     * 构造 {@code CustodyWebhookService}，初始化该组件运行所需的状态和依赖。
+     */
     public CustodyWebhookService(CustodyRepository repository,
                                  CustodyCryptoService crypto,
                                  ObjectMapper objectMapper,
@@ -60,6 +81,9 @@ public class CustodyWebhookService {
                 .build();
     }
 
+    /**
+     * 构建或生成 {@code create} 对应的结果，并执行输入和状态校验。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public CreatedWebhook create(CustodyPrincipal principal, CreateWebhookCommand command, String sourceIp) {
         requireTenantAdmin(principal);
@@ -78,11 +102,17 @@ public class CustodyWebhookService {
                 saved.id(), saved.name(), saved.url(), saved.status(),
                 secret, saved.createdAt());
     }
+    /**
+     * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
+     */
     public List<Map<String, Object>> list(CustodyPrincipal principal) {
         requireScope(principal, "webhooks:read");
         return repository.listWebhookEndpoints(principal.tenantId());
     }
 
+    /**
+     * 验证 {@code verify} 对应的签名、交易或数据证明是否有效。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public WebhookEndpointRecord verify(CustodyPrincipal principal, UUID endpointId, String sourceIp) {
         requireTenantAdmin(principal);
@@ -118,6 +148,9 @@ public class CustodyWebhookService {
         return repository.requireWebhookEndpoint(principal.tenantId(), endpointId);
     }
 
+    /**
+     * 设置或更新 {@code setEnabled} 对应的状态，并保持相关业务字段一致。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void setEnabled(CustodyPrincipal principal, UUID endpointId, boolean enabled, String sourceIp) {
         requireTenantAdmin(principal);
@@ -132,6 +165,9 @@ public class CustodyWebhookService {
                 "{\"status\":\"" + status + "\"}");
     }
 
+    /**
+     * 执行 {@code deliveries} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public List<Map<String, Object>> deliveries(CustodyPrincipal principal, UUID endpointId,
                                                 String status, int limit, int offset) {
         requireScope(principal, "webhooks:read");
@@ -140,6 +176,9 @@ public class CustodyWebhookService {
                 principal.tenantId(), endpointId, normalizedStatus, limit, offset);
     }
 
+    /**
+     * 执行 {@code deliveryAttempts} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public List<Map<String, Object>> deliveryAttempts(
             CustodyPrincipal principal, UUID deliveryId, int limit, int offset) {
         requireScope(principal, "webhooks:read");
@@ -150,6 +189,9 @@ public class CustodyWebhookService {
                 principal.tenantId(), deliveryId, limit, offset);
     }
 
+    /**
+     * 处理 {@code retry} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void retry(CustodyPrincipal principal, UUID deliveryId, String sourceIp) {
         requireTenantAdmin(principal);
@@ -158,6 +200,9 @@ public class CustodyWebhookService {
                 "WEBHOOK.DELIVERY_RETRY", "WEBHOOK_DELIVERY", deliveryId.toString(), sourceIp, "{}");
     }
 
+    /**
+     * 处理 {@code retryFailed} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public int retryFailed(CustodyPrincipal principal, UUID endpointId, String sourceIp) {
         requireTenantAdmin(principal);
@@ -171,6 +216,9 @@ public class CustodyWebhookService {
                 json(Map.of("queued", queued, "statuses", List.of("FAILED", "RETRY"))));
         return queued;
     }
+    /**
+     * 转换或计算 {@code normalizeDeliveryStatus} 对应的值，统一金额、格式和边界规则。
+     */
     private String normalizeDeliveryStatus(String status) {
         String normalized = status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
         if (normalized.isBlank()) {
@@ -182,6 +230,9 @@ public class CustodyWebhookService {
         return normalized;
     }
 
+    /**
+     * 发送或广播 {@code send} 对应的链上请求，并返回节点处理结果。
+     */
     public WebhookHttpResult send(String url, String secret, UUID eventId,
                                   String eventType, String body) {
         URI uri = validateEndpoint(url);
@@ -216,6 +267,9 @@ public class CustodyWebhookService {
             throw new IllegalStateException("webhook request failed: " + e.getMessage(), e);
         }
     }
+    /**
+     * 校验 {@code validateEndpoint} 对应的前置条件，不满足时抛出明确异常。
+     */
     URI validateEndpoint(String value) {
         String url = value == null ? "" : value.trim();
         if (url.isBlank() || url.length() > 2048) {
@@ -247,6 +301,9 @@ public class CustodyWebhookService {
             throw new IllegalArgumentException("webhook URL is invalid or cannot be resolved", e);
         }
     }
+    /**
+     * 编码 {@code json} 对应的数据，生成链上或接口所需的表示。
+     */
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -254,6 +311,9 @@ public class CustodyWebhookService {
             throw new IllegalStateException("failed to serialize webhook payload", e);
         }
     }
+    /**
+     * 校验 {@code required} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static String required(String value, String field, int maxLength) {
         String result = value == null ? "" : value.trim();
         if (result.isBlank() || result.length() > maxLength) {
@@ -261,11 +321,17 @@ public class CustodyWebhookService {
         }
         return result;
     }
+    /**
+     * 校验 {@code requireTenantAdmin} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static void requireTenantAdmin(CustodyPrincipal principal) {
         if (principal == null || !"TENANT_ADMIN".equals(principal.role())) {
             throw new CustodyForbiddenException("tenant administrator required");
         }
     }
+    /**
+     * 校验 {@code requireScope} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static void requireScope(CustodyPrincipal principal, String scope) {
         if (principal == null || !principal.hasScope(scope)) {
             throw new CustodyForbiddenException(scope + " scope required");

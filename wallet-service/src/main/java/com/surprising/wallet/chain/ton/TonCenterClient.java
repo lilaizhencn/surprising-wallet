@@ -68,15 +68,24 @@ class TonCenterClient {
     /** 上次请求时间戳（用于无 API Key 时的速率限制） */
     private long lastRequestMillis;
 
+    /**
+     * 构造 {@code TonCenterClient}，初始化该组件运行所需的状态和依赖。
+     */
     @Autowired
     public TonCenterClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
         this(new ObjectMapper(), repository, rpcNodeService, null, null);
     }
 
+    /**
+     * 构造 {@code TonCenterClient}，初始化该组件运行所需的状态和依赖。
+     */
     TonCenterClient(ObjectMapper objectMapper, String baseUrl, String apiKey) {
         this(objectMapper, null, null, baseUrl, apiKey);
     }
 
+    /**
+     * 构造 {@code TonCenterClient}，初始化该组件运行所需的状态和依赖。
+     */
     private TonCenterClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
                             ChainRpcNodeService rpcNodeService, String baseUrl, String apiKey) {
         this.objectMapper = objectMapper;
@@ -94,12 +103,21 @@ class TonCenterClient {
     public JsonNode masterchainInfo() {
         return get("/getMasterchainInfo");
     }
+    /**
+     * 添加 {@code addressInformation} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     public JsonNode addressInformation(String address) {
         return get("/getAddressInformation?address=" + encode(address));
     }
+    /**
+     * 执行 {@code walletInformation} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public JsonNode walletInformation(String address) {
         return get("/getWalletInformation?address=" + encode(address));
     }
+    /**
+     * 执行 {@code balance} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long balance(String address) {
         return get("/getAddressBalance?address=" + encode(address)).asLong();
     }
@@ -113,6 +131,9 @@ class TonCenterClient {
         JsonNode wallet = get("/getWalletInformation?address=" + encode(address));
         return wallet.path("seqno").asLong(0);
     }
+    /**
+     * 执行 {@code transactions} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public JsonNode transactions(String address, int limit) {
         return get("/getTransactions?address=" + encode(address) + "&limit=" + limit + "&archival=true");
     }
@@ -152,6 +173,9 @@ class TonCenterClient {
         }
         return Optional.empty();
     }
+    /**
+     * 执行或处理 {@code runGetMethod} 对应的业务流程，并维护状态和异常边界。
+     */
     public JsonNode runGetMethod(String address, String method, JsonNode stack) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("address", address);
@@ -159,9 +183,15 @@ class TonCenterClient {
         body.set("stack", stack);
         return post("/runGetMethod", body);
     }
+    /**
+     * 获取或查询 {@code get} 对应的数据，供调用方读取当前状态。
+     */
     private JsonNode get(String path) {
         return request("GET", path, null);
     }
+    /**
+     * 执行 {@code post} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private JsonNode post(String path, JsonNode body) {
         try {
             return request("POST", path, objectMapper.writeValueAsString(body));
@@ -169,6 +199,9 @@ class TonCenterClient {
             throw new IllegalStateException("TON request serialization failed", e);
         }
     }
+    /**
+     * 执行 {@code request} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private JsonNode request(String method, String path, String body) {
         if (fixedBaseUrl != null && !fixedBaseUrl.isBlank()) {
             return execute(method, URI.create(fixedBaseUrl + path), body, null, fixedApiKey);
@@ -180,6 +213,9 @@ class TonCenterClient {
                 node -> execute(method, URI.create(trim(node.getRpcUrl()) + path), body, node,
                         node.getApiKey() == null ? "" : node.getApiKey()));
     }
+    /**
+     * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
+     */
     private synchronized JsonNode execute(String method, URI uri, String body, ChainRpcNode node, String apiKey) {
         int attempts = 3;
         IllegalStateException lastFailure = null;
@@ -240,10 +276,16 @@ class TonCenterClient {
         }
         throw lastFailure == null ? new IllegalStateException("TON Center request failed") : lastFailure;
     }
+    /**
+     * 判断 {@code isRetryable} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private static boolean isRetryable(int statusCode) {
         return statusCode == 429 || statusCode == 500 || statusCode == 502
                 || statusCode == 503 || statusCode == 504;
     }
+    /**
+     * 转换或计算 {@code sleepBeforeRetry} 对应的值，统一金额、格式和边界规则。
+     */
     private static void sleepBeforeRetry(int attempt) {
         try {
             Thread.sleep(1_500L * attempt);
@@ -252,15 +294,24 @@ class TonCenterClient {
             throw new IllegalStateException("TON Center request interrupted", e);
         }
     }
+    /**
+     * 执行 {@code abbreviate} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String abbreviate(String value) {
         if (value == null || value.isBlank()) {
             return "<empty>";
         }
         return value.length() <= 500 ? value : value.substring(0, 500) + "...";
     }
+    /**
+     * 编码或序列化 {@code encode} 对应的数据，生成链上或接口需要的表示。
+     */
     private static String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
+    /**
+     * 执行 {@code trim} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String trim(String value) {
         return value == null ? "" : value.replaceAll("/+$", "");
     }
@@ -276,6 +327,9 @@ class TonCenterClient {
         byte[] secondBytes = decodeHash(second);
         return firstBytes != null && secondBytes != null && Arrays.equals(firstBytes, secondBytes);
     }
+    /**
+     * 解析或转换 {@code decodeHash} 对应的数据，并校验其格式和边界。
+     */
     private static byte[] decodeHash(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -294,6 +348,9 @@ class TonCenterClient {
             return null;
         }
     }
+    /**
+     * 构建或生成 {@code buildHttpClient} 对应的结果，并执行输入和状态校验。
+     */
     private static HttpClient buildHttpClient() {
         return HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)

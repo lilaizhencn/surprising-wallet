@@ -54,6 +54,9 @@ public interface CustodyAssetRecoveryChainGateway {
 
     /** 交易永久失败异常（如链上 revert），不可重试 */
     final class PermanentlyFailedTransactionException extends RuntimeException {
+        /**
+         * 构造 {@code PermanentlyFailedTransactionException}，初始化该组件运行所需的状态和依赖。
+         */
         public PermanentlyFailedTransactionException(String message) {
             super(message);
         }

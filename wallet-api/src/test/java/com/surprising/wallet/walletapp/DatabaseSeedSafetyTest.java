@@ -11,7 +11,13 @@ import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code DatabaseSeedSafetyTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class DatabaseSeedSafetyTest {
+    /**
+     * 验证 {@code unverifiedNewChainsStayDisabledInFreshDatabaseSeed} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void unverifiedNewChainsStayDisabledInFreshDatabaseSeed() throws Exception {
         String sql = databaseSeed();
@@ -59,10 +65,16 @@ class DatabaseSeedSafetyTest {
         }
     }
 
+    /**
+     * 验证 {@code assertRegex} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertRegex(String value, String regex, String message) {
         assertTrue(Pattern.compile(regex).matcher(value).find(), message);
     }
 
+    /**
+     * 验证 {@code databaseSeed} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String databaseSeed() throws IOException {
         Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath();
         while (current != null) {

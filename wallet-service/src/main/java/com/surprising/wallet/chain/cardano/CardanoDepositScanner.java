@@ -62,6 +62,9 @@ class CardanoDepositScanner {
     /** 运行时配置服务（可选） */
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
+    /**
+     * 扫描或观察 {@code scanAndCredit} 对应的链上状态，并转换为业务可用结果。
+     */
     public List<DepositEvent> scanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "cardano scanAndCredit");
         Map<String, TokenDefinition> tokensByUnit = tokensByUnit();
@@ -123,6 +126,9 @@ class CardanoDepositScanner {
         });
     }
 
+    /**
+     * 扫描或观察 {@code scanOutputs} 对应的链上状态，并转换为业务可用结果。
+     */
     private void scanOutputs(TrackedCardanoAddress tracked, TxContentUtxo utxo,
                              Map<String, TokenDefinition> tokensByUnit,
                              Set<String> managedAddresses,
@@ -165,6 +171,9 @@ class CardanoDepositScanner {
         }
     }
 
+    /**
+     * 处理 {@code depositForAmount} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private CreditableDeposit depositForAmount(String unit, BigInteger atomic,
                                                Map<String, TokenDefinition> tokensByUnit,
                                                AddressTransactionContent tx, TrackedCardanoAddress tracked,
@@ -195,6 +204,9 @@ class CardanoDepositScanner {
                 unit, output.toString());
         return new CreditableDeposit(event, addressRecord);
     }
+    /**
+     * 执行 {@code trackedDepositAddresses} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     Map<String, TrackedCardanoAddress> trackedDepositAddresses(Map<String, TokenDefinition> tokensByUnit) {
         Map<String, MutableTrackedCardanoAddress> addresses = new HashMap<>();
         for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, SYMBOL)) {
@@ -218,6 +230,9 @@ class CardanoDepositScanner {
         addresses.forEach((key, value) -> immutableAddresses.put(key, value.toRecord()));
         return immutableAddresses;
     }
+    /**
+     * 编码 {@code tokensByUnit} 对应的数据，生成链上或接口所需的表示。
+     */
     private Map<String, TokenDefinition> tokensByUnit() {
         Map<String, TokenDefinition> tokens = new HashMap<>();
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
@@ -227,12 +242,21 @@ class CardanoDepositScanner {
         }
         return tokens;
     }
+    /**
+     * 执行 {@code safeOutputs} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static List<TxContentUtxoOutputs> safeOutputs(TxContentUtxo utxo) {
         return utxo == null || utxo.getOutputs() == null ? List.of() : utxo.getOutputs();
     }
+    /**
+     * 执行 {@code safeAmounts} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static List<TxContentOutputAmount> safeAmounts(List<TxContentOutputAmount> amounts) {
         return amounts == null ? List.of() : amounts;
     }
+    /**
+     * 执行 {@code firstInputAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String firstInputAddress(TxContentUtxo utxo) {
         if (utxo == null || utxo.getInputs() == null) {
             return "";
@@ -244,6 +268,9 @@ class CardanoDepositScanner {
         }
         return "";
     }
+    /**
+     * 执行 {@code inputAddresses} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static Set<String> inputAddresses(TxContentUtxo utxo) {
         if (utxo == null || utxo.getInputs() == null) {
             return Set.of();
@@ -254,20 +281,35 @@ class CardanoDepositScanner {
                 .filter(address -> !address.isBlank())
                 .collect(Collectors.toSet());
     }
+    /**
+     * 执行 {@code reservedHotAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static boolean reservedHotAddress(ChainAddressRecord address) {
         return address.getUserId() == 0L && address.getBiz() == 0 && address.getAddressIndex() == 0L;
     }
+    /**
+     * 处理 {@code confirmations} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private static int confirmations(long latest, long blockHeight) {
         return (int) Math.min(Integer.MAX_VALUE, Math.max(1L, latest - blockHeight + 1L));
     }
+    /**
+     * 校验 {@code requiredConfirmations} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static int requiredConfirmations(AccountChainProfile profile) {
         Integer configured = profile.getDepositConfirmations();
         return configured == null || configured <= 0 ? 15 : configured;
     }
+    /**
+     * 扫描或观察 {@code scanLimit} 对应的链上状态，并转换为业务可用结果。
+     */
     private static int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 50 : Math.min(batchSize, 100);
     }
+    /**
+     * 转换或计算 {@code normalize} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalize(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
@@ -277,21 +319,45 @@ class CardanoDepositScanner {
     }
     private record CreditableDeposit(DepositEvent event, ChainAddressRecord addressRecord) {
     }
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     private static final class MutableTrackedCardanoAddress {
+        /**
+         * 保存 {@code normalizedAddress}，表示链、网络、资产或代币配置。
+         */
         private final String normalizedAddress;
+        /**
+         * 保存 {@code address}，表示链、网络、资产或代币配置。
+         */
         private final String address;
+        /**
+         * 保存 {@code nativeRecord}，表示链、网络、资产或代币配置。
+         */
         private ChainAddressRecord nativeRecord;
+        /**
+         * 保存 {@code tokenRecordsByUnit}，表示链、网络、资产或代币配置。
+         */
         private final Map<String, ChainAddressRecord> tokenRecordsByUnit = new HashMap<>();
 
+        /**
+         * 构造 {@code MutableTrackedCardanoAddress}，初始化该组件运行所需的状态和依赖。
+         */
         private MutableTrackedCardanoAddress(String normalizedAddress, String address) {
             this.normalizedAddress = normalizedAddress;
             this.address = address;
         }
 
+        /**
+         * 编码 {@code toRecord} 对应的数据，生成链上或接口所需的表示。
+         */
         private TrackedCardanoAddress toRecord() {
             return new TrackedCardanoAddress(normalizedAddress, address, nativeRecord, Map.copyOf(tokenRecordsByUnit));
         }
     }
+    /**
+     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);

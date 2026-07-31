@@ -19,14 +19,35 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code AptosLiveFungibleAssetFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class AptosLiveFungibleAssetFlowIntegrationTest {
+    /**
+     * 保存 {@code TESTNET_USDC}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String TESTNET_USDC =
             "0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832";
+    /**
+     * 保存 {@code OWNER_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long OWNER_INDEX = 1_310_011L;
+    /**
+     * 保存 {@code EXTERNAL_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long EXTERNAL_INDEX = 1_310_012L;
+    /**
+     * 保存 {@code HOT_USER_ID}，用于标识测试中的交易、区块或业务记录。
+     */
     private static final long HOT_USER_ID = 6_110L;
+    /**
+     * 保存 {@code HOT_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long HOT_INDEX = 1_310_010L;
 
+    /**
+     * 验证 {@code liveFaDepositWithdrawCollectionAndReplayAreSafe} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void liveFaDepositWithdrawCollectionAndReplayAreSafe() {
         Assumptions.assumeTrue(Boolean.getBoolean("aptos.fa.live.enabled"),
@@ -154,6 +175,9 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
                 """, Long.class));
     }
 
+    /**
+     * 验证 {@code external} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static ChainAddressRecord external(AptosKeyService keys, long index) {
         Ed25519DerivedKey key = keys.derive(6112L, 0, index);
         String address = AptosKeyService.address(key.publicKey());
@@ -172,10 +196,16 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
                 .build();
     }
 
+    /**
+     * 验证 {@code address} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String address(AptosKeyService keys, long userId, long index) {
         return AptosKeyService.address(keys.derive(userId, 0, index).publicKey());
     }
 
+    /**
+     * 验证 {@code requireFunding} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void requireFunding(AptosRpcClient rpc, String external, String owner,
                                        String metadataAddress, long depositAtomic) {
         Assumptions.assumeTrue(rpc.aptBalance(external) > 5_000_000L,
@@ -186,6 +216,9 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
                 "external Testnet account needs FA test funds: " + external);
     }
 
+    /**
+     * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal ledger(JdbcTemplate jdbc, UUID tenantId,
                                      String symbol, String accountId) {
         BigDecimal balance = jdbc.queryForObject("""
@@ -196,16 +229,25 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
         return balance == null ? BigDecimal.ZERO : balance;
     }
 
+    /**
+     * 验证 {@code assertAmountEquals} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertAmountEquals(BigDecimal expected, BigDecimal actual) {
         assertEquals(0, expected.compareTo(actual),
                 () -> "expected amount " + expected.toPlainString()
                         + " but was " + actual.toPlainString());
     }
 
+    /**
+     * 验证 {@code pow10} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static long pow10(int decimals) {
         return BigDecimal.TEN.pow(decimals).longValueExact();
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;

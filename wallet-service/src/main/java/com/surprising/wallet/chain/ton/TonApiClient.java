@@ -55,6 +55,9 @@ class TonApiClient {
     /** 固定 API Key（测试用） */
     private final String fixedApiKey;
 
+    /**
+     * 构造 {@code TonApiClient}，初始化该组件运行所需的状态和依赖。
+     */
     @Autowired
     public TonApiClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
         this.objectMapper = new ObjectMapper();
@@ -65,6 +68,9 @@ class TonApiClient {
         this.httpClient = buildHttpClient();
     }
 
+    /**
+     * 构造 {@code TonApiClient}，初始化该组件运行所需的状态和依赖。
+     */
     TonApiClient(ObjectMapper objectMapper, String baseUrl, String apiKey) {
         this.objectMapper = objectMapper;
         this.repository = null;

@@ -17,15 +17,42 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code AptosLiveNativeFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class AptosLiveNativeFlowIntegrationTest {
+    /**
+     * 保存 {@code OWNER_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long OWNER_INDEX = 1_300_001L;
+    /**
+     * 保存 {@code EXTERNAL_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long EXTERNAL_INDEX = 1_300_002L;
+    /**
+     * 保存 {@code HOT_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long HOT_INDEX = 0L;
+    /**
+     * 保存 {@code ONE_APT}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long ONE_APT = 100_000_000L;
+    /**
+     * 保存 {@code DEPOSIT_AMOUNT}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final BigDecimal DEPOSIT_AMOUNT = BigDecimal.ONE;
+    /**
+     * 保存 {@code WITHDRAW_AMOUNT}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final BigDecimal WITHDRAW_AMOUNT = new BigDecimal("0.2");
+    /**
+     * 保存 {@code COLLECTION_AMOUNT}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final BigDecimal COLLECTION_AMOUNT = new BigDecimal("0.3");
 
+    /**
+     * 验证 {@code liveAptDepositWithdrawCollectionAndReconciliationAreSafe} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void liveAptDepositWithdrawCollectionAndReconciliationAreSafe() {
         Assumptions.assumeTrue(Boolean.getBoolean("aptos.live.enabled"),
@@ -137,6 +164,9 @@ class AptosLiveNativeFlowIntegrationTest {
         System.out.println("APTOS_NATIVE_COLLECTION_TX=" + collectionHash);
     }
 
+    /**
+     * 验证 {@code waitForBalanceAtLeast} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void waitForBalanceAtLeast(AptosRpcClient rpc, String address, long amount, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
@@ -148,6 +178,9 @@ class AptosLiveNativeFlowIntegrationTest {
         throw new IllegalStateException("Aptos faucet balance did not arrive for " + address);
     }
 
+    /**
+     * 验证 {@code external} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static ChainAddressRecord external(AptosKeyService keys) {
         Ed25519DerivedKey key = keys.derive(6002L, 0, EXTERNAL_INDEX);
         String address = AptosKeyService.address(key.publicKey());
@@ -166,6 +199,9 @@ class AptosLiveNativeFlowIntegrationTest {
                 .build();
     }
 
+    /**
+     * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal ledger(JdbcTemplate jdbc, UUID tenantId, String accountId) {
         return jdbc.queryForObject("""
                 select coalesce(sum(total_balance), 0) from ledger_balance
@@ -174,6 +210,9 @@ class AptosLiveNativeFlowIntegrationTest {
                 """, BigDecimal.class, tenantId, accountId);
     }
 
+    /**
+     * 验证 {@code transactionGas} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static long transactionGas(AptosRpcClient rpc, String hash) {
         var transaction = rpc.transactionByHash(hash);
         return Math.multiplyExact(
@@ -181,15 +220,24 @@ class AptosLiveNativeFlowIntegrationTest {
                 transaction.path("gas_unit_price").asLong());
     }
 
+    /**
+     * 验证 {@code toOctas} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static long toOctas(BigDecimal amount) {
         return amount.movePointRight(8).longValueExact();
     }
 
+    /**
+     * 验证 {@code assertAmount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertAmount(BigDecimal expected, BigDecimal actual) {
         assertEquals(0, expected.compareTo(actual),
                 () -> "expected " + expected.toPlainString() + " but was " + actual.toPlainString());
     }
 
+    /**
+     * 验证 {@code sleep} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);
@@ -199,6 +247,9 @@ class AptosLiveNativeFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;

@@ -35,21 +35,33 @@ public record Evm7702CollectionRequest(
         requireUint(callGasLimit, "callGasLimit", false);
     }
 
+    /**
+     * 执行 {@code batchId} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Override
     public byte[] batchId() {
         return batchId.clone();
     }
+    /**
+     * 校验 {@code requireNotExpired} 对应的前置条件，不满足时抛出明确异常。
+     */
     public void requireNotExpired(Instant now) {
         if (deadline.compareTo(BigInteger.valueOf(now.getEpochSecond())) <= 0) {
             throw new IllegalArgumentException("collection signature deadline has expired");
         }
     }
+    /**
+     * 校验 {@code requireUint} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static void requireUint(BigInteger value, String field, boolean allowZero) {
         if (value == null || value.signum() < 0 || (!allowZero && value.signum() == 0)
                 || value.bitLength() > 256) {
             throw new IllegalArgumentException(field + " must be a valid uint256");
         }
     }
+    /**
+     * 校验 {@code requireAddress} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static String requireAddress(String value, String field, boolean allowZero) {
         String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         if (!normalized.matches("^0x[0-9a-f]{40}$")

@@ -37,13 +37,34 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code CardanoDevnetFullFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class CardanoDevnetFullFlowIntegrationTest {
+    /**
+     * 保存 {@code CHAIN}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String CHAIN = "ADA";
+    /**
+     * 保存 {@code SOURCE_USER}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long SOURCE_USER = 900_001L;
+    /**
+     * 保存 {@code USER}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long USER = 100_001L;
+    /**
+     * 保存 {@code EXTERNAL_USER}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long EXTERNAL_USER = 100_002L;
+    /**
+     * 保存 {@code TOKEN_SUPPLY}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final BigInteger TOKEN_SUPPLY = new BigInteger("1000000000");
 
+    /**
+     * 验证 {@code shouldExecuteNativeAndNativeAssetFullFlow} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldExecuteNativeAndNativeAssetFullFlow() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("cardano.devnet.flow.enabled"),
@@ -115,6 +136,9 @@ class CardanoDevnetFullFlowIntegrationTest {
                 ledger(repository, CHAIN, user.getAccountId()).getTotalBalance());
     }
 
+    /**
+     * 验证 {@code tokenFlow} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal tokenFlow(UUID tenantId, UUID custodyAddressId,
                                         JdbcTemplate jdbc, ChainJdbcRepository repository, CardanoKeyService keys,
                                         CardanoBackendClient backend, CardanoTransactionService transactions,
@@ -164,6 +188,9 @@ class CardanoDevnetFullFlowIntegrationTest {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /**
+     * 验证 {@code mint} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String mint(CardanoBackendClient backend, CardanoKeyService keys,
                                ChainAddressRecord source, String symbol) throws Exception {
         Ed25519DerivedKey derived = keys.derive(source.getUserId(), source.getBiz(), source.getAddressIndex());
@@ -185,6 +212,9 @@ class CardanoDevnetFullFlowIntegrationTest {
         return unit;
     }
 
+    /**
+     * 验证 {@code withdraw} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void withdraw(UUID tenantId, ChainJdbcRepository repository,
                                  CardanoTransactionService transactions,
                                  String orderNo, ChainAddressRecord from, ChainAddressRecord to,
@@ -208,6 +238,9 @@ class CardanoDevnetFullFlowIntegrationTest {
                 symbol, from.getAccountId(), amount));
     }
 
+    /**
+     * 验证 {@code collect} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String collect(UUID tenantId, UUID custodyAddressId,
                                   ChainJdbcRepository repository, CardanoTransactionService transactions,
                                   String collectionNo, ChainAddressRecord from, ChainAddressRecord hot,
@@ -231,6 +264,9 @@ class CardanoDevnetFullFlowIntegrationTest {
         return txHash;
     }
 
+    /**
+     * 验证 {@code assertInternalCollectionNotCredited} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertInternalCollectionNotCredited(
             JdbcTemplate jdbc, ChainJdbcRepository repository, String txHash,
             String symbol, String userAccountId, BigDecimal expectedLedger) {
@@ -241,6 +277,9 @@ class CardanoDevnetFullFlowIntegrationTest {
         assertAmount(expectedLedger, ledger(repository, symbol, userAccountId).getTotalBalance());
     }
 
+    /**
+     * 验证 {@code scanUntil} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static List<DepositEvent> scanUntil(CardanoDepositScanner scanner, String txHash, String symbol) {
         for (int attempt = 0; attempt < 40; attempt++) {
             List<DepositEvent> events = scanner.scanAndCredit();
@@ -253,10 +292,16 @@ class CardanoDevnetFullFlowIntegrationTest {
         throw new IllegalStateException("Cardano scanner did not find " + symbol + " transaction " + txHash);
     }
 
+    /**
+     * 验证 {@code nativeAtomicBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger nativeAtomicBalance(CardanoBackendClient backend, String address) {
         return atomicBalance(backend, CardanoAssetUnit.LOVELACE, address);
     }
 
+    /**
+     * 验证 {@code atomicBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger atomicBalance(CardanoBackendClient backend, String unit, String address) {
         return backend.withBackend((service, node, profile) -> CardanoBackendClient.requireSuccess(
                         service.getUtxoService().getUtxos(address, 100, 1, OrderEnum.asc), "address UTXOs"))
@@ -267,6 +312,9 @@ class CardanoDevnetFullFlowIntegrationTest {
                 .reduce(BigInteger.ZERO, BigInteger::add);
     }
 
+    /**
+     * 验证 {@code assertTokenBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertTokenBalance(CardanoBackendClient backend, String unit,
                                            String address, BigDecimal expected) {
         BigDecimal actual = BigDecimal.ZERO;
@@ -280,6 +328,9 @@ class CardanoDevnetFullFlowIntegrationTest {
         assertAmount(expected, actual);
     }
 
+    /**
+     * 验证 {@code address} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static ChainAddressRecord address(UUID tenantId, CardanoKeyService keys,
                                               long userId, int biz, long index,
                                               String role, String symbol, String accountId) {
@@ -298,6 +349,9 @@ class CardanoDevnetFullFlowIntegrationTest {
                 .build();
     }
 
+    /**
+     * 验证 {@code tokenAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static ChainAddressRecord tokenAddress(ChainAddressRecord nativeAddress,
                                                    String symbol, String accountId) {
         return ChainAddressRecord.builder()
@@ -315,15 +369,24 @@ class CardanoDevnetFullFlowIntegrationTest {
                 .build();
     }
 
+    /**
+     * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String symbol, String accountId) {
         return repository.findLedgerBalance(CHAIN, symbol, accountId)
                 .orElseThrow(() -> new IllegalStateException("missing ADA ledger " + symbol + "/" + accountId));
     }
 
+    /**
+     * 验证 {@code assertAmount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertAmount(BigDecimal expected, BigDecimal actual) {
         assertEquals(0, expected.compareTo(actual), "expected=" + expected + ", actual=" + actual);
     }
 
+    /**
+     * 验证 {@code dataSource} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static DriverManagerDataSource dataSource() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
         dataSource.setDriverClassName("org.postgresql.Driver");
@@ -333,12 +396,18 @@ class CardanoDevnetFullFlowIntegrationTest {
         return dataSource;
     }
 
+    /**
+     * 验证 {@code setField} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void setField(Object target, String name, Object value) throws Exception {
         Field field = target.getClass().getDeclaredField(name);
         field.setAccessible(true);
         field.set(target, value);
     }
 
+    /**
+     * 验证 {@code sleep} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);

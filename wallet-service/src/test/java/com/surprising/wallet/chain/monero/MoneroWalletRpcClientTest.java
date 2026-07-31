@@ -18,11 +18,26 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code MoneroWalletRpcClientTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class MoneroWalletRpcClientTest {
+    /**
+     * 保存 {@code MAPPER}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    /**
+     * 保存 {@code requests}，用于承载当前测试夹具的配置或运行数据。
+     */
     private final List<JsonNode> requests = new ArrayList<>();
+    /**
+     * 保存 {@code server}，用于承载当前测试夹具的配置或运行数据。
+     */
     private HttpServer server;
 
+    /**
+     * 验证 {@code tearDown} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @AfterEach
     void tearDown() {
         if (server != null) {
@@ -30,6 +45,9 @@ class MoneroWalletRpcClientTest {
         }
     }
 
+    /**
+     * 验证 {@code callsWalletRpcAndKeepsAtomicPrecision} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void callsWalletRpcAndKeepsAtomicPrecision() throws Exception {
         MoneroWalletRpcClient client = startClient();
@@ -59,6 +77,9 @@ class MoneroWalletRpcClientTest {
                 transferRequest.path("params").path("destinations").get(0).path("amount").asText());
     }
 
+    /**
+     * 验证 {@code buildsDigestAuthorizationForWalletRpcLogin} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void buildsDigestAuthorizationForWalletRpcLogin() {
         String header = MoneroWalletRpcClient.digestAuthorization(
@@ -76,6 +97,9 @@ class MoneroWalletRpcClientTest {
         assertTrue(header.matches(".*response=\"[0-9a-f]{32}\".*"));
     }
 
+    /**
+     * 验证 {@code startClient} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private MoneroWalletRpcClient startClient() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/json_rpc", exchange -> {
@@ -94,6 +118,9 @@ class MoneroWalletRpcClientTest {
         return new MoneroWalletRpcClient(MAPPER, "http://127.0.0.1:" + port);
     }
 
+    /**
+     * 验证 {@code responseFor} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static JsonNode responseFor(JsonNode request) {
         String method = request.path("method").asText();
         return switch (method) {
@@ -126,6 +153,9 @@ class MoneroWalletRpcClientTest {
         };
     }
 
+    /**
+     * 验证 {@code json} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static JsonNode json(String value) {
         try {
             return MAPPER.readTree(value);

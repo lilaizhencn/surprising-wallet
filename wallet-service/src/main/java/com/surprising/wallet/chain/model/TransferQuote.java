@@ -22,6 +22,9 @@ public record TransferQuote(
         boolean supported,
         String reason
 ) {
+    /**
+     * 执行 {@code unsupported} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public static TransferQuote unsupported(ChainType chainType, String assetSymbol, String fromAddress,
                                             String toAddress, BigDecimal amount, String reason) {
         return new TransferQuote(chainType, assetSymbol, fromAddress, toAddress, amount, BigDecimal.ZERO,

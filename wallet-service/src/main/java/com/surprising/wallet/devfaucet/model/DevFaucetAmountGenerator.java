@@ -14,12 +14,21 @@ public final class DevFaucetAmountGenerator {
 
     /** 随机数生成器 */
     private final RandomGenerator random;
+    /**
+     * 构造 {@code DevFaucetAmountGenerator}，初始化该组件运行所需的状态和依赖。
+     */
     public DevFaucetAmountGenerator() {
         this(new SecureRandom());
     }
+    /**
+     * 构造 {@code DevFaucetAmountGenerator}，初始化该组件运行所需的状态和依赖。
+     */
     public DevFaucetAmountGenerator(RandomGenerator random) {
         this.random = random;
     }
+    /**
+     * 执行 {@code next} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public BigDecimal next(DevFaucetProperties.AmountRange range) {
         int scale = range.getScale();
         BigInteger min = range.getMin().movePointRight(scale).toBigIntegerExact();

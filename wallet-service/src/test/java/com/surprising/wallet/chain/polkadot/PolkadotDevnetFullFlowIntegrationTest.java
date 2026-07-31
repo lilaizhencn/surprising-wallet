@@ -24,13 +24,34 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code PolkadotDevnetFullFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class PolkadotDevnetFullFlowIntegrationTest {
+    /**
+     * 保存 {@code CHAIN}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String CHAIN = "DOT";
+    /**
+     * 保存 {@code SOURCE_USER}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long SOURCE_USER = 900_001L;
+    /**
+     * 保存 {@code USER}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long USER = 100_001L;
+    /**
+     * 保存 {@code EXTERNAL_USER}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long EXTERNAL_USER = 100_002L;
+    /**
+     * 保存 {@code TOKEN_SUPPLY}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final BigInteger TOKEN_SUPPLY = new BigInteger("1000000000");
 
+    /**
+     * 验证 {@code shouldExecuteNativeAndAssetHubFullFlow} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldExecuteNativeAndAssetHubFullFlow() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("polkadot.devnet.flow.enabled"),
@@ -104,6 +125,9 @@ class PolkadotDevnetFullFlowIntegrationTest {
         assertAmount(new BigDecimal("80"), ledger(repository, CHAIN, user.getAccountId()).getTotalBalance());
     }
 
+    /**
+     * 验证 {@code tokenFlow} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void tokenFlow(UUID tenantId, UUID custodyAddressId,
                                   JdbcTemplate jdbc, ChainJdbcRepository repository, PolkadotKeyService keys,
                                   PolkadotRuntimeClient runtime, PolkadotTransactionService transactions,
@@ -164,6 +188,9 @@ class PolkadotDevnetFullFlowIntegrationTest {
         assertAmount(ledger(repository, symbol, user.getAccountId()).getTotalBalance(), tenantCustody);
     }
 
+    /**
+     * 验证 {@code withdraw} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void withdraw(UUID tenantId, ChainJdbcRepository repository,
                                  PolkadotTransactionService transactions,
                                  String orderNo, ChainAddressRecord from, ChainAddressRecord to,
@@ -187,6 +214,9 @@ class PolkadotDevnetFullFlowIntegrationTest {
                 symbol, from.getAccountId(), amount));
     }
 
+    /**
+     * 验证 {@code collect} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String collect(UUID tenantId, UUID custodyAddressId,
                                   ChainJdbcRepository repository, PolkadotTransactionService transactions,
                                   String collectionNo, ChainAddressRecord from, ChainAddressRecord hot,
@@ -210,6 +240,9 @@ class PolkadotDevnetFullFlowIntegrationTest {
         return txHash;
     }
 
+    /**
+     * 验证 {@code assertInternalCollectionNotCredited} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertInternalCollectionNotCredited(
             JdbcTemplate jdbc, ChainJdbcRepository repository, String txHash,
             String symbol, String userAccountId) {
@@ -221,6 +254,9 @@ class PolkadotDevnetFullFlowIntegrationTest {
                 ledger(repository, symbol, userAccountId).getTotalBalance());
     }
 
+    /**
+     * 验证 {@code scanUntil} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static List<DepositEvent> scanUntil(PolkadotDepositScanner scanner,
                                                 String txHash, String symbol) {
         for (int attempt = 0; attempt < 40; attempt++) {
@@ -234,15 +270,24 @@ class PolkadotDevnetFullFlowIntegrationTest {
         throw new IllegalStateException("Polkadot scanner did not find " + symbol + " transaction " + txHash);
     }
 
+    /**
+     * 验证 {@code assertAssetBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertAssetBalance(PolkadotRuntimeClient runtime, String assetId,
                                            String address, BigDecimal expected) {
         assertAmount(expected, assetBalance(runtime, assetId, address));
     }
 
+    /**
+     * 验证 {@code assetBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal assetBalance(PolkadotRuntimeClient runtime, String assetId, String address) {
         return new BigDecimal(runtime.assetBalance(assetId, address)).movePointLeft(6).stripTrailingZeros();
     }
 
+    /**
+     * 验证 {@code address} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static ChainAddressRecord address(UUID tenantId, PolkadotKeyService keys,
                                               long userId, int biz, long index,
                                               String role, String symbol, String accountId) {
@@ -261,6 +306,9 @@ class PolkadotDevnetFullFlowIntegrationTest {
                 .build();
     }
 
+    /**
+     * 验证 {@code tokenAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static ChainAddressRecord tokenAddress(ChainAddressRecord nativeAddress,
                                                    String symbol, String accountId) {
         return ChainAddressRecord.builder()
@@ -278,15 +326,24 @@ class PolkadotDevnetFullFlowIntegrationTest {
                 .build();
     }
 
+    /**
+     * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String symbol, String accountId) {
         return repository.findLedgerBalance(CHAIN, symbol, accountId)
                 .orElseThrow(() -> new IllegalStateException("missing DOT ledger " + symbol + "/" + accountId));
     }
 
+    /**
+     * 验证 {@code assertAmount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertAmount(BigDecimal expected, BigDecimal actual) {
         assertEquals(0, expected.compareTo(actual), "expected=" + expected + ", actual=" + actual);
     }
 
+    /**
+     * 验证 {@code dataSource} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static DriverManagerDataSource dataSource() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
         dataSource.setDriverClassName("org.postgresql.Driver");
@@ -296,12 +353,18 @@ class PolkadotDevnetFullFlowIntegrationTest {
         return dataSource;
     }
 
+    /**
+     * 验证 {@code setField} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void setField(Object target, String name, Object value) throws Exception {
         Field field = target.getClass().getDeclaredField(name);
         field.setAccessible(true);
         field.set(target, value);
     }
 
+    /**
+     * 验证 {@code sleep} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);

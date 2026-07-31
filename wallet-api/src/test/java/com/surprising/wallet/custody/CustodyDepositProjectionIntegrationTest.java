@@ -26,11 +26,26 @@ import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
 
+/**
+ * 验证 {@code CustodyDepositProjectionIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class CustodyDepositProjectionIntegrationTest {
+    /**
+     * 保存 {@code dataSource}，用于承载当前测试夹具的配置或运行数据。
+     */
     private DriverManagerDataSource dataSource;
+    /**
+     * 保存 {@code jdbc}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private JdbcTemplate jdbc;
+    /**
+     * 保存 {@code transactions}，用于标识测试中的交易、区块或业务记录。
+     */
     private TransactionTemplate transactions;
 
+    /**
+     * 验证 {@code setUp} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @BeforeEach
     void setUp() throws Exception {
         dataSource = CustodyIntegrationDatabase.dataSource();
@@ -39,6 +54,9 @@ class CustodyDepositProjectionIntegrationTest {
         CustodyIntegrationDatabase.reset(dataSource);
     }
 
+    /**
+     * 验证 {@code confirmedDepositProjectsDisabledAddressAndSubjectAtomically} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void confirmedDepositProjectsDisabledAddressAndSubjectAtomically() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
@@ -90,6 +108,9 @@ class CustodyDepositProjectionIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code observerFailureRollsBackDepositAndBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void observerFailureRollsBackDepositAndBalance() {
         DepositCreditObserver failingObserver = (ignoredEvent, ignoredIndex, ignoredAccount) -> {
@@ -120,6 +141,9 @@ class CustodyDepositProjectionIntegrationTest {
                 """, Integer.class, accountId[0]));
     }
 
+    /**
+     * 验证 {@code pendingDepositIsAttributedToTenantBeforeCredit} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void pendingDepositIsAttributedToTenantBeforeCredit() {
         transactions.executeWithoutResult(status -> {
@@ -146,6 +170,9 @@ class CustodyDepositProjectionIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code collectionTransferToTenantHotAddressIsNotCreditedAsANewDeposit} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void collectionTransferToTenantHotAddressIsNotCreditedAsANewDeposit() {
         transactions.executeWithoutResult(status -> {
@@ -177,6 +204,9 @@ class CustodyDepositProjectionIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code withdrawalToAnotherSystemAddressIsCreditedToTheRecipient} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void withdrawalToAnotherSystemAddressIsCreditedToTheRecipient() {
         transactions.executeWithoutResult(status -> {
@@ -205,6 +235,9 @@ class CustodyDepositProjectionIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code tenantSubjectMappingIsStableAndTenantIsolated} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void tenantSubjectMappingIsStableAndTenantIsolated() {
         transactions.executeWithoutResult(status -> {
@@ -224,6 +257,9 @@ class CustodyDepositProjectionIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code webhookDeliveryIsAutomaticOnlyForApiCreatedAddresses} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void webhookDeliveryIsAutomaticOnlyForApiCreatedAddresses() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
@@ -255,10 +291,16 @@ class CustodyDepositProjectionIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code createFixture} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private DepositFixture createFixture(String subjectValue, String status) {
         return createFixture(subjectValue, status, "API");
     }
 
+    /**
+     * 验证 {@code createFixture} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private DepositFixture createFixture(String subjectValue, String status, String source) {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         UUID tenantId = UUID.randomUUID();
@@ -304,6 +346,9 @@ class CustodyDepositProjectionIntegrationTest {
         return new DepositFixture(tenantId, custodyAddressId, address, address);
     }
 
+    /**
+     * 验证 {@code insertActiveWebhook} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void insertActiveWebhook(UUID tenantId) {
         jdbc.update("""
                 insert into custody_webhook_endpoint(
@@ -313,12 +358,18 @@ class CustodyDepositProjectionIntegrationTest {
                 """, UUID.randomUUID(), tenantId);
     }
 
+    /**
+     * 验证 {@code deliveryCount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private int deliveryCount(UUID tenantId) {
         return jdbc.queryForObject(
                 "select count(*) from custody_webhook_delivery where tenant_id = ?",
                 Integer.class, tenantId);
     }
 
+    /**
+     * 验证 {@code insertTenant} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private UUID insertTenant(String prefix) {
         UUID tenantId = UUID.randomUUID();
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
@@ -329,6 +380,9 @@ class CustodyDepositProjectionIntegrationTest {
         return tenantId;
     }
 
+    /**
+     * 验证 {@code event} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static DepositEvent event(String address, BigDecimal amount) {
         return new DepositEvent(
                 ChainType.ETH,

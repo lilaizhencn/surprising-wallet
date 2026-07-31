@@ -13,9 +13,18 @@ import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code PolkadotRuntimeConnectivityIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class PolkadotRuntimeConnectivityIntegrationTest {
+    /**
+     * 保存 {@code MAPPER}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /**
+     * 验证 {@code runtimeServiceReadsWestendFinalizedHeight} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void runtimeServiceReadsWestendFinalizedHeight() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("polkadot.runtime.live.enabled"),
@@ -26,6 +35,9 @@ class PolkadotRuntimeConnectivityIntegrationTest {
         assertFinalizedHeight(rpcUrl);
     }
 
+    /**
+     * 验证 {@code runtimeServiceReadsWestendAssetHubFinalizedHeight} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void runtimeServiceReadsWestendAssetHubFinalizedHeight() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("polkadot.runtime.live.enabled"),
@@ -36,6 +48,9 @@ class PolkadotRuntimeConnectivityIntegrationTest {
         assertFinalizedHeight(rpcUrl);
     }
 
+    /**
+     * 验证 {@code assertFinalizedHeight} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertFinalizedHeight(String rpcUrl) throws Exception {
         String serviceUrl = System.getProperty("polkadot.runtime.url",
                 "http://127.0.0.1:8787");
@@ -59,6 +74,9 @@ class PolkadotRuntimeConnectivityIntegrationTest {
         assertTrue(json.path("result").path("height").asLong(0L) > 0, response.body());
     }
 
+    /**
+     * 验证 {@code envOrProperty} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String envOrProperty(String env, String property) {
         String value = System.getProperty(property);
         if (value == null || value.isBlank()) {

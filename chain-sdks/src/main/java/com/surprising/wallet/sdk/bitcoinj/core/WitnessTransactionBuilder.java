@@ -40,15 +40,39 @@ import java.util.List;
  * </ul>
  */
 public class WitnessTransactionBuilder {
+    /**
+     * 定义 {@code HEX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final HexFormat HEX = HexFormat.of();
+    /**
+     * 定义 {@code RBF_SEQUENCE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final long RBF_SEQUENCE = 0xfffffffdL;
 
+    /**
+     * 保存 {@code params}，用于承载当前对象的运行配置或业务数据。
+     */
     private final NetworkParameters params;
+    /**
+     * 保存 {@code signer}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final WitnessSigner signer = new WitnessSigner();
+    /**
+     * 保存 {@code inputs}，用于承载当前对象的运行配置或业务数据。
+     */
     private final List<InputMeta> inputs = new ArrayList<>();
+    /**
+     * 保存 {@code outputs}，用于承载当前对象的运行配置或业务数据。
+     */
     private final List<OutputMeta> outputs = new ArrayList<>();
+    /**
+     * 保存 {@code cachedTx}，用于保存业务集合或索引状态。
+     */
     private Transaction cachedTx;
 
+    /**
+     * 构造 {@code WitnessTransactionBuilder}，初始化该组件运行所需的状态和依赖。
+     */
     public WitnessTransactionBuilder(NetworkParameters params) {
         if (params == null) {
             throw new IllegalArgumentException("network must not be null");
@@ -56,6 +80,9 @@ public class WitnessTransactionBuilder {
         this.params = params;
     }
 
+    /**
+     * 添加 {@code addInput} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     public void addInput(String txId, int index, String witnessScriptHex, Coin value) {
         if (txId == null || txId.isEmpty() || witnessScriptHex == null || witnessScriptHex.isEmpty()
                 || value == null || value.signum() <= 0) {
@@ -65,6 +92,9 @@ public class WitnessTransactionBuilder {
         cachedTx = null;
     }
 
+    /**
+     * 添加 {@code addOutput} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     public void addOutput(String address, Coin value) {
         if (address == null || address.isEmpty() || value == null || value.signum() <= 0) {
             throw new IllegalArgumentException("invalid output");
@@ -77,6 +107,9 @@ public class WitnessTransactionBuilder {
         }
     }
 
+    /**
+     * 构建或生成 {@code buildFirstSign} 对应的结果，并执行输入和状态校验。
+     */
     public String buildFirstSign(List<ECKey> keys) {
         if (inputs.isEmpty()) {
             throw new IllegalArgumentException("at least one input is required");
@@ -109,6 +142,9 @@ public class WitnessTransactionBuilder {
         return HEX.formatHex(tx.bitcoinSerialize());
     }
 
+    /**
+     * 构建或生成 {@code buildSecondSign} 对应的结果，并执行输入和状态校验。
+     */
     public String buildSecondSign(String hex, List<ECKey> keys, List<String> witnessScriptHexes, List<Coin> values) {
         Transaction tx = Transaction.read(ByteBuffer.wrap(HEX.parseHex(hex)));
         int inputCount = tx.getInputs().size();
@@ -139,14 +175,23 @@ public class WitnessTransactionBuilder {
         return HEX.formatHex(tx.bitcoinSerialize());
     }
 
+    /**
+     * 获取或查询 {@code getTransaction} 对应的数据，供调用方读取当前状态。
+     */
     public Transaction getTransaction() {
         return cachedTx;
     }
 
+    /**
+     * 获取或查询 {@code getHash} 对应的数据，供调用方读取当前状态。
+     */
     public String getHash() {
         return cachedTx == null ? null : cachedTx.getTxId().toString();
     }
 
+    /**
+     * 获取或查询 {@code getVsize} 对应的数据，供调用方读取当前状态。
+     */
     public int getVsize() {
         if (cachedTx == null) {
             throw new IllegalStateException("transaction has not been built");
@@ -154,20 +199,44 @@ public class WitnessTransactionBuilder {
         return cachedTx.getVsize();
     }
 
+    /**
+     * 计算或估算 {@code estimateVBytes} 对应的金额、费用或资源消耗。
+     */
     public static long estimateVBytes(int inputs, int outputs) {
         return P2wshFeeCalculator.estimateVBytes(inputs, outputs);
     }
 
+    /**
+     * 计算或估算 {@code estimateVBytes} 对应的金额、费用或资源消耗。
+     */
     public static long estimateVBytes(int inputs, int outputs, int requiredSignatures, int totalPubKeys) {
         return P2wshFeeCalculator.estimateVBytes(inputs, outputs, requiredSignatures, totalPubKeys);
     }
 
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     private static class InputMeta {
+        /**
+         * 保存 {@code txId}，用于标识交易、区块或业务记录。
+         */
         private final String txId;
+        /**
+         * 保存 {@code index}，用于承载当前对象的运行配置或业务数据。
+         */
         private final int index;
+        /**
+         * 保存 {@code witnessScriptHex}，用于承载当前对象的运行配置或业务数据。
+         */
         private final String witnessScriptHex;
+        /**
+         * 保存 {@code value}，用于保存金额、费用或链上执行状态。
+         */
         private final Coin value;
 
+        /**
+         * 构造 {@code InputMeta}，初始化该组件运行所需的状态和依赖。
+         */
         private InputMeta(String txId, int index, String witnessScriptHex, Coin value) {
             this.txId = txId;
             this.index = index;
@@ -176,10 +245,22 @@ public class WitnessTransactionBuilder {
         }
     }
 
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     private static class OutputMeta {
+        /**
+         * 保存 {@code address}，表示链、网络、资产或代币配置。
+         */
         private final Address address;
+        /**
+         * 保存 {@code value}，用于保存金额、费用或链上执行状态。
+         */
         private final Coin value;
 
+        /**
+         * 构造 {@code OutputMeta}，初始化该组件运行所需的状态和依赖。
+         */
         private OutputMeta(Address address, Coin value) {
             this.address = address;
             this.value = value;

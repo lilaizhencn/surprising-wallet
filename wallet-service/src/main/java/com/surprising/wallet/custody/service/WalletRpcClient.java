@@ -22,19 +22,34 @@ import java.util.concurrent.TimeUnit;
  */
 @Service
 class WalletRpcClient {
+    /**
+     * 保存 {@code httpClient}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final HttpClient httpClient;
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper;
 
+    /**
+     * 构造 {@code WalletRpcClient}，初始化该组件运行所需的状态和依赖。
+     */
     @Autowired
     WalletRpcClient(ObjectMapper objectMapper) {
         this(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(), objectMapper);
     }
 
+    /**
+     * 构造 {@code WalletRpcClient}，初始化该组件运行所需的状态和依赖。
+     */
     WalletRpcClient(HttpClient httpClient, ObjectMapper objectMapper) {
         this.httpClient = httpClient;
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 执行 {@code probe} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     ProbeResult probe(String rpcUrl, String connectionType, String authType,
                       String authHeaderName, String apiKey, String username, String password) {
         long started = System.nanoTime();
@@ -75,6 +90,9 @@ class WalletRpcClient {
         }
     }
 
+    /**
+     * 编码 {@code jsonRpc} 对应的数据，生成链上或接口所需的表示。
+     */
     JsonNode jsonRpc(String rpcUrl, String connectionType, String authType,
                      String authHeaderName, String apiKey, String username, String password,
                      String method, String params) {
@@ -113,6 +131,9 @@ class WalletRpcClient {
         }
     }
 
+    /**
+     * 设置或更新 {@code applyAuth} 对应的状态，并保持相关业务字段一致。
+     */
     private static void applyAuth(
             HttpRequest.Builder builder, String connectionType, String authType,
             String authHeaderName, String apiKey, String username, String password) {
@@ -128,6 +149,9 @@ class WalletRpcClient {
         }
     }
 
+    /**
+     * 设置或更新 {@code applyAuth} 对应的状态，并保持相关业务字段一致。
+     */
     private static void applyAuth(
             WebSocket.Builder builder, String authType, String authHeaderName,
             String apiKey, String username, String password) {
@@ -141,29 +165,47 @@ class WalletRpcClient {
         }
     }
 
+    /**
+     * 执行 {@code apiKeyAuth} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static boolean apiKeyAuth(String auth) {
         return "API_KEY".equals(auth) || "PROJECT_ID".equals(auth)
                 || "TOKEN".equals(auth) || "API_KEY_OPTIONAL".equals(auth);
     }
 
+    /**
+     * 执行 {@code basic} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String basic(String username, String password) {
         String value = Base64.getEncoder().encodeToString(
                 (username + ":" + password).getBytes(StandardCharsets.UTF_8));
         return "Basic " + value;
     }
 
+    /**
+     * 转换或计算 {@code upper} 对应的值，统一金额、格式和边界规则。
+     */
     private static String upper(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
+    /**
+     * 校验 {@code blank} 对应的输入或状态，失败时抛出明确异常。
+     */
     private static boolean blank(String value) {
         return value == null || value.isBlank();
     }
 
+    /**
+     * 执行 {@code elapsedMillis} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static long elapsedMillis(long started) {
         return Duration.ofNanos(System.nanoTime() - started).toMillis();
     }
 
+    /**
+     * 执行 {@code safeError} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String safeError(Exception error) {
         String message = error.getMessage();
         return message == null || message.isBlank()

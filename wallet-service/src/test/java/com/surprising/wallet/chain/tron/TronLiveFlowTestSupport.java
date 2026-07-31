@@ -14,12 +14,24 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 测试辅助类 {@code TronLiveFlowTestSupport}，为相关测试提供隔离环境或共享数据。
+ */
 final class TronLiveFlowTestSupport {
+    /**
+     * 保存 {@code CHAIN}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     static final String CHAIN = "TRON";
 
+    /**
+     * 验证 {@code TronLiveFlowTestSupport} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private TronLiveFlowTestSupport() {
     }
 
+    /**
+     * 验证 {@code reportOrSkip} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static Map<String, String> reportOrSkip() throws Exception {
         Path report = Path.of("target", "tron-live-flow-report.properties");
         Assumptions.assumeTrue(Files.exists(report),
@@ -30,6 +42,9 @@ final class TronLiveFlowTestSupport {
                 .collect(Collectors.toMap(parts -> parts[0], parts -> parts[1]));
     }
 
+    /**
+     * 验证 {@code jdbcTemplate} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static JdbcTemplate jdbcTemplate() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
         dataSource.setDriverClassName("org.postgresql.Driver");
@@ -39,6 +54,9 @@ final class TronLiveFlowTestSupport {
         return new JdbcTemplate(dataSource);
     }
 
+    /**
+     * 验证 {@code assertCreditedDeposit} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static void assertCreditedDeposit(JdbcTemplate jdbcTemplate, String txId, String address, String asset,
                                       BigDecimal amount) {
         Map<String, Object> row = jdbcTemplate.queryForMap("""
@@ -51,6 +69,9 @@ final class TronLiveFlowTestSupport {
         assertEquals(Boolean.TRUE, row.get("credited"));
     }
 
+    /**
+     * 验证 {@code assertConfirmedWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static void assertConfirmedWithdrawal(JdbcTemplate jdbcTemplate, String txId, String asset) {
         String status = jdbcTemplate.queryForObject("""
                         select status from withdrawal_order
@@ -59,6 +80,9 @@ final class TronLiveFlowTestSupport {
         assertEquals("CONFIRMED", status);
     }
 
+    /**
+     * 验证 {@code assertConfirmedCollection} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static void assertConfirmedCollection(JdbcTemplate jdbcTemplate, String txId) {
         String status = jdbcTemplate.queryForObject("""
                         select status from collection_record
@@ -67,6 +91,9 @@ final class TronLiveFlowTestSupport {
         assertEquals("CONFIRMED", status);
     }
 
+    /**
+     * 验证 {@code assertConfirmedGasTopup} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static void assertConfirmedGasTopup(JdbcTemplate jdbcTemplate, String txId) {
         String status = jdbcTemplate.queryForObject("""
                         select status from gas_topup_task
@@ -75,6 +102,9 @@ final class TronLiveFlowTestSupport {
         assertEquals("CONFIRMED", status);
     }
 
+    /**
+     * 验证 {@code assertNoLockedOrNegativeLedger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static void assertNoLockedOrNegativeLedger(JdbcTemplate jdbcTemplate, String... addresses) {
         for (String address : addresses) {
             Integer count = jdbcTemplate.queryForObject("""
@@ -86,6 +116,9 @@ final class TronLiveFlowTestSupport {
         }
     }
 
+    /**
+     * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static BigDecimal ledger(JdbcTemplate jdbcTemplate, String asset, String address) {
         List<BigDecimal> rows = jdbcTemplate.queryForList("""
                         select available_balance from ledger_balance

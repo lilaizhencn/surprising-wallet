@@ -106,15 +106,24 @@ class SuiRpcClient {
     /** 固定的 gRPC 端点（用于测试），为空则从数据库动态获取 */
     private final String fixedGrpcEndpoint;
 
+    /**
+     * 构造 {@code SuiRpcClient}，初始化该组件运行所需的状态和依赖。
+     */
     @Autowired
     public SuiRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
         this(new ObjectMapper(), repository, rpcNodeService, null);
     }
 
+    /**
+     * 构造 {@code SuiRpcClient}，初始化该组件运行所需的状态和依赖。
+     */
     SuiRpcClient(ObjectMapper objectMapper, String grpcEndpoint) {
         this(objectMapper, null, null, grpcEndpoint);
     }
 
+    /**
+     * 构造 {@code SuiRpcClient}，初始化该组件运行所需的状态和依赖。
+     */
     private SuiRpcClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
                          ChainRpcNodeService rpcNodeService, String fixedGrpcEndpoint) {
         this.objectMapper = objectMapper;
@@ -122,17 +131,26 @@ class SuiRpcClient {
         this.rpcNodeService = rpcNodeService;
         this.fixedGrpcEndpoint = fixedGrpcEndpoint;
     }
+    /**
+     * 执行 {@code latestCheckpoint} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long latestCheckpoint() {
         return call(context -> ledger(context).getServiceInfo(
                         LedgerServiceOuterClass.GetServiceInfoRequest.getDefaultInstance()))
                 .getCheckpointHeight();
     }
+    /**
+     * 执行 {@code referenceGasPrice} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long referenceGasPrice() {
         LedgerServiceOuterClass.GetEpochRequest request = LedgerServiceOuterClass.GetEpochRequest.newBuilder()
                 .setReadMask(FieldMask.newBuilder().addPaths("reference_gas_price"))
                 .build();
         return call(context -> ledger(context).getEpoch(request)).getEpoch().getReferenceGasPrice();
     }
+    /**
+     * 执行 {@code balance} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public BigDecimal balance(String owner, String coinType) {
         StateServiceOuterClass.GetBalanceRequest request = StateServiceOuterClass.GetBalanceRequest.newBuilder()
                 .setOwner(SuiHex.normalizeAddress(owner))
@@ -141,12 +159,18 @@ class SuiRpcClient {
         long value = call(context -> state(context).getBalance(request)).getBalance().getBalance();
         return unsignedBigDecimal(value);
     }
+    /**
+     * 获取或查询 {@code coins} 对应的数据，并向调用方返回当前业务状态。
+     */
     public List<SuiCoin> coins(String owner, String coinType, int limit) {
         if (limit <= 0) {
             return List.of();
         }
         return call(context -> listCoins(context, owner, coinType, limit));
     }
+    /**
+     * 校验 {@code checkpointTransactions} 对应的前置条件，不满足时抛出明确异常。
+     */
     public List<JsonNode> checkpointTransactions(long startCheckpoint, long endCheckpoint) {
         if (endCheckpoint < startCheckpoint) {
             return List.of();
@@ -174,6 +198,9 @@ class SuiRpcClient {
             return transactions;
         });
     }
+    /**
+     * 执行 {@code transactionBlock} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public JsonNode transactionBlock(String digest) {
         LedgerServiceOuterClass.GetTransactionRequest request =
                 LedgerServiceOuterClass.GetTransactionRequest.newBuilder()
@@ -193,6 +220,9 @@ class SuiRpcClient {
                 ? toLegacyTransaction(response.getTransaction())
                 : objectMapper.createObjectNode();
     }
+    /**
+     * 执行或处理 {@code executeSignedTransaction} 对应的业务流程，并维护状态和异常边界。
+     */
     public JsonNode executeSignedTransaction(String txBytesBase64, String signatureBase64) {
         BcsOuterClass.Bcs transactionBcs = BcsOuterClass.Bcs.newBuilder()
                 .setValue(ByteString.copyFrom(Base64.getDecoder().decode(txBytesBase64)))
@@ -218,6 +248,9 @@ class SuiRpcClient {
         }
         return transaction;
     }
+    /**
+     * 获取或查询 {@code listCoins} 对应的数据，供调用方读取当前状态。
+     */
     private List<SuiCoin> listCoins(GrpcContext context, String owner, String coinType, int limit) {
         List<SuiCoin> result = new ArrayList<>();
         ByteString pageToken = ByteString.EMPTY;
@@ -245,6 +278,9 @@ class SuiRpcClient {
         } while (!pageToken.isEmpty() && result.size() < limit);
         return result;
     }
+    /**
+     * 编码 {@code toLegacyTransaction} 对应的数据，生成链上或接口所需的表示。
+     */
     private ObjectNode toLegacyTransaction(ExecutedTransactionOuterClass.ExecutedTransaction source) {
         ObjectNode transaction = objectMapper.createObjectNode();
         transaction.put("digest", source.getDigest());
@@ -284,6 +320,9 @@ class SuiRpcClient {
         }
         return transaction;
     }
+    /**
+     * 执行 {@code call} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private <T> T call(Function<GrpcContext, T> request) {
         if (fixedGrpcEndpoint != null && !fixedGrpcEndpoint.isBlank()) {
             return callNode(fixedGrpcEndpoint, Map.of(), request);
@@ -295,6 +334,9 @@ class SuiRpcClient {
                 node -> callNode(node.getRpcUrl(), rpcNodeService.authHeaders(node), request));
     }
 
+    /**
+     * 执行 {@code callNode} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private <T> T callNode(String endpoint, Map<String, String> authHeaders,
                            Function<GrpcContext, T> request) {
         Endpoint parsed = Endpoint.parse(endpoint);
@@ -324,23 +366,38 @@ class SuiRpcClient {
             }
         }
     }
+    /**
+     * 执行 {@code ledger} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static LedgerServiceGrpc.LedgerServiceBlockingStub ledger(GrpcContext context) {
         return LedgerServiceGrpc.newBlockingStub(context.channel())
                 .withDeadlineAfter(RPC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
+    /**
+     * 执行 {@code state} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static StateServiceGrpc.StateServiceBlockingStub state(GrpcContext context) {
         return StateServiceGrpc.newBlockingStub(context.channel())
                 .withDeadlineAfter(RPC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
+    /**
+     * 执行 {@code execution} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static TransactionExecutionServiceGrpc.TransactionExecutionServiceBlockingStub execution(
             GrpcContext context) {
         return TransactionExecutionServiceGrpc.newBlockingStub(context.channel())
                 .withDeadlineAfter(RPC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
+    /**
+     * 执行 {@code unsignedBigDecimal} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static BigDecimal unsignedBigDecimal(long value) {
         return new BigDecimal(Long.toUnsignedString(value));
     }
+    /**
+     * 转换或计算 {@code normalizeCoinType} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalizeCoinType(String value) {
         String[] parts = value.split("::");
         if (parts.length != 3) {
@@ -351,6 +408,9 @@ class SuiRpcClient {
     private record GrpcContext(Channel channel) {
     }
     private record Endpoint(String target, boolean secure) {
+        /**
+         * 解析或转换 {@code parse} 对应的数据，并校验其格式和边界。
+         */
         private static Endpoint parse(String value) {
             String endpoint = value == null ? "" : value.trim();
             if (endpoint.isBlank()) {

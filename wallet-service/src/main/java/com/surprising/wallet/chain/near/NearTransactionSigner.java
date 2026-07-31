@@ -41,10 +41,16 @@ class NearTransactionSigner {
 
     /** NEAR 密钥服务 */
     private final NearKeyService keyService;
+    /**
+     * 构造 {@code NearTransactionSigner}，初始化该组件运行所需的状态和依赖。
+     */
     public NearTransactionSigner(NearKeyService keyService) {
         this.keyService = keyService;
     }
 
+    /**
+     * 执行 {@code transfer} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public SignedTransaction transfer(long userId, int biz, long addressIndex,
                                       String signerId, long nonce, String receiverId,
                                       String blockHashBase58, BigInteger amountYocto) {
@@ -60,6 +66,9 @@ class NearTransactionSigner {
                 Base58.encode(publicKey));
     }
 
+    /**
+     * 执行 {@code functionCall} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public SignedTransaction functionCall(long userId, int biz, long addressIndex,
                                           String signerId, long nonce, String receiverId,
                                           String blockHashBase58, String methodName,
@@ -77,6 +86,9 @@ class NearTransactionSigner {
                 Base58.encode(publicKey));
     }
 
+    /**
+     * 执行 {@code deployContractAndFunctionCall} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public SignedTransaction deployContractAndFunctionCall(long userId, int biz, long addressIndex,
                                                            String signerId, long nonce, String receiverId,
                                                            String blockHashBase58, byte[] contractCode,
@@ -95,6 +107,9 @@ class NearTransactionSigner {
                 Base58.encode(publicKey));
     }
 
+    /**
+     * 执行 {@code transactionBytes} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     static byte[] transactionBytes(String signerId, byte[] publicKey, long nonce,
                                    String receiverId, byte[] blockHash, BigInteger amountYocto) {
         if (publicKey == null || publicKey.length != 32) {
@@ -115,6 +130,9 @@ class NearTransactionSigner {
         return writer.toByteArray();
     }
 
+    /**
+     * 执行 {@code functionCallTransactionBytes} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     static byte[] functionCallTransactionBytes(String signerId, byte[] publicKey, long nonce,
                                                String receiverId, byte[] blockHash, String methodName,
                                                byte[] args, long gas, BigInteger depositYocto) {
@@ -142,6 +160,9 @@ class NearTransactionSigner {
         return writer.toByteArray();
     }
 
+    /**
+     * 执行 {@code deployContractAndFunctionCallTransactionBytes} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     static byte[] deployContractAndFunctionCallTransactionBytes(String signerId, byte[] publicKey, long nonce,
                                                                 String receiverId, byte[] blockHash,
                                                                 byte[] contractCode, String methodName,
@@ -175,6 +196,9 @@ class NearTransactionSigner {
         writer.u128(depositYocto);
         return writer.toByteArray();
     }
+    /**
+     * 为 {@code signedTransactionBytes} 对应的交易或消息生成签名，并保持原始数据不被改变。
+     */
     private static byte[] signedTransactionBytes(byte[] transaction, byte[] signature) {
         if (signature == null || signature.length != 64) {
             throw new IllegalArgumentException("NEAR Ed25519 signature must be 64 bytes");
@@ -185,6 +209,9 @@ class NearTransactionSigner {
         writer.bytes(signature);
         return writer.toByteArray();
     }
+    /**
+     * 转换或计算 {@code sha256} 对应的值，统一金额、格式和边界规则。
+     */
     private static byte[] sha256(byte[] value) {
         try {
             return MessageDigest.getInstance("SHA-256").digest(value);
@@ -194,21 +221,39 @@ class NearTransactionSigner {
     }
     public record SignedTransaction(String transactionHash, String signedTransactionBase64, String publicKeyBase58) {
     }
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     private static final class BorshWriter {
+        /**
+         * 保存 {@code out}，用于承载当前对象的运行配置或业务数据。
+         */
         private final ByteArrayOutputStream out = new ByteArrayOutputStream();
 
+        /**
+         * 执行 {@code u8} 对应的辅助逻辑，完成数据处理并维护状态边界。
+         */
         void u8(int value) {
             out.write(value & 0xff);
         }
 
+        /**
+         * 执行 {@code u32} 对应的辅助逻辑，完成数据处理并维护状态边界。
+         */
         void u32(int value) {
             bytes(ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(value).array());
         }
 
+        /**
+         * 执行 {@code u64} 对应的辅助逻辑，完成数据处理并维护状态边界。
+         */
         void u64(long value) {
             bytes(ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(value).array());
         }
 
+        /**
+         * 执行 {@code u128} 对应的辅助逻辑，完成数据处理并维护状态边界。
+         */
         void u128(BigInteger value) {
             if (value == null || value.signum() < 0 || value.bitLength() > 128) {
                 throw new IllegalArgumentException("NEAR amount must fit unsigned 128-bit integer");
@@ -224,26 +269,41 @@ class NearTransactionSigner {
             bytes(littleEndian);
         }
 
+        /**
+         * 转换或计算 {@code string} 对应的值，统一金额、格式和边界规则。
+         */
         void string(String value) {
             byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
             u32(bytes.length);
             bytes(bytes);
         }
 
+        /**
+         * 执行 {@code publicKey} 对应的辅助逻辑，完成数据处理并维护状态边界。
+         */
         void publicKey(byte[] publicKey) {
             u8(ED25519_KEY_TYPE);
             bytes(publicKey);
         }
 
+        /**
+         * 执行 {@code bytes} 对应的辅助逻辑，完成数据处理并维护状态边界。
+         */
         void bytes(byte[] bytes) {
             out.writeBytes(bytes);
         }
 
+        /**
+         * 执行 {@code byteArray} 对应的辅助逻辑，完成数据处理并维护状态边界。
+         */
         void byteArray(byte[] bytes) {
             u32(bytes.length);
             bytes(bytes);
         }
 
+        /**
+         * 编码 {@code toByteArray} 对应的数据，生成链上或接口所需的表示。
+         */
         byte[] toByteArray() {
             return out.toByteArray();
         }

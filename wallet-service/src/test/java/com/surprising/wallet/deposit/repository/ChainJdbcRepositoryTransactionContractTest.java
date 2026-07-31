@@ -10,8 +10,14 @@ import java.util.Arrays;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+/**
+ * 验证 {@code ChainJdbcRepositoryTransactionContractTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class ChainJdbcRepositoryTransactionContractTest {
 
+    /**
+     * 验证 {@code everyPublicDepositCreditEntryPointIsTransactional} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void everyPublicDepositCreditEntryPointIsTransactional() {
         Method[] entryPoints = Arrays.stream(ChainJdbcRepository.class.getDeclaredMethods())

@@ -15,7 +15,13 @@ import com.surprising.wallet.devfaucet.model.DevFaucetAmountGenerator;
 import com.surprising.wallet.devfaucet.service.JsonRpcDevFaucetClient;
 import com.surprising.wallet.devfaucet.service.DevFaucetRpcClient;
 
+/**
+ * 验证 {@code DevFaucetPropertiesTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class DevFaucetPropertiesTest {
+    /**
+     * 验证 {@code enabledFaucetAcceptsOnlyDevelopmentEnvironmentAndLoopbackNodes} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void enabledFaucetAcceptsOnlyDevelopmentEnvironmentAndLoopbackNodes() {
         DevFaucetProperties properties = validProperties();
@@ -27,6 +33,9 @@ class DevFaucetPropertiesTest {
         assertThrows(IllegalStateException.class, () -> properties.validate("dev"));
     }
 
+    /**
+     * 验证 {@code randomAmountsStayInsideConfiguredAtomicRange} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void randomAmountsStayInsideConfiguredAtomicRange() {
         DevFaucetProperties properties = validProperties();
@@ -40,6 +49,9 @@ class DevFaucetPropertiesTest {
         }
     }
 
+    /**
+     * 验证 {@code erc20TransferEncodingUsesRecipientAndAtomicAmount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void erc20TransferEncodingUsesRecipientAndAtomicAmount() {
         String encoded = JsonRpcDevFaucetClient.encodeTransfer(
@@ -51,6 +63,9 @@ class DevFaucetPropertiesTest {
         assertTrue(encoded.endsWith("0000000000000000000000000000000000000000000000000000000000bc614e"));
     }
 
+    /**
+     * 验证 {@code localJsonRpcClientUsesHttp11InsteadOfH2cUpgrade} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void localJsonRpcClientUsesHttp11InsteadOfH2cUpgrade() throws Exception {
         JsonRpcDevFaucetClient client = new JsonRpcDevFaucetClient(
@@ -62,6 +77,9 @@ class DevFaucetPropertiesTest {
                 ((HttpClient) field.get(client)).version());
     }
 
+    /**
+     * 验证 {@code validProperties} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static DevFaucetProperties validProperties() {
         DevFaucetProperties properties = new DevFaucetProperties();
         properties.setEnabled(true);

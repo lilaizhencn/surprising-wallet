@@ -19,7 +19,13 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.service.WalletConfigOverviewService.SummaryView;
 import com.surprising.wallet.custody.service.WalletConfigOverviewService.UpdateGlobalSwitchesCommand;
 import com.surprising.wallet.custody.service.WalletConfigOverviewService;
+/**
+ * 验证 {@code WalletConfigOverviewServiceTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class WalletConfigOverviewServiceTest {
+    /**
+     * 保存 {@code PLATFORM_ADMIN}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final CustodyPrincipal PLATFORM_ADMIN = new CustodyPrincipal(
             CustodyPrincipal.ActorType.PLATFORM_USER,
             UUID.fromString("11111111-1111-1111-1111-111111111111"),
@@ -28,6 +34,9 @@ class WalletConfigOverviewServiceTest {
             "PLATFORM_ADMIN",
             Set.of("*"));
 
+    /**
+     * 验证 {@code testEnvironmentAllowsDevAndTestProfilesWithOneEnabledNetwork} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void testEnvironmentAllowsDevAndTestProfilesWithOneEnabledNetwork() {
         FakeJdbcTemplate jdbc = configuredDatabase();
@@ -44,6 +53,9 @@ class WalletConfigOverviewServiceTest {
         assertEquals("DISABLED", summary.chains().get(1).status());
     }
 
+    /**
+     * 验证 {@code productionReportsMultipleAndNonProductionNetworks} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void productionReportsMultipleAndNonProductionNetworks() {
         FakeJdbcTemplate jdbc = configuredDatabase();
@@ -65,6 +77,9 @@ class WalletConfigOverviewServiceTest {
         assertTrue(summary.chains().stream().allMatch(row -> row.status().equals("BLOCKED")));
     }
 
+    /**
+     * 验证 {@code updatesAllGlobalSwitchesAndWritesAudit} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void updatesAllGlobalSwitchesAndWritesAudit() {
         FakeJdbcTemplate jdbc = configuredDatabase();
@@ -86,6 +101,9 @@ class WalletConfigOverviewServiceTest {
                 + "\"collectionEnabled\":false,\"transferEnabled\":true}", audit.details);
     }
 
+    /**
+     * 验证 {@code service} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static WalletConfigOverviewService service(FakeJdbcTemplate jdbc,
                                                        String environment,
                                                        boolean keysetConfigured,
@@ -93,6 +111,9 @@ class WalletConfigOverviewServiceTest {
         return new WalletConfigOverviewService(jdbc, audit, () -> keysetConfigured, environment);
     }
 
+    /**
+     * 验证 {@code configuredDatabase} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static FakeJdbcTemplate configuredDatabase() {
         FakeJdbcTemplate jdbc = new FakeJdbcTemplate();
         jdbc.systemRows.add(switchRow("global.all.enabled", true));
@@ -109,6 +130,9 @@ class WalletConfigOverviewServiceTest {
         return jdbc;
     }
 
+    /**
+     * 验证 {@code switchRow} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Map<String, Object> switchRow(String key, boolean value) {
         return map(
                 "config_key", key,
@@ -116,6 +140,9 @@ class WalletConfigOverviewServiceTest {
                 "enabled", true);
     }
 
+    /**
+     * 验证 {@code profileRow} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Map<String, Object> profileRow(long id, String chain, String network, boolean enabled) {
         return map(
                 "id", id,
@@ -129,6 +156,9 @@ class WalletConfigOverviewServiceTest {
                 "transfer_enabled", true);
     }
 
+    /**
+     * 验证 {@code rpcRow} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Map<String, Object> rpcRow(String chain, String network, String environment) {
         return map(
                 "chain", chain,
@@ -137,6 +167,9 @@ class WalletConfigOverviewServiceTest {
                 "enabled", true);
     }
 
+    /**
+     * 验证 {@code map} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Map<String, Object> map(Object... values) {
         Map<String, Object> row = new LinkedHashMap<>();
         for (int index = 0; index < values.length; index += 2) {
@@ -145,14 +178,38 @@ class WalletConfigOverviewServiceTest {
         return row;
     }
 
+    /**
+     * 测试替身 {@code FakeJdbcTemplate}，用于隔离外部依赖并验证调用参数和状态变化。
+     */
     private static final class FakeJdbcTemplate extends JdbcTemplate {
+        /**
+         * 保存 {@code systemRows}，用于承载当前测试夹具的配置或运行数据。
+         */
         private final List<Map<String, Object>> systemRows = new ArrayList<>();
+        /**
+         * 保存 {@code profileRows}，用于承载当前测试夹具的配置或运行数据。
+         */
         private final List<Map<String, Object>> profileRows = new ArrayList<>();
+        /**
+         * 保存 {@code tokenRows}，表示测试所覆盖的链、网络、资产或代币配置。
+         */
         private final List<Map<String, Object>> tokenRows = new ArrayList<>();
+        /**
+         * 保存 {@code assetRows}，表示测试所覆盖的链、网络、资产或代币配置。
+         */
         private final List<Map<String, Object>> assetRows = new ArrayList<>();
+        /**
+         * 保存 {@code rpcRows}，用于访问当前测试所依赖的仓储、客户端或服务。
+         */
         private final List<Map<String, Object>> rpcRows = new ArrayList<>();
+        /**
+         * 保存 {@code switchUpdates}，用于记录测试时间边界或审计时间。
+         */
         private int switchUpdates;
 
+        /**
+         * 验证 {@code queryForList} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public List<Map<String, Object>> queryForList(String sql) {
             if (sql.contains("from wallet_system_config")) {
@@ -173,6 +230,9 @@ class WalletConfigOverviewServiceTest {
             throw new AssertionError("unexpected query: " + sql);
         }
 
+        /**
+         * 验证 {@code update} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public int update(String sql, Object... args) {
             if (!sql.contains("wallet_system_config")) {
@@ -187,15 +247,33 @@ class WalletConfigOverviewServiceTest {
         }
     }
 
+    /**
+     * 测试替身 {@code FakeAuditRepository}，用于隔离外部依赖并验证调用参数和状态变化。
+     */
     private static final class FakeAuditRepository extends CustodyRepository {
+        /**
+         * 保存 {@code action}，用于承载当前测试夹具的配置或运行数据。
+         */
         private String action;
+        /**
+         * 保存 {@code sourceIp}，用于承载当前测试夹具的配置或运行数据。
+         */
         private String sourceIp;
+        /**
+         * 保存 {@code details}，用于承载当前测试夹具的配置或运行数据。
+         */
         private String details;
 
+        /**
+         * 验证 {@code FakeAuditRepository} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private FakeAuditRepository() {
             super(null);
         }
 
+        /**
+         * 验证 {@code audit} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public void audit(UUID tenantId, String actorType, String actorId, String action,
                           String resourceType, String resourceId, String sourceIp, String detailsJson) {

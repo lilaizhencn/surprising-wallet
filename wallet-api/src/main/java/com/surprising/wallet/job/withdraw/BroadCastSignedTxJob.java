@@ -30,6 +30,9 @@ public class BroadCastSignedTxJob {
     /** 交易服务，负责链上广播动作。 */
     @Autowired
     private TransactionService txService;
+    /**
+     * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
+     */
     @Autowired
     private StringRedisTemplate redis;
 

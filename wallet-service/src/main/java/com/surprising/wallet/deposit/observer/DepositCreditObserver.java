@@ -3,12 +3,11 @@ package com.surprising.wallet.deposit.observer;
 import com.surprising.wallet.common.chain.DepositEvent;
 
 /**
- * Transactional extension point invoked after a deposit is idempotently credited.
- *
- * <p>Implementations run inside {@link ChainJdbcRepository#recordAndCreditDeposit}'s
- * transaction. They must be deterministic and idempotent; throwing rolls back both
- * the ledger credit and the observer write.</p>
+ * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
  */
 @FunctionalInterface
 public interface DepositCreditObserver {
+    /**
+     * 执行 {@code onDepositCredited} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     void onDepositCredited(DepositEvent event, long logIndex, String accountId);}

@@ -111,6 +111,9 @@ class TonTransactionService {
                 toAddress, amountNano, comment);
     }
 
+    /**
+     * 执行 {@code prepareNative} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private PreparedTransfer prepareNative(long userId, int biz, long derivationIndex,
                                            String toAddress, BigInteger amountNano, String comment) {
         WalletV4R2 wallet = keyService.wallet(userId, biz, derivationIndex);
@@ -130,6 +133,9 @@ class TonTransactionService {
         return prepare(wallet, config, seqno);
     }
 
+    /**
+     * 执行 {@code prepareJetton} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public PreparedTransfer prepareJetton(long derivationIndex, String sourceJettonWallet,
                                           String destinationOwner, BigInteger tokenAmount,
                                           String responseAddress, String comment) {
@@ -155,6 +161,9 @@ class TonTransactionService {
                 sourceJettonWallet, destinationOwner, tokenAmount, responseAddress, comment);
     }
 
+    /**
+     * 执行 {@code prepareJetton} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private PreparedTransfer prepareJetton(long userId, int biz, long derivationIndex, String sourceJettonWallet,
                                            String destinationOwner, BigInteger tokenAmount,
                                            String responseAddress, String comment) {
@@ -179,13 +188,22 @@ class TonTransactionService {
                 .build();
         return prepare(wallet, config, seqno);
     }
+    /**
+     * 执行 {@code prepareWalletDeploy} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public PreparedTransfer prepareWalletDeploy(long derivationIndex) {
         return prepareWalletDeploy(keyService.wallet(derivationIndex));
     }
+    /**
+     * 执行 {@code prepareWalletDeploy} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public PreparedTransfer prepareWalletDeploy(ChainAddressRecord from) {
         return prepareWalletDeploy(keyService.wallet(
                 from.getUserId(), from.getBiz(), from.getAddressIndex()));
     }
+    /**
+     * 执行 {@code prepareWalletDeploy} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private PreparedTransfer prepareWalletDeploy(WalletV4R2 wallet) {
         Message message = wallet.prepareDeployMsg();
         byte[] boc = message.toCell().toBoc(false);
@@ -194,6 +212,9 @@ class TonTransactionService {
                 java.util.HexFormat.of().formatHex(message.toCell().hash()));
     }
 
+    /**
+     * 执行 {@code prepareContractCall} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public PreparedTransfer prepareContractCall(long derivationIndex, String destination,
                                                 BigInteger amountNano, StateInit stateInit,
                                                 Cell body, boolean bounce) {
@@ -201,6 +222,9 @@ class TonTransactionService {
         return prepareContractCall(wallet, destination, amountNano, stateInit, body, bounce);
     }
 
+    /**
+     * 执行 {@code prepareContractCall} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public PreparedTransfer prepareContractCall(ChainAddressRecord from, String destination,
                                                 BigInteger amountNano, StateInit stateInit,
                                                 Cell body, boolean bounce) {
@@ -208,6 +232,9 @@ class TonTransactionService {
         return prepareContractCall(wallet, destination, amountNano, stateInit, body, bounce);
     }
 
+    /**
+     * 执行 {@code prepareContractCall} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private PreparedTransfer prepareContractCall(WalletV4R2 wallet, String destination,
                                                  BigInteger amountNano, StateInit stateInit,
                                                  Cell body, boolean bounce) {
@@ -285,6 +312,9 @@ class TonTransactionService {
         repository.synchronizeAccountSequence(CHAIN, senderAddress, rpc.seqno(senderAddress));
         return true;
     }
+    /**
+     * 执行 {@code rebroadcast} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private void rebroadcast(String messageHash) {
         repository.findTonTransactionRawPayload(CHAIN, messageHash).ifPresent(rawPayload -> {
             try {
@@ -531,6 +561,9 @@ class TonTransactionService {
         }
         return false;
     }
+    /**
+     * 执行 {@code prepare} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private PreparedTransfer prepare(WalletV4R2 wallet, WalletV4R2Config config, long seqno) {
         Message message = wallet.prepareExternalMsg(config);
         byte[] boc = message.toCell().toBoc(false);
@@ -538,22 +571,37 @@ class TonTransactionService {
                 java.util.Base64.getEncoder().encodeToString(boc),
                 java.util.HexFormat.of().formatHex(message.toCell().hash()));
     }
+    /**
+     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
+     */
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
+    /**
+     * 执行 {@code atomicAmount} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static BigInteger atomicAmount(BigDecimal amount, int decimals) {
         return amount.movePointRight(decimals).toBigIntegerExact();
     }
+    /**
+     * 执行 {@code displayAmount} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static BigDecimal displayAmount(long atomicAmount, int decimals) {
         return BigDecimal.valueOf(atomicAmount).movePointLeft(decimals);
     }
+    /**
+     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
 
+    /**
+     * 记录或保存 {@code record} 对应的数据，并遵守幂等和事务约束。
+     */
     private void record(String hash, String from, String to, String symbol, String master,
                         BigDecimal amount, long fee, BigInteger lt, String status, String rawPayload) {
         repository.recordTonTransaction(TonTransactionRecord.builder()
@@ -571,6 +619,9 @@ class TonTransactionService {
                 .rawPayload(rawPayload)
                 .build());
     }
+    /**
+     * 执行 {@code friendly} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private String friendly(Address address, boolean bounceable) {
         boolean testnet = profile().getNetwork().toLowerCase(java.util.Locale.ROOT).contains("test");
         return address.toString(true, true, bounceable, testnet);

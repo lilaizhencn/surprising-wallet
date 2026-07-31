@@ -11,8 +11,14 @@ import org.web3j.utils.Numeric;
 import java.math.BigInteger;
 import java.util.List;
 
-/** Deterministically constructs and signs an EIP-7702 type-4 outer transaction. */
+/**
+ * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
+ */
 public class Evm7702BatchTransactionService {
+    /**
+     * 构建并签名包含授权列表的 EIP-7702 type-4 交易。
+     * <p>方法会校验交易费用、调用数据、授权列表和中继账户凭证，并确认编码结果的首字节为 type-4。</p>
+     */
     public SignedType4Transaction sign(
             long chainId,
             BigInteger relayerNonce,
@@ -61,6 +67,9 @@ public class Evm7702BatchTransactionService {
                 Numeric.toHexString(signed), Numeric.toHexString(Hash.sha3(signed)), relayerNonce);
     }
 
+    /**
+     * 签名归集批次交易；存在授权列表时生成 type-4，否则生成普通 EIP-1559 type-2 交易。
+     */
     public SignedBatchTransaction signBatch(
             long chainId, BigInteger relayerNonce, BigInteger maxPriorityFeePerGas,
             BigInteger maxFeePerGas, BigInteger gasLimit, String collectorAddress,

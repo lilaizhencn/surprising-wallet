@@ -17,7 +17,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code SuiDatabaseFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class SuiDatabaseFlowIntegrationTest {
+    /**
+     * 验证 {@code recordsDepositsTransactionsAndGuardedLedgerOnce} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void recordsDepositsTransactionsAndGuardedLedgerOnce() {
         Assumptions.assumeTrue(Boolean.getBoolean("sui.db.enabled"),
@@ -88,6 +94,9 @@ class SuiDatabaseFlowIntegrationTest {
                         """, BigDecimal.class, user.getAccountId()));
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;

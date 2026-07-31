@@ -6,8 +6,13 @@ import org.web3j.crypto.Sign;
 
 import java.math.BigInteger;
 
-/** Produces chain-bound EIP-7702 authorization tuples for an Authority EOA. */
+/**
+ * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
+ */
 public class Evm7702AuthorizationService {
+    /**
+     * 执行 {@code authorize} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public AuthorizationTuple authorize(BigInteger chainId, String delegateAddress,
                                         BigInteger authorityNonce, Credentials authorityCredentials) {
         if (chainId == null || chainId.signum() <= 0 || chainId.bitLength() > 63) {

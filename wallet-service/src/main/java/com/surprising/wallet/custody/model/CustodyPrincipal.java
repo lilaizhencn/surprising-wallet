@@ -28,10 +28,19 @@ public record CustodyPrincipal(
     /** 认证主体类型 */
     public enum ActorType {
         /** 平台管理员（Platform 后台登录） */
+        /**
+         * 定义 {@code PLATFORM_USER} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         PLATFORM_USER,
         /** 租户用户（Console 登录） */
+        /**
+         * 定义 {@code TENANT_USER} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         TENANT_USER,
         /** API 密钥（HMAC 签名认证） */
+        /**
+         * 定义 {@code API_KEY} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         API_KEY
     }
 

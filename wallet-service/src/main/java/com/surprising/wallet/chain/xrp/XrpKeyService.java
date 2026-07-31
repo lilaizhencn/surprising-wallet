@@ -72,12 +72,21 @@ class XrpKeyService {
     public PrivateKey privateKey(AccountChainProfile profile, ChainAddressRecord address) {
         return privateKey(signerKeyService.key(profile, address));
     }
+    /**
+     * 添加 {@code address} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     public static String address(ECKey ecKey) {
         return publicKey(ecKey).deriveAddress().value();
     }
+    /**
+     * 执行 {@code publicKey} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public static PublicKey publicKey(ECKey ecKey) {
         return PublicKey.fromBase16EncodedPublicKey(Hex.toHexString(ecKey.getPubKey()).toUpperCase());
     }
+    /**
+     * 执行 {@code privateKey} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public static PrivateKey privateKey(ECKey ecKey) {
         byte[] privateBytes = ecKey.getPrivKeyBytes();
         try {

@@ -32,13 +32,34 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 public class CustodyWithdrawalService {
     /** 提现创建操作的幂等键前缀 */
     private static final String CREATE_OPERATION = "WITHDRAWAL.CREATE";
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final CustodyRepository repository;
+    /**
+     * 保存 {@code executionService}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final CustodyWithdrawalExecutionService executionService;
+    /**
+     * 保存 {@code gasService}，用于保存金额、费用或链上执行状态。
+     */
     private final CustodyGasService gasService;
+    /**
+     * 保存 {@code tenantChains}，表示链、网络、资产或代币配置。
+     */
     private final CustodyTenantChainService tenantChains;
+    /**
+     * 保存 {@code crypto}，用于承载当前对象的运行配置或业务数据。
+     */
     private final CustodyCryptoService crypto;
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper;
 
+    /**
+     * 构造 {@code CustodyWithdrawalService}，初始化该组件运行所需的状态和依赖。
+     */
     public CustodyWithdrawalService(CustodyRepository repository,
                                     CustodyWithdrawalExecutionService executionService,
                                     CustodyGasService gasService,
@@ -53,6 +74,9 @@ public class CustodyWithdrawalService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 构建或生成 {@code create} 对应的结果，并执行输入和状态校验。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public WithdrawalView create(CustodyPrincipal principal, CreateWithdrawalCommand command,
                                  String source, String idempotencyKey, String sourceIp) {
@@ -166,6 +190,9 @@ public class CustodyWithdrawalService {
         return view;
     }
 
+    /**
+     * 处理 {@code withdrawals} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public List<Map<String, Object>> withdrawals(CustodyPrincipal principal, String chain,
                                                   String assetSymbol, String status,
                                                   String search, int limit, int offset) {
@@ -175,6 +202,9 @@ public class CustodyWithdrawalService {
                 upperOrEmpty(status), search, limit, offset);
     }
 
+    /**
+     * 处理 {@code withdrawalPage} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public PageView<Map<String, Object>> withdrawalPage(
             CustodyPrincipal principal, String chain, String assetSymbol, String status,
             String search, int limit, int offset) {
@@ -194,6 +224,9 @@ public class CustodyWithdrawalService {
                 pageSize, pageOffset);
     }
 
+    /**
+     * 处理 {@code deposits} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public List<Map<String, Object>> deposits(CustodyPrincipal principal, String chain,
                                                String assetSymbol, String status,
                                                String search, int limit, int offset) {
@@ -202,6 +235,9 @@ public class CustodyWithdrawalService {
                 principal.tenantId(), upperOrEmpty(chain), upperOrEmpty(assetSymbol),
                 upperOrEmpty(status), search, limit, offset);
     }
+    /**
+     * 处理 {@code depositPage} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public PageView<Map<String, Object>> depositPage(
             CustodyPrincipal principal, String chain, String assetSymbol, String status,
             String search, int limit, int offset) {
@@ -220,6 +256,9 @@ public class CustodyWithdrawalService {
                         normalizedStatus, search),
                 pageSize, pageOffset);
     }
+    /**
+     * 执行 {@code replay} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private WithdrawalView replay(UUID tenantId, String key, String requestHash) {
         IdempotencyRecord existing = repository.findIdempotency(tenantId, key, CREATE_OPERATION)
                 .orElse(null);
@@ -238,6 +277,9 @@ public class CustodyWithdrawalService {
             throw new IllegalStateException("stored idempotent response is invalid", e);
         }
     }
+    /**
+     * 执行 {@code eventPayload} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     String eventPayload(UUID eventId, String eventType, WithdrawalView view) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("withdrawalId", view.id());
@@ -258,6 +300,9 @@ public class CustodyWithdrawalService {
                 "createdAt", Instant.now(),
                 "data", data));
     }
+    /**
+     * 编码 {@code json} 对应的数据，生成链上或接口所需的表示。
+     */
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -265,6 +310,9 @@ public class CustodyWithdrawalService {
             throw new IllegalArgumentException("value cannot be serialized as JSON", e);
         }
     }
+    /**
+     * 转换或计算 {@code normalizeSource} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalizeSource(String source) {
         String value = source == null ? "" : source.trim().toUpperCase(Locale.ROOT);
         if (!"API".equals(value) && !"CONSOLE".equals(value)) {
@@ -272,6 +320,9 @@ public class CustodyWithdrawalService {
         }
         return value;
     }
+    /**
+     * 校验 {@code requireUpper} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static String requireUpper(String value, String field, int max) {
         String result = required(value, field, max).toUpperCase(Locale.ROOT);
         if (!result.matches("^[A-Z][A-Z0-9_]{1," + (max - 1) + "}$")) {
@@ -279,6 +330,9 @@ public class CustodyWithdrawalService {
         }
         return result;
     }
+    /**
+     * 校验 {@code required} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static String required(String value, String field, int max) {
         String result = value == null ? "" : value.trim();
         if (result.isBlank() || result.length() > max) {
@@ -286,6 +340,9 @@ public class CustodyWithdrawalService {
         }
         return result;
     }
+    /**
+     * 执行 {@code optional} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String optional(String value, int max) {
         String result = value == null ? "" : value.trim();
         if (result.length() > max) {
@@ -293,6 +350,9 @@ public class CustodyWithdrawalService {
         }
         return result.isBlank() ? null : result;
     }
+    /**
+     * 校验 {@code requireIdempotencyKey} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static String requireIdempotencyKey(String value) {
         String key = value == null ? "" : value.trim();
         if (!key.matches("^[A-Za-z0-9._:-]{8,160}$")) {
@@ -301,9 +361,15 @@ public class CustodyWithdrawalService {
         }
         return key;
     }
+    /**
+     * 转换或计算 {@code upperOrEmpty} 对应的值，统一金额、格式和边界规则。
+     */
     private static String upperOrEmpty(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
+    /**
+     * 校验 {@code requireScope} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static void requireScope(CustodyPrincipal principal, String scope) {
         if (principal == null || principal.tenantId() == null || !principal.hasScope(scope)) {
             throw new CustodyForbiddenException(scope + " scope required");

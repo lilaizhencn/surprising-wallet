@@ -39,28 +39,49 @@ class SuiKeyService {
         this.keyMaterial = keyMaterial;
         this.testProvider = null;
     }
+    /**
+     * 构造 {@code SuiKeyService}，初始化该组件运行所需的状态和依赖。
+     */
     public SuiKeyService(String encodedMasterSeed) {
         this.keyMaterial = null;
         this.testProvider = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(encodedMasterSeed));
     }
+    /**
+     * 判断 {@code isConfigured} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     public boolean isConfigured() {
         return testProvider != null || keyMaterial.isConfigured();
     }
+    /**
+     * 构建或生成 {@code derive} 对应的结果，并执行输入和状态校验。
+     */
     public Ed25519DerivedKey derive(long derivationIndex) {
         return provider().derive(Ed25519Chain.SUI, derivationIndex);
     }
+    /**
+     * 构建或生成 {@code derive} 对应的结果，并执行输入和状态校验。
+     */
     public Ed25519DerivedKey derive(long userId, int biz, long derivationIndex) {
         if (userId == 0 && biz == 0) {
             return derive(derivationIndex);
         }
         return provider().derive(Ed25519Chain.SUI, biz, userId, derivationIndex);
     }
+    /**
+     * 添加 {@code address} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     public String address(long derivationIndex) {
         return address(derive(derivationIndex).publicKey());
     }
+    /**
+     * 为 {@code sign} 对应的交易或消息生成签名，并保持原始数据不被改变。
+     */
     public byte[] sign(long derivationIndex, byte[] message) {
         return provider().sign(Ed25519Chain.SUI, derivationIndex, message);
     }
+    /**
+     * 为 {@code sign} 对应的交易或消息生成签名，并保持原始数据不被改变。
+     */
     public byte[] sign(long userId, int biz, long derivationIndex, byte[] message) {
         if (userId == 0 && biz == 0) {
             return sign(derivationIndex, message);
@@ -81,6 +102,9 @@ class SuiKeyService {
         System.arraycopy(publicKey, 0, data, 1, publicKey.length);
         return SuiHex.withPrefix(new Blake2b.Blake2b256().digest(data));
     }
+    /**
+     * 获取或查询 {@code provider} 对应的数据，并向调用方返回当前业务状态。
+     */
     private Ed25519KeyProvider provider() {
         return testProvider != null ? testProvider : keyMaterial.ed25519();
     }

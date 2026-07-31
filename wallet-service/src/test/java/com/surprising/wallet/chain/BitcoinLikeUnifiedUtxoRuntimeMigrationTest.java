@@ -19,11 +19,12 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * PostgreSQL-backed verification for the AssetRuntimeMetadata-to-DB asset migration:
- * BTC/LTC/DOGE/BCH runtime UTXO operations must use utxo_record as the source
- * of truth and must not require legacy *_utxo_transaction rows.
+ * 验证 {@code BitcoinLikeUnifiedUtxoRuntimeMigrationTest} 覆盖的业务流程、边界条件和异常行为。
  */
 class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
+    /**
+     * 验证 {@code unifiedUtxoRecordMustSupportSelectionLockReleaseSpendAndLedgerIdempotency} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void unifiedUtxoRecordMustSupportSelectionLockReleaseSpendAndLedgerIdempotency() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("utxo.migration.db.enabled"),
@@ -122,11 +123,17 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
         }
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    /**
+     * 验证 {@code runtimeCurrencyId} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static int runtimeCurrencyId(JdbcTemplate jdbc, String chain) {
         Integer id = jdbc.queryForObject("""
                 select min(runtime_currency_id)
@@ -137,6 +144,9 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
         return id;
     }
 
+    /**
+     * 验证 {@code ensureBitcoinLikeProfiles} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void ensureBitcoinLikeProfiles(JdbcTemplate jdbc) {
         jdbc.update("""
                 insert into chain_profile(chain, network, family, runtime_currency_id, bip44_coin_type,
@@ -175,6 +185,9 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                 """);
     }
 
+    /**
+     * 验证 {@code bip44CoinType} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static int bip44CoinType(String chain) {
         return switch (chain) {
             case "BTC" -> 0;

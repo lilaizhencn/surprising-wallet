@@ -20,14 +20,25 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Tenant-scoped persistence and outbox for EIP-7702 collection batches. */
+/**
+ * 负责钱包业务数据的查询、持久化、租户隔离和事务边界管理。
+ */
 @Repository
 public class Evm7702CollectionRepository {
+    /**
+     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final JdbcTemplate jdbc;
+    /**
+     * 构造 {@code Evm7702CollectionRepository}，初始化该组件运行所需的状态和依赖。
+     */
     public Evm7702CollectionRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
+    /**
+     * 构建或生成 {@code createAccountProjection} 对应的结果，并执行输入和状态校验。
+     */
     public void createAccountProjection(UUID tenantId, UUID custodyAddressId, String chain,
                                         String network, String authorityAddress) {
         jdbc.update("""
@@ -37,6 +48,9 @@ public class Evm7702CollectionRepository {
                 on conflict (tenant_id, custody_address_id, chain) do nothing
                 """, UUID.randomUUID(), tenantId, custodyAddressId, chain, network, authorityAddress);
     }
+    /**
+     * 获取或查询 {@code findRuntimeConfig} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<RuntimeConfig> findRuntimeConfig(String chain, String network, String status) {
         return jdbc.query("""
                         select c.id, c.chain, c.network, c.chain_id, c.version,
@@ -58,11 +72,17 @@ public class Evm7702CollectionRepository {
                         """, (rs, rowNum) -> mapConfig(rs), chain, network, status)
                 .stream().findFirst();
     }
+    /**
+     * 校验 {@code requireActiveConfig} 对应的前置条件，不满足时抛出明确异常。
+     */
     public RuntimeConfig requireActiveConfig(String chain, String network) {
         return findRuntimeConfig(chain, network, "ACTIVE")
                 .orElseThrow(() -> new IllegalStateException(
                         "EIP-7702 ACTIVE configuration is missing for " + chain + "/" + network));
     }
+    /**
+     * 校验 {@code requireRuntimeConfigVersion} 对应的前置条件，不满足时抛出明确异常。
+     */
     public RuntimeConfig requireRuntimeConfigVersion(String chain, String network, int version) {
         return jdbc.query("""
                         select c.id, c.chain, c.network, c.chain_id, c.version,
@@ -86,6 +106,9 @@ public class Evm7702CollectionRepository {
                         "EIP-7702 configuration version is missing for "
                                 + chain + "/" + network + "/" + version));
     }
+    /**
+     * 获取或查询 {@code listRuntimeTargets} 对应的数据，供调用方读取当前状态。
+     */
     public List<RuntimeTarget> listRuntimeTargets() {
         return jdbc.query("""
                 select p.chain, p.network,
@@ -106,6 +129,9 @@ public class Evm7702CollectionRepository {
                 """, (rs, rowNum) -> new RuntimeTarget(
                 rs.getString("chain"), rs.getString("network"), rs.getBoolean("active")));
     }
+    /**
+     * 获取或查询 {@code listUnknownAttempts} 对应的数据，供调用方读取当前状态。
+     */
     public List<UnknownAttempt> listUnknownAttempts(String chain, String network, int limit) {
         return jdbc.query("""
                 select b.tenant_id, b.id batch_id, a.tx_hash,
@@ -124,6 +150,9 @@ public class Evm7702CollectionRepository {
                 rs.getString("tx_hash"), rs.getString("signed_tx_ciphertext"),
                 rs.getInt("rebroadcast_count")), chain, network, Math.min(Math.max(limit, 1), 100));
     }
+    /**
+     * 记录或保存 {@code recordRecoveryAttempt} 对应的数据，并遵守幂等和事务约束。
+     */
     public void recordRecoveryAttempt(UnknownAttempt attempt) {
         jdbc.update("""
                 update evm_collection_batch_attempt
@@ -133,6 +162,9 @@ public class Evm7702CollectionRepository {
                  where tenant_id = ? and batch_id = ? and tx_hash = ? and status = 'UNKNOWN'
                 """, attempt.tenantId(), attempt.batchId(), attempt.txHash());
     }
+    /**
+     * 写入或更新 {@code markRecoveryError} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void markRecoveryError(UnknownAttempt attempt, String errorCode, String errorMessage) {
         jdbc.update("""
                 update evm_collection_batch_attempt
@@ -147,6 +179,9 @@ public class Evm7702CollectionRepository {
                 """, errorCode, truncate(errorMessage, 1000), attempt.tenantId(), attempt.batchId());
     }
 
+    /**
+     * 执行 {@code claimNextBatch} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public Optional<Batch> claimNextBatch(String chain, String network) {
         RuntimeConfig config = requireActiveConfig(chain, network);
@@ -288,6 +323,9 @@ public class Evm7702CollectionRepository {
                 signatureDeadline, config, List.copyOf(items)));
     }
 
+    /**
+     * 记录或保存 {@code saveSignedAttempt} 对应的数据，并遵守幂等和事务约束。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void saveSignedAttempt(Batch batch, PreparedAttempt attempt) {
         if (!batch.tenantId().equals(attempt.tenantId()) || !batch.id().equals(attempt.batchId())) {
@@ -336,6 +374,9 @@ public class Evm7702CollectionRepository {
                 attempt.encryptionKeyVersion());
     }
 
+    /**
+     * 写入或更新 {@code markSubmitted} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void markSubmitted(UUID tenantId, UUID batchId, String txHash) {
         if (jdbc.update("""
@@ -367,6 +408,9 @@ public class Evm7702CollectionRepository {
                    and cr.status in ('SIGNING', 'SENT')
                 """, txHash, tenantId, batchId);
     }
+    /**
+     * 写入或更新 {@code markBroadcastUnknown} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void markBroadcastUnknown(UUID tenantId, UUID batchId, String errorCode, String errorMessage) {
         jdbc.update("""
                 update evm_collection_batch
@@ -379,6 +423,9 @@ public class Evm7702CollectionRepository {
                  where tenant_id = ? and batch_id = ? and status = 'CREATED'
                 """, errorCode, truncate(errorMessage, 1000), tenantId, batchId);
     }
+    /**
+     * 获取或查询 {@code findPendingBatch} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<PendingBatch> findPendingBatch(UUID tenantId, UUID batchId) {
         return jdbc.query("""
                 select b.tenant_id, b.id, b.canonical_tx_hash, b.status,
@@ -394,6 +441,9 @@ public class Evm7702CollectionRepository {
                 rs.getInt("required_confirmations"), rs.getString("collector_address")), tenantId, batchId)
                 .stream().findFirst();
     }
+    /**
+     * 获取或查询 {@code listPendingBatches} 对应的数据，供调用方读取当前状态。
+     */
     public List<PendingBatch> listPendingBatches(String chain, String network, int limit) {
         return jdbc.query("""
                 select b.tenant_id, b.id, b.canonical_tx_hash, b.status,
@@ -412,6 +462,9 @@ public class Evm7702CollectionRepository {
                 rs.getInt("required_confirmations"), rs.getString("collector_address")),
                 chain, network, Math.min(Math.max(limit, 1), 200));
     }
+    /**
+     * 获取或查询 {@code listBatchItemIdentities} 对应的数据，供调用方读取当前状态。
+     */
     public List<BatchItemIdentity> listBatchItemIdentities(UUID tenantId, UUID batchId) {
         return jdbc.query("""
                 select item_index, authority_address, token_contract, recipient,
@@ -425,6 +478,9 @@ public class Evm7702CollectionRepository {
                 rs.getBigDecimal("requested_amount_atomic").toBigIntegerExact()), tenantId, batchId);
     }
 
+    /**
+     * 执行 {@code completeBatch} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void completeBatch(UUID tenantId, UUID batchId, String txHash,
                               BigInteger gasUsed, BigInteger effectiveGasPrice,
@@ -521,6 +577,9 @@ public class Evm7702CollectionRepository {
                 """, tenantId, batchId, txHash);
     }
 
+    /**
+     * 删除或释放 {@code releaseUnbroadcastBatch} 对应的资源，并收敛相关业务状态。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public void releaseUnbroadcastBatch(Batch batch, String errorCode, String errorMessage) {
         int attempts = Optional.ofNullable(jdbc.queryForObject("""
@@ -562,6 +621,9 @@ public class Evm7702CollectionRepository {
                    and cr.status = 'SIGNING'
                 """, truncate(errorMessage, 1000), batch.tenantId(), batch.id());
     }
+    /**
+     * 执行 {@code mapConfig} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private RuntimeConfig mapConfig(ResultSet rs) throws SQLException {
         String configuredRelayer = rs.getString("relayer_address");
         String derivedRelayer = rs.getString("address");
@@ -598,6 +660,9 @@ public class Evm7702CollectionRepository {
                 rs.getBoolean("batch_withdrawal_enabled"), rs.getInt("withdrawal_max_wait_ms"),
                 rs.getInt("withdrawal_max_batch_items"), relayer);
     }
+    /**
+     * 执行 {@code mapClaimedItem} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private ClaimedItem mapClaimedItem(ResultSet rs, int decimals) throws SQLException {
         BigDecimal amount = rs.getBigDecimal("amount");
         BigInteger atomic;
@@ -628,6 +693,9 @@ public class Evm7702CollectionRepository {
                 rs.getObject("tenant_id", UUID.class), rs.getObject("custody_address_id", UUID.class),
                 rs.getString("from_address"), rs.getString("to_address"), amount, atomic, authority);
     }
+    /**
+     * 转换或计算 {@code truncate} 对应的值，统一金额、格式和边界规则。
+     */
     private static String truncate(String value, int max) {
         if (value == null) return null;
         return value.length() <= max ? value : value.substring(0, max);

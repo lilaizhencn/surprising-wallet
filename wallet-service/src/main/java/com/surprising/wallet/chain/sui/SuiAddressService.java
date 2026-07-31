@@ -30,16 +30,25 @@ class SuiAddressService {
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
 
+    /**
+     * 构建或生成 {@code createNativeAddress} 对应的结果，并执行输入和状态校验。
+     */
     public ChainAddressRecord createNativeAddress(UUID tenantId, long userId, int biz,
                                                   long derivationIndex, String walletRole) {
         return createAddress(tenantId, "SUI", userId, biz, derivationIndex, walletRole);
     }
 
+    /**
+     * 构建或生成 {@code createCoinAddress} 对应的结果，并执行输入和状态校验。
+     */
     public ChainAddressRecord createCoinAddress(UUID tenantId, String symbol, long userId, int biz,
                                                 long derivationIndex, String walletRole) {
         return createAddress(tenantId, symbol, userId, biz, derivationIndex, walletRole);
     }
 
+    /**
+     * 构建或生成 {@code createAddress} 对应的结果，并执行输入和状态校验。
+     */
     private ChainAddressRecord createAddress(UUID tenantId, String symbol, long userId, int biz,
                                              long derivationIndex, String walletRole) {
         Objects.requireNonNull(tenantId, "tenantId is required");

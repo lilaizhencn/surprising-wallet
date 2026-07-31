@@ -15,6 +15,9 @@ public record TronGasPolicy(BigDecimal minGasTopup,
                             BigDecimal maxGasTopup,
                             BigDecimal targetGasBalance,
                             long trc20FeeLimitSun,
+                            /**
+                             * 执行 {@code nileDefault} 对应的辅助逻辑，完成数据处理并维护状态边界。
+                             */
                             BigDecimal reserveSafetyMultiplier) {    public static TronGasPolicy nileDefault() {
         return new TronGasPolicy(new BigDecimal("1"), new BigDecimal("30"), new BigDecimal("10"),
                 30_000_000L, new BigDecimal("1.20"));

@@ -18,7 +18,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.config.WalletStartupValidator;
 
+/**
+ * 验证 {@code WalletStartupValidatorTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class WalletStartupValidatorTest {
+    /**
+     * 验证 {@code enabledProfilesRejectPlaceholderRpcNodes} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void enabledProfilesRejectPlaceholderRpcNodes() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
@@ -34,6 +40,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("ADA/preprod"));
     }
 
+    /**
+     * 验证 {@code enabledProfilesAcceptConfiguredRpcNodes} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void enabledProfilesAcceptConfiguredRpcNodes() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
@@ -45,6 +54,9 @@ class WalletStartupValidatorTest {
         assertDoesNotThrow(validator::validateProfiles);
     }
 
+    /**
+     * 验证 {@code enabledEvmProfileAcceptsExplicitGasAndFeeModels} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void enabledEvmProfileAcceptsExplicitGasAndFeeModels() throws Exception {
         AccountChainProfile profile = evmProfile("BASE", "sepolia", "ETH_BASE",
@@ -58,6 +70,9 @@ class WalletStartupValidatorTest {
         assertDoesNotThrow(validator::validateProfiles);
     }
 
+    /**
+     * 验证 {@code activeEip7702ConfigAcceptsMatchingEnabledEvmProfile} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void activeEip7702ConfigAcceptsMatchingEnabledEvmProfile() throws Exception {
         AccountChainProfile profile = evmProfile("BASE", "sepolia", "ETH_BASE",
@@ -75,6 +90,9 @@ class WalletStartupValidatorTest {
         assertDoesNotThrow(validator::validateProfiles);
     }
 
+    /**
+     * 验证 {@code enabledEvmProfileRejectsAmbiguousOldL2GasPolicy} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void enabledEvmProfileRejectsAmbiguousOldL2GasPolicy() throws Exception {
         AccountChainProfile profile = evmProfile("BASE", "sepolia", "ETH_BASE",
@@ -88,6 +106,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("invalid fee policy"));
     }
 
+    /**
+     * 验证 {@code testEnvironmentRejectsMultipleEnabledNetworksForOneChain} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void testEnvironmentRejectsMultipleEnabledNetworksForOneChain() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
@@ -102,6 +123,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("multiple enabled networks"));
     }
 
+    /**
+     * 验证 {@code productionRejectsMultipleEnabledNetworksForOneChain} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void productionRejectsMultipleEnabledNetworksForOneChain() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
@@ -116,6 +140,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("ETH"));
     }
 
+    /**
+     * 验证 {@code productionRejectsTestNetwork} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void productionRejectsTestNetwork() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
@@ -129,6 +156,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("cannot enable test network"));
     }
 
+    /**
+     * 验证 {@code dotProfilesRequireRuntimeServiceNode} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void dotProfilesRequireRuntimeServiceNode() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
@@ -143,6 +173,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("DOT/westend"));
     }
 
+    /**
+     * 验证 {@code hyperCoreProfilesRequireInfoAndExchangeNodes} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void hyperCoreProfilesRequireInfoAndExchangeNodes() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
@@ -157,6 +190,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("HYPERCORE/testnet"));
     }
 
+    /**
+     * 验证 {@code hyperCoreProfilesAcceptInfoAndExchangeNodes} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void hyperCoreProfilesAcceptInfoAndExchangeNodes() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
@@ -171,6 +207,9 @@ class WalletStartupValidatorTest {
         assertDoesNotThrow(validator::validateProfiles);
     }
 
+    /**
+     * 验证 {@code cardanoBlockfrostNodesRequireProjectId} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void cardanoBlockfrostNodesRequireProjectId() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
@@ -185,6 +224,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("ADA/preprod"));
     }
 
+    /**
+     * 验证 {@code digestWalletRpcNodesRequireCredentials} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void digestWalletRpcNodesRequireCredentials() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
@@ -199,6 +241,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("XMR/regtest"));
     }
 
+    /**
+     * 验证 {@code xmrRegtestProfilesRequireFaucetAndDaemonNodes} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void xmrRegtestProfilesRequireFaucetAndDaemonNodes() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
@@ -213,6 +258,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("XMR/regtest"));
     }
 
+    /**
+     * 验证 {@code xmrRegtestProfilesAcceptConfiguredRpcFaucetAndDaemonNodes} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void xmrRegtestProfilesAcceptConfiguredRpcFaucetAndDaemonNodes() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(
@@ -229,6 +277,9 @@ class WalletStartupValidatorTest {
         assertDoesNotThrow(validator::validateProfiles);
     }
 
+    /**
+     * 验证 {@code placeholderDetectionCoversCommonSeedMarkers} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void placeholderDetectionCoversCommonSeedMarkers() {
         assertTrue(WalletStartupValidator.containsPlaceholder("https://example.com/CHANGE_ME_KEY"));
@@ -236,6 +287,9 @@ class WalletStartupValidatorTest {
         assertTrue(WalletStartupValidator.containsPlaceholder("replace_me"));
     }
 
+    /**
+     * 验证 {@code enabledTokenConfigRejectsPlaceholderContracts} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void enabledTokenConfigRejectsPlaceholderContracts() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(List.of(), List.of(), List.of()),
@@ -251,6 +305,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("NEAR/USDC"));
     }
 
+    /**
+     * 验证 {@code activeTokenAssetRejectsMissingContracts} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void activeTokenAssetRejectsMissingContracts() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(List.of(), List.of(), List.of()),
@@ -265,6 +322,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("ADA/USDT"));
     }
 
+    /**
+     * 验证 {@code activeTokenAssetRejectsMissingEnabledTokenConfig} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void activeTokenAssetRejectsMissingEnabledTokenConfig() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(List.of(), List.of(), List.of()),
@@ -280,6 +340,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("DOT/USDC"));
     }
 
+    /**
+     * 验证 {@code activeTokenAssetRejectsMismatchedTokenConfigContract} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void activeTokenAssetRejectsMismatchedTokenConfigContract() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(List.of(), List.of(), List.of()),
@@ -296,6 +359,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("NEAR/USDC"));
     }
 
+    /**
+     * 验证 {@code activeTokenAssetAcceptsMatchingTokenConfigContract} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void activeTokenAssetAcceptsMatchingTokenConfigContract() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(List.of(), List.of(), List.of()),
@@ -310,6 +376,9 @@ class WalletStartupValidatorTest {
         assertDoesNotThrow(validator::validateEnabledAssetsAndTokens);
     }
 
+    /**
+     * 验证 {@code enabledTokenConfigRejectsNetworkMismatchWithEnabledProfile} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void enabledTokenConfigRejectsNetworkMismatchWithEnabledProfile() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(List.of(), List.of(), List.of()),
@@ -327,6 +396,9 @@ class WalletStartupValidatorTest {
         assertTrue(error.getMessage().contains("NEAR/USDC"));
     }
 
+    /**
+     * 验证 {@code enabledTokenConfigMatchesAnyEnabledTestNetworkProfile} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void enabledTokenConfigMatchesAnyEnabledTestNetworkProfile() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(List.of(), List.of(), List.of()),
@@ -342,6 +414,9 @@ class WalletStartupValidatorTest {
         assertDoesNotThrow(validator::validateEnabledAssetsAndTokens);
     }
 
+    /**
+     * 验证 {@code enabledTokenConfigAllowsBlankNetworkForLegacyRows} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void enabledTokenConfigAllowsBlankNetworkForLegacyRows() throws Exception {
         WalletStartupValidator validator = validator(new FakeRepository(List.of(), List.of(), List.of()),
@@ -354,10 +429,16 @@ class WalletStartupValidatorTest {
         assertDoesNotThrow(validator::validateEnabledAssetsAndTokens);
     }
 
+    /**
+     * 验证 {@code validator} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static WalletStartupValidator validator(ChainJdbcRepository repository) throws Exception {
         return validator(repository, new FakeJdbcTemplate(List.of(), List.of()));
     }
 
+    /**
+     * 验证 {@code validator} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static WalletStartupValidator validator(ChainJdbcRepository repository,
                                                     JdbcTemplate jdbcTemplate) throws Exception {
         WalletStartupValidator validator = new WalletStartupValidator(repository, null, jdbcTemplate, null);
@@ -365,12 +446,18 @@ class WalletStartupValidatorTest {
         return validator;
     }
 
+    /**
+     * 验证 {@code setField} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void setField(Object target, String name, Object value) throws Exception {
         Field field = WalletStartupValidator.class.getDeclaredField(name);
         field.setAccessible(true);
         field.set(target, value);
     }
 
+    /**
+     * 验证 {@code profile} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static AccountChainProfile profile(String chain, String network) {
         return AccountChainProfile.builder()
                 .chain(chain)
@@ -385,6 +472,9 @@ class WalletStartupValidatorTest {
                 .build();
     }
 
+    /**
+     * 验证 {@code evmProfile} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static AccountChainProfile evmProfile(
             String chain, String network, String nativeSymbol,
             String gasPolicy, String feeModel) {
@@ -404,10 +494,16 @@ class WalletStartupValidatorTest {
                 .build();
     }
 
+    /**
+     * 验证 {@code node} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static ChainRpcNode node(String label, String rpcUrl, String apiKey) {
         return node("ADA", "rpc", label, "HTTP_JSON_RPC", "NONE", rpcUrl, apiKey, null, null);
     }
 
+    /**
+     * 验证 {@code node} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static ChainRpcNode node(String chain, String purpose, String label, String connectionType,
                                      String authType, String rpcUrl, String apiKey,
                                      String username, String password) {
@@ -427,6 +523,9 @@ class WalletStartupValidatorTest {
                 .build();
     }
 
+    /**
+     * 验证 {@code node} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static ChainRpcNode node(String chain, String network, String purpose,
                                      String label, String rpcUrl) {
         return ChainRpcNode.builder()
@@ -442,6 +541,9 @@ class WalletStartupValidatorTest {
                 .build();
     }
 
+    /**
+     * 验证 {@code network} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String network(String chain) {
         return switch (chain) {
             case "DOT" -> "westend";
@@ -453,11 +555,26 @@ class WalletStartupValidatorTest {
         };
     }
 
+    /**
+     * 测试替身 {@code FakeRepository}，用于隔离外部依赖并验证调用参数和状态变化。
+     */
     private static final class FakeRepository extends ChainJdbcRepository {
+        /**
+         * 保存 {@code profiles}，用于承载当前测试夹具的配置或运行数据。
+         */
         private final List<AccountChainProfile> profiles;
+        /**
+         * 保存 {@code nodes}，用于承载当前测试夹具的配置或运行数据。
+         */
         private final List<ChainRpcNode> nodes;
+        /**
+         * 保存 {@code tokens}，表示测试所覆盖的链、网络、资产或代币配置。
+         */
         private final List<TokenDefinition> tokens;
 
+        /**
+         * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private FakeRepository(List<AccountChainProfile> profiles, List<ChainRpcNode> nodes,
                                List<TokenDefinition> tokens) {
             super(null);
@@ -466,16 +583,25 @@ class WalletStartupValidatorTest {
             this.tokens = tokens;
         }
 
+        /**
+         * 验证 {@code listEnabledChainProfiles} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public List<AccountChainProfile> listEnabledChainProfiles() {
             return profiles;
         }
 
+        /**
+         * 验证 {@code listEnabledRpcNodes} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public List<ChainRpcNode> listEnabledRpcNodes(String chain, String network, String environment) {
             return listEnabledRpcNodes(chain, network, environment, "rpc");
         }
 
+        /**
+         * 验证 {@code listEnabledRpcNodes} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public List<ChainRpcNode> listEnabledRpcNodes(String chain, String network,
                                                       String environment, String purpose) {
@@ -486,6 +612,9 @@ class WalletStartupValidatorTest {
                     .toList();
         }
 
+        /**
+         * 验证 {@code listTokens} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public List<TokenDefinition> listTokens(String chain) {
             return tokens.stream()
@@ -493,6 +622,9 @@ class WalletStartupValidatorTest {
                     .toList();
         }
 
+        /**
+         * 验证 {@code findAsset} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public Optional<ChainAsset> findAsset(String chain, String symbol) {
             return profiles.stream()
@@ -508,6 +640,9 @@ class WalletStartupValidatorTest {
                             .build());
         }
 
+        /**
+         * 验证 {@code countActiveNativeAssets} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public int countActiveNativeAssets(String chain) {
             return profiles.stream()
@@ -515,23 +650,47 @@ class WalletStartupValidatorTest {
         }
     }
 
+    /**
+     * 测试替身 {@code FakeJdbcTemplate}，用于隔离外部依赖并验证调用参数和状态变化。
+     */
     private static final class FakeJdbcTemplate extends JdbcTemplate {
+        /**
+         * 保存 {@code tokenRows}，表示测试所覆盖的链、网络、资产或代币配置。
+         */
         private final List<Map<String, Object>> tokenRows;
+        /**
+         * 保存 {@code assetRows}，表示测试所覆盖的链、网络、资产或代币配置。
+         */
         private final List<Map<String, Object>> assetRows;
+        /**
+         * 保存 {@code profileRows}，用于承载当前测试夹具的配置或运行数据。
+         */
         private final List<Map<String, Object>> profileRows;
+        /**
+         * 保存 {@code eip7702Rows}，用于承载当前测试夹具的配置或运行数据。
+         */
         private final List<Map<String, Object>> eip7702Rows;
 
+        /**
+         * 验证 {@code FakeJdbcTemplate} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private FakeJdbcTemplate(List<Map<String, Object>> tokenRows,
                                  List<Map<String, Object>> assetRows) {
             this(tokenRows, assetRows, List.of(), List.of());
         }
 
+        /**
+         * 验证 {@code FakeJdbcTemplate} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private FakeJdbcTemplate(List<Map<String, Object>> tokenRows,
                                  List<Map<String, Object>> assetRows,
                                  List<Map<String, Object>> profileRows) {
             this(tokenRows, assetRows, profileRows, List.of());
         }
 
+        /**
+         * 验证 {@code FakeJdbcTemplate} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private FakeJdbcTemplate(List<Map<String, Object>> tokenRows,
                                  List<Map<String, Object>> assetRows,
                                  List<Map<String, Object>> profileRows,
@@ -542,6 +701,9 @@ class WalletStartupValidatorTest {
             this.eip7702Rows = eip7702Rows;
         }
 
+        /**
+         * 验证 {@code queryForList} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public List<Map<String, Object>> queryForList(String sql) {
             if (sql.contains("from token_config")) {

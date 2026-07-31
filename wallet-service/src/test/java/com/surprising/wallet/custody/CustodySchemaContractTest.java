@@ -14,10 +14,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code CustodySchemaContractTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class CustodySchemaContractTest {
+    /**
+     * 保存 {@code PROTECTED_FILES}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final Map<String, String> PROTECTED_FILES = Map.of(
             "keypairs", "755b669714430fc2aa814bca1402907bf3bd6636a6381c746db6bae19aec0fc7");
 
+    /**
+     * 验证 {@code cleanBaselineContainsTenantIsolationAndReliableEvents} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void cleanBaselineContainsTenantIsolationAndReliableEvents() throws Exception {
         Path root = projectRoot();
@@ -106,6 +115,9 @@ class CustodySchemaContractTest {
         assertFalse(sql.contains("custody_tenant_user_email_key ON public.custody_tenant_user USING btree (COALESCE(tenant_id"));
     }
 
+    /**
+     * 验证 {@code localKeypairFileRemainsByteIdentical} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void localKeypairFileRemainsByteIdentical() throws Exception {
         Path root = projectRoot();
@@ -115,11 +127,17 @@ class CustodySchemaContractTest {
         }
     }
 
+    /**
+     * 验证 {@code sha256} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String sha256(Path path) throws IOException, NoSuchAlgorithmException {
         return HexFormat.of().formatHex(
                 MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
     }
 
+    /**
+     * 验证 {@code projectRoot} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Path projectRoot() throws IOException {
         Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath();
         while (current != null) {

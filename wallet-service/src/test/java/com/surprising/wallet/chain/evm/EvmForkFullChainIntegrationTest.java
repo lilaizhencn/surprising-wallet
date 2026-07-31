@@ -44,11 +44,26 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code EvmForkFullChainIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class EvmForkFullChainIntegrationTest {
+    /**
+     * 保存 {@code TEST_TENANT_ID}，用于标识测试中的交易、区块或业务记录。
+     */
     private static final UUID TEST_TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000001");
+    /**
+     * 保存 {@code LOCAL_RPC}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private static final String LOCAL_RPC = "http://127.0.0.1:8545";
+    /**
+     * 保存 {@code WEI_PER_ETH}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final BigDecimal WEI_PER_ETH = new BigDecimal("1000000000000000000");
 
+    /**
+     * 验证 {@code shouldExecuteNativeAndErc20ForkFullChain} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldExecuteNativeAndErc20ForkFullChain() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("evm.fork.enabled"),
@@ -150,6 +165,9 @@ class EvmForkFullChainIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code prepareDatabase} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void prepareDatabase(JdbcTemplate jdbcTemplate, ChainType chain, String nativeSymbol,
                                         String walletAddress, String derivationPath) {
         String account = walletAddress.toLowerCase(Locale.ROOT);
@@ -183,6 +201,9 @@ class EvmForkFullChainIntegrationTest {
                 derivationPath);
     }
 
+    /**
+     * 验证 {@code tokenContracts} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static List<TokenContract> tokenContracts(JdbcTemplate jdbcTemplate, ChainType chain) {
         return jdbcTemplate.query("""
                         select symbol, contract_address, decimals
@@ -195,6 +216,9 @@ class EvmForkFullChainIntegrationTest {
                 chain.name());
     }
 
+    /**
+     * 验证 {@code walletCredentials} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Credentials walletCredentials(ChainType chain) throws Exception {
         Bip32Node node = Bip32Node.decode(sig2Master())
                 .getChild(44)
@@ -205,14 +229,23 @@ class EvmForkFullChainIntegrationTest {
         return Credentials.create(node.getEcKey().getPrivateKeyAsHex());
     }
 
+    /**
+     * 验证 {@code derivationPath} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String derivationPath(ChainType chain) {
         return "m/44/2/1/" + derivationIndex(chain) + "/0";
     }
 
+    /**
+     * 验证 {@code derivationIndex} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static int derivationIndex(ChainType chain) {
         return 92001 + chain.ordinal();
     }
 
+    /**
+     * 验证 {@code sig2Master} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String sig2Master() throws Exception {
         String fromProperty = System.getProperty("evm.sig2.master");
         if (isValidMasterKey(fromProperty)) {
@@ -235,6 +268,9 @@ class EvmForkFullChainIntegrationTest {
         return testMasterKey();
     }
 
+    /**
+     * 验证 {@code isValidMasterKey} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static boolean isValidMasterKey(String value) {
         if (value == null || value.isBlank() || value.contains("${")) {
             return false;
@@ -247,12 +283,18 @@ class EvmForkFullChainIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code testMasterKey} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String testMasterKey() {
         byte[] seed = new byte[32];
         Arrays.fill(seed, (byte) 0x42);
         return Bip32Node.getMasterKey(seed).privSerialize(Bip32Node.TYPE_BITCOIN, true);
     }
 
+    /**
+     * 验证 {@code projectRoot} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Path projectRoot() {
         Path current = Path.of("").toAbsolutePath();
         while (current != null) {
@@ -266,6 +308,9 @@ class EvmForkFullChainIntegrationTest {
         throw new IllegalStateException("cannot locate project root");
     }
 
+    /**
+     * 验证 {@code sendUnlockedNative} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TransactionReceipt sendUnlockedNative(Web3j web3j, String from, String to, BigDecimal amount) throws Exception {
         BigInteger gasPrice = web3j.ethGasPrice().send().getGasPrice();
         EthSendTransaction sent = web3j.ethSendTransaction(
@@ -274,6 +319,9 @@ class EvmForkFullChainIntegrationTest {
         return waitReceipt(web3j, sent);
     }
 
+    /**
+     * 验证 {@code sendUnlockedTokenCall} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TransactionReceipt sendUnlockedTokenCall(Web3j web3j, String from, String contract, String data) throws Exception {
         BigInteger gasPrice = web3j.ethGasPrice().send().getGasPrice();
         EthSendTransaction sent = web3j.ethSendTransaction(
@@ -282,6 +330,9 @@ class EvmForkFullChainIntegrationTest {
         return waitReceipt(web3j, sent);
     }
 
+    /**
+     * 验证 {@code sendSignedNative} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static SignedTx sendSignedNative(Web3j web3j, Credentials from, String to,
                                              BigDecimal amount, long chainId) throws Exception {
         BigDecimal before = getNativeBalance(web3j, from.getAddress());
@@ -294,6 +345,9 @@ class EvmForkFullChainIntegrationTest {
         return new SignedTx(receipt, before.subtract(after).subtract(amount));
     }
 
+    /**
+     * 验证 {@code sendSignedTokenTransfer} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static SignedTx sendSignedTokenTransfer(Web3j web3j, Credentials from, String contract,
                                                     String to, BigDecimal amount, int tokenDecimals,
                                                     long chainId) throws Exception {
@@ -307,6 +361,9 @@ class EvmForkFullChainIntegrationTest {
         return new SignedTx(receipt, before.subtract(after));
     }
 
+    /**
+     * 验证 {@code sendSigned} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TransactionReceipt sendSigned(Web3j web3j, RawTransaction raw, Credentials credentials,
                                                  long chainId) throws Exception {
         byte[] signed = TransactionEncoder.signMessage(raw, chainId, credentials);
@@ -314,6 +371,9 @@ class EvmForkFullChainIntegrationTest {
         return waitReceipt(web3j, sent);
     }
 
+    /**
+     * 验证 {@code waitReceipt} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TransactionReceipt waitReceipt(Web3j web3j, EthSendTransaction sent) throws Exception {
         if (sent.hasError()) {
             throw new IllegalStateException("transaction failed before broadcast: " + sent.getError().getMessage());
@@ -331,21 +391,33 @@ class EvmForkFullChainIntegrationTest {
         throw new IllegalStateException("transaction receipt timeout: " + txHash);
     }
 
+    /**
+     * 验证 {@code pendingNonce} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger pendingNonce(Web3j web3j, Credentials credentials) throws Exception {
         return web3j.ethGetTransactionCount(credentials.getAddress(), DefaultBlockParameterName.PENDING)
                 .send().getTransactionCount();
     }
 
+    /**
+     * 验证 {@code encodeMint} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String encodeMint(String to, BigDecimal amount, int tokenDecimals) {
         return FunctionEncoder.encode(new Function("mint",
                 List.of(new Address(to), new Uint256(tokenToUnits(amount, tokenDecimals))), List.of()));
     }
 
+    /**
+     * 验证 {@code encodeTransfer} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String encodeTransfer(String to, BigDecimal amount, int tokenDecimals) {
         return FunctionEncoder.encode(new Function("transfer",
                 List.of(new Address(to), new Uint256(tokenToUnits(amount, tokenDecimals))), List.of()));
     }
 
+    /**
+     * 验证 {@code tokenBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal tokenBalance(Web3j web3j, String token, String account, int tokenDecimals) throws Exception {
         Function function = new Function("balanceOf",
                 List.of(new Address(account)), List.of(TypeReference.create(Uint256.class)));
@@ -358,10 +430,16 @@ class EvmForkFullChainIntegrationTest {
         return new BigDecimal(raw).divide(decimalFactor(tokenDecimals), 18, RoundingMode.DOWN);
     }
 
+    /**
+     * 验证 {@code getNativeBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal getNativeBalance(Web3j web3j, String account) throws Exception {
         return weiToEth(web3j.ethGetBalance(account, DefaultBlockParameterName.LATEST).send().getBalance());
     }
 
+    /**
+     * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal ledger(JdbcTemplate jdbcTemplate, ChainType chain, String asset, String account) {
         return jdbcTemplate.queryForObject("""
                         select available_balance
@@ -370,30 +448,51 @@ class EvmForkFullChainIntegrationTest {
                         """, BigDecimal.class, chain.name(), asset, account);
     }
 
+    /**
+     * 验证 {@code assertBalanceEquals} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertBalanceEquals(BigDecimal expected, BigDecimal actual) {
         assertEquals(0, expected.setScale(18, RoundingMode.DOWN).compareTo(actual.setScale(18, RoundingMode.DOWN)));
     }
 
+    /**
+     * 验证 {@code fee} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal fee(SignedTx tx) {
         return tx.nativeFee();
     }
 
+    /**
+     * 验证 {@code ethToWei} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger ethToWei(BigDecimal amount) {
         return amount.multiply(WEI_PER_ETH).toBigIntegerExact();
     }
 
+    /**
+     * 验证 {@code tokenToUnits} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger tokenToUnits(BigDecimal amount, int tokenDecimals) {
         return amount.multiply(decimalFactor(tokenDecimals)).toBigIntegerExact();
     }
 
+    /**
+     * 验证 {@code decimalFactor} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal decimalFactor(int tokenDecimals) {
         return BigDecimal.TEN.pow(tokenDecimals);
     }
 
+    /**
+     * 验证 {@code weiToEth} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal weiToEth(BigInteger wei) {
         return new BigDecimal(wei).divide(WEI_PER_ETH, 18, RoundingMode.DOWN);
     }
 
+    /**
+     * 验证 {@code dataSource} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static DriverManagerDataSource dataSource() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
         dataSource.setDriverClassName("org.postgresql.Driver");

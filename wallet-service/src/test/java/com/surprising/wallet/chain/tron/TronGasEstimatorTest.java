@@ -8,7 +8,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code TronGasEstimatorTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class TronGasEstimatorTest {
+    /**
+     * 验证 {@code trxSufficient_shouldNotTopup} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void trxSufficient_shouldNotTopup() {
         TronGasEstimator estimator = new TronGasEstimator();
@@ -18,6 +24,9 @@ class TronGasEstimatorTest {
         assertEquals(BigDecimal.ZERO, decision.topupAmount());
     }
 
+    /**
+     * 验证 {@code trxInsufficient_shouldEnterWaitingGasWithBoundedTopup} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void trxInsufficient_shouldEnterWaitingGasWithBoundedTopup() {
         TronGasEstimator estimator = new TronGasEstimator();
@@ -28,6 +37,9 @@ class TronGasEstimatorTest {
         assertEquals(new BigDecimal("5"), decision.topupAmount());
     }
 
+    /**
+     * 验证 {@code trc20Fee_shouldRespectFeeLimit} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void trc20Fee_shouldRespectFeeLimit() {
         TronGasEstimator estimator = new TronGasEstimator();

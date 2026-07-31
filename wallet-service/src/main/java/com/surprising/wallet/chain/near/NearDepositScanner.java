@@ -50,6 +50,9 @@ class NearDepositScanner {
     /** 空 Merkle 根（表示 chunk 中没有交易） */
     private static final String EMPTY_MERKLE_ROOT = "11111111111111111111111111111111";
 
+    /**
+     * 定义 {@code MAPPER} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /** NEAR RPC 客户端 */
@@ -64,6 +67,9 @@ class NearDepositScanner {
     /** 运行时配置服务（可选） */
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
+    /**
+     * 扫描或观察 {@code scanAndCredit} 对应的链上状态，并转换为业务可用结果。
+     */
     public List<DepositEvent> scanAndCredit() {
         if (!scanning.compareAndSet(false, true)) {
             return List.of();
@@ -74,6 +80,9 @@ class NearDepositScanner {
             scanning.set(false);
         }
     }
+    /**
+     * 执行 {@code doScanAndCredit} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private List<DepositEvent> doScanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "near scanAndCredit");
         AccountChainProfile profile = profile();
@@ -101,6 +110,9 @@ class NearDepositScanner {
         return events;
     }
 
+    /**
+     * 扫描或观察 {@code scanBlock} 对应的链上状态，并转换为业务可用结果。
+     */
     private void scanBlock(long height, long latest, int requiredConfirmations,
                            Map<String, ChainAddressRecord> nativeAddresses,
                            Map<String, TokenDefinition> tokensByContract,
@@ -180,11 +192,17 @@ class NearDepositScanner {
             }
         }
     }
+    /**
+     * 执行 {@code transactionSucceeded} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private boolean transactionSucceeded(ScannedTransfer transfer) {
         JsonNode result = rpc.transactionStatus(transfer.txHash(), transfer.sender());
         JsonNode status = result.path("status");
         return status.has("SuccessValue") || status.has("SuccessReceiptId");
     }
+    /**
+     * 执行 {@code nativeTransfers} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     static List<NativeTransfer> nativeTransfers(JsonNode chunk, long blockHeight, long latestHeight) {
         List<NativeTransfer> transfers = new ArrayList<>();
         for (JsonNode transaction : chunk.path("transactions")) {
@@ -212,6 +230,9 @@ class NearDepositScanner {
         return transfers;
     }
 
+    /**
+     * 编码 {@code tokenTransfers} 对应的数据，生成链上或接口所需的表示。
+     */
     static List<TokenTransfer> tokenTransfers(JsonNode chunk, Map<String, TokenDefinition> tokensByContract,
                                               long blockHeight, long latestHeight) {
         List<TokenTransfer> transfers = new ArrayList<>();
@@ -247,6 +268,9 @@ class NearDepositScanner {
         }
         return transfers;
     }
+    /**
+     * 执行 {@code trackedNativeDepositAddresses} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Map<String, ChainAddressRecord> trackedNativeDepositAddresses() {
         Map<String, ChainAddressRecord> addresses = new HashMap<>();
         for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, SYMBOL)) {
@@ -256,6 +280,9 @@ class NearDepositScanner {
         }
         return addresses;
     }
+    /**
+     * 编码 {@code tokensByContract} 对应的数据，生成链上或接口所需的表示。
+     */
     private Map<String, TokenDefinition> tokensByContract() {
         Map<String, TokenDefinition> tokens = new HashMap<>();
         for (TokenDefinition token : repository.listTokens(CHAIN)) {
@@ -266,6 +293,9 @@ class NearDepositScanner {
         return tokens;
     }
 
+    /**
+     * 执行 {@code trackedTokenDepositAddresses} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Map<String, Map<String, ChainAddressRecord>> trackedTokenDepositAddresses(
             Map<String, TokenDefinition> tokensByContract) {
         Map<String, Map<String, ChainAddressRecord>> addresses = new HashMap<>();
@@ -282,6 +312,9 @@ class NearDepositScanner {
         }
         return addresses;
     }
+    /**
+     * 扫描或观察 {@code scanStart} 对应的链上状态，并转换为业务可用结果。
+     */
     private long scanStart(AccountChainProfile profile, long safeHeight) {
         return repository.findScanSafeHeight(CHAIN, SCANNER)
                 .map(height -> Math.min(height + 1L, safeHeight + 1L))
@@ -293,6 +326,9 @@ class NearDepositScanner {
                     return Math.max(0L, safeHeight - maxBlocksPerRun(profile) + 1L);
                 });
     }
+    /**
+     * 执行 {@code maxBlocksPerRun} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private int maxBlocksPerRun(AccountChainProfile profile) {
         Long configured = profile.getScanMaxBlocksPerRun();
         if (configured != null && configured > 0) {
@@ -304,25 +340,43 @@ class NearDepositScanner {
         }
         return 50;
     }
+    /**
+     * 校验 {@code requiredConfirmations} 对应的前置条件，不满足时抛出明确异常。
+     */
     private int requiredConfirmations(AccountChainProfile profile) {
         Integer configured = profile.getDepositConfirmations();
         return configured == null || configured <= 0 ? 1 : configured;
     }
+    /**
+     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
+     */
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
+    /**
+     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
+    /**
+     * 处理 {@code confirmations} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private static int confirmations(long latestHeight, long blockHeight) {
         return (int) Math.min(Integer.MAX_VALUE, Math.max(1L, latestHeight - blockHeight + 1L));
     }
+    /**
+     * 转换或计算 {@code normalize} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalize(String address) {
         return address == null ? "" : address.trim().toLowerCase(Locale.ROOT);
     }
+    /**
+     * 解析或转换 {@code decodeFunctionArgs} 对应的数据，并校验其格式和边界。
+     */
     private static JsonNode decodeFunctionArgs(String encoded) {
         if (encoded == null || encoded.isBlank()) {
             return MAPPER.nullNode();
@@ -333,9 +387,18 @@ class NearDepositScanner {
             return MAPPER.nullNode();
         }
     }
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     interface ScannedTransfer {
+        /**
+         * 执行 {@code txHash} 对应的辅助逻辑，完成数据处理并维护状态边界。
+         */
         String txHash();
 
+        /**
+         * 发送或广播 {@code sender} 对应的链上请求，并返回节点处理结果。
+         */
         String sender();
     }
 

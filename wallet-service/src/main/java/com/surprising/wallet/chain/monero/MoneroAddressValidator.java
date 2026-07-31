@@ -14,16 +14,37 @@ import java.util.Set;
  * 支持的地址类型：主网（18）、测试网（53）、阶段网（24）等前缀。
  */
 public final class MoneroAddressValidator {
+    /**
+     * 定义 {@code ALPHABET} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final String ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    /**
+     * 定义 {@code FULL_BLOCK_SIZE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final int FULL_BLOCK_SIZE = 8;
+    /**
+     * 定义 {@code FULL_ENCODED_BLOCK_SIZE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final int FULL_ENCODED_BLOCK_SIZE = 11;
+    /**
+     * 定义 {@code DECODED_BLOCK_SIZES} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final int[] DECODED_BLOCK_SIZES = {0, 0, 1, 2, 0, 3, 4, 5, 0, 6, 7, 8};
+    /**
+     * 定义 {@code SUPPORTED_PREFIXES} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final Set<Integer> SUPPORTED_PREFIXES = Set.of(
             18, 19, 42,
             53, 54, 63,
             24, 25, 36);
+    /**
+     * 构造 {@code MoneroAddressValidator}，初始化该组件运行所需的状态和依赖。
+     */
     private MoneroAddressValidator() {
     }
+    /**
+     * 判断 {@code isValid} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     public static boolean isValid(String address) {
         String value = address == null ? "" : address.trim();
         if (value.length() != 95 && value.length() != 106) {
@@ -42,6 +63,9 @@ public final class MoneroAddressValidator {
         byte[] actual = Arrays.copyOfRange(decoded, decoded.length - 4, decoded.length);
         return Arrays.equals(expected, actual);
     }
+    /**
+     * 解析或转换 {@code decode} 对应的数据，并校验其格式和边界。
+     */
     private static byte[] decode(String encoded) {
         int fullBlockCount = encoded.length() / FULL_ENCODED_BLOCK_SIZE;
         int lastBlockEncodedSize = encoded.length() % FULL_ENCODED_BLOCK_SIZE;
@@ -68,6 +92,9 @@ public final class MoneroAddressValidator {
         }
         return decoded;
     }
+    /**
+     * 解析或转换 {@code decodeBlock} 对应的数据，并校验其格式和边界。
+     */
     private static boolean decodeBlock(String block, byte[] output, int offset, int decodedSize) {
         BigInteger value = BigInteger.ZERO;
         for (int i = 0; i < block.length(); i++) {

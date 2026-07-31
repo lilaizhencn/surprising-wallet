@@ -12,7 +12,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code Trc20AbiEncodingTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class Trc20AbiEncodingTest {
+    /**
+     * 验证 {@code transfer_shouldEncodeFunctionSelectorAndAmount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void transfer_shouldEncodeFunctionSelectorAndAmount() {
         String recipient = TronTridentKeyFactory.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(50), true));
@@ -21,6 +27,9 @@ class Trc20AbiEncodingTest {
         assertTrue(encoded.endsWith("00000000000000000000000000000000000000000000000000000000001312d0"));
     }
 
+    /**
+     * 验证 {@code transferEvent_shouldDecodeTopicsAndAmount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void transferEvent_shouldDecodeTopicsAndAmount() {
         String contract = TronTridentKeyFactory.toHexAddress(ECKey.fromPrivate(BigInteger.valueOf(51), true));
@@ -41,6 +50,9 @@ class Trc20AbiEncodingTest {
         assertEquals(BigInteger.valueOf(12_500_000L), log.rawAmount());
     }
 
+    /**
+     * 验证 {@code amountWithTooManyDecimals_shouldFail} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void amountWithTooManyDecimals_shouldFail() {
         String recipient = TronTridentKeyFactory.toBase58Address(ECKey.fromPrivate(BigInteger.valueOf(54), true));
@@ -48,6 +60,9 @@ class Trc20AbiEncodingTest {
                 () -> Trc20AbiCodec.encodeTransfer(recipient, new BigDecimal("0.0000001"), 6));
     }
 
+    /**
+     * 验证 {@code topic} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String topic(String base58Address) {
         return "000000000000000000000000" + TronAddressCodec.base58ToHex(base58Address).substring(2);
     }

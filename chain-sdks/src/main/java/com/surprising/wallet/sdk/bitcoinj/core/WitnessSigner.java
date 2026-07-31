@@ -31,8 +31,14 @@ import java.util.TreeMap;
  * <p>P2WSH见证数据结构：{@code [dummy(0x00), sig1, sig2, ..., sigM, witnessScript]}</p>
  */
 public class WitnessSigner {
+    /**
+     * 定义 {@code EMPTY} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final byte[] EMPTY = new byte[0];
 
+    /**
+     * 为 {@code signWitnessInput} 对应的交易或消息生成签名，并保持原始数据不被改变。
+     */
     public TransactionSignature signWitnessInput(Transaction tx, int index, ECKey key, Script witnessScript,
                                                  Coin value, Transaction.SigHash hashType) {
         if (tx == null || key == null || witnessScript == null || value == null || hashType == null) {
@@ -41,6 +47,9 @@ public class WitnessSigner {
         return tx.calculateWitnessSignature(index, key, witnessScript, value, hashType, false);
     }
 
+    /**
+     * 创建或构建 {@code assembleWitness} 对应的对象或结果，并完成必要的输入校验。
+     */
     public TransactionWitness assembleWitness(Script witnessScript, List<TransactionSignature> signatures) {
         if (witnessScript == null || signatures == null) {
             throw new IllegalArgumentException("witness script and signatures are required");
@@ -56,6 +65,9 @@ public class WitnessSigner {
         return TransactionWitness.of(pushes);
     }
 
+    /**
+     * 执行 {@code mergeWitness} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public TransactionWitness mergeWitness(TransactionWitness existingWitness, TransactionSignature newSignature, int slot) {
         if (existingWitness == null || newSignature == null) {
             throw new IllegalArgumentException("witness and signature are required");
@@ -82,6 +94,9 @@ public class WitnessSigner {
         return TransactionWitness.of(pushes);
     }
 
+    /**
+     * 执行 {@code mergeMultisigWitness} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public TransactionWitness mergeMultisigWitness(Transaction tx, int inputIndex, TransactionWitness existingWitness,
                                                    TransactionSignature newSignature, ECKey signingKey,
                                                    Script witnessScript, Coin value, int requiredSignatures) {
@@ -138,6 +153,9 @@ public class WitnessSigner {
         return TransactionWitness.of(pushes);
     }
 
+    /**
+     * 执行 {@code extractWitnessScript} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public Script extractWitnessScript(TransactionWitness witness) {
         if (witness == null || witness.getPushCount() < 2) {
             return null;
@@ -153,6 +171,9 @@ public class WitnessSigner {
         }
     }
 
+    /**
+     * 执行 {@code countSignatures} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public int countSignatures(TransactionWitness witness) {
         if (witness == null || witness.getPushCount() < 2) {
             return 0;
@@ -166,6 +187,9 @@ public class WitnessSigner {
         return count;
     }
 
+    /**
+     * 编码或序列化 {@code encodeSignatureForWitness} 对应的数据，生成链上或接口需要的表示。
+     */
     public static byte[] encodeSignatureForWitness(TransactionSignature signature) {
         if (signature == null) {
             throw new IllegalArgumentException("signature must not be null");
@@ -173,6 +197,9 @@ public class WitnessSigner {
         return signature.encodeToBitcoin();
     }
 
+    /**
+     * 解析或转换 {@code decodeSignature} 对应的数据，并校验其格式和边界。
+     */
     private static TransactionSignature decodeSignature(byte[] signatureBytes) {
         try {
             return TransactionSignature.decodeFromBitcoin(signatureBytes, false, false);
@@ -181,6 +208,9 @@ public class WitnessSigner {
         }
     }
 
+    /**
+     * 获取或查询 {@code findPubKeyIndex} 对应的数据，供调用方读取当前状态。
+     */
     private static int findPubKeyIndex(List<ECKey> pubKeys, ECKey signingKey) {
         for (int i = 0; i < pubKeys.size(); i++) {
             if (Arrays.equals(pubKeys.get(i).getPubKey(), signingKey.getPubKey())) {
@@ -190,6 +220,9 @@ public class WitnessSigner {
         return -1;
     }
 
+    /**
+     * 获取或查询 {@code findSigningPubKey} 对应的数据，供调用方读取当前状态。
+     */
     private static int findSigningPubKey(Transaction tx, int inputIndex, Script witnessScript, Coin value,
                                          List<ECKey> pubKeys, TransactionSignature signature) {
         for (int i = 0; i < pubKeys.size(); i++) {
@@ -200,6 +233,9 @@ public class WitnessSigner {
         return -1;
     }
 
+    /**
+     * 执行 {@code verifies} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static boolean verifies(Transaction tx, int inputIndex, Script witnessScript, Coin value,
                                     ECKey pubKey, TransactionSignature signature) {
         Sha256Hash hash = tx.hashForWitnessSignature(inputIndex, witnessScript, value,

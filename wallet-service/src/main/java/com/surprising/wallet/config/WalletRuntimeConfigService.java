@@ -99,8 +99,14 @@ public class WalletRuntimeConfigService {
             Map.entry("LTC", 30_000L),
             Map.entry("BTC", 60_000L),
             Map.entry("BCH", 60_000L));
+    /**
+     * 定义 {@code DEFAULT_SCAN_INTERVAL_MILLIS} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final long DEFAULT_SCAN_INTERVAL_MILLIS = 10_000L;
 
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository repository;
 
     /**

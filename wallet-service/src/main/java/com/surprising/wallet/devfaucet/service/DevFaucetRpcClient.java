@@ -24,12 +24,21 @@ public interface DevFaucetRpcClient {
 
     /** 交易被拒绝异常（永久性失败，不可重试） */
     final class RejectedException extends RuntimeException {
+        /**
+         * 构造 {@code RejectedException}，初始化该组件运行所需的状态和依赖。
+         */
         RejectedException(String message) { super(message); }
+        /**
+         * 构造 {@code RejectedException}，初始化该组件运行所需的状态和依赖。
+         */
         RejectedException(String message, Throwable cause) { super(message, cause); }
     }
 
     /** 交易结果不明确异常（临时性失败，可重试） */
     final class AmbiguousException extends RuntimeException {
+        /**
+         * 构造 {@code AmbiguousException}，初始化该组件运行所需的状态和依赖。
+         */
         AmbiguousException(String message, Throwable cause) { super(message, cause); }
     }
 }

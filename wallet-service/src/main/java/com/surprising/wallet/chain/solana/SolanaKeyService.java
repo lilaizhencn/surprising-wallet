@@ -49,6 +49,9 @@ class SolanaKeyService {
         this.keyMaterial = null;
         this.testProvider = new Ed25519KeyProvider(Ed25519KeyProvider.decodeMasterSeed(encodedMasterSeed));
     }
+    /**
+     * 判断 {@code isConfigured} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     public boolean isConfigured() {
         return testProvider != null || keyMaterial.isConfigured();
     }
@@ -101,6 +104,9 @@ class SolanaKeyService {
         Arrays.fill(seed, (byte) 0);
         return new Account(keyPair.getSecretKey());
     }
+    /**
+     * 获取或查询 {@code provider} 对应的数据，并向调用方返回当前业务状态。
+     */
     private Ed25519KeyProvider provider() {
         return testProvider != null ? testProvider : keyMaterial.ed25519();
     }

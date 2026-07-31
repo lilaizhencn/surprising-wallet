@@ -12,11 +12,26 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code LitecoinAddressGenerationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class LitecoinAddressGenerationTest {
+    /**
+     * 保存 {@code XPUB_1}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String XPUB_1 = "tpubD6NzVbkrYhZ4YeTnP6ae6en8YvKSvxvvCwh5X7gNpwqEeix6o7etGgsyGywcB9gS1bGTmC4WfLKAdK6vxDEzedd7PMRLcYk5yZLj5JkLAVB";
+    /**
+     * 保存 {@code XPUB_2}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String XPUB_2 = "tpubD6NzVbkrYhZ4WuN2bmdffo5p894oRYGQVCfKe3TKT4QVw7qQT18jG1FYbYyB3ePESejLdfaEFMRpsYGVjb4Bh6HiiWaSU8iJRVE46EirNBT";
+    /**
+     * 保存 {@code XPUB_3}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String XPUB_3 = "tpubD6NzVbkrYhZ4XKeuSHwv2p3snJxWjacFsu2rEEht2qMaM5FYV2RkbMaJEYNZGK7B3i8D46RTs83DJNPh2Jd5MzXivXCiHLbqAFKv8MKxrC4";
 
+    /**
+     * 验证 {@code sameRootKeysShouldGenerateLitecoinTestnetP2wshAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void sameRootKeysShouldGenerateLitecoinTestnetP2wshAddress() {
         String first = addressAt(0);
@@ -28,6 +43,9 @@ class LitecoinAddressGenerationTest {
         assertThrows(AddressFormatException.class, () -> Address.fromString(TestNet3Params.get(), first));
     }
 
+    /**
+     * 验证 {@code addressAt} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String addressAt(int index) {
         SegwitMultiSignAddressGenerator generator = new SegwitMultiSignAddressGenerator();
         generator.addECKey(Bip32Node.decode(XPUB_1).getChild(44).getChild(2).getChild(1).getChild(9001).getChild(index).getEcKey());

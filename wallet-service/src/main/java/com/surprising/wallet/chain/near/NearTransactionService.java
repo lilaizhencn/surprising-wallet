@@ -75,12 +75,18 @@ class NearTransactionService {
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
 
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** 运行时配置服务（可选） */
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
 
+    /**
+     * 构造 {@code NearTransactionService}，初始化该组件运行所需的状态和依赖。
+     */
     public NearTransactionService(NearRpcClient rpc,
                                   NearTransactionSigner signer,
                                   NearKeyService keyService,
@@ -90,6 +96,9 @@ class NearTransactionService {
         this.keyService = keyService;
         this.repository = repository;
     }
+    /**
+     * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
+     */
     public String sendNative(ChainAddressRecord from, String toAddress, BigInteger amountYocto) {
         JsonNode accessKey = rpc.accessKey(from.getAddress(), publicKeyBase58(from));
         long nonce = accessKey.path("nonce").asLong(0L) + 1L;
@@ -104,9 +113,15 @@ class NearTransactionService {
                 result.toString());
         return txHash;
     }
+    /**
+     * 执行 {@code accountExists} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public boolean accountExists(String accountId) {
         return rpc.accountExists(accountId);
     }
+    /**
+     * 执行 {@code activateImplicitAccount} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public String activateImplicitAccount(ChainAddressRecord payer, String accountId, BigInteger amountYocto) {
         if (!NearKeyService.isValidAccountId(accountId)) {
             throw new IllegalArgumentException("invalid NEAR account id: " + accountId);
@@ -116,6 +131,9 @@ class NearTransactionService {
         }
         return sendNative(payer, accountId, amountYocto);
     }
+    /**
+     * 发送或广播 {@code sendToken} 对应的链上请求，并返回节点处理结果。
+     */
     public String sendToken(ChainAddressRecord from, TokenDefinition token, String toAccountId, BigDecimal amount) {
         BigInteger atomicAmount = toAtomic(amount, token.getDecimals());
         ObjectNode args = objectMapper.createObjectNode();
@@ -130,6 +148,9 @@ class NearTransactionService {
         return txHash;
     }
 
+    /**
+     * 执行 {@code storageDeposit} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public String storageDeposit(ChainAddressRecord payer, TokenDefinition token,
                                  String accountId, BigInteger depositYocto) {
         ObjectNode args = objectMapper.createObjectNode();
@@ -144,6 +165,9 @@ class NearTransactionService {
         return txHash;
     }
 
+    /**
+     * 执行 {@code deployContractAndInit} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public DeployResult deployContractAndInit(ChainAddressRecord from, byte[] contractCode,
                                               String initMethod, byte[] initArgs,
                                               long gas, BigInteger depositYocto) {
@@ -161,12 +185,18 @@ class NearTransactionService {
                 result.toString());
         return new DeployResult(txHash, nonce, result);
     }
+    /**
+     * 编码 {@code tokenStorageRegistered} 对应的数据，生成链上或接口所需的表示。
+     */
     public boolean tokenStorageRegistered(TokenDefinition token, String accountId) {
         ObjectNode args = objectMapper.createObjectNode();
         args.put("account_id", accountId);
         JsonNode balance = rpc.viewFunctionJson(token.getContractAddress(), "storage_balance_of", jsonBytes(args));
         return balance != null && !balance.isNull() && !balance.isMissingNode();
     }
+    /**
+     * 编码 {@code tokenStorageMinimum} 对应的数据，生成链上或接口所需的表示。
+     */
     public BigInteger tokenStorageMinimum(TokenDefinition token) {
         JsonNode bounds = rpc.viewFunctionJson(token.getContractAddress(), "storage_balance_bounds",
                 "{}".getBytes(StandardCharsets.UTF_8));
@@ -174,6 +204,9 @@ class NearTransactionService {
         return new BigInteger(min);
     }
 
+    /**
+     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
                                      String orderNo, String txHash,
                                      String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
@@ -187,6 +220,9 @@ class NearTransactionService {
         return false;
     }
 
+    /**
+     * 处理 {@code collectNative} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigInteger amountYocto) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "near collectNative");
@@ -209,6 +245,9 @@ class NearTransactionService {
         }
     }
 
+    /**
+     * 处理 {@code collectToken} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public String collectToken(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                TokenDefinition token, String hotAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "near collectToken");
@@ -231,6 +270,9 @@ class NearTransactionService {
             throw e;
         }
     }
+    /**
+     * 校验 {@code ensureTokenStorageRegistered} 对应的输入或状态，失败时抛出明确异常。
+     */
     private void ensureTokenStorageRegistered(TokenDefinition token, String accountId) {
         if (tokenStorageRegistered(token, accountId)) {
             return;
@@ -252,6 +294,9 @@ class NearTransactionService {
             throw new IllegalStateException("NEAR token storage registration did not complete");
         }
     }
+    /**
+     * 处理 {@code waitForTokenStorageRegistered} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public boolean waitForTokenStorageRegistered(TokenDefinition token, String accountId, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
@@ -263,6 +308,9 @@ class NearTransactionService {
         return tokenStorageRegistered(token, accountId);
     }
 
+    /**
+     * 处理 {@code confirmCollection} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public boolean confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
                                      String collectionNo) {
         String txHash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
@@ -274,6 +322,9 @@ class NearTransactionService {
         }
         return false;
     }
+    /**
+     * 校验 {@code requireSuccessfulConfirmation} 对应的前置条件，不满足时抛出明确异常。
+     */
     public JsonNode requireSuccessfulConfirmation(String txHash, String senderAccountId, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         String sender = senderAccountId == null || senderAccountId.isBlank()
@@ -292,10 +343,16 @@ class NearTransactionService {
         }
         throw new IllegalStateException("NEAR confirmation timeout for " + txHash);
     }
+    /**
+     * 执行 {@code publicKeyBase58} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private String publicKeyBase58(ChainAddressRecord from) {
         return keyService.publicKeyBase58(from.getUserId(), from.getBiz(), from.getAddressIndex());
     }
 
+    /**
+     * 发送或广播 {@code sendFunctionCall} 对应的链上请求，并返回节点处理结果。
+     */
     private JsonNode sendFunctionCall(ChainAddressRecord from, String contractAccountId,
                                       String methodName, byte[] args, long gas, BigInteger depositYocto) {
         JsonNode accessKey = rpc.accessKey(from.getAddress(), publicKeyBase58(from));
@@ -307,6 +364,9 @@ class NearTransactionService {
         return rpc.broadcastTxCommit(signed.signedTransactionBase64());
     }
 
+    /**
+     * 记录或保存 {@code record} 对应的数据，并遵守幂等和事务约束。
+     */
     private void record(String hash, long actionIndex, String sender, String receiver,
                         String assetSymbol, BigDecimal amount,
                         long gasBurnt, long blockHeight, String status, String rawPayload) {
@@ -324,10 +384,16 @@ class NearTransactionService {
                 .rawPayload(rawPayload)
                 .build());
     }
+    /**
+     * 执行 {@code txSucceeded} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static boolean txSucceeded(JsonNode result) {
         JsonNode status = result.path("status");
         return status.has("SuccessValue") || status.has("SuccessReceiptId");
     }
+    /**
+     * 执行 {@code gasBurnt} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static long gasBurnt(JsonNode result) {
         long total = result.path("transaction_outcome").path("outcome").path("gas_burnt").asLong(0L);
         for (JsonNode receipt : result.path("receipts_outcome")) {
@@ -335,6 +401,9 @@ class NearTransactionService {
         }
         return total;
     }
+    /**
+     * 执行 {@code blockHeight} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static long blockHeight(JsonNode result) {
         long height = result.path("transaction_outcome").path("block_height").asLong(0L);
         for (JsonNode receipt : result.path("receipts_outcome")) {
@@ -342,17 +411,29 @@ class NearTransactionService {
         }
         return height;
     }
+    /**
+     * 编码 {@code toYocto} 对应的数据，生成链上或接口所需的表示。
+     */
     public static BigInteger toYocto(BigDecimal amount) {
         return amount.movePointRight(DECIMALS).setScale(0, RoundingMode.UNNECESSARY).toBigIntegerExact();
     }
+    /**
+     * 解析 {@code fromYocto} 对应的输入，并转换为当前业务模型。
+     */
     public static BigDecimal fromYocto(BigInteger amount) {
         return new BigDecimal(amount == null ? BigInteger.ZERO : amount)
                 .movePointLeft(DECIMALS)
                 .stripTrailingZeros();
     }
+    /**
+     * 编码 {@code toAtomic} 对应的数据，生成链上或接口所需的表示。
+     */
     public static BigInteger toAtomic(BigDecimal amount, int decimals) {
         return amount.movePointRight(decimals).setScale(0, RoundingMode.UNNECESSARY).toBigIntegerExact();
     }
+    /**
+     * 编码 {@code jsonBytes} 对应的数据，生成链上或接口所需的表示。
+     */
     private byte[] jsonBytes(JsonNode json) {
         try {
             return objectMapper.writeValueAsBytes(json);
@@ -360,11 +441,17 @@ class NearTransactionService {
             throw new IllegalStateException("NEAR JSON serialization failed", e);
         }
     }
+    /**
+     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
+    /**
+     * 转换或计算 {@code sleep} 对应的值，统一金额、格式和边界规则。
+     */
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);

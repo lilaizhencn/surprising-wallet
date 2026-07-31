@@ -17,7 +17,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code LitecoinNetworkParamsTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class LitecoinNetworkParamsTest {
+    /**
+     * 验证 {@code litecoinTestnetShouldUseIndependentAddressParameters} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void litecoinTestnetShouldUseIndependentAddressParameters() {
         LitecoinNetworkParameters params = LitecoinNetworkParameters.testnet();
@@ -27,6 +33,9 @@ class LitecoinNetworkParamsTest {
         assertEquals("tltc", params.getSegwitAddressHrp());
     }
 
+    /**
+     * 验证 {@code p2wshAddressShouldUseLitecoinBech32HrpAndNotParseAsBitcoinTestnet} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void p2wshAddressShouldUseLitecoinBech32HrpAndNotParseAsBitcoinTestnet() {
         SegwitMultiSignAddressGenerator generator = new SegwitMultiSignAddressGenerator();
@@ -40,6 +49,9 @@ class LitecoinNetworkParamsTest {
         assertThrows(AddressFormatException.class, () -> Address.fromString(TestNet3Params.get(), address));
     }
 
+    /**
+     * 验证 {@code litecoinFeePolicyShouldClampAndKeepDustSeparateFromBtc} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void litecoinFeePolicyShouldClampAndKeepDustSeparateFromBtc() {
         assertEquals(1L, LitecoinFeePolicy.clampFeeRate(0));
@@ -48,6 +60,9 @@ class LitecoinNetworkParamsTest {
         assertEquals(1_000L, LitecoinFeePolicy.DUST_THRESHOLD_LITOSHI);
     }
 
+    /**
+     * 验证 {@code transactionBuilderShouldAcceptLitecoinAddressAndRejectBitcoinAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void transactionBuilderShouldAcceptLitecoinAddressAndRejectBitcoinAddress() {
         SegwitMultiSignAddressGenerator generator = new SegwitMultiSignAddressGenerator();

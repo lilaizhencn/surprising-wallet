@@ -18,15 +18,32 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-/** Strictly decodes and validates per-item collector events from a canonical receipt. */
+/**
+ * 负责 EVM 链交易、费用、扫描或 EIP-7702 相关处理。
+ */
 public class Evm7702ReceiptParser {
+    /**
+     * 定义 {@code NATIVE_TOKEN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
+    /**
+     * 定义 {@code ITEM_TOPIC} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     public static final String ITEM_TOPIC = Hash.sha3String(
             "CollectionItemResult(bytes32,uint256,address,address,address,uint256,uint256,bool,bytes32)");
+    /**
+     * 定义 {@code BATCH_TOPIC} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     public static final String BATCH_TOPIC = Hash.sha3String(
             "BatchProcessed(bytes32,uint256,uint256,uint256)");
+    /**
+     * 定义 {@code TRANSFER_TOPIC} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     public static final String TRANSFER_TOPIC = Hash.sha3String("Transfer(address,address,uint256)");
 
+    /**
+     * 定义 {@code ITEM_OUTPUTS} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final List<TypeReference<Type>> ITEM_OUTPUTS = List.of(
             ref(new TypeReference<Address>() { }),
             ref(new TypeReference<Address>() { }),
@@ -35,11 +52,17 @@ public class Evm7702ReceiptParser {
             ref(new TypeReference<Bool>() { }),
             ref(new TypeReference<Bytes32>() { }));
 
+    /**
+     * 解析或转换 {@code parse} 对应的数据，并校验其格式和边界。
+     */
     public ParsedReceipt parse(TransactionReceipt receipt, String expectedCollector,
                                byte[] expectedBatchId, int expectedItemCount) {
         return parseEvents(receipt, expectedCollector, expectedBatchId, expectedItemCount);
     }
 
+    /**
+     * 解析或转换 {@code parse} 对应的数据，并校验其格式和边界。
+     */
     public ParsedReceipt parse(TransactionReceipt receipt, String expectedCollector,
                                byte[] expectedBatchId, List<ExpectedTransfer> expectedTransfers) {
         if (expectedTransfers == null) {
@@ -76,6 +99,9 @@ public class Evm7702ReceiptParser {
         return parsed;
     }
 
+    /**
+     * 解析或转换 {@code parseEvents} 对应的数据，并校验其格式和边界。
+     */
     private ParsedReceipt parseEvents(TransactionReceipt receipt, String expectedCollector,
                                       byte[] expectedBatchId, int expectedItemCount) {
         if (receipt == null || !receipt.isStatusOK()) {
@@ -136,6 +162,9 @@ public class Evm7702ReceiptParser {
         }
         return new ParsedReceipt(List.copyOf(items), batch);
     }
+    /**
+     * 判断 {@code isExpectedTransfer} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private static boolean isExpectedTransfer(Log log, ExpectedTransfer expected) {
         if (!log.getAddress().equalsIgnoreCase(expected.token()) || log.getTopics().size() != 3
                 || !TRANSFER_TOPIC.equalsIgnoreCase(log.getTopics().getFirst())
@@ -149,6 +178,9 @@ public class Evm7702ReceiptParser {
             return false;
         }
     }
+    /**
+     * 添加 {@code addressTopic} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     private static String addressTopic(String address) {
         String clean = Numeric.cleanHexPrefix(address);
         if (!clean.matches("[0-9a-fA-F]{40}")) {
@@ -157,6 +189,9 @@ public class Evm7702ReceiptParser {
         return "0x" + "0".repeat(24) + clean.toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * 执行 {@code ref} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @SuppressWarnings("unchecked")
     private static <T extends Type> TypeReference<Type> ref(TypeReference<T> reference) {
         return (TypeReference<Type>) (TypeReference<?>) reference;

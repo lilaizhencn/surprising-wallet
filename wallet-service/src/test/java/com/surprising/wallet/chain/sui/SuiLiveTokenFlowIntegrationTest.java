@@ -21,19 +21,55 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code SuiLiveTokenFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class SuiLiveTokenFlowIntegrationTest {
+    /**
+     * 保存 {@code CHAIN}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String CHAIN = "SUI";
+    /**
+     * 保存 {@code SYMBOL}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String SYMBOL = "USDC";
+    /**
+     * 保存 {@code DECIMALS}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final int DECIMALS = 6;
+    /**
+     * 保存 {@code MINT_ATOMIC}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long MINT_ATOMIC = 10_000_000L;
+    /**
+     * 保存 {@code WITHDRAW_ATOMIC}，记录测试开关、处理状态、确认结果或重试信息。
+     */
     private static final long WITHDRAW_ATOMIC = 1_250_000L;
+    /**
+     * 保存 {@code COLLECTION_ATOMIC}，记录测试开关、处理状态、确认结果或重试信息。
+     */
     private static final long COLLECTION_ATOMIC = 2_000_000L;
+    /**
+     * 保存 {@code RUN_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long RUN_INDEX = 1_700_000L
             + Math.floorMod(UUID.randomUUID().getLeastSignificantBits(), 100_000L) * 3L;
+    /**
+     * 保存 {@code OWNER_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long OWNER_INDEX = RUN_INDEX + 1L;
+    /**
+     * 保存 {@code EXTERNAL_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long EXTERNAL_INDEX = RUN_INDEX + 2L;
+    /**
+     * 保存 {@code HOT_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long HOT_INDEX = RUN_INDEX;
 
+    /**
+     * 验证 {@code liveUsdcDepositWithdrawAndReplayAreExact} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void liveUsdcDepositWithdrawAndReplayAreExact() {
         Assumptions.assumeTrue(Boolean.getBoolean("sui.token.live.enabled"),
@@ -135,6 +171,9 @@ class SuiLiveTokenFlowIntegrationTest {
         System.out.println("SUI_USDC_COLLECTION_TX=" + collectionDigest);
     }
 
+    /**
+     * 验证 {@code configureToken} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void configureToken(JdbcTemplate jdbc, String coinType) {
         assertEquals(1, jdbc.update("""
                 update token_config
@@ -161,6 +200,9 @@ class SuiLiveTokenFlowIntegrationTest {
                 """, coinType);
     }
 
+    /**
+     * 验证 {@code mint} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String mint(String packageId, String treasuryId, String recipient, long amount) {
         List<String> command = new ArrayList<>(List.of(
                 env("SUI_CLI_BIN", "sui"), "client", "--client.config", requiredEnv("SUI_CLIENT_CONFIG"),
@@ -172,6 +214,9 @@ class SuiLiveTokenFlowIntegrationTest {
         return result.path("digest").asText();
     }
 
+    /**
+     * 验证 {@code fundGas} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void fundGas(String recipient) {
         String body = "{\"FixedAmountRequest\":{\"recipient\":\""
                 + SuiHex.normalizeAddress(recipient) + "\"}}";
@@ -182,6 +227,9 @@ class SuiLiveTokenFlowIntegrationTest {
         assertTrue(result.path("coins_sent").isArray());
     }
 
+    /**
+     * 验证 {@code commandJson} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static JsonNode commandJson(List<String> command, String operation) {
         try {
             Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
@@ -199,6 +247,9 @@ class SuiLiveTokenFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code waitForBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void waitForBalance(SuiRpcClient rpc, String owner, String coinType,
                                        BigDecimal minimum, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
@@ -211,20 +262,32 @@ class SuiLiveTokenFlowIntegrationTest {
         throw new IllegalStateException("Sui balance did not arrive for " + owner + " " + coinType);
     }
 
+    /**
+     * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String accountId) {
         return repository.findLedgerBalance(CHAIN, SYMBOL, accountId).orElseThrow();
     }
 
+    /**
+     * 验证 {@code display} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal display(long atomic) {
         return BigDecimal.valueOf(atomic).movePointLeft(DECIMALS);
     }
 
+    /**
+     * 验证 {@code assertAmountEquals} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertAmountEquals(BigDecimal expected, BigDecimal actual) {
         assertEquals(0, expected.compareTo(actual),
                 () -> "expected amount " + expected.toPlainString()
                         + " but was " + actual.toPlainString());
     }
 
+    /**
+     * 验证 {@code sleep} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);
@@ -234,12 +297,18 @@ class SuiLiveTokenFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code requiredEnv} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String requiredEnv(String name) {
         String value = System.getenv(name);
         Assumptions.assumeTrue(value != null && !value.isBlank(), name + " is required");
         return value;
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;

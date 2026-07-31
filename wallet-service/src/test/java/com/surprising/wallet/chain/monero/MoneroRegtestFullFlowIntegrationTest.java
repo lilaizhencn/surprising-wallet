@@ -28,19 +28,37 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Real XMR regtest verification through monerod + monero-wallet-rpc.
- *
- * <p>The test is opt-in because it requires Docker, a PostgreSQL schema created
- * from docs/db/surprising-wallet-init-pgsql.sql, and the Monero regtest images.</p>
+ * 验证 {@code MoneroRegtestFullFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
  */
 class MoneroRegtestFullFlowIntegrationTest {
+    /**
+     * 保存 {@code TEST_TENANT_ID}，用于标识测试中的交易、区块或业务记录。
+     */
     private static final UUID TEST_TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000002");
+    /**
+     * 保存 {@code CHAIN}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String CHAIN = "XMR";
+    /**
+     * 保存 {@code SYMBOL}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String SYMBOL = "XMR";
+    /**
+     * 保存 {@code CONFIRMATIONS}，记录测试开关、处理状态、确认结果或重试信息。
+     */
     private static final int CONFIRMATIONS = 1;
+    /**
+     * 保存 {@code DEPOSIT_AMOUNT}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final BigDecimal DEPOSIT_AMOUNT = new BigDecimal("0.500000000000");
+    /**
+     * 保存 {@code WITHDRAW_AMOUNT}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final BigDecimal WITHDRAW_AMOUNT = new BigDecimal("0.050000000000");
 
+    /**
+     * 验证 {@code moneroRegtestMustScanWithdrawAndAvoidInternalDoubleCredit} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void moneroRegtestMustScanWithdrawAndAvoidInternalDoubleCredit() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("monero.regtest.enabled"),
@@ -130,6 +148,9 @@ class MoneroRegtestFullFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code profile} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static AccountChainProfile profile(String network) {
         return AccountChainProfile.builder()
                 .chain(CHAIN)
@@ -149,6 +170,9 @@ class MoneroRegtestFullFlowIntegrationTest {
                 .build();
     }
 
+    /**
+     * 验证 {@code addressRecord} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static ChainAddressRecord addressRecord(long userId, String accountId,
                                                     MoneroWalletRpcClient.Subaddress subaddress) {
         return ChainAddressRecord.builder()
@@ -166,6 +190,9 @@ class MoneroRegtestFullFlowIntegrationTest {
                 .build();
     }
 
+    /**
+     * 验证 {@code ensureMoneroConfig} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void ensureMoneroConfig(JdbcTemplate jdbc, String environment, String network) {
         jdbc.update("""
                         insert into chain_profile(
@@ -198,6 +225,9 @@ class MoneroRegtestFullFlowIntegrationTest {
                 walletRpcUrl(), login[0], login[1]);
     }
 
+    /**
+     * 验证 {@code upsertRpcNode} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void upsertRpcNode(JdbcTemplate jdbc, String environment, String network, String label,
                                       String purpose, String url, String username, String password) {
         String authType = blankToNull(username) == null && blankToNull(password) == null ? "NONE" : "DIGEST";
@@ -222,6 +252,9 @@ class MoneroRegtestFullFlowIntegrationTest {
                 CHAIN, network, environment, label, purpose, url, authType, blankToNull(username), blankToNull(password));
     }
 
+    /**
+     * 验证 {@code assertBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertBalance(ChainJdbcRepository repository, String accountId,
                                       BigDecimal available, BigDecimal locked, BigDecimal total) {
         LedgerBalanceRecord balance = repository.findLedgerBalance(CHAIN, SYMBOL, accountId).orElseThrow();
@@ -230,6 +263,9 @@ class MoneroRegtestFullFlowIntegrationTest {
         assertEquals(0, total.compareTo(balance.getTotalBalance().stripTrailingZeros()));
     }
 
+    /**
+     * 验证 {@code walletRpcUrl} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String walletRpcUrl() {
         String configured = env("MONERO_REGTEST_WALLET_RPC_URL", "");
         if (!configured.isBlank()) {
@@ -240,6 +276,9 @@ class MoneroRegtestFullFlowIntegrationTest {
         return "http://" + host + ":" + port;
     }
 
+    /**
+     * 验证 {@code rpcLogin} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String[] rpcLogin() {
         String login = env("MONERO_REGTEST_RPC_LOGIN", "");
         int separator = login.indexOf(':');
@@ -249,6 +288,9 @@ class MoneroRegtestFullFlowIntegrationTest {
         return new String[]{login.substring(0, separator), login.substring(separator + 1)};
     }
 
+    /**
+     * 验证 {@code runScript} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void runScript(Path root, String... args) throws IOException, InterruptedException {
         List<String> command = new ArrayList<>();
         command.add("bash");
@@ -271,6 +313,9 @@ class MoneroRegtestFullFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code repoRoot} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Path repoRoot() {
         Path current = Path.of("").toAbsolutePath();
         while (current != null) {
@@ -282,6 +327,9 @@ class MoneroRegtestFullFlowIntegrationTest {
         throw new IllegalStateException("could not locate repo root containing scripts/regtest/monero-regtest.sh");
     }
 
+    /**
+     * 验证 {@code setField} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void setField(Object target, String name, Object value) {
         try {
             Field field = target.getClass().getDeclaredField(name);
@@ -292,11 +340,17 @@ class MoneroRegtestFullFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String key, String fallback) {
         String value = System.getenv(key);
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    /**
+     * 验证 {@code blankToNull} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value;
     }

@@ -8,8 +8,14 @@ import java.util.HexFormat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code TonCenterClientTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class TonCenterClientTest {
 
+    /**
+     * 验证 {@code comparesTonMessageHashesAcrossHexBase64AndBase64Url} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void comparesTonMessageHashesAcrossHexBase64AndBase64Url() {
         byte[] hash = new byte[32];

@@ -17,16 +17,34 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * 验证 {@code AptosDepositScannerTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class AptosDepositScannerTest {
+    /**
+     * 保存 {@code OWNER}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String OWNER =
             "0x1111111111111111111111111111111111111111111111111111111111111111";
+    /**
+     * 保存 {@code EXTERNAL}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String EXTERNAL =
             "0x2222222222222222222222222222222222222222222222222222222222222222";
+    /**
+     * 保存 {@code STORE}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String STORE =
             "0x3333333333333333333333333333333333333333333333333333333333333333";
+    /**
+     * 保存 {@code METADATA}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String METADATA =
             "0x4444444444444444444444444444444444444444444444444444444444444444";
 
+    /**
+     * 验证 {@code creditsFungibleAssetToTheTrackedNativeChainAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void creditsFungibleAssetToTheTrackedNativeChainAddress() throws Exception {
         FakeRepository repository = new FakeRepository();
@@ -45,6 +63,9 @@ class AptosDepositScannerTest {
         assertEquals("tenant-aptos", repository.creditedAccountId);
     }
 
+    /**
+     * 验证 {@code transaction} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static JsonNode transaction() throws Exception {
         return new ObjectMapper().readTree("""
                 {
@@ -76,6 +97,9 @@ class AptosDepositScannerTest {
                 """.formatted(EXTERNAL, STORE, METADATA, STORE));
     }
 
+    /**
+     * 验证 {@code depositAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static ChainAddressRecord depositAddress() {
         return ChainAddressRecord.builder()
                 .chain("APTOS")
@@ -91,25 +115,46 @@ class AptosDepositScannerTest {
                 .build();
     }
 
+    /**
+     * 测试替身 {@code ExistingStoreRpc}，用于隔离外部依赖并验证调用参数和状态变化。
+     */
     private static final class ExistingStoreRpc extends AptosRpcClient {
+        /**
+         * 保存 {@code transactions}，用于标识测试中的交易、区块或业务记录。
+         */
         private final ArrayNode transactions;
+        /**
+         * 保存 {@code ownerLookups}，用于承载当前测试夹具的配置或运行数据。
+         */
         private int ownerLookups;
 
+        /**
+         * 验证 {@code ExistingStoreRpc} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private ExistingStoreRpc(JsonNode transaction) {
             super(new ObjectMapper(), "http://aptos.invalid/v1", "");
             transactions = new ObjectMapper().createArrayNode().add(transaction);
         }
 
+        /**
+         * 验证 {@code ledgerVersion} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public long ledgerVersion() {
             return 100L;
         }
 
+        /**
+         * 验证 {@code transactions} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public JsonNode transactions(long startVersion, int limit) {
             return transactions;
         }
 
+        /**
+         * 验证 {@code fungibleStoreOwner} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public Optional<String> fungibleStoreOwner(String storeAddress) {
             ownerLookups++;
@@ -117,7 +162,13 @@ class AptosDepositScannerTest {
         }
     }
 
+    /**
+     * 测试替身 {@code FakeRepository}，用于隔离外部依赖并验证调用参数和状态变化。
+     */
     private static final class FakeRepository extends ChainJdbcRepository {
+        /**
+         * 保存 {@code token}，表示测试所覆盖的链、网络、资产或代币配置。
+         */
         private final TokenDefinition token = TokenDefinition.builder()
                 .chain("APTOS")
                 .symbol("USDC")
@@ -126,13 +177,25 @@ class AptosDepositScannerTest {
                 .standard("APTOS_FA")
                 .active(true)
                 .build();
+        /**
+         * 保存 {@code credited}，用于承载当前测试夹具的配置或运行数据。
+         */
         private DepositEvent credited;
+        /**
+         * 保存 {@code creditedAccountId}，用于标识测试中的交易、区块或业务记录。
+         */
         private String creditedAccountId;
 
+        /**
+         * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private FakeRepository() {
             super(null);
         }
 
+        /**
+         * 验证 {@code findProfileByChain} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public Optional<AccountChainProfile> findProfileByChain(String chain) {
             return Optional.of(AccountChainProfile.builder()
@@ -146,31 +209,49 @@ class AptosDepositScannerTest {
                     .build());
         }
 
+        /**
+         * 验证 {@code listTokens} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public List<TokenDefinition> listTokens(String chain) {
             return List.of(token);
         }
 
+        /**
+         * 验证 {@code listChainAddresses} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public List<ChainAddressRecord> listChainAddresses(String chain, String assetSymbol) {
             return "APT".equals(assetSymbol) ? List.of(depositAddress()) : List.of();
         }
 
+        /**
+         * 验证 {@code listChainAddresses} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public List<ChainAddressRecord> listChainAddresses(String chain) {
             return List.of(depositAddress());
         }
 
+        /**
+         * 验证 {@code findScanSafeHeight} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public Optional<Long> findScanSafeHeight(String chain, String scannerName) {
             return Optional.of(99L);
         }
 
+        /**
+         * 验证 {@code recordAptosTransaction} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public int recordAptosTransaction(AptosTransactionRecord tx) {
             return 1;
         }
 
+        /**
+         * 验证 {@code recordAndCreditDeposit} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public boolean recordAndCreditDeposit(DepositEvent event, long logIndex,
                                               int requiredConfirmations, String accountId) {
@@ -179,6 +260,9 @@ class AptosDepositScannerTest {
             return true;
         }
 
+        /**
+         * 验证 {@code updateScanHeight} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public void updateScanHeight(String chain, String scannerName, long bestHeight, long safeHeight) {
         }

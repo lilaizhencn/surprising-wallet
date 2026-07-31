@@ -102,6 +102,9 @@ public class AptosDepositScanner {
         return events;
     }
 
+    /**
+     * 扫描或观察 {@code scanTransaction} 对应的链上状态，并转换为业务可用结果。
+     */
     private void scanTransaction(JsonNode transaction, Map<String, ChainAddressRecord> nativeAddresses,
                                  Map<String, TokenDefinition> metadataTokens, AccountChainProfile profile,
                                  long ledgerVersion, List<DepositEvent> events) {
@@ -167,20 +170,32 @@ public class AptosDepositScanner {
             events.add(event);
         }
     }
+    /**
+     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
+     */
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
+    /**
+     * 扫描或观察 {@code scanLimit} 对应的链上状态，并转换为业务可用结果。
+     */
     private int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 100 : batchSize;
     }
+    /**
+     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
 
+    /**
+     * 获取或查询 {@code resolveAsset} 对应的数据，并向调用方返回当前业务状态。
+     */
     private ResolvedAsset resolveAsset(String owner, String metadata,
                                        Map<String, ChainAddressRecord> nativeAddresses,
                                        Map<String, TokenDefinition> metadataTokens) {
@@ -200,6 +215,9 @@ public class AptosDepositScanner {
         return new ResolvedAsset(token.getSymbol(), token.getContractAddress(),
                 metadata, address, token.getDecimals());
     }
+    /**
+     * 执行 {@code storeOwners} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Map<String, String> storeOwners(JsonNode transaction) {
         Map<String, String> owners = new HashMap<>();
         for (JsonNode change : transaction.path("changes")) {
@@ -211,6 +229,9 @@ public class AptosDepositScanner {
         }
         return owners;
     }
+    /**
+     * 执行 {@code storeMetadata} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Map<String, String> storeMetadata(JsonNode transaction) {
         Map<String, String> metadata = new HashMap<>();
         for (JsonNode change : transaction.path("changes")) {
@@ -223,6 +244,9 @@ public class AptosDepositScanner {
         }
         return metadata;
     }
+    /**
+     * 判断 {@code isPlatformAddress} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private boolean isPlatformAddress(String address) {
         for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
             if (sameAddress(address, tracked.getAddress()) || sameAddress(address, tracked.getOwnerAddress())) {
@@ -231,6 +255,9 @@ public class AptosDepositScanner {
         }
         return false;
     }
+    /**
+     * 执行 {@code sameAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private boolean sameAddress(String first, String second) {
         if (first == null || first.isBlank() || second == null || second.isBlank()) {
             return false;

@@ -12,7 +12,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.custody.service.CustodyCryptoService;
 import com.surprising.wallet.custody.model.CustodySecurityProperties;
 
+/**
+ * 验证 {@code CustodyCryptoServiceTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class CustodyCryptoServiceTest {
+    /**
+     * 验证 {@code encryptsWithRandomNonceAndAuthenticatesCiphertext} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void encryptsWithRandomNonceAndAuthenticatesCiphertext() {
         CustodySecurityProperties properties = properties();
@@ -30,6 +36,9 @@ class CustodyCryptoServiceTest {
         assertThrows(IllegalStateException.class, () -> crypto.decrypt(tampered));
     }
 
+    /**
+     * 验证 {@code hmacComparisonIsExact} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void hmacComparisonIsExact() {
         CustodyCryptoService crypto = new CustodyCryptoService(properties());
@@ -39,6 +48,9 @@ class CustodyCryptoServiceTest {
         assertFalse(crypto.constantTimeEquals(signature, signature + "x"));
     }
 
+    /**
+     * 验证 {@code refusesMissingOrShortMasterKey} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void refusesMissingOrShortMasterKey() {
         CustodySecurityProperties missing = new CustodySecurityProperties();
@@ -49,6 +61,9 @@ class CustodyCryptoServiceTest {
         assertThrows(IllegalStateException.class, () -> crypto.encrypt("secret"));
     }
 
+    /**
+     * 验证 {@code properties} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static CustodySecurityProperties properties() {
         byte[] key = new byte[32];
         for (int i = 0; i < key.length; i++) {

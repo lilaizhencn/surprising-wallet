@@ -58,21 +58,45 @@ class MoneroWalletRpcClient {
 
     /** 原子单位换算因子 */
     private static final BigDecimal ATOMIC_FACTOR = BigDecimal.TEN.pow(DECIMALS);
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper;
+    /**
+     * 保存 {@code httpClient}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final HttpClient httpClient;
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository repository;
+    /**
+     * 保存 {@code rpcNodeService}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainRpcNodeService rpcNodeService;
+    /**
+     * 保存 {@code fixedRpcUrl}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final String fixedRpcUrl;
 
+    /**
+     * 构造 {@code MoneroWalletRpcClient}，初始化该组件运行所需的状态和依赖。
+     */
     @Autowired
     public MoneroWalletRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
         this(new ObjectMapper(), repository, rpcNodeService, null);
     }
 
+    /**
+     * 构造 {@code MoneroWalletRpcClient}，初始化该组件运行所需的状态和依赖。
+     */
     MoneroWalletRpcClient(ObjectMapper objectMapper, String fixedRpcUrl) {
         this(objectMapper, null, null, fixedRpcUrl);
     }
 
+    /**
+     * 构造 {@code MoneroWalletRpcClient}，初始化该组件运行所需的状态和依赖。
+     */
     private MoneroWalletRpcClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
                                   ChainRpcNodeService rpcNodeService, String fixedRpcUrl) {
         this.objectMapper = objectMapper;
@@ -84,27 +108,51 @@ class MoneroWalletRpcClient {
                 .version(HttpClient.Version.HTTP_1_1)
                 .build();
     }
+    /**
+     * 执行 {@code height} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long height() {
         return call("get_height", objectMapper.createObjectNode()).path("height").asLong(0L);
     }
+    /**
+     * 执行 {@code height} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long height(String network, String purpose) {
         return call("get_height", objectMapper.createObjectNode(), network, purpose).path("height").asLong(0L);
     }
+    /**
+     * 写入或更新 {@code refresh} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void refresh() {
         call("refresh", objectMapper.createObjectNode());
     }
+    /**
+     * 写入或更新 {@code refresh} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public void refresh(String network, String purpose) {
         call("refresh", objectMapper.createObjectNode(), network, purpose);
     }
+    /**
+     * 执行 {@code primaryAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public Subaddress primaryAddress() {
         return getAddress(0);
     }
+    /**
+     * 执行 {@code primaryAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public Subaddress primaryAddress(String network, String purpose) {
         return getAddress(0, network, purpose);
     }
+    /**
+     * 获取或查询 {@code getAddress} 对应的数据，供调用方读取当前状态。
+     */
     public Subaddress getAddress(int subaddressIndex) {
         return getAddress(subaddressIndex, null, null);
     }
+    /**
+     * 获取或查询 {@code getAddress} 对应的数据，供调用方读取当前状态。
+     */
     public Subaddress getAddress(int subaddressIndex, String network, String purpose) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("account_index", ACCOUNT_INDEX);
@@ -123,6 +171,9 @@ class MoneroWalletRpcClient {
         }
         return new Subaddress(result.path("address").asText(), subaddressIndex);
     }
+    /**
+     * 构建或生成 {@code createAddress} 对应的结果，并执行输入和状态校验。
+     */
     public Subaddress createAddress(String label) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("account_index", ACCOUNT_INDEX);
@@ -134,9 +185,15 @@ class MoneroWalletRpcClient {
                 result.path("address").asText(),
                 result.path("address_index").asInt());
     }
+    /**
+     * 执行 {@code incomingTransfers} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public List<Transfer> incomingTransfers(long minHeight) {
         return incomingTransfers(minHeight, null, null);
     }
+    /**
+     * 执行 {@code incomingTransfers} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public List<Transfer> incomingTransfers(long minHeight, String network, String purpose) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("in", true);
@@ -161,10 +218,16 @@ class MoneroWalletRpcClient {
         }
         return transfers;
     }
+    /**
+     * 执行 {@code transfer} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public Transfer transfer(int fromSubaddressIndex, String toAddress, BigDecimal amount) {
         return transfer(fromSubaddressIndex, toAddress, amount, null, null);
     }
 
+    /**
+     * 执行 {@code transfer} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public Transfer transfer(int fromSubaddressIndex, String toAddress, BigDecimal amount,
                              String network, String purpose) {
         ObjectNode params = objectMapper.createObjectNode();
@@ -198,9 +261,15 @@ class MoneroWalletRpcClient {
                 "OUT",
                 result.toString());
     }
+    /**
+     * 执行 {@code transferByTxHash} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public Transfer transferByTxHash(String txHash) {
         return transferByTxHash(txHash, null, null);
     }
+    /**
+     * 执行 {@code transferByTxHash} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public Transfer transferByTxHash(String txHash, String network, String purpose) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("txid", txHash);
@@ -213,17 +282,29 @@ class MoneroWalletRpcClient {
         }
         return mapTransfer(transfer, transfer.path("type").asText("OUT").toUpperCase(), network, purpose);
     }
+    /**
+     * 解析 {@code fromAtomic} 对应的输入，并转换为当前业务模型。
+     */
     public BigDecimal fromAtomic(BigInteger atomicAmount) {
         return new BigDecimal(atomicAmount == null ? BigInteger.ZERO : atomicAmount)
                 .divide(ATOMIC_FACTOR, DECIMALS, RoundingMode.DOWN)
                 .stripTrailingZeros();
     }
+    /**
+     * 编码 {@code toAtomic} 对应的数据，生成链上或接口所需的表示。
+     */
     public BigInteger toAtomic(BigDecimal amount) {
         return amount.movePointRight(DECIMALS).setScale(0, RoundingMode.UNNECESSARY).toBigIntegerExact();
     }
+    /**
+     * 执行 {@code mapTransfer} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Transfer mapTransfer(JsonNode item, String direction) {
         return mapTransfer(item, direction, null, null);
     }
+    /**
+     * 执行 {@code mapTransfer} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Transfer mapTransfer(JsonNode item, String direction, String network, String purpose) {
         JsonNode subaddr = item.path("subaddr_index");
         int subaddressIndex = subaddr.path("minor").asInt(0);
@@ -246,6 +327,9 @@ class MoneroWalletRpcClient {
                 direction,
                 item.toString());
     }
+    /**
+     * 执行 {@code call} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private JsonNode call(String method, JsonNode params) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("jsonrpc", "2.0");
@@ -264,6 +348,9 @@ class MoneroWalletRpcClient {
             throw new IllegalStateException("Monero wallet-rpc serialization failed for " + method, e);
         }
     }
+    /**
+     * 执行 {@code call} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private JsonNode call(String method, JsonNode params, String network, String purpose) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("jsonrpc", "2.0");
@@ -276,11 +363,17 @@ class MoneroWalletRpcClient {
             throw new IllegalStateException("Monero wallet-rpc serialization failed for " + method, e);
         }
     }
+    /**
+     * 执行 {@code callSerialized} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private JsonNode callSerialized(String method, String requestBody, String network, String purpose) {
         String effectivePurpose = purpose == null || purpose.isBlank() ? "rpc" : purpose;
         return rpcNodeService.withFailover(CHAIN, network, effectivePurpose,
                 node -> execute(method, requestBody, node.getRpcUrl(), node));
     }
+    /**
+     * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
+     */
     private JsonNode execute(String method, String requestBody, String rpcUrl, ChainRpcNode node) {
         String endpoint = jsonRpcEndpoint(rpcUrl);
         try {
@@ -322,6 +415,9 @@ class MoneroWalletRpcClient {
         }
     }
 
+    /**
+     * 处理 {@code retryWithDigestAuth} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private HttpResponse<String> retryWithDigestAuth(String endpoint, String requestBody, ChainRpcNode node,
                                                      HttpResponse<String> challengeResponse)
             throws IOException, InterruptedException {
@@ -342,6 +438,9 @@ class MoneroWalletRpcClient {
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody));
         return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
+    /**
+     * 执行 {@code digestAuthorization} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     static String digestAuthorization(String method, URI uri, String username, String password, String challenge) {
         Map<String, String> values = parseDigestChallenge(challenge);
         String realm = values.getOrDefault("realm", "");
@@ -388,6 +487,9 @@ class MoneroWalletRpcClient {
         }
         return header.toString();
     }
+    /**
+     * 解析或转换 {@code parseDigestChallenge} 对应的数据，并校验其格式和边界。
+     */
     private static Map<String, String> parseDigestChallenge(String challenge) {
         String value = challenge == null ? "" : challenge.trim();
         if (value.toLowerCase(Locale.ROOT).startsWith("digest")) {
@@ -435,6 +537,9 @@ class MoneroWalletRpcClient {
         }
         return result;
     }
+    /**
+     * 执行 {@code firstQop} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String firstQop(String qop) {
         String value = qop == null ? "" : qop.trim();
         if (value.isBlank()) {
@@ -447,6 +552,9 @@ class MoneroWalletRpcClient {
         }
         return value.split(",")[0].trim();
     }
+    /**
+     * 添加 {@code appendDigestPart} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     private static void appendDigestPart(StringBuilder builder, String key, String value, boolean quoted) {
         if (builder.length() > "Digest ".length()) {
             builder.append(", ");
@@ -459,12 +567,21 @@ class MoneroWalletRpcClient {
             builder.append(value == null ? "" : value);
         }
     }
+    /**
+     * 判断 {@code hasPasswordAuth} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private static boolean hasPasswordAuth(ChainRpcNode node) {
         return !trim(node.getUsername()).isBlank() || !trim(node.getPassword()).isBlank();
     }
+    /**
+     * 判断 {@code isDigestAuth} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private static boolean isDigestAuth(ChainRpcNode node) {
         return "DIGEST".equalsIgnoreCase(trim(node.getAuthType()));
     }
+    /**
+     * 执行 {@code md5Hex} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String md5Hex(String value) {
         try {
             byte[] digest = MessageDigest.getInstance("MD5")
@@ -474,6 +591,9 @@ class MoneroWalletRpcClient {
             throw new IllegalStateException("MD5 digest unavailable", e);
         }
     }
+    /**
+     * 编码 {@code jsonRpcEndpoint} 对应的数据，生成链上或接口所需的表示。
+     */
     private static String jsonRpcEndpoint(String rpcUrl) {
         String value = rpcUrl == null ? "" : rpcUrl.trim().replaceAll("/+$", "");
         if (value.endsWith("/json_rpc")) {
@@ -481,12 +601,18 @@ class MoneroWalletRpcClient {
         }
         return value + "/json_rpc";
     }
+    /**
+     * 执行 {@code abbreviate} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String abbreviate(String value) {
         if (value == null || value.isBlank()) {
             return "<empty>";
         }
         return value.length() <= 500 ? value : value.substring(0, 500) + "...";
     }
+    /**
+     * 执行 {@code trim} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String trim(String value) {
         return value == null ? "" : value.trim();
     }

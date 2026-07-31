@@ -34,19 +34,34 @@ import java.util.Locale;
  * </ul>
  */
 public final class BitcoinCashAddressCodec {
+    /**
+     * 定义 {@code CHARSET} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final String CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+    /**
+     * 定义 {@code GENERATORS} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final long[] GENERATORS = {
             0x98f2bc8e61L, 0x79b76d99e2L, 0xf33e5fb3c4L,
             0xae2eabe2a8L, 0x1e4f43e470L
     };
 
+    /**
+     * 构造 {@code BitcoinCashAddressCodec}，初始化该组件运行所需的状态和依赖。
+     */
     private BitcoinCashAddressCodec() {
     }
 
+    /**
+     * 解析 {@code fromLegacy} 对应的输入，并转换为当前业务模型。
+     */
     public static String fromLegacy(LegacyAddress address, String prefix) {
         return encode(prefix, address.p2sh ? 1 : 0, address.getHash());
     }
 
+    /**
+     * 编码 {@code toLegacy} 对应的数据，生成链上或接口所需的表示。
+     */
     public static LegacyAddress toLegacy(
             NetworkParameters params, String expectedPrefix, String cashAddress) {
         Decoded decoded = decode(expectedPrefix, cashAddress);
@@ -55,6 +70,9 @@ public final class BitcoinCashAddressCodec {
                 : LegacyAddress.fromScriptHash(params, decoded.hash);
     }
 
+    /**
+     * 编码或序列化 {@code encode} 对应的数据，生成链上或接口需要的表示。
+     */
     public static String encode(String prefix, int type, byte[] hash) {
         if (type < 0 || type > 1 || hash == null || hash.length != 20) {
             throw new IllegalArgumentException("only 160-bit P2PKH/P2SH CashAddr is supported");
@@ -76,6 +94,9 @@ public final class BitcoinCashAddressCodec {
         return result.toString();
     }
 
+    /**
+     * 解析或转换 {@code decode} 对应的数据，并校验其格式和边界。
+     */
     public static Decoded decode(String expectedPrefix, String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("CashAddr is blank");
@@ -120,6 +141,9 @@ public final class BitcoinCashAddressCodec {
         return new Decoded(prefix, type, Arrays.copyOfRange(decoded, 1, decoded.length));
     }
 
+    /**
+     * 构建或生成 {@code createChecksum} 对应的结果，并执行输入和状态校验。
+     */
     private static byte[] createChecksum(String prefix, byte[] payload) {
         byte[] values = concat(prefixExpand(prefix), payload, new byte[8]);
         long mod = polymod(values);
@@ -130,6 +154,9 @@ public final class BitcoinCashAddressCodec {
         return result;
     }
 
+    /**
+     * 执行 {@code polymod} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static long polymod(byte[] values) {
         long checksum = 1;
         for (byte value : values) {
@@ -144,6 +171,9 @@ public final class BitcoinCashAddressCodec {
         return checksum ^ 1;
     }
 
+    /**
+     * 执行 {@code prefixExpand} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static byte[] prefixExpand(String prefix) {
         byte[] result = new byte[prefix.length() + 1];
         for (int i = 0; i < prefix.length(); i++) {
@@ -152,6 +182,9 @@ public final class BitcoinCashAddressCodec {
         return result;
     }
 
+    /**
+     * 解析或转换 {@code convertBits} 对应的数据，并校验其格式和边界。
+     */
     private static byte[] convertBits(byte[] input, int fromBits, int toBits, boolean pad) {
         int accumulator = 0;
         int bits = 0;
@@ -183,6 +216,9 @@ public final class BitcoinCashAddressCodec {
         return result;
     }
 
+    /**
+     * 执行 {@code concat} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static byte[] concat(byte[]... arrays) {
         int length = Arrays.stream(arrays).mapToInt(array -> array.length).sum();
         byte[] result = new byte[length];

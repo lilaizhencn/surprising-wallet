@@ -24,13 +24,25 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
  */
 @Service
 public class CustodyAssetDashboardService {
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final CustodyAssetDashboardRepository repository;
+    /**
+     * 保存 {@code custody}，用于承载当前对象的运行配置或业务数据。
+     */
     private final CustodyRepository custody;
+    /**
+     * 构造 {@code CustodyAssetDashboardService}，初始化该组件运行所需的状态和依赖。
+     */
     public CustodyAssetDashboardService(CustodyAssetDashboardRepository repository,
                                         CustodyRepository custody) {
         this.repository = repository;
         this.custody = custody;
     }
+    /**
+     * 执行 {@code dashboard} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public Dashboard dashboard(CustodyPrincipal principal) {
         requireScope(principal, "assets:read");
         List<CustodyAssetDashboardRepository.AssetBalance> balances =
@@ -77,11 +89,17 @@ public class CustodyAssetDashboardService {
                                 row.createdAt()))
                         .toList());
     }
+    /**
+     * 执行 {@code prices} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public List<CustodyAssetDashboardRepository.AssetPrice> prices(CustodyPrincipal principal) {
         requirePlatformAdmin(principal);
         return repository.prices();
     }
 
+    /**
+     * 设置或更新 {@code setPrice} 对应的状态，并保持相关业务字段一致。
+     */
     @Transactional(rollbackFor = Throwable.class)
     public CustodyAssetDashboardRepository.AssetPrice setPrice(
             CustodyPrincipal principal, String symbolValue, SetPriceCommand command, String sourceIp) {
@@ -106,6 +124,9 @@ public class CustodyAssetDashboardService {
                 "{\"assetSymbol\":\"" + symbol + "\",\"source\":\"" + source + "\"}");
         return saved;
     }
+    /**
+     * 转换或计算 {@code normalizeSymbol} 对应的值，统一金额、格式和边界规则。
+     */
     private static String normalizeSymbol(String value) {
         String symbol = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         if (!symbol.matches("^[A-Z][A-Z0-9_]{1,31}$")) {
@@ -113,30 +134,66 @@ public class CustodyAssetDashboardService {
         }
         return symbol;
     }
+    /**
+     * 校验 {@code requireScope} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static void requireScope(CustodyPrincipal principal, String scope) {
         if (principal == null || principal.tenantId() == null || !principal.hasScope(scope)) {
             throw new CustodyForbiddenException(scope + " scope required");
         }
     }
+    /**
+     * 校验 {@code requirePlatformAdmin} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static void requirePlatformAdmin(CustodyPrincipal principal) {
         if (principal == null || principal.tenantId() != null
                 || !"PLATFORM_ADMIN".equals(principal.role())) {
             throw new CustodyForbiddenException("platform administrator required");
         }
     }
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     private static final class MutableAggregate {
+        /**
+         * 保存 {@code symbol}，表示链、网络、资产或代币配置。
+         */
         private final String symbol;
+        /**
+         * 保存 {@code available}，用于承载当前对象的运行配置或业务数据。
+         */
         private BigDecimal available = BigDecimal.ZERO;
+        /**
+         * 保存 {@code locked}，用于承载当前对象的运行配置或业务数据。
+         */
         private BigDecimal locked = BigDecimal.ZERO;
+        /**
+         * 保存 {@code total}，用于承载当前对象的运行配置或业务数据。
+         */
         private BigDecimal total = BigDecimal.ZERO;
+        /**
+         * 保存 {@code valueUsd}，用于保存金额、费用或链上执行状态。
+         */
         private BigDecimal valueUsd = BigDecimal.ZERO;
+        /**
+         * 保存 {@code priced}，表示金额、余额、手续费、Gas 或精度相关参数。
+         */
         private boolean priced;
+        /**
+         * 保存 {@code chains}，表示链、网络、资产或代币配置。
+         */
         private final List<String> chains = new ArrayList<>();
 
+        /**
+         * 构造 {@code MutableAggregate}，初始化该组件运行所需的状态和依赖。
+         */
         private MutableAggregate(String symbol) {
             this.symbol = symbol;
         }
 
+        /**
+         * 添加 {@code add} 对应的业务对象，并更新当前组件的集合或索引。
+         */
         private void add(AssetRow row) {
             available = available.add(row.availableBalance());
             locked = locked.add(row.lockedBalance());
@@ -148,21 +205,45 @@ public class CustodyAssetDashboardService {
             }
         }
 
+        /**
+         * 获取或查询 {@code view} 对应的数据，并向调用方返回当前业务状态。
+         */
         private SymbolAggregate view() {
             return new SymbolAggregate(symbol, available, locked, total,
                     priced ? valueUsd : null, List.copyOf(chains));
         }
     }
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     private static final class MutableChain {
+        /**
+         * 保存 {@code chain}，表示链、网络、资产或代币配置。
+         */
         private final String chain;
+        /**
+         * 保存 {@code valueUsd}，用于保存金额、费用或链上执行状态。
+         */
         private BigDecimal valueUsd = BigDecimal.ZERO;
+        /**
+         * 保存 {@code priced}，表示金额、余额、手续费、Gas 或精度相关参数。
+         */
         private boolean priced;
+        /**
+         * 保存 {@code assets}，表示链、网络、资产或代币配置。
+         */
         private final List<AssetRow> assets = new ArrayList<>();
 
+        /**
+         * 构造 {@code MutableChain}，初始化该组件运行所需的状态和依赖。
+         */
         private MutableChain(String chain) {
             this.chain = chain;
         }
 
+        /**
+         * 添加 {@code add} 对应的业务对象，并更新当前组件的集合或索引。
+         */
         private void add(AssetRow row) {
             assets.add(row);
             if (row.valueUsd() != null) {
@@ -171,6 +252,9 @@ public class CustodyAssetDashboardService {
             }
         }
 
+        /**
+         * 获取或查询 {@code view} 对应的数据，并向调用方返回当前业务状态。
+         */
         private ChainAggregate view() {
             return new ChainAggregate(chain, priced ? valueUsd : null, List.copyOf(assets));
         }

@@ -8,11 +8,13 @@ import org.tron.trident.proto.Response;
 import org.springframework.stereotype.Service;
 
 /**
- * Builds and signs native TRX transfer transactions with Trident.
- * The KeyPair must be created from the existing Bitcoin ECKey-derived private key.
+ * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
  */
 @Service
 public class TronTransactionService {
+    /**
+     * 为 {@code signTrxTransfer} 对应的交易或消息生成签名，并保持原始数据不被改变。
+     */
     public SignedTronTransaction signTrxTransfer(TronTridentClient client, KeyPair keyPair,
                                                  String toAddress, long amountSun) throws IllegalException {
         String fromAddress = keyPair.toBase58CheckAddress();
@@ -20,9 +22,15 @@ public class TronTransactionService {
         Chain.Transaction signed = client.api().signTransaction(tx, keyPair);
         return new SignedTronTransaction(txId(signed), signed);
     }
+    /**
+     * 发送或广播 {@code broadcast} 对应的链上请求，并返回节点处理结果。
+     */
     public String broadcast(TronTridentClient client, SignedTronTransaction transaction) {
         return client.broadcast(transaction.transaction());
     }
+    /**
+     * 执行 {@code txId} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public static String txId(Chain.Transaction transaction) {
         return ApiWrapper.toHex(ApiWrapper.calculateTransactionHash(transaction));
     }

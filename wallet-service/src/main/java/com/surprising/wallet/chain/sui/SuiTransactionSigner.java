@@ -27,9 +27,15 @@ class SuiTransactionSigner {
 
     /** Sui 密钥服务 */
     private final SuiKeyService keyService;
+    /**
+     * 为 {@code signTransactionBytes} 对应的交易或消息生成签名，并保持原始数据不被改变。
+     */
     public String signTransactionBytes(long derivationIndex, String txBytesBase64) {
         return signTransactionBytes(0L, 0, derivationIndex, txBytesBase64);
     }
+    /**
+     * 为 {@code signTransactionBytes} 对应的交易或消息生成签名，并保持原始数据不被改变。
+     */
     public String signTransactionBytes(long userId, int biz, long derivationIndex, String txBytesBase64) {
         byte[] txBytes = Base64.getDecoder().decode(txBytesBase64);
         byte[] intentMessage = new byte[TRANSACTION_DATA_INTENT.length + txBytes.length];

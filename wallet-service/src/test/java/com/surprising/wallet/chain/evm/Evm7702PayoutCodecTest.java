@@ -27,13 +27,31 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code Evm7702PayoutCodecTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class Evm7702PayoutCodecTest {
+    /**
+     * 保存 {@code AUTHORITY}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final Credentials AUTHORITY = Credentials.create(
             "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d");
+    /**
+     * 保存 {@code EXECUTOR}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private static final String EXECUTOR = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
+    /**
+     * 保存 {@code TOKEN}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String TOKEN = "0x3333333333333333333333333333333333333333";
+    /**
+     * 保存 {@code RECIPIENT}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String RECIPIENT = "0x4444444444444444444444444444444444444444";
 
+    /**
+     * 验证 {@code signsRecoverableRequestAndEncodesExactPayoutSelector} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void signsRecoverableRequestAndEncodesExactPayoutSelector() throws SignatureException {
         byte[] batchId = Hash.sha3("tenant:WITHDRAWAL:batch".getBytes(StandardCharsets.UTF_8));
@@ -57,6 +75,9 @@ class Evm7702PayoutCodecTest {
         assertTrue(calldata.startsWith(selector));
     }
 
+    /**
+     * 验证 {@code rejectsDuplicateWithdrawalIdentityBeforeSigning} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void rejectsDuplicateWithdrawalIdentityBeforeSigning() {
         Evm7702PayoutItem first = item(0, TOKEN, RECIPIENT, 1);
@@ -69,6 +90,9 @@ class Evm7702PayoutCodecTest {
                 BigInteger.valueOf(2_000_000_000L)));
     }
 
+    /**
+     * 验证 {@code parsesNativeSuccessAndTokenFailureWithoutSettlingFailedTransfer} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void parsesNativeSuccessAndTokenFailureWithoutSettlingFailedTransfer() {
         byte[] batchId = Hash.sha3("receipt-batch".getBytes(StandardCharsets.UTF_8));
@@ -96,6 +120,9 @@ class Evm7702PayoutCodecTest {
         assertArrayEquals(tokenItem.withdrawalId(), parsed.items().get(1).withdrawalId());
     }
 
+    /**
+     * 验证 {@code item} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Evm7702PayoutItem item(int index, String token, String recipient, long amount) {
         return new Evm7702PayoutItem(
                 Hash.sha3(("withdrawal-" + index).getBytes(StandardCharsets.UTF_8)),
@@ -103,11 +130,17 @@ class Evm7702PayoutCodecTest {
                 BigInteger.valueOf(120_000));
     }
 
+    /**
+     * 验证 {@code expected} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Evm7702PayoutReceiptParser.ExpectedPayout expected(Evm7702PayoutItem item) {
         return new Evm7702PayoutReceiptParser.ExpectedPayout(
                 item.withdrawalId(), item.token(), item.recipient(), item.amount());
     }
 
+    /**
+     * 验证 {@code itemLog} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Log itemLog(byte[] batchId, Evm7702PayoutItem item, boolean success,
                                BigInteger actual, int logIndex) {
         byte[] error = success ? new byte[32] : Hash.sha3("transfer-failed".getBytes(StandardCharsets.UTF_8));
@@ -126,6 +159,9 @@ class Evm7702PayoutCodecTest {
         return log;
     }
 
+    /**
+     * 验证 {@code batchLog} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Log batchLog(byte[] batchId, int total, int succeeded,
                                 int failed, int logIndex) {
         Log log = new Log();
@@ -139,6 +175,9 @@ class Evm7702PayoutCodecTest {
         return log;
     }
 
+    /**
+     * 验证 {@code addressTopic} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String addressTopic(String address) {
         return "0x" + "0".repeat(24) + Numeric.cleanHexPrefix(address).toLowerCase();
     }

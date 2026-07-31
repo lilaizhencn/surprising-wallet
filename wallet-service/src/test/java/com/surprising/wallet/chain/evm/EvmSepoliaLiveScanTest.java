@@ -15,11 +15,26 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code EvmSepoliaLiveScanTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class EvmSepoliaLiveScanTest {
+    /**
+     * 保存 {@code TX_ID}，用于标识测试中的交易、区块或业务记录。
+     */
     private static final String TX_ID = "0x086c6c6083d60bfffe2e5873d3388fd41a5c68499221369f248621305a4e97d3";
+    /**
+     * 保存 {@code ADDRESS}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final String ADDRESS = "0xa69c190e7c823fe23dcf6ed7c32877214458d4d3";
+    /**
+     * 保存 {@code BLOCK}，用于标识测试中的交易、区块或业务记录。
+     */
     private static final long BLOCK = 11099971L;
 
+    /**
+     * 验证 {@code shouldScanAndCreditGoogleCloudSepoliaFaucetTx} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldScanAndCreditGoogleCloudSepoliaFaucetTx() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("evm.live.enabled"),
@@ -57,6 +72,9 @@ class EvmSepoliaLiveScanTest {
         assertTrue(afterSecondScan.compareTo(new BigDecimal("0.05")) >= 0);
     }
 
+    /**
+     * 验证 {@code ledgerBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal ledgerBalance(JdbcTemplate jdbcTemplate) {
         return jdbcTemplate.queryForObject("""
                         select available_balance
@@ -65,6 +83,9 @@ class EvmSepoliaLiveScanTest {
                         """, BigDecimal.class, ADDRESS);
     }
 
+    /**
+     * 验证 {@code dataSource} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static DriverManagerDataSource dataSource() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
         dataSource.setDriverClassName("org.postgresql.Driver");

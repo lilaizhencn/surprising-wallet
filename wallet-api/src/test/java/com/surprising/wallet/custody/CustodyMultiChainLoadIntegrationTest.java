@@ -49,15 +49,30 @@ import com.surprising.wallet.custody.model.CustodyWebhookRetryPolicy;
 import com.surprising.wallet.custody.service.CustodyWebhookService;
 import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
 
+/**
+ * 验证 {@code CustodyMultiChainLoadIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class CustodyMultiChainLoadIntegrationTest {
+    /**
+     * 保存 {@code CHAINS}，表示测试所覆盖的链、网络、资产或代币配置。
+     */
     private static final List<ChainAsset> CHAINS = List.of(
             new ChainAsset(ChainType.ETH, "ETH"),
             new ChainAsset(ChainType.TRON, "TRX"),
             new ChainAsset(ChainType.SOLANA, "SOL"),
             new ChainAsset(ChainType.SUI, "SUI"));
+    /**
+     * 保存 {@code DEPOSIT_AMOUNT}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final BigDecimal DEPOSIT_AMOUNT = new BigDecimal("10.000000");
+    /**
+     * 保存 {@code WITHDRAW_AMOUNT}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final BigDecimal WITHDRAW_AMOUNT = new BigDecimal("3.000000");
 
+    /**
+     * 验证 {@code shouldKeepFundsAndCallbacksCorrectUnderMultiChainLoad} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldKeepFundsAndCallbacksCorrectUnderMultiChainLoad() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("custody.load.enabled"),
@@ -164,6 +179,9 @@ class CustodyMultiChainLoadIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code createTenant} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Tenant createTenant(JdbcTemplate jdbc, CustodyTenantChainRepository tenantChains) {
         UUID tenantId = UUID.randomUUID();
         UUID adminId = UUID.randomUUID();
@@ -196,6 +214,9 @@ class CustodyMultiChainLoadIntegrationTest {
         return new Tenant(tenantId, namespace);
     }
 
+    /**
+     * 验证 {@code createAccounts} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static List<UserAccount> createAccounts(JdbcTemplate jdbc, Tenant tenant, int users) {
         List<UserAccount> accounts = new ArrayList<>(users);
         for (int index = 0; index < users; index++) {
@@ -226,6 +247,9 @@ class CustodyMultiChainLoadIntegrationTest {
         return accounts;
     }
 
+    /**
+     * 验证 {@code insertWebhook} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static UUID insertWebhook(JdbcTemplate jdbc, CustodyCryptoService crypto,
                                       UUID tenantId, String url) {
         UUID endpointId = UUID.randomUUID();
@@ -237,6 +261,9 @@ class CustodyMultiChainLoadIntegrationTest {
         return endpointId;
     }
 
+    /**
+     * 验证 {@code crypto} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static CustodyCryptoService crypto() {
         byte[] key = new byte[32];
         new SecureRandom().nextBytes(key);
@@ -247,6 +274,9 @@ class CustodyMultiChainLoadIntegrationTest {
         return crypto;
     }
 
+    /**
+     * 验证 {@code depositEvent} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static DepositEvent depositEvent(UserAccount account) {
         return new DepositEvent(
                 account.chain(), account.symbol(), String.format("%064x", account.index() + 1L),
@@ -255,6 +285,9 @@ class CustodyMultiChainLoadIntegrationTest {
                 12, null, "{\"load\":true}");
     }
 
+    /**
+     * 验证 {@code createAndConfirmWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void createAndConfirmWithdrawal(JdbcTemplate jdbc, ChainJdbcRepository chains,
                                                    CustodyRepository custody, UUID tenantId,
                                                    UserAccount account) {
@@ -281,6 +314,9 @@ class CustodyMultiChainLoadIntegrationTest {
                 "load-withdraw-" + account.index(), null);
     }
 
+    /**
+     * 验证 {@code drainDueWebhooks} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void drainDueWebhooks(JdbcTemplate jdbc,
                                          List<CustodyWebhookDispatcher> dispatchers,
                                          int concurrency) throws Exception {
@@ -298,6 +334,9 @@ class CustodyMultiChainLoadIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code assertMoney} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertMoney(JdbcTemplate jdbc, int users) {
         BigDecimal expectedAvailable = new BigDecimal(users).multiply(
                 DEPOSIT_AMOUNT.subtract(WITHDRAW_AMOUNT));
@@ -331,6 +370,9 @@ class CustodyMultiChainLoadIntegrationTest {
         assertEquals(0, expectedAvailable.compareTo(credits.subtract(debits)));
     }
 
+    /**
+     * 验证 {@code writeReport} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void writeReport(int users, int concurrency, int webhookWorkers, int retries,
                                     Duration deposits, Duration withdrawals, Duration webhooks) throws IOException {
         Path report = Path.of("target", "multi-chain-load-report.properties");
@@ -353,14 +395,23 @@ class CustodyMultiChainLoadIntegrationTest {
         Files.writeString(report, content);
     }
 
+    /**
+     * 验证 {@code rate} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static long rate(int operations, Duration duration) {
         return Math.round(operations / Math.max(duration.toMillis() / 1_000.0d, 0.001d));
     }
 
+    /**
+     * 验证 {@code count} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static int count(JdbcTemplate jdbc, String sql) {
         return jdbc.queryForObject(sql, Integer.class);
     }
 
+    /**
+     * 验证 {@code address} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String address(ChainType chain, int index) {
         return switch (chain) {
             case ETH -> String.format("0x%040x", index + 1L);
@@ -371,6 +422,9 @@ class CustodyMultiChainLoadIntegrationTest {
         };
     }
 
+    /**
+     * 验证 {@code runConcurrently} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void runConcurrently(int operations, int concurrency, IntConsumer operation) throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(concurrency);
         CountDownLatch start = new CountDownLatch(1);
@@ -408,13 +462,34 @@ class CustodyMultiChainLoadIntegrationTest {
     private record DepositAttempt(UserAccount account, DepositEvent event) {
     }
 
+    /**
+     * 测试辅助类 {@code CallbackServer}，为相关测试提供隔离环境或共享数据。
+     */
     private static final class CallbackServer implements AutoCloseable {
+        /**
+         * 保存 {@code server}，用于承载当前测试夹具的配置或运行数据。
+         */
         private final HttpServer server;
+        /**
+         * 保存 {@code executor}，用于访问当前测试所依赖的仓储、客户端或服务。
+         */
         private final ExecutorService executor = Executors.newFixedThreadPool(32);
+        /**
+         * 保存 {@code attempts}，记录测试开关、处理状态、确认结果或重试信息。
+         */
         private final Map<String, AtomicInteger> attempts = new ConcurrentHashMap<>();
+        /**
+         * 保存 {@code requests}，用于承载当前测试夹具的配置或运行数据。
+         */
         private final AtomicInteger requests = new AtomicInteger();
+        /**
+         * 保存 {@code invalidRequests}，用于标识测试中的交易、区块或业务记录。
+         */
         private final AtomicInteger invalidRequests = new AtomicInteger();
 
+        /**
+         * 验证 {@code CallbackServer} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private CallbackServer() throws IOException {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             server.createContext("/custody", this::handle);
@@ -422,10 +497,16 @@ class CustodyMultiChainLoadIntegrationTest {
             server.start();
         }
 
+        /**
+         * 验证 {@code url} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private String url() {
             return "http://127.0.0.1:" + server.getAddress().getPort() + "/custody";
         }
 
+        /**
+         * 验证 {@code handle} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private void handle(HttpExchange exchange) throws IOException {
             requests.incrementAndGet();
             String eventId = exchange.getRequestHeaders().getFirst("X-Custody-Event-Id");
@@ -450,14 +531,23 @@ class CustodyMultiChainLoadIntegrationTest {
             exchange.close();
         }
 
+        /**
+         * 验证 {@code requests} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private int requests() {
             return requests.get();
         }
 
+        /**
+         * 验证 {@code invalidRequests} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private int invalidRequests() {
             return invalidRequests.get();
         }
 
+        /**
+         * 验证 {@code close} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public void close() throws Exception {
             server.stop(0);

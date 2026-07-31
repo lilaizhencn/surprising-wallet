@@ -10,8 +10,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.custody.service.CustodyAddressService;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 
+/**
+ * 验证 {@code CustodyAddressServiceTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class CustodyAddressServiceTest {
 
+    /**
+     * 验证 {@code auditDetailsRecordAddressVersionAndChildIndex} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void auditDetailsRecordAddressVersionAndChildIndex() throws Exception {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
@@ -28,6 +34,9 @@ class CustodyAddressServiceTest {
         assertEquals(3, details.path("childIndex").asLong());
     }
 
+    /**
+     * 验证 {@code addressVersionDefaultsToZeroAndRejectsInvalidValues} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void addressVersionDefaultsToZeroAndRejectsInvalidValues() {
         assertEquals(0L, CustodyAddressService.requireAddressVersion(null));
@@ -38,6 +47,9 @@ class CustodyAddressServiceTest {
                 () -> CustodyAddressService.requireAddressVersion((long) Integer.MAX_VALUE + 1));
     }
 
+    /**
+     * 验证 {@code tenantSubjectsCannotUseReservedSystemPrefix} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void tenantSubjectsCannotUseReservedSystemPrefix() {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,

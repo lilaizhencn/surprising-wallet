@@ -27,20 +27,44 @@ import com.surprising.wallet.custody.model.CustodySecurityProperties;
  */
 @Service
 public class CustodyCryptoService {
+    /**
+     * 定义 {@code RANDOM} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final SecureRandom RANDOM = new SecureRandom();
+    /**
+     * 定义 {@code URL_ENCODER} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
+    /**
+     * 定义 {@code URL_DECODER} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();
+    /**
+     * 定义 {@code VERSION} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final String VERSION = "v1";
+    /**
+     * 保存 {@code properties}，用于承载当前对象的运行配置或业务数据。
+     */
     private final CustodySecurityProperties properties;
+    /**
+     * 构造 {@code CustodyCryptoService}，初始化该组件运行所需的状态和依赖。
+     */
     public CustodyCryptoService(CustodySecurityProperties properties) {
         this.properties = properties;
     }
 
+    /**
+     * 校验 {@code validateConfiguration} 对应的前置条件，不满足时抛出明确异常。
+     */
     @PostConstruct
     public void validateConfiguration() {
         byte[] key = masterKey();
         Arrays.fill(key, (byte) 0);
     }
+    /**
+     * 执行 {@code randomSecret} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public String randomSecret(int bytes) {
         if (bytes < 16) {
             throw new IllegalArgumentException("secret must contain at least 16 random bytes");
@@ -49,6 +73,9 @@ public class CustodyCryptoService {
         RANDOM.nextBytes(value);
         return URL_ENCODER.encodeToString(value);
     }
+    /**
+     * 执行 {@code encrypt} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public String encrypt(String plaintext) {
         if (plaintext == null || plaintext.isBlank()) {
             throw new IllegalArgumentException("secret is required");
@@ -74,6 +101,9 @@ public class CustodyCryptoService {
             throw new IllegalStateException("failed to encrypt custody secret", e);
         }
     }
+    /**
+     * 执行 {@code decrypt} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public String decrypt(String ciphertext) {
         if (ciphertext == null || !ciphertext.startsWith(VERSION + ":")) {
             throw new IllegalArgumentException("unsupported custody secret format");
@@ -103,6 +133,9 @@ public class CustodyCryptoService {
             throw new IllegalStateException("failed to decrypt custody secret", e);
         }
     }
+    /**
+     * 转换或计算 {@code hmacSha256} 对应的值，统一金额、格式和边界规则。
+     */
     public String hmacSha256(String secret, String value) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
@@ -112,6 +145,9 @@ public class CustodyCryptoService {
             throw new IllegalStateException("failed to sign custody message", e);
         }
     }
+    /**
+     * 转换或计算 {@code sha256} 对应的值，统一金额、格式和边界规则。
+     */
     public String sha256(String value) {
         try {
             return HexFormat.of().formatHex(
@@ -120,6 +156,9 @@ public class CustodyCryptoService {
             throw new IllegalStateException("SHA-256 is unavailable", e);
         }
     }
+    /**
+     * 转换或计算 {@code sha256} 对应的值，统一金额、格式和边界规则。
+     */
     public String sha256(byte[] value) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value));
@@ -127,6 +166,9 @@ public class CustodyCryptoService {
             throw new IllegalStateException("SHA-256 is unavailable", e);
         }
     }
+    /**
+     * 执行 {@code constantTimeEquals} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public boolean constantTimeEquals(String expected, String actual) {
         if (expected == null || actual == null) {
             return false;
@@ -135,6 +177,9 @@ public class CustodyCryptoService {
                 expected.getBytes(StandardCharsets.UTF_8),
                 actual.getBytes(StandardCharsets.UTF_8));
     }
+    /**
+     * 执行 {@code masterKey} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private byte[] masterKey() {
         String configured = properties.getSecretMasterKey();
         if (configured == null || configured.isBlank()) {

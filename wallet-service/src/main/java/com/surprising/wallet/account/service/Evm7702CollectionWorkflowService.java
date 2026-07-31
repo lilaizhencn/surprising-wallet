@@ -56,27 +56,83 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.surprising.wallet.account.coordinator.Evm7702CollectionCoordinator;
 import com.surprising.wallet.account.repository.Evm7702CollectionRepository;
 
-/** Production multi-network EVM EIP-7702 token collection worker. */
+/**
+ * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
+ */
 @Service
 public class Evm7702CollectionWorkflowService {
+    /**
+     * 保存 {@code log}，用于承载当前对象的运行配置或业务数据。
+     */
     private static final Logger log = LoggerFactory.getLogger(Evm7702CollectionWorkflowService.class);
+    /**
+     * 定义 {@code MIN_ITEM_GAS} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final BigInteger MIN_ITEM_GAS = BigInteger.valueOf(60_000L);
+    /**
+     * 定义 {@code DEFAULT_ITEM_GAS} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final BigInteger DEFAULT_ITEM_GAS = BigInteger.valueOf(180_000L);
+    /**
+     * 定义 {@code NATIVE_TOKEN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final String NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final Evm7702CollectionRepository repository;
+    /**
+     * 保存 {@code coordinator}，用于承载当前对象的运行配置或业务数据。
+     */
     private final Evm7702CollectionCoordinator coordinator;
+    /**
+     * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository chainRepository;
+    /**
+     * 保存 {@code rpcNodes}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainRpcNodeService rpcNodes;
+    /**
+     * 保存 {@code keyService}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
+     */
     private final AccountSecp256k1KeyService keyService;
+    /**
+     * 保存 {@code crypto}，用于承载当前对象的运行配置或业务数据。
+     */
     private final CustodyCryptoService crypto;
+    /**
+     * 保存 {@code runtimeConfig}，用于保存运行配置和策略参数。
+     */
     private final WalletRuntimeConfigService runtimeConfig;
+    /**
+     * 保存 {@code authorizationService}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final Evm7702AuthorizationService authorizationService = new Evm7702AuthorizationService();
+    /**
+     * 保存 {@code operationSigner}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final Evm7702OperationSigner operationSigner = new Evm7702OperationSigner();
+    /**
+     * 保存 {@code contractCodec}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final Evm7702ContractCodec contractCodec = new Evm7702ContractCodec();
+    /**
+     * 保存 {@code transactionService}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final Evm7702BatchTransactionService transactionService = new Evm7702BatchTransactionService();
+    /**
+     * 保存 {@code receiptParser}，用于承载当前对象的运行配置或业务数据。
+     */
     private final Evm7702ReceiptParser receiptParser = new Evm7702ReceiptParser();
+    /**
+     * 保存 {@code running}，用于承载当前对象的运行配置或业务数据。
+     */
     private final AtomicBoolean running = new AtomicBoolean();
 
+    /**
+     * 构造 {@code Evm7702CollectionWorkflowService}，初始化该组件运行所需的状态和依赖。
+     */
     public Evm7702CollectionWorkflowService(
             Evm7702CollectionRepository repository,
             Evm7702CollectionCoordinator coordinator,
@@ -93,6 +149,9 @@ public class Evm7702CollectionWorkflowService {
         this.crypto = crypto;
         this.runtimeConfig = runtimeConfig;
     }
+    /**
+     * 执行或处理 {@code run} 对应的业务流程，并维护状态和异常边界。
+     */
     public void run() {
         if (!running.compareAndSet(false, true)) return;
         try {
@@ -121,9 +180,8 @@ public class Evm7702CollectionWorkflowService {
         }
     }
 
-    /**
-     * Resolves an uncertain broadcast without ever creating a new transaction or consuming a new nonce.
-     * The encrypted outbox is decrypted, hash-checked, and the exact same signed bytes are resubmitted.
+        /**
+     * 执行 {@code recoverUnknown} 对应的签名或签名恢复，保证交易数据可验证。
      */
     public void recoverUnknown(AccountChainProfile profile) {
         List<Evm7702CollectionRepository.UnknownAttempt> attempts = repository.listUnknownAttempts(
@@ -170,6 +228,9 @@ public class Evm7702CollectionWorkflowService {
             web3j.shutdown();
         }
     }
+    /**
+     * 执行或处理 {@code processOne} 对应的业务流程，并维护状态和异常边界。
+     */
     public Optional<String> processOne(AccountChainProfile profile) {
         Evm7702CollectionRepository.Batch batch = repository
                 .claimNextBatch(profile.getChain(), profile.getNetwork()).orElse(null);
@@ -213,6 +274,9 @@ public class Evm7702CollectionWorkflowService {
                     : new IllegalStateException("failed to process EIP-7702 batch", e);
         }
     }
+    /**
+     * 处理 {@code confirm} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public void confirm(AccountChainProfile profile) {
         ChainRpcNode node = requireRpcNode(profile);
         Web3j web3j = Web3j.build(http(node));
@@ -255,6 +319,9 @@ public class Evm7702CollectionWorkflowService {
         }
     }
 
+    /**
+     * 执行 {@code transactionReceipt} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Optional<EvmTransactionReceipt> transactionReceipt(
             HttpService http, String txHash) throws Exception {
         EvmReceiptResponse response = new Request<>(
@@ -267,6 +334,9 @@ public class Evm7702CollectionWorkflowService {
         return Optional.ofNullable(response.getResult());
     }
 
+    /**
+     * 执行 {@code prepare} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Prepared prepare(Web3j web3j, HttpService http, AccountChainProfile profile,
                              Evm7702CollectionRepository.Batch batch) throws Exception {
         var config = batch.config();
@@ -354,6 +424,9 @@ public class Evm7702CollectionWorkflowService {
                 List.copyOf(preparedItems));
     }
 
+    /**
+     * 为 {@code signPrepared} 对应的交易或消息生成签名，并保持原始数据不被改变。
+     */
     private Evm7702CollectionCoordinator.SignedAttempt signPrepared(
             Web3j web3j, AccountChainProfile profile,
             Evm7702CollectionRepository.Batch batch, Prepared prepared, BigInteger reservedNonce) {
@@ -384,6 +457,9 @@ public class Evm7702CollectionWorkflowService {
         return new Evm7702CollectionCoordinator.SignedAttempt(signed, attempt, reservedFee);
     }
 
+    /**
+     * 执行 {@code nativeDecimals} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private int nativeDecimals(AccountChainProfile profile) {
         var asset = chainRepository.findAsset(profile.getChain(), profile.getNativeSymbol())
                 .orElseThrow(() -> new IllegalStateException(
@@ -395,6 +471,9 @@ public class Evm7702CollectionWorkflowService {
         return asset.getDecimals();
     }
 
+    /**
+     * 计算或估算 {@code estimateGas} 对应的金额、费用或资源消耗。
+     */
     private BigInteger estimateGas(HttpService http, String from, String to, String data,
                                    BigInteger priority, BigInteger maxFee,
                                    List<AuthorizationTuple> authorizations) throws Exception {
@@ -418,6 +497,9 @@ public class Evm7702CollectionWorkflowService {
         }
         return Numeric.decodeQuantity(response.getResult());
     }
+    /**
+     * 执行 {@code authorizationJson} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Map<String, String> authorizationJson(AuthorizationTuple tuple) {
         Map<String, String> result = new LinkedHashMap<>();
         result.put("chainId", Numeric.encodeQuantity(tuple.getChainId()));
@@ -428,6 +510,9 @@ public class Evm7702CollectionWorkflowService {
         result.put("s", Numeric.encodeQuantity(tuple.getS()));
         return result;
     }
+    /**
+     * 编码 {@code tokenBalance} 对应的数据，生成链上或接口所需的表示。
+     */
     private BigInteger tokenBalance(Web3j web3j, String token, String owner) throws Exception {
         Function function = new Function(
                 "balanceOf", List.of(new Address(owner)), List.of(new TypeReference<Uint256>() { }));
@@ -439,6 +524,9 @@ public class Evm7702CollectionWorkflowService {
         if (values.size() != 1) throw new IllegalStateException("token balanceOf returned malformed data");
         return (BigInteger) values.getFirst().getValue();
     }
+    /**
+     * 执行 {@code operationNonce} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private BigInteger operationNonce(Web3j web3j, String authority) throws Exception {
         Function function = new Function("operationNonce", List.of(), List.of(new TypeReference<Uint256>() { }));
         EthCall call = web3j.ethCall(
@@ -448,12 +536,18 @@ public class Evm7702CollectionWorkflowService {
         return (BigInteger) FunctionReturnDecoder.decode(call.getValue(), function.getOutputParameters())
                 .getFirst().getValue();
     }
+    /**
+     * 判断 {@code isTransactionKnown} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private boolean isTransactionKnown(Web3j web3j, String txHash) throws Exception {
         if (web3j.ethGetTransactionReceipt(txHash).send().getTransactionReceipt().isPresent()) {
             return true;
         }
         return web3j.ethGetTransactionByHash(txHash).send().getTransaction().isPresent();
     }
+    /**
+     * 校验 {@code requireCodeHash} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void requireCodeHash(Web3j web3j, String address, String expected, String label) throws Exception {
         String code = web3j.ethGetCode(address, DefaultBlockParameterName.LATEST).send().getCode();
         if (code == null || "0x".equalsIgnoreCase(code)) {
@@ -465,11 +559,17 @@ public class Evm7702CollectionWorkflowService {
         }
     }
 
+    /**
+     * 执行 {@code credentials} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Credentials credentials(AccountChainProfile profile,
                                     com.surprising.wallet.common.chain.ChainAddressRecord address) {
         ECKey key = keyService.key(profile, address);
         return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(key.getPrivKey(), 64));
     }
+    /**
+     * 校验 {@code requireRpcNode} 对应的前置条件，不满足时抛出明确异常。
+     */
     private ChainRpcNode requireRpcNode(AccountChainProfile profile) {
         List<ChainRpcNode> nodes = rpcNodes.enabledNodes(profile.getChain(), profile.getNetwork(), "rpc");
         if (nodes.isEmpty()) {
@@ -478,18 +578,30 @@ public class Evm7702CollectionWorkflowService {
         }
         return nodes.getFirst();
     }
+    /**
+     * 执行 {@code http} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private HttpService http(ChainRpcNode node) {
         HttpService service = new HttpService(node.getRpcUrl());
         service.addHeaders(rpcNodes.authHeaders(node));
         return service;
     }
+    /**
+     * 执行 {@code delegationCode} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String delegationCode(String delegate) {
         return "0xef0100" + Numeric.cleanHexPrefix(delegate).toLowerCase();
     }
+    /**
+     * 执行 {@code batchHash} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String batchHash(java.util.UUID tenantId, java.util.UUID batchId) {
         return Numeric.toHexString(Hash.sha3(
                 (tenantId + ":" + batchId).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
+    /**
+     * 发送或广播 {@code send} 对应的链上请求，并返回节点处理结果。
+     */
     private static <T> T send(CheckedSupplier<T> supplier) {
         try {
             return supplier.get();
@@ -498,29 +610,80 @@ public class Evm7702CollectionWorkflowService {
         }
     }
 
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     @FunctionalInterface
     private interface CheckedSupplier<T> {
+        /**
+         * 获取或查询 {@code get} 对应的数据，供调用方读取当前状态。
+         */
         T get() throws Exception;
     }
+    /**
+     * 封装钱包业务数据和字段约束，作为模块之间传递的明确模型。
+     */
     public static class QuantityResponse extends Response<String> {
     }
+    /**
+     * 封装钱包业务数据和字段约束，作为模块之间传递的明确模型。
+     */
     public static class EvmReceiptResponse extends Response<EvmTransactionReceipt> {
     }
+    /**
+     * 负责 EVM 链交易、费用、扫描或 EIP-7702 相关处理。
+     */
     public static class EvmTransactionReceipt extends TransactionReceipt {
+        /**
+         * 保存 {@code l1Fee}，用于保存金额、费用或链上执行状态。
+         */
         private String l1Fee;
+        /**
+         * 保存 {@code gasUsedForL1}，用于保存金额、费用或链上执行状态。
+         */
         private String gasUsedForL1;
+        /**
+         * 保存 {@code operatorFeeScalar}，用于保存金额、费用或链上执行状态。
+         */
         private String operatorFeeScalar;
+        /**
+         * 保存 {@code operatorFeeConstant}，用于保存金额、费用或链上执行状态。
+         */
         private String operatorFeeConstant;
 
+        /**
+         * 获取或查询 {@code getL1Fee} 对应的数据，供调用方读取当前状态。
+         */
         public String getL1Fee() { return l1Fee; }
+        /**
+         * 设置或更新 {@code setL1Fee} 对应的状态，并保持相关业务字段一致。
+         */
         public void setL1Fee(String l1Fee) { this.l1Fee = l1Fee; }
+        /**
+         * 获取或查询 {@code getGasUsedForL1} 对应的数据，供调用方读取当前状态。
+         */
         public String getGasUsedForL1() { return gasUsedForL1; }
+        /**
+         * 设置或更新 {@code setGasUsedForL1} 对应的状态，并保持相关业务字段一致。
+         */
         public void setGasUsedForL1(String gasUsedForL1) { this.gasUsedForL1 = gasUsedForL1; }
+        /**
+         * 获取或查询 {@code getOperatorFeeScalar} 对应的数据，供调用方读取当前状态。
+         */
         public String getOperatorFeeScalar() { return operatorFeeScalar; }
+        /**
+         * 设置或更新 {@code setOperatorFeeScalar} 对应的状态，并保持相关业务字段一致。
+         */
         public void setOperatorFeeScalar(String operatorFeeScalar) {
             this.operatorFeeScalar = operatorFeeScalar;
         }
+        /**
+         * 获取或查询 {@code getOperatorFeeConstant} 对应的数据，供调用方读取当前状态。
+         */
         public String getOperatorFeeConstant() { return operatorFeeConstant; }
+        /**
+         * 设置或更新 {@code setOperatorFeeConstant} 对应的状态，并保持相关业务字段一致。
+         */
         public void setOperatorFeeConstant(String operatorFeeConstant) {
             this.operatorFeeConstant = operatorFeeConstant;
         }

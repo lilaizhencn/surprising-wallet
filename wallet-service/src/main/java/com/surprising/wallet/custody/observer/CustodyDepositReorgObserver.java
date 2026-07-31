@@ -30,8 +30,17 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 public class CustodyDepositReorgObserver implements DepositReorgObserver {
     /** Webhook 事件类型：充值被重组 */
     private static final String EVENT_TYPE = "DEPOSIT.REORGED";
+    /**
+     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final JdbcTemplate jdbc;
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final CustodyRepository repository;
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper;
 
     /**
@@ -48,6 +57,9 @@ public class CustodyDepositReorgObserver implements DepositReorgObserver {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 执行 {@code onDepositReorged} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     @Override
     public void onDepositReorged(ReorgedDeposit deposit) {
         List<AddressProjection> projections = jdbc.query("""
@@ -130,10 +142,16 @@ public class CustodyDepositReorgObserver implements DepositReorgObserver {
                 "DEPOSIT.REORG", "CUSTODY_DEPOSIT", projection.depositId().toString(), null,
                 json(data));
     }
+    /**
+     * 执行 {@code reference} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String reference(ReorgedDeposit deposit, String action) {
         return deposit.chain() + ":" + deposit.txHash() + ":" + deposit.logIndex()
                 + ":" + action + ":" + deposit.creditGeneration();
     }
+    /**
+     * 编码 {@code json} 对应的数据，生成链上或接口所需的表示。
+     */
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);

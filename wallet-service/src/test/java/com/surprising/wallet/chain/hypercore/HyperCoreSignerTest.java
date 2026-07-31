@@ -13,7 +13,13 @@ import java.math.BigInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * 验证 {@code HyperCoreSignerTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class HyperCoreSignerTest {
+    /**
+     * 验证 {@code usdSendSignatureRecoversSignerAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void usdSendSignatureRecoversSignerAddress() throws Exception {
         ObjectMapper mapper = new ObjectMapper();

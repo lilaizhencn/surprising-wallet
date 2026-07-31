@@ -29,6 +29,9 @@ class MoneroAddressService {
 
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
+    /**
+     * 构建或生成 {@code createNativeAddress} 对应的结果，并执行输入和状态校验。
+     */
     public ChainAddressRecord createNativeAddress(long userId, int biz, long preferredIndex, String walletRole) {
         MoneroWalletRpcClient.Subaddress subaddress = userId == 0 && biz == 0 && preferredIndex == 0
                 ? walletRpcClient.primaryAddress()
@@ -50,6 +53,9 @@ class MoneroAddressService {
         return repository.findChainAddress(CHAIN, SYMBOL, userId, biz, subaddress.addressIndex(), walletRole)
                 .orElseThrow();
     }
+    /**
+     * 执行 {@code label} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String label(long userId, int biz, long preferredIndex) {
         return "surprising-wallet user=" + userId + " biz=" + biz + " requested-index=" + preferredIndex;
     }

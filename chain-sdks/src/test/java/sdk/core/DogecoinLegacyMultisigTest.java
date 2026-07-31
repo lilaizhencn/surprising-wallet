@@ -14,7 +14,13 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * 验证 {@code DogecoinLegacyMultisigTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class DogecoinLegacyMultisigTest {
+    /**
+     * 验证 {@code shouldGenerateAndSignDogecoinTestnetP2shTwoOfThree} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldGenerateAndSignDogecoinTestnetP2shTwoOfThree() {
         var params = DogecoinNetworkParameters.testnet();

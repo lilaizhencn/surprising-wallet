@@ -6,6 +6,9 @@ package com.surprising.wallet.custody.exception;
  * 在认证失败时抛出，被 {@code CustodyExceptionHandler} 统一转为 HTTP 401 响应。
  */
 public class CustodyUnauthorizedException extends RuntimeException {
+    /**
+     * 构造 {@code CustodyUnauthorizedException}，初始化该组件运行所需的状态和依赖。
+     */
     public CustodyUnauthorizedException(String message) {
         super(message);
     }

@@ -43,15 +43,26 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Real local-chain test: broadcasts a Web3j-encoded type-4 transaction with three
- * EIP-7702 authorizations. No hardhat_setCode shortcut is used here.
+ * 验证 {@code Evm7702Type4IntegrationTest} 覆盖的业务流程、边界条件和异常行为。
  */
 class Evm7702Type4IntegrationTest {
+    /**
+     * 保存 {@code RPC}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private static final String RPC = "http://127.0.0.1:8545";
+    /**
+     * 保存 {@code RELAYER}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final Credentials RELAYER = Credentials.create(
             "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
+    /**
+     * 保存 {@code GAS_PRICE}，表示测试使用的金额、余额、手续费、Gas 或精度参数。
+     */
     private static final BigInteger GAS_PRICE = BigInteger.valueOf(2_000_000_000L);
 
+    /**
+     * 验证 {@code shouldAuthorizeAndCollectThreeZeroEthAddressesWithOneType4Tx} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void shouldAuthorizeAndCollectThreeZeroEthAddressesWithOneType4Tx() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("evm.7702.enabled"),
@@ -147,6 +158,9 @@ class Evm7702Type4IntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code deployMockToken} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Deployment deployMockToken(
             Web3j web3j, BigInteger nonce, long chainId) throws Exception {
         Path artifact = projectRoot().resolve(
@@ -168,6 +182,9 @@ class Evm7702Type4IntegrationTest {
         return new Deployment(receipt.getContractAddress());
     }
 
+    /**
+     * 验证 {@code sendLegacyCall} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TransactionReceipt sendLegacyCall(
             Web3j web3j, BigInteger nonce, String to, String data, long chainId)
             throws Exception {
@@ -179,11 +196,17 @@ class Evm7702Type4IntegrationTest {
         return waitReceipt(web3j, response.getTransactionHash());
     }
 
+    /**
+     * 验证 {@code encodeMint} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String encodeMint(String recipient, BigInteger amount) {
         return FunctionEncoder.encode(new Function(
                 "mint", List.of(new Address(recipient), new Uint256(amount)), List.of()));
     }
 
+    /**
+     * 验证 {@code tokenBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger tokenBalance(Web3j web3j, String token, String owner) throws Exception {
         Function function = new Function(
                 "balanceOf", List.of(new Address(owner)), List.of(new TypeReference<Uint256>() { }));
@@ -195,6 +218,9 @@ class Evm7702Type4IntegrationTest {
         return (BigInteger) values.getFirst().getValue();
     }
 
+    /**
+     * 验证 {@code operationNonce} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigInteger operationNonce(Web3j web3j, String authority) throws Exception {
         Function function = new Function("operationNonce", List.of(), List.of(new TypeReference<Uint256>() { }));
         EthCall response = web3j.ethCall(
@@ -205,6 +231,9 @@ class Evm7702Type4IntegrationTest {
                 .getFirst().getValue();
     }
 
+    /**
+     * 验证 {@code waitReceipt} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TransactionReceipt waitReceipt(Web3j web3j, String txHash) throws Exception {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
         while (Instant.now().isBefore(deadline)) {
@@ -217,10 +246,16 @@ class Evm7702Type4IntegrationTest {
         throw new IllegalStateException("timed out waiting for transaction receipt " + txHash);
     }
 
+    /**
+     * 验证 {@code randomCredentials} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Credentials randomCredentials() throws Exception {
         return Credentials.create(Keys.createEcKeyPair());
     }
 
+    /**
+     * 验证 {@code requiredProperty} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String requiredProperty(String name) {
         String value = System.getProperty(name, "").trim();
         if (!value.matches("^0x[0-9a-fA-F]{40}$")) {
@@ -229,6 +264,9 @@ class Evm7702Type4IntegrationTest {
         return Keys.toChecksumAddress(value);
     }
 
+    /**
+     * 验证 {@code projectRoot} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Path projectRoot() {
         Path current = Path.of("").toAbsolutePath();
         while (current != null) {

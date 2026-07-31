@@ -28,9 +28,18 @@ import com.surprising.wallet.custody.service.CustodyAssetRecoveryService.SubmitC
 import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway.Verification;
 import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway.VerificationRequest;
 
+/**
+ * 验证 {@code CustodyAssetRecoveryIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class CustodyAssetRecoveryIntegrationTest {
+    /**
+     * 保存 {@code jdbc}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private JdbcTemplate jdbc;
 
+    /**
+     * 验证 {@code setUp} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @BeforeEach
     void setUp() throws Exception {
         DriverManagerDataSource dataSource = CustodyIntegrationDatabase.dataSource();
@@ -38,6 +47,9 @@ class CustodyAssetRecoveryIntegrationTest {
         CustodyIntegrationDatabase.reset(dataSource);
     }
 
+    /**
+     * 验证 {@code tenantSubmissionIsVerifiedApprovedAndExecutedWithOriginalDerivation} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void tenantSubmissionIsVerifiedApprovedAndExecutedWithOriginalDerivation() {
         Fixture fixture = fixture();
@@ -92,6 +104,9 @@ class CustodyAssetRecoveryIntegrationTest {
                 """, Integer.class, fixture.tenantId()));
     }
 
+    /**
+     * 验证 {@code unownedDestinationIsRejectedBeforeARecoveryCaseIsCreated} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void unownedDestinationIsRejectedBeforeARecoveryCaseIsCreated() {
         Fixture fixture = fixture();
@@ -107,6 +122,9 @@ class CustodyAssetRecoveryIntegrationTest {
                 "select count(*) from custody_asset_recovery", Integer.class));
     }
 
+    /**
+     * 验证 {@code fixture} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private Fixture fixture() {
         String suffix = UUID.randomUUID().toString().replace("-", "");
         UUID tenantId = UUID.randomUUID();
@@ -166,19 +184,37 @@ class CustodyAssetRecoveryIntegrationTest {
                 Integer.toUnsignedLong(subject), namespace, tenant, platform);
     }
 
+    /**
+     * 验证 {@code assertAmount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertAmount(String expected, BigDecimal actual) {
         assertEquals(0, new BigDecimal(expected).compareTo(actual));
     }
 
+    /**
+     * 测试替身 {@code FakeGateway}，用于隔离外部依赖并验证调用参数和状态变化。
+     */
     private static final class FakeGateway implements CustodyAssetRecoveryChainGateway {
+        /**
+         * 保存 {@code executedSource}，用于承载当前测试夹具的配置或运行数据。
+         */
         private ChainAddressRecord executedSource;
+        /**
+         * 保存 {@code confirmed}，记录测试开关、处理状态、确认结果或重试信息。
+         */
         private boolean confirmed = true;
 
+        /**
+         * 验证 {@code supports} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public boolean supports(String chain) {
             return "BNB".equals(chain);
         }
 
+        /**
+         * 验证 {@code verify} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public Verification verify(VerificationRequest request) {
             assertEquals("BNB", request.chain());
@@ -189,6 +225,9 @@ class CustodyAssetRecoveryIntegrationTest {
                     "{\"canonical\":true,\"nativeBalanceForGas\":\"0.01\"}");
         }
 
+        /**
+         * 验证 {@code execute} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public String execute(ExecutionRequest request) {
             executedSource = request.source();
@@ -198,6 +237,9 @@ class CustodyAssetRecoveryIntegrationTest {
             return "0xrecovery-transaction";
         }
 
+        /**
+         * 验证 {@code confirmed} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         @Override
         public boolean confirmed(String chain, String txHash) {
             assertEquals("BNB", chain);

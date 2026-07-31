@@ -40,6 +40,9 @@ public class CustodyWebhookDispatcher {
     /** 防并发开关。 */
     private final AtomicBoolean running = new AtomicBoolean();
 
+    /**
+     * 构造 {@code CustodyWebhookDispatcher}，初始化该组件运行所需的状态和依赖。
+     */
     public CustodyWebhookDispatcher(CustodyRepository repository,
                                     CustodyCryptoService crypto,
                                     CustodyWebhookService webhooks,

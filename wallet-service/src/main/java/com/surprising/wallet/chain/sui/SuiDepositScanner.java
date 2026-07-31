@@ -47,6 +47,9 @@ class SuiDepositScanner {
     /** 运行时配置服务（可选） */
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
+    /**
+     * 扫描或观察 {@code scanAndCredit} 对应的链上状态，并转换为业务可用结果。
+     */
     public List<DepositEvent> scanAndCredit() {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "sui scanAndCredit");
         AccountChainProfile profile = profile();
@@ -72,6 +75,9 @@ class SuiDepositScanner {
         repository.updateScanHeight(CHAIN, SCANNER, end, safeHeight);
         return events;
     }
+    /**
+     * 添加 {@code addTargets} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     private void addTargets(List<AssetScanTarget> targets, String symbol, String coinType) {
         for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, symbol)) {
             if ("DEPOSIT".equals(address.getWalletRole())) {
@@ -80,6 +86,9 @@ class SuiDepositScanner {
         }
     }
 
+    /**
+     * 扫描或观察 {@code scanTransaction} 对应的链上状态，并转换为业务可用结果。
+     */
     private void scanTransaction(JsonNode transaction, String symbol, String coinType,
                                  ChainAddressRecord address, AccountChainProfile profile,
                                  long bestCheckpoint, Set<String> platformAddresses,
@@ -130,6 +139,9 @@ class SuiDepositScanner {
             events.add(event);
         }
     }
+    /**
+     * 执行 {@code ownerMatches} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private boolean ownerMatches(JsonNode owner, String address) {
         String expected = SuiHex.normalizeAddress(address);
         if (owner.isTextual()) {
@@ -138,6 +150,9 @@ class SuiDepositScanner {
         String value = owner.path("AddressOwner").asText(null);
         return value != null && expected.equals(SuiHex.normalizeAddress(value));
     }
+    /**
+     * 执行 {@code platformAddresses} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private Set<String> platformAddresses() {
         Set<String> addresses = new HashSet<>();
         for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
@@ -146,6 +161,9 @@ class SuiDepositScanner {
         }
         return addresses;
     }
+    /**
+     * 添加 {@code addAddress} 对应的业务对象，并更新当前组件的集合或索引。
+     */
     private void addAddress(Set<String> addresses, String address) {
         if (address == null || address.isBlank()) {
             return;
@@ -156,9 +174,15 @@ class SuiDepositScanner {
             // Ignore malformed historical records; address creation validates new rows.
         }
     }
+    /**
+     * 执行 {@code sameCoinType} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private boolean sameCoinType(String expected, String actual) {
         return normalizeCoinType(expected).equals(normalizeCoinType(actual));
     }
+    /**
+     * 转换或计算 {@code normalizeCoinType} 对应的值，统一金额、格式和边界规则。
+     */
     private String normalizeCoinType(String value) {
         String[] parts = value.split("::");
         if (parts.length != 3) {
@@ -166,6 +190,9 @@ class SuiDepositScanner {
         }
         return SuiHex.normalizeAddress(parts[0]) + "::" + parts[1] + "::" + parts[2];
     }
+    /**
+     * 获取或查询 {@code decimals} 对应的数据，并向调用方返回当前业务状态。
+     */
     private int decimals(String symbol) {
         return repository.findAsset(CHAIN, symbol)
                 .map(asset -> asset.getDecimals())
@@ -173,15 +200,24 @@ class SuiDepositScanner {
                         .map(TokenDefinition::getDecimals)
                         .orElse(9));
     }
+    /**
+     * 编码 {@code totalGas} 对应的数据，生成链上或接口所需的表示。
+     */
     private long totalGas(JsonNode gas) {
         return gas.path("computationCost").asLong(0)
                 + gas.path("storageCost").asLong(0)
                 - gas.path("storageRebate").asLong(0);
     }
+    /**
+     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
+     */
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
+    /**
+     * 扫描或观察 {@code scanStart} 对应的链上状态，并转换为业务可用结果。
+     */
     private long scanStart(AccountChainProfile profile, long latest) {
         return repository.findScanSafeHeight(CHAIN, SCANNER)
                 .map(height -> Math.min(latest, height + 1L))
@@ -191,6 +227,9 @@ class SuiDepositScanner {
                     return Math.max(configured, latest - scanBatchSize(profile) + 1L);
                 });
     }
+    /**
+     * 扫描或观察 {@code scanBatchSize} 对应的链上状态，并转换为业务可用结果。
+     */
     private int scanBatchSize(AccountChainProfile profile) {
         int requiredConfirmations = Math.max(1, profile.getDepositConfirmations());
         Long maxBlocks = profile.getScanMaxBlocksPerRun();
@@ -204,6 +243,9 @@ class SuiDepositScanner {
     }
     private record AssetScanTarget(String symbol, String coinType, ChainAddressRecord address) {
     }
+    /**
+     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);

@@ -23,6 +23,9 @@ import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway;
  */
 @Repository
 public class CustodyAssetRecoveryRepository {
+    /**
+     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final JdbcTemplate jdbc;
 
     /**
@@ -34,6 +37,9 @@ public class CustodyAssetRecoveryRepository {
         this.jdbc = jdbc;
     }
 
+    /**
+     * 记录或保存 {@code insert} 对应的数据，并遵守幂等和事务约束。
+     */
     public RecoveryRecord insert(UUID id, UUID tenantId, String actualChain, String expectedChain,
                                  String assetSymbol, String tokenContract, String txHash,
                                  long logIndex, Long requestedLogIndex, String destinationAddress,
@@ -50,18 +56,27 @@ public class CustodyAssetRecoveryRepository {
                 destinationAddress, claimedAmount, requestedBy);
         return require(id);
     }
+    /**
+     * 校验 {@code require} 对应的前置条件，不满足时抛出明确异常。
+     */
     public RecoveryRecord require(UUID id) {
         return jdbc.query("""
                         select * from custody_asset_recovery where id = ?
                         """, this::map, id).stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("asset recovery case not found"));
     }
+    /**
+     * 校验 {@code require} 对应的前置条件，不满足时抛出明确异常。
+     */
     public RecoveryRecord require(UUID tenantId, UUID id) {
         return jdbc.query("""
                         select * from custody_asset_recovery where tenant_id = ? and id = ?
                         """, this::map, tenantId, id).stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("asset recovery case not found"));
     }
+    /**
+     * 获取或查询 {@code findByTransaction} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<RecoveryRecord> findByTransaction(String actualChain, String txHash, long logIndex) {
         return jdbc.query("""
                         select * from custody_asset_recovery
@@ -69,6 +84,9 @@ public class CustodyAssetRecoveryRepository {
                         """, this::map, actualChain, txHash, logIndex).stream().findFirst();
     }
 
+    /**
+     * 获取或查询 {@code findByRequest} 对应的数据，供调用方读取当前状态。
+     */
     public Optional<RecoveryRecord> findByRequest(String actualChain, String txHash,
                                                   String destinationAddress, String assetSymbol,
                                                   String tokenContract) {
@@ -83,6 +101,9 @@ public class CustodyAssetRecoveryRepository {
                         """, this::map, actualChain, txHash, destinationAddress,
                 assetSymbol, tokenContract, tokenContract).stream().findFirst();
     }
+    /**
+     * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
+     */
     public List<RecoveryRecord> list(UUID tenantId, String status, int limit, int offset) {
         if (tenantId == null) {
             return jdbc.query("""
@@ -97,6 +118,9 @@ public class CustodyAssetRecoveryRepository {
                          order by created_at desc limit ? offset ?
                         """, this::map, tenantId, status, status, limit, offset);
     }
+    /**
+     * 执行 {@code count} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public long count(UUID tenantId, String status) {
         Long count;
         if (tenantId == null) {
@@ -113,6 +137,9 @@ public class CustodyAssetRecoveryRepository {
         return count == null ? 0L : count;
     }
 
+    /**
+     * 执行 {@code verified} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public RecoveryRecord verified(UUID id, UUID custodyAddressId,
                                    CustodyAssetRecoveryChainGateway.Verification verification) {
         if (jdbc.update("""
@@ -129,6 +156,9 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
+    /**
+     * 执行 {@code verificationFailed} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public RecoveryRecord verificationFailed(UUID id, String reason) {
         jdbc.update("""
                         update custody_asset_recovery
@@ -137,6 +167,9 @@ public class CustodyAssetRecoveryRepository {
                         """, reason, id);
         return require(id);
     }
+    /**
+     * 执行 {@code approve} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public RecoveryRecord approve(UUID id, String recoveryAddress, UUID reviewer) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -148,6 +181,9 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
+    /**
+     * 执行 {@code claimExecution} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public boolean claimExecution(UUID id) {
         return jdbc.update("""
                         update custody_asset_recovery
@@ -155,6 +191,9 @@ public class CustodyAssetRecoveryRepository {
                          where id = ? and status = 'APPROVED'
                         """, id) == 1;
     }
+    /**
+     * 发送或广播 {@code broadcasted} 对应的链上请求，并返回节点处理结果。
+     */
     public RecoveryRecord broadcasted(UUID id, String recoveryTxHash, UUID executor) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -166,6 +205,9 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
+    /**
+     * 处理 {@code confirmed} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public RecoveryRecord confirmed(UUID id) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -177,6 +219,9 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
+    /**
+     * 发送或广播 {@code broadcastFailed} 对应的链上请求，并返回节点处理结果。
+     */
     public RecoveryRecord broadcastFailed(UUID id, String reason) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -187,6 +232,9 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
+    /**
+     * 发送或广播 {@code broadcastRecoveries} 对应的链上请求，并返回节点处理结果。
+     */
     public List<RecoveryRecord> broadcastRecoveries(int limit) {
         return jdbc.query("""
                         select * from custody_asset_recovery
@@ -194,6 +242,9 @@ public class CustodyAssetRecoveryRepository {
                          order by updated_at limit ?
                         """, this::map, limit);
     }
+    /**
+     * 执行 {@code executionFailed} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public RecoveryRecord executionFailed(UUID id, String reason) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -204,6 +255,9 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
+    /**
+     * 执行 {@code reject} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public RecoveryRecord reject(UUID id, String reason, UUID reviewer) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -214,6 +268,9 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(id);
     }
+    /**
+     * 判断 {@code cancel} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     public RecoveryRecord cancel(UUID tenantId, UUID id) {
         if (jdbc.update("""
                         update custody_asset_recovery
@@ -224,6 +281,9 @@ public class CustodyAssetRecoveryRepository {
         }
         return require(tenantId, id);
     }
+    /**
+     * 执行 {@code map} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private RecoveryRecord map(ResultSet rs, int rowNum) throws SQLException {
         return new RecoveryRecord(
                 rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
@@ -242,6 +302,9 @@ public class CustodyAssetRecoveryRepository {
                 instant(rs, "approved_at"), instant(rs, "executed_at"),
                 rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant());
     }
+    /**
+     * 转换或计算 {@code instant} 对应的值，统一金额、格式和边界规则。
+     */
     private static Instant instant(ResultSet rs, String field) throws SQLException {
         var value = rs.getTimestamp(field);
         return value == null ? null : value.toInstant();

@@ -6,13 +6,28 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
+/**
+ * 测试辅助类 {@code AptosTenantIntegrationFixture}，为相关测试提供隔离环境或共享数据。
+ */
 final class AptosTenantIntegrationFixture {
+    /**
+     * 保存 {@code TENANT_ID}，用于标识测试中的交易、区块或业务记录。
+     */
     private static final UUID TENANT_ID = namedUuid("aptos-localnet-tenant");
+    /**
+     * 保存 {@code ADMIN_ID}，用于标识测试中的交易、区块或业务记录。
+     */
     private static final UUID ADMIN_ID = namedUuid("aptos-localnet-admin");
 
+    /**
+     * 验证 {@code AptosTenantIntegrationFixture} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private AptosTenantIntegrationFixture() {
     }
 
+    /**
+     * 验证 {@code attachDepositAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static TenantAddress attachDepositAddress(JdbcTemplate jdbc, ChainAddressRecord address) {
         ensureTenant(jdbc);
         attachAddressRows(jdbc, address);
@@ -43,11 +58,17 @@ final class AptosTenantIntegrationFixture {
         return new TenantAddress(TENANT_ID, storedCustodyId);
     }
 
+    /**
+     * 验证 {@code attachPlatformAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static void attachPlatformAddress(JdbcTemplate jdbc, ChainAddressRecord address) {
         ensureTenant(jdbc);
         attachAddressRows(jdbc, address);
     }
 
+    /**
+     * 验证 {@code attachAddressRows} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void attachAddressRows(JdbcTemplate jdbc, ChainAddressRecord address) {
         int updated = jdbc.update("""
                 update chain_address set tenant_id = ?, updated_at = now()
@@ -58,6 +79,9 @@ final class AptosTenantIntegrationFixture {
         }
     }
 
+    /**
+     * 验证 {@code ensureTenant} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void ensureTenant(JdbcTemplate jdbc) {
         jdbc.update("""
                 insert into custody_tenant(id, slug, name, derivation_namespace)
@@ -82,6 +106,9 @@ final class AptosTenantIntegrationFixture {
                 """, TENANT_ID, ADMIN_ID);
     }
 
+    /**
+     * 验证 {@code namedUuid} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static UUID namedUuid(String value) {
         return UUID.nameUUIDFromBytes(value.getBytes(StandardCharsets.UTF_8));
     }

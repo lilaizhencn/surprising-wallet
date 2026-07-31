@@ -18,12 +18,24 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
+/**
+ * 验证 {@code HotWalletAddressServiceTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class HotWalletAddressServiceTest {
+    /**
+     * 保存 {@code XPUB_2}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String XPUB_2 =
             "tpubD6NzVbkrYhZ4WuN2bmdffo5p894oRYGQVCfKe3TKT4QVw7qQT18jG1FYbYyB3ePESejLdfaEFMRpsYGVjb4Bh6HiiWaSU8iJRVE46EirNBT";
+    /**
+     * 保存 {@code ED25519_SEED}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final String ED25519_SEED =
             "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
+    /**
+     * 验证 {@code hyperCoreUsesSecp256k1AccountDerivation} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void hyperCoreUsesSecp256k1AccountDerivation() {
         Bip32Node node = Bip32Node.decode(XPUB_2);
@@ -47,6 +59,9 @@ class HotWalletAddressServiceTest {
         assertEquals("0x2aced92da0e5dd90498ef43da87274aa7b01be1b", address.getAddress());
     }
 
+    /**
+     * 验证 {@code evmChainsShareAddressAtTheSameTenantCoordinates} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void evmChainsShareAddressAtTheSameTenantCoordinates() {
         Bip32Node node = Bip32Node.decode(XPUB_2);
@@ -67,6 +82,9 @@ class HotWalletAddressServiceTest {
         assertEquals("0x2194d0e84405809794c6ef9e433acc3f781a4c7e", ethAddress.getAddress());
     }
 
+    /**
+     * 验证 {@code tenantEd25519AddressesIncludeNamespaceAndSubject} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @ParameterizedTest
     @MethodSource("tenantEd25519Profiles")
     void tenantEd25519AddressesIncludeNamespaceAndSubject(
@@ -83,6 +101,9 @@ class HotWalletAddressServiceTest {
         assertNotEquals(nextSubject.getAddress(), nextTenant.getAddress());
     }
 
+    /**
+     * 验证 {@code tenantEd25519Profiles} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Stream<Arguments> tenantEd25519Profiles() {
         return Stream.of(
                 Arguments.of(profile("SOLANA", "solana", "SOL", 501), 501),
@@ -91,6 +112,9 @@ class HotWalletAddressServiceTest {
                 Arguments.of(profile("TON", "ton", "TON", 607), 607));
     }
 
+    /**
+     * 验证 {@code profile} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static AccountChainProfile profile(String chain, String family, String symbol, int coinType) {
         return AccountChainProfile.builder()
                 .chain(chain)
@@ -101,6 +125,9 @@ class HotWalletAddressServiceTest {
                 .build();
     }
 
+    /**
+     * 验证 {@code tenantEd25519Service} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static HotWalletAddressService tenantEd25519Service() {
         return new HotWalletAddressService(
                 null,

@@ -46,6 +46,9 @@ class BlockchainAdapterRegistry {
         }
         return adapters.values().stream().filter(candidate -> candidate.supports(chainType)).findFirst();
     }
+    /**
+     * 校验 {@code require} 对应的前置条件，不满足时抛出明确异常。
+     */
     public BlockchainAdapter require(ChainType chainType) {
         return find(chainType).orElseThrow(() ->
                 new IllegalArgumentException("No adapter registered for " + chainType));

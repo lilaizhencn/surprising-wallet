@@ -39,6 +39,9 @@ import java.util.function.Function;
 @Service
 @RequiredArgsConstructor
 public class ChainRpcNodeService {
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository repository;
 
     /** 按 provider key 记录上次请求时间戳，用于速率节流 */
@@ -144,6 +147,9 @@ public class ChainRpcNodeService {
                 ? new IllegalStateException("all rpc nodes failed for " + chain + "/" + network)
                 : last;
     }
+    /**
+     * 执行 {@code withProviderLimit} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private <T> T withProviderLimit(ChainRpcNode node, Function<ChainRpcNode, T> request) {
         try {
             return withProviderLimit(node, () -> request.apply(node));
@@ -174,6 +180,9 @@ public class ChainRpcNodeService {
             limiter.release();
         }
     }
+    /**
+     * 执行 {@code acquireProviderPermit} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static void acquireProviderPermit(String providerKey, Semaphore limiter) {
         try {
             limiter.acquire();
@@ -190,6 +199,9 @@ public class ChainRpcNodeService {
      */
     @FunctionalInterface
     public interface ProviderLimitedRequest<T> {
+        /**
+         * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
+         */
         T execute() throws Exception;
     }
 
@@ -231,6 +243,9 @@ public class ChainRpcNodeService {
         authHeaders(node).forEach(builder::header);
         return builder;
     }
+    /**
+     * 执行 {@code throttle} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private void throttle(String providerKey, ChainRpcNode node) {
         int intervalMs = node.getMinRequestIntervalMs() == null ? 0 : node.getMinRequestIntervalMs();
         if (intervalMs <= 0) {
@@ -252,6 +267,9 @@ public class ChainRpcNodeService {
             }
         }
     }
+    /**
+     * 转换或计算 {@code sleep} 对应的值，统一金额、格式和边界规则。
+     */
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);
@@ -260,9 +278,15 @@ public class ChainRpcNodeService {
             throw new IllegalStateException("RPC rate limit sleep interrupted", e);
         }
     }
+    /**
+     * 执行 {@code trim} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String trim(String value) {
         return value == null ? "" : value.trim();
     }
+    /**
+     * 获取或查询 {@code providerKey} 对应的数据，并向调用方返回当前业务状态。
+     */
     private static String providerKey(ChainRpcNode node) {
         String fromLabel = providerFromText(node.getNodeLabel());
         if (!fromLabel.isBlank()) {
@@ -278,6 +302,9 @@ public class ChainRpcNodeService {
         }
         return "host:" + rootDomain(host);
     }
+    /**
+     * 获取或查询 {@code providerFromText} 对应的数据，并向调用方返回当前业务状态。
+     */
     private static String providerFromText(String value) {
         String text = trim(value).toLowerCase(Locale.ROOT);
         if (text.isBlank()) {
@@ -342,6 +369,9 @@ public class ChainRpcNodeService {
         }
         return "";
     }
+    /**
+     * 执行 {@code host} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String host(String rpcUrl) {
         String value = trim(rpcUrl);
         if (value.isBlank()) {
@@ -358,6 +388,9 @@ public class ChainRpcNodeService {
             return "";
         }
     }
+    /**
+     * 执行 {@code rootDomain} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String rootDomain(String host) {
         String normalized = host.startsWith("www.") ? host.substring(4) : host;
         String[] parts = normalized.split("\\.");

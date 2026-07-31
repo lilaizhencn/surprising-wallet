@@ -34,11 +34,29 @@ import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
 @Component
 @ConditionalOnProperty(prefix = "sw.wallet.dev-faucet", name = "enabled", havingValue = "true")
 public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
+    /**
+     * 定义 {@code ERC20_TRANSFER_SELECTOR} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final String ERC20_TRANSFER_SELECTOR = "a9059cbb";
+    /**
+     * 保存 {@code properties}，用于承载当前对象的运行配置或业务数据。
+     */
     private final DevFaucetProperties properties;
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
     private final ObjectMapper objectMapper;
+    /**
+     * 保存 {@code httpClient}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final HttpClient httpClient;
+    /**
+     * 保存 {@code requestIds}，用于标识交易、区块或业务记录。
+     */
     private final AtomicLong requestIds = new AtomicLong();
+    /**
+     * 构造 {@code JsonRpcDevFaucetClient}，初始化该组件运行所需的状态和依赖。
+     */
     public JsonRpcDevFaucetClient(DevFaucetProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
@@ -48,6 +66,9 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
                 .build();
     }
 
+    /**
+     * 发送或广播 {@code send} 对应的链上请求，并返回节点处理结果。
+     */
     @Override
     public String send(DevFaucetFunding funding) {
         return switch (funding.chain().toUpperCase(Locale.ROOT)) {
@@ -56,6 +77,9 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
             default -> throw new RejectedException("unsupported dev faucet chain " + funding.chain());
         };
     }
+    /**
+     * 发送或广播 {@code sendBitcoin} 对应的链上请求，并返回节点处理结果。
+     */
     private String sendBitcoin(DevFaucetFunding funding) {
         DevFaucetProperties.Bitcoin bitcoin = properties.getBitcoin();
         URI walletUri = URI.create(trimSlash(bitcoin.getRpcUrl()) + "/wallet/"
@@ -74,6 +98,9 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
                     "bitcoin transaction was sent but confirmation block mining failed", error);
         }
     }
+    /**
+     * 发送或广播 {@code sendEvm} 对应的链上请求，并返回节点处理结果。
+     */
     private String sendEvm(DevFaucetFunding funding) {
         DevFaucetProperties.Evm evm = properties.getEvm();
         String from = evm.getFromAddress().toLowerCase(Locale.ROOT);
@@ -105,6 +132,9 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
         return requiredText(call(URI.create(evm.getRpcUrl()), null,
                 "eth_sendTransaction", List.of(transaction)), "eth_sendTransaction");
     }
+    /**
+     * 执行 {@code call} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private JsonNode call(URI uri, String authorization, String method, List<?> params) {
         try {
             String payload = objectMapper.writeValueAsString(Map.of(
@@ -147,12 +177,18 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
             throw new AmbiguousException("dev faucet RPC outcome is unknown", error);
         }
     }
+    /**
+     * 执行 {@code bitcoinAuth} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private String bitcoinAuth() {
         DevFaucetProperties.Bitcoin bitcoin = properties.getBitcoin();
         String raw = bitcoin.getRpcUsername() + ":" + bitcoin.getRpcPassword();
         return "Basic " + Base64.getEncoder().encodeToString(
                 raw.getBytes(StandardCharsets.UTF_8));
     }
+    /**
+     * 编码或序列化 {@code encodeTransfer} 对应的数据，生成链上或接口需要的表示。
+     */
     public static String encodeTransfer(String address, BigInteger atomicAmount) {
         if (address == null || !address.matches("(?i)^0x[0-9a-f]{40}$")) {
             throw new RejectedException("invalid EVM deposit address");
@@ -164,18 +200,27 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
                 + leftPad(address.substring(2).toLowerCase(Locale.ROOT), 64)
                 + leftPad(atomicAmount.toString(16), 64);
     }
+    /**
+     * 编码 {@code hexQuantity} 对应的数据，生成链上或接口所需的表示。
+     */
     private static String hexQuantity(BigInteger value) {
         if (value.signum() < 0) {
             throw new RejectedException("EVM value must not be negative");
         }
         return "0x" + value.toString(16);
     }
+    /**
+     * 执行 {@code leftPad} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String leftPad(String value, int length) {
         if (value.length() > length) {
             throw new RejectedException("EVM ABI value exceeds 32 bytes");
         }
         return "0".repeat(length - value.length()) + value;
     }
+    /**
+     * 校验 {@code requiredText} 对应的前置条件，不满足时抛出明确异常。
+     */
     private static String requiredText(JsonNode node, String operation) {
         String value = node == null ? "" : node.asText("").trim();
         if (value.isEmpty()) {
@@ -183,6 +228,9 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
         }
         return value;
     }
+    /**
+     * 执行 {@code trimSlash} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private static String trimSlash(String value) {
         String result = value;
         while (result.endsWith("/")) {

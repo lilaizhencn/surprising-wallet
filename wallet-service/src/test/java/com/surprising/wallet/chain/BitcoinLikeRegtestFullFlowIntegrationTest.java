@@ -46,25 +46,31 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Real local-regtest verification for the unified bitcoin-like UTXO runtime.
- *
- * <p>The test talks to bitcoind/litecoind/dogecoind/BCHN through scripts/regtest, creates real
- * chain transactions and confirmations, then verifies deposit_record,
- * utxo_record, withdrawal_order, collection_record, ledger_balance and
- * idempotency against PostgreSQL. DB writes are rolled back; regtest chain
- * transactions remain in the local nodes.</p>
- *
- * <p>This is deliberately opt-in because it requires Docker, BTC/LTC/DOGE/BCH
- * regtest nodes, and PostgreSQL.</p>
+ * 验证 {@code BitcoinLikeRegtestFullFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
  */
 class BitcoinLikeRegtestFullFlowIntegrationTest {
+    /**
+     * 保存 {@code TEST_TENANT_ID}，用于标识测试中的交易、区块或业务记录。
+     */
     private static final UUID TEST_TENANT_ID = UUID.fromString("77020000-0000-0000-0000-000000000003");
+    /**
+     * 保存 {@code JSON}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final ObjectMapper JSON = new ObjectMapper();
+    /**
+     * 保存 {@code RPC_HTTP}，用于访问当前测试所依赖的仓储、客户端或服务。
+     */
     private static final HttpClient RPC_HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
+    /**
+     * 保存 {@code REQUIRED_CONFIRMATIONS}，记录测试开关、处理状态、确认结果或重试信息。
+     */
     private static final int REQUIRED_CONFIRMATIONS = 6;
 
+    /**
+     * 保存 {@code BTC}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final RegtestChain BTC = new RegtestChain(
             ChainType.BTC,
             "scripts/regtest/bitcoin-regtest.sh",
@@ -74,6 +80,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
             new BigDecimal("0.10000000"),
             new BigDecimal("0.00001000"));
 
+    /**
+     * 保存 {@code LTC}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final RegtestChain LTC = new RegtestChain(
             ChainType.LTC,
             "scripts/regtest/litecoin-regtest.sh",
@@ -83,6 +92,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
             new BigDecimal("0.10000000"),
             new BigDecimal("0.00001000"));
 
+    /**
+     * 保存 {@code DOGE}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final RegtestChain DOGE = new RegtestChain(
             ChainType.DOGE,
             "scripts/regtest/dogecoin-regtest.sh",
@@ -92,6 +104,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
             new BigDecimal("10.00000000"),
             new BigDecimal("1.00000000"));
 
+    /**
+     * 保存 {@code BCH}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final RegtestChain BCH = new RegtestChain(
             ChainType.BCH,
             "scripts/regtest/bitcoincash-regtest.sh",
@@ -101,6 +116,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
             new BigDecimal("0.10000000"),
             new BigDecimal("0.00001000"));
 
+    /**
+     * 验证 {@code bitcoinLikeRegtestFlowsMustUseUnifiedUtxoRecordEndToEnd} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void bitcoinLikeRegtestFlowsMustUseUnifiedUtxoRecordEndToEnd() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("bitcoinlike.regtest.enabled"),
@@ -133,6 +151,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code bitcoinLikeLedgerAndRoutingGuardsMustStayAtomicUnderConcurrency} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void bitcoinLikeLedgerAndRoutingGuardsMustStayAtomicUnderConcurrency() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("bitcoinlike.concurrency.enabled"),
@@ -157,6 +178,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code bitcoinLikeRegtestNodesMustBroadcastBulkDepositsAndWithdrawalsConcurrently} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void bitcoinLikeRegtestNodesMustBroadcastBulkDepositsAndWithdrawalsConcurrently() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("bitcoinlike.broadcast.enabled"),
@@ -188,6 +212,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code selectedChains} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static List<RegtestChain> selectedChains() {
         String configured = System.getProperty("bitcoinlike.regtest.chains", "BTC,LTC,DOGE,BCH");
         List<RegtestChain> selected = Arrays.stream(configured.split(","))
@@ -208,6 +235,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         return selected;
     }
 
+    /**
+     * 验证 {@code runFullFlow} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void runFullFlow(Path root, RegtestChain chain, JdbcTemplate jdbc,
                              ChainJdbcRepository repository) throws Exception {
         String chainName = chain.chainType().name();
@@ -314,6 +344,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 depositAddress, withdrawAddress, afterWithdraw.toPlainString());
     }
 
+    /**
+     * 验证 {@code runConcurrencyGuards} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void runConcurrencyGuards(RegtestChain chain, JdbcTemplate jdbc,
                                       ChainJdbcRepository repository, String runId) throws Exception {
         String chainName = chain.chainType().name();
@@ -413,6 +446,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 sumUpdates(withdrawalClaims));
     }
 
+    /**
+     * 验证 {@code syntheticDeposit} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static DepositEvent syntheticDeposit(RegtestChain chain, String txHash, String toAddress,
                                                  BigDecimal amount) {
         String chainName = chain.chainType().name();
@@ -422,6 +458,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 null, "{\"synthetic\":true}");
     }
 
+    /**
+     * 验证 {@code runBulkBroadcastFlow} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private void runBulkBroadcastFlow(Path root, RegtestChain chain, JdbcTemplate jdbc,
                                       ChainJdbcRepository repository, String runId, List<String> cleanupTxids,
                                       int depositCount, int withdrawalCount) throws Exception {
@@ -532,6 +571,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 expectedAvailable.toPlainString());
     }
 
+    /**
+     * 验证 {@code broadcastPayments} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private List<BroadcastResult> broadcastPayments(Path root, RegtestChain chain,
                                                     List<BroadcastPayment> payments,
                                                     List<String> cleanupTxids) throws Exception {
@@ -544,6 +586,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code fetchBroadcastTransactions} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private List<RealTx> fetchBroadcastTransactions(Path root, RegtestChain chain,
                                                     List<BroadcastResult> broadcasts) throws Exception {
         return runConcurrently(broadcasts.size(), index -> {
@@ -558,24 +603,36 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         });
     }
 
+    /**
+     * 验证 {@code bulkDepositAmount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal bulkDepositAmount(RegtestChain chain) {
         return chain.chainType() == ChainType.DOGE
                 ? new BigDecimal("3.00000000")
                 : new BigDecimal("0.02000000");
     }
 
+    /**
+     * 验证 {@code bulkWithdrawalAmount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal bulkWithdrawalAmount(RegtestChain chain) {
         return chain.chainType() == ChainType.DOGE
                 ? new BigDecimal("1.00000000")
                 : new BigDecimal("0.00500000");
     }
 
+    /**
+     * 验证 {@code bulkWithdrawalFee} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static BigDecimal bulkWithdrawalFee(RegtestChain chain) {
         return chain.chainType() == ChainType.DOGE
                 ? new BigDecimal("1.00000000")
                 : new BigDecimal("0.00001000");
     }
 
+    /**
+     * 验证 {@code sendAndMine} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private RealTx sendAndMine(Path root, RegtestChain chain, String address, BigDecimal amount) throws Exception {
         String txid = walletRpc(root, chain, "sendtoaddress", address, amount.toPlainString()).trim();
         rpc(root, chain, null, "mine", String.valueOf(REQUIRED_CONFIRMATIONS));
@@ -588,11 +645,17 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         return new RealTx(txid, raw, blockHeight, confirmations);
     }
 
+    /**
+     * 验证 {@code getRawTransaction} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private String getRawTransaction(Path root, RegtestChain chain, String txid) throws Exception {
         String verbose = chain.chainType() == ChainType.DOGE ? "1" : "true";
         return rpc(root, chain, chain.chainRpc(), "getrawtransaction", txid, verbose);
     }
 
+    /**
+     * 验证 {@code findOutput} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private Output findOutput(JsonNode tx, String address, BigDecimal amount) {
         for (JsonNode output : tx.path("vout")) {
             if (sameAmount(output.path("value").decimalValue(), amount)
@@ -605,6 +668,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         return null;
     }
 
+    /**
+     * 验证 {@code scriptContainsAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static boolean scriptContainsAddress(JsonNode scriptPubKey, String expectedAddress) {
         if (expectedAddress.equals(scriptPubKey.path("address").asText())) {
             return true;
@@ -617,18 +683,30 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         return false;
     }
 
+    /**
+     * 验证 {@code sameAmount} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static boolean sameAmount(BigDecimal left, BigDecimal right) {
         return left.setScale(8).compareTo(right.setScale(8)) == 0;
     }
 
+    /**
+     * 验证 {@code walletRpc} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String walletRpc(Path root, RegtestChain chain, String... args) throws Exception {
         return rpc(root, chain, chain.walletRpc(), args);
     }
 
+    /**
+     * 验证 {@code walletRpcHttp} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static JsonNode walletRpcHttp(RegtestChain chain, String method, Object... params) throws Exception {
         return rpcHttp(chain, true, method, params);
     }
 
+    /**
+     * 验证 {@code rpcHttp} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static JsonNode rpcHttp(RegtestChain chain, boolean wallet, String method, Object... params)
             throws Exception {
         String credentials = Base64.getEncoder().encodeToString((
@@ -652,6 +730,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         return payload.path("result");
     }
 
+    /**
+     * 验证 {@code rpcEndpoint} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String rpcEndpoint(RegtestChain chain, boolean wallet) {
         String base = switch (chain.chainType()) {
             case BTC -> "http://127.0.0.1:" + env("BTC_REGTEST_RPC_PORT", "18444");
@@ -666,6 +747,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         return base + "/wallet/regtest-funder";
     }
 
+    /**
+     * 验证 {@code rpcUserEnv} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String rpcUserEnv(RegtestChain chain) {
         return switch (chain.chainType()) {
             case BTC -> "BTC_REGTEST_RPC_USER";
@@ -676,6 +760,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         };
     }
 
+    /**
+     * 验证 {@code rpcPasswordEnv} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String rpcPasswordEnv(RegtestChain chain) {
         return switch (chain.chainType()) {
             case BTC -> "BTC_REGTEST_RPC_PASSWORD";
@@ -686,6 +773,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         };
     }
 
+    /**
+     * 验证 {@code rpc} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String rpc(Path root, RegtestChain chain, String rpcMode, String... args) throws Exception {
         List<String> command = new ArrayList<>();
         command.add(root.resolve(chain.script()).toString());
@@ -703,10 +793,16 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         return output.trim();
     }
 
+    /**
+     * 验证 {@code json} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static JsonNode json(String payload) throws IOException {
         return JSON.readTree(payload);
     }
 
+    /**
+     * 验证 {@code assertLedger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertLedger(JdbcTemplate jdbc, String chain, String accountId,
                                      BigDecimal available, BigDecimal locked, BigDecimal total) {
         LedgerBalanceRecord record = new ChainJdbcRepository(jdbc)
@@ -717,6 +813,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         assertDecimalEquals(total, record.getTotalBalance(), chain + " total");
     }
 
+    /**
+     * 验证 {@code assertNoNegativeLedger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertNoNegativeLedger(JdbcTemplate jdbc, String chain) {
         assertEquals(0L, count(jdbc, """
                 select count(*) from ledger_balance
@@ -725,36 +824,57 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 """, chain));
     }
 
+    /**
+     * 验证 {@code assertDecimalEquals} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertDecimalEquals(BigDecimal expected, BigDecimal actual, String label) {
         assertEquals(0, expected.setScale(18).compareTo(actual.setScale(18)),
                 label + " expected=" + expected.toPlainString() + " actual=" + actual.toPlainString());
     }
 
+    /**
+     * 验证 {@code count} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static long count(JdbcTemplate jdbc, String sql, Object... args) {
         Long count = jdbc.queryForObject(sql, Long.class, args);
         return count == null ? 0L : count;
     }
 
+    /**
+     * 验证 {@code scalarLong} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static long scalarLong(JdbcTemplate jdbc, String sql, Object... args) {
         Long value = jdbc.queryForObject(sql, Long.class, args);
         assertNotNull(value);
         return value;
     }
 
+    /**
+     * 验证 {@code scalarString} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String scalarString(JdbcTemplate jdbc, String sql, Object... args) {
         String value = jdbc.queryForObject(sql, String.class, args);
         assertNotNull(value);
         return value;
     }
 
+    /**
+     * 验证 {@code countTrue} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static long countTrue(List<Boolean> values) {
         return values.stream().filter(Boolean::booleanValue).count();
     }
 
+    /**
+     * 验证 {@code sumUpdates} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static long sumUpdates(List<Integer> values) {
         return values.stream().mapToLong(Integer::longValue).sum();
     }
 
+    /**
+     * 验证 {@code assetMetadata} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static AssetRuntimeMetadata assetMetadata(ChainJdbcRepository repository, String chain) {
         AccountChainProfile profile = repository.findProfileByChain(chain)
                 .orElseThrow(() -> new IllegalStateException("missing chain_profile for " + chain));
@@ -771,6 +891,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 asset.getContractAddress());
     }
 
+    /**
+     * 验证 {@code ensureTestTenant} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void ensureTestTenant(JdbcTemplate jdbc) {
         jdbc.update("""
                 insert into custody_tenant(id, slug, name)
@@ -779,6 +902,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 """, TEST_TENANT_ID);
     }
 
+    /**
+     * 验证 {@code registerTestAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void registerTestAddress(JdbcTemplate jdbc, String chain,
                                             String accountId, String address) {
         Long addressIndex = jdbc.queryForObject(
@@ -798,6 +924,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 address, address, "m/regtest/" + addressIndex);
     }
 
+    /**
+     * 验证 {@code ensureBitcoinLikeProfiles} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void ensureBitcoinLikeProfiles(JdbcTemplate jdbc) {
         jdbc.update("""
                 update chain_profile
@@ -844,6 +973,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 """);
     }
 
+    /**
+     * 验证 {@code cleanupConcurrencyRows} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void cleanupConcurrencyRows(JdbcTemplate jdbc, String runId) {
         String like = runId + "%";
         jdbc.update("delete from chain_scan_height where scanner_name like ?", like);
@@ -855,6 +987,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         jdbc.update("delete from chain_address where account_id like ?", like);
     }
 
+    /**
+     * 验证 {@code cleanupBroadcastRows} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void cleanupBroadcastRows(JdbcTemplate jdbc, String runId, List<String> txids) {
         cleanupConcurrencyRows(jdbc, runId);
         for (String txid : txids) {
@@ -863,6 +998,9 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code repoRoot} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static Path repoRoot() {
         Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath();
         while (current != null) {
@@ -878,11 +1016,17 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         return Path.of(".");
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    /**
+     * 验证 {@code intProperty} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static int intProperty(String name, int fallback) {
         String value = System.getProperty(name);
         return value == null || value.isBlank() ? fallback : Integer.parseInt(value);
@@ -913,11 +1057,20 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
     private record WithdrawalPlan(int index, String orderNo, String address, BigDecimal amount, BigDecimal fee) {
     }
 
+    /**
+     * 测试辅助类 {@code ConcurrentOperation}，为相关测试提供隔离环境或共享数据。
+     */
     @FunctionalInterface
     private interface ConcurrentOperation<T> {
+        /**
+         * 验证 {@code run} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         T run(int index) throws Exception;
     }
 
+    /**
+     * 验证 {@code runConcurrently} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static <T> List<T> runConcurrently(int workers, ConcurrentOperation<T> operation) throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(workers);
         CountDownLatch ready = new CountDownLatch(workers);

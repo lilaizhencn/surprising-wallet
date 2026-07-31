@@ -35,18 +35,54 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code SegwitP2wshMultisigTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class SegwitP2wshMultisigTest {
+    /**
+     * 保存 {@code PARAMS}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final NetworkParameters PARAMS = TestNet3Params.get();
+    /**
+     * 保存 {@code HEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final HexFormat HEX = HexFormat.of();
+    /**
+     * 保存 {@code KEY_1}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final ECKey KEY_1 = ECKey.fromPrivate(BigInteger.valueOf(2), true);
+    /**
+     * 保存 {@code KEY_2}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final ECKey KEY_2 = ECKey.fromPrivate(BigInteger.valueOf(3), true);
+    /**
+     * 保存 {@code KEY_3}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final ECKey KEY_3 = ECKey.fromPrivate(BigInteger.valueOf(4), true);
+    /**
+     * 保存 {@code WRONG_KEY}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final ECKey WRONG_KEY = ECKey.fromPrivate(BigInteger.valueOf(99), true);
+    /**
+     * 保存 {@code INPUT_VALUE}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final Coin INPUT_VALUE = Coin.valueOf(150_000L);
+    /**
+     * 保存 {@code XPUB_1}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String XPUB_1 = "tpubD6NzVbkrYhZ4YeTnP6ae6en8YvKSvxvvCwh5X7gNpwqEeix6o7etGgsyGywcB9gS1bGTmC4WfLKAdK6vxDEzedd7PMRLcYk5yZLj5JkLAVB";
+    /**
+     * 保存 {@code XPUB_2}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String XPUB_2 = "tpubD6NzVbkrYhZ4WuN2bmdffo5p894oRYGQVCfKe3TKT4QVw7qQT18jG1FYbYyB3ePESejLdfaEFMRpsYGVjb4Bh6HiiWaSU8iJRVE46EirNBT";
+    /**
+     * 保存 {@code XPUB_3}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final String XPUB_3 = "tpubD6NzVbkrYhZ4XKeuSHwv2p3snJxWjacFsu2rEEht2qMaM5FYV2RkbMaJEYNZGK7B3i8D46RTs83DJNPh2Jd5MzXivXCiHLbqAFKv8MKxrC4";
 
+    /**
+     * 验证 {@code nativeP2wshAddressAndWitnessScriptAreGenerated} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void nativeP2wshAddressAndWitnessScriptAreGenerated() throws Exception {
         SegwitMultiSignAddressGenerator generator = multisigGenerator();
@@ -62,6 +98,9 @@ class SegwitP2wshMultisigTest {
         assertEquals(generator.getWitnessScript().program().length * 2, generator.getWitnessScriptStr().length());
     }
 
+    /**
+     * 验证 {@code twoOfThreeFirstAndSecondSignProduceBroadcastReadyNativeSegwitTransaction} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void twoOfThreeFirstAndSecondSignProduceBroadcastReadyNativeSegwitTransaction() throws Exception {
         SignedFixture fixture = signedFixture();
@@ -95,6 +134,9 @@ class SegwitP2wshMultisigTest {
         assertEquals(2, validation.signatureCount);
     }
 
+    /**
+     * 验证 {@code configuredTpubs_shouldDeriveNativeP2wshMultisigAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void configuredTpubs_shouldDeriveNativeP2wshMultisigAddress() {
         SegwitMultiSignAddressGenerator generator = multisigGeneratorFromConfiguredTpubs(1, 1, 0, 0);
@@ -107,6 +149,9 @@ class SegwitP2wshMultisigTest {
         assertEquals(3, generator.getWitnessScript().getPubKeys().size());
     }
 
+    /**
+     * 验证 {@code firstSign_shouldProducePartialWitness} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void firstSign_shouldProducePartialWitness() {
         FirstSignFixture fixture = firstSignFixture();
@@ -119,6 +164,9 @@ class SegwitP2wshMultisigTest {
         assertEquals(fixture.witnessScriptHex, HEX.formatHex(witness.getPush(2)));
     }
 
+    /**
+     * 验证 {@code secondSign_shouldCompleteWitness} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void secondSign_shouldCompleteWitness() {
         SignedFixture fixture = signedFixture();
@@ -131,6 +179,9 @@ class SegwitP2wshMultisigTest {
         assertEquals(fixture.witnessScriptHex, HEX.formatHex(witness.getPush(3)));
     }
 
+    /**
+     * 验证 {@code signedP2wshMultisigTx_shouldVerify} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void signedP2wshMultisigTx_shouldVerify() {
         SignedFixture fixture = signedFixture();
@@ -141,6 +192,9 @@ class SegwitP2wshMultisigTest {
         assertEquals(2, validation.signatureCount);
     }
 
+    /**
+     * 验证 {@code redisSerializedTx_shouldKeepWitness} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void redisSerializedTx_shouldKeepWitness() {
         SignedFixture fixture = signedFixture();
@@ -152,6 +206,9 @@ class SegwitP2wshMultisigTest {
         assertEquals(fixture.fullTxId, restored.getTxId().toString());
     }
 
+    /**
+     * 验证 {@code wrongPrivateKey_shouldFail} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void wrongPrivateKey_shouldFail() {
         FirstSignFixture fixture = firstSignFixture();
@@ -162,6 +219,9 @@ class SegwitP2wshMultisigTest {
                         List.of(fixture.witnessScriptHex), List.of(INPUT_VALUE)));
     }
 
+    /**
+     * 验证 {@code duplicatePrivateKey_shouldFail} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void duplicatePrivateKey_shouldFail() {
         FirstSignFixture fixture = firstSignFixture();
@@ -172,6 +232,9 @@ class SegwitP2wshMultisigTest {
                         List.of(fixture.witnessScriptHex), List.of(INPUT_VALUE)));
     }
 
+    /**
+     * 验证 {@code missingInputValue_shouldFail} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void missingInputValue_shouldFail() {
         SegwitMultiSignAddressGenerator generator = multisigGenerator();
@@ -183,6 +246,9 @@ class SegwitP2wshMultisigTest {
                         0, generator.getWitnessScriptStr(), null));
     }
 
+    /**
+     * 验证 {@code wrongWitnessScript_shouldFail} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void wrongWitnessScript_shouldFail() {
         FirstSignFixture fixture = firstSignFixture();
@@ -198,6 +264,9 @@ class SegwitP2wshMultisigTest {
                         List.of(wrong.getWitnessScriptStr()), List.of(INPUT_VALUE)));
     }
 
+    /**
+     * 验证 {@code segwitVbytesAreLowerThanLegacyMultisigByteEstimate} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void segwitVbytesAreLowerThanLegacyMultisigByteEstimate() {
         long legacyBytes = 325L + 35L * 2L + 15L;
@@ -207,6 +276,9 @@ class SegwitP2wshMultisigTest {
         assertTrue(estimatedSegwitVbytes <= legacyBytes * 60 / 100);
     }
 
+    /**
+     * 验证 {@code feeCalculator_shouldEstimateP2wshSingleInputSingleOutput} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void feeCalculator_shouldEstimateP2wshSingleInputSingleOutput() {
         assertEquals(634L, P2wshFeeCalculator.estimateWeight(1, 1, 2, 3));
@@ -214,12 +286,18 @@ class SegwitP2wshMultisigTest {
         assertEquals(1_590L, P2wshFeeCalculator.calculateFeeSat(1, 1, 10));
     }
 
+    /**
+     * 验证 {@code feeCalculator_shouldEstimateP2wshMultiInputTwoOutputs} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void feeCalculator_shouldEstimateP2wshMultiInputTwoOutputs() {
         assertEquals(1_226L, P2wshFeeCalculator.estimateWeight(2, 2, 2, 3));
         assertEquals(307L, P2wshFeeCalculator.estimateVBytes(2, 2));
     }
 
+    /**
+     * 验证 {@code feeCalculator_shouldMergeDustChangeIntoFee} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void feeCalculator_shouldMergeDustChangeIntoFee() {
         long inputSat = 100_000L;
@@ -232,12 +310,18 @@ class SegwitP2wshMultisigTest {
         assertEquals(159L, result.getVbytes());
     }
 
+    /**
+     * 验证 {@code feeCalculator_shouldScaleWithFeeRate} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void feeCalculator_shouldScaleWithFeeRate() {
         assertEquals(202L, P2wshFeeCalculator.calculateFeeSat(1, 2, 1));
         assertEquals(5_050L, P2wshFeeCalculator.calculateFeeSat(1, 2, 25));
     }
 
+    /**
+     * 验证 {@code mockP2wshBlockScanIsIdempotentForUtxoAddAndSpend} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void mockP2wshBlockScanIsIdempotentForUtxoAddAndSpend() {
         SegwitMultiSignAddressGenerator generator = multisigGenerator();
@@ -259,11 +343,17 @@ class SegwitP2wshMultisigTest {
         assertTrue(utxos.isEmpty(), "duplicate spend scans must remain idempotent");
     }
 
+    /**
+     * 验证 {@code p2wshScriptVerificationSurfaceIsExplicitlyCoveredByManualSignatureChecks} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void p2wshScriptVerificationSurfaceIsExplicitlyCoveredByManualSignatureChecks() {
         assertDoesNotThrow(this::twoOfThreeFirstAndSecondSignProduceBroadcastReadyNativeSegwitTransaction);
     }
 
+    /**
+     * 验证 {@code multisigGenerator} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static SegwitMultiSignAddressGenerator multisigGenerator() {
         SegwitMultiSignAddressGenerator generator = new SegwitMultiSignAddressGenerator();
         generator.addECKey(KEY_1);
@@ -272,6 +362,9 @@ class SegwitP2wshMultisigTest {
         return generator;
     }
 
+    /**
+     * 验证 {@code multisigGeneratorFromConfiguredTpubs} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static SegwitMultiSignAddressGenerator multisigGeneratorFromConfiguredTpubs(
             int currency, int biz, int userId, int index) {
         SegwitMultiSignAddressGenerator generator = new SegwitMultiSignAddressGenerator();
@@ -281,6 +374,9 @@ class SegwitP2wshMultisigTest {
         return generator;
     }
 
+    /**
+     * 验证 {@code derive} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static ECKey derive(String xpub, int currency, int biz, int userId, int index) {
         return Bip32Node.decode(xpub)
                 .getChild(44)
@@ -291,6 +387,9 @@ class SegwitP2wshMultisigTest {
                 .getEcKey();
     }
 
+    /**
+     * 验证 {@code firstSignFixture} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static FirstSignFixture firstSignFixture() {
         SegwitMultiSignAddressGenerator generator = multisigGenerator();
         generator.generateAddress(PARAMS, 2);
@@ -307,6 +406,9 @@ class SegwitP2wshMultisigTest {
         return new FirstSignFixture(witnessScriptHex, builder.buildFirstSign(List.of(KEY_1)));
     }
 
+    /**
+     * 验证 {@code signedFixture} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static SignedFixture signedFixture() {
         FirstSignFixture first = firstSignFixture();
         WitnessTransactionBuilder builder = new WitnessTransactionBuilder(PARAMS);
@@ -316,22 +418,52 @@ class SegwitP2wshMultisigTest {
         return new SignedFixture(first.witnessScriptHex, first.firstHex, fullHex, fullTx.getTxId().toString());
     }
 
+    /**
+     * 测试辅助类 {@code FirstSignFixture}，为相关测试提供隔离环境或共享数据。
+     */
     private static class FirstSignFixture {
+        /**
+         * 保存 {@code witnessScriptHex}，用于承载当前测试夹具的配置或运行数据。
+         */
         private final String witnessScriptHex;
+        /**
+         * 保存 {@code firstHex}，用于承载当前测试夹具的配置或运行数据。
+         */
         private final String firstHex;
 
+        /**
+         * 验证 {@code FirstSignFixture} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private FirstSignFixture(String witnessScriptHex, String firstHex) {
             this.witnessScriptHex = witnessScriptHex;
             this.firstHex = firstHex;
         }
     }
 
+    /**
+     * 测试辅助类 {@code SignedFixture}，为相关测试提供隔离环境或共享数据。
+     */
     private static class SignedFixture {
+        /**
+         * 保存 {@code witnessScriptHex}，用于承载当前测试夹具的配置或运行数据。
+         */
         private final String witnessScriptHex;
+        /**
+         * 保存 {@code firstHex}，用于承载当前测试夹具的配置或运行数据。
+         */
         private final String firstHex;
+        /**
+         * 保存 {@code fullHex}，用于承载当前测试夹具的配置或运行数据。
+         */
         private final String fullHex;
+        /**
+         * 保存 {@code fullTxId}，用于标识测试中的交易、区块或业务记录。
+         */
         private final String fullTxId;
 
+        /**
+         * 验证 {@code SignedFixture} 对应的测试场景，明确输入、预期结果和异常边界。
+         */
         private SignedFixture(String witnessScriptHex, String firstHex, String fullHex, String fullTxId) {
             this.witnessScriptHex = witnessScriptHex;
             this.firstHex = firstHex;
@@ -340,6 +472,9 @@ class SegwitP2wshMultisigTest {
         }
     }
 
+    /**
+     * 验证 {@code scanOutputs} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void scanOutputs(Transaction tx, String watchedAddress, Map<String, Coin> utxos) {
         for (int i = 0; i < tx.getOutputs().size(); i++) {
             Address address = tx.getOutput(i).getScriptPubKey().getToAddress(PARAMS);
@@ -349,6 +484,9 @@ class SegwitP2wshMultisigTest {
         }
     }
 
+    /**
+     * 验证 {@code applySpends} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void applySpends(Transaction tx, Map<String, Coin> utxos) {
         tx.getInputs().forEach(input -> utxos.remove(input.getOutpoint().hash() + ":" + input.getOutpoint().index()));
     }

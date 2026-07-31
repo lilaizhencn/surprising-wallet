@@ -24,13 +24,34 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code TonLiveMockJettonFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class TonLiveMockJettonFlowIntegrationTest {
+    /**
+     * 保存 {@code OWNER_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long OWNER_INDEX = 1_100_001L;
+    /**
+     * 保存 {@code EXTERNAL_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long EXTERNAL_INDEX = 1_100_002L;
+    /**
+     * 保存 {@code HOT_INDEX}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long HOT_INDEX = 0L;
+    /**
+     * 保存 {@code NANO}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long NANO = 1_000_000_000L;
+    /**
+     * 保存 {@code FLOW_TIMEOUT}，用于记录测试时间边界或审计时间。
+     */
     private static final Duration FLOW_TIMEOUT = Duration.ofMinutes(10);
 
+    /**
+     * 验证 {@code liveNativeAndMockJettonDepositWithdrawAreIdempotent} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void liveNativeAndMockJettonDepositWithdrawAreIdempotent() {
         Assumptions.assumeTrue(Boolean.getBoolean("ton.live.enabled"),
@@ -134,6 +155,9 @@ class TonLiveMockJettonFlowIntegrationTest {
         System.out.println("TON_USDC_COLLECTION_TX=" + usdcTx.collectionHash());
     }
 
+    /**
+     * 验证 {@code deployWalletIfNeeded} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String deployWalletIfNeeded(ChainAddressRecord owner,
                                                TonCenterClient rpc, TonTransactionService transactions) {
         if ("active".equalsIgnoreCase(rpc.addressInformation(owner.getAddress()).path("state").asText())) {
@@ -145,6 +169,9 @@ class TonLiveMockJettonFlowIntegrationTest {
         return hash;
     }
 
+    /**
+     * 验证 {@code deployAndMint} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static MockJetton deployAndMint(UUID tenantId, String symbol, ChainAddressRecord owner,
                                             String externalFundingOwner,
                                             TonCenterClient rpc, TonTransactionService transactions,
@@ -204,6 +231,9 @@ class TonLiveMockJettonFlowIntegrationTest {
         return new MockJetton(symbol, masterAddress, userJettonWallet, deployHash, mintHash);
     }
 
+    /**
+     * 验证 {@code withdrawAndCollectJetton} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static TokenTx withdrawAndCollectJetton(UUID tenantId, UUID custodyAddressId,
                                                     String symbol, MockJetton jetton,
                                                     ChainAddressRecord external, ChainAddressRecord hot,
@@ -248,6 +278,9 @@ class TonLiveMockJettonFlowIntegrationTest {
         return new TokenTx(withdraw, collection);
     }
 
+    /**
+     * 验证 {@code collectNative} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String collectNative(UUID tenantId, UUID custodyAddressId,
                                         ChainAddressRecord owner, ChainAddressRecord hot,
                                         TonTransactionService transactions,
@@ -268,6 +301,9 @@ class TonLiveMockJettonFlowIntegrationTest {
         return collection;
     }
 
+    /**
+     * 验证 {@code waitForJettonLedger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void waitForJettonLedger(TonDepositScanner scanner, ChainJdbcRepository repository, String symbol,
                                             String accountId, BigDecimal minimum) {
         Instant deadline = Instant.now().plus(FLOW_TIMEOUT);
@@ -284,6 +320,9 @@ class TonLiveMockJettonFlowIntegrationTest {
         throw new IllegalStateException("TON " + symbol + " ledger was not credited");
     }
 
+    /**
+     * 验证 {@code waitForSeqnoGreaterThan} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void waitForSeqnoGreaterThan(TonCenterClient rpc, String address,
                                                 long previousSeqno, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
@@ -296,6 +335,9 @@ class TonLiveMockJettonFlowIntegrationTest {
         throw new IllegalStateException("TON seqno did not advance for " + address);
     }
 
+    /**
+     * 验证 {@code waitForState} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void waitForState(TonCenterClient rpc, String address, String expected, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
@@ -308,12 +350,18 @@ class TonLiveMockJettonFlowIntegrationTest {
         throw new IllegalStateException("TON account did not become " + expected + ": " + address);
     }
 
+    /**
+     * 验证 {@code jettonWalletAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String jettonWalletAddress(String ownerAddress, String masterAddress) {
         return JettonWallet.calculateUserJettonWalletAddress(
                 0, Address.of(ownerAddress), Address.of(masterAddress), JettonWallet.CODE_CELL)
                 .toString(true, true, true, true);
     }
 
+    /**
+     * 验证 {@code configureToken} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void configureToken(String symbol, String masterAddress, JdbcTemplate jdbc) {
         jdbc.update("""
                 insert into token_config(
@@ -347,10 +395,16 @@ class TonLiveMockJettonFlowIntegrationTest {
                 """, symbol, masterAddress);
     }
 
+    /**
+     * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String symbol, String accountId) {
         return repository.findLedgerBalance("TON", symbol, accountId).orElseThrow();
     }
 
+    /**
+     * 验证 {@code sleep} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);
@@ -360,6 +414,9 @@ class TonLiveMockJettonFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;

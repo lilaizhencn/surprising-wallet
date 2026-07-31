@@ -12,7 +12,13 @@ import java.math.BigDecimal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code LitecoinFeeEstimatorTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class LitecoinFeeEstimatorTest {
+    /**
+     * 验证 {@code quoteShouldUseLitecoinFeePolicy} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void quoteShouldUseLitecoinFeePolicy() {
         LitecoinChainAdapter adapter = new LitecoinChainAdapter(null);
@@ -26,6 +32,9 @@ class LitecoinFeeEstimatorTest {
         assertTrue(quote.supported());
     }
 
+    /**
+     * 验证 {@code highFeeRateShouldBeClamped} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void highFeeRateShouldBeClamped() {
         LitecoinChainAdapter adapter = new LitecoinChainAdapter(null);

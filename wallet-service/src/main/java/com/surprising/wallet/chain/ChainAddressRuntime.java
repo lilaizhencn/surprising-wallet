@@ -43,7 +43,13 @@ class ChainAddressRuntime {
     /** 32 字节十六进制地址正则（Aptos、Sui） */
     private static final String HEX_32_BYTE_ADDRESS_REGEX = "^0x[0-9a-fA-F]{64}$";
 
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final ChainJdbcRepository repository;
+    /**
+     * 保存 {@code hotWalletAddressService}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final HotWalletAddressService hotWalletAddressService;
 
     /**
@@ -113,6 +119,9 @@ class ChainAddressRuntime {
                 .orElse(record);
         return toAddress(profile, saved);
     }
+    /**
+     * 校验 {@code checkAddress} 对应的前置条件，不满足时抛出明确异常。
+     */
     public boolean checkAddress(ChainType chainType, String address) {
         if (!StringUtils.hasText(address)) {
             return false;
@@ -138,16 +147,25 @@ class ChainAddressRuntime {
                     "address validation is not implemented by generic runtime for " + chainType);
         };
     }
+    /**
+     * 执行 {@code nextAddressIndex} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     private long nextAddressIndex(AccountChainProfile profile, long userId, int biz) {
         return repository.findMaxChainAddressIndex(
                         profile.getChain(), profile.getNativeSymbol(), userId, biz, WALLET_ROLE_DEPOSIT)
                 .map(value -> value + 1L)
                 .orElse(0L);
     }
+    /**
+     * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
+     */
     private AccountChainProfile profile(ChainType chainType) {
         return repository.findProfileByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
     }
+    /**
+     * 编码 {@code toAddress} 对应的数据，生成链上或接口所需的表示。
+     */
     private Address toAddress(AccountChainProfile profile, ChainAddressRecord record) {
         return Address.builder()
                 .address(record.getAddress())
@@ -164,6 +182,9 @@ class ChainAddressRuntime {
                 .updateDate(Date.from(Instant.now()))
                 .build();
     }
+    /**
+     * 判断 {@code isValidXrpAddress} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private boolean isValidXrpAddress(String address) {
         try {
             org.xrpl.xrpl4j.model.transactions.Address.of(address).validateAddress();
@@ -172,6 +193,9 @@ class ChainAddressRuntime {
             return false;
         }
     }
+    /**
+     * 判断 {@code isValidSolanaAddress} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private boolean isValidSolanaAddress(String address) {
         try {
             return Base58.decode(address).length == 32;
@@ -179,6 +203,9 @@ class ChainAddressRuntime {
             return false;
         }
     }
+    /**
+     * 判断 {@code isValidTonAddress} 对应的条件是否成立，并返回明确的布尔结果。
+     */
     private boolean isValidTonAddress(String address) {
         try {
             org.ton.ton4j.address.Address.of(address);

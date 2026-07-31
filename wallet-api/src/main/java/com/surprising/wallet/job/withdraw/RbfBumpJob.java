@@ -52,12 +52,24 @@ public class RbfBumpJob {
     /** 默认费率倍数（当操作人员忘记手动提高 Redis 费率时使用） */
     private static final double DEFAULT_FEE_BUMP_FACTOR = 2.0;
 
+    /**
+     * 保存 {@code chainJdbcRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     @Autowired
     private ChainJdbcRepository chainJdbcRepository;
+    /**
+     * 保存 {@code blockchainRuntimeService}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     @Autowired
     private BlockchainRuntimeService blockchainRuntimeService;
+    /**
+     * 保存 {@code runtimeConfigService}，用于保存运行配置和策略参数。
+     */
     @Autowired
     private WalletRuntimeConfigService runtimeConfigService;
+    /**
+     * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
+     */
     @Autowired
     private StringRedisTemplate redis;
 

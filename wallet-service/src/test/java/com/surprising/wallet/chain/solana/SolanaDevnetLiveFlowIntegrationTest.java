@@ -23,9 +23,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code SolanaDevnetLiveFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class SolanaDevnetLiveFlowIntegrationTest {
+    /**
+     * 保存 {@code LAMPORTS_PER_SOL}，用于承载当前测试夹具的配置或运行数据。
+     */
     private static final long LAMPORTS_PER_SOL = 1_000_000_000L;
 
+    /**
+     * 验证 {@code liveSolAndMockSplDepositWithdrawAreIdempotent} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void liveSolAndMockSplDepositWithdrawAreIdempotent() {
         Assumptions.assumeTrue(Boolean.getBoolean("solana.live.enabled"),
@@ -172,6 +181,9 @@ class SolanaDevnetLiveFlowIntegrationTest {
         System.out.println("SOLANA_USDC_COLLECTION_TX=" + usdc.collection());
     }
 
+    /**
+     * 验证 {@code createAndFundMockToken} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private TokenFlow createAndFundMockToken(
             String symbol, int decimals, long mintIndex, long funderIndex,
             UUID tenantId, UUID custodyAddressId, Account funder,
@@ -282,6 +294,9 @@ class SolanaDevnetLiveFlowIntegrationTest {
         return new TokenFlow(mint.getPublicKeyBase58(), depositA, withdraw, collection);
     }
 
+    /**
+     * 验证 {@code sendNative} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String sendNative(SolanaRpcClient rpc, Account from, String to, long lamports) {
         Transaction transaction = new Transaction()
                 .addInstruction(SystemProgram.transfer(
@@ -289,22 +304,34 @@ class SolanaDevnetLiveFlowIntegrationTest {
         return signAndSend(rpc, transaction, List.of(from));
     }
 
+    /**
+     * 验证 {@code signAndSend} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String signAndSend(SolanaRpcClient rpc, Transaction transaction, List<Account> signers) {
         transaction.setRecentBlockHash(rpc.getLatestBlockhash());
         transaction.sign(signers);
         return rpc.sendTransaction(transaction.serialize());
     }
 
+    /**
+     * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String symbol, String accountId) {
         return repository.findLedgerBalance("SOLANA", symbol, accountId).orElseThrow();
     }
 
+    /**
+     * 验证 {@code assertAmountEquals} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static void assertAmountEquals(BigDecimal expected, BigDecimal actual) {
         assertEquals(0, expected.compareTo(actual),
                 () -> "expected amount " + expected.toPlainString()
                         + " but was " + actual.toPlainString());
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;

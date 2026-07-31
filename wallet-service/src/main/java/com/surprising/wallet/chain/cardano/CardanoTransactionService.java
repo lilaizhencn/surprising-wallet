@@ -59,15 +59,24 @@ class CardanoTransactionService {
     /** 运行时配置服务（可选） */
     @Autowired(required = false)
     private WalletRuntimeConfigService runtimeConfigService;
+    /**
+     * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
+     */
     public String sendNative(ChainAddressRecord from, String toAddress, BigInteger lovelace) {
         return send(from, toAddress, Amount.lovelace(lovelace));
     }
+    /**
+     * 发送或广播 {@code sendToken} 对应的链上请求，并返回节点处理结果。
+     */
     public String sendToken(ChainAddressRecord from, TokenDefinition token, String toAddress, BigDecimal amount) {
         BigInteger atomic = toAtomic(amount, token.getDecimals());
         String unit = CardanoAssetUnit.fromTokenContract(token.getContractAddress());
         return send(from, toAddress, Amount.asset(unit, atomic));
     }
 
+    /**
+     * 处理 {@code confirmWithdrawal} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
                                      String orderNo, String txHash,
                                      String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
@@ -78,18 +87,27 @@ class CardanoTransactionService {
                 assetSymbol, debitAccountId, debitAmount);
     }
 
+    /**
+     * 处理 {@code collectNative} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigInteger lovelace) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "cardano collectNative");
         return collect(tenantId, collectionNo, () -> sendNative(from, hotAddress, lovelace));
     }
 
+    /**
+     * 处理 {@code collectToken} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public String collectToken(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                TokenDefinition token, String hotAddress, BigDecimal amount) {
         requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "cardano collectToken");
         return collect(tenantId, collectionNo, () -> sendToken(from, token, hotAddress, amount));
     }
 
+    /**
+     * 处理 {@code confirmCollection} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     public boolean confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
                                      String collectionNo) {
         String txHash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
@@ -98,13 +116,22 @@ class CardanoTransactionService {
         }
         return false;
     }
+    /**
+     * 编码 {@code toLovelace} 对应的数据，生成链上或接口所需的表示。
+     */
     public static BigInteger toLovelace(BigDecimal amount) {
         return toAtomic(amount, ADA_DECIMALS);
     }
+    /**
+     * 解析 {@code fromLovelace} 对应的输入，并转换为当前业务模型。
+     */
     public static BigDecimal fromLovelace(BigInteger amount) {
         return new BigDecimal(amount == null ? BigInteger.ZERO : amount).movePointLeft(ADA_DECIMALS)
                 .stripTrailingZeros();
     }
+    /**
+     * 发送或广播 {@code send} 对应的链上请求，并返回节点处理结果。
+     */
     private String send(ChainAddressRecord from, String toAddress, Amount amount) {
         return backendClient.withBackend((backend, node, profile) -> {
             SecretKey secretKey = secretKey(from);
@@ -131,6 +158,9 @@ class CardanoTransactionService {
             return hash;
         });
     }
+    /**
+     * 处理 {@code collect} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private String collect(java.util.UUID tenantId, String collectionNo, TxSubmitter submitter) {
         Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
@@ -150,6 +180,9 @@ class CardanoTransactionService {
             throw e;
         }
     }
+    /**
+     * 处理 {@code confirmed} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
+     */
     private boolean confirmed(AccountChainProfile profile, String txHash) {
         if (txHash == null || txHash.isBlank()) {
             return false;
@@ -174,9 +207,15 @@ class CardanoTransactionService {
         }
         return false;
     }
+    /**
+     * 构建或生成 {@code derivedKey} 对应的结果，并执行输入和状态校验。
+     */
     private Ed25519DerivedKey derivedKey(ChainAddressRecord from) {
         return keyService.derive(from.getUserId(), from.getBiz(), from.getAddressIndex());
     }
+    /**
+     * 转换或计算 {@code secretKey} 对应的值，统一金额、格式和边界规则。
+     */
     private SecretKey secretKey(ChainAddressRecord from) {
         try {
             return SecretKey.create(derivedKey(from).privateSeed());
@@ -184,14 +223,23 @@ class CardanoTransactionService {
             throw new IllegalStateException("unable to create Cardano signing key", e);
         }
     }
+    /**
+     * 编码 {@code toAtomic} 对应的数据，生成链上或接口所需的表示。
+     */
     private static BigInteger toAtomic(BigDecimal amount, int decimals) {
         return amount.movePointRight(decimals).setScale(0, RoundingMode.UNNECESSARY).toBigIntegerExact();
     }
+    /**
+     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void requireTaskEnabled(String task, String operation) {
         if (runtimeConfigService != null) {
             runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
+    /**
+     * 转换或计算 {@code sleep} 对应的值，统一金额、格式和边界规则。
+     */
     private static void sleep(long millis) {
         try {
             Thread.sleep(millis);
@@ -201,8 +249,14 @@ class CardanoTransactionService {
         }
     }
 
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     @FunctionalInterface
     private interface TxSubmitter {
+        /**
+         * 发送或广播 {@code submit} 对应的链上请求，并返回节点处理结果。
+         */
         String submit();
     }
 }

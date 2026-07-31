@@ -23,12 +23,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@Slf4j
-@Component
-@RequiredArgsConstructor
 /**
  * 应用启动自检器，防止在链配置、RPC 配置、资产配置存在缺失时上线路径运行。
  */
+@Slf4j
+@Component
+@RequiredArgsConstructor
 public class WalletStartupValidator implements ApplicationRunner {
     /** 链配置仓储，用于读取 chain_profile/rpc/config 运行状态。 */
     private final ChainJdbcRepository repository;
@@ -178,6 +178,9 @@ public class WalletStartupValidator implements ApplicationRunner {
         return enabledProfiles;
     }
 
+    /**
+     * 校验 {@code validateEvmProfile} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void validateEvmProfile(AccountChainProfile profile) {
         if (!"evm".equalsIgnoreCase(profile.getFamily())) {
             return;
@@ -214,6 +217,9 @@ public class WalletStartupValidator implements ApplicationRunner {
         }
     }
 
+    /**
+     * 校验 {@code validateActiveEip7702Profiles} 对应的前置条件，不满足时抛出明确异常。
+     */
     private void validateActiveEip7702Profiles(List<AccountChainProfile> enabledProfiles) {
         Map<String, AccountChainProfile> profiles = enabledProfiles.stream()
                 .collect(Collectors.toMap(

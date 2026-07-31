@@ -30,6 +30,9 @@ import java.util.stream.Stream;
 @Component
 public
 class PubKeyConfig {
+    /**
+     * 定义 {@code HEX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+     */
     private static final HexFormat HEX = HexFormat.of();
 
     /** 生产环境密钥材料提供者，注入时为非空；测试模式为 null。 */
@@ -221,6 +224,9 @@ class PubKeyConfig {
         /** 逗号分隔的三把公钥（十六进制） */
         private final String publicKeys;
 
+        /**
+         * 构造 {@code AddressMetadata}，初始化该组件运行所需的状态和依赖。
+         */
         private AddressMetadata(String address, String path, String redeemScript,
                                 String witnessScript, String publicKeys) {
             this.address = address;
@@ -230,22 +236,37 @@ class PubKeyConfig {
             this.publicKeys = publicKeys;
         }
 
+        /**
+         * 获取或查询 {@code getAddress} 对应的数据，供调用方读取当前状态。
+         */
         public String getAddress() {
             return address;
         }
 
+        /**
+         * 获取或查询 {@code getPath} 对应的数据，供调用方读取当前状态。
+         */
         public String getPath() {
             return path;
         }
 
+        /**
+         * 获取或查询 {@code getRedeemScript} 对应的数据，供调用方读取当前状态。
+         */
         public String getRedeemScript() {
             return redeemScript;
         }
 
+        /**
+         * 获取或查询 {@code getWitnessScript} 对应的数据，供调用方读取当前状态。
+         */
         public String getWitnessScript() {
             return witnessScript;
         }
 
+        /**
+         * 获取或查询 {@code getPublicKeys} 对应的数据，供调用方读取当前状态。
+         */
         public String getPublicKeys() {
             return publicKeys;
         }

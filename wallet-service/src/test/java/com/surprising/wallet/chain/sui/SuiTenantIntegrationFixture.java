@@ -6,13 +6,25 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
+/**
+ * 测试辅助类 {@code SuiTenantIntegrationFixture}，为相关测试提供隔离环境或共享数据。
+ */
 final class SuiTenantIntegrationFixture {
+    /**
+     * 保存 {@code TENANT_ID}，用于标识测试中的交易、区块或业务记录。
+     */
     private static final UUID TENANT_ID = UUID.nameUUIDFromBytes(
             "sui-localnet-tenant".getBytes(StandardCharsets.UTF_8));
 
+    /**
+     * 验证 {@code SuiTenantIntegrationFixture} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private SuiTenantIntegrationFixture() {
     }
 
+    /**
+     * 验证 {@code ensureTenant} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static UUID ensureTenant(JdbcTemplate jdbc) {
         jdbc.update("""
                 insert into custody_tenant(id, slug, name, derivation_namespace)
@@ -22,6 +34,9 @@ final class SuiTenantIntegrationFixture {
         return TENANT_ID;
     }
 
+    /**
+     * 验证 {@code attachDepositAddress} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     static UUID attachDepositAddress(JdbcTemplate jdbc, ChainAddressRecord address) {
         ensureTenant(jdbc);
         Long chainAddressId = jdbc.queryForObject("""

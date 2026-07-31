@@ -45,6 +45,9 @@ import static java.util.regex.Pattern.compile;
  */
 public class Tools {
 
+    /**
+     * 执行 {@code xor} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public static byte[] xor(byte[] arr1, byte[] arr2) {
         if (arr1 == null || arr2 == null) {
             throw new IllegalArgumentException("arrays must not be null");
@@ -59,6 +62,9 @@ public class Tools {
         return result;
     }
 
+    /**
+     * 校验 {@code check} 对应的前置条件，不满足时抛出明确异常。
+     */
     public static boolean check(byte[] input) {
         if (input == null || input.length < 5) {
             throw new IllegalArgumentException("input is empty");
@@ -70,6 +76,9 @@ public class Tools {
         return Arrays.areEqual(checkSum, Arrays.copyOfRange(checkCode, 0, 4));
     }
 
+    /**
+     * 执行 {@code byteToString} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public static String byteToString(byte version, byte[] input) {
         if (input == null || input.length == 0) {
             throw new IllegalArgumentException("input is empty");
@@ -80,6 +89,9 @@ public class Tools {
         return byteToString(versioned);
     }
 
+    /**
+     * 执行 {@code byteToString} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public static String byteToString(byte[] input) {
         if (input == null || input.length == 0) {
             throw new IllegalArgumentException("input is empty");
@@ -91,6 +103,9 @@ public class Tools {
         return Base58.encode(result);
     }
 
+    /**
+     * 执行 {@code pubKeyHexToAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public static String pubKeyHexToAddress(String pubKeyHex, NetworkParameters params) {
         if (pubKeyHex == null || params == null) {
             throw new IllegalArgumentException("pubkey and network must not be null");
@@ -105,6 +120,9 @@ public class Tools {
         return address.toString();
     }
 
+    /**
+     * 执行 {@code ecKeyToAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public static String ecKeyToAddress(ECKey ecKey, NetworkParameters params) {
         if (ecKey == null || params == null) {
             throw new IllegalArgumentException("key and network must not be null");
@@ -112,6 +130,9 @@ public class Tools {
         return Tools.byteToString((byte) params.getAddressHeader(), ecKey.getPubKeyHash());
     }
 
+    /**
+     * 转换或计算 {@code hmacSha512} 对应的值，统一金额、格式和边界规则。
+     */
     public static byte[] hmacSha512(byte[] data, byte[] keySeed) {
         if (data == null || keySeed == null) {
             throw new IllegalArgumentException("data and key must not be null");
@@ -126,10 +147,16 @@ public class Tools {
         }
     }
 
+    /**
+     * 解析或转换 {@code parseHex} 对应的数据，并校验其格式和边界。
+     */
     public static byte[] parseHex(String hex) {
         return ByteUtils.parseHex(hex);
     }
 
+    /**
+     * 执行 {@code formatHex} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public static String formatHex(byte[] bytes) {
         return ByteUtils.formatHex(bytes);
     }

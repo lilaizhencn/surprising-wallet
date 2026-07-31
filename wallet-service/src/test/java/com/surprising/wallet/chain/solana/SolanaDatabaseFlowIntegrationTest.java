@@ -19,10 +19,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * 验证 {@code SolanaDatabaseFlowIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
+ */
 class SolanaDatabaseFlowIntegrationTest {
+    /**
+     * 保存 {@code MASTER_SEED}，用于测试签名、认证或密钥相关逻辑。
+     */
     private static final String MASTER_SEED =
             "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
+    /**
+     * 验证 {@code addressRestartDepositReplayAndLedgerLocksAreSafe} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     @Test
     void addressRestartDepositReplayAndLedgerLocksAreSafe() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("solana.db.enabled"),
@@ -81,6 +90,9 @@ class SolanaDatabaseFlowIntegrationTest {
         }
     }
 
+    /**
+     * 验证 {@code env} 对应的测试场景，明确输入、预期结果和异常边界。
+     */
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;

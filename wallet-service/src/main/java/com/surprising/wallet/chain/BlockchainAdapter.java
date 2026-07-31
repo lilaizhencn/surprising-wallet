@@ -209,18 +209,57 @@ public interface BlockchainAdapter {
         return new IllegalStateException(
                 chainType() + " adapter does not provide capability " + capability);
     }
+    /**
+     * 该类型封装所在链或钱包模块的配置、业务状态和校验逻辑。
+     */
     enum Capability {
+        /**
+         * 定义 {@code NATIVE_QUOTE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         NATIVE_QUOTE,
+        /**
+         * 定义 {@code TOKEN_QUOTE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         TOKEN_QUOTE,
+        /**
+         * 定义 {@code DEPOSIT_SCAN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         DEPOSIT_SCAN,
+        /**
+         * 定义 {@code ADDRESS_GENERATION} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         ADDRESS_GENERATION,
+        /**
+         * 定义 {@code ADDRESS_VALIDATION} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         ADDRESS_VALIDATION,
+        /**
+         * 定义 {@code CONFIRMATION_POLICY} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         CONFIRMATION_POLICY,
+        /**
+         * 定义 {@code DUST_POLICY} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         DUST_POLICY,
+        /**
+         * 定义 {@code BEST_HEIGHT} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         BEST_HEIGHT,
+        /**
+         * 定义 {@code BLOCK_TRANSACTION_SCAN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         BLOCK_TRANSACTION_SCAN,
+        /**
+         * 定义 {@code CONFIRMATION_REFRESH} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         CONFIRMATION_REFRESH,
+        /**
+         * 定义 {@code BALANCE_REFRESH} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         BALANCE_REFRESH,
+        /**
+         * 定义 {@code SIGNED_TRANSACTION_BROADCAST} 常量，作为当前组件统一使用的固定协议、网络或配置值。
+         */
         SIGNED_TRANSACTION_BROADCAST
     }
 }

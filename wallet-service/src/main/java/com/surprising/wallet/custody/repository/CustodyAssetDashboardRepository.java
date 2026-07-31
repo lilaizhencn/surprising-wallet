@@ -23,6 +23,9 @@ import java.util.UUID;
  */
 @Repository
 public class CustodyAssetDashboardRepository {
+    /**
+     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
     private final JdbcTemplate jdbc;
 
     /**
@@ -33,6 +36,9 @@ public class CustodyAssetDashboardRepository {
     public CustodyAssetDashboardRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
+    /**
+     * 执行 {@code balances} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public List<AssetBalance> balances(UUID tenantId) {
         return jdbc.query("""
                 with tenant_accounts as (
@@ -110,6 +116,9 @@ public class CustodyAssetDashboardRepository {
                 instantOrNull(rs.getTimestamp("observed_at"))),
                 tenantId, tenantId, tenantId, tenantId);
     }
+    /**
+     * 执行 {@code prices} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public List<AssetPrice> prices() {
         return jdbc.query("""
                 select asset_symbol, usd_price, source, observed_at, updated_at
@@ -119,6 +128,9 @@ public class CustodyAssetDashboardRepository {
                 rs.getString("source"), rs.getTimestamp("observed_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant()));
     }
+    /**
+     * 执行 {@code openReorgDeficits} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
     public List<ReorgDeficit> openReorgDeficits(UUID tenantId) {
         return jdbc.query("""
                 select id, custody_address_id, chain, asset_symbol,
@@ -133,6 +145,9 @@ public class CustodyAssetDashboardRepository {
                 rs.getBigDecimal("deficit_amount"), rs.getBigDecimal("recovered_amount"),
                 rs.getTimestamp("created_at").toInstant()), tenantId);
     }
+    /**
+     * 写入或更新 {@code upsertPrice} 对应的业务状态，并保持关联字段与审计状态一致。
+     */
     public AssetPrice upsertPrice(String symbol, BigDecimal price, String source, Instant observedAt) {
         return jdbc.queryForObject("""
                 insert into custody_asset_price(asset_symbol, usd_price, source, observed_at, updated_at)
@@ -149,6 +164,9 @@ public class CustodyAssetDashboardRepository {
                 rs.getTimestamp("updated_at").toInstant()),
                 symbol, price, source, Timestamp.from(observedAt));
     }
+    /**
+     * 转换或计算 {@code instantOrNull} 对应的值，统一金额、格式和边界规则。
+     */
     private static Instant instantOrNull(Timestamp value) {
         return value == null ? null : value.toInstant();
     }
@@ -185,6 +203,9 @@ public class CustodyAssetDashboardRepository {
             BigDecimal recoveredAmount,
             Instant createdAt
     ) {
+        /**
+         * 执行 {@code outstandingAmount} 对应的辅助逻辑，完成数据处理并维护状态边界。
+         */
         public BigDecimal outstandingAmount() {
             return deficitAmount.subtract(recoveredAmount);
         }
