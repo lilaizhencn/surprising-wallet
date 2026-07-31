@@ -4,7 +4,6 @@ import com.google.protobuf.ByteString;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.tron.api.GrpcAPI;
 import org.tron.api.GrpcAPI.*;
 import org.tron.api.GrpcAPI.Return.response_code;
@@ -26,7 +25,7 @@ public class GrpcClient {
   private WalletGrpc.WalletBlockingStub blockingStubFull = null;
 
   public GrpcClient(String fullNodeIp) {
-    if (!StringUtils.isEmpty(fullNodeIp)) {
+    if (fullNodeIp != null && !fullNodeIp.isEmpty()) {
       this.channelFull = ManagedChannelBuilder.forTarget(fullNodeIp)
               .usePlaintext()
           .build();

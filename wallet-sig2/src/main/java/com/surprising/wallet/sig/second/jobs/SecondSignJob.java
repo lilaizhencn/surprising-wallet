@@ -1,6 +1,6 @@
 package com.surprising.wallet.sig.second.jobs;
 
-import com.alibaba.fastjson.JSONObject;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
@@ -16,6 +16,8 @@ import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -55,6 +57,8 @@ public class SecondSignJob {
      * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
      */
     private final StringRedisTemplate redis;
+    /** Jackson 3 对象映射器，用于处理 Redis 队列中的交易 JSON。 */
+    private final ObjectMapper objectMapper;
 
     /**
      * 执行 {@code schedule} 对应的辅助逻辑，完成数据处理并维护状态边界。
@@ -78,16 +82,16 @@ public class SecondSignJob {
                 return;
             }
 
-            WithdrawTransaction transaction = JSONObject.parseObject(txStr, WithdrawTransaction.class);
+            WithdrawTransaction transaction = JacksonJson.readValue(objectMapper, txStr, WithdrawTransaction.class);
             AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
             ISignService signService = SignContent.getSignService(currency);
-            JSONObject signature = JSONObject.parseObject(transaction.getSignature());
+            ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
             if (signService == null) {
                 signature.put("valid", false);
                 signature.put("error", "no sign service for " + currency.getName());
             } else {
                 String rawTransaction = signService.signTransaction(transaction);
-                signature = JSONObject.parseObject(transaction.getSignature());
+                signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
                 if (StringUtils.hasText(rawTransaction)) {
                     Transaction signedTx = Transaction.read(ByteBuffer.wrap(HEX.parseHex(rawTransaction)));
                     signature.put("rawTransaction", rawTransaction);
@@ -100,13 +104,15 @@ public class SecondSignJob {
                             transaction.getId(), signedTx.getTxId(), signedTx.getWeight(), signedTx.getVsize());
                 } else {
                     signature.put("valid", false);
-                    signature.putIfAbsent("error", "second sign returned empty raw transaction");
-                    log.warn("二次签名失败 txId={}, error={}", transaction.getId(), signature.getString("error"));
+                    if (!signature.has("error")) {
+                        signature.put("error", "second sign returned empty raw transaction");
+                    }
+                    log.warn("二次签名失败 txId={}, error={}", transaction.getId(), JacksonJson.text(signature, "error"));
                 }
             }
-            transaction.setSignature(signature.toJSONString());
+            transaction.setSignature(JacksonJson.writeValue(objectMapper, signature));
             redis.opsForList().leftPush(
-                    Constants.WALLET_WITHDRAW_SIG_DONE_KEY, JSONObject.toJSONString(transaction));
+                    Constants.WALLET_WITHDRAW_SIG_DONE_KEY, JacksonJson.writeValue(objectMapper, transaction));
             redis.opsForList().leftPop(tmp);
 
         } catch (DataAccessException e) {

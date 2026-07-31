@@ -1,9 +1,8 @@
 package com.surprising.wallet.sig.first.service;
 
-import com.alibaba.fastjson.JSONArray;
-import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -18,6 +17,9 @@ import org.bitcoinj.crypto.ECKey;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -42,6 +44,10 @@ public class BchFirstSignService implements ISignService {
     /** 密钥材料提供者（sig1 模式） */
     @Autowired
     private WalletKeyMaterialProvider keyMaterial;
+
+    /** Jackson 3 对象映射器，用于解析和序列化签名元数据。 */
+    @Autowired
+    private ObjectMapper objectMapper;
 
     /** BCH 网络模式：mainnet / testnet / regtest */
     @Value("${sw.bch.network:testnet}")
@@ -70,14 +76,11 @@ public class BchFirstSignService implements ISignService {
     @Override
     public void signTransaction(WithdrawTransaction transaction) {
         AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
-        JSONObject signature = JSONObject.parseObject(transaction.getSignature());
+        ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
         try {
-            List<UtxoTransaction> utxos =
-                    signature.getJSONArray("utxos").toJavaList(UtxoTransaction.class);
-            List<Address> addresses =
-                    signature.getJSONArray("addresses").toJavaList(Address.class);
-            List<WithdrawRecord> withdrawals =
-                    signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
+            List<UtxoTransaction> utxos = JacksonJson.toList(objectMapper, signature.get("utxos"), UtxoTransaction.class);
+            List<Address> addresses = JacksonJson.toList(objectMapper, signature.get("addresses"), Address.class);
+            List<WithdrawRecord> withdrawals = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
             if (utxos.size() != addresses.size()) {
                 throw new IllegalArgumentException("BCH UTXO/address count mismatch");
             }
@@ -110,11 +113,11 @@ public class BchFirstSignService implements ISignService {
                     .reduce(BigDecimal.ZERO, BigDecimal::add)
                     .multiply(decimal)
                     .longValueExact();
-            long feeRate = signature.getLongValue("feeRate");
+            long feeRate = JacksonJson.longValue(signature, "feeRate");
             if (feeRate <= 0) {
                 feeRate = BitcoinCashFeePolicy.DEFAULT_SAT_PER_BYTE;
             }
-            long dust = signature.getLongValue("dustThreshold");
+            long dust = JacksonJson.longValue(signature, "dustThreshold");
             if (dust <= 0) {
                 dust = BitcoinCashFeePolicy.DUST_THRESHOLD_SAT;
             }
@@ -129,7 +132,7 @@ public class BchFirstSignService implements ISignService {
                 builder.addOutput(withdrawal.getAddress(), Coin.valueOf(value));
             }
             if (spendPlan.change() > 0) {
-                String changeAddress = signature.getString("changeAddress");
+                String changeAddress = JacksonJson.text(signature, "changeAddress");
                 if (changeAddress == null || changeAddress.isBlank()) {
                     throw new IllegalArgumentException("missing BCH change address");
                 }
@@ -140,14 +143,14 @@ public class BchFirstSignService implements ISignService {
             signature.put("fee", spendPlan.fee());
             signature.put("estimatedBytes", spendPlan.estimatedBytes());
             signature.put("valid", true);
-            JSONArray scripts = new JSONArray();
+            ArrayNode scripts = objectMapper.createArrayNode();
             redeemScripts.forEach(scripts::add);
-            signature.put("redeemScripts", scripts);
+            signature.set("redeemScripts", scripts);
         } catch (Throwable error) {
             signature.put("valid", false);
             signature.put("error", error.getMessage());
         }
-        transaction.setSignature(signature.toJSONString());
+        transaction.setSignature(JacksonJson.writeValue(objectMapper, signature));
     }
 
     /**

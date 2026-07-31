@@ -1,15 +1,17 @@
 package com.surprising.wallet.chain;
 
-import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -25,11 +27,14 @@ public class BitcoinLikeSettlementService {
      * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
     private final ChainJdbcRepository chainRepository;
+    /** Jackson 3 对象映射器，用于解析提现签名元数据。 */
+    private final ObjectMapper objectMapper;
     /**
      * 构造 {@code BitcoinLikeSettlementService}，初始化该组件运行所需的状态和依赖。
      */
-    public BitcoinLikeSettlementService(ChainJdbcRepository chainRepository) {
+    public BitcoinLikeSettlementService(ChainJdbcRepository chainRepository, ObjectMapper objectMapper) {
         this.chainRepository = chainRepository;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -42,15 +47,15 @@ public class BitcoinLikeSettlementService {
             throw new IllegalArgumentException("unsupported unified UTXO currency " + currency);
         }
         String chain = currency.chain();
-        JSONObject signature = JSONObject.parseObject(transaction.getSignature());
+        ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
 
         transaction.setStatus(Constants.CONFIRM);
         transaction.setUpdateDate(Date.from(Instant.now()));
         chainRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
 
-        List<WithdrawRecord> records = signature.getJSONArray("withdraw") == null
+        List<WithdrawRecord> records = signature.get("withdraw") == null
                 ? List.of()
-                : signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
+                : JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
         for (WithdrawRecord record : records) {
             BigDecimal fee = record.getFee() == null ? BigDecimal.ZERO : record.getFee();
             BigDecimal settled = record.getBalance().add(fee);

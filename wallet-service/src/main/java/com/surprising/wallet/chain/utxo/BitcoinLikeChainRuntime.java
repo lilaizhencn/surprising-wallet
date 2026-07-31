@@ -1,6 +1,5 @@
 package com.surprising.wallet.chain.utxo;
 
-import com.alibaba.fastjson.JSONObject;
 import com.googlecode.jsonrpc4j.JsonRpcClientException;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.BitcoinLikeChainProfile;
@@ -10,6 +9,7 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.dto.TransactionDTO;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -48,6 +48,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -122,6 +124,9 @@ class BitcoinLikeChainRuntime {
     /** BCH JSON-RPC 命令执行器 */
     private final BchCommand bchCommand;
 
+    /** Jackson 3 对象映射器，用于读取提现签名元数据。 */
+    private final ObjectMapper objectMapper;
+
     /**
      * @param chainRepository             链配置数据库访问
      * @param pubKeyConfig                多签公钥配置
@@ -142,7 +147,8 @@ class BitcoinLikeChainRuntime {
             BtcCommand btcCommand,
             LitecoinEsploraCommand ltcCommand,
             DogeCommand dogeCommand,
-            BchCommand bchCommand) {
+            BchCommand bchCommand,
+            ObjectMapper objectMapper) {
         this.chainRepository = chainRepository;
         this.pubKeyConfig = pubKeyConfig;
         this.addressService = addressService;
@@ -152,6 +158,7 @@ class BitcoinLikeChainRuntime {
         this.ltcCommand = ltcCommand;
         this.dogeCommand = dogeCommand;
         this.bchCommand = bchCommand;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -370,8 +377,8 @@ class BitcoinLikeChainRuntime {
     public String broadcastSignedTransaction(ChainType chainType, WithdrawTransaction transaction) {
         String expectedTxId = txId(transaction);
         try {
-            JSONObject signature = JSONObject.parseObject(transaction.getSignature());
-            String raw = signature.getString("rawTransaction");
+            ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
+            String raw = JacksonJson.text(signature, "rawTransaction");
             if (transactionExists(chainType, expectedTxId)) {
                 return expectedTxId;
             }
@@ -607,7 +614,7 @@ class BitcoinLikeChainRuntime {
         if (transaction.getStatus() != null && transaction.getStatus() >= Constants.CONFIRM) {
             return;
         }
-        JSONObject signature = JSONObject.parseObject(transaction.getSignature());
+        ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
         int confirmations = confirmations(chainType, txId);
         if (confirmations < withdrawConfirmationThreshold(chainType)) {
             markConfirming(chainType, signature, txId);
@@ -652,16 +659,16 @@ class BitcoinLikeChainRuntime {
             if (confirmations >= withdrawConfirmationThreshold(chainType)) {
                 updateWithdrawTransaction(chainType, transaction.getTxId(), asset);
             } else if (confirmations > 0) {
-                markConfirming(chainType, JSONObject.parseObject(transaction.getSignature()), transaction.getTxId());
+                markConfirming(chainType, JacksonJson.readObject(objectMapper, transaction.getSignature()), transaction.getTxId());
             }
         }
     }
     /**
      * 写入或更新 {@code markConfirming} 对应的业务状态，并保持关联字段与审计状态一致。
      */
-    private void markConfirming(ChainType chainType, JSONObject signature, String txId) {
+    private void markConfirming(ChainType chainType, ObjectNode signature, String txId) {
         String chain = chainType.name();
-        List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
+        List<WithdrawRecord> records = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
         records.forEach(record -> {
             java.util.UUID tenantId = chainRepository.requireWithdrawalTenant(
                     chain, record.getWithdrawId());
@@ -729,8 +736,8 @@ class BitcoinLikeChainRuntime {
      * 执行 {@code txId} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private String txId(WithdrawTransaction transaction) {
-        JSONObject signature = JSONObject.parseObject(transaction.getSignature());
-        String raw = signature.getString("rawTransaction");
+        ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
+        String raw = JacksonJson.text(signature, "rawTransaction");
         Transaction signCompleteTx = Transaction.read(java.nio.ByteBuffer.wrap(java.util.HexFormat.of().parseHex(raw)));
         return signCompleteTx.getTxId().toString();
     }

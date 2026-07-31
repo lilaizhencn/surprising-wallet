@@ -1,7 +1,7 @@
 package com.surprising.wallet.job.withdraw;
 
-import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.wallet.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +11,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Set;
@@ -33,6 +34,9 @@ public class GetWithdrawRecordJob {
      */
     @Autowired
     private StringRedisTemplate redis;
+    /** Jackson 3 对象映射器，用于处理待提现队列中的 JSON。 */
+    @Autowired
+    private ObjectMapper objectMapper;
 
     /**
      * 执行一次取数与提交：读取待提现队列、去重、入流水并对失败请求回写重试队列。
@@ -46,8 +50,7 @@ public class GetWithdrawRecordJob {
             List<String> withdrawStr = redis.opsForList().range(key, 0L, count);
             if (!CollectionUtils.isEmpty(withdrawStr)) {
                 Set<WithdrawRecord> withdrawRecordSet = withdrawStr.parallelStream().map(str -> {
-                    JSONObject json = JSONObject.parseObject(str);
-                    WithdrawRecord withdrawRecord = json.toJavaObject(WithdrawRecord.class);
+                    WithdrawRecord withdrawRecord = JacksonJson.readValue(objectMapper, str, WithdrawRecord.class);
                     log.info("打印提现请求:{}", withdrawRecord);
                     return withdrawRecord;
                 }).collect(Collectors.toSet());
@@ -59,7 +62,7 @@ public class GetWithdrawRecordJob {
                         log.error("执行提现服务失败 币种:{} 提现地址:{}", record.getCurrency(), record.getAddress(), e);
                     }
                     if (!success) {
-                        redis.opsForList().leftPush(failKey, JSONObject.toJSONString(record));
+                        redis.opsForList().leftPush(failKey, JacksonJson.writeValue(objectMapper, record));
                     }
                 });
                 redis.opsForList().trim(key, withdrawStr.size(), -1L);

@@ -37,7 +37,6 @@
         <protobuf.version>4.34.1</protobuf.version>
         <trident.protobuf.version>3.25.8</trident.protobuf.version>
         <grpc.version>1.82.1</grpc.version>
-        <fastjson.version>1.2.75</fastjson.version>
         <guava.version>32.0.1-android</guava.version>
         <spongycastle.version>1.58.0.0</spongycastle.version>
         <bouncycastle.version>1.84</bouncycastle.version>
@@ -95,11 +94,6 @@
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
                 <version>${guava.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.alibaba</groupId>
-                <artifactId>fastjson</artifactId>
-                <version>${fastjson.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.madgag.spongycastle</groupId>

@@ -34,7 +34,6 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
-import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
 import java.math.BigInteger;
@@ -66,6 +65,27 @@ public class JsonFormat {
   private static final Pattern DIGITS = Pattern.compile(
       "[0-9]",
       Pattern.CASE_INSENSITIVE);
+
+  /**
+   * 判断字符串是否由一个或多个 Unicode 小写字符组成。
+   *
+   * <p>该判断保持原有 Commons Lang 行为：空值、空字符串、数字和符号均不符合，
+   * 只有每个字符都满足 {@link Character#isLowerCase(char)} 时才返回 {@code true}。</p>
+   *
+   * @param value 待判断的字符串
+   * @return 字符串是否全部为小写字符
+   */
+  static boolean isAllLowerCase(final String value) {
+    if (value == null || value.isEmpty()) {
+      return false;
+    }
+    for (int index = 0; index < value.length(); index++) {
+      if (!Character.isLowerCase(value.charAt(index))) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   /**
    * Outputs a textual representation of the Protocol Message supplied into the parameter output.
@@ -622,7 +642,7 @@ public class JsonFormat {
           }
         } else {
           String id = tokenizer.consumeIdentifier();
-          if (StringUtils.isAllLowerCase(id)) {
+          if (isAllLowerCase(id)) {
             char b = id.charAt(0);
             b = (char) (b + 'A' - 'a');
             String s = id.substring(1);

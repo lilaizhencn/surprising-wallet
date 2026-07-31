@@ -4,8 +4,6 @@ import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.tron.api.GrpcAPI;
 import org.tron.api.GrpcAPI.NodeList;
 import org.tron.protos.Contract;
@@ -85,7 +83,7 @@ public class TronWalletApi {
     }
 
     public static boolean addressValid(byte[] address) {
-        if (ArrayUtils.isEmpty(address)) {
+        if (address == null || address.length == 0) {
             log.warn("Warning: Address is empty !!");
             return false;
         }
@@ -204,7 +202,7 @@ public class TronWalletApi {
     }
 
     public static byte[] decodeFromBase58Check(String addressBase58) {
-        if (StringUtils.isEmpty(addressBase58)) {
+        if (addressBase58 == null || addressBase58.isEmpty()) {
             log.warn("Warning: Address is empty !!");
             return null;
         }

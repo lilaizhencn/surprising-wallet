@@ -1,7 +1,7 @@
 package com.surprising.wallet.sig.second.impl;
 
-import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.core.LegacyMultisigTransactionBuilder;
@@ -10,7 +10,10 @@ import com.surprising.wallet.sig.second.BipNodeUtil;
 import com.surprising.wallet.sig.second.ISignService;
 import org.bitcoinj.crypto.ECKey;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +23,9 @@ import java.util.List;
  */
 @Component
 public class DogeSecondSignService implements ISignService {
+    /** Jackson 3 对象映射器，用于解析和序列化签名元数据。 */
+    @Autowired
+    private ObjectMapper objectMapper;
     /**
      * 保存 {@code network}，表示链、网络、资产或代币配置。
      */
@@ -32,14 +38,14 @@ public class DogeSecondSignService implements ISignService {
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
         AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
-        JSONObject signature = JSONObject.parseObject(transaction.getSignature());
+        ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
         try {
-            if (!"p2sh".equals(signature.getString("scriptType"))) {
+            if (!"p2sh".equals(JacksonJson.text(signature, "scriptType"))) {
                 throw new IllegalArgumentException("not DOGE P2SH");
             }
-            String firstSigned = signature.getString("firstSignTx");
-            List<Address> addresses = signature.getJSONArray("addresses").toJavaList(Address.class);
-            List<String> redeemScripts = signature.getJSONArray("redeemScripts").toJavaList(String.class);
+            String firstSigned = JacksonJson.text(signature, "firstSignTx");
+            List<Address> addresses = JacksonJson.toList(objectMapper, signature.get("addresses"), Address.class);
+            List<String> redeemScripts = JacksonJson.toList(objectMapper, signature.get("redeemScripts"), String.class);
             List<ECKey> keys = new ArrayList<>(addresses.size());
             for (Address address : addresses) {
                 keys.add(BipNodeUtil.getBipNODE(address, currency).getEcKey());
@@ -50,7 +56,7 @@ public class DogeSecondSignService implements ISignService {
         } catch (Throwable error) {
             signature.put("valid", false);
             signature.put("error", error.getMessage());
-            transaction.setSignature(signature.toJSONString());
+            transaction.setSignature(JacksonJson.writeValue(objectMapper, signature));
             return "";
         }
     }

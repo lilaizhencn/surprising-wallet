@@ -1,7 +1,7 @@
 package com.surprising.wallet.job.withdraw;
 
-import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
@@ -14,6 +14,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.util.List;
 
@@ -72,6 +74,9 @@ public class RbfBumpJob {
      */
     @Autowired
     private StringRedisTemplate redis;
+    /** Jackson 3 对象映射器，用于读写 RBF 签名元数据。 */
+    @Autowired
+    private ObjectMapper objectMapper;
 
     /**
      * 每 30 秒检查一次 RBF 触发队列，发现请求即执行重报流程。
@@ -114,19 +119,18 @@ public class RbfBumpJob {
         }
         WithdrawTransaction tx = txOpt.get();
 
-        JSONObject sigJson = JSONObject.parseObject(tx.getSignature());
-        String firstSignTx = sigJson.getString("firstSignTx");
+        ObjectNode sigJson = JacksonJson.readObject(objectMapper, tx.getSignature());
+        String firstSignTx = JacksonJson.text(sigJson, "firstSignTx");
         if (firstSignTx == null || firstSignTx.isEmpty()) {
             log.error("RBF: 交易尚未完成首次签名 id={}", txId);
             return;
         }
 
         log.info("RBF bump 开始: txId={}, 原txid={}, 原fee={}",
-                txId, tx.getTxId(), sigJson.getLongValue("fee"));
+                txId, tx.getTxId(), JacksonJson.longValue(sigJson, "fee"));
 
         // 2. 提取原始 UTXO
-        List<UtxoTransaction> utxos = sigJson.getJSONArray("utxos")
-                .toJavaList(UtxoTransaction.class);
+        List<UtxoTransaction> utxos = JacksonJson.toList(objectMapper, sigJson.get("utxos"), UtxoTransaction.class);
 
         // 3. RBF 继续复用同一组输入，并确保它们仍由当前签名交易 id 持有锁。
         for (UtxoTransaction utxo : utxos) {
@@ -135,8 +139,7 @@ public class RbfBumpJob {
         log.info("RBF: {} 个UTXO 使用统一表保持锁定", utxos.size());
 
         // 4. 订单继续保持 SIGNING；不回写旧提现表。
-        List<WithdrawRecord> records = sigJson.getJSONArray("withdraw")
-                .toJavaList(WithdrawRecord.class);
+        List<WithdrawRecord> records = JacksonJson.toList(objectMapper, sigJson.get("withdraw"), WithdrawRecord.class);
         for (WithdrawRecord record : records) {
             chainJdbcRepository.updateWithdrawalStatus(
                     chain, record.getWithdrawId(), "SIGNING", null, null, null);
@@ -144,7 +147,7 @@ public class RbfBumpJob {
         log.info("RBF: {} 条提现订单保持签名中", records.size());
 
         // 5. 提高费率
-        long oldFeeRate = sigJson.getLongValue("feeRate");
+        long oldFeeRate = JacksonJson.longValue(sigJson, "feeRate");
         String configuredFeeRateValue =
                 redis.opsForValue().get(Constants.WALLET_FEE + currency.getIndex());
         Integer configuredFeeRate =
@@ -158,14 +161,14 @@ public class RbfBumpJob {
         }
 
         sigJson.put("feeRate", newFeeRate);
-        tx.setSignature(sigJson.toJSONString());
+        tx.setSignature(JacksonJson.writeValue(objectMapper, sigJson));
         tx.setStatus(Constants.WAITING);
         tx.setTxId("rbf-" + txId);
         currency.applyTo(tx);
         chainJdbcRepository.updateBitcoinLikeSigningTransaction(currency, tx);
 
         // 6. 重新推送签名队列
-        String val = JSONObject.toJSONString(tx);
+        String val = JacksonJson.writeValue(objectMapper, tx);
         redis.opsForList().leftPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, val);
 
         log.info("RBF bump 完成: txId={}, 新费率={} sat/vB, 已推送首签队列",

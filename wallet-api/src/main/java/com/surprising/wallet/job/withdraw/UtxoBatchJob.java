@@ -1,9 +1,9 @@
 package com.surprising.wallet.job.withdraw;
 
-import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
@@ -17,6 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -49,6 +51,9 @@ abstract public class UtxoBatchJob {
      */
     @Autowired
     protected StringRedisTemplate redis;
+    /** Jackson 3 对象映射器，用于构建和序列化签名队列 JSON。 */
+    @Autowired
+    protected ObjectMapper objectMapper;
 
     /** 单签链标记集合，目前默认空。 */
     private static final Set<AssetRuntimeMetadata> SINGLE_SIG_CURRENCY = Collections.emptySet();
@@ -88,7 +93,7 @@ abstract public class UtxoBatchJob {
                     break;
                 }
                 // 将签名交易对象序列化后推送到签名服务队列
-                String val = JSONObject.toJSONString(transaction);
+                String val = JacksonJson.writeValue(objectMapper, transaction);
 
                 if (SINGLE_SIG_CURRENCY.contains(currency)) {
                     redis.opsForList().leftPush(Constants.WALLET_WITHDRAW_SIG_SECOND_KEY, val);
@@ -180,11 +185,11 @@ abstract public class UtxoBatchJob {
         }
 
         // 初始化待签名 payload
-        JSONObject signature = new JSONObject();
+        ObjectNode signature = objectMapper.createObjectNode();
         Address changeAddress = defaultHotChangeAddress(tenantId, currency);
-        signature.put("utxos", utxos);
-        signature.put("addresses", addresses);
-        signature.put("withdraw", records);
+        signature.set("utxos", objectMapper.valueToTree(utxos));
+        signature.set("addresses", objectMapper.valueToTree(addresses));
+        signature.set("withdraw", objectMapper.valueToTree(records));
         signature.put("changeAddress", changeAddress.getAddress());
         signature.put("feeRate", feeRate);
         signature.put("totalAmount", totalAmount.toPlainString());
@@ -198,7 +203,7 @@ abstract public class UtxoBatchJob {
                 .currency(currency.getIndex())
                 .status(Constants.SIGNING)
                 .txId("signing")
-                .signature(signature.toJSONString())
+                .signature(JacksonJson.writeValue(objectMapper, signature))
                 .build();
         currency.applyTo(transaction);
         String businessNo = records.stream()

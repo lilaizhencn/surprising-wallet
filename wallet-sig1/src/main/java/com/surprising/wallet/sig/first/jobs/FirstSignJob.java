@@ -1,6 +1,6 @@
 package com.surprising.wallet.sig.first.jobs;
 
-import com.alibaba.fastjson.JSONObject;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.sig.first.SignContent;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
@@ -15,6 +15,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Duration;
 
@@ -48,6 +50,8 @@ public class FirstSignJob {
      * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
      */
     private final StringRedisTemplate redis;
+    /** Jackson 3 对象映射器，用于处理 Redis 队列中的交易 JSON。 */
+    private final ObjectMapper objectMapper;
 
     /**
      * 保存 {@code signContent}，用于承载当前对象的运行配置或业务数据。
@@ -78,29 +82,29 @@ public class FirstSignJob {
             }
 
             log.info("获取到的第一次交易的数据:{}", txStr);
-            JSONObject txJson = JSONObject.parseObject(txStr);
-            WithdrawTransaction transaction = txJson.toJavaObject(WithdrawTransaction.class);
+            ObjectNode txJson = JacksonJson.readObject(objectMapper, txStr);
+            WithdrawTransaction transaction = JacksonJson.toValue(objectMapper, txJson, WithdrawTransaction.class);
             AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
             ISignService signService = signContent.getSignService(currency);
             if (signService == null) {
-                JSONObject signature = JSONObject.parseObject(transaction.getSignature());
+                ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
                 signature.put("valid", false);
                 signature.put("error", "no first sign service for " + currency.getName());
-                transaction.setSignature(signature.toJSONString());
+                transaction.setSignature(JacksonJson.writeValue(objectMapper, signature));
             } else {
                 signService.signTransaction(transaction);
             }
             String signatureStr = transaction.getSignature();
-            JSONObject sigJson = JSONObject.parseObject(signatureStr);
+            ObjectNode sigJson = JacksonJson.readObject(objectMapper, signatureStr);
             String rKey;
-            if (sigJson.getBoolean("valid")) {
+            if (JacksonJson.booleanValue(sigJson, "valid")) {
                 log.info("签名验证成功 开始推送到第二次签名服务队列");
                 rKey = Constants.WALLET_WITHDRAW_SIG_SECOND_KEY;
             } else {
                 log.warn("签名验证失败 推送到签名失败队列");
                 rKey = Constants.WALLET_WITHDRAW_SIG_DONE_KEY;
             }
-            redis.opsForList().leftPush(rKey, JSONObject.toJSONString(transaction));
+            redis.opsForList().leftPush(rKey, JacksonJson.writeValue(objectMapper, transaction));
             redis.opsForList().leftPop(tmp);
             log.info("签名验证推送完成 key:{}", rKey);
 

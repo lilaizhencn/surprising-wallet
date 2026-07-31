@@ -1,7 +1,7 @@
 package com.surprising.wallet.job.withdraw;
 
-import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.wallet.service.TransactionService;
@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 失败提现重试任务。
@@ -35,6 +36,9 @@ public class RetryFailedWithdraw {
      */
     @Autowired
     private StringRedisTemplate redis;
+    /** Jackson 3 对象映射器，用于解析失败提现队列中的 JSON。 */
+    @Autowired
+    private ObjectMapper objectMapper;
 
     /**
      * 每分钟从失败队列取出待重试请求，调用提现流程，失败继续回填等待下一轮处理。
@@ -56,8 +60,7 @@ public class RetryFailedWithdraw {
                 String str = redis.opsForList().rightPopAndLeftPush(failKey, failKeyTmp);
                 boolean success = false;
                 try {
-                    JSONObject json = JSONObject.parseObject(str);
-                    WithdrawRecord record = json.toJavaObject(WithdrawRecord.class);
+                    WithdrawRecord record = JacksonJson.readValue(objectMapper, str, WithdrawRecord.class);
                     success = txService.withdraw(record);
                 } catch (Throwable e) {
                     log.error("重新尝试失败的交易 异常 记录:{}", str, e);

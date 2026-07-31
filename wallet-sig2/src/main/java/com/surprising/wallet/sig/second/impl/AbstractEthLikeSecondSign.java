@@ -1,7 +1,7 @@
 package com.surprising.wallet.sig.second.impl;
 
-import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
@@ -21,6 +21,10 @@ import org.web3j.crypto.RawTransaction;
 import org.web3j.crypto.TransactionEncoder;
 import org.web3j.tx.ChainIdLong;
 import org.web3j.utils.Numeric;
+import org.springframework.beans.factory.annotation.Autowired;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.math.BigInteger;
 import java.math.BigDecimal;
@@ -38,6 +42,10 @@ import java.util.List;
  */
 @Slf4j
 abstract public class AbstractEthLikeSecondSign implements ISignService {
+
+    /** Jackson 3 对象映射器，用于解析签名元数据。 */
+    @Autowired
+    protected ObjectMapper objectMapper;
 
     /** 十六进制字符串前缀 */
     public static final String PREFIX = "0x";
@@ -70,19 +78,19 @@ abstract public class AbstractEthLikeSecondSign implements ISignService {
     @Override
     public String signTransaction(WithdrawTransaction transaction) {
         String sigStr = transaction.getSignature();
-        JSONObject sigJson = JSONObject.parseObject(sigStr);
+        ObjectNode sigJson = JacksonJson.readObject(objectMapper, sigStr);
         AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
         BigDecimal feeDecimal = feeDecimal(sigJson, currency);
-        Address address = sigJson.getJSONObject("address").toJavaObject(Address.class);
+        Address address = JacksonJson.toValue(objectMapper, sigJson.get("address"), Address.class);
         Bip32Node node = BipNodeUtil.getBipNODE(address, currency);
         String signResult = sign(
                 BigInteger.valueOf(address.getNonce()),
-                sigJson.getBigDecimal("gasPrice").multiply(feeDecimal).toBigInteger(),
-                sigJson.getBigDecimal("gas").multiply(feeDecimal).toBigInteger(),
-                sigJson.getString("to"),
+                JacksonJson.decimalValue(sigJson, "gasPrice").multiply(feeDecimal).toBigInteger(),
+                JacksonJson.decimalValue(sigJson, "gas").multiply(feeDecimal).toBigInteger(),
+                JacksonJson.text(sigJson, "to"),
                 transaction.getBalance().multiply(currency.getDecimal()).toBigInteger(),
                 "",
-                sigJson.containsKey("chainId") ? sigJson.getLongValue("chainId") : ChainIdLong.MAINNET,
+                sigJson.has("chainId") ? JacksonJson.longValue(sigJson, "chainId") : ChainIdLong.MAINNET,
                 node.getEcKey().getPrivateKeyAsHex());
         return signResult;
     }
@@ -94,8 +102,9 @@ abstract public class AbstractEthLikeSecondSign implements ISignService {
      * @param currency 资产元数据
      * @return 精度因子
      */
-    protected BigDecimal feeDecimal(JSONObject sigJson, AssetRuntimeMetadata currency) {
-        Integer decimals = sigJson.getObject("feeAssetDecimals", Integer.class);
+    protected BigDecimal feeDecimal(ObjectNode sigJson, AssetRuntimeMetadata currency) {
+        JsonNode decimalsNode = sigJson.get("feeAssetDecimals");
+        Integer decimals = decimalsNode == null || decimalsNode.isNull() ? null : decimalsNode.asInt();
         return BigDecimal.TEN.pow(decimals == null ? currency.getDecimals() : decimals);
     }
 

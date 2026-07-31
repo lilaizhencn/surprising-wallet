@@ -21,8 +21,6 @@ package org.tron.wallet.util;
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.Longs;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.spongycastle.util.encoders.Hex;
 
 import java.io.ByteArrayOutputStream;
@@ -75,28 +73,28 @@ public class ByteArray {
      * get long data from bytes data.
      */
     public static long toLong(final byte[] b) {
-        return ArrayUtils.isEmpty(b) ? 0 : new BigInteger(1, b).longValue();
+        return b == null || b.length == 0 ? 0 : new BigInteger(1, b).longValue();
     }
 
     /**
      * get int data from bytes data.
      */
     public static int toInt(final byte[] b) {
-        return ArrayUtils.isEmpty(b) ? 0 : new BigInteger(1, b).intValue();
+        return b == null || b.length == 0 ? 0 : new BigInteger(1, b).intValue();
     }
 
     /**
      * get bytes data from string data.
      */
     public static byte[] fromString(final String s) {
-        return StringUtils.isBlank(s) ? null : s.getBytes();
+        return s == null || s.isBlank() ? null : s.getBytes();
     }
 
     /**
      * get string data from bytes data.
      */
     public static String toStr(final byte[] b) {
-        return ArrayUtils.isEmpty(b) ? null : new String(b);
+        return b == null || b.length == 0 ? null : new String(b);
     }
 
     public static byte[] fromLong(final long val) {

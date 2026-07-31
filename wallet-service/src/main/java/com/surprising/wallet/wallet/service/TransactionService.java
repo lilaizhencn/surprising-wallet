@@ -1,10 +1,10 @@
 package com.surprising.wallet.wallet.service;
 
-import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.dto.TransactionDTO;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
@@ -19,6 +19,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import tools.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -70,6 +72,9 @@ public class TransactionService {
      */
     @Autowired
     StringRedisTemplate redis;
+    /** Jackson 3 对象映射器，用于处理队列和签名元数据 JSON。 */
+    @Autowired
+    ObjectMapper objectMapper;
 
     /**
      * 充值，把充值交易推送到各自的业务线队列
@@ -102,7 +107,7 @@ public class TransactionService {
         }
         // String depositKey = WALLET_DEPOSIT_KEY + dto.getBiz();
         String depositKey = WALLET_DEPOSIT_KEY;
-        String val = JSONObject.toJSONString(dto);
+        String val = JacksonJson.writeValue(objectMapper, dto);
         redis.opsForList().rightPush(depositKey, val);
         log.info("saveTransaction dto: {} end", dto.getTxId());
     }
@@ -164,14 +169,14 @@ public class TransactionService {
     @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_COMMITTED)
     public boolean sendWithdrawTransaction(WithdrawTransaction transaction) {
         log.info("广播签名后的交易 开始 币种id:{} 交易id:{}", transaction.getCurrency(), transaction.getId());
-        JSONObject signature = JSONObject.parseObject(transaction.getSignature());
+        ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
         AssetRuntimeMetadata currency = transactionAsset(transaction);
 
         //签名是否成功
-        if (!signature.containsKey("valid") || !signature.getBoolean("valid")) {
+        if (!signature.has("valid") || !JacksonJson.booleanValue(signature, "valid")) {
             log.error("广播签名后的交易 签名失败 币种id:{} 交易id:{}", transaction.getCurrency(), transaction.getId());
             if (isUnifiedBitcoinLike(currency)) {
-                failBitcoinLikeTransaction(transaction, currency, signature.getString("error"));
+                failBitcoinLikeTransaction(transaction, currency, JacksonJson.text(signature, "error"));
             }
             return true;
         }
@@ -212,9 +217,9 @@ public class TransactionService {
                     "legacy withdraw transaction runtime is disabled for currency " + transaction.getCurrency());
         }
 
-        List<WithdrawRecord> records = signature.getJSONArray("withdraw") == null
+        List<WithdrawRecord> records = signature.get("withdraw") == null
                 ? List.of()
-                : signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
+                : JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
         records.forEach((record) -> {
             record.setTxId(txId);
             record.setStatus((byte) status);
@@ -223,7 +228,7 @@ public class TransactionService {
                     chainName(currency), record.getWithdrawId(), "SENT", null, txId, null);
             // String key = Constants.WALLET_WITHDRAW_TX_BIZ_KEY + record.getBiz();
             String key = Constants.WALLET_WITHDRAW_TX_BIZ_KEY;
-            String val = JSONObject.toJSONString(record);
+            String val = JacksonJson.writeValue(objectMapper, record);
             redis.opsForList().leftPush(key, val);
         });
         log.info("广播签名后的交易 成功 更新数据库完成 币种id:{} 交易id:{}", currency.getName(), transaction.getTxId());
@@ -234,10 +239,10 @@ public class TransactionService {
      * 标记统一 UTXO 广播为 UNKNOWN，记录错误原因并刷新待发提现状态，防止交易丢失。
      */
     private void markBitcoinLikeBroadcastUnknown(WithdrawTransaction transaction, AssetRuntimeMetadata currency,
-                                                 JSONObject signature, String error) {
+                                                 ObjectNode signature, String error) {
         String chain = chainName(currency);
         chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
-        List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
+        List<WithdrawRecord> records = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
         records.forEach(record -> chainJdbcRepository.updateWithdrawalStatus(
                 chain, record.getWithdrawId(), "BROADCAST_UNKNOWN", null, null, error));
     }
@@ -246,7 +251,7 @@ public class TransactionService {
      * UTXO 签名失败处理：释放锁定 UTXO 与冻结余额，更新提现记录为失败状态。
      */
     private void failBitcoinLikeTransaction(WithdrawTransaction transaction, AssetRuntimeMetadata currency, String error) {
-        JSONObject signature = JSONObject.parseObject(transaction.getSignature());
+        ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
         String lockRef = transaction.getId().toString();
         String chain = chainName(currency);
         chainJdbcRepository.releaseUtxos(chain, lockRef);
@@ -255,7 +260,7 @@ public class TransactionService {
         chainJdbcRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
         chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
 
-        List<WithdrawRecord> records = signature.getJSONArray("withdraw").toJavaList(WithdrawRecord.class);
+        List<WithdrawRecord> records = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
         records.forEach(record -> {
             BigDecimal amount = withdrawFrozenAmount(record);
             String debitAccountId = withdrawalDebitAccount(chain, record);

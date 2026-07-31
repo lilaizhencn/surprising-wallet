@@ -1,7 +1,7 @@
 package com.surprising.wallet.job.withdraw;
 
-import com.alibaba.fastjson.JSONObject;
 import com.googlecode.jsonrpc4j.JsonRpcClientException;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.wallet.service.TransactionService;
@@ -12,6 +12,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
@@ -35,6 +36,9 @@ public class BroadCastSignedTxJob {
      */
     @Autowired
     private StringRedisTemplate redis;
+    /** Jackson 3 对象映射器，用于解析签名完成队列中的交易 JSON。 */
+    @Autowired
+    private ObjectMapper objectMapper;
 
     /**
      * 每 30 秒执行一次广播流程：读取已签名交易、逐笔广播、失败项回填队列。
@@ -48,8 +52,7 @@ public class BroadCastSignedTxJob {
                 log.info("广播交易开始 待广播数量:{}", withdrawStr.size());
                 java.util.ArrayList<String> retry = new java.util.ArrayList<>();
                 withdrawStr.forEach(str -> {
-                    JSONObject json = JSONObject.parseObject(str);
-                    WithdrawTransaction transaction = json.toJavaObject(WithdrawTransaction.class);
+                    WithdrawTransaction transaction = JacksonJson.readValue(objectMapper, str, WithdrawTransaction.class);
                     if (!txService.sendWithdrawTransaction(transaction)) {
                         retry.add(str);
                     }

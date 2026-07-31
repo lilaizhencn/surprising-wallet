@@ -1,10 +1,10 @@
 package com.surprising.wallet.sdk.bitcoinj.rpc.model;
 
-import com.alibaba.fastjson.JSON;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import lombok.Data;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.Serializable;
 import java.util.List;
@@ -18,6 +18,11 @@ import java.util.List;
 @Data
 public class ScriptPubKey implements Serializable {
 
+
+    /**
+     * 使用 Jackson 3 解析 Bitcoin-like RPC 返回的 JSON 数据。
+     */
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * 保存 {@code serialVersionUID}，用于标识交易、区块或业务记录。
@@ -64,7 +69,7 @@ public class ScriptPubKey implements Serializable {
      * 解析或转换 {@code convert} 对应的数据，并校验其格式和边界。
      */
     public static ScriptPubKey convert(String jsonString) {
-        return JSON.parseObject(jsonString, ScriptPubKey.class);
+        return OBJECT_MAPPER.readValue(jsonString, ScriptPubKey.class);
     }
 
 

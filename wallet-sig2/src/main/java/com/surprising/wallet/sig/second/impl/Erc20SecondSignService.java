@@ -1,7 +1,7 @@
 package com.surprising.wallet.sig.second.impl;
 
-import com.alibaba.fastjson.JSONObject;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
@@ -9,6 +9,7 @@ import com.surprising.wallet.sig.second.BipNodeUtil;
 import com.surprising.wallet.sig.second.ISignService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.math.BigInteger;
 import java.math.BigDecimal;
@@ -64,19 +65,19 @@ public class Erc20SecondSignService extends AbstractEthLikeSecondSign implements
     public String signTransaction(WithdrawTransaction transaction) {
         AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
         String sigStr = transaction.getSignature();
-        JSONObject sigJson = JSONObject.parseObject(sigStr);
+        ObjectNode sigJson = JacksonJson.readObject(objectMapper, sigStr);
         BigDecimal feeDecimal = feeDecimal(sigJson, currency);
-        Address address = sigJson.getJSONObject("address").toJavaObject(Address.class);
+        Address address = JacksonJson.toValue(objectMapper, sigJson.get("address"), Address.class);
         Bip32Node node = BipNodeUtil.getBipNODE(address, currency);
         String signResult = tokenTransaction(
-                sigJson.getBigDecimal("gasPrice").multiply(feeDecimal).toBigInteger(),
-                sigJson.getBigDecimal("gas").multiply(feeDecimal).toBigInteger(),
+                JacksonJson.decimalValue(sigJson, "gasPrice").multiply(feeDecimal).toBigInteger(),
+                JacksonJson.decimalValue(sigJson, "gas").multiply(feeDecimal).toBigInteger(),
                 BigInteger.valueOf(address.getNonce()),
                 node.getEcKey().getPrivateKeyAsHex(),
                 currency.getContractAddress(),
-                sigJson.getString("to"),
+                JacksonJson.text(sigJson, "to"),
                 transaction.getBalance().multiply(currency.getDecimal()).toBigInteger(),
-                sigJson.containsKey("chainId") ? sigJson.getLongValue("chainId") : org.web3j.tx.ChainIdLong.NONE);
+                sigJson.has("chainId") ? JacksonJson.longValue(sigJson, "chainId") : org.web3j.tx.ChainIdLong.NONE);
         return signResult;
     }
 }

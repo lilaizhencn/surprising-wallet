@@ -1,6 +1,6 @@
 package com.surprising.wallet.sig.first.test;
 
-import com.alibaba.fastjson.JSONObject;
+import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.*;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sig.first.config.PubKeyConfig;
@@ -12,11 +12,15 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.HexFormat;
 import java.util.List;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * 验证 {@code FullSigningTest} 覆盖的业务流程、边界条件和异常行为。
  */
 public class FullSigningTest {
+    /** 测试使用的 Jackson 3 对象映射器。 */
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     /**
      * 保存 {@code ROOT1}，用于承载当前测试夹具的配置或运行数据。
      */
@@ -66,13 +70,15 @@ public class FullSigningTest {
             .address("tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx")
             .balance(new BigDecimal("0.0005")).build();
 
-        JSONObject sigJson = new JSONObject();
-        sigJson.put("utxos", List.of(utxo)); sigJson.put("addresses", List.of(addr));
-        sigJson.put("withdraw", List.of(rec)); sigJson.put("feeRate", 10L);
+        ObjectNode sigJson = OBJECT_MAPPER.createObjectNode();
+        sigJson.set("utxos", OBJECT_MAPPER.valueToTree(List.of(utxo)));
+        sigJson.set("addresses", OBJECT_MAPPER.valueToTree(List.of(addr)));
+        sigJson.set("withdraw", OBJECT_MAPPER.valueToTree(List.of(rec)));
+        sigJson.put("feeRate", 10L);
         sigJson.put("changeAddress", "2N2ky5hJ1b5j8E4GT14GiKcxcdUoTuhDRG7");
 
         WithdrawTransaction tx = WithdrawTransaction.builder()
-            .signature(sigJson.toJSONString()).balance(new BigDecimal("0.001"))
+            .signature(JacksonJson.writeValue(OBJECT_MAPPER, sigJson)).balance(new BigDecimal("0.001"))
             .chain("BTC").assetSymbol("BTC").assetDecimals(8).bip44CoinType(0).build();
 
         // Phase 1: First Sign with SIG1_MK
@@ -81,16 +87,17 @@ public class FullSigningTest {
         PubKeyConfig pk = new PubKeyConfig(
                 Bip32Node.decode(PK1), Bip32Node.decode(PK2), Bip32Node.decode(PK3));
         set(firstSign, "pubKeyConfig", pk);
+        set(firstSign, "objectMapper", OBJECT_MAPPER);
 
         System.out.println("=============================================");
         System.out.println("  Phase 1: FirstSign (KEY 1 — hot wallet)");
         System.out.println("=============================================");
         firstSign.signTransaction(tx);
 
-        JSONObject r1 = JSONObject.parseObject(tx.getSignature());
-        System.out.println("valid: " + r1.getBooleanValue("valid") + "  fee: " + r1.getLongValue("fee") + " sat");
-        if (!r1.getBooleanValue("valid")) { System.out.println("FAIL"); System.exit(1); }
-        String firstSignTx = r1.getString("firstSignTx");
+        ObjectNode r1 = JacksonJson.readObject(OBJECT_MAPPER, tx.getSignature());
+        System.out.println("valid: " + JacksonJson.booleanValue(r1, "valid") + "  fee: " + JacksonJson.longValue(r1, "fee") + " sat");
+        if (!JacksonJson.booleanValue(r1, "valid")) { System.out.println("FAIL"); System.exit(1); }
+        String firstSignTx = JacksonJson.text(r1, "firstSignTx");
 
         // Phase 2: Second Sign with SIG2_MK (different key!)
         System.out.println("");
@@ -99,11 +106,12 @@ public class FullSigningTest {
         System.out.println("=============================================");
         Class<?> ssClass = Class.forName("com.surprising.wallet.sig.second.impl.BtcSecondSignService");
         Object ss = ssClass.getDeclaredConstructor().newInstance();
+        set(ss, "objectMapper", OBJECT_MAPPER);
         String fullTx = (String) ssClass.getMethod("signTransaction", WithdrawTransaction.class).invoke(ss, tx);
 
         if (fullTx == null || fullTx.isEmpty()) {
-            r1 = JSONObject.parseObject(tx.getSignature());
-            System.out.println("SECOND SIGN FAILED: " + r1.getString("error"));
+            r1 = JacksonJson.readObject(OBJECT_MAPPER, tx.getSignature());
+            System.out.println("SECOND SIGN FAILED: " + JacksonJson.text(r1, "error"));
             System.exit(1);
         }
         System.out.println("fullTx: " + fullTx.length() + " chars");
