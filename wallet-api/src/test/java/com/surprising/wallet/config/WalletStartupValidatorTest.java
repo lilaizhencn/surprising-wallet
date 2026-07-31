@@ -59,6 +59,23 @@ class WalletStartupValidatorTest {
     }
 
     @Test
+    void activeEip7702ConfigAcceptsMatchingEnabledEvmProfile() throws Exception {
+        AccountChainProfile profile = evmProfile("BASE", "sepolia", "ETH_BASE",
+                "eip1559", "op-stack");
+        WalletStartupValidator validator = validator(
+                new FakeRepository(
+                        List.of(profile),
+                        List.of(node("BASE", "sepolia", "rpc", "base-sepolia",
+                                "https://base-sepolia-rpc.publicnode.com")),
+                        List.of()),
+                new FakeJdbcTemplate(
+                        List.of(), List.of(), List.of(),
+                        List.of(Map.of("chain", "BASE", "network", "sepolia"))));
+
+        assertDoesNotThrow(validator::validateProfiles);
+    }
+
+    @Test
     void enabledEvmProfileRejectsAmbiguousOldL2GasPolicy() throws Exception {
         AccountChainProfile profile = evmProfile("BASE", "sepolia", "ETH_BASE",
                 "eip1559-l2", "op-stack");
@@ -502,18 +519,27 @@ class WalletStartupValidatorTest {
         private final List<Map<String, Object>> tokenRows;
         private final List<Map<String, Object>> assetRows;
         private final List<Map<String, Object>> profileRows;
+        private final List<Map<String, Object>> eip7702Rows;
 
         private FakeJdbcTemplate(List<Map<String, Object>> tokenRows,
                                  List<Map<String, Object>> assetRows) {
-            this(tokenRows, assetRows, List.of());
+            this(tokenRows, assetRows, List.of(), List.of());
         }
 
         private FakeJdbcTemplate(List<Map<String, Object>> tokenRows,
                                  List<Map<String, Object>> assetRows,
                                  List<Map<String, Object>> profileRows) {
+            this(tokenRows, assetRows, profileRows, List.of());
+        }
+
+        private FakeJdbcTemplate(List<Map<String, Object>> tokenRows,
+                                 List<Map<String, Object>> assetRows,
+                                 List<Map<String, Object>> profileRows,
+                                 List<Map<String, Object>> eip7702Rows) {
             this.tokenRows = tokenRows;
             this.assetRows = assetRows;
             this.profileRows = profileRows;
+            this.eip7702Rows = eip7702Rows;
         }
 
         @Override
@@ -526,6 +552,12 @@ class WalletStartupValidatorTest {
             }
             if (sql.contains("from chain_profile")) {
                 return profileRows;
+            }
+            if (sql.contains("from evm_7702_config")) {
+                return eip7702Rows;
+            }
+            if (sql.contains("evm_7702")) {
+                throw new AssertionError("unexpected EIP-7702 table in startup query: " + sql);
             }
             return List.of();
         }

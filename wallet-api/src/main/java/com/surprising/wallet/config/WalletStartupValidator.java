@@ -221,7 +221,7 @@ public class WalletStartupValidator implements ApplicationRunner {
                         profile -> profile));
         for (Map<String, Object> row : jdbcTemplate.queryForList("""
                 select chain, network
-                  from evm_7702_chain_config
+                  from evm_7702_config
                  where status = 'ACTIVE'
                 """)) {
             String chain = stringValue(row.get("chain"));

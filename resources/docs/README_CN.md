@@ -10,6 +10,7 @@
 | EIP-7702 免 Gas 批量归集 | [zh/eip7702-collection.md](zh/eip7702-collection.md) |
 | EIP-7702 原生归集与批量提现 | [zh/eip7702-native-collection-and-batch-withdrawal.md](zh/eip7702-native-collection-and-batch-withdrawal.md) |
 | EIP-7702 生产 Runbook（ETH/Arbitrum/Base/BNB/Optimism/Polygon） | [zh/](zh/) 下各 `eip7702-*-production-runbook.md` |
+| EVM 链 Gas 资产与交易模型矩阵 | [zh/evm-chain-gas-and-transaction-model.md](zh/evm-chain-gas-and-transaction-model.md) |
 | Custody API | [openapi/custody-v1.yaml](openapi/custody-v1.yaml) |
 | 启动与测试 | [zh/startup-and-testing.md](zh/startup-and-testing.md) |
 | 数据库 | [zh/database.md](zh/database.md) |

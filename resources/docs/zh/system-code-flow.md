@@ -91,6 +91,9 @@ EVM 的三类配置必须分开解释：
 - `gas_policy` 只决定交易报价和信封类型：`legacy-gas-price` 或 `eip1559`。
 - `fee_model` 决定总费用组成：`standard`、`op-stack`、`op-stack-l1`、`arbitrum-nitro`、`scroll`。OP Stack/Scroll 必须计入回执的 L1 数据费，OP Stack 还可能有 Operator Fee；Arbitrum 的父链成本已进入 Nitro gas 计量，拆分审计时不得二次扣费。
 
+逐链 Gas 资产、普通交易信封和 EIP-7702 当前启用状态见
+[EVM 链 Gas 资产与交易模型矩阵](evm-chain-gas-and-transaction-model.md)。
+
 发送普通 EVM 交易前，服务先通过 `eth_estimateGas` 估算并加安全余量，再按最终签名交易查询链级 L1/Operator 费用，校验发送方链上原生币余额。确认时以回执实际费用覆盖预估值；需要独立 L1 费用但回执缺失对应字段时中止结算并保留人工审计，禁止静默少扣。
 
 ## 归集流程
