@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain.polkadot;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;

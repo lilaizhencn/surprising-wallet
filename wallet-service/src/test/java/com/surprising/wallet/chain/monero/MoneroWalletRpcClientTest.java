@@ -1,7 +1,8 @@
 package com.surprising.wallet.chain.monero;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -159,7 +160,7 @@ class MoneroWalletRpcClientTest {
     private static JsonNode json(String value) {
         try {
             return MAPPER.readTree(value);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException(e);
         }
     }

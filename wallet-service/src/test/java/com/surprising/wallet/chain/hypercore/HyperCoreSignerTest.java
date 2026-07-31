@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain.hypercore;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.bitcoinj.crypto.ECKey;
 import org.junit.jupiter.api.Test;
 import org.web3j.crypto.ECKeyPair;

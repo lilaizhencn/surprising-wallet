@@ -1,6 +1,6 @@
 package com.surprising.wallet.chain.ton;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;

@@ -1,9 +1,9 @@
 package com.surprising.wallet.chain.aptos;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.config.ChainRpcNodeService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;

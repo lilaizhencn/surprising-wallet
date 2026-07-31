@@ -297,7 +297,7 @@ class TonTransactionService {
      * @return true 表示消息已成功处理
      */
     public boolean confirmSentMessage(String messageHash, String senderAddress) {
-        Optional<com.fasterxml.jackson.databind.JsonNode> transaction = rpc.findExternalMessageTransaction(
+        Optional<tools.jackson.databind.JsonNode> transaction = rpc.findExternalMessageTransaction(
                 senderAddress, messageHash, CONFIRMATION_SCAN_LIMIT);
         if (transaction.isEmpty()) {
             rebroadcast(messageHash);

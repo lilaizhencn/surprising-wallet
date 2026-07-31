@@ -1,7 +1,6 @@
 package com.surprising.wallet.job.devfaucet;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -193,7 +192,7 @@ public class DevFaucetJob {
             custodyRepository.audit(
                     funding.tenantId(), "SYSTEM", "dev-faucet", action,
                     "DEV_FAUCET_FUNDING", funding.id().toString(), "", details);
-        } catch (JsonProcessingException | RuntimeException auditError) {
+        } catch (RuntimeException auditError) {
             log.error("failed to write dev faucet audit for {}", funding.id(), auditError);
         }
     }

@@ -1,6 +1,6 @@
 package com.surprising.wallet.chain.ton;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Test;
@@ -202,7 +202,7 @@ class TonMessageEncodingTest {
          * 验证 {@code findExternalMessageTransaction} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         @Override
-        public Optional<com.fasterxml.jackson.databind.JsonNode> findExternalMessageTransaction(
+        public Optional<tools.jackson.databind.JsonNode> findExternalMessageTransaction(
                 String address, String messageHash, int limit) {
             return Optional.empty();
         }

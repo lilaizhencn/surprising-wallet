@@ -1,7 +1,7 @@
 package com.surprising.wallet.custody.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.custody.repository.CustodyRepository.AddressRecord;
 import com.surprising.wallet.custody.repository.CustodyRepository.GasAccountRecord;
 import com.surprising.wallet.custody.repository.CustodyRepository.TenantRecord;
@@ -183,7 +183,7 @@ public class CustodyTenantService {
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("failed to serialize audit detail", e);
         }
     }

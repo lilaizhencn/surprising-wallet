@@ -6,8 +6,8 @@ import com.surprising.wallet.custody.repository.CustodyRepository;
 import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway;
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.custody.repository.CustodyAssetRecoveryRepository.RecoveryRecord;
 import org.springframework.dao.DuplicateKeyException;
@@ -304,7 +304,7 @@ public class CustodyAssetRecoveryService {
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("failed to serialize asset recovery event", e);
         }
     }

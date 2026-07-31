@@ -1,8 +1,8 @@
 package com.surprising.wallet.custody.service;
 
 import com.surprising.wallet.custody.model.PageView;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.custody.repository.CustodyRepository.AddressRecord;
 import com.surprising.wallet.custody.repository.CustodyRepository.IdempotencyRecord;
 import com.surprising.wallet.custody.repository.CustodyRepository.TenantRecord;
@@ -273,7 +273,7 @@ public class CustodyWithdrawalService {
         }
         try {
             return objectMapper.readValue(existing.responseJson(), WithdrawalView.class);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored idempotent response is invalid", e);
         }
     }
@@ -306,7 +306,7 @@ public class CustodyWithdrawalService {
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("value cannot be serialized as JSON", e);
         }
     }

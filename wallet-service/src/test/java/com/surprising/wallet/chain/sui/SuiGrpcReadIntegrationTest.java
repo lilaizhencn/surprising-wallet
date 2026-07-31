@@ -1,6 +1,6 @@
 package com.surprising.wallet.chain.sui;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 

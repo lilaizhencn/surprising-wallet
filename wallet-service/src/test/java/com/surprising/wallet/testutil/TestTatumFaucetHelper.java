@@ -1,6 +1,6 @@
 package com.surprising.wallet.testutil;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.net.URI;

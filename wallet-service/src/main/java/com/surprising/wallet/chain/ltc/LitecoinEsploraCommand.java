@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain.ltc;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeBlock;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeRawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.ScriptPubKey;

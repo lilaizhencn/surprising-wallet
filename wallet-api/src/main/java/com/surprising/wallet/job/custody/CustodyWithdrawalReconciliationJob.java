@@ -1,7 +1,7 @@
 package com.surprising.wallet.job.custody;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.custody.repository.CustodyRepository.WithdrawalStatusChange;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -100,7 +100,7 @@ public class CustodyWithdrawalReconciliationJob {
                     "type", eventType,
                     "createdAt", Instant.now(),
                     "data", data));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("failed to serialize withdrawal event", e);
         }
     }

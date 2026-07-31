@@ -1,6 +1,6 @@
 package com.surprising.wallet.devfaucet;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.custody.repository.CustodyRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;

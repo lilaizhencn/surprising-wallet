@@ -11,8 +11,9 @@ import com.surprising.wallet.custody.service.CustodyGasService;
 import com.surprising.wallet.custody.service.CustodyTenantChainService;
 import com.surprising.wallet.custody.service.CustodyWithdrawalExecutionService;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
@@ -167,7 +168,7 @@ class Evm7702ProductionFlowIntegrationTest {
         DriverManagerDataSource dataSource = CustodyIntegrationDatabase.dataSource();
         CustodyIntegrationDatabase.reset(dataSource);
         jdbc = new JdbcTemplate(dataSource);
-        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+        ObjectMapper objectMapper = JsonMapper.builder().findAndAddModules().build();
         custodyRepository = new CustodyRepository(jdbc);
         CustodyTenantChainRepository tenantChainRepository =
                 new CustodyTenantChainRepository(jdbc);

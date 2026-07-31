@@ -69,7 +69,7 @@ class DevFaucetPropertiesTest {
     @Test
     void localJsonRpcClientUsesHttp11InsteadOfH2cUpgrade() throws Exception {
         JsonRpcDevFaucetClient client = new JsonRpcDevFaucetClient(
-                validProperties(), new com.fasterxml.jackson.databind.ObjectMapper());
+                validProperties(), new tools.jackson.databind.ObjectMapper());
         Field field = JsonRpcDevFaucetClient.class.getDeclaredField("httpClient");
         field.setAccessible(true);
 

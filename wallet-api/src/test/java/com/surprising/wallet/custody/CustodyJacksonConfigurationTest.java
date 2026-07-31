@@ -1,6 +1,6 @@
 package com.surprising.wallet.custody;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -24,7 +24,6 @@ class CustodyJacksonConfigurationTest {
         String json = mapper.writeValueAsString(Map.of("createdAt", instant));
 
         assertEquals("{\"createdAt\":\"2026-07-20T00:00:00Z\"}", json);
-        assertEquals(instant, mapper.readTree(json).path("createdAt").traverse(mapper)
-                .readValueAs(Instant.class));
+        assertEquals(instant, mapper.treeToValue(mapper.readTree(json).path("createdAt"), Instant.class));
     }
 }

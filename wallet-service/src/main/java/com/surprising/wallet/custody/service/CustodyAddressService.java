@@ -1,8 +1,8 @@
 package com.surprising.wallet.custody.service;
 
 import com.surprising.wallet.custody.model.PageView;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.custody.repository.CustodyRepository.AddressRecord;
@@ -306,7 +306,7 @@ public class CustodyAddressService {
     private Map<String, Object> readMetadata(String json) {
         try {
             return objectMapper.readValue(json, Map.class);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored address metadata is invalid", e);
         }
     }
@@ -327,7 +327,7 @@ public class CustodyAddressService {
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("value cannot be serialized as JSON", e);
         }
     }

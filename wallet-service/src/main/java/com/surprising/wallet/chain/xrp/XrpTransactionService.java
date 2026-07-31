@@ -1,6 +1,6 @@
 package com.surprising.wallet.chain.xrp;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.google.common.primitives.UnsignedInteger;
 import com.google.common.primitives.UnsignedLong;
 import com.surprising.wallet.common.chain.AccountChainProfile;

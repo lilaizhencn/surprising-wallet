@@ -1,8 +1,9 @@
 package com.surprising.wallet.chain.hypercore;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.config.ChainRpcNodeService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
@@ -106,7 +107,7 @@ class HyperCoreApiClient {
                     .getNetwork();
             return rpcNodeService.withFailover(CHAIN, network, purpose,
                     node -> execute(path, requestBody, node.getRpcUrl(), node));
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("HyperCore request serialization failed", e);
         }
     }

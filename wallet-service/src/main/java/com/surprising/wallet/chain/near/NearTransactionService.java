@@ -1,8 +1,9 @@
 package com.surprising.wallet.chain.near;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.HotWalletRules;
@@ -437,7 +438,7 @@ class NearTransactionService {
     private byte[] jsonBytes(JsonNode json) {
         try {
             return objectMapper.writeValueAsBytes(json);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("NEAR JSON serialization failed", e);
         }
     }

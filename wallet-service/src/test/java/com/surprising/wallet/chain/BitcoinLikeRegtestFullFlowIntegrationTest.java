@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.ChainType;

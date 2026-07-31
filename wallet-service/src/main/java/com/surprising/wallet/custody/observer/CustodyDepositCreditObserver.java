@@ -1,7 +1,7 @@
 package com.surprising.wallet.custody.observer;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.deposit.observer.DepositCreditObserver;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -276,7 +276,7 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("failed to serialize custody deposit event", e);
         }
     }

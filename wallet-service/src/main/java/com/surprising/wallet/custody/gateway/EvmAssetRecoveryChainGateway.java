@@ -1,7 +1,7 @@
 package com.surprising.wallet.custody.gateway;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.TokenDefinition;
@@ -293,7 +293,7 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("failed to serialize recovery verification", e);
         }
     }

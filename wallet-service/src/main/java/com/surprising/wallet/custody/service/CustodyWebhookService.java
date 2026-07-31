@@ -1,8 +1,8 @@
 package com.surprising.wallet.custody.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.custody.repository.CustodyRepository.WebhookEndpointRecord;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -139,7 +139,7 @@ public class CustodyWebhookService {
             if (!challenge.equals(response.path("challenge").asText())) {
                 throw new IllegalStateException("webhook verification response did not echo the challenge");
             }
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("webhook verification response must be valid JSON", e);
         }
         repository.markWebhookVerified(principal.tenantId(), endpointId);
@@ -307,7 +307,7 @@ public class CustodyWebhookService {
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("failed to serialize webhook payload", e);
         }
     }
