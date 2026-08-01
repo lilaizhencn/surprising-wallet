@@ -34,7 +34,6 @@ import com.surprising.wallet.config.PubKeyConfig;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import com.surprising.wallet.wallet.service.AddressService;
 import com.surprising.wallet.wallet.service.TransactionService;
-import org.apache.commons.collections4.CollectionUtils;
 import org.bitcoinj.base.LegacyAddress;
 import org.bitcoinj.base.exceptions.AddressFormatException;
 import org.bitcoinj.core.NetworkParameters;
@@ -306,10 +305,10 @@ class BitcoinLikeChainRuntime {
                         return List.<UtxoTransaction>of();
                     }
                 })
-                .filter(utxos -> !CollectionUtils.isEmpty(utxos))
+                .filter(utxos -> utxos != null && !utxos.isEmpty())
                 .collect(LinkedList::new, LinkedList::addAll, LinkedList::addAll);
         results.forEach(utxo -> utxo.setBlockHash(hash));
-        if (CollectionUtils.isEmpty(results)) {
+        if (results.isEmpty()) {
             return List.of();
         }
         persistScannedUtxos(chainType, results);
@@ -488,7 +487,7 @@ class BitcoinLikeChainRuntime {
     private List<UtxoTransaction> getUtxos(
             ChainType chainType, String txid, long height, long bestHeight, AssetRuntimeMetadata asset) {
         BtcLikeRawTransaction rawTransaction = getRawTransaction(chainType, txid);
-        if (rawTransaction == null || CollectionUtils.isEmpty(rawTransaction.getVout())) {
+        if (rawTransaction == null || rawTransaction.getVout() == null || rawTransaction.getVout().isEmpty()) {
             return List.of();
         }
         return rawTransaction.getVout().parallelStream()
@@ -536,13 +535,13 @@ class BitcoinLikeChainRuntime {
         if (pubKey == null) {
             return null;
         }
-        if (chainType == ChainType.BCH && !CollectionUtils.isEmpty(pubKey.getCashAddrs())) {
+        if (chainType == ChainType.BCH && pubKey.getCashAddrs() != null && !pubKey.getCashAddrs().isEmpty()) {
             return pubKey.getCashAddrs().get(0);
         }
         if (StringUtils.hasText(pubKey.getAddress())) {
             return pubKey.getAddress();
         }
-        if (!CollectionUtils.isEmpty(pubKey.getAddresses())) {
+        if (pubKey.getAddresses() != null && !pubKey.getAddresses().isEmpty()) {
             return pubKey.getAddresses().get(0);
         }
         return null;

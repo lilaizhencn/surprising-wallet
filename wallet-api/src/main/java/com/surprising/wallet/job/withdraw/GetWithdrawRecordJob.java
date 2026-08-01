@@ -5,7 +5,6 @@ import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.wallet.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -48,7 +47,7 @@ public class GetWithdrawRecordJob {
         try {
             long count = 100L;
             List<String> withdrawStr = redis.opsForList().range(key, 0L, count);
-            if (!CollectionUtils.isEmpty(withdrawStr)) {
+            if (withdrawStr != null && !withdrawStr.isEmpty()) {
                 Set<WithdrawRecord> withdrawRecordSet = withdrawStr.parallelStream().map(str -> {
                     WithdrawRecord withdrawRecord = JacksonJson.readValue(objectMapper, str, WithdrawRecord.class);
                     log.info("打印提现请求:{}", withdrawRecord);

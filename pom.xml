@@ -38,21 +38,13 @@
         <trident.protobuf.version>3.25.8</trident.protobuf.version>
         <grpc.version>1.82.1</grpc.version>
         <guava.version>32.0.1-android</guava.version>
+        <jsr305.version>3.0.2</jsr305.version>
         <spongycastle.version>1.58.0.0</spongycastle.version>
         <bouncycastle.version>1.84</bouncycastle.version>
-        <scrypt.version>1.4.0</scrypt.version>
         <bitcoinj.version>0.17.1</bitcoinj.version>
-        <config.version>1.4.9</config.version>
         <okhttp.version>4.0.1</okhttp.version>
-        <retrofit.version>2.6.1</retrofit.version>
         <jsonrpc4j.version>1.7</jsonrpc4j.version>
-        <commons-text.version>1.15.0</commons-text.version>
-        <commons-io.version>2.22.0</commons-io.version>
-        <commons-collections4.version>4.5.0</commons-collections4.version>
-        <disruptor.version>3.4.2</disruptor.version>
-        <zxing.version>3.5.4</zxing.version>
         <web3j.version>6.0.0</web3j.version>
-        <legacy-janino.version>2.5.10</legacy-janino.version>
         <trident.version>0.11.0</trident.version>
         <solanaj.version>1.28.0</solanaj.version>
         <ton4j.version>2.1.0</ton4j.version>
@@ -96,6 +88,11 @@
                 <version>${guava.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.google.code.findbugs</groupId>
+                <artifactId>jsr305</artifactId>
+                <version>${jsr305.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>com.madgag.spongycastle</groupId>
                 <artifactId>core</artifactId>
                 <version>${spongycastle.version}</version>
@@ -111,11 +108,6 @@
                 <version>${bouncycastle.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.lambdaworks</groupId>
-                <artifactId>scrypt</artifactId>
-                <version>${scrypt.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>org.bitcoinj</groupId>
                 <artifactId>bitcoinj-core</artifactId>
                 <version>${bitcoinj.version}</version>
@@ -128,12 +120,7 @@
             <dependency>
                 <groupId>com.google.protobuf</groupId>
                 <artifactId>protobuf-java-util</artifactId>
-                <version>${protobuf.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.typesafe</groupId>
-                <artifactId>config</artifactId>
-                <version>${config.version}</version>
+                <version>${trident.protobuf.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.squareup.okhttp3</groupId>
@@ -141,39 +128,9 @@
                 <version>${okhttp.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.squareup.retrofit2</groupId>
-                <artifactId>retrofit</artifactId>
-                <version>${retrofit.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>com.github.briandilley.jsonrpc4j</groupId>
                 <artifactId>jsonrpc4j</artifactId>
                 <version>${jsonrpc4j.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.commons</groupId>
-                <artifactId>commons-text</artifactId>
-                <version>${commons-text.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>commons-io</groupId>
-                <artifactId>commons-io</artifactId>
-                <version>${commons-io.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.apache.commons</groupId>
-                <artifactId>commons-collections4</artifactId>
-                <version>${commons-collections4.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.lmax</groupId>
-                <artifactId>disruptor</artifactId>
-                <version>${disruptor.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.google.zxing</groupId>
-                <artifactId>javase</artifactId>
-                <version>${zxing.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.web3j</groupId>
@@ -191,9 +148,9 @@
                 <version>${web3j.version}</version>
             </dependency>
             <dependency>
-                <groupId>janino</groupId>
-                <artifactId>janino</artifactId>
-                <version>${legacy-janino.version}</version>
+                <groupId>org.web3j</groupId>
+                <artifactId>utils</artifactId>
+                <version>${web3j.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.tronprotocol</groupId>
@@ -216,13 +173,33 @@
                 <version>${xrpl4j.version}</version>
             </dependency>
             <dependency>
+                <groupId>org.xrpl</groupId>
+                <artifactId>xrpl4j-core</artifactId>
+                <version>${xrpl4j.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>com.bloxbean.cardano</groupId>
-                <artifactId>cardano-client-lib</artifactId>
+                <artifactId>cardano-client-function</artifactId>
+                <version>${cardano-client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bloxbean.cardano</groupId>
+                <artifactId>cardano-client-quicktx</artifactId>
+                <version>${cardano-client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bloxbean.cardano</groupId>
+                <artifactId>cardano-client-backend</artifactId>
                 <version>${cardano-client.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.bloxbean.cardano</groupId>
                 <artifactId>cardano-client-backend-blockfrost</artifactId>
+                <version>${cardano-client.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.bloxbean.cardano</groupId>
+                <artifactId>cardano-client-transaction-spec</artifactId>
                 <version>${cardano-client.version}</version>
             </dependency>
             <dependency>

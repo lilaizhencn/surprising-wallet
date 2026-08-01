@@ -6,7 +6,6 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.wallet.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -48,7 +47,7 @@ public class BroadCastSignedTxJob {
         String key = Constants.WALLET_WITHDRAW_SIG_DONE_KEY;
         try {
             List<String> withdrawStr = redis.opsForList().range(key, 0L, COUNT);
-            if (!CollectionUtils.isEmpty(withdrawStr)) {
+            if (withdrawStr != null && !withdrawStr.isEmpty()) {
                 log.info("广播交易开始 待广播数量:{}", withdrawStr.size());
                 java.util.ArrayList<String> retry = new java.util.ArrayList<>();
                 withdrawStr.forEach(str -> {

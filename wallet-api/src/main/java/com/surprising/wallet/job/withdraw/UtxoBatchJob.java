@@ -14,7 +14,6 @@ import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import tools.jackson.databind.ObjectMapper;
@@ -76,7 +75,7 @@ abstract public class UtxoBatchJob {
             while (true) {
                 List<WithdrawalOrderRecord> orders =
                         chainJdbcRepository.listWithdrawalsForSigning(chain, chain, COUNT);
-                if (CollectionUtils.isEmpty(orders)) {
+                if (orders == null || orders.isEmpty()) {
                     break;
                 }
                 List<WithdrawRecord> records = orders.stream()
@@ -148,7 +147,7 @@ abstract public class UtxoBatchJob {
         while (true) {
             List<UtxoTransaction> tmps = listCandidateUtxos(
                     tenantId, depositConfirmationThreshold, size, offset);
-            if (CollectionUtils.isEmpty(tmps)) {
+            if (tmps == null || tmps.isEmpty()) {
                 log.error("构建交易失败 钱包余额不足");
                 return null;
             }
