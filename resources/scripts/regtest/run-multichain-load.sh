@@ -44,7 +44,7 @@ SW_TEST_CUSTODY_DB_URL="$LOAD_DB_URL" \
 SW_TEST_CUSTODY_DB_USERNAME="$REGTEST_PG_USER" \
 SW_TEST_CUSTODY_DB_PASSWORD="$REGTEST_PG_PASSWORD" \
 mvn -f "$LOAD_BUILD_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-server -am \
+  -pl wallet-api -am \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dtest=CustodyMultiChainLoadIntegrationTest \
   -Dcustody.load.enabled=true \
@@ -53,7 +53,7 @@ mvn -f "$LOAD_BUILD_ROOT/pom.xml" \
   -Dcustody.load.webhookWorkers="$LOAD_WEBHOOK_WORKERS" \
   test
 
-report="$LOAD_BUILD_ROOT/backendservices/wallet-parent/wallet-server/target/multi-chain-load-report.properties"
+report="$LOAD_BUILD_ROOT/wallet-api/target/multi-chain-load-report.properties"
 if [[ ! -s "$report" ]]; then
   printf 'multi-chain load report was not generated: %s\n' "$report" >&2
   exit 1

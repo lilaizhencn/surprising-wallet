@@ -149,7 +149,7 @@ for attempt in $(seq 1 60); do
 done
 
 mvn -f "$CARDANO_FLOW_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-service -am \
+  -pl wallet-api -am \
   -Dtest=CardanoAddressGenerationTest,CardanoAssetUnitTest,CardanoBackendClientTest,CardanoDepositScannerTest,CardanoDevnetFullFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dcardano.devnet.flow.enabled=true \

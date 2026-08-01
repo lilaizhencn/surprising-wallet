@@ -86,12 +86,12 @@ for attempt in $(seq 1 90); do
 done
 
 mvn -f "$NEAR_FLOW_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-service -am \
+  -pl wallet-api -am \
   -Dtest=NearAddressGenerationTest,NearDepositScannerTest,NearRpcClientTest,NearTransactionSignerTest,NearSandboxFullFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dnear.sandbox.flow.enabled=true \
   -Dnear.sandbox.rpc="http://127.0.0.1:${NEAR_FLOW_RPC_PORT}" \
-  -Dnear.nep141.wasm="$NEAR_FLOW_ROOT/backendservices/wallet-parent/wallet-server/src/main/resources/contracts/near/artifacts/TokDouNep141.wasm" \
+  -Dnear.nep141.wasm="$NEAR_FLOW_ROOT/wallet-api/src/main/resources/contracts/near/artifacts/TokDouNep141.wasm" \
   -Dnear.db.url="$NEAR_FLOW_DB_URL" \
   -Dnear.db.user="$REGTEST_PG_USER" \
   -Dnear.db.password="$REGTEST_PG_PASSWORD" \

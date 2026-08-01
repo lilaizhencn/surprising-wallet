@@ -179,7 +179,7 @@ run_asset_test() {
   APTOS_FA_SYMBOL="$symbol" \
   APTOS_FA_METADATA="$metadata" \
   mvn -q -f "$APTOS_FLOW_ROOT/pom.xml" \
-    -pl backendservices/wallet-parent/wallet-service -am \
+    -pl wallet-api -am \
     -Dtest=AptosLiveFungibleAssetFlowIntegrationTest \
     -Dsurefire.failIfNoSpecifiedTests=false \
     -Daptos.fa.live.enabled=true test
@@ -192,7 +192,7 @@ APTOS_RPC_URL=http://127.0.0.1:8080/v1 \
 APTOS_FAUCET_URL=http://127.0.0.1:18081 \
 SW_ED25519_SEED="$APTOS_TEST_MASTER_SEED" \
 mvn -q -f "$APTOS_FLOW_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-service -am \
+  -pl wallet-api -am \
   -Dtest=AptosLiveNativeFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Daptos.live.enabled=true test

@@ -228,7 +228,7 @@ SQL
     npm --prefix "$EVM_MATRIX_BUILD_ROOT/resources/infra/evm-fork" run deploy:mock >/dev/null
 
   mvn -q -f "$EVM_MATRIX_BUILD_ROOT/pom.xml" \
-    -pl wallet-service -am \
+    -pl wallet-api -am \
     -Dtest=EvmForkFullChainIntegrationTest,EvmForkMultiUserBusinessFlowIntegrationTest \
     -Dsurefire.failIfNoSpecifiedTests=false \
     -Devm.fork.enabled=true \

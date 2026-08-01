@@ -79,7 +79,7 @@ join_by_comma() {
 }
 
 mvn_wallet_test() {
-  (cd "${ROOT_DIR}" && mvn -pl backendservices/wallet-parent/wallet-service -am "$@")
+  (cd "${ROOT_DIR}" && mvn -pl wallet-api -am "$@")
 }
 
 matrix() {

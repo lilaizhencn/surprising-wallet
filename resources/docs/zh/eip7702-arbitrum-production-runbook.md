@@ -28,7 +28,7 @@ deployment JSON。生产 admin 使用多签并与 Relayer 分离。
 官方 RPC：
 
 ```bash
-mvn -pl wallet-service -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702RpcCapabilityIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.rpc-capability.enabled=true \
@@ -40,7 +40,7 @@ mvn -pl wallet-service -am \
 项目 PublicNode：
 
 ```bash
-mvn -pl wallet-service -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702RpcCapabilityIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.rpc-capability.enabled=true \
@@ -95,7 +95,7 @@ runtime code hash。
 ## 4. 真实 type-4 和生产路径
 
 ```bash
-mvn -pl wallet-service -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702Type4IntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.enabled=true \

@@ -71,13 +71,13 @@ rsync -a \
   "$APTOS_SAAS_SOURCE_ROOT/" "$APTOS_SAAS_BUILD_ROOT/"
 
 mvn -q -f "$APTOS_SAAS_BUILD_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-server -am \
+  -pl wallet-api -am \
   -Dmaven.test.skip=true package
 APTOS_SAAS_WALLET_JAR=$(find \
-  "$APTOS_SAAS_BUILD_ROOT/backendservices/wallet-parent/wallet-server/target" \
-  -maxdepth 1 -type f -name 'wallet-server-*.jar' ! -name '*.original' | head -1)
+  "$APTOS_SAAS_BUILD_ROOT/wallet-api/target" \
+  -maxdepth 1 -type f -name 'wallet-api-*.jar' ! -name '*.original' | head -1)
 if [[ -z "$APTOS_SAAS_WALLET_JAR" ]]; then
-  printf 'wallet-server jar was not produced\n' >&2
+  printf 'wallet-api jar was not produced\n' >&2
   exit 1
 fi
 

@@ -90,7 +90,7 @@ npm run deploy:7702
 
 ```bash
 cd ..
-mvn -pl :wallet-service -am \
+mvn -pl :wallet-api -am \
   -Dtest=Evm7702Type4IntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.enabled=true \
@@ -425,7 +425,7 @@ npm run compile
 npm run test:7702
 
 cd ..
-mvn -pl :wallet-service -am test
+mvn -pl :wallet-api -am test
 mvn -pl :wallet-api -am test
 git diff --check
 ```

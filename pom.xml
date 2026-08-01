@@ -66,12 +66,6 @@
                 <artifactId>common</artifactId>
                 <version>${surprising.version}</version>
             </dependency>
-            <dependency>
-                <groupId>com.surprising</groupId>
-                <artifactId>wallet-service</artifactId>
-                <version>${surprising.version}</version>
-            </dependency>
-
             <!-- gRPC version alignment for generated TRON clients and Trident -->
             <dependency>
                 <groupId>io.grpc</groupId>
@@ -307,7 +301,6 @@
         <module>chain-sdks</module>
         <module>wallet-sig1</module>
         <module>wallet-sig2</module>
-        <module>wallet-service</module>
         <module>wallet-api</module>
     </modules>
 </project>

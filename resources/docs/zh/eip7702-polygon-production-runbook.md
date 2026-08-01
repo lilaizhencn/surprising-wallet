@@ -29,7 +29,7 @@ batch、item 和账本必须全部带同一个 `tenant_id`。
 对项目当前 Amoy RPC 执行：
 
 ```bash
-mvn -pl wallet-service -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702RpcCapabilityIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.rpc-capability.enabled=true \
@@ -76,7 +76,7 @@ EVM_VERIFY_RPC_URL=http://127.0.0.1:8545 npm run verify:7702
 在仓库根目录依次执行：
 
 ```bash
-mvn -pl wallet-service -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702Type4IntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.enabled=true \

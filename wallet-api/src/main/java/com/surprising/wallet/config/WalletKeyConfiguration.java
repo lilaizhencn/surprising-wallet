@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * wallet-server 模块的密钥 Spring 配置。
+ * wallet-api 应用的密钥 Spring 配置。
  *
  * <p>从 Spring 配置加载四个根 Seed，并创建 WALLET_SERVER 模式的
  * {@link WalletKeyMaterialProvider}，供地址派生、签名等业务使用。

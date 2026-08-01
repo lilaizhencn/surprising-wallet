@@ -104,7 +104,7 @@ SUI_CLIENT_CONFIG="$SUI_FLOW_TMP/network/client.yaml" \
 SUI_MOCK_PACKAGE_ID="$SUI_FLOW_PACKAGE" \
 SUI_MOCK_TREASURY_ID="$SUI_FLOW_TREASURY" \
 mvn -f "$SUI_FLOW_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-service -am \
+  -pl wallet-api -am \
   -Dtest=SuiPtbTransactionBuilderTest,SuiGrpcReadIntegrationTest,SuiDatabaseFlowIntegrationTest,SuiLiveNativeFlowIntegrationTest,SuiLiveTokenFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dsui.db.enabled=true \

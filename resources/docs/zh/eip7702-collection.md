@@ -520,7 +520,7 @@ CREATE UNIQUE INDEX evm_7702_config_one_enabled_version
 不要给所有 `family=evm` 的链自动插入 ACTIVE 配置。先用 SHADOW 验证当前网络和全部 RPC 节点确实支持 Type-4
 查询、估算、广播和 Receipt。
 
-在 `wallet-service` 增加：
+在 `wallet-api` 内部增加：
 
 ```text
 com.surprising.wallet.service.chain.evm.Evm7702ConfigRepository
@@ -958,7 +958,7 @@ settleGasUsage(UUID tenantId, String operationType, UUID operationId,
 
 ### 第 7 步：增加 7702 签名、组包和回执解析服务
 
-在 `wallet-service/src/main/java/com/surprising/wallet/service/chain/evm/` 增加：
+在 `wallet-api/src/main/java/com/surprising/wallet/chain/evm/` 增加：
 
 ```text
 Evm7702AuthorizationService.java   # 为尚未委托或版本变化的地址签 authorization
@@ -1207,17 +1207,17 @@ npx hardhat test test/Eip7702Collection.test.js
 新增测试建议与执行命令：
 
 ```text
-wallet-service/.../evm/Evm7702AuthorizationServiceTest.java
-wallet-service/.../evm/Evm7702OperationSignerTest.java
-wallet-service/.../evm/Evm7702BatchTransactionServiceTest.java
-wallet-service/.../evm/Evm7702ReceiptParserTest.java
+wallet-api/.../chain/evm/Evm7702AuthorizationServiceTest.java
+wallet-api/.../chain/evm/Evm7702OperationSignerTest.java
+wallet-api/.../chain/evm/Evm7702BatchTransactionServiceTest.java
+wallet-api/.../chain/evm/Evm7702ReceiptParserTest.java
 wallet-api/.../account/Evm7702CollectionWorkflowServiceTest.java
 wallet-api/.../custody/CustodyGasServiceTest.java
 wallet-api/.../custody/CustodyOperationsIntegrationTest.java
 ```
 
 ```bash
-mvn -pl wallet-service -am test
+mvn -pl wallet-api -am test
 mvn -pl wallet-api -am test
 ```
 
@@ -1375,7 +1375,7 @@ type-4 `authorizationList`，同一笔外层交易先设置 delegation，再调�
 
 1. `resources/infra/resources/infra/evm-fork/contracts/Eip7702Collection.sol`、部署脚本、合约测试和部署说明。
 2. `..b/surprising-wallet-init-pgsql.sql`：配置、account 投影、batch/item/attempt、Gas usage 目标结构。
-3. `wallet-service`：配置仓储、authorization、EIP-712、type-4、receipt parser 与单元测试。
+3. `wallet-api` 内部业务层：配置仓储、authorization、EIP-712、type-4、receipt parser 与单元测试。
 4. `wallet-api`：批次 Repository、Workflow、Gas 通用化、状态恢复与集成测试。
 5. `AccountChainWorkflowService`：EVM ERC-20 ACTIVE 路由切换；删除不再使用的逐条 token 归集分支，而不是保留双实现。
 6. 管理 API、租户查询 API、Console 批次详情与审计。

@@ -52,7 +52,7 @@ HYPERCORE_DB_URL="$(local_pg_jdbc_url "$HYPERCORE_DB")" \
 HYPERCORE_DB_USER="$REGTEST_PG_USER" \
 HYPERCORE_DB_PASSWORD="$REGTEST_PG_PASSWORD" \
 mvn -f "$HYPERCORE_BUILD_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-service -am \
+  -pl wallet-api -am \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dtest=HyperCoreLocalFullFlowIntegrationTest,HyperCoreSignerTest \
   -Dhypercore.local.flow.enabled=true \

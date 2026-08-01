@@ -592,7 +592,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         Path current = Path.of("").toAbsolutePath();
         while (current != null) {
             if (Files.exists(current.resolve("pom.xml"))
-                    && Files.exists(current.resolve("wallet-service"))
+                    && Files.exists(current.resolve("wallet-api"))
                     && Files.exists(current.resolve("common"))) {
                 return current;
             }

@@ -34,7 +34,7 @@ Token 或本项目配置已经可生产使用。
 在仓库根目录对 BSC Testnet 官方 RPC 执行无状态 estimate 门禁：
 
 ```bash
-mvn -pl wallet-service -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702RpcCapabilityIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.rpc-capability.enabled=true \
@@ -97,7 +97,7 @@ EVM_VERIFY_RPC_URL=http://127.0.0.1:8545 npm run verify:7702
 回到仓库根目录，把部署 JSON 中地址代入：
 
 ```bash
-mvn -pl wallet-service -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702Type4IntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.enabled=true \

@@ -169,7 +169,7 @@ run_chain() {
 
   (
     cd "${ROOT_DIR}"
-    mvn -q -pl backendservices/wallet-parent/wallet-service \
+    mvn -q -pl wallet-api \
       -Dtest=com.surprising.wallet.service.chain.evm.EvmForkFullChainIntegrationTest \
       -Devm.fork.enabled=true \
       -Devm.fork.chain="${chain}" \
@@ -182,7 +182,7 @@ run_chain() {
   if [[ "${RUN_MULTIUSER:-false}" == "true" ]]; then
     (
       cd "${ROOT_DIR}"
-      mvn -q -pl backendservices/wallet-parent/wallet-service \
+      mvn -q -pl wallet-api \
         -Dtest=com.surprising.wallet.service.chain.evm.EvmForkMultiUserBusinessFlowIntegrationTest \
         -Devm.multiuser.enabled=true \
         -Devm.fork.chain="${chain}" \

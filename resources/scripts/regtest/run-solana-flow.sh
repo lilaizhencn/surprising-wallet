@@ -69,7 +69,7 @@ SOLANA_DB_USER="$REGTEST_PG_USER" \
 SOLANA_DB_PASSWORD="$REGTEST_PG_PASSWORD" \
 SOLANA_RPC_URL="http://127.0.0.1:${SOLANA_FLOW_RPC_PORT}" \
 mvn -f "$SOLANA_FLOW_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-service -am \
+  -pl wallet-api -am \
   -Dtest=SolanaDatabaseFlowIntegrationTest,SolanaDevnetLiveFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dsolana.db.enabled=true \

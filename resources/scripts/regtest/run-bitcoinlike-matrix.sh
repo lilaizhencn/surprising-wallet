@@ -88,7 +88,7 @@ for chain in "${UTXO_CHAINS[@]}"; do
   BITCOINLIKE_REGTEST_DB_USER="$REGTEST_PG_USER" \
   BITCOINLIKE_REGTEST_DB_PASSWORD="$REGTEST_PG_PASSWORD" \
   mvn -q -f "$UTXO_MATRIX_ROOT/pom.xml" \
-    -pl backendservices/wallet-parent/wallet-service -am \
+    -pl wallet-api -am \
     -Dtest=BitcoinLikeRegtestFullFlowIntegrationTest \
     -Dsurefire.failIfNoSpecifiedTests=false \
     -Dbitcoinlike.regtest.enabled=true \

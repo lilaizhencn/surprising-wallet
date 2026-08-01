@@ -34,17 +34,12 @@
   <!-- ====== 第二层：应用服务 ====== -->
   <text x="30" y="180" class="sep"> 应用服务</text>
 
-  <rect x="30"  y="194" width="320" height="100" class="svc"/>
-  <text x="190" y="222" text-anchor="middle" class="label">wallet-api</text>
-  <text x="190" y="244" text-anchor="middle" class="desc">REST · Servlet / Cookie · HTTP 映射</text>
-  <text x="190" y="262" text-anchor="middle" class="desc">按链周期扫描 · 提现批处理 · 归集协调</text>
-  <text x="190" y="280" text-anchor="middle" class="desc">EIP-7702 · Webhook · Gas 对账</text>
-
-  <rect x="375" y="194" width="320" height="100" class="svc"/>
-  <text x="535" y="222" text-anchor="middle" class="label">wallet-service</text>
-  <text x="535" y="244" text-anchor="middle" class="desc">领域/持久化模型 · 链适配器 · 账本</text>
-  <text x="535" y="262" text-anchor="middle" class="desc">UTXO 选择 · Gas 估算 · 归集</text>
-  <text x="535" y="280" text-anchor="middle" class="desc">27 条链，14 个链族</text>
+  <rect x="30"  y="194" width="665" height="118" class="svc"/>
+  <text x="362" y="219" text-anchor="middle" class="label">wallet-api · Spring MVC 单体应用</text>
+  <text x="362" y="241" text-anchor="middle" class="desc">Web：Controller · Job · Config · Exception · Filter · Model</text>
+  <text x="362" y="259" text-anchor="middle" class="desc">Application：Service · Workflow · 调度编排</text>
+  <text x="362" y="277" text-anchor="middle" class="desc">Domain/Infrastructure：Chain · Repository · Gateway · Coordinator</text>
+  <text x="362" y="295" text-anchor="middle" class="desc">REST · 充值/提现/归集 · EIP-7702 · Webhook · Gas 对账</text>
 
   <rect x="720" y="194" width="340" height="100" class="svc"/>
   <text x="890" y="222" text-anchor="middle" class="label">wallet-sig1 · wallet-sig2</text>
@@ -53,10 +48,8 @@
   <text x="890" y="280" text-anchor="middle" class="desc">ETH/ERC20/TRON 最终签名与广播</text>
 
   <!-- providers → consumers -->
-  <line x1="250" y1="109" x2="230" y2="109" class="arrow"/>
-  <line x1="130" y1="148" x2="455" y2="194" class="arrow"/>
-  <line x1="350" y1="148" x2="535" y2="194" class="arrow"/>
-  <line x1="535" y1="194" x2="270" y2="194" class="arrow"/>
+  <line x1="130" y1="148" x2="270" y2="194" class="arrow"/>
+  <line x1="350" y1="148" x2="470" y2="194" class="arrow"/>
   <line x1="130" y1="148" x2="810" y2="194" class="arrow"/>
   <line x1="350" y1="148" x2="890" y2="194" class="arrow"/>
 
@@ -200,5 +193,5 @@
   <text x="985" y="600" text-anchor="middle" class="desc">Node.js Runtime 桥接</text>
 
   <!-- 底部 -->
-  <text x="550" y="648" text-anchor="middle" class="desc" fill="#94a3b8" font-size="11">surprising-wallet — 6 Java 模块 · Java 25 · Spring Boot 4.1 · 27 条链 · 14 个链族</text>
+  <text x="550" y="648" text-anchor="middle" class="desc" fill="#94a3b8" font-size="11">surprising-wallet — 5 Java 模块 · Java 25 · Spring Boot 4.1 · 27 条链 · 14 个链族</text>
 </svg>

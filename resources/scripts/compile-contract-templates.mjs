@@ -10,9 +10,8 @@ const evmSolc = require("solc");
 const tronSolc = require("solc-0-8-19");
 const contractsRoot = path.join(
   root,
-  "backendservices",
-  "wallet-parent",
-  "wallet-server",
+  "..",
+  "wallet-api",
   "src",
   "main",
   "resources",

@@ -183,7 +183,7 @@ TON_DB_USER="$REGTEST_PG_USER" \
 TON_DB_PASSWORD="$REGTEST_PG_PASSWORD" \
 TON_RPC_URL="$TON_FLOW_RPC_URL" \
 mvn -f "$TON_FLOW_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-service -am \
+  -pl wallet-api -am \
   -Dtest=TonCenterClientTest,TonDatabaseFlowIntegrationTest,TonLocalFundingIntegrationTest,TonLiveMockJettonFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dton.db.enabled=true \

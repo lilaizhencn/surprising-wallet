@@ -10,7 +10,6 @@ on:
       - chain-sdks/**
       - wallet-sig1/**
       - wallet-sig2/**
-      - wallet-service/**
       - wallet-api/**
       - resources/docs/db/**
       - resources/infra/systemd/surprising-wallet.service

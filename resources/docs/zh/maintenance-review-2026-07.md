@@ -19,7 +19,7 @@
 
 | 优先级 | 发现 | 影响 | 建议 |
 |---|---|---|---|
-| P0 | `UtxoBatchJob` 位于 `wallet-api`，但包含选币、锁 UTXO、计算手续费、创建交易和状态推进 | 违反薄 Job 边界，难以单测和复用 | 将主体迁入 `wallet-service` 的 UTXO 工作流服务，Job 只保留 `service.run(chain)` |
+| P0 | `UtxoBatchJob` 位于 `wallet-api`，但包含选币、锁 UTXO、计算手续费、创建交易和状态推进 | 违反薄 Job 边界，难以单测和复用 | 将主体迁入 `wallet-api` 内部的 UTXO 工作流服务，Job 只保留 `service.run(chain)` |
 | P0 | `AccountChainWorkflowService` 同时编排十余条链，接近单体链路由器 | 新增链或修改一条链容易影响其他链 | 按 family 建立 `AccountChainHandler` 注册表，工作流只做遍历、开关和错误隔离 |
 | P0 | `ChainJdbcRepository` 聚合配置、充值、提现、UTXO、地址和 checkpoint 等多类数据访问 | 修改 SQL 的影响范围过大，审查困难 | 按领域拆为 `ChainProfileRepository`、`DepositRepository`、`WithdrawalRepository`、`UtxoRepository`、`ScanCheckpointRepository` |
 | P1 | 部分链服务通过可选注入运行时开关，非 Spring 构造路径可能绕过底层校验 | 安全边界依赖调用方自律 | 保留工作流入口硬校验，逐步将链网关改为必须注入或只暴露包内方法 |
@@ -44,7 +44,7 @@
 
 ## 推荐优化顺序
 
-1. 将 `UtxoBatchJob` 业务逻辑迁入 `wallet-service`，消除当前最明确的分层违规。
+1. 将 `UtxoBatchJob` 业务逻辑迁入 `wallet-api` 内部业务服务，消除当前最明确的分层违规。
 2. 拆分 `ChainJdbcRepository`，优先拆充值和扫描 checkpoint，再拆提现/UTXO。
 3. 为账户链建立 handler 注册表，移除中心服务中的大型 `switch`。
 4. 统一状态枚举、任务开关判定入口和审计事件模型。

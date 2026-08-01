@@ -109,7 +109,7 @@ usdt_contract=$(jq -r '.usdtContract' "$TRON_FLOW_RUNTIME_DIR/contracts.json")
 usdc_contract=$(jq -r '.usdcContract' "$TRON_FLOW_RUNTIME_DIR/contracts.json")
 
 TRON_LOCAL_SOURCE_KEY="$source_private_key" mvn -f "$TRON_FLOW_BUILD_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-service -am \
+  -pl wallet-api -am \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dtest=Trc20AbiEncodingTest,TronAddressCodecTest,TronAddressGenerationTest,TronGasEstimatorTest,TronLedgerIdempotencyTest,TronScannerTest,TronTridentKeyFactoryTest,TronWaitingGasStateTest,TronLiveFullFlowIntegrationTest \
   -Dtron.live.flow.enabled=true \
@@ -125,7 +125,7 @@ TRON_LOCAL_SOURCE_KEY="$source_private_key" mvn -f "$TRON_FLOW_BUILD_ROOT/pom.xm
   test
 
 mvn -f "$TRON_FLOW_BUILD_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-service -am \
+  -pl wallet-api -am \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dtest=TronTrxDepositScanIntegrationTest,TronTrxWithdrawIntegrationTest,Trc20DepositScanIntegrationTest,Trc20WithdrawIntegrationTest,Trc20CollectionIntegrationTest,TronGasTopupIntegrationTest \
   -Dtron.db.url="$TRON_FLOW_DB_URL" \

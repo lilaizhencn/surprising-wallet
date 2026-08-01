@@ -10,45 +10,33 @@ Surprising Wallet 涉及链上资产和钱包账户，所有改动必须保守�
 
 ## 模块职责与分层约束
 
-### wallet-api（功能入口，薄层）
+### wallet-api（Spring MVC 单体应用）
 
-只放以下内容，**不放 Service 和 Repository**：
+`wallet-api` 是唯一承载钱包业务的 Spring Boot MVC 应用，合并原 `wallet-service` 的业务、领域、数据访问和链集成代码。
+合并不改变原 API Web 层职责：Controller、Job 和 Web 配置仍是应用入口与调度入口，业务逻辑通过内部 Service 委托完成。
 
-| 允许 | 说明 | 示例 |
+| 层次 | 职责与约束 | 典型位置 |
 |---|---|---|
-| `controller/` | REST API 入口，纯参数校验 + 委托 | `custody/controller/api/` `console/` `platform/` |
-| `job/` | `@Scheduled` 定时任务入口，纯调度编排，实际逻辑调 service | `job/deposit/` `job/withdraw/` `job/custody/` `job/collection/` |
-| `config/` | Web / Jackson / 安全等应用级配置 | `config/custody/` `config/eip7702/` |
-| `exception/` | Web 层异常 + `@ControllerAdvice` | `CustodyExceptionHandler` |
-| `filter/` | 认证过滤器 | `CustodyApiAuthenticationFilter` |
-| `model/` | Web 层 DTO / 请求响应 / 工具类 | `CachedBodyHttpServletRequest` |
+| Web 层 | REST 参数校验、委托、HTTP 异常映射、认证过滤和 Web DTO；保持原有 Controller/Job 行为 | `custody/controller/**`、`job/**`、`custody/exception/**`、`custody/filter/**`、Web `model/**` |
+| 应用层 | 业务用例、工作流编排、运行时开关和定时任务实际调用的 Service | `account/service/**`、`custody/service/**`、`deposit/**`、`wallet/service/**` |
+| 领域与链集成层 | 领域模型、链适配器、RPC 客户端、链上协调器和观察者 | `chain/**`、`account/coordinator/**`、`custody/gateway/**`、`custody/observer/**`、业务 `model/**` |
+| 持久化层 | PostgreSQL/JDBC 仓储、账本和链配置数据访问 | `account/repository/**`、`custody/repository/**`、`deposit/repository/**` |
+| 应用配置层 | Web、安全、Jackson、数据源、链 RPC 和钱包运行时配置 | `config/**` |
 
-**不允许**：`service/`、`repository/`、`@Repository`、业务逻辑、领域模型、网关、观察者。
-
-### wallet-service（业务逻辑）
-
-所有业务逻辑、数据访问、领域模型放在这里：
-
-| 允许 | 说明 | 示例 |
-|---|---|---|
-| `service/` | 业务逻辑、工作流编排 | `custody/service/` `account/service/` |
-| `repository/` | `@Repository` 数据访问 | `custody/repository/` `account/repository/` |
-| `observer/` | 领域事件观察者 | `custody/observer/CustodyDepositCreditObserver` |
-| `gateway/` | 链网关 / RPC 适配 | `custody/gateway/EvmAssetRecoveryChainGateway` |
-| `coordinator/` | 链上操作协调器 | `account/coordinator/Evm7702CollectionCoordinator` |
-| `model/` | 领域模型 / 业务枚举 / 配置属性 | `CustodyPrincipal`, `CustodyWebhookRetryPolicy` |
-| `config/` | 被多模块共享的基础配置 | `WalletEnvironmentPolicy`, `WalletRpcPolicy` |
-
-**不允许**：`@Scheduled`、`@Controller`、Web 层异常、Servlet API。
+Controller 只负责请求边界和委托，Job 只负责 `@Scheduled` 调度编排；业务流程、链操作和数据访问必须位于内部应用/领域/基础设施层。
+业务层不得反向依赖 Controller 或 Job，不得把 Servlet API、Web 异常或 HTTP 状态映射带入领域和持久化代码。
 
 ### 依赖方向
 
 ```
-wallet-api → wallet-service → common, chain-sdks
+wallet-api → common, chain-sdks
+wallet-sig1 → common, chain-sdks
+wallet-sig2 → common, chain-sdks
 ```
 
-- wallet-api 可以 import wallet-service 的任何类。
-- wallet-service **不得** import wallet-api 的任何类。
+- `wallet-api` 内部按 MVC 分层协作，不再通过 `wallet-service` 模块传递业务类。
+- `common` 和 `chain-sdks` 不得依赖 `wallet-api`；签名服务也不得依赖 `wallet-api`。
+- 项目不再保留 `wallet-service` 模块、POM 或独立构建入口。
 - @Scheduled 只允许在 wallet-api（及 wallet-sig1 / wallet-sig2）中。
 
 ### job 包划分
@@ -64,9 +52,9 @@ wallet-api/job/
 
 ### 线程池
 
-每个 jar 必须为 `@Scheduled` 配置独立线程池：
+每个包含 `@Scheduled` 的 jar 必须配置独立线程池：
 
-- **wallet-api**：按 job 类别分池，`SchedulingConfig.java` 中定义 `@Bean ThreadPoolTaskScheduler`（custody/evm7702/account/deposit/withdraw 各一个）。
+- **wallet-api**：按 job 类别分池，`SchedulingConfig.java` 中定义 `@Bean ThreadPoolTaskScheduler`（custody/evm7702/account/deposit/withdraw 各一个）。业务 Service 不直接声明 `@Scheduled`。
 - **wallet-sig1 / wallet-sig2**：通过 `spring.task.scheduling.pool.size` + `thread-name-prefix` 配置，或显式 `@Bean TaskScheduler`。
 
 禁止所有 `@Scheduled` 共用一个默认线程池。

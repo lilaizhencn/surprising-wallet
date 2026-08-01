@@ -184,7 +184,7 @@ dev_fund "$DOT_FLOW_ASSET_PORT" "$DOT_FLOW_USER_ADDRESS" 10000000000
 dev_fund "$DOT_FLOW_ASSET_PORT" "$DOT_FLOW_EXTERNAL_ADDRESS" 10000000000
 
 mvn -f "$DOT_FLOW_BUILD_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-service -am \
+  -pl wallet-api -am \
   -Dtest=PolkadotAddressGenerationTest,PolkadotRuntimeClientTest,PolkadotDepositScannerTest,PolkadotTransactionServiceTest,PolkadotDevnetFullFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dpolkadot.devnet.flow.enabled=true \

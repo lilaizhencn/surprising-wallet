@@ -33,7 +33,7 @@ MONERO_REGTEST_DB_URL="$XMR_FLOW_DB_URL" \
 MONERO_REGTEST_DB_USER="$REGTEST_PG_USER" \
 MONERO_REGTEST_DB_PASSWORD="$REGTEST_PG_PASSWORD" \
 mvn -f "${XMR_FLOW_ROOT}/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-service -am \
+  -pl wallet-api -am \
   -Dtest=MoneroRegtestFullFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dmonero.regtest.enabled=true test

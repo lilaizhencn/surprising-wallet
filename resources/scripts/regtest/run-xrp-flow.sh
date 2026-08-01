@@ -31,7 +31,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 SQL
 
 mvn -f "$XRP_FLOW_ROOT/pom.xml" \
-  -pl backendservices/wallet-parent/wallet-service -am \
+  -pl wallet-api -am \
   -Dtest=XrpAddressGenerationTest,XrpIssuedCurrencyTest,XrpTestnetFullFlowIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dxrp.live.flow.enabled=true \

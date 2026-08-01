@@ -29,7 +29,7 @@ deployment JSON。Relayer 与 admin 分离；生产 admin 使用多签。
 官方 RPC：
 
 ```bash
-mvn -pl wallet-service -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702RpcCapabilityIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.rpc-capability.enabled=true \
@@ -41,7 +41,7 @@ mvn -pl wallet-service -am \
 项目当前 RPC：
 
 ```bash
-mvn -pl wallet-service -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702RpcCapabilityIntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.rpc-capability.enabled=true \
@@ -94,7 +94,7 @@ Hardhat 公开账户只允许本地。部署脚本排他创建证据文件，已
 ## 4. 真实 type-4 和数据库生产路径
 
 ```bash
-mvn -pl wallet-service -am \
+mvn -pl wallet-api -am \
   -Dtest=Evm7702Type4IntegrationTest \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Devm.7702.enabled=true \

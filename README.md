@@ -43,8 +43,7 @@ surprising-wallet/
 ├── chain-sdks/           # Bitcoin-like 和 TRON 链 SDK
 ├── wallet-sig1/          # 第一签名服务
 ├── wallet-sig2/          # 第二签名服务
-├── wallet-service/       # 链适配与业务逻辑
-├── wallet-api/           # HTTP API 与定时任务
+├── wallet-api/           # MVC 应用：HTTP API、定时任务、业务逻辑与链适配
 └── resources/docs/      # 文档、OpenAPI、数据库脚本
 ```
 
@@ -56,8 +55,7 @@ surprising-wallet/
 | `chain-sdks` | Bitcoin-like 链和 TRON 链 SDK：多签地址、SegWit 交易、UTXO 选择、BIP32、gRPC 客户端、Protobuf 合约、ECKey 密码学 |
 | `wallet-sig1` | 第一轮签名服务：对 BTC、BCH、LTC、DOGE 提现交易生成部分签名，轮询 Redis 队列获取待签任务 |
 | `wallet-sig2` | 第二轮签名服务：对 BTC、BCH、LTC、DOGE、ETH、ERC20、TRON 交易完成最终签名并广播 |
-| `wallet-service` | 链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、扫链充值、账本管理、提现流程、UTXO 归集、Gas 估算 |
-| `wallet-api` | Custody REST API、Console 管理后台、充值扫描任务、提现批处理、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
+| `wallet-api` | Spring MVC 单体应用：Custody REST API、Console 管理后台、充值扫描任务、提现批处理、业务服务、链适配器、数据访问、Gas 对账、Webhook 投递、EIP-7702 归集与提现、启动校验 |
 
 运行模型覆盖 50 条链、14 个链族：
 

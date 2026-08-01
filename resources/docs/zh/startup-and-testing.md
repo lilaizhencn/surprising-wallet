@@ -69,7 +69,7 @@ mvn clean install -DskipTests
 快速编译检查：
 
 ```bash
-mvn -pl wallet-service -am test -DskipTests
+mvn -pl wallet-api -am test -DskipTests
 ```
 
 ## 5. 密钥与运行配置

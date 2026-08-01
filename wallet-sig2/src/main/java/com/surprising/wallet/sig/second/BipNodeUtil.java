@@ -9,7 +9,7 @@ import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
  *
  * <p>在应用启动时由 {@link WalletSig2Application#initializeSig2Key} 初始化根节点。
  * 后续所有地址的签名私钥均通过路径 m/44'/{coinType}'/{biz}'/{userId}'/{index} 派生，
- * 确保与 wallet-service 的地址生成使用相同的种子和派生逻辑。
+ * 确保与 wallet-api 的地址生成使用相同的种子和派生逻辑。
  *
  * @author atomex
  */
