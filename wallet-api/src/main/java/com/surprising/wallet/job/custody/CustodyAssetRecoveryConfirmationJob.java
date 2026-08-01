@@ -3,7 +3,7 @@ package com.surprising.wallet.job.custody;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import com.surprising.wallet.custody.service.CustodyAssetRecoveryService;
+import com.surprising.wallet.service.CustodyAssetRecoveryService;
 
 /**
  * 托管资产找回确认任务。

@@ -1,8 +1,8 @@
-package com.surprising.wallet.custody.service;
+package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.custody.service.CustodyAddressService.AddressView;
-import com.surprising.wallet.custody.service.CustodyAddressService.CreateAddressCommand;
+import com.surprising.wallet.service.CustodyAddressService.AddressView;
+import com.surprising.wallet.service.CustodyAddressService.CreateAddressCommand;
 import com.surprising.wallet.repository.CustodyRepository.GasAccountRecord;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import org.springframework.stereotype.Service;

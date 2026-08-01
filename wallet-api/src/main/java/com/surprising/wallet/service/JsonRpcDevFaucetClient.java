@@ -1,4 +1,4 @@
-package com.surprising.wallet.devfaucet.service;
+package com.surprising.wallet.service;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;

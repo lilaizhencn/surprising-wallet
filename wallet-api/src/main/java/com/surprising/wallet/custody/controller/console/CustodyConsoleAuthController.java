@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
-import com.surprising.wallet.custody.service.CustodyAuthService;
+import com.surprising.wallet.service.CustodyAuthService;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.model.CustodySessionCookie;

@@ -1,6 +1,6 @@
 package com.surprising.wallet.custody.controller.console;
 
-import com.surprising.wallet.custody.service.CustodyWebhookService.CreateWebhookCommand;
+import com.surprising.wallet.service.CustodyWebhookService.CreateWebhookCommand;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -17,7 +17,7 @@ import java.util.UUID;
 
 import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
-import com.surprising.wallet.custody.service.CustodyWebhookService;
+import com.surprising.wallet.service.CustodyWebhookService;
 
 /**
  * Console Webhook 端点管理控制器。

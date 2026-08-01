@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
-import com.surprising.wallet.custody.service.WalletConfigOverviewService;
+import com.surprising.wallet.service.WalletConfigOverviewService;
 
 /**
  * 平台钱包配置概览控制器。

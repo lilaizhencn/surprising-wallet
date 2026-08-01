@@ -1,9 +1,9 @@
 package com.surprising.wallet.custody.controller.platform;
 
-import com.surprising.wallet.custody.service.CustodyTenantService.CreateTenantCommand;
-import com.surprising.wallet.custody.service.CustodyTenantService.TenantDetail;
-import com.surprising.wallet.custody.service.CustodyTenantService.TenantPage;
-import com.surprising.wallet.custody.service.CustodyTenantService.UpdateTenantCommand;
+import com.surprising.wallet.service.CustodyTenantService.CreateTenantCommand;
+import com.surprising.wallet.service.CustodyTenantService.TenantDetail;
+import com.surprising.wallet.service.CustodyTenantService.TenantPage;
+import com.surprising.wallet.service.CustodyTenantService.UpdateTenantCommand;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,13 +20,13 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
-import com.surprising.wallet.custody.service.CustodyAssetDashboardService;
-import com.surprising.wallet.custody.service.CustodyAuthService;
+import com.surprising.wallet.service.CustodyAssetDashboardService;
+import com.surprising.wallet.service.CustodyAuthService;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.model.CustodySessionCookie;
-import com.surprising.wallet.custody.service.CustodyTenantService;
+import com.surprising.wallet.service.CustodyTenantService;
 
 /**
  * 平台管理控制器，提供租户管理（CRUD）、平台级仪表盘、登录/登出功能。

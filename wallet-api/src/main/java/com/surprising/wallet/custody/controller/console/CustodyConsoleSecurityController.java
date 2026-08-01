@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import com.surprising.wallet.custody.service.CustodyApiKeyService;
+import com.surprising.wallet.service.CustodyApiKeyService;
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;

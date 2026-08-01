@@ -1,6 +1,6 @@
 package com.surprising.wallet.job.collection;
 
-import com.surprising.wallet.account.service.AccountChainWorkflowService;
+import com.surprising.wallet.service.AccountChainWorkflowService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

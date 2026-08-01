@@ -54,8 +54,8 @@
 模块依赖遵循 `wallet-api -> common, chain-sdks`，签名服务分别直接依赖共享库和链 SDK。`wallet-api`
 内部采用 MVC 分层：Servlet 请求、Cookie 读写和 HTTP 状态映射只存在于 Web 层的 Controller、Filter
 和异常处理器；Job 只负责调度编排，业务 Service、领域模型、仓储、网关和协调器位于同一个应用内。
-应用 Service 按业务域组织在 `account/service/**`、`custody/service/**` 和 `service/**`，通用钱包服务使用单层
-`com.surprising.wallet.service` 包，不再使用重复的 `com.surprising.wallet.wallet` 包。
+所有应用 Service（包括工作流和实现类）统一位于 `com.surprising.wallet.service`，使用 `service/**` 单层包，
+不再按业务域拆分 `account/service`、`custody/service` 或 `devfaucet/service`，也不保留 `impl` 子包。
 所有业务域的 PostgreSQL/JDBC Repository 统一位于 `com.surprising.wallet.repository`，业务包下不再保留
 `account/repository`、`custody/repository`、`deposit/repository` 或其他分散的 Repository 子包。
 需要 Redis 的可执行模块直接注入 Spring Data Redis 的 `StringRedisTemplate`，由 Spring Boot 自动配置

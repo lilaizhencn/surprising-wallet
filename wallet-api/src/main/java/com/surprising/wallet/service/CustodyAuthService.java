@@ -1,4 +1,4 @@
-package com.surprising.wallet.custody.service;
+package com.surprising.wallet.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.surprising.wallet.custody.model.CustodyPrincipal.ActorType;

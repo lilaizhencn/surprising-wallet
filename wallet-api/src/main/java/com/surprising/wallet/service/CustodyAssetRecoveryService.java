@@ -1,4 +1,4 @@
-package com.surprising.wallet.custody.service;
+package com.surprising.wallet.service;
 
 import com.surprising.wallet.custody.model.PageView;
 import com.surprising.wallet.repository.CustodyAssetRecoveryRepository;

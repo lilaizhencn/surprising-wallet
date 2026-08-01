@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.custody.service.CustodyAddressService;
+import com.surprising.wallet.service.CustodyAddressService;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 
 /**

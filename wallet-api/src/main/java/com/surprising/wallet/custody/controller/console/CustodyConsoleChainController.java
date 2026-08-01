@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
-import com.surprising.wallet.custody.service.CustodyTenantChainService;
+import com.surprising.wallet.service.CustodyTenantChainService;
 
 /**
  * Console 链配置控制器。

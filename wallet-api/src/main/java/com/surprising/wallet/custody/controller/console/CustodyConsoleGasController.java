@@ -1,8 +1,8 @@
 package com.surprising.wallet.custody.controller.console;
 
-import com.surprising.wallet.custody.service.CustodyGasService.CreateGasAccountCommand;
-import com.surprising.wallet.custody.service.CustodyGasService.GasAccountView;
-import com.surprising.wallet.custody.service.CustodyGasService.UpdateGasAccountCommand;
+import com.surprising.wallet.service.CustodyGasService.CreateGasAccountCommand;
+import com.surprising.wallet.service.CustodyGasService.GasAccountView;
+import com.surprising.wallet.service.CustodyGasService.UpdateGasAccountCommand;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import com.surprising.wallet.custody.service.CustodyGasService;
+import com.surprising.wallet.service.CustodyGasService;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 
 /**

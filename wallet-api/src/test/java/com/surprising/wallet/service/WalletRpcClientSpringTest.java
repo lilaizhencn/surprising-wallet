@@ -1,4 +1,4 @@
-package com.surprising.wallet.custody.service;
+package com.surprising.wallet.service;
 
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;

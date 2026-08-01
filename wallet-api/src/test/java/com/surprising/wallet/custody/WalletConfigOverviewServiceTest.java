@@ -16,9 +16,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.custody.model.CustodyPrincipal.ActorType;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;
-import com.surprising.wallet.custody.service.WalletConfigOverviewService.SummaryView;
-import com.surprising.wallet.custody.service.WalletConfigOverviewService.UpdateGlobalSwitchesCommand;
-import com.surprising.wallet.custody.service.WalletConfigOverviewService;
+import com.surprising.wallet.service.WalletConfigOverviewService.SummaryView;
+import com.surprising.wallet.service.WalletConfigOverviewService.UpdateGlobalSwitchesCommand;
+import com.surprising.wallet.service.WalletConfigOverviewService;
 /**
  * 验证 {@code WalletConfigOverviewServiceTest} 覆盖的业务流程、边界条件和异常行为。
  */

@@ -19,7 +19,7 @@ import com.surprising.wallet.devfaucet.model.DevFaucetAmountGenerator;
 import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
 import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
 import com.surprising.wallet.repository.DevFaucetRepository;
-import com.surprising.wallet.devfaucet.service.DevFaucetRpcClient;
+import com.surprising.wallet.service.DevFaucetRpcClient;
 
 /**
  * 开发环境水龙头任务。

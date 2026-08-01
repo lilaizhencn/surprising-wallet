@@ -1,4 +1,4 @@
-package com.surprising.wallet.custody.service;
+package com.surprising.wallet.service;
 
 import org.springframework.stereotype.Service;
 

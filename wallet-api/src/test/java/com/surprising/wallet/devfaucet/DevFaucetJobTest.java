@@ -20,7 +20,7 @@ import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
 import com.surprising.wallet.job.devfaucet.DevFaucetJob;
 import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
 import com.surprising.wallet.repository.DevFaucetRepository;
-import com.surprising.wallet.devfaucet.service.DevFaucetRpcClient;
+import com.surprising.wallet.service.DevFaucetRpcClient;
 
 /**
  * 验证 {@code DevFaucetJobTest} 覆盖的业务流程、边界条件和异常行为。

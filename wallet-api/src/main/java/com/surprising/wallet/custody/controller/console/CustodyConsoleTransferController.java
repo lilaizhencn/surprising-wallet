@@ -1,6 +1,6 @@
 package com.surprising.wallet.custody.controller.console;
 
-import com.surprising.wallet.custody.service.CustodyWithdrawalService.CreateWithdrawalCommand;
+import com.surprising.wallet.service.CustodyWithdrawalService.CreateWithdrawalCommand;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,7 +14,7 @@ import java.util.Map;
 
 import com.surprising.wallet.custody.model.PageView;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
-import com.surprising.wallet.custody.service.CustodyWithdrawalService;
+import com.surprising.wallet.service.CustodyWithdrawalService;
 
 /**
  * Console 提现/转账管理控制器。

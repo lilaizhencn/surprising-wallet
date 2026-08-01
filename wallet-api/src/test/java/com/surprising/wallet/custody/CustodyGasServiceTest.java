@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import com.surprising.wallet.custody.service.CustodyGasService;
+import com.surprising.wallet.service.CustodyGasService;
 
 /**
  * 验证 {@code CustodyGasServiceTest} 覆盖的业务流程、边界条件和异常行为。

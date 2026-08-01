@@ -1,7 +1,7 @@
 package com.surprising.wallet.custody.controller.api;
 
-import com.surprising.wallet.custody.service.CustodyAddressService.AddressView;
-import com.surprising.wallet.custody.service.CustodyAddressService.CreateAddressCommand;
+import com.surprising.wallet.service.CustodyAddressService.AddressView;
+import com.surprising.wallet.service.CustodyAddressService.CreateAddressCommand;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,10 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
-import com.surprising.wallet.custody.service.CustodyAddressService;
+import com.surprising.wallet.service.CustodyAddressService;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
-import com.surprising.wallet.custody.service.CustodyTenantChainService;
-import com.surprising.wallet.custody.service.CustodyWithdrawalService;
+import com.surprising.wallet.service.CustodyTenantChainService;
+import com.surprising.wallet.service.CustodyWithdrawalService;
 
 /**
  * 公共 API 控制器，暴露给租户的 REST API。

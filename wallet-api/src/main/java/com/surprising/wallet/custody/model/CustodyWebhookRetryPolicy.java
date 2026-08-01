@@ -21,7 +21,7 @@ import java.util.UUID;
  *   <li>超过最大次数后标记为 terminal，不再自动重试</li>
  * </ul>
  *
- * @see com.surprising.wallet.custody.service.CustodyWebhookService
+ * @see com.surprising.wallet.service.CustodyWebhookService
  */
 @Component
 public

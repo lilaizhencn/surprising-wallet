@@ -1,4 +1,4 @@
-package com.surprising.wallet.account.service;
+package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.ChainAsset;

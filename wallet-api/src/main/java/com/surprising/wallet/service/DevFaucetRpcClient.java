@@ -1,4 +1,4 @@
-package com.surprising.wallet.devfaucet.service;
+package com.surprising.wallet.service;
 
 import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
 
@@ -8,8 +8,8 @@ import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
  * <p>不同链族（Bitcoin、EVM）提供各自的实现，由 {@link DevFaucetRpcClient} 的子类型决定具体发送逻辑。</p>
  *
  * @see DevFaucetFunding
- * @see com.surprising.wallet.devfaucet.service.DevFaucetBitcoinRpcClient
- * @see com.surprising.wallet.devfaucet.service.DevFaucetEvmRpcClient
+ * @see com.surprising.wallet.service.DevFaucetBitcoinRpcClient
+ * @see com.surprising.wallet.service.DevFaucetEvmRpcClient
  */
 public interface DevFaucetRpcClient {
     /**

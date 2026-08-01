@@ -17,7 +17,7 @@ import java.util.Map;
 import com.surprising.wallet.custody.model.PageView;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
-import com.surprising.wallet.custody.service.WalletConfigManagementService;
+import com.surprising.wallet.service.WalletConfigManagementService;
 
 /**
  * 平台钱包配置管理控制器。

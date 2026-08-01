@@ -6,9 +6,9 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import com.surprising.wallet.custody.service.CustodyWebhookService.CreateWebhookCommand;
+import com.surprising.wallet.service.CustodyWebhookService.CreateWebhookCommand;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
-import com.surprising.wallet.custody.service.CustodyWebhookService;
+import com.surprising.wallet.service.CustodyWebhookService;
 
 /**
  * 验证 {@code CustodyConsoleWebhookControllerTest} 覆盖的业务流程、边界条件和异常行为。

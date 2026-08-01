@@ -1,4 +1,4 @@
-package com.surprising.wallet.custody.service;
+package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.chain.BlockchainAdapter;

@@ -1,8 +1,8 @@
 package com.surprising.wallet.custody.controller.console;
 
-import com.surprising.wallet.custody.service.CustodyAddressService.AddressView;
-import com.surprising.wallet.custody.service.CustodyAddressService.CreateAddressCommand;
-import com.surprising.wallet.custody.service.CustodyAddressService.UpdateAddressCommand;
+import com.surprising.wallet.service.CustodyAddressService.AddressView;
+import com.surprising.wallet.service.CustodyAddressService.CreateAddressCommand;
+import com.surprising.wallet.service.CustodyAddressService.UpdateAddressCommand;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.surprising.wallet.custody.model.PageView;
-import com.surprising.wallet.custody.service.CustodyAddressService;
+import com.surprising.wallet.service.CustodyAddressService;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 
 /**

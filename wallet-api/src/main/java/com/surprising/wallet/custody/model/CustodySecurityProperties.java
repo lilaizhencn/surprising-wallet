@@ -17,7 +17,7 @@ import java.time.Duration;
  *   <li>{@code platformAdmin} — 平台初始管理员邮箱和密码</li>
  * </ul>
  *
- * @see com.surprising.wallet.custody.service.CustodyCryptoService
+ * @see com.surprising.wallet.service.CustodyCryptoService
  */
 @Component
 @ConfigurationProperties(prefix = "sw.wallet.custody")

@@ -7,8 +7,8 @@ import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.custody.service.WalletConfigManagementService.RpcNodeView;
-import com.surprising.wallet.custody.service.WalletConfigManagementService;
+import com.surprising.wallet.service.WalletConfigManagementService.RpcNodeView;
+import com.surprising.wallet.service.WalletConfigManagementService;
 
 /**
  * 验证 {@code WalletConfigManagementContractTest} 覆盖的业务流程、边界条件和异常行为。

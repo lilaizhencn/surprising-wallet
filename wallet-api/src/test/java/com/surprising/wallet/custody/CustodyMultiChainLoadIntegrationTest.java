@@ -38,7 +38,7 @@ import java.util.function.IntConsumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.custody.service.CustodyCryptoService;
+import com.surprising.wallet.service.CustodyCryptoService;
 import com.surprising.wallet.custody.observer.CustodyDepositCreditObserver;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.repository.CustodyRepository;
@@ -46,7 +46,7 @@ import com.surprising.wallet.custody.model.CustodySecurityProperties;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
 import com.surprising.wallet.job.custody.CustodyWebhookDispatcher;
 import com.surprising.wallet.custody.model.CustodyWebhookRetryPolicy;
-import com.surprising.wallet.custody.service.CustodyWebhookService;
+import com.surprising.wallet.service.CustodyWebhookService;
 import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
 
 /**

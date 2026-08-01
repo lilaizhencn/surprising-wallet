@@ -1,8 +1,8 @@
-package com.surprising.wallet.account.service;
+package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainRpcNode;
-import com.surprising.wallet.custody.service.CustodyCryptoService;
+import com.surprising.wallet.service.CustodyCryptoService;
 import com.surprising.wallet.chain.evm.Evm7702AuthorizationService;
 import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
 import com.surprising.wallet.chain.evm.Evm7702PayoutCodec;

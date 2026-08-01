@@ -16,9 +16,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.account.service.Evm7702CollectionWorkflowService;
-import com.surprising.wallet.account.service.Evm7702WithdrawalWorkflowService.EvmReceiptResponse;
-import com.surprising.wallet.account.service.Evm7702WithdrawalWorkflowService.EvmTransactionReceipt;
+import com.surprising.wallet.service.Evm7702CollectionWorkflowService;
+import com.surprising.wallet.service.Evm7702WithdrawalWorkflowService.EvmReceiptResponse;
+import com.surprising.wallet.service.Evm7702WithdrawalWorkflowService.EvmTransactionReceipt;
 
 /**
  * 验证 {@code Evm7702ArbitrumFeeIntegrationTest} 覆盖的业务流程、边界条件和异常行为。

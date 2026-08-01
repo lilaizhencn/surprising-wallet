@@ -29,7 +29,7 @@ import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
  * reconcileConfirmed（与 custody_deposit 对账确认）。</p>
  *
  * @see com.surprising.wallet.devfaucet.model.DevFaucetProperties
- * @see com.surprising.wallet.devfaucet.service.DevFaucetRpcClient
+ * @see com.surprising.wallet.service.DevFaucetRpcClient
  */
 @Repository
 @ConditionalOnProperty(prefix = "sw.wallet.dev-faucet", name = "enabled", havingValue = "true")

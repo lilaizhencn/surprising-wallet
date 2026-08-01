@@ -16,15 +16,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.custody.model.CustodyPrincipal.ActorType;
-import com.surprising.wallet.custody.service.CustodyAssetRecoveryService.ApproveCommand;
+import com.surprising.wallet.service.CustodyAssetRecoveryService.ApproveCommand;
 import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway;
 import com.surprising.wallet.repository.CustodyAssetRecoveryRepository;
-import com.surprising.wallet.custody.service.CustodyAssetRecoveryService;
+import com.surprising.wallet.service.CustodyAssetRecoveryService;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway.ExecutionRequest;
-import com.surprising.wallet.custody.service.CustodyAssetRecoveryService.SubmitCommand;
+import com.surprising.wallet.service.CustodyAssetRecoveryService.SubmitCommand;
 import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway.Verification;
 import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway.VerificationRequest;
 

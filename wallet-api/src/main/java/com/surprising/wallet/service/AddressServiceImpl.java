@@ -1,4 +1,4 @@
-package com.surprising.wallet.service.impl;
+package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;

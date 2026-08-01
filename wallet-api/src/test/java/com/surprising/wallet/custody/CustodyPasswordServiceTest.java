@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.custody.service.CustodyPasswordService;
+import com.surprising.wallet.service.CustodyPasswordService;
 
 /**
  * 验证 {@code CustodyPasswordServiceTest} 覆盖的业务流程、边界条件和异常行为。
