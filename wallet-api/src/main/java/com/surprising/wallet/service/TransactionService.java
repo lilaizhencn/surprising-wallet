@@ -1,4 +1,4 @@
-package com.surprising.wallet.wallet.service;
+package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;

@@ -11,7 +11,7 @@ import com.surprising.wallet.chain.near.NearKeyService;
 import com.surprising.wallet.chain.polkadot.PolkadotKeyService;
 import com.surprising.wallet.chain.tron.TronAddressCodec;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
-import com.surprising.wallet.wallet.service.HotWalletAddressService;
+import com.surprising.wallet.service.HotWalletAddressService;
 import lombok.RequiredArgsConstructor;
 import org.bitcoinj.base.Base58;
 import org.springframework.dao.DuplicateKeyException;

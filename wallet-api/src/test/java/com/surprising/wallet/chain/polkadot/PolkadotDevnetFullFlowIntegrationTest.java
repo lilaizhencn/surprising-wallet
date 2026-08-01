@@ -8,7 +8,7 @@ import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.config.ChainRpcNodeService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
-import com.surprising.wallet.wallet.service.HotWalletAddressService;
+import com.surprising.wallet.service.HotWalletAddressService;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;

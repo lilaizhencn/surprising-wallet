@@ -1,4 +1,4 @@
-package com.surprising.wallet.wallet.repository;
+package com.surprising.wallet.repository;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;

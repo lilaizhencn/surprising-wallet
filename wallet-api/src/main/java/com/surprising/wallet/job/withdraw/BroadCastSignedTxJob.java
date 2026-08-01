@@ -4,7 +4,7 @@ import com.googlecode.jsonrpc4j.JsonRpcClientException;
 import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.wallet.service.TransactionService;
+import com.surprising.wallet.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;

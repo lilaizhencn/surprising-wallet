@@ -1,11 +1,11 @@
-package com.surprising.wallet.wallet.service.impl;
+package com.surprising.wallet.service.impl;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
-import com.surprising.wallet.wallet.service.AddressService;
+import com.surprising.wallet.service.AddressService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;

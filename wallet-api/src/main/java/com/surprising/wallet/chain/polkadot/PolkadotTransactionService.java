@@ -6,7 +6,7 @@ import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
-import com.surprising.wallet.wallet.service.HotWalletAddressService;
+import com.surprising.wallet.service.HotWalletAddressService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;

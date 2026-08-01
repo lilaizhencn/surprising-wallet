@@ -6,7 +6,7 @@ import com.surprising.wallet.job.deposit.model.BestBlockHeight;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
-import com.surprising.wallet.wallet.service.TransactionService;
+import com.surprising.wallet.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
