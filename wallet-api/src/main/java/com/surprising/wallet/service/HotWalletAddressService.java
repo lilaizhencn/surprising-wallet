@@ -15,7 +15,7 @@ import com.surprising.wallet.chain.sui.SuiKeyService;
 import com.surprising.wallet.chain.ton.TonKeyService;
 import com.surprising.wallet.chain.xrp.XrpKeyService;
 import com.surprising.wallet.config.PubKeyConfig;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashAddressCodec;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParameters;
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinNetworkParameters;

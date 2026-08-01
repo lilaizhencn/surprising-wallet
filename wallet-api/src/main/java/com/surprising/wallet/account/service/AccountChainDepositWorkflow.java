@@ -20,7 +20,7 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

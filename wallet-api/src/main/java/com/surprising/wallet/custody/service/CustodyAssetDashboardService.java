@@ -11,10 +11,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import com.surprising.wallet.custody.repository.CustodyAssetDashboardRepository;
+import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 
 /**
  * 托管资产仪表盘服务，提供租户资产概览数据。

@@ -31,7 +31,7 @@ import com.surprising.wallet.chain.rpc.BtcCommand;
 import com.surprising.wallet.chain.rpc.BtcLikeCommand;
 import com.surprising.wallet.chain.rpc.DogeCommand;
 import com.surprising.wallet.config.PubKeyConfig;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.service.AddressService;
 import com.surprising.wallet.service.TransactionService;
 import org.bitcoinj.base.LegacyAddress;

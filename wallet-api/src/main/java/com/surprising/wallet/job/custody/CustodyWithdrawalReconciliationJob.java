@@ -2,7 +2,7 @@ package com.surprising.wallet.job.custody;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.custody.repository.CustodyRepository.WithdrawalStatusChange;
+import com.surprising.wallet.repository.CustodyRepository.WithdrawalStatusChange;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -13,7 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 
 /**
  * 托管提现状态对账任务。

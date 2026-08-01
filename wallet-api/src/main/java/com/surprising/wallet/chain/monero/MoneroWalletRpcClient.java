@@ -8,7 +8,7 @@ import tools.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.config.ChainRpcNodeService;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 

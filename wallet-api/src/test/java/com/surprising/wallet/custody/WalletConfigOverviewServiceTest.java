@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.custody.model.CustodyPrincipal.ActorType;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.custody.service.WalletConfigOverviewService.SummaryView;
 import com.surprising.wallet.custody.service.WalletConfigOverviewService.UpdateGlobalSwitchesCommand;
 import com.surprising.wallet.custody.service.WalletConfigOverviewService;

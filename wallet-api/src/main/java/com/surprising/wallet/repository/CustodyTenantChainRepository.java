@@ -1,4 +1,4 @@
-package com.surprising.wallet.custody.repository;
+package com.surprising.wallet.repository;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;

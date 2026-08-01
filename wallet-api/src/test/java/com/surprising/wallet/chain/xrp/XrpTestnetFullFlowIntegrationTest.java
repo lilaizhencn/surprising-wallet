@@ -12,7 +12,7 @@ import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.config.AccountSecp256k1KeyService;
 import com.surprising.wallet.config.PubKeyConfig;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import okhttp3.HttpUrl;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;

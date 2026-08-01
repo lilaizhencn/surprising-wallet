@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain.evm;
 
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;

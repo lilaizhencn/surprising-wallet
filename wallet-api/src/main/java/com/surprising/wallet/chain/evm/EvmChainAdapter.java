@@ -8,7 +8,7 @@ import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.chain.model.TransferQuote;
 import com.surprising.wallet.chain.model.TransferRequest;
 import com.surprising.wallet.chain.BlockchainAdapter;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 

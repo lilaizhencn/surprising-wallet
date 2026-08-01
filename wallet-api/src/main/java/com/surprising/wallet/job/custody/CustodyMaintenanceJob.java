@@ -4,7 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 
 /**
  * 托管系统安全维护任务。

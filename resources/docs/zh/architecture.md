@@ -56,6 +56,8 @@
 和异常处理器；Job 只负责调度编排，业务 Service、领域模型、仓储、网关和协调器位于同一个应用内。
 应用 Service 按业务域组织在 `account/service/**`、`custody/service/**` 和 `service/**`，通用钱包服务使用单层
 `com.surprising.wallet.service` 包，不再使用重复的 `com.surprising.wallet.wallet` 包。
+所有业务域的 PostgreSQL/JDBC Repository 统一位于 `com.surprising.wallet.repository`，业务包下不再保留
+`account/repository`、`custody/repository`、`deposit/repository` 或其他分散的 Repository 子包。
 需要 Redis 的可执行模块直接注入 Spring Data Redis 的 `StringRedisTemplate`，由 Spring Boot 自动配置
 连接工厂；`common` 不再提供静态 Redis 封装，也不携带 Redis、Servlet 或 Spring Web 依赖。各可执行模块
 分别声明自身实际使用的 starter，避免依赖传递造成的隐式可用。

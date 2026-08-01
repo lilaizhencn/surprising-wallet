@@ -5,7 +5,7 @@ import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.chain.BlockchainAdapterRegistry;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.chain.tron.TronChainAdapter;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
@@ -31,13 +31,13 @@ import com.surprising.wallet.custody.model.CustodyPrincipal.ActorType;
 import com.surprising.wallet.custody.service.CustodyAssetDashboardService.AssetRow;
 import com.surprising.wallet.custody.service.CustodyAddressService.CreateAddressCommand;
 import com.surprising.wallet.custody.service.CustodyAddressService;
-import com.surprising.wallet.custody.repository.CustodyAssetDashboardRepository;
+import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
 import com.surprising.wallet.custody.service.CustodyAssetDashboardService;
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.custody.repository.CustodyRepository;
-import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyTenantChainRepository;
 import com.surprising.wallet.custody.service.CustodyTenantChainService;
 
 /**

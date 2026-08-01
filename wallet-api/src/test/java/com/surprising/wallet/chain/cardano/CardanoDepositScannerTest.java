@@ -2,7 +2,7 @@ package com.surprising.wallet.chain.cardano;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

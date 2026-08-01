@@ -1,4 +1,4 @@
-package com.surprising.wallet.deposit.repository;
+package com.surprising.wallet.repository;
 
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.utils.Constants;

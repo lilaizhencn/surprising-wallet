@@ -8,7 +8,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.FieldMask;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.config.ChainRpcNodeService;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import io.grpc.Channel;
 import io.grpc.ClientInterceptors;
 import io.grpc.ManagedChannel;

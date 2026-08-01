@@ -5,7 +5,7 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.chain.model.TransferQuote;
 import com.surprising.wallet.chain.model.TransferRequest;
 import com.surprising.wallet.common.pojo.Address;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

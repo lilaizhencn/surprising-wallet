@@ -19,11 +19,11 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 import java.util.UUID;
 
-import com.surprising.wallet.custody.repository.CustodyAssetDashboardRepository;
+import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
 import com.surprising.wallet.custody.service.CustodyAssetDashboardService;
 import com.surprising.wallet.custody.service.CustodyAuthService;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.model.CustodySessionCookie;
 import com.surprising.wallet.custody.service.CustodyTenantService;

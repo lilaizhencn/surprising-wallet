@@ -7,7 +7,7 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.config.AccountSecp256k1KeyService;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.repository.HyperCoreRepository;
 import lombok.RequiredArgsConstructor;
 import org.bitcoinj.crypto.ECKey;

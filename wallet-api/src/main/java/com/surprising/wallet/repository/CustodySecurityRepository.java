@@ -1,4 +1,4 @@
-package com.surprising.wallet.custody.repository;
+package com.surprising.wallet.repository;
 
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -15,9 +15,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-import static com.surprising.wallet.custody.repository.CustodyRepository.ApiKeyRecord;
-import static com.surprising.wallet.custody.repository.CustodyRepository.AuthUser;
-import static com.surprising.wallet.custody.repository.CustodyRepository.SessionRecord;
+import static com.surprising.wallet.repository.CustodyRepository.ApiKeyRecord;
+import static com.surprising.wallet.repository.CustodyRepository.AuthUser;
+import static com.surprising.wallet.repository.CustodyRepository.SessionRecord;
 
 /**
  * 托管身份、会话、API 密钥、重放保护和 IP 白名单仓储。

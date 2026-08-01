@@ -14,8 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import com.surprising.wallet.custody.repository.CustodyRepository;
-import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyTenantChainRepository;
 
 /**
  * 托管充值入账观察者，实现 {@link DepositCreditObserver}，在充值确认后：

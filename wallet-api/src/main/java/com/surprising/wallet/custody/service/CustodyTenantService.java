@@ -2,9 +2,9 @@ package com.surprising.wallet.custody.service;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.custody.repository.CustodyRepository.AddressRecord;
-import com.surprising.wallet.custody.repository.CustodyRepository.GasAccountRecord;
-import com.surprising.wallet.custody.repository.CustodyRepository.TenantRecord;
+import com.surprising.wallet.repository.CustodyRepository.AddressRecord;
+import com.surprising.wallet.repository.CustodyRepository.GasAccountRecord;
+import com.surprising.wallet.repository.CustodyRepository.TenantRecord;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +16,7 @@ import java.util.UUID;
 
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 
 /**
  * 托管租户管理服务，管理租户生命周期。

@@ -1,4 +1,4 @@
-package com.surprising.wallet.devfaucet.repository;
+package com.surprising.wallet.repository;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;

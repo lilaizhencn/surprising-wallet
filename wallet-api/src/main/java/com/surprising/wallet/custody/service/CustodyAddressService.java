@@ -5,11 +5,11 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.pojo.Address;
-import com.surprising.wallet.custody.repository.CustodyRepository.AddressRecord;
-import com.surprising.wallet.custody.repository.CustodyRepository.TenantRecord;
-import com.surprising.wallet.account.repository.Evm7702CollectionRepository;
+import com.surprising.wallet.repository.CustodyRepository.AddressRecord;
+import com.surprising.wallet.repository.CustodyRepository.TenantRecord;
+import com.surprising.wallet.repository.Evm7702CollectionRepository;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +23,7 @@ import java.util.UUID;
 
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 
 /**
  * 托管充值地址服务，管理租户的充值地址生命周期。

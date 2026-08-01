@@ -3,7 +3,7 @@ package com.surprising.wallet.custody.service;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.custody.repository.CustodyRepository.WebhookEndpointRecord;
+import com.surprising.wallet.repository.CustodyRepository.WebhookEndpointRecord;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +25,7 @@ import java.util.UUID;
 
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 
 /**
  * 托管 Webhook 投递服务，负责向租户配置的 Webhook 端点投递事件通知。

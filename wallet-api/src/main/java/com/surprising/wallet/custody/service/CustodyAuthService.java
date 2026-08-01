@@ -2,8 +2,8 @@ package com.surprising.wallet.custody.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.surprising.wallet.custody.model.CustodyPrincipal.ActorType;
-import com.surprising.wallet.custody.repository.CustodyRepository.AuthUser;
-import com.surprising.wallet.custody.repository.CustodyRepository.SessionRecord;
+import com.surprising.wallet.repository.CustodyRepository.AuthUser;
+import com.surprising.wallet.repository.CustodyRepository.SessionRecord;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -17,7 +17,7 @@ import java.util.UUID;
 
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodySecurityProperties;
 import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
 

@@ -9,7 +9,7 @@ import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.chain.aptos.AptosTransactionService;
 import com.surprising.wallet.chain.evm.EvmAccountTransactionService;
 import com.surprising.wallet.chain.ton.TonTransactionService;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.InvocationTargetException;

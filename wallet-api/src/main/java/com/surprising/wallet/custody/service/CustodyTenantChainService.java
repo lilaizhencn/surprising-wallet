@@ -14,8 +14,8 @@ import java.util.UUID;
 
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.custody.repository.CustodyRepository;
-import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyTenantChainRepository;
 
 /**
  * 租户链配置服务，管理租户启用的链和资产列表。

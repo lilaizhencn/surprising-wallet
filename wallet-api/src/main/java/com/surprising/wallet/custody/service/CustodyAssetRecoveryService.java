@@ -1,15 +1,15 @@
 package com.surprising.wallet.custody.service;
 
 import com.surprising.wallet.custody.model.PageView;
-import com.surprising.wallet.custody.repository.CustodyAssetRecoveryRepository;
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyAssetRecoveryRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway;
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.custody.repository.CustodyAssetRecoveryRepository.RecoveryRecord;
+import com.surprising.wallet.repository.CustodyAssetRecoveryRepository.RecoveryRecord;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;

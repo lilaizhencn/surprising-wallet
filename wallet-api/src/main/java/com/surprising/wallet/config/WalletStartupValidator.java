@@ -7,7 +7,7 @@ import com.surprising.wallet.common.chain.EvmGasPolicy;
 import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

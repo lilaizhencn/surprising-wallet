@@ -6,7 +6,7 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.SolanaTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.p2p.solanaj.core.Account;

@@ -20,7 +20,7 @@ Surprising Wallet 涉及链上资产和钱包账户，所有改动必须保守�
 | Web 层 | REST 参数校验、委托、HTTP 异常映射、认证过滤和 Web DTO；保持原有 Controller/Job 行为 | `custody/controller/**`、`job/**`、`custody/exception/**`、`custody/filter/**`、Web `model/**` |
 | 应用层 | 业务用例、工作流编排、运行时开关和定时任务实际调用的 Service | `account/service/**`、`custody/service/**`、`deposit/**`、`service/**` |
 | 领域与链集成层 | 领域模型、链适配器、RPC 客户端、链上协调器和观察者 | `chain/**`、`account/coordinator/**`、`custody/gateway/**`、`custody/observer/**`、业务 `model/**` |
-| 持久化层 | PostgreSQL/JDBC 仓储、账本和链配置数据访问 | `account/repository/**`、`custody/repository/**`、`deposit/repository/**` |
+| 持久化层 | PostgreSQL/JDBC 仓储、账本和链配置数据访问 | `repository/**` |
 | 应用配置层 | Web、安全、Jackson、数据源、链 RPC 和钱包运行时配置 | `config/**` |
 
 Controller 只负责请求边界和委托，Job 只负责 `@Scheduled` 调度编排；业务流程、链操作和数据访问必须位于内部应用/领域/基础设施层。

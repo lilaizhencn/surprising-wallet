@@ -9,7 +9,7 @@ import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.chain.model.TonTransactionRecord;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;

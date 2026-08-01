@@ -2,7 +2,7 @@ package com.surprising.wallet.chain.ton;
 
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Test;
 import org.ton.ton4j.address.Address;
 import org.ton.ton4j.cell.Cell;

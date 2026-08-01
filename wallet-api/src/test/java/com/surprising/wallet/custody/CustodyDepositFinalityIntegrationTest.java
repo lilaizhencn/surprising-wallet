@@ -3,7 +3,7 @@ package com.surprising.wallet.custody;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.deposit.observer.DepositCreditObserver;
 import com.surprising.wallet.deposit.observer.DepositReorgObserver;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,12 +20,12 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.custody.repository.CustodyAssetDashboardRepository;
+import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
 import com.surprising.wallet.custody.observer.CustodyDepositCreditObserver;
 import com.surprising.wallet.custody.observer.CustodyDepositReorgObserver;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
-import com.surprising.wallet.custody.repository.CustodyRepository;
-import com.surprising.wallet.custody.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyTenantChainRepository;
 
 /**
  * 验证 {@code CustodyDepositFinalityIntegrationTest} 覆盖的业务流程、边界条件和异常行为。

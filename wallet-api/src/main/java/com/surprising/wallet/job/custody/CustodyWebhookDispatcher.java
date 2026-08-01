@@ -1,6 +1,6 @@
 package com.surprising.wallet.job.custody;
 
-import com.surprising.wallet.custody.repository.CustodyRepository.WebhookDeliveryTask;
+import com.surprising.wallet.repository.CustodyRepository.WebhookDeliveryTask;
 import com.surprising.wallet.custody.service.CustodyWebhookService.WebhookHttpResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -11,7 +11,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.surprising.wallet.custody.service.CustodyCryptoService;
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodyWebhookRetryPolicy;
 import com.surprising.wallet.custody.service.CustodyWebhookService;
 

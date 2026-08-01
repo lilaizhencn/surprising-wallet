@@ -1,4 +1,4 @@
-package com.surprising.wallet.deposit.repository;
+package com.surprising.wallet.repository;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Transactional;

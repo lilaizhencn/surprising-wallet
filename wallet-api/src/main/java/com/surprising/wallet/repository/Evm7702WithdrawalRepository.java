@@ -1,4 +1,4 @@
-package com.surprising.wallet.account.repository;
+package com.surprising.wallet.repository;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.evm.Evm7702PayoutReceiptParser;

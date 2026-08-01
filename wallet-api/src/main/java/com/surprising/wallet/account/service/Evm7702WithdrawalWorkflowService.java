@@ -14,7 +14,7 @@ import com.surprising.wallet.chain.evm.EvmFeeSupport;
 import com.surprising.wallet.config.AccountSecp256k1KeyService;
 import com.surprising.wallet.config.ChainRpcNodeService;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.bitcoinj.crypto.ECKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,9 +54,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.surprising.wallet.account.repository.Evm7702CollectionRepository;
+import com.surprising.wallet.repository.Evm7702CollectionRepository;
 import com.surprising.wallet.account.coordinator.Evm7702WithdrawalCoordinator;
-import com.surprising.wallet.account.repository.Evm7702WithdrawalRepository;
+import com.surprising.wallet.repository.Evm7702WithdrawalRepository;
 
 /**
  * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。

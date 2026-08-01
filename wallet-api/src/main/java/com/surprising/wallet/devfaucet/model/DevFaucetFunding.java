@@ -6,7 +6,7 @@ import java.util.UUID;
 /**
  * 开发水龙头补币任务记录。
  *
- * <p>每条记录代表一个待发送或已发送的测试币补给请求，由 {@link com.surprising.wallet.devfaucet.repository.DevFaucetRepository}
+ * <p>每条记录代表一个待发送或已发送的测试币补给请求，由 {@link com.surprising.wallet.repository.DevFaucetRepository}
  * 管理生命周期（discover → create → due → markSending → markSent → reconcileConfirmed）。
  *
  * @param id                唯一标识

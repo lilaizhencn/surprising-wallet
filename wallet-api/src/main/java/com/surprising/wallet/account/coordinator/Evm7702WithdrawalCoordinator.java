@@ -1,10 +1,10 @@
 package com.surprising.wallet.account.coordinator;
 
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
 import com.surprising.wallet.chain.evm.Evm7702PayoutReceiptParser;
 import com.surprising.wallet.chain.evm.EvmFeeSupport;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 
-import com.surprising.wallet.account.repository.Evm7702WithdrawalRepository;
+import com.surprising.wallet.repository.Evm7702WithdrawalRepository;
 
 /**
  * 协调 EIP-7702 批量提现的事务边界。

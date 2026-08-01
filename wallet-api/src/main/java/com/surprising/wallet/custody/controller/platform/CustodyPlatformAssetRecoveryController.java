@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.surprising.wallet.custody.model.PageView;
-import com.surprising.wallet.custody.repository.CustodyAssetRecoveryRepository;
+import com.surprising.wallet.repository.CustodyAssetRecoveryRepository;
 import com.surprising.wallet.custody.service.CustodyAssetRecoveryService;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 

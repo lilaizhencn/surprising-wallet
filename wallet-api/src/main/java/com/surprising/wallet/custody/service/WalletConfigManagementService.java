@@ -29,7 +29,7 @@ import org.web3j.utils.Numeric;
 
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 
 /**
  * 钱包配置管理服务，管理系统配置项（环境策略、RPC 策略）的 Console CRUD。

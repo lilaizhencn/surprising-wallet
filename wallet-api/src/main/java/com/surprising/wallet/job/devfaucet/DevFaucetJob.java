@@ -1,7 +1,7 @@
 package com.surprising.wallet.job.devfaucet;
 
 import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +18,7 @@ import java.util.Map;
 import com.surprising.wallet.devfaucet.model.DevFaucetAmountGenerator;
 import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
 import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
-import com.surprising.wallet.devfaucet.repository.DevFaucetRepository;
+import com.surprising.wallet.repository.DevFaucetRepository;
 import com.surprising.wallet.devfaucet.service.DevFaucetRpcClient;
 
 /**

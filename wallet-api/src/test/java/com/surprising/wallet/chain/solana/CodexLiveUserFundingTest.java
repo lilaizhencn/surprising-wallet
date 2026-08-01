@@ -6,7 +6,7 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.chain.evm.EvmDepositScanner;
 import com.surprising.wallet.chain.evm.EvmLogScanner;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import org.bitcoinj.crypto.ECKey;
 import org.junit.jupiter.api.Assumptions;

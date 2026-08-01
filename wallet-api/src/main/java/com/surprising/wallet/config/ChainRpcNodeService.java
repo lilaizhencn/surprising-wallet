@@ -1,7 +1,7 @@
 package com.surprising.wallet.config;
 
 import com.surprising.wallet.common.chain.ChainRpcNode;
-import com.surprising.wallet.deposit.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

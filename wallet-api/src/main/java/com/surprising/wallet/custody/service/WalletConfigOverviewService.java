@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.custody.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyRepository;
 
 /**
  * 钱包配置概览服务，提供环境策略、RPC 策略、链配置的健康检查总览。
