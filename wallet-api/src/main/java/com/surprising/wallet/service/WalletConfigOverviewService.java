@@ -4,7 +4,6 @@ import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.config.WalletEnvironmentPolicy;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,9 +19,14 @@ import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
-import com.surprising.wallet.custody.exception.CustodyForbiddenException;
-import com.surprising.wallet.custody.model.CustodyPrincipal;
+import com.surprising.wallet.exception.CustodyForbiddenException;
+import com.surprising.wallet.model.CustodyPrincipal;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainRpcNodeRepository;
 import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.repository.WalletSystemConfigRepository;
 
 /**
  * 钱包配置概览服务，提供环境策略、RPC 策略、链配置的健康检查总览。
@@ -41,10 +45,16 @@ public class WalletConfigOverviewService {
             "withdraw", "global.withdraw.enabled",
             "collection", "global.collection.enabled",
             "transfer", "global.transfer.enabled");
-    /**
-     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final JdbcTemplate jdbc;
+    /** 全局系统配置仓储。 */
+    private final WalletSystemConfigRepository systemConfigRepository;
+    /** 链配置仓储。 */
+    private final ChainProfileRepository chainProfileRepository;
+    /** 代币配置仓储。 */
+    private final TokenConfigRepository tokenConfigRepository;
+    /** 链资产仓储。 */
+    private final ChainAssetRepository chainAssetRepository;
+    /** RPC 节点仓储。 */
+    private final ChainRpcNodeRepository rpcNodeRepository;
     /**
      * 保存 {@code custodyRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
@@ -62,25 +72,39 @@ public class WalletConfigOverviewService {
      * 构造 {@code WalletConfigOverviewService}，初始化该组件运行所需的状态和依赖。
      */
     @Autowired
-    public WalletConfigOverviewService(JdbcTemplate jdbc,
+    public WalletConfigOverviewService(WalletSystemConfigRepository systemConfigRepository,
+                                       ChainProfileRepository chainProfileRepository,
+                                       TokenConfigRepository tokenConfigRepository,
+                                       ChainAssetRepository chainAssetRepository,
+                                       ChainRpcNodeRepository rpcNodeRepository,
                                        CustodyRepository custodyRepository,
                                        WalletKeyMaterialProvider keyMaterial,
                                        @Value("${sw.app.env.name:dev}")
                                        String environment) {
-        this.jdbc = jdbc;
+        this.systemConfigRepository = systemConfigRepository;
+        this.chainProfileRepository = chainProfileRepository;
+        this.tokenConfigRepository = tokenConfigRepository;
+        this.chainAssetRepository = chainAssetRepository;
+        this.rpcNodeRepository = rpcNodeRepository;
         this.custodyRepository = custodyRepository;
         this.keysetConfigured = keyMaterial::isConfigured;
         this.environment = normalizeEnvironment(environment);
     }
 
-    /**
-     * 构造 {@code WalletConfigOverviewService}，初始化该组件运行所需的状态和依赖。
-     */
-    public WalletConfigOverviewService(JdbcTemplate jdbc,
-                                CustodyRepository custodyRepository,
-                                BooleanSupplier keysetConfigured,
-                                String environment) {
-        this.jdbc = jdbc;
+    /** 使用单表仓储构造概览服务，便于测试替换业务依赖。 */
+    public WalletConfigOverviewService(WalletSystemConfigRepository systemConfigRepository,
+                                       ChainProfileRepository chainProfileRepository,
+                                       TokenConfigRepository tokenConfigRepository,
+                                       ChainAssetRepository chainAssetRepository,
+                                       ChainRpcNodeRepository rpcNodeRepository,
+                                       CustodyRepository custodyRepository,
+                                       BooleanSupplier keysetConfigured,
+                                       String environment) {
+        this.systemConfigRepository = systemConfigRepository;
+        this.chainProfileRepository = chainProfileRepository;
+        this.tokenConfigRepository = tokenConfigRepository;
+        this.chainAssetRepository = chainAssetRepository;
+        this.rpcNodeRepository = rpcNodeRepository;
         this.custodyRepository = custodyRepository;
         this.keysetConfigured = keysetConfigured;
         this.environment = normalizeEnvironment(environment);
@@ -184,17 +208,7 @@ public class WalletConfigOverviewService {
      */
     private GlobalSwitches loadSwitches() {
         Map<String, Boolean> values = new HashMap<>();
-        for (Map<String, Object> row : jdbc.queryForList("""
-                select config_key, config_value, enabled
-                  from wallet_system_config
-                 where config_key in (
-                    'global.all.enabled',
-                    'global.scan.enabled',
-                    'global.withdraw.enabled',
-                    'global.collection.enabled',
-                    'global.transfer.enabled'
-                 )
-                """)) {
+        for (Map<String, Object> row : systemConfigRepository.listGlobalSwitches()) {
             boolean enabled = booleanValue(row.get("enabled"), true);
             values.put(stringValue(row.get("config_key")),
                     enabled && Boolean.parseBoolean(stringValue(row.get("config_value"))));
@@ -210,12 +224,7 @@ public class WalletConfigOverviewService {
      * 获取或查询 {@code loadProfiles} 对应的数据，供调用方读取当前状态。
      */
     private List<ProfileRow> loadProfiles() {
-        return jdbc.queryForList("""
-                select id, chain, network, family, enabled,
-                       scan_enabled, withdraw_enabled, collection_enabled, transfer_enabled
-                  from chain_profile
-                 order by chain, network
-                """).stream().map(row -> new ProfileRow(
+        return chainProfileRepository.listAll().stream().map(row -> new ProfileRow(
                 longValue(row.get("id")),
                 stringValue(row.get("chain")),
                 stringValue(row.get("network")),
@@ -230,12 +239,7 @@ public class WalletConfigOverviewService {
      * 获取或查询 {@code loadTokens} 对应的数据，供调用方读取当前状态。
      */
     private List<TokenRow> loadTokens() {
-        return jdbc.queryForList("""
-                select chain, network, symbol, enabled,
-                       coalesce(contract_address, contract_address_base58, contract_address_hex) as contract_address
-                  from token_config
-                 order by chain, network, symbol
-                """).stream().map(row -> new TokenRow(
+        return tokenConfigRepository.listAll().stream().map(row -> new TokenRow(
                 stringValue(row.get("chain")),
                 stringValue(row.get("network")),
                 stringValue(row.get("symbol")),
@@ -246,12 +250,7 @@ public class WalletConfigOverviewService {
      * 获取或查询 {@code loadAssets} 对应的数据，供调用方读取当前状态。
      */
     private List<AssetRow> loadAssets() {
-        return jdbc.queryForList("""
-                select chain, symbol, contract_address, active
-                  from chain_asset
-                 where native_asset = false
-                 order by chain, symbol
-                """).stream().map(row -> new AssetRow(
+        return chainAssetRepository.listNonNativeOverview().stream().map(row -> new AssetRow(
                 stringValue(row.get("chain")),
                 stringValue(row.get("symbol")),
                 stringValue(row.get("contract_address")),
@@ -261,11 +260,7 @@ public class WalletConfigOverviewService {
      * 获取或查询 {@code loadRpcNodes} 对应的数据，供调用方读取当前状态。
      */
     private List<RpcRow> loadRpcNodes() {
-        return jdbc.queryForList("""
-                select chain, network, environment, enabled
-                  from chain_rpc_node
-                 order by chain, network, environment, priority, id
-                """).stream().map(row -> new RpcRow(
+        return rpcNodeRepository.listOverview().stream().map(row -> new RpcRow(
                 stringValue(row.get("chain")),
                 stringValue(row.get("network")),
                 stringValue(row.get("environment")),
@@ -464,16 +459,7 @@ public class WalletConfigOverviewService {
      * 写入或更新 {@code upsertSwitch} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     private void upsertSwitch(String key, boolean value) {
-        jdbc.update("""
-                insert into wallet_system_config(
-                    config_key, config_value, value_type, enabled, remark)
-                values (?, ?, 'boolean', true, 'Managed by the platform wallet configuration console')
-                on conflict (config_key) do update set
-                    config_value = excluded.config_value,
-                    value_type = 'boolean',
-                    enabled = true,
-                    updated_at = now()
-                """, key, Boolean.toString(value));
+        systemConfigRepository.upsertBoolean(key, value);
     }
 
     /**

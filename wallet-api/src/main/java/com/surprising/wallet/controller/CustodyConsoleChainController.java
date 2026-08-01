@@ -1,0 +1,60 @@
+package com.surprising.wallet.controller;
+
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+import com.surprising.wallet.model.CustodyRequestSupport;
+import com.surprising.wallet.service.CustodyTenantChainService;
+
+/**
+ * Console 链配置控制器。
+ *
+ * <p>端点路径：/custody/console/v1/{tenantId}/chains。
+ * 提供租户链启用状态的查询（GET）和更新（PUT）功能。
+ */
+@RestController
+@RequestMapping("/custody/console/v1/chains")
+public class CustodyConsoleChainController {
+    /** 链配置服务，查询/更新租户链启用开关。 */
+    private final CustodyTenantChainService chains;
+
+    /**
+     * 注入链服务。
+     */
+    public CustodyConsoleChainController(CustodyTenantChainService chains) {
+        this.chains = chains;
+    }
+
+    /**
+     * 获取当前租户链列表与链级配置。
+     */
+    @GetMapping
+    public List<CustodyTenantChainService.ChainView> list(HttpServletRequest request) {
+        return chains.list(CustodyRequestSupport.requirePrincipal(request));
+    }
+
+    /**
+     * 按链标识更新启用状态。
+     */
+    @PutMapping("/{chain}")
+    public CustodyTenantChainService.ChainView setEnabled(
+            @PathVariable String chain,
+            @RequestBody UpdateTenantChainRequest body,
+            HttpServletRequest request) {
+        return chains.setEnabled(CustodyRequestSupport.requirePrincipal(request), chain,
+                body.enabled(), CustodyRequestSupport.clientIp(request));
+    }
+
+    /**
+     * 链启用开关请求体。
+     */
+    public record UpdateTenantChainRequest(boolean enabled) {
+    }
+}

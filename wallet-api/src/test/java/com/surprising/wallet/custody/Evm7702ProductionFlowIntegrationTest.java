@@ -4,9 +4,9 @@ import com.surprising.wallet.service.CustodyWithdrawalReconciliationService;
 import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.service.CustodyCryptoService;
 import com.surprising.wallet.service.CustodyWithdrawalService;
-import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.custody.model.CustodySecurityProperties;
-import com.surprising.wallet.custody.observer.CustodyDepositCreditObserver;
+import com.surprising.wallet.model.CustodyPrincipal;
+import com.surprising.wallet.model.CustodySecurityProperties;
+import com.surprising.wallet.observer.CustodyDepositCreditObserver;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
 import com.surprising.wallet.service.CustodyGasService;
 import com.surprising.wallet.service.CustodyTenantChainService;
@@ -21,10 +21,10 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.key.WalletKeyConfig;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
-import com.surprising.wallet.account.coordinator.Evm7702CollectionCoordinator;
+import com.surprising.wallet.coordinator.Evm7702CollectionCoordinator;
 import com.surprising.wallet.repository.Evm7702CollectionRepository;
 import com.surprising.wallet.service.Evm7702CollectionWorkflowService;
-import com.surprising.wallet.account.coordinator.Evm7702WithdrawalCoordinator;
+import com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator;
 import com.surprising.wallet.repository.Evm7702WithdrawalRepository;
 import com.surprising.wallet.service.Evm7702WithdrawalWorkflowService;
 import com.surprising.wallet.chain.evm.EvmDepositScanner;
@@ -33,7 +33,13 @@ import com.surprising.wallet.config.AccountSecp256k1KeyService;
 import com.surprising.wallet.config.ChainRpcNodeService;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
-import com.surprising.wallet.deposit.observer.DepositCreditObserver;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.CustodyAddressRepository;
+import com.surprising.wallet.repository.LedgerBalanceRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.observer.DepositCreditObserver;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -207,7 +213,10 @@ class Evm7702ProductionFlowIntegrationTest {
         CustodyTenantChainService tenantChainService = new CustodyTenantChainService(
                 tenantChainRepository, custodyRepository, null);
         CustodyWithdrawalExecutionService withdrawalExecution =
-                new CustodyWithdrawalExecutionService(jdbc, chainRepository, runtimeConfig);
+                new CustodyWithdrawalExecutionService(chainRepository, runtimeConfig,
+                        new ChainAssetRepository(jdbc), new ChainProfileRepository(jdbc),
+                        new TokenConfigRepository(jdbc), new CustodyAddressRepository(jdbc),
+                        new ChainAddressRepository(jdbc), new LedgerBalanceRepository(jdbc));
         withdrawalService = new CustodyWithdrawalService(
                 custodyRepository, withdrawalExecution,
                 new CustodyGasService(custodyRepository, null, null),

@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.custody.model.CidrMatcher;
+import com.surprising.wallet.model.CidrMatcher;
 
 /**
  * 验证 {@code CidrMatcherTest} 覆盖的业务流程、边界条件和异常行为。

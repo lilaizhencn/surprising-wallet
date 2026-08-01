@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.custody.model.CustodyWebhookRetryPolicy;
+import com.surprising.wallet.model.CustodyWebhookRetryPolicy;
 
 /**
  * 验证 {@code CustodyWebhookRetryPolicyTest} 覆盖的业务流程、边界条件和异常行为。

@@ -1,8 +1,8 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.custody.exception.CustodyForbiddenException;
-import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.custody.model.PageView;
+import com.surprising.wallet.exception.CustodyForbiddenException;
+import com.surprising.wallet.model.CustodyPrincipal;
+import com.surprising.wallet.model.PageView;
 import com.surprising.wallet.repository.CustodyRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

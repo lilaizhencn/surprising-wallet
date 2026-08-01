@@ -27,15 +27,13 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.custody.model.CustodyPrincipal.ActorType;
-import com.surprising.wallet.service.CustodyAssetDashboardService.AssetRow;
-import com.surprising.wallet.service.CustodyAddressService.CreateAddressCommand;
+
 import com.surprising.wallet.service.CustodyAddressService;
 import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
 import com.surprising.wallet.service.CustodyAssetDashboardService;
-import com.surprising.wallet.custody.exception.CustodyForbiddenException;
+import com.surprising.wallet.exception.CustodyForbiddenException;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
-import com.surprising.wallet.custody.model.CustodyPrincipal;
+import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
 import com.surprising.wallet.service.CustodyTenantChainService;

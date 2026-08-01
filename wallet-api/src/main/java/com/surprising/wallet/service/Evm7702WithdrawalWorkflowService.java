@@ -22,7 +22,6 @@ import org.web3j.abi.FunctionEncoder;
 import org.web3j.abi.FunctionReturnDecoder;
 import org.web3j.abi.TypeReference;
 import org.web3j.abi.datatypes.Address;
-import org.web3j.abi.datatypes.DynamicBytes;
 import org.web3j.abi.datatypes.Function;
 import org.web3j.abi.datatypes.Type;
 import org.web3j.abi.datatypes.generated.Uint256;
@@ -30,7 +29,6 @@ import org.web3j.crypto.AuthorizationTuple;
 import org.web3j.crypto.Credentials;
 import org.web3j.crypto.Hash;
 import org.web3j.protocol.Web3j;
-import org.web3j.protocol.core.DefaultBlockParameter;
 import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.Request;
 import org.web3j.protocol.core.Response;
@@ -54,7 +52,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.surprising.wallet.repository.Evm7702CollectionRepository;
-import com.surprising.wallet.account.coordinator.Evm7702WithdrawalCoordinator;
+import com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator;
 import com.surprising.wallet.repository.Evm7702WithdrawalRepository;
 
 /**

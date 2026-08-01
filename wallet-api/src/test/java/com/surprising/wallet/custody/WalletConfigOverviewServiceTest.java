@@ -13,12 +13,15 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.custody.model.CustodyPrincipal.ActorType;
-import com.surprising.wallet.custody.model.CustodyPrincipal;
+
+import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;
-import com.surprising.wallet.service.WalletConfigOverviewService.SummaryView;
-import com.surprising.wallet.service.WalletConfigOverviewService.UpdateGlobalSwitchesCommand;
 import com.surprising.wallet.service.WalletConfigOverviewService;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainRpcNodeRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.repository.WalletSystemConfigRepository;
 /**
  * 验证 {@code WalletConfigOverviewServiceTest} 覆盖的业务流程、边界条件和异常行为。
  */
@@ -108,7 +111,13 @@ class WalletConfigOverviewServiceTest {
                                                        String environment,
                                                        boolean keysetConfigured,
                                                        CustodyRepository audit) {
-        return new WalletConfigOverviewService(jdbc, audit, () -> keysetConfigured, environment);
+        return new WalletConfigOverviewService(
+                new WalletSystemConfigRepository(jdbc),
+                new ChainProfileRepository(jdbc),
+                new TokenConfigRepository(jdbc),
+                new ChainAssetRepository(jdbc),
+                new ChainRpcNodeRepository(jdbc),
+                audit, () -> keysetConfigured, environment);
     }
 
     /**

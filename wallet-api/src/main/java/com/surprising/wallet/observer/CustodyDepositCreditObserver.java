@@ -1,0 +1,297 @@
+package com.surprising.wallet.observer;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import com.surprising.wallet.common.chain.DepositEvent;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyTenantChainRepository;
+
+/**
+ * 托管充值入账观察者，实现 {@link DepositCreditObserver}，在充值确认后：
+ * <ol>
+ *   <li>根据 chain_address 匹配托管地址所属租户</li>
+ *   <li>校验租户链是否已开通且充值开关已启用</li>
+ *   <li>分配 deposit_record 和 ledger_balance 的 tenant_id</li>
+ *   <li>创建 custody_deposit 记录和 DEPOSIT CREDIT 分类账条目</li>
+ *   <li>自动应用尚未弥补的重组赤字（apply open reorg deficits）</li>
+ *   <li>通过 {@link CustodyRepository#insertEventWithDeliveries} 发布 DEPOSIT.CONFIRMED Webhook 事件</li>
+ * </ol>
+ *
+ * @see DepositCreditObserver
+ * @see CustodyRepository
+ * @see CustodyTenantChainRepository
+ */
+@Component
+public class CustodyDepositCreditObserver implements DepositCreditObserver {
+    /** Webhook 事件类型：充值已确认 */
+    private static final String EVENT_TYPE = "DEPOSIT.CONFIRMED";
+    /**
+     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
+    private final JdbcTemplate jdbc;
+    /**
+     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
+     */
+    private final ObjectMapper objectMapper;
+    /**
+     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     */
+    private final CustodyRepository repository;
+    /**
+     * 保存 {@code tenantChains}，表示链、网络、资产或代币配置。
+     */
+    private final CustodyTenantChainRepository tenantChains;
+
+    /**
+     * 构造器。
+     *
+     * @param jdbc         JDBC 模板
+     * @param objectMapper JSON 序列化器
+     * @param repository   托管仓储
+     * @param tenantChains 租户链仓储
+     */
+    public CustodyDepositCreditObserver(JdbcTemplate jdbc, ObjectMapper objectMapper,
+                                        CustodyRepository repository,
+                                        CustodyTenantChainRepository tenantChains) {
+        this.jdbc = jdbc;
+        this.objectMapper = objectMapper;
+        this.repository = repository;
+        this.tenantChains = tenantChains;
+    }
+
+    /**
+     * 执行 {@code onDepositCredited} 对应的辅助逻辑，完成数据处理并维护状态边界。
+     */
+    @Override
+    public void onDepositCredited(DepositEvent event, long logIndex, String accountId) {
+        String chain = event.chainType().name();
+        List<AddressOwner> owners = jdbc.query("""
+                        select c.id as custody_address_id, c.tenant_id, c.subject,
+                               c.address, c.memo, c.source,
+                               case when exists (
+                                   select 1 from custody_gas_account g
+                                    where g.tenant_id = c.tenant_id
+                                      and g.custody_address_id = c.id
+                               ) then 'GAS_FUNDING' else 'CUSTOMER' end as purpose
+                          from custody_address c
+                          join chain_address base
+                            on base.tenant_id = c.tenant_id
+                           and base.id = c.chain_address_id
+                         where c.chain = ?
+                           and exists (
+                               select 1
+                                 from chain_address related
+                                where related.tenant_id = c.tenant_id
+                                  and related.chain = base.chain
+                                  and related.user_id = base.user_id
+                                  and related.biz = base.biz
+                                  and related.address_index = base.address_index
+                                  and related.wallet_role = base.wallet_role
+                                  and related.enabled = true
+                                  and (lower(related.account_id) = lower(?)
+                                       or lower(related.address) = lower(?))
+                           )
+                         limit 2
+                        """, (rs, rowNum) -> new AddressOwner(
+                        rs.getObject("custody_address_id", UUID.class),
+                        rs.getObject("tenant_id", UUID.class),
+                        rs.getString("subject"),
+                        rs.getString("address"),
+                        rs.getString("memo"),
+                        rs.getString("source"),
+                        rs.getString("purpose")),
+                chain, accountId, event.toAddress());
+        if (owners.isEmpty()) {
+            return;
+        }
+        if (owners.size() > 1) {
+            throw new IllegalStateException("deposit address maps to more than one custody tenant");
+        }
+        AddressOwner owner = owners.getFirst();
+        if (!tenantChains.depositEnabled(
+                owner.tenantId(), chain, event.assetSymbol())) {
+            return;
+        }
+        DepositProjection depositProjection = jdbc.queryForObject("""
+                        select id, credit_generation from deposit_record
+                         where chain = ? and tx_hash = ? and log_index = ?
+                        """, (rs, rowNum) -> new DepositProjection(
+                        rs.getLong("id"), rs.getInt("credit_generation")),
+                chain, event.txId(), logIndex);
+        if (depositProjection == null) {
+            throw new IllegalStateException("credited deposit record is missing");
+        }
+        long depositRecordId = depositProjection.id();
+        if (jdbc.update("""
+                        update deposit_record
+                           set tenant_id = ?, updated_at = now()
+                         where id = ? and (tenant_id is null or tenant_id = ?)
+                        """, owner.tenantId(), depositRecordId, owner.tenantId()) != 1) {
+            throw new IllegalStateException("deposit record belongs to another tenant");
+        }
+        if (jdbc.update("""
+                        update ledger_balance
+                           set tenant_id = ?, updated_at = now()
+                         where chain = ? and asset_symbol = ?
+                           and lower(account_id) = lower(?)
+                           and (tenant_id is null or tenant_id = ?)
+                        """, owner.tenantId(), chain, event.assetSymbol(), accountId,
+                owner.tenantId()) != 1) {
+            throw new IllegalStateException("ledger balance belongs to another tenant");
+        }
+
+        UUID custodyDepositId = jdbc.queryForObject("""
+                        insert into custody_deposit(
+                            id, tenant_id, custody_address_id, deposit_record_id, chain,
+                            asset_symbol, tx_hash, log_index, amount, status, credited_at)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'CONFIRMED', now())
+                        on conflict (tenant_id, deposit_record_id) do update set
+                            status = excluded.status,
+                            credited_at = excluded.credited_at,
+                            updated_at = now()
+                        returning id
+                        """, UUID.class, UUID.randomUUID(), owner.tenantId(), owner.addressId(), depositRecordId,
+                chain, event.assetSymbol(), event.txId(), logIndex, event.amount());
+        if (custodyDepositId == null) {
+            throw new IllegalStateException("failed to persist custody deposit");
+        }
+
+        String referenceId = chain + ":" + event.txId() + ":" + logIndex
+                + ":credit:" + depositProjection.creditGeneration();
+        jdbc.update("""
+                        insert into custody_ledger_entry(
+                            id, tenant_id, custody_address_id, chain, asset_symbol, account_id,
+                            entry_type, direction, amount, reference_type, reference_id)
+                        values (?, ?, ?, ?, ?, ?, 'DEPOSIT', 'CREDIT', ?, 'DEPOSIT', ?)
+                        on conflict (tenant_id, entry_type, reference_type, reference_id) do nothing
+                        """, UUID.randomUUID(), owner.tenantId(), owner.addressId(), chain,
+                event.assetSymbol(), accountId, event.amount(), referenceId);
+
+        BigDecimal deficitApplied = applyOpenDeficits(
+                owner, event, accountId, referenceId, event.amount());
+
+        UUID eventId = UUID.randomUUID();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("depositId", custodyDepositId);
+        data.put("subject", owner.subject());
+        data.put("chain", chain);
+        data.put("asset", event.assetSymbol());
+        data.put("address", owner.address());
+        data.put("memo", owner.memo());
+        data.put("purpose", owner.purpose());
+        data.put("amount", event.amount());
+        data.put("txHash", event.txId());
+        data.put("logIndex", logIndex);
+        data.put("blockHeight", event.blockHeight());
+        data.put("blockHash", event.blockHash());
+        data.put("confirmations", event.confirmations());
+        data.put("creditGeneration", depositProjection.creditGeneration());
+        data.put("appliedToReorgDeficit", deficitApplied);
+        data.put("availableAmount", event.amount().subtract(deficitApplied));
+        data.put("confirmedAt", Instant.now());
+        String payload = json(Map.of(
+                "id", eventId,
+                "type", EVENT_TYPE,
+                "createdAt", Instant.now(),
+                "data", data));
+
+        repository.insertEventWithDeliveries(
+                eventId, owner.tenantId(), EVENT_TYPE, "DEPOSIT", referenceId, payload,
+                "API".equals(owner.source()));
+    }
+
+    /**
+     * 设置或更新 {@code applyOpenDeficits} 对应的状态，并保持相关业务字段一致。
+     */
+    private BigDecimal applyOpenDeficits(AddressOwner owner, DepositEvent event, String accountId,
+                                         String creditReference, BigDecimal creditAmount) {
+        List<Deficit> deficits = jdbc.query("""
+                        select id, deficit_amount, recovered_amount
+                          from custody_reorg_deficit
+                         where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
+                           and status = 'OPEN'
+                         order by created_at, id
+                         for update
+                        """, (rs, rowNum) -> new Deficit(
+                        rs.getObject("id", UUID.class), rs.getBigDecimal("deficit_amount"),
+                        rs.getBigDecimal("recovered_amount")),
+                owner.tenantId(), event.chainType().name(), event.assetSymbol(), accountId);
+        BigDecimal remaining = creditAmount;
+        BigDecimal appliedTotal = BigDecimal.ZERO;
+        for (Deficit deficit : deficits) {
+            if (remaining.signum() <= 0) {
+                break;
+            }
+            BigDecimal outstanding = deficit.amount().subtract(deficit.recovered());
+            BigDecimal applied = outstanding.min(remaining);
+            if (applied.signum() <= 0) {
+                continue;
+            }
+            if (jdbc.update("""
+                            update ledger_balance
+                               set available_balance = available_balance - ?,
+                                   total_balance = total_balance - ?, updated_at = now()
+                             where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
+                               and available_balance >= ? and total_balance >= ?
+                            """, applied, applied, owner.tenantId(), event.chainType().name(),
+                    event.assetSymbol(), accountId, applied, applied) != 1) {
+                throw new IllegalStateException("unable to apply deposit to reorg deficit");
+            }
+            jdbc.update("""
+                            update custody_reorg_deficit
+                               set recovered_amount = recovered_amount + ?,
+                                   status = case when recovered_amount + ? >= deficit_amount
+                                       then 'RECOVERED' else 'OPEN' end,
+                                   updated_at = now()
+                             where id = ? and tenant_id = ?
+                            """, applied, applied, deficit.id(), owner.tenantId());
+            jdbc.update("""
+                            insert into custody_ledger_entry(
+                                id, tenant_id, custody_address_id, chain, asset_symbol, account_id,
+                                entry_type, direction, amount, reference_type, reference_id)
+                            values (?, ?, ?, ?, ?, ?, 'REORG_DEFICIT_RECOVERY', 'DEBIT', ?, 'REORG_DEFICIT', ?)
+                            on conflict (tenant_id, entry_type, reference_type, reference_id) do nothing
+                            """, UUID.randomUUID(), owner.tenantId(), owner.addressId(),
+                    event.chainType().name(), event.assetSymbol(), accountId, applied,
+                    creditReference + ":deficit:" + deficit.id());
+            remaining = remaining.subtract(applied);
+            appliedTotal = appliedTotal.add(applied);
+        }
+        return appliedTotal;
+    }
+    /**
+     * 编码 {@code json} 对应的数据，生成链上或接口所需的表示。
+     */
+    private String json(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JacksonException e) {
+            throw new IllegalStateException("failed to serialize custody deposit event", e);
+        }
+    }
+
+    private record AddressOwner(
+            UUID addressId,
+            UUID tenantId,
+            String subject,
+            String address,
+            String memo,
+            String source,
+            String purpose
+    ) {
+    }
+    private record DepositProjection(long id, int creditGeneration) {
+    }
+    private record Deficit(UUID id, BigDecimal amount, BigDecimal recovered) {
+    }
+}

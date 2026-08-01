@@ -1,6 +1,6 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.custody.model.CustodyWebhookRetryPolicy;
+import com.surprising.wallet.model.CustodyWebhookRetryPolicy;
 import com.surprising.wallet.repository.CustodyRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

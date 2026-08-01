@@ -16,8 +16,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
-import com.surprising.wallet.custody.exception.CustodyForbiddenException;
-import com.surprising.wallet.custody.model.CustodyPrincipal;
+import com.surprising.wallet.exception.CustodyForbiddenException;
+import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;
 
 /**

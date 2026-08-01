@@ -7,9 +7,9 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import com.surprising.wallet.custody.controller.api.CustodyPublicApiController.CreatePublicAddressRequest;
+
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
-import com.surprising.wallet.custody.controller.api.CustodyPublicApiController;
+import com.surprising.wallet.controller.CustodyPublicApiController;
 
 /**
  * 验证 {@code CustodyPublicApiControllerTest} 覆盖的业务流程、边界条件和异常行为。

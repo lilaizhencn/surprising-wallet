@@ -15,18 +15,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.custody.model.CustodyPrincipal.ActorType;
-import com.surprising.wallet.service.CustodyAssetRecoveryService.ApproveCommand;
-import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway;
+
+import com.surprising.wallet.service.custody.CustodyAssetRecoveryChainGateway;
 import com.surprising.wallet.repository.CustodyAssetRecoveryRepository;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.CustodyAddressRepository;
+import com.surprising.wallet.repository.DepositRecordRepository;
 import com.surprising.wallet.service.CustodyAssetRecoveryService;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
-import com.surprising.wallet.custody.model.CustodyPrincipal;
+import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;
-import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway.ExecutionRequest;
-import com.surprising.wallet.service.CustodyAssetRecoveryService.SubmitCommand;
-import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway.Verification;
-import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway.VerificationRequest;
 
 /**
  * 验证 {@code CustodyAssetRecoveryIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
@@ -55,7 +53,9 @@ class CustodyAssetRecoveryIntegrationTest {
         Fixture fixture = fixture();
         FakeGateway gateway = new FakeGateway();
         CustodyAssetRecoveryService service = new CustodyAssetRecoveryService(
-                new CustodyAssetRecoveryRepository(jdbc), new CustodyRepository(jdbc), jdbc,
+                new CustodyAssetRecoveryRepository(jdbc), new CustodyRepository(jdbc),
+                new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc),
+                new DepositRecordRepository(jdbc),
                 List.of(gateway), new CustodyJacksonConfiguration().custodyObjectMapper());
         var command = new CustodyAssetRecoveryService.SubmitCommand(
                 "BNB", "ETH", "USDT", "0x1111111111111111111111111111111111111111",
@@ -111,7 +111,9 @@ class CustodyAssetRecoveryIntegrationTest {
     void unownedDestinationIsRejectedBeforeARecoveryCaseIsCreated() {
         Fixture fixture = fixture();
         CustodyAssetRecoveryService service = new CustodyAssetRecoveryService(
-                new CustodyAssetRecoveryRepository(jdbc), new CustodyRepository(jdbc), jdbc,
+                new CustodyAssetRecoveryRepository(jdbc), new CustodyRepository(jdbc),
+                new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc),
+                new DepositRecordRepository(jdbc),
                 List.of(new FakeGateway()), new CustodyJacksonConfiguration().custodyObjectMapper());
         var command = new CustodyAssetRecoveryService.SubmitCommand(
                 "BNB", "ETH", "BNB", null, "0xunknown", 0L,

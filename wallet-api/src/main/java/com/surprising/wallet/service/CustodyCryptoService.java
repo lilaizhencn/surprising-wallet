@@ -16,7 +16,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 
-import com.surprising.wallet.custody.model.CustodySecurityProperties;
+import com.surprising.wallet.model.CustodySecurityProperties;
 
 /**
  * 托管密码学服务，提供 AES-256-GCM 加密和 HMAC-SHA256 签名。

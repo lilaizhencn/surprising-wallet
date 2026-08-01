@@ -1,21 +1,24 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.custody.model.PageView;
+import com.surprising.wallet.model.PageView;
 import com.surprising.wallet.repository.CustodyAssetRecoveryRepository;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.CustodyRepository;
-import com.surprising.wallet.custody.gateway.CustodyAssetRecoveryChainGateway;
-import com.surprising.wallet.custody.exception.CustodyForbiddenException;
-import com.surprising.wallet.custody.model.CustodyPrincipal;
+import com.surprising.wallet.repository.DepositRecordRepository;
+import com.surprising.wallet.service.custody.CustodyAssetRecoveryChainGateway;
+import com.surprising.wallet.exception.CustodyForbiddenException;
+import com.surprising.wallet.model.CustodyPrincipal;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.repository.CustodyAssetRecoveryRepository.RecoveryRecord;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
@@ -44,7 +47,11 @@ public class CustodyAssetRecoveryService {
     /**
      * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final JdbcTemplate jdbc;
+    private final CustodyAddressRepository custodyAddressRepository;
+    /** chain_address 单表仓储。 */
+    private final ChainAddressRepository chainAddressRepository;
+    /** deposit_record 单表仓储。 */
+    private final DepositRecordRepository depositRecordRepository;
     /**
      * 保存 {@code gateways}，用于承载当前对象的运行配置或业务数据。
      */
@@ -57,12 +64,17 @@ public class CustodyAssetRecoveryService {
      * 构造 {@code CustodyAssetRecoveryService}，初始化该组件运行所需的状态和依赖。
      */
     public CustodyAssetRecoveryService(CustodyAssetRecoveryRepository repository,
-                                       CustodyRepository custody, JdbcTemplate jdbc,
+                                       CustodyRepository custody,
+                                       CustodyAddressRepository custodyAddressRepository,
+                                       ChainAddressRepository chainAddressRepository,
+                                       DepositRecordRepository depositRecordRepository,
                                        List<CustodyAssetRecoveryChainGateway> gateways,
                                        ObjectMapper objectMapper) {
         this.repository = repository;
         this.custody = custody;
-        this.jdbc = jdbc;
+        this.custodyAddressRepository = custodyAddressRepository;
+        this.chainAddressRepository = chainAddressRepository;
+        this.depositRecordRepository = depositRecordRepository;
         this.gateways = List.copyOf(gateways);
         this.objectMapper = objectMapper;
     }
@@ -280,11 +292,8 @@ public class CustodyAssetRecoveryService {
      */
     private void publishRecovered(RecoveryRecord recovery) {
         UUID eventId = UUID.randomUUID();
-        boolean automatic = Boolean.TRUE.equals(jdbc.queryForObject("""
-                        select coalesce(bool_or(source = 'API'), false)
-                          from custody_address
-                         where tenant_id = ? and id = ?
-                        """, Boolean.class, recovery.tenantId(), recovery.custodyAddressId()));
+        boolean automatic = custodyAddressRepository.hasApiSource(
+                recovery.tenantId(), recovery.custodyAddressId());
         Map<String, Object> data = Map.of(
                 "recoveryId", recovery.id(),
                 "chain", recovery.actualChain(),
@@ -351,13 +360,8 @@ public class CustodyAssetRecoveryService {
                             recovery.actualChain(), recovery.assetSymbol(), recovery.tokenContract(),
                             recovery.txHash(), requestedLogIndex, recovery.destinationAddress(),
                             recovery.claimedAmount()));
-            Boolean processed = jdbc.queryForObject("""
-                            select exists(select 1 from deposit_record
-                                where chain = ? and lower(tx_hash) = lower(?) and log_index = ?
-                                  and canonical_status = 'CANONICAL')
-                            """, Boolean.class, recovery.actualChain(), recovery.txHash(),
-                    verification.logIndex());
-            if (Boolean.TRUE.equals(processed)) {
+            if (depositRecordRepository.existsCanonical(recovery.actualChain(), recovery.txHash(),
+                    verification.logIndex())) {
                 return repository.verificationFailed(
                         recovery.id(), "this transfer is already recorded by the deposit system");
             }
@@ -372,23 +376,18 @@ public class CustodyAssetRecoveryService {
      */
     private Ownership requireOwnership(UUID tenantId, String destinationAddress,
                                        String preferredChain) {
-        List<Ownership> owners = jdbc.query("""
-                        select custody.id as custody_address_id, address.account_id,
-                               address.user_id, address.biz, address.address_index,
-                               address.address, address.owner_address, address.derivation_path,
-                               address.wallet_role
-                          from custody_address custody
-                          join chain_address address
-                            on address.tenant_id = custody.tenant_id
-                           and address.id = custody.chain_address_id
-                         where custody.tenant_id = ? and lower(custody.address) = lower(?)
-                         order by case when custody.chain = ? then 0 else 1 end, custody.created_at
-                        """, (rs, rowNum) -> new Ownership(
-                        rs.getObject("custody_address_id", UUID.class), rs.getString("account_id"),
-                        rs.getLong("user_id"), rs.getInt("biz"), rs.getLong("address_index"),
-                        rs.getString("address"), rs.getString("owner_address"),
-                        rs.getString("derivation_path"), rs.getString("wallet_role")),
-                tenantId, destinationAddress, preferredChain);
+        List<Ownership> owners = new ArrayList<>();
+        for (Map<String, Object> custodyRow : custodyAddressRepository.listByTenantAndAddress(
+                tenantId, destinationAddress, preferredChain)) {
+            long chainAddressId = ((Number) custodyRow.get("chain_address_id")).longValue();
+            chainAddressRepository.findByTenantAndId(tenantId, chainAddressId).ifPresent(address ->
+                    owners.add(new Ownership(
+                            (UUID) custodyRow.get("id"), string(address.get("account_id")),
+                            longValue(address.get("user_id")), intValue(address.get("biz")),
+                            longValue(address.get("address_index")), string(address.get("address")),
+                            nullable(address.get("owner_address")), string(address.get("derivation_path")),
+                            string(address.get("wallet_role")))));
+        }
         if (owners.isEmpty()) {
             throw new IllegalArgumentException(
                     "destination address is not controlled by this tenant");
@@ -477,6 +476,26 @@ public class CustodyAssetRecoveryService {
      */
     private static String normalizedStatus(String status) {
         return status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
+    }
+
+    /** 将数据库对象转换为可空字符串。 */
+    private static String nullable(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    /** 将数据库对象转换为字符串。 */
+    private static String string(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    /** 将数据库数值转换为长整型。 */
+    private static long longValue(Object value) {
+        return value == null ? 0L : ((Number) value).longValue();
+    }
+
+    /** 将数据库数值转换为整型。 */
+    private static int intValue(Object value) {
+        return value == null ? 0 : ((Number) value).intValue();
     }
     /**
      * 转换或计算 {@code upper} 对应的值，统一金额、格式和边界规则。

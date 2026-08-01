@@ -26,6 +26,14 @@ Surprising Wallet 涉及链上资产和钱包账户，所有改动必须保守�
 Controller 只负责请求边界和委托，Job 只负责 `@Scheduled` 调度编排；业务流程、链操作和数据访问必须位于内部应用/领域/基础设施层。
 业务层不得反向依赖 Controller 或 Job，不得把 Servlet API、Web 异常或 HTTP 状态映射带入领域和持久化代码。
 
+### Repository 单表约束
+
+- 每个 `@Repository` 类只允许对应一张数据库表，类名和表名必须一一对应；禁止在同一个 Repository 中混合访问多个业务表。
+- 禁止在 Service、Controller、Job、Gateway 或 Coordinator 中注入 `JdbcTemplate`、拼接 SQL 或执行数据库查询。
+- 跨表业务查询必须由 Service 分别调用对应的单表 Repository，再在内存中完成组合、过滤和业务判定；禁止通过 JOIN、子查询或 `FROM` 多表查询绕过边界。
+- 一个事务可以由 Service 编排多个单表 Repository 的写操作，但事务边界和业务规则必须留在 Service。
+- 新增或拆分表时，必须同时新增对应单表 Repository、架构边界测试，并更新本文件和架构文档。
+
 ### 依赖方向
 
 ```

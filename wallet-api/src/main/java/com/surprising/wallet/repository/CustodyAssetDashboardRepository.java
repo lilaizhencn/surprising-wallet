@@ -1,153 +1,134 @@
 package com.surprising.wallet.repository;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
-/**
- * 托管资产仪表盘仓储，提供租户资产余额汇总、资产价格、重组赤字等看板数据查询。
- *
- * <p>核心查询：</p>
- * <ul>
- *   <li>{@link #balances(UUID)} — 按链和资产符号汇总可用余额、锁定余额、总余额及地址数</li>
- *   <li>{@link #prices()} — 查询所有资产的美元参考价格</li>
- *   <li>{@link #openReorgDeficits(UUID)} — 查询尚未弥补的链重组赤字</li>
- * </ul>
- *
- * @see CustodyRepository
- */
+/** custody_asset_price 单表仓储，并组合单表仓储生成资产看板数据。 */
 @Repository
 public class CustodyAssetDashboardRepository {
-    /**
-     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
+    /** JDBC 模板，仅用于访问 custody_asset_price。 */
     private final JdbcTemplate jdbc;
+    /** 托管地址单表仓储。 */
+    private final CustodyAddressRepository custodyAddresses;
+    /** Gas 账户单表仓储。 */
+    private final CustodyGasAccountRepository gasAccounts;
+    /** 链地址单表仓储。 */
+    private final ChainAddressRepository chainAddresses;
+    /** 链配置单表仓储。 */
+    private final ChainProfileRepository chainProfiles;
+    /** 链资产单表仓储。 */
+    private final ChainAssetRepository chainAssets;
+    /** 代币配置单表仓储。 */
+    private final TokenConfigRepository tokenConfigs;
+    /** 租户链单表仓储。 */
+    private final CustodyTenantChainRepository tenantChains;
+    /** 账本余额单表仓储。 */
+    private final LedgerBalanceRepository ledgerBalances;
+    /** 重组赤字单表仓储。 */
+    private final CustodyReorgDeficitRepository reorgDeficits;
 
-    /**
-     * 构造器。
-     *
-     * @param jdbc JDBC 模板
-     */
+    /** 兼容测试和手工构造。 */
     public CustodyAssetDashboardRepository(JdbcTemplate jdbc) {
+        this(jdbc, new CustodyAddressRepository(jdbc), new CustodyGasAccountRepository(jdbc),
+                new ChainAddressRepository(jdbc), new ChainProfileRepository(jdbc),
+                new ChainAssetRepository(jdbc), new TokenConfigRepository(jdbc),
+                new CustodyTenantChainRepository(jdbc), new LedgerBalanceRepository(jdbc),
+                new CustodyReorgDeficitRepository(jdbc));
+    }
+
+    /** 构造资产看板仓储，注入各自负责单表的数据访问组件。 */
+    @Autowired
+    public CustodyAssetDashboardRepository(
+            JdbcTemplate jdbc,
+            CustodyAddressRepository custodyAddresses,
+            CustodyGasAccountRepository gasAccounts,
+            ChainAddressRepository chainAddresses,
+            ChainProfileRepository chainProfiles,
+            ChainAssetRepository chainAssets,
+            TokenConfigRepository tokenConfigs,
+            CustodyTenantChainRepository tenantChains,
+            LedgerBalanceRepository ledgerBalances,
+            CustodyReorgDeficitRepository reorgDeficits) {
         this.jdbc = jdbc;
+        this.custodyAddresses = custodyAddresses;
+        this.gasAccounts = gasAccounts;
+        this.chainAddresses = chainAddresses;
+        this.chainProfiles = chainProfiles;
+        this.chainAssets = chainAssets;
+        this.tokenConfigs = tokenConfigs;
+        this.tenantChains = tenantChains;
+        this.ledgerBalances = ledgerBalances;
+        this.reorgDeficits = reorgDeficits;
     }
-    /**
-     * 执行 {@code balances} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
+    /** 查询租户的资产余额，跨表关系在 Java 中按单表结果组合。 */
     public List<AssetBalance> balances(UUID tenantId) {
-        return jdbc.query("""
-                with tenant_accounts as (
-                    select distinct c.id as custody_address_id, c.tenant_id,
-                           related.chain, related.account_id
-                      from custody_address c
-                      join chain_address base
-                        on base.tenant_id = c.tenant_id
-                       and base.id = c.chain_address_id
-                      join chain_address related
-                        on related.tenant_id = c.tenant_id
-                       and related.chain = base.chain
-                       and related.user_id = base.user_id
-                       and related.biz = base.biz
-                       and related.address_index = base.address_index
-                       and related.wallet_role = base.wallet_role
-                       and related.enabled = true
-                     where c.tenant_id = ?
-                       and not exists (select 1 from custody_gas_account g
-                                        where g.tenant_id = c.tenant_id
-                                          and g.custody_address_id = c.id)
-                    union
-                    select distinct c.id, c.tenant_id, base.chain, base.account_id
-                      from custody_address c
-                      join chain_address base
-                        on base.tenant_id = c.tenant_id
-                       and base.id = c.chain_address_id
-                     where c.tenant_id = ?
-                       and not exists (select 1 from custody_gas_account g
-                                        where g.tenant_id = c.tenant_id
-                                          and g.custody_address_id = c.id)
-                ), configured_assets as (
-                    select tc.chain, a.symbol as asset_symbol, true as native_asset
-                      from custody_tenant_chain tc
-                      join chain_profile p
-                        on p.chain = tc.chain and p.enabled = true
-                      join chain_asset a
-                        on a.chain = tc.chain and a.active = true and a.native_asset = true
-                     where tc.tenant_id = ? and tc.status = 'ACTIVE'
-                    union all
-                    select tc.chain, a.symbol, false
-                      from custody_tenant_chain tc
-                      join chain_profile p
-                        on p.chain = tc.chain and p.enabled = true
-                      join chain_asset a
-                        on a.chain = tc.chain and a.active = true and a.native_asset = false
-                      join token_config t
-                        on t.chain = tc.chain and t.symbol = a.symbol
-                       and lower(t.network) = lower(p.network)
-                     where tc.tenant_id = ? and tc.status = 'ACTIVE'
-                )
-                select ca.chain, ca.asset_symbol, ca.native_asset,
-                       coalesce(sum(lb.available_balance), 0) as available_balance,
-                       coalesce(sum(lb.locked_balance), 0) as locked_balance,
-                       coalesce(sum(lb.total_balance), 0) as total_balance,
-                       count(distinct ta.custody_address_id)
-                           filter (where lb.account_id is not null) as address_count,
-                       p.usd_price, p.source as price_source, p.observed_at
-                  from configured_assets ca
-                  left join tenant_accounts ta on ta.chain = ca.chain
-                  left join ledger_balance lb
-                    on lb.tenant_id = ta.tenant_id
-                   and lb.chain = ta.chain and lower(lb.account_id) = lower(ta.account_id)
-                   and lb.asset_symbol = ca.asset_symbol
-                  left join custody_asset_price p on p.asset_symbol = ca.asset_symbol
-                 group by ca.chain, ca.asset_symbol, ca.native_asset,
-                          p.usd_price, p.source, p.observed_at
-                 order by ca.native_asset desc, ca.asset_symbol, ca.chain
-                """, (rs, rowNum) -> new AssetBalance(
-                rs.getString("chain"), rs.getString("asset_symbol"),
-                rs.getBoolean("native_asset"),
-                rs.getBigDecimal("available_balance"), rs.getBigDecimal("locked_balance"),
-                rs.getBigDecimal("total_balance"), rs.getLong("address_count"),
-                rs.getBigDecimal("usd_price"), rs.getString("price_source"),
-                instantOrNull(rs.getTimestamp("observed_at"))),
-                tenantId, tenantId, tenantId, tenantId);
+        List<Account> accounts = customerAccounts(tenantId);
+        List<Map<String, Object>> balances = ledgerBalances.listByTenant(tenantId);
+        Map<String, AssetPrice> prices = prices().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        AssetPrice::assetSymbol, row -> row, (left, right) -> left));
+        List<ConfiguredAsset> configuredAssets = configuredAssets(tenantId);
+        List<AssetBalance> result = new ArrayList<>();
+        for (ConfiguredAsset configured : configuredAssets) {
+            List<Map<String, Object>> matched = balances.stream()
+                    .filter(row -> same(row.get("chain"), configured.chain()))
+                    .filter(row -> same(row.get("asset_symbol"), configured.symbol()))
+                    .filter(row -> accounts.stream().anyMatch(account -> account.matches(row)))
+                    .toList();
+            BigDecimal available = sum(matched, "available_balance");
+            BigDecimal locked = sum(matched, "locked_balance");
+            BigDecimal total = sum(matched, "total_balance");
+            long addressCount = matched.stream()
+                    .map(row -> accounts.stream()
+                            .filter(account -> account.matches(row))
+                            .map(Account::custodyAddressId)
+                            .filter(Objects::nonNull)
+                            .findFirst().orElse(null))
+                    .filter(Objects::nonNull)
+                    .distinct().count();
+            AssetPrice price = prices.get(configured.symbol());
+            result.add(new AssetBalance(
+                    configured.chain(), configured.symbol(), configured.nativeAsset(),
+                    available, locked, total, addressCount,
+                    price == null ? null : price.usdPrice(),
+                    price == null ? null : price.source(),
+                    price == null ? null : price.observedAt()));
+        }
+        return result;
     }
-    /**
-     * 执行 {@code prices} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
+    /** 查询全部资产价格。 */
     public List<AssetPrice> prices() {
         return jdbc.query("""
                 select asset_symbol, usd_price, source, observed_at, updated_at
-                  from custody_asset_price order by asset_symbol
+                  from custody_asset_price
+                 order by asset_symbol
                 """, (rs, rowNum) -> new AssetPrice(
                 rs.getString("asset_symbol"), rs.getBigDecimal("usd_price"),
                 rs.getString("source"), rs.getTimestamp("observed_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant()));
     }
-    /**
-     * 执行 {@code openReorgDeficits} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
+    /** 查询尚未弥补的重组赤字。 */
     public List<ReorgDeficit> openReorgDeficits(UUID tenantId) {
-        return jdbc.query("""
-                select id, custody_address_id, chain, asset_symbol,
-                       deficit_amount, recovered_amount, created_at
-                  from custody_reorg_deficit
-                 where tenant_id = ? and status = 'OPEN'
-                 order by created_at desc
-                """, (rs, rowNum) -> new ReorgDeficit(
-                rs.getObject("id", UUID.class),
-                rs.getObject("custody_address_id", UUID.class),
-                rs.getString("chain"), rs.getString("asset_symbol"),
-                rs.getBigDecimal("deficit_amount"), rs.getBigDecimal("recovered_amount"),
-                rs.getTimestamp("created_at").toInstant()), tenantId);
+        return reorgDeficits.listOpen(tenantId);
     }
-    /**
-     * 写入或更新 {@code upsertPrice} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
+
+    /** 新增或更新资产价格。 */
     public AssetPrice upsertPrice(String symbol, BigDecimal price, String source, Instant observedAt) {
         return jdbc.queryForObject("""
                 insert into custody_asset_price(asset_symbol, usd_price, source, observed_at, updated_at)
@@ -164,13 +145,128 @@ public class CustodyAssetDashboardRepository {
                 rs.getTimestamp("updated_at").toInstant()),
                 symbol, price, source, Timestamp.from(observedAt));
     }
-    /**
-     * 转换或计算 {@code instantOrNull} 对应的值，统一金额、格式和边界规则。
-     */
-    private static Instant instantOrNull(Timestamp value) {
-        return value == null ? null : value.toInstant();
+
+    /** 组合租户非 Gas 托管地址和其对应的链地址账户。 */
+    private List<Account> customerAccounts(UUID tenantId) {
+        Set<UUID> gasAddressIds = new HashSet<>(gasAccounts.listCustodyAddressIds(tenantId));
+        List<Map<String, Object>> addresses = custodyAddresses.listByTenant(tenantId).stream()
+                .filter(row -> !gasAddressIds.contains(uuid(row.get("id"))))
+                .toList();
+        List<Map<String, Object>> chainRows = chainAddresses.listByTenant(tenantId);
+        List<Account> result = new ArrayList<>();
+        for (Map<String, Object> address : addresses) {
+            Map<String, Object> base = chainRows.stream()
+                    .filter(row -> Objects.equals(longValue(row.get("id")),
+                            longValue(address.get("chain_address_id"))))
+                    .findFirst().orElse(null);
+            if (base == null) {
+                continue;
+            }
+            List<Map<String, Object>> related = chainRows.stream()
+                    .filter(row -> bool(row.get("enabled")))
+                    .filter(row -> same(row.get("chain"), base.get("chain")))
+                    .filter(row -> Objects.equals(row.get("user_id"), base.get("user_id")))
+                    .filter(row -> Objects.equals(row.get("biz"), base.get("biz")))
+                    .filter(row -> Objects.equals(row.get("address_index"), base.get("address_index")))
+                    .filter(row -> Objects.equals(row.get("wallet_role"), base.get("wallet_role")))
+                    .toList();
+            if (related.isEmpty()) {
+                related = List.of(base);
+            }
+            for (Map<String, Object> row : related) {
+                result.add(new Account(uuid(address.get("id")), text(row.get("chain")),
+                        text(row.get("account_id"))));
+            }
+        }
+        return result;
     }
 
+    /** 组合租户已启用链、链资产和代币配置。 */
+    private List<ConfiguredAsset> configuredAssets(UUID tenantId) {
+        Set<String> activeChains = tenantChains.listActiveChains(tenantId).stream()
+                .map(value -> value.toUpperCase(java.util.Locale.ROOT))
+                .collect(java.util.stream.Collectors.toSet());
+        List<Map<String, Object>> profiles = chainProfiles.listAll().stream()
+                .filter(row -> bool(row.get("enabled")))
+                .filter(row -> activeChains.contains(text(row.get("chain")).toUpperCase(
+                        java.util.Locale.ROOT)))
+                .toList();
+        List<Map<String, Object>> assets = chainAssets.listActive();
+        List<Map<String, Object>> tokens = tokenConfigs.listAll();
+        Map<String, ConfiguredAsset> result = new LinkedHashMap<>();
+        for (Map<String, Object> profile : profiles) {
+            String chain = text(profile.get("chain"));
+            String network = text(profile.get("network"));
+            for (Map<String, Object> asset : assets) {
+                if (!same(asset.get("chain"), chain)) {
+                    continue;
+                }
+                boolean nativeAsset = bool(asset.get("native_asset"));
+                boolean configured = nativeAsset || tokens.stream().anyMatch(token ->
+                        same(token.get("chain"), chain)
+                                && same(token.get("symbol"), asset.get("symbol"))
+                                && same(token.get("network"), network));
+                if (configured) {
+                    ConfiguredAsset value = new ConfiguredAsset(
+                            chain, text(asset.get("symbol")), nativeAsset);
+                    result.putIfAbsent(chain + "\n" + value.symbol(), value);
+                }
+            }
+        }
+        return result.values().stream().toList();
+    }
+
+    /** 对余额列求和。 */
+    private static BigDecimal sum(List<Map<String, Object>> rows, String field) {
+        return rows.stream().map(row -> decimal(row.get(field)))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** 比较两个业务文本。 */
+    private static boolean same(Object left, Object right) {
+        return left != null && right != null
+                && left.toString().equalsIgnoreCase(right.toString());
+    }
+
+    /** 读取文本字段。 */
+    private static String text(Object value) {
+        return value == null ? "" : value.toString();
+    }
+
+    /** 读取布尔字段。 */
+    private static boolean bool(Object value) {
+        return Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(text(value));
+    }
+
+    /** 读取数值字段。 */
+    private static long longValue(Object value) {
+        return value instanceof Number number ? number.longValue() : Long.parseLong(text(value));
+    }
+
+    /** 读取金额字段。 */
+    private static BigDecimal decimal(Object value) {
+        return value instanceof BigDecimal decimal ? decimal
+                : value == null ? BigDecimal.ZERO : new BigDecimal(value.toString());
+    }
+
+    /** 读取 UUID 字段。 */
+    private static UUID uuid(Object value) {
+        return value instanceof UUID result ? result : value == null ? null : UUID.fromString(value.toString());
+    }
+
+    /** 租户账户组合键。 */
+    private record Account(UUID custodyAddressId, String chain, String accountId) {
+        /** 判断账本余额是否属于当前账户。 */
+        private boolean matches(Map<String, Object> row) {
+            return same(chain, row.get("chain")) && same(accountId, row.get("account_id"));
+        }
+    }
+
+    /** 已配置资产。 */
+    private record ConfiguredAsset(String chain, String symbol, boolean nativeAsset) {
+    }
+
+    /** 资产余额。 */
     public record AssetBalance(
             String chain,
             String assetSymbol,
@@ -185,6 +281,7 @@ public class CustodyAssetDashboardRepository {
     ) {
     }
 
+    /** 资产价格。 */
     public record AssetPrice(
             String assetSymbol,
             BigDecimal usdPrice,
@@ -194,6 +291,7 @@ public class CustodyAssetDashboardRepository {
     ) {
     }
 
+    /** 重组赤字。 */
     public record ReorgDeficit(
             UUID id,
             UUID custodyAddressId,
@@ -203,9 +301,7 @@ public class CustodyAssetDashboardRepository {
             BigDecimal recoveredAmount,
             Instant createdAt
     ) {
-        /**
-         * 执行 {@code outstandingAmount} 对应的辅助逻辑，完成数据处理并维护状态边界。
-         */
+        /** 计算尚未弥补的金额。 */
         public BigDecimal outstandingAmount() {
             return deficitAmount.subtract(recoveredAmount);
         }

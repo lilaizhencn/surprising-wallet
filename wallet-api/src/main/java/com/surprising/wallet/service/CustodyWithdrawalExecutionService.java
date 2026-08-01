@@ -8,12 +8,16 @@ import com.surprising.wallet.chain.near.NearKeyService;
 import com.surprising.wallet.chain.polkadot.PolkadotKeyService;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.CustodyAddressRepository;
+import com.surprising.wallet.repository.LedgerBalanceRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.security.SecureRandom;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -30,7 +34,6 @@ public class CustodyWithdrawalExecutionService {
     /**
      * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final JdbcTemplate jdbc;
     /**
      * 保存 {@code chains}，表示链、网络、资产或代币配置。
      */
@@ -39,15 +42,38 @@ public class CustodyWithdrawalExecutionService {
      * 保存 {@code runtimeConfig}，用于保存运行配置和策略参数。
      */
     private final WalletRuntimeConfigService runtimeConfig;
+    /** chain_asset 单表仓储。 */
+    private final ChainAssetRepository chainAssetRepository;
+    /** chain_profile 单表仓储。 */
+    private final ChainProfileRepository chainProfileRepository;
+    /** token_config 单表仓储。 */
+    private final TokenConfigRepository tokenConfigRepository;
+    /** custody_address 单表仓储。 */
+    private final CustodyAddressRepository custodyAddressRepository;
+    /** chain_address 单表仓储。 */
+    private final ChainAddressRepository chainAddressRepository;
+    /** ledger_balance 单表仓储。 */
+    private final LedgerBalanceRepository ledgerBalanceRepository;
 
     /**
      * 构造 {@code CustodyWithdrawalExecutionService}，初始化该组件运行所需的状态和依赖。
      */
-    public CustodyWithdrawalExecutionService(JdbcTemplate jdbc, ChainJdbcRepository chains,
-                                             WalletRuntimeConfigService runtimeConfig) {
-        this.jdbc = jdbc;
+    public CustodyWithdrawalExecutionService(ChainJdbcRepository chains,
+                                             WalletRuntimeConfigService runtimeConfig,
+                                             ChainAssetRepository chainAssetRepository,
+                                             ChainProfileRepository chainProfileRepository,
+                                             TokenConfigRepository tokenConfigRepository,
+                                             CustodyAddressRepository custodyAddressRepository,
+                                             ChainAddressRepository chainAddressRepository,
+                                             LedgerBalanceRepository ledgerBalanceRepository) {
         this.chains = chains;
         this.runtimeConfig = runtimeConfig;
+        this.chainAssetRepository = chainAssetRepository;
+        this.chainProfileRepository = chainProfileRepository;
+        this.tokenConfigRepository = tokenConfigRepository;
+        this.custodyAddressRepository = custodyAddressRepository;
+        this.chainAddressRepository = chainAddressRepository;
+        this.ledgerBalanceRepository = ledgerBalanceRepository;
     }
 
     /**
@@ -94,33 +120,25 @@ public class CustodyWithdrawalExecutionService {
      * 校验 {@code requireAsset} 对应的前置条件，不满足时抛出明确异常。
      */
     private AssetMeta requireAsset(String chain, String symbol) {
-        List<Map<String, Object>> rows = jdbc.queryForList("""
-                select a.native_asset, cp.native_symbol, cp.default_fee_rate,
-                       cp.dust_threshold, a.decimals
-                  from chain_asset a
-                  join chain_profile cp
-                    on cp.chain = a.chain and cp.enabled = true and cp.withdraw_enabled = true
-                  left join token_config tc
-                    on tc.chain = a.chain and tc.network = cp.network
-                   and tc.symbol = a.symbol and tc.enabled = true
-                 where a.chain = ? and a.symbol = ? and a.active = true
-                   and (a.native_asset = true or tc.id is not null)
-                 limit 1
-                """, chain, symbol);
-        if (rows.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "asset withdrawal is not enabled: " + chain + "/" + symbol);
-        }
-        Map<String, Object> row = rows.getFirst();
-        boolean nativeAsset = Boolean.TRUE.equals(row.get("native_asset"));
-        int decimals = row.get("decimals") instanceof Number number ? number.intValue() : 18;
+        Map<String, Object> asset = chainAssetRepository.findActive(chain, symbol)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "asset withdrawal is not enabled: " + chain + "/" + symbol));
+        boolean nativeAsset = Boolean.TRUE.equals(asset.get("native_asset"));
+        Map<String, Object> profile = chainProfileRepository.listEnabledForWithdrawal(chain).stream()
+                .filter(candidate -> nativeAsset
+                        || tokenConfigRepository.findEnabled(chain,
+                                String.valueOf(candidate.get("network")), symbol).isPresent())
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "asset withdrawal is not enabled: " + chain + "/" + symbol));
+        int decimals = asset.get("decimals") instanceof Number number ? number.intValue() : 18;
         BigDecimal networkFee = "XMR".equals(chain)
-                ? atomicToDecimal(row.get("default_fee_rate"), decimals)
-                    .max(atomicToDecimal(row.get("dust_threshold"), decimals))
+                ? atomicToDecimal(profile.get("default_fee_rate"), decimals)
+                    .max(atomicToDecimal(profile.get("dust_threshold"), decimals))
                     .max(new BigDecimal("0.0001")).stripTrailingZeros()
                 : BigDecimal.ZERO;
         return new AssetMeta(
-                chain, symbol, nativeAsset, String.valueOf(row.get("native_symbol")), networkFee);
+                chain, symbol, nativeAsset, String.valueOf(profile.get("native_symbol")), networkFee);
     }
 
     /**
@@ -129,28 +147,23 @@ public class CustodyWithdrawalExecutionService {
     private SpendAccount requireTenantSpendAccount(UUID tenantId, UUID custodyAddressId,
                                                    String chain, String symbol,
                                                    BigDecimal requiredAmount) {
-        List<Map<String, Object>> rows = jdbc.queryForList("""
-                select balance.account_id, base.address
-                  from custody_address custody
-                  join chain_address base
-                    on base.tenant_id = custody.tenant_id
-                   and base.id = custody.chain_address_id
-                  join ledger_balance balance
-                    on balance.tenant_id = custody.tenant_id
-                   and balance.chain = base.chain
-                   and balance.asset_symbol = ?
-                   and lower(balance.account_id) = lower(base.account_id)
-                 where custody.tenant_id = ? and custody.id = ? and custody.chain = ?
-                   and custody.status = 'ACTIVE' and base.enabled = true
-                   and balance.available_balance >= ?
-                 order by balance.available_balance desc
-                 limit 1
-                """, symbol, tenantId, custodyAddressId, chain, requiredAmount);
-        if (rows.isEmpty()) {
+        Map<String, Object> custody = custodyAddressRepository.findByTenantAndId(
+                        tenantId, custodyAddressId)
+                .orElseThrow(() -> new IllegalArgumentException("insufficient available balance"));
+        if (!chain.equalsIgnoreCase(String.valueOf(custody.get("chain")))
+                || !"ACTIVE".equalsIgnoreCase(String.valueOf(custody.get("status")))) {
             throw new IllegalArgumentException("insufficient available balance");
         }
-        Map<String, Object> row = rows.getFirst();
-        return new SpendAccount(String.valueOf(row.get("account_id")), String.valueOf(row.get("address")));
+        long chainAddressId = ((Number) custody.get("chain_address_id")).longValue();
+        Map<String, Object> address = chainAddressRepository.findByTenantAndId(tenantId, chainAddressId)
+                .filter(row -> Boolean.TRUE.equals(row.get("enabled")))
+                .orElseThrow(() -> new IllegalArgumentException("insufficient available balance"));
+        String accountId = String.valueOf(address.get("account_id"));
+        Map<String, Object> balance = ledgerBalanceRepository.listAvailable(
+                        tenantId, chain, symbol, accountId, requiredAmount).stream()
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("insufficient available balance"));
+        return new SpendAccount(String.valueOf(balance.get("account_id")),
+                String.valueOf(address.get("address")));
     }
     /**
      * 处理 {@code withdrawalSourceAddress} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。

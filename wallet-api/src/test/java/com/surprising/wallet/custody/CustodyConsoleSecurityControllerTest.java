@@ -6,8 +6,8 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import com.surprising.wallet.custody.controller.console.CustodyConsoleSecurityController.CreateApiKeyRequest;
-import com.surprising.wallet.custody.controller.console.CustodyConsoleSecurityController;
+
+import com.surprising.wallet.controller.CustodyConsoleSecurityController;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 
 /**

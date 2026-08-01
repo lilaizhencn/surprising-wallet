@@ -46,6 +46,10 @@ public class CustodyRepository {
      * 保存 {@code securityRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
     private final CustodySecurityRepository securityRepository;
+    /** custody_tenant 单表仓储。 */
+    private final CustodyTenantTableRepository tenantTable;
+    /** custody_tenant_user 单表仓储。 */
+    private final CustodyTenantUserRepository tenantUsers;
 
     /**
      * 构造器。
@@ -53,16 +57,27 @@ public class CustodyRepository {
      * @param jdbc JDBC 模板
      */
     public CustodyRepository(JdbcTemplate jdbc) {
-        this(jdbc, new CustodySecurityRepository(jdbc));
+        this(jdbc, new CustodySecurityRepository(jdbc), new CustodyTenantTableRepository(jdbc),
+                new CustodyTenantUserRepository(jdbc));
+    }
+
+    /** 兼容已有手工构造方式。 */
+    public CustodyRepository(JdbcTemplate jdbc, CustodySecurityRepository securityRepository) {
+        this(jdbc, securityRepository, new CustodyTenantTableRepository(jdbc),
+                new CustodyTenantUserRepository(jdbc));
     }
 
     /**
      * 构造 {@code CustodyRepository}，初始化该组件运行所需的状态和依赖。
      */
     @Autowired
-    public CustodyRepository(JdbcTemplate jdbc, CustodySecurityRepository securityRepository) {
+    public CustodyRepository(JdbcTemplate jdbc, CustodySecurityRepository securityRepository,
+                             CustodyTenantTableRepository tenantTable,
+                             CustodyTenantUserRepository tenantUsers) {
         this.jdbc = jdbc;
         this.securityRepository = securityRepository;
+        this.tenantTable = tenantTable;
+        this.tenantUsers = tenantUsers;
     }
 
     /**
@@ -71,59 +86,25 @@ public class CustodyRepository {
     @Transactional(rollbackFor = Throwable.class)
     public TenantRecord createTenant(UUID tenantId, String slug, String name, UUID adminId,
                                      String adminEmail, String adminDisplayName, String passwordHash) {
-        jdbc.update("""
-                        insert into custody_tenant(id, slug, name)
-                        values (?, ?, ?)
-                        """, tenantId, slug, name);
-        jdbc.update("""
-                        insert into custody_tenant_user(
-                            id, tenant_id, email, display_name, password_hash, role, status)
-                        values (?, ?, ?, ?, ?, 'TENANT_ADMIN', 'ACTIVE')
-                        """, adminId, tenantId, adminEmail, adminDisplayName, passwordHash);
+        tenantTable.insert(tenantId, slug, name);
+        tenantUsers.insertTenantAdmin(adminId, tenantId, adminEmail, adminDisplayName, passwordHash);
         return requireTenant(tenantId);
     }
     /**
      * 获取或查询 {@code findTenantBySlug} 对应的数据，供调用方读取当前状态。
      */
     public Optional<TenantRecord> findTenantBySlug(String slug) {
-        return jdbc.query("""
-                        select id, slug, name, status, derivation_namespace, ip_allowlist_enabled,
-                               display_currency, created_at, updated_at
-                          from custody_tenant
-                         where slug = ?
-                        """, (rs, rowNum) -> new TenantRecord(
-                        rs.getObject("id", UUID.class),
-                        rs.getString("slug"),
-                        rs.getString("name"),
-                        rs.getString("status"),
-                        rs.getInt("derivation_namespace"),
-                        rs.getBoolean("ip_allowlist_enabled"),
-                        rs.getString("display_currency"),
-                        rs.getTimestamp("created_at").toInstant(),
-                        rs.getTimestamp("updated_at").toInstant()),
-                slug).stream().findFirst();
+        return Optional.ofNullable(tenantTable.findBySlug(slug)).map(CustodyRepository::mapTenant);
     }
     /**
      * 校验 {@code requireTenant} 对应的前置条件，不满足时抛出明确异常。
      */
     public TenantRecord requireTenant(UUID tenantId) {
-        return jdbc.query("""
-                        select id, slug, name, status, derivation_namespace, ip_allowlist_enabled,
-                               display_currency, created_at, updated_at
-                          from custody_tenant
-                         where id = ?
-                        """, (rs, rowNum) -> new TenantRecord(
-                        rs.getObject("id", UUID.class),
-                        rs.getString("slug"),
-                        rs.getString("name"),
-                        rs.getString("status"),
-                        rs.getInt("derivation_namespace"),
-                        rs.getBoolean("ip_allowlist_enabled"),
-                        rs.getString("display_currency"),
-                        rs.getTimestamp("created_at").toInstant(),
-                        rs.getTimestamp("updated_at").toInstant()),
-                tenantId).stream().findFirst().orElseThrow(() ->
-                new IllegalArgumentException("tenant not found"));
+        Map<String, Object> row = tenantTable.findFullById(tenantId);
+        if (row == null) {
+            throw new IllegalArgumentException("tenant not found");
+        }
+        return mapTenant(row);
     }
 
     /**
@@ -302,11 +283,7 @@ public class CustodyRepository {
      * 设置或更新 {@code updateTenantProfile} 对应的状态，并保持相关业务字段一致。
      */
     public void updateTenantProfile(UUID tenantId, String name, String displayCurrency) {
-        if (jdbc.update("""
-                        update custody_tenant
-                           set name = ?, display_currency = ?, updated_at = now()
-                         where id = ?
-                        """, name, displayCurrency, tenantId) != 1) {
+        if (tenantTable.updateProfile(tenantId, name, displayCurrency) != 1) {
             throw new IllegalArgumentException("tenant not found");
         }
     }
@@ -314,11 +291,7 @@ public class CustodyRepository {
      * 设置或更新 {@code updateTenantStatus} 对应的状态，并保持相关业务字段一致。
      */
     public void updateTenantStatus(UUID tenantId, String status) {
-        if (jdbc.update("""
-                        update custody_tenant
-                           set status = ?, updated_at = now()
-                         where id = ?
-                        """, status, tenantId) != 1) {
+        if (tenantTable.updateStatus(tenantId, status) != 1) {
             throw new IllegalArgumentException("tenant not found");
         }
     }
@@ -2402,6 +2375,41 @@ public class CustodyRepository {
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant());
     }
+    /** 将 custody_tenant 单表字段转换为租户模型。 */
+    private static TenantRecord mapTenant(Map<String, Object> row) {
+        return new TenantRecord(
+                uuid(row.get("id")), text(row.get("slug")), text(row.get("name")),
+                text(row.get("status")), number(row.get("derivation_namespace")),
+                bool(row.get("ip_allowlist_enabled")), text(row.get("display_currency")),
+                instant(row.get("created_at")), instant(row.get("updated_at")));
+    }
+
+    /** 读取对象文本。 */
+    private static String text(Object value) {
+        return value == null ? null : value.toString();
+    }
+
+    /** 读取对象布尔值。 */
+    private static boolean bool(Object value) {
+        return Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(String.valueOf(value));
+    }
+
+    /** 读取对象整数。 */
+    private static int number(Object value) {
+        return value instanceof Number number ? number.intValue() : Integer.parseInt(value.toString());
+    }
+
+    /** 读取对象 UUID。 */
+    private static UUID uuid(Object value) {
+        return value instanceof UUID result ? result : value == null ? null : UUID.fromString(value.toString());
+    }
+
+    /** 读取对象时间。 */
+    private static Instant instant(Object value) {
+        return value instanceof Timestamp timestamp ? timestamp.toInstant()
+                : value instanceof Instant result ? result : null;
+    }
+
     /**
      * 转换或计算 {@code instantOrNull} 对应的值，统一金额、格式和边界规则。
      */

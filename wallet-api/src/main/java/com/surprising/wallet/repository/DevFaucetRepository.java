@@ -1,259 +1,235 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Duration;
-import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
-import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
-
-/**
- * 开发环境水龙头数据仓储。
- *
- * <p>仅在 {@code sw.wallet.dev-faucet.enabled=true} 时加载。
- * 提供候选地址发现、补币记录 CRUD、余额查询等功能。
- * 所有操作使用 JDBC 直接访问 PostgreSQL。
- */
-/**
- * 开发水龙头仓储，管理测试环境下的自动充值（funding）生命周期。
- *
- * <p>仅在 {@code sw.wallet.dev-faucet.enabled=true} 且环境为 dev/test/test2/local 时生效。
- * 核心流程：discover（发现待充值地址） -> create（创建充值任务） ->
- * due（获取待发送任务） -> markSending/markSent/markFailed（状态更新） ->
- * reconcileConfirmed（与 custody_deposit 对账确认）。</p>
- *
- * @see com.surprising.wallet.devfaucet.model.DevFaucetProperties
- * @see com.surprising.wallet.service.DevFaucetRpcClient
- */
+/** 开发水龙头数据访问门面，实际 SQL 由单表仓储执行。 */
 @Repository
 @ConditionalOnProperty(prefix = "sw.wallet.dev-faucet", name = "enabled", havingValue = "true")
 public class DevFaucetRepository {
-    /**
-     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final JdbcTemplate jdbc;
+    /** 水龙头资金单表仓储。 */
+    private final DevFaucetFundingRepository fundings;
+    /** 托管地址单表仓储。 */
+    private final CustodyAddressRepository custodyAddresses;
+    /** 托管租户单表仓储。 */
+    private final CustodyTenantTableRepository tenants;
+    /** 租户链单表仓储。 */
+    private final CustodyTenantChainRepository tenantChains;
+    /** Gas 账户单表仓储。 */
+    private final CustodyGasAccountRepository gasAccounts;
+    /** 链配置单表仓储。 */
+    private final ChainProfileRepository chainProfiles;
+    /** 链资产单表仓储。 */
+    private final ChainAssetRepository chainAssets;
+    /** 代币配置单表仓储。 */
+    private final TokenConfigRepository tokenConfigs;
+    /** 托管充值单表仓储。 */
+    private final CustodyDepositRepository deposits;
 
-    /**
-     * 构造器。
-     *
-     * @param jdbc JDBC 模板
-     */
-    public DevFaucetRepository(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
+    /** 兼容测试和手工构造。 */
+    public DevFaucetRepository(org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        this(new DevFaucetFundingRepository(jdbc), new CustodyAddressRepository(jdbc),
+                new CustodyTenantTableRepository(jdbc), new CustodyTenantChainRepository(jdbc),
+                new CustodyGasAccountRepository(jdbc), new ChainProfileRepository(jdbc),
+                new ChainAssetRepository(jdbc), new TokenConfigRepository(jdbc),
+                new CustodyDepositRepository(jdbc));
     }
-    /**
-     * 执行 {@code discover} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
+    /** Spring 构造器，注入各自负责单表的数据访问组件。 */
+    @Autowired
+    public DevFaucetRepository(
+            DevFaucetFundingRepository fundings,
+            CustodyAddressRepository custodyAddresses,
+            CustodyTenantTableRepository tenants,
+            CustodyTenantChainRepository tenantChains,
+            CustodyGasAccountRepository gasAccounts,
+            ChainProfileRepository chainProfiles,
+            ChainAssetRepository chainAssets,
+            TokenConfigRepository tokenConfigs,
+            CustodyDepositRepository deposits) {
+        this.fundings = fundings;
+        this.custodyAddresses = custodyAddresses;
+        this.tenants = tenants;
+        this.tenantChains = tenantChains;
+        this.gasAccounts = gasAccounts;
+        this.chainProfiles = chainProfiles;
+        this.chainAssets = chainAssets;
+        this.tokenConfigs = tokenConfigs;
+        this.deposits = deposits;
+    }
+
+    /** 查询待补充的原生币和代币地址，关联逻辑在 Java 中完成。 */
     public List<Candidate> discover(int limit) {
-        return jdbc.query("""
-                select candidate.tenant_id, candidate.custody_address_id, candidate.chain,
-                       candidate.network, candidate.asset_symbol, candidate.purpose,
-                       candidate.address, candidate.contract_address, candidate.decimals
-                  from (
-                    select c.tenant_id, c.id as custody_address_id, c.chain, c.network,
-                           native.symbol as asset_symbol,
-                           case when gas.id is null then 'CUSTOMER_DEPOSIT'
-                                else 'TENANT_GAS' end as purpose,
-                           c.address, cast(null as varchar) as contract_address,
-                           native.decimals
-                      from custody_address c
-                      join custody_tenant tenant
-                        on tenant.id = c.tenant_id and tenant.status = 'ACTIVE'
-                      join custody_tenant_chain tenant_chain
-                        on tenant_chain.tenant_id = c.tenant_id
-                       and tenant_chain.chain = c.chain
-                       and tenant_chain.status = 'ACTIVE'
-                      join chain_profile profile
-                        on profile.chain = c.chain
-                       and lower(profile.network) = lower(c.network)
-                       and profile.enabled = true and profile.scan_enabled = true
-                      join chain_asset native
-                        on native.chain = c.chain and native.native_asset = true
-                       and native.active = true
-                      left join custody_gas_account gas
-                        on gas.tenant_id = c.tenant_id
-                       and gas.custody_address_id = c.id
-                       and gas.status = 'ACTIVE'
-                     where c.status = 'ACTIVE'
-                       and c.chain in ('BTC', 'ETH')
-                       and ((c.source = 'API' and gas.id is null) or gas.id is not null)
-                    union all
-                    select c.tenant_id, c.id, c.chain, c.network, token.symbol,
-                           'CUSTOMER_DEPOSIT', c.address, token.contract_address,
-                           token.decimals
-                      from custody_address c
-                      join custody_tenant tenant
-                        on tenant.id = c.tenant_id and tenant.status = 'ACTIVE'
-                      join custody_tenant_chain tenant_chain
-                        on tenant_chain.tenant_id = c.tenant_id
-                       and tenant_chain.chain = c.chain
-                       and tenant_chain.status = 'ACTIVE'
-                      join chain_profile profile
-                        on profile.chain = c.chain
-                       and lower(profile.network) = lower(c.network)
-                       and profile.enabled = true and profile.scan_enabled = true
-                      join token_config token
-                        on token.chain = c.chain and token.symbol in ('USDT', 'USDC')
-                       and token.enabled = true
-                       and (token.network is null
-                            or lower(token.network) = lower(profile.network))
-                      join chain_asset asset
-                        on asset.chain = token.chain and asset.symbol = token.symbol
-                       and asset.active = true and asset.native_asset = false
-                       and lower(asset.contract_address) = lower(token.contract_address)
-                     where c.status = 'ACTIVE' and c.source = 'API' and c.chain = 'ETH'
-                       and not exists (
-                           select 1 from custody_gas_account gas
-                            where gas.tenant_id = c.tenant_id
-                              and gas.custody_address_id = c.id
-                       )
-                  ) candidate
-                 where not exists (
-                     select 1 from custody_dev_faucet_funding funding
-                      where funding.custody_address_id = candidate.custody_address_id
-                        and funding.asset_symbol = candidate.asset_symbol
-                        and funding.purpose = candidate.purpose
-                 )
-                 order by candidate.custody_address_id, candidate.asset_symbol
-                 limit ?
-                """, (rs, rowNum) -> new Candidate(
-                rs.getObject("tenant_id", UUID.class),
-                rs.getObject("custody_address_id", UUID.class),
-                rs.getString("chain"),
-                rs.getString("network"),
-                rs.getString("asset_symbol"),
-                rs.getString("purpose"),
-                rs.getString("address"),
-                rs.getString("contract_address"),
-                rs.getInt("decimals")), limit);
-    }
-    /**
-     * 构建或生成 {@code create} 对应的结果，并执行输入和状态校验。
-     */
-    public boolean create(Candidate candidate, BigDecimal amount) {
-        return jdbc.update("""
-                insert into custody_dev_faucet_funding(
-                    id, tenant_id, custody_address_id, chain, network, asset_symbol,
-                    purpose, address, contract_address, decimals, requested_amount)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict (custody_address_id, asset_symbol, purpose) do nothing
-                """, UUID.randomUUID(), candidate.tenantId(), candidate.custodyAddressId(),
-                candidate.chain(), candidate.network(), candidate.assetSymbol(),
-                candidate.purpose(), candidate.address(), candidate.contractAddress(),
-                candidate.decimals(), amount) == 1;
-    }
-    /**
-     * 执行 {@code due} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public List<DevFaucetFunding> due(int limit, int maxAttempts) {
-        return jdbc.query("""
-                select id, tenant_id, custody_address_id, chain, network, asset_symbol,
-                       purpose, address, contract_address, decimals, requested_amount, attempts
-                  from custody_dev_faucet_funding
-                 where status in ('PENDING', 'FAILED')
-                   and attempts < ? and next_attempt_at <= now()
-                 order by created_at, id
-                 limit ?
-                """, (rs, rowNum) -> new DevFaucetFunding(
-                rs.getObject("id", UUID.class),
-                rs.getObject("tenant_id", UUID.class),
-                rs.getObject("custody_address_id", UUID.class),
-                rs.getString("chain"),
-                rs.getString("network"),
-                rs.getString("asset_symbol"),
-                rs.getString("purpose"),
-                rs.getString("address"),
-                rs.getString("contract_address"),
-                rs.getInt("decimals"),
-                rs.getBigDecimal("requested_amount"),
-                rs.getInt("attempts")), maxAttempts, limit);
-    }
-    /**
-     * 写入或更新 {@code markSending} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
-    public boolean markSending(UUID id) {
-        return jdbc.update("""
-                update custody_dev_faucet_funding
-                   set status = 'SENDING', attempts = attempts + 1,
-                       last_error = null, updated_at = now()
-                 where id = ? and status in ('PENDING', 'FAILED')
-                """, id) == 1;
-    }
-    /**
-     * 写入或更新 {@code markSent} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
-    public void markSent(UUID id, String txHash) {
-        jdbc.update("""
-                update custody_dev_faucet_funding
-                   set status = 'SENT', tx_hash = ?, sent_at = now(), updated_at = now()
-                 where id = ? and status = 'SENDING'
-                """, txHash, id);
-    }
-    /**
-     * 写入或更新 {@code markFailed} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
-    public void markFailed(UUID id, String error, Duration retryDelay) {
-        jdbc.update("""
-                update custody_dev_faucet_funding
-                   set status = 'FAILED', last_error = ?, next_attempt_at = ?, updated_at = now()
-                 where id = ? and status = 'SENDING'
-                """, truncate(error), Timestamp.from(Instant.now().plus(retryDelay)), id);
-    }
-    /**
-     * 写入或更新 {@code markUnknown} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
-    public void markUnknown(UUID id, String error) {
-        jdbc.update("""
-                update custody_dev_faucet_funding
-                   set status = 'UNKNOWN', last_error = ?, updated_at = now()
-                 where id = ? and status = 'SENDING'
-                """, truncate(error), id);
-    }
-    /**
-     * 执行 {@code recoverStaleSending} 对应的签名或签名恢复，保证交易数据可验证。
-     */
-    public int recoverStaleSending(Duration age) {
-        return jdbc.update("""
-                update custody_dev_faucet_funding
-                   set status = 'UNKNOWN',
-                       last_error = coalesce(last_error,
-                           'worker stopped while RPC outcome was unknown'),
-                       updated_at = now()
-                 where status = 'SENDING' and updated_at < ?
-                """, Timestamp.from(Instant.now().minus(age)));
-    }
-    /**
-     * 处理 {@code reconcileConfirmed} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public int reconcileConfirmed() {
-        return jdbc.update("""
-                update custody_dev_faucet_funding funding
-                   set status = 'CONFIRMED', confirmed_at = deposit.credited_at,
-                       updated_at = now()
-                  from custody_deposit deposit
-                 where funding.status = 'SENT'
-                   and deposit.tenant_id = funding.tenant_id
-                   and deposit.custody_address_id = funding.custody_address_id
-                   and deposit.chain = funding.chain
-                   and deposit.asset_symbol = funding.asset_symbol
-                   and lower(deposit.tx_hash) = lower(funding.tx_hash)
-                   and deposit.status = 'CONFIRMED'
-                """);
-    }
-    /**
-     * 转换或计算 {@code truncate} 对应的值，统一金额、格式和边界规则。
-     */
-    private static String truncate(String value) {
-                String safe = value == null ? "unknown error" : value;
-        return safe.length() <= 1000 ? safe : safe.substring(0, 1000);
+        Set<UUID> activeTenants = new HashSet<>(tenants.listActiveIds());
+        Set<UUID> activeGasAddresses = new HashSet<>(gasAccounts.listActive().stream()
+                .map(row -> uuid(row.get("custody_address_id"))).toList());
+        List<Map<String, Object>> profiles = chainProfiles.listAll();
+        List<Map<String, Object>> assets = chainAssets.listActive();
+        List<Map<String, Object>> tokens = tokenConfigs.listAll();
+        List<Candidate> candidates = new ArrayList<>();
+        for (Map<String, Object> address : custodyAddresses.listAll()) {
+            UUID tenantId = uuid(address.get("tenant_id"));
+            UUID addressId = uuid(address.get("id"));
+            String chain = text(address.get("chain"));
+            if (!activeTenants.contains(tenantId) || !Set.of("BTC", "ETH").contains(chain)
+                    || !"ACTIVE".equalsIgnoreCase(text(address.get("status")))) {
+                continue;
+            }
+            boolean gas = activeGasAddresses.contains(addressId);
+            if ((!gas && !"API".equalsIgnoreCase(text(address.get("source"))))) {
+                continue;
+            }
+            if (!tenantChains.listActiveChains(tenantId).stream().anyMatch(value -> same(value, chain))) {
+                continue;
+            }
+            Map<String, Object> profile = profiles.stream()
+                    .filter(row -> same(row.get("chain"), chain))
+                    .filter(row -> same(row.get("network"), address.get("network")))
+                    .filter(row -> bool(row.get("enabled")) && bool(row.get("scan_enabled")))
+                    .findFirst().orElse(null);
+            if (profile == null) {
+                continue;
+            }
+            for (Map<String, Object> asset : assets) {
+                if (!same(asset.get("chain"), chain) || !bool(asset.get("native_asset"))) {
+                    continue;
+                }
+                String purpose = gas ? "TENANT_GAS" : "CUSTOMER_DEPOSIT";
+                addIfNew(candidates, new Candidate(
+                        tenantId, addressId, chain, text(address.get("network")),
+                        text(asset.get("symbol")), purpose, text(address.get("address")),
+                        null, number(asset.get("decimals"))));
+            }
+            if ("ETH".equals(chain) && !gas) {
+                for (Map<String, Object> token : tokens) {
+                    if (!Set.of("USDT", "USDC").contains(text(token.get("symbol")))
+                            || !same(token.get("chain"), chain)
+                            || !bool(token.get("enabled"))
+                            || (token.get("network") != null
+                            && !same(token.get("network"), profile.get("network")))) {
+                        continue;
+                    }
+                    boolean assetMatches = assets.stream().anyMatch(asset ->
+                            same(asset.get("chain"), chain)
+                                    && same(asset.get("symbol"), token.get("symbol"))
+                                    && !bool(asset.get("native_asset"))
+                                    && bool(asset.get("active"))
+                                    && same(asset.get("contract_address"), token.get("contract_address")));
+                    if (!assetMatches) {
+                        continue;
+                    }
+                    addIfNew(candidates, new Candidate(
+                            tenantId, addressId, chain, text(address.get("network")),
+                            text(token.get("symbol")), "CUSTOMER_DEPOSIT",
+                            text(address.get("address")), text(token.get("contract_address")),
+                            number(token.get("decimals"))));
+                }
+            }
+        }
+        return candidates.stream()
+                .sorted(java.util.Comparator.comparing(Candidate::custodyAddressId)
+                        .thenComparing(Candidate::assetSymbol))
+                .limit(Math.max(limit, 0))
+                .toList();
     }
 
+    /** 创建补币资金任务。 */
+    public boolean create(Candidate candidate, BigDecimal amount) {
+        return fundings.create(candidate.tenantId(), candidate.custodyAddressId(), candidate.chain(),
+                candidate.network(), candidate.assetSymbol(), candidate.purpose(), candidate.address(),
+                candidate.contractAddress(), candidate.decimals(), amount);
+    }
+
+    /** 查询待发送资金任务。 */
+    public List<DevFaucetFunding> due(int limit, int maxAttempts) {
+        return fundings.due(limit, maxAttempts);
+    }
+
+    /** 标记资金任务进入发送状态。 */
+    public boolean markSending(UUID id) {
+        return fundings.markSending(id);
+    }
+
+    /** 标记资金任务已发送。 */
+    public void markSent(UUID id, String txHash) {
+        fundings.markSent(id, txHash);
+    }
+
+    /** 标记资金任务失败。 */
+    public void markFailed(UUID id, String error, Duration retryDelay) {
+        fundings.markFailed(id, error, retryDelay);
+    }
+
+    /** 标记资金任务结果未知。 */
+    public void markUnknown(UUID id, String error) {
+        fundings.markUnknown(id, error);
+    }
+
+    /** 恢复超时发送任务。 */
+    public int recoverStaleSending(Duration age) {
+        return fundings.recoverStaleSending(age);
+    }
+
+    /** 对账已确认资金任务。 */
+    public int reconcileConfirmed() {
+        int updated = 0;
+        for (DevFaucetFundingRepository.SentFunding funding : fundings.sent()) {
+            Timestamp creditedAt = deposits.findConfirmedAt(
+                    funding.tenantId(), funding.custodyAddressId(), funding.chain(),
+                    funding.assetSymbol(), funding.txHash());
+            if (creditedAt != null) {
+                updated += fundings.markConfirmed(funding.id(), creditedAt);
+            }
+        }
+        return updated;
+    }
+
+    /** 保持候选去重并排除已经创建的资金任务。 */
+    private void addIfNew(List<Candidate> candidates, Candidate candidate) {
+        if (!fundings.exists(candidate.custodyAddressId(), candidate.assetSymbol(), candidate.purpose())) {
+            candidates.add(candidate);
+        }
+    }
+
+    /** 比较业务文本。 */
+    private static boolean same(Object left, Object right) {
+        return left != null && right != null
+                && left.toString().equalsIgnoreCase(right.toString());
+    }
+
+    /** 读取文本字段。 */
+    private static String text(Object value) {
+        return value == null ? "" : value.toString();
+    }
+
+    /** 读取布尔字段。 */
+    private static boolean bool(Object value) {
+        return Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(text(value));
+    }
+
+    /** 读取数值字段。 */
+    private static int number(Object value) {
+        return value instanceof Number number ? number.intValue() : Integer.parseInt(text(value));
+    }
+
+    /** 读取 UUID 字段。 */
+    private static UUID uuid(Object value) {
+        return value instanceof UUID result ? result : value == null ? null : UUID.fromString(value.toString());
+    }
+
+    /** 开发水龙头候选地址。 */
     public record Candidate(
             UUID tenantId,
             UUID custodyAddressId,

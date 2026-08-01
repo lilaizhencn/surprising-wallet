@@ -1,0 +1,82 @@
+package com.surprising.wallet.controller;
+
+import com.surprising.wallet.service.CustodyWithdrawalService.CreateWithdrawalCommand;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
+
+import com.surprising.wallet.model.PageView;
+import com.surprising.wallet.model.CustodyRequestSupport;
+import com.surprising.wallet.service.CustodyWithdrawalService;
+
+/**
+ * Console 提现/转账管理控制器。
+ *
+ * <p>端点路径：/custody/console/v1/{tenantId}/withdrawals。
+ * 提供提现工单的创建（POST）和查询列表（GET）功能。
+ */
+@RestController
+@RequestMapping("/custody/console/v1")
+public class CustodyConsoleTransferController {
+    /** 提现服务：查询与提交提现工单。 */
+    private final CustodyWithdrawalService transfers;
+
+    /**
+     * 注入提现服务。
+     */
+    public CustodyConsoleTransferController(CustodyWithdrawalService transfers) {
+        this.transfers = transfers;
+    }
+
+    /**
+     * 控制台分页查询充值记录。
+     */
+    @GetMapping("/deposits")
+    public PageView<Map<String, Object>> deposits(
+            @RequestParam(defaultValue = "") String chain,
+            @RequestParam(defaultValue = "") String assetSymbol,
+            @RequestParam(defaultValue = "") String status,
+            @RequestParam(defaultValue = "") String search,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int offset,
+            HttpServletRequest request) {
+        return transfers.depositPage(
+                CustodyRequestSupport.requirePrincipal(request),
+                chain, assetSymbol, status, search, limit, offset);
+    }
+
+    /**
+     * 控制台分页查询提现记录。
+     */
+    @GetMapping("/withdrawals")
+    public PageView<Map<String, Object>> withdrawals(
+            @RequestParam(defaultValue = "") String chain,
+            @RequestParam(defaultValue = "") String assetSymbol,
+            @RequestParam(defaultValue = "") String status,
+            @RequestParam(defaultValue = "") String search,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int offset,
+            HttpServletRequest request) {
+        return transfers.withdrawalPage(
+                CustodyRequestSupport.requirePrincipal(request),
+                chain, assetSymbol, status, search, limit, offset);
+    }
+
+    /**
+     * 提交控制台提现请求，来源打标记为 CONSOLE。
+     */
+    @PostMapping("/withdrawals")
+    public CustodyWithdrawalService.WithdrawalView create(
+            @RequestBody CreateWithdrawalCommand body,
+            HttpServletRequest request) {
+        return transfers.create(
+                CustodyRequestSupport.requirePrincipal(request), body, "CONSOLE", null,
+                CustodyRequestSupport.clientIp(request));
+    }
+}

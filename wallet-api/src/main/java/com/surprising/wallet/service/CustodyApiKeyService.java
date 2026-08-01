@@ -1,24 +1,23 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.custody.model.CustodyPrincipal.ActorType;
+import com.surprising.wallet.model.CustodyPrincipal.ActorType;
 import com.surprising.wallet.repository.CustodyRepository.ApiKeyRecord;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import com.surprising.wallet.custody.model.CidrMatcher;
-import com.surprising.wallet.custody.exception.CustodyForbiddenException;
-import com.surprising.wallet.custody.model.CustodyPrincipal;
+import com.surprising.wallet.model.CidrMatcher;
+import com.surprising.wallet.exception.CustodyForbiddenException;
+import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;
-import com.surprising.wallet.custody.model.CustodySecurityProperties;
-import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
+import com.surprising.wallet.model.CustodySecurityProperties;
+import com.surprising.wallet.exception.CustodyUnauthorizedException;
 
 /**
  * API Key 管理服务，负责 API Key 的创建、查询和撤销。

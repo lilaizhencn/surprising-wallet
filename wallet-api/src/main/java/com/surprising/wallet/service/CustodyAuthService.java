@@ -1,7 +1,7 @@
 package com.surprising.wallet.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.surprising.wallet.custody.model.CustodyPrincipal.ActorType;
+import com.surprising.wallet.model.CustodyPrincipal.ActorType;
 import com.surprising.wallet.repository.CustodyRepository.AuthUser;
 import com.surprising.wallet.repository.CustodyRepository.SessionRecord;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -15,11 +15,11 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
-import com.surprising.wallet.custody.exception.CustodyForbiddenException;
-import com.surprising.wallet.custody.model.CustodyPrincipal;
+import com.surprising.wallet.exception.CustodyForbiddenException;
+import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;
-import com.surprising.wallet.custody.model.CustodySecurityProperties;
-import com.surprising.wallet.custody.exception.CustodyUnauthorizedException;
+import com.surprising.wallet.model.CustodySecurityProperties;
+import com.surprising.wallet.exception.CustodyUnauthorizedException;
 
 /**
  * 托管认证服务，管理 API Key 验证和 Console 会话。

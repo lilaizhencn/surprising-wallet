@@ -22,7 +22,7 @@ class ArchitectureBoundaryTest {
         Path serviceRoot = sourceRoot.resolve("service");
         Path repositoryRoot = sourceRoot.resolve("repository");
         Path jobRoot = sourceRoot.resolve("job");
-        Path controllerRoot = sourceRoot.resolve("custody/controller");
+        Path controllerRoot = sourceRoot.resolve("controller");
 
         assertTrue(Files.isDirectory(serviceRoot), "service package must exist");
         assertTrue(Files.isDirectory(repositoryRoot), "repository package must exist");
@@ -46,6 +46,14 @@ class ArchitectureBoundaryTest {
                     "Controller must not access Repository directly: " + file);
             assertFalse(source.contains("JdbcTemplate"),
                     "Controller must not contain JDBC access: " + file);
+        }
+        for (Path file : javaFiles(serviceRoot)) {
+            String source = Files.readString(file);
+            assertFalse(source.contains("JdbcTemplate"),
+                    "Service must not access JDBC directly: " + file);
+            assertFalse(source.lines().anyMatch(line -> line.trim().toLowerCase()
+                            .matches(".*\\b(select\\s+.+\\s+from|insert\\s+into|update\\s+[a-z_]+\\s+set|delete\\s+from)\\b.*")),
+                    "Service must not contain SQL: " + file);
         }
         for (Path file : javaFiles(sourceRoot)) {
             String source = Files.readString(file);

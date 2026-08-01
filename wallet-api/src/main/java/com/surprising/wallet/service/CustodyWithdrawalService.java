@@ -1,6 +1,6 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.custody.model.PageView;
+import com.surprising.wallet.model.PageView;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.repository.CustodyRepository.AddressRecord;
@@ -17,8 +17,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
-import com.surprising.wallet.custody.exception.CustodyForbiddenException;
-import com.surprising.wallet.custody.model.CustodyPrincipal;
+import com.surprising.wallet.exception.CustodyForbiddenException;
+import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;
 
 /**

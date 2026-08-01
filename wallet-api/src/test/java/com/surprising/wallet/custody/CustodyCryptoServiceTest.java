@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.service.CustodyCryptoService;
-import com.surprising.wallet.custody.model.CustodySecurityProperties;
+import com.surprising.wallet.model.CustodySecurityProperties;
 
 /**
  * 验证 {@code CustodyCryptoServiceTest} 覆盖的业务流程、边界条件和异常行为。

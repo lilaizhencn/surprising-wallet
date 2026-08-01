@@ -1,0 +1,92 @@
+package com.surprising.wallet.controller;
+
+import com.surprising.wallet.service.CustodyAddressService.AddressView;
+import com.surprising.wallet.service.CustodyAddressService.CreateAddressCommand;
+import com.surprising.wallet.service.CustodyAddressService.UpdateAddressCommand;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import com.surprising.wallet.model.PageView;
+import com.surprising.wallet.service.CustodyAddressService;
+import com.surprising.wallet.model.CustodyRequestSupport;
+
+/**
+ * Console 充值地址管理控制器。
+ *
+ * <p>端点路径：/custody/console/v1/{tenantId}/addresses。
+ * 提供充值地址的创建（POST）、查询列表（GET）、修改备注/标签（PATCH）功能。
+ */
+@RestController
+@RequestMapping("/custody/console/v1")
+public class CustodyConsoleAddressController {
+    /** 地址服务，处理创建、更新、列表逻辑。 */
+    private final CustodyAddressService addresses;
+
+    /**
+     * 注入地址服务。
+     */
+    public CustodyConsoleAddressController(CustodyAddressService addresses) {
+        this.addresses = addresses;
+    }
+
+    /**
+     * 查询地址列表，支持链、来源、状态、关键字过滤和分页。
+     */
+    @GetMapping("/addresses")
+    public PageView<AddressView> addresses(
+            @RequestParam(defaultValue = "") String chain,
+            @RequestParam(defaultValue = "") String source,
+            @RequestParam(defaultValue = "") String status,
+            @RequestParam(defaultValue = "") String search,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int offset,
+            HttpServletRequest request) {
+        return addresses.page(CustodyRequestSupport.requirePrincipal(request),
+                chain, source, status, search, limit, offset);
+    }
+
+    /**
+     * 创建控制台地址，记录来源为控制台。
+     */
+    @PostMapping("/addresses")
+    public AddressView create(@RequestBody CreateAddressCommand body, HttpServletRequest request) {
+        return addresses.create(
+                CustodyRequestSupport.requirePrincipal(request),
+                body,
+                "CONSOLE",
+                CustodyRequestSupport.clientIp(request));
+    }
+
+    /**
+     * 更新地址属性（状态、备注等），支持部分字段更新。
+     */
+    @PatchMapping("/addresses/{addressId}")
+    public AddressView update(@PathVariable UUID addressId,
+                              @RequestBody UpdateAddressCommand body,
+                              HttpServletRequest request) {
+        return addresses.update(
+                CustodyRequestSupport.requirePrincipal(request),
+                addressId,
+                body,
+                CustodyRequestSupport.clientIp(request));
+    }
+
+    /**
+     * 查询资产维度清单，供后台侧余额与链路配置展示。
+     */
+    @GetMapping("/assets")
+    public List<Map<String, Object>> assets(HttpServletRequest request) {
+        return addresses.assets(CustodyRequestSupport.requirePrincipal(request));
+    }
+}

@@ -11,7 +11,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
+import java.util.Optional;
 
 /**
  * UTXO 扫描结果、锁定和花费状态仓储。
@@ -75,28 +75,19 @@ public class UtxoRepository {
     public int lock(String chain, String txHash, int vout, String lockRef) {
         return jdbc.update("""
                         update utxo_record
-                        set state = 'LOCKED', lock_ref = ?, updated_at = ?
-                        where chain = ? and tx_hash = ? and vout = ?
-                          and (state = 'AVAILABLE' or (state = 'LOCKED' and lock_ref = ?))
-                        """, lockRef, Timestamp.from(Instant.now()), chain, txHash, vout, lockRef);
+                           set state = 'LOCKED', lock_ref = ?, updated_at = ?
+                         where chain = ? and tx_hash = ? and vout = ?
+                           and (state = 'AVAILABLE' or (state = 'LOCKED' and lock_ref = ?))
+                        """, lockRef, Timestamp.from(Instant.now()),
+                chain, txHash, vout, lockRef);
     }
 
-    /**
-     * 执行 {@code lock} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public int lock(UUID tenantId, String chain, String txHash, int vout, String lockRef) {
-        return jdbc.update("""
-                        update utxo_record ur
-                           set state = 'LOCKED', lock_ref = ?, updated_at = ?
-                         where ur.chain = ? and ur.tx_hash = ? and ur.vout = ?
-                           and (ur.state = 'AVAILABLE' or (ur.state = 'LOCKED' and ur.lock_ref = ?))
-                           and exists (
-                               select 1 from chain_address a
-                                where a.tenant_id = ? and a.chain = ur.chain
-                                  and lower(a.address) = lower(ur.address) and a.enabled = true
-                           )
-                        """, lockRef, Timestamp.from(Instant.now()),
-                chain, txHash, vout, lockRef, tenantId);
+    /** 查询 UTXO 的地址，供 Service 层完成租户归属校验。 */
+    public Optional<String> findAddress(String chain, String txHash, int vout) {
+        return jdbc.queryForList("""
+                select address from utxo_record
+                 where chain = ? and tx_hash = ? and vout = ?
+                """, String.class, chain, txHash, vout).stream().findFirst();
     }
 
     /**
@@ -136,24 +127,12 @@ public class UtxoRepository {
      * 获取或查询 {@code listSpendable} 对应的数据，供调用方读取当前状态。
      */
     public List<UtxoTransaction> listSpendable(
-            String chain, String assetSymbol, long requiredConfirmations, int limit, int offset) {
+            String chain, String assetSymbol, long requiredConfirmations, int limit, int offset,
+            int runtimeCurrencyId) {
         return jdbc.query("""
                         select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
                                ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
-                               (
-                                   select cp.runtime_currency_id
-                                   from chain_profile cp
-                                   where cp.chain = ur.chain
-                                     and cp.native_symbol = ur.asset_symbol
-                                     and cp.enabled = true
-                                   order by case cp.network
-                                       when 'regtest' then 0
-                                       when 'testnet' then 1
-                                       when 'testnet3' then 1
-                                       else 2
-                                   end
-                                   limit 1
-                               ) as runtime_currency_id
+                               ? as runtime_currency_id
                         from utxo_record ur
                         where ur.chain = ?
                           and ur.asset_symbol = ?
@@ -161,69 +140,46 @@ public class UtxoRepository {
                           and ur.confirmations >= ?
                         order by ur.id
                         limit ? offset ?
-                        """, (rs, rowNum) -> map(rs, chain),
-                chain, assetSymbol, requiredConfirmations, limit, offset);
+                        """, (rs, rowNum) -> map(rs, chain, runtimeCurrencyId),
+                runtimeCurrencyId, chain, assetSymbol, requiredConfirmations, limit, offset);
     }
 
     /**
      * 获取或查询 {@code listSpendable} 对应的数据，供调用方读取当前状态。
      */
     public List<UtxoTransaction> listSpendable(
-            UUID tenantId, String chain, String assetSymbol,
-            long requiredConfirmations, int limit, int offset) {
-        return jdbc.query("""
-                        select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
-                               ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
-                               (
-                                   select cp.runtime_currency_id
-                                   from chain_profile cp
-                                   where cp.chain = ur.chain
-                                     and cp.native_symbol = ur.asset_symbol
-                                     and cp.enabled = true
-                                   order by case cp.network
-                                       when 'regtest' then 0
-                                       when 'testnet' then 1
-                                       when 'testnet3' then 1
-                                       else 2
-                                   end
-                                   limit 1
-                               ) as runtime_currency_id
-                        from utxo_record ur
-                        where ur.chain = ? and ur.asset_symbol = ?
-                          and ur.state = 'AVAILABLE' and ur.confirmations >= ?
-                          and exists (
-                              select 1 from chain_address a
-                               where a.tenant_id = ? and a.chain = ur.chain
-                                 and lower(a.address) = lower(ur.address) and a.enabled = true
-                          )
-                        order by ur.id
-                        limit ? offset ?
-                        """, (rs, rowNum) -> map(rs, chain),
-                chain, assetSymbol, requiredConfirmations, tenantId, limit, offset);
+            String chain, String assetSymbol, long requiredConfirmations, int limit, int offset,
+            int runtimeCurrencyId, List<String> addresses) {
+        if (addresses.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(addresses.size(), "?"));
+        String sql = """
+                select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
+                       ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
+                       ? as runtime_currency_id
+                  from utxo_record ur
+                 where ur.chain = ? and ur.asset_symbol = ?
+                   and ur.state = 'AVAILABLE' and ur.confirmations >= ?
+                   and lower(ur.address) in (%s)
+                 order by ur.id
+                 limit ? offset ?
+                """.formatted(placeholders);
+        return jdbc.query(sql, (rs, rowNum) -> map(rs, chain, runtimeCurrencyId),
+                buildArguments(runtimeCurrencyId, chain, assetSymbol, requiredConfirmations,
+                        addresses, limit, offset));
     }
 
     /**
      * 获取或查询 {@code listAvailableBelowConfirmations} 对应的数据，供调用方读取当前状态。
      */
     public List<UtxoTransaction> listAvailableBelowConfirmations(
-            String chain, String assetSymbol, long maxConfirmations, long afterId, int limit) {
+            String chain, String assetSymbol, long maxConfirmations, long afterId, int limit,
+            int runtimeCurrencyId) {
         return jdbc.query("""
                         select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
                                ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
-                               (
-                                   select cp.runtime_currency_id
-                                   from chain_profile cp
-                                   where cp.chain = ur.chain
-                                     and cp.native_symbol = ur.asset_symbol
-                                     and cp.enabled = true
-                                   order by case cp.network
-                                       when 'regtest' then 0
-                                       when 'testnet' then 1
-                                       when 'testnet3' then 1
-                                       else 2
-                                   end
-                                   limit 1
-                               ) as runtime_currency_id
+                               ? as runtime_currency_id
                         from utxo_record ur
                         where ur.chain = ?
                           and ur.asset_symbol = ?
@@ -232,8 +188,8 @@ public class UtxoRepository {
                           and ur.id > ?
                         order by ur.id
                         limit ?
-                        """, (rs, rowNum) -> map(rs, chain),
-                chain, assetSymbol, maxConfirmations, afterId, limit);
+                        """, (rs, rowNum) -> map(rs, chain, runtimeCurrencyId),
+                runtimeCurrencyId, chain, assetSymbol, maxConfirmations, afterId, limit);
     }
 
     /**
@@ -253,41 +209,25 @@ public class UtxoRepository {
     /**
      * 获取或查询 {@code listByAddress} 对应的数据，供调用方读取当前状态。
      */
-    public List<UtxoTransaction> listByAddress(String chain, String address, int limit) {
+    public List<UtxoTransaction> listByAddress(String chain, String address, int limit,
+                                                int runtimeCurrencyId) {
         return jdbc.query("""
                         select ur.id, ur.tx_hash, ur.vout, ur.address, ur.amount, ur.block_height, ur.block_hash,
                                ur.confirmations, ur.credited, ur.created_at, ur.updated_at,
-                               (
-                                   select cp.runtime_currency_id
-                                   from chain_profile cp
-                                   where cp.chain = ur.chain
-                                     and cp.native_symbol = ur.asset_symbol
-                                     and cp.enabled = true
-                                   order by case cp.network
-                                       when 'regtest' then 0
-                                       when 'testnet' then 1
-                                       when 'testnet3' then 1
-                                       else 2
-                                   end
-                                   limit 1
-                               ) as runtime_currency_id
+                               ? as runtime_currency_id
                         from utxo_record ur
                         where ur.chain = ?
                           and ur.address = ?
                         order by ur.id desc
                         limit ?
-                        """, (rs, rowNum) -> map(rs, chain), chain, address, limit);
+                """, (rs, rowNum) -> map(rs, chain, runtimeCurrencyId),
+                runtimeCurrencyId, chain, address, limit);
     }
 
     /**
      * 执行 {@code map} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
-    private UtxoTransaction map(ResultSet rs, String chain) throws SQLException {
-        int runtimeCurrencyId = rs.getInt("runtime_currency_id");
-        if (rs.wasNull()) {
-            throw new IllegalStateException(
-                    "missing enabled chain_profile.runtime_currency_id for unified UTXO chain " + chain);
-        }
+    private UtxoTransaction map(ResultSet rs, String chain, int runtimeCurrencyId) throws SQLException {
         return UtxoTransaction.builder()
                 .id(rs.getLong("id"))
                 .txId(rs.getString("tx_hash"))
@@ -305,5 +245,22 @@ public class UtxoRepository {
                 .createDate(rs.getTimestamp("created_at"))
                 .updateDate(rs.getTimestamp("updated_at"))
                 .build();
+    }
+
+    /** 组装租户地址过滤查询的参数，SQL 仍只访问 utxo_record。 */
+    private static Object[] buildArguments(int runtimeCurrencyId, String chain, String assetSymbol,
+                                           long requiredConfirmations, List<String> addresses,
+                                           int limit, int offset) {
+        List<Object> arguments = new java.util.ArrayList<>();
+        arguments.add(runtimeCurrencyId);
+        arguments.add(chain);
+        arguments.add(assetSymbol);
+        arguments.add(requiredConfirmations);
+        arguments.addAll(addresses.stream()
+                .map(address -> address.toLowerCase(java.util.Locale.ROOT))
+                .toList());
+        arguments.add(limit);
+        arguments.add(offset);
+        return arguments.toArray();
     }
 }

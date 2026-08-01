@@ -10,7 +10,7 @@ import java.lang.reflect.Method;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import com.surprising.wallet.custody.exception.CustodyExceptionHandler;
+import com.surprising.wallet.exception.CustodyExceptionHandler;
 
 /**
  * 验证 {@code CustodyExceptionHandlerTest} 覆盖的业务流程、边界条件和异常行为。

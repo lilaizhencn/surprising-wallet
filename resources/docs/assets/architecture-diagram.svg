@@ -39,7 +39,7 @@
   <text x="362" y="241" text-anchor="middle" class="desc">Web：Controller · Job(调度) · Config · Exception · Filter · Model</text>
   <text x="362" y="259" text-anchor="middle" class="desc">Application：service/** · Workflow · 业务编排与状态流转</text>
   <text x="362" y="277" text-anchor="middle" class="desc">Domain/Infrastructure：Chain · repository/** · Gateway · Coordinator</text>
-  <text x="362" y="295" text-anchor="middle" class="desc">REST · 充值/提现/归集 · EIP-7702 · Webhook · Gas 对账</text>
+  <text x="362" y="295" text-anchor="middle" class="desc">Repository：一表一仓储 · Service 组合跨表业务</text>
 
   <rect x="720" y="194" width="340" height="100" class="svc"/>
   <text x="890" y="222" text-anchor="middle" class="label">wallet-sig1 · wallet-sig2</text>

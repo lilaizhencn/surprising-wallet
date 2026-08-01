@@ -1,5 +1,6 @@
 package com.surprising.wallet.repository;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -9,115 +10,132 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
-/**
- * 托管租户链仓储，管理租户已开通的链及代币信息。
- *
- * <p>提供租户维度的链列表查询、链状态管理（开通/关闭）、
- * 充值/提现开关检查以及平台全局代币配置的读取。</p>
- *
- * @see CustodyRepository
- */
+/** custody_tenant_chain 单表仓储。 */
 @Repository
 public class CustodyTenantChainRepository {
-    /**
-     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
+    /** JDBC 模板，仅用于访问 custody_tenant_chain。 */
     private final JdbcTemplate jdbc;
+    /** 链配置单表仓储。 */
+    private final ChainProfileRepository chainProfiles;
+    /** 链资产单表仓储。 */
+    private final ChainAssetRepository chainAssets;
+    /** 代币配置单表仓储。 */
+    private final TokenConfigRepository tokenConfigs;
+    /** EIP-7702 配置单表仓储。 */
+    private final Evm7702ConfigRepository evm7702Configs;
 
-    /**
-     * 构造器。
-     *
-     * @param jdbc JDBC 模板
-     */
+    /** 兼容测试和手工构造，初始化全部单表仓储。 */
     public CustodyTenantChainRepository(JdbcTemplate jdbc) {
+        this(jdbc, new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc),
+                new TokenConfigRepository(jdbc), new Evm7702ConfigRepository(jdbc));
+    }
+
+    /** 构造租户链仓储，注入各自负责单表的数据访问组件。 */
+    @Autowired
+    public CustodyTenantChainRepository(
+            JdbcTemplate jdbc,
+            ChainProfileRepository chainProfiles,
+            ChainAssetRepository chainAssets,
+            TokenConfigRepository tokenConfigs,
+            Evm7702ConfigRepository evm7702Configs) {
         this.jdbc = jdbc;
+        this.chainProfiles = chainProfiles;
+        this.chainAssets = chainAssets;
+        this.tokenConfigs = tokenConfigs;
+        this.evm7702Configs = evm7702Configs;
     }
-    /**
-     * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
-     */
+
+    /** 查询平台已启用链及租户在该链上的状态。 */
     public List<ChainRecord> list(UUID tenantId) {
+        Map<String, Map<String, Object>> tenantChains = jdbc.queryForList("""
+                        select chain, status, opened_at, closed_at
+                          from custody_tenant_chain
+                         where tenant_id = ?
+                        """, tenantId).stream()
+                .collect(Collectors.toMap(
+                        row -> text(row.get("chain")).toUpperCase(),
+                        row -> row,
+                        (left, right) -> left,
+                        LinkedHashMap::new));
         Map<String, List<TokenRecord>> tokensByChain = tokens().stream()
-                .collect(java.util.stream.Collectors.groupingBy(
-                        TokenRecord::chain, LinkedHashMap::new, java.util.stream.Collectors.toList()));
-        return jdbc.query("""
-                        select p.chain, p.network, p.family, p.native_symbol,
-                               exists(
-                                   select 1 from evm_7702_config e
-                                    where e.chain = p.chain
-                                      and lower(e.network) = lower(p.network)
-                                      and e.status = 'ACTIVE'
-                               ) as eip_7702_enabled,
-                               p.scan_enabled, p.withdraw_enabled, p.transfer_enabled,
-                               coalesce(tc.status, 'CLOSED') as tenant_status,
-                               tc.opened_at, tc.closed_at
-                          from chain_profile p
-                          left join custody_tenant_chain tc
-                            on tc.tenant_id = ? and tc.chain = p.chain
-                         where p.enabled = true
-                         order by p.chain
-                        """, (rs, rowNum) -> new ChainRecord(
-                rs.getString("chain"),
-                rs.getString("network"),
-                rs.getString("family"),
-                rs.getString("native_symbol"),
-                rs.getBoolean("eip_7702_enabled"),
-                rs.getBoolean("scan_enabled"),
-                rs.getBoolean("withdraw_enabled"),
-                rs.getBoolean("transfer_enabled"),
-                rs.getString("tenant_status"),
-                instantOrNull(rs.getTimestamp("opened_at")),
-                instantOrNull(rs.getTimestamp("closed_at")),
-                tokensByChain.getOrDefault(rs.getString("chain"), List.of())), tenantId);
+                .collect(Collectors.groupingBy(
+                        TokenRecord::chain, LinkedHashMap::new, Collectors.toList()));
+        return chainProfiles.listAll().stream()
+                .filter(row -> bool(row.get("enabled")))
+                .map(profile -> {
+                    String chain = text(profile.get("chain"));
+                    Map<String, Object> tenantChain = tenantChains.get(chain.toUpperCase());
+                    return new ChainRecord(
+                            chain,
+                            text(profile.get("network")),
+                            text(profile.get("family")),
+                            text(profile.get("native_symbol")),
+                            evm7702Configs.existsActive(chain, text(profile.get("network"))),
+                            bool(profile.get("scan_enabled")),
+                            bool(profile.get("withdraw_enabled")),
+                            bool(profile.get("transfer_enabled")),
+                            tenantChain == null ? "CLOSED" : text(tenantChain.get("status")),
+                            tenantChain == null ? null : instant(tenantChain.get("opened_at")),
+                            tenantChain == null ? null : instant(tenantChain.get("closed_at")),
+                            tokensByChain.getOrDefault(chain, List.of()));
+                })
+                .toList();
     }
-    /**
-     * 编码 {@code tokens} 对应的数据，生成链上或接口所需的表示。
-     */
+
+    /** 查询平台启用的非原生代币配置，并在 Java 中组合链资产和代币表。 */
     public List<TokenRecord> tokens() {
-        return jdbc.query("""
-                select p.chain, a.symbol,
-                       coalesce(t.token_standard, t.standard) as standard,
-                       t.contract_address, t.decimals,
-                       t.enabled as platform_enabled
-                  from chain_profile p
-                  join chain_asset a
-                    on a.chain = p.chain and a.active = true and a.native_asset = false
-                  join token_config t
-                    on t.chain = p.chain and t.symbol = a.symbol
-                   and lower(t.network) = lower(p.network)
-                 where p.enabled = true
-                 order by p.chain, a.symbol
-                """, (rs, rowNum) -> new TokenRecord(
-                rs.getString("chain"), rs.getString("symbol"), rs.getString("standard"),
-                rs.getString("contract_address"), rs.getInt("decimals"),
-                rs.getBoolean("platform_enabled")));
+        List<Map<String, Object>> profiles = chainProfiles.listAll().stream()
+                .filter(row -> bool(row.get("enabled")))
+                .toList();
+        List<Map<String, Object>> assets = chainAssets.listActive().stream()
+                .filter(row -> !bool(row.get("native_asset")))
+                .toList();
+        List<Map<String, Object>> configs = tokenConfigs.listAll();
+        return profiles.stream()
+                .flatMap(profile -> assets.stream()
+                        .filter(asset -> same(profile.get("chain"), asset.get("chain")))
+                        .map(asset -> configs.stream()
+                                .filter(token -> same(token.get("chain"), asset.get("chain")))
+                                .filter(token -> same(token.get("symbol"), asset.get("symbol")))
+                                .filter(token -> same(token.get("network"), profile.get("network")))
+                                .findFirst()
+                                .map(token -> new TokenRecord(
+                                        text(asset.get("chain")), text(asset.get("symbol")),
+                                        text(token.get("standard")), text(token.get("contract_address")),
+                                        number(token.get("decimals")), bool(token.get("enabled")))))
+                        .flatMap(java.util.Optional::stream))
+                .sorted(java.util.Comparator.comparing(TokenRecord::chain)
+                        .thenComparing(TokenRecord::symbol))
+                .toList();
     }
-    /**
-     * 执行 {@code platformChainEnabled} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
+    /** 判断平台链配置是否启用。 */
     public boolean platformChainEnabled(String chain) {
-        Boolean enabled = jdbc.queryForObject("""
-                select exists(select 1 from chain_profile where chain = ? and enabled = true)
-                """, Boolean.class, chain);
-        return Boolean.TRUE.equals(enabled);
+        return chainProfiles.listAll().stream()
+                .anyMatch(row -> same(row.get("chain"), chain) && bool(row.get("enabled")));
     }
-    /**
-     * 执行 {@code active} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
+    /** 判断租户是否已启用指定链，链平台配置由链配置仓储负责校验。 */
     public boolean active(UUID tenantId, String chain) {
-        Boolean active = jdbc.queryForObject("""
-                select exists(
-                    select 1
-                      from custody_tenant_chain tc
-                      join chain_profile p on p.chain = tc.chain and p.enabled = true
-                     where tc.tenant_id = ? and tc.chain = ? and tc.status = 'ACTIVE'
-                )
-                """, Boolean.class, tenantId, chain);
-        return Boolean.TRUE.equals(active);
+        return platformChainEnabled(chain) && !jdbc.queryForList("""
+                select chain
+                  from custody_tenant_chain
+                 where tenant_id = ? and upper(chain) = upper(?) and status = 'ACTIVE'
+                """, tenantId, chain).isEmpty();
     }
-    /**
-     * 设置或更新 {@code setStatus} 对应的状态，并保持相关业务字段一致。
-     */
+
+    /** 查询租户当前已启用的链名称。 */
+    public List<String> listActiveChains(UUID tenantId) {
+        return jdbc.queryForList("""
+                select chain
+                  from custody_tenant_chain
+                 where tenant_id = ? and status = 'ACTIVE'
+                """, String.class, tenantId);
+    }
+
+    /** 更新租户链启用状态。 */
     public void setStatus(UUID tenantId, String chain, String status, UUID actorId) {
         jdbc.update("""
                 insert into custody_tenant_chain(
@@ -142,50 +160,73 @@ public class CustodyTenantChainRepository {
                 """, tenantId, chain, status,
                 status, actorId, status, status, actorId, status);
     }
-    /**
-     * 处理 {@code depositEnabled} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
+
+    /** 判断租户指定链和资产是否允许充值。 */
     public boolean depositEnabled(UUID tenantId, String chain, String symbol) {
         return assetOperationEnabled(tenantId, chain, symbol, true);
     }
-    /**
-     * 处理 {@code withdrawalEnabled} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
+
+    /** 判断租户指定链和资产是否允许提现。 */
     public boolean withdrawalEnabled(UUID tenantId, String chain, String symbol) {
         return assetOperationEnabled(tenantId, chain, symbol, false);
     }
 
-    /**
-     * 获取或查询 {@code assetOperationEnabled} 对应的数据，并向调用方返回当前业务状态。
-     */
+    /** 在 Java 中组合四张单表的开关和资产配置。 */
     private boolean assetOperationEnabled(UUID tenantId, String chain, String symbol,
                                           boolean deposit) {
-        Boolean enabled = jdbc.queryForObject("""
-                select exists(
-                    select 1
-                      from chain_asset a
-                      join chain_profile p
-                        on p.chain = a.chain and p.enabled = true
-                      join custody_tenant_chain tc
-                        on tc.tenant_id = ? and tc.chain = a.chain and tc.status = 'ACTIVE'
-                      left join token_config t
-                        on t.chain = a.chain and t.symbol = a.symbol and t.enabled = true
-                       and lower(t.network) = lower(p.network)
-                     where a.chain = ? and a.symbol = ? and a.active = true
-                       and case when ? then p.scan_enabled
-                                else p.withdraw_enabled and p.transfer_enabled end
-                       and (a.native_asset = true or t.id is not null)
-                )
-                """, Boolean.class, tenantId, chain, symbol, deposit);
-        return Boolean.TRUE.equals(enabled);
-    }
-    /**
-     * 转换或计算 {@code instantOrNull} 对应的值，统一金额、格式和边界规则。
-     */
-    private static Instant instantOrNull(Timestamp value) {
-        return value == null ? null : value.toInstant();
+        Map<String, Object> profile = chainProfiles.listAll().stream()
+                .filter(row -> same(row.get("chain"), chain) && bool(row.get("enabled")))
+                .findFirst().orElse(null);
+        if (profile == null || !active(tenantId, chain)) {
+            return false;
+        }
+        boolean operationEnabled = deposit
+                ? bool(profile.get("scan_enabled"))
+                : bool(profile.get("withdraw_enabled")) && bool(profile.get("transfer_enabled"));
+        if (!operationEnabled) {
+            return false;
+        }
+        Map<String, Object> asset = chainAssets.findActive(chain, symbol).orElse(null);
+        if (asset == null) {
+            return false;
+        }
+        return bool(asset.get("native_asset")) || tokenConfigs.listAll().stream()
+                .anyMatch(token -> same(token.get("chain"), chain)
+                        && same(token.get("symbol"), symbol)
+                        && same(token.get("network"), profile.get("network"))
+                        && bool(token.get("enabled")));
     }
 
+    /** 比较两个链配置文本。 */
+    private static boolean same(Object left, Object right) {
+        return left != null && right != null
+                && left.toString().equalsIgnoreCase(right.toString());
+    }
+
+    /** 读取文本字段。 */
+    private static String text(Object value) {
+        return value == null ? "" : value.toString();
+    }
+
+    /** 读取布尔字段。 */
+    private static boolean bool(Object value) {
+        return Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(text(value));
+    }
+
+    /** 读取数字字段。 */
+    private static int number(Object value) {
+        return value instanceof Number number ? number.intValue() : Integer.parseInt(text(value));
+    }
+
+    /** 转换时间字段。 */
+    private static Instant instant(Object value) {
+        if (value instanceof Timestamp timestamp) {
+            return timestamp.toInstant();
+        }
+        return value instanceof Instant result ? result : null;
+    }
+
+    /** 租户链展示记录。 */
     public record ChainRecord(
             String chain,
             String network,
@@ -202,6 +243,7 @@ public class CustodyTenantChainRepository {
     ) {
     }
 
+    /** 租户链上的代币展示记录。 */
     public record TokenRecord(
             String chain,
             String symbol,
