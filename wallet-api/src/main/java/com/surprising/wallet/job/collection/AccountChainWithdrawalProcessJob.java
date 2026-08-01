@@ -29,7 +29,7 @@ public class AccountChainWithdrawalProcessJob {
      * <p>
      * EVM 链若启用了 EIP-7702，则跳过（由 {@code Evm7702WithdrawalJob} 单独处理）。
      * <p>
-     * 注意：UTXO 链提现由 {@code *UtxoBatchJob} 处理。
+     * 注意：UTXO 链提现由对应的 UTXO 批处理调度任务处理。
      */
     @Scheduled(scheduler = "accountTaskScheduler", cron = "13/30 * * * * ?")
     public void run() {

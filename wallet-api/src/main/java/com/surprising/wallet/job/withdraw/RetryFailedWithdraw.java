@@ -6,7 +6,6 @@ import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -26,19 +25,26 @@ import tools.jackson.databind.ObjectMapper;
 public class RetryFailedWithdraw {
 
     /** 提现服务，重试失败请求。 */
-    @Autowired
-    private TransactionService txService;
+    private final TransactionService txService;
     /** 全局任务开关服务。 */
-    @Autowired
-    private WalletRuntimeConfigService runtimeConfigService;
+    private final WalletRuntimeConfigService runtimeConfigService;
     /**
      * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
      */
-    @Autowired
-    private StringRedisTemplate redis;
+    private final StringRedisTemplate redis;
     /** Jackson 3 对象映射器，用于解析失败提现队列中的 JSON。 */
-    @Autowired
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
+
+    /** 构造失败提现重试任务。 */
+    public RetryFailedWithdraw(TransactionService txService,
+                               WalletRuntimeConfigService runtimeConfigService,
+                               StringRedisTemplate redis,
+                               ObjectMapper objectMapper) {
+        this.txService = txService;
+        this.runtimeConfigService = runtimeConfigService;
+        this.redis = redis;
+        this.objectMapper = objectMapper;
+    }
 
     /**
      * 每分钟从失败队列取出待重试请求，调用提现流程，失败继续回填等待下一轮处理。

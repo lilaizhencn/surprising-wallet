@@ -11,9 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -21,8 +19,8 @@ import java.util.UUID;
 import com.surprising.wallet.service.CustodyApiKeyService;
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
+import com.surprising.wallet.service.CustodySecurityService;
 
 /**
  * Console 安全配置控制器。
@@ -33,17 +31,18 @@ import com.surprising.wallet.custody.model.CustodyRequestSupport;
 @RestController
 @RequestMapping("/custody/console/v1")
 public class CustodyConsoleSecurityController {
-    /** 仓储服务，用于安全配置、审计与白名单持久化。 */
-    private final CustodyRepository repository;
     /** API Key 管理服务。 */
     private final CustodyApiKeyService apiKeys;
+    /** 安全配置应用服务。 */
+    private final CustodySecurityService security;
 
     /**
      * 注入仓储与 API Key 服务。
      */
-    public CustodyConsoleSecurityController(CustodyRepository repository, CustodyApiKeyService apiKeys) {
-        this.repository = repository;
+    public CustodyConsoleSecurityController(CustodyApiKeyService apiKeys,
+                                            CustodySecurityService security) {
         this.apiKeys = apiKeys;
+        this.security = security;
     }
 
     /**
@@ -83,59 +82,39 @@ public class CustodyConsoleSecurityController {
     @GetMapping("/ip-allowlist")
     public Map<String, Object> ipAllowlist(HttpServletRequest request) {
         CustodyPrincipal principal = requireTenantAdmin(request);
-        CustodyRepository.TenantRecord tenant = repository.requireTenant(principal.tenantId());
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("enabled", tenant.ipAllowlistEnabled());
-        result.put("rules", repository.listIpRules(principal.tenantId()));
-        return result;
+        return security.ipAllowlist(principal);
     }
 
     /**
      * 更新白名单生效策略并记录审计。
      */
-    @Transactional(rollbackFor = Throwable.class)
     @PutMapping("/ip-allowlist/enforcement")
     public Map<String, Object> ipEnforcement(@RequestBody IpEnforcementRequest body,
                                              HttpServletRequest request) {
         CustodyPrincipal principal = requireTenantAdmin(request);
-        repository.setIpAllowlistEnabled(principal.tenantId(), body.enabled());
-        repository.audit(principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
-                "IP_ALLOWLIST.ENFORCEMENT_CHANGE", "TENANT", principal.tenantId().toString(),
-                CustodyRequestSupport.clientIp(request), "{\"enabled\":" + body.enabled() + "}");
-        return ipAllowlist(request);
+        return security.updateIpEnforcement(
+                principal, body.enabled(), CustodyRequestSupport.clientIp(request));
     }
 
     /**
      * 新增 IP 白名单规则，并返回持久化后的记录。
      */
-    @Transactional(rollbackFor = Throwable.class)
     @PostMapping("/ip-allowlist/rules")
     public Map<String, Object> addIpRule(@RequestBody CreateIpRuleRequest body,
                                         HttpServletRequest request) {
         CustodyPrincipal principal = requireTenantAdmin(request);
-        String label = requireText(body.label(), "IP rule label", 120);
-        String cidr = requireText(body.cidr(), "CIDR", 64);
-        UUID ruleId = UUID.randomUUID();
-        Map<String, Object> created = repository.insertIpRule(
-                principal.tenantId(), ruleId, label, cidr, principal.actorId());
-        repository.audit(principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
-                "IP_ALLOWLIST.RULE_CREATE", "IP_RULE", ruleId.toString(),
-                CustodyRequestSupport.clientIp(request), "{\"cidr\":\"" + cidr + "\"}");
-        return created;
+        return security.addIpRule(principal, body.label(), body.cidr(),
+                CustodyRequestSupport.clientIp(request));
     }
 
     /**
      * 删除白名单规则并记录审计变更。
      */
-    @Transactional(rollbackFor = Throwable.class)
     @DeleteMapping("/ip-allowlist/rules/{ruleId}")
     public Map<String, Object> deleteIpRule(@PathVariable UUID ruleId, HttpServletRequest request) {
         CustodyPrincipal principal = requireTenantAdmin(request);
-        repository.deleteIpRule(principal.tenantId(), ruleId);
-        repository.audit(principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
-                "IP_ALLOWLIST.RULE_DELETE", "IP_RULE", ruleId.toString(),
-                CustodyRequestSupport.clientIp(request), "{}");
-        return Map.of("ok", true);
+        return security.deleteIpRule(
+                principal, ruleId, CustodyRequestSupport.clientIp(request));
     }
 
     /**
@@ -150,12 +129,7 @@ public class CustodyConsoleSecurityController {
         if (!principal.hasScope("audit:read") && !"TENANT_ADMIN".equals(principal.role())) {
             throw new CustodyForbiddenException("audit:read scope required");
         }
-        int pageSize = Math.min(Math.max(limit, 1), 200);
-        int pageOffset = Math.max(offset, 0);
-        return new PageView<>(
-                repository.listAudit(principal.tenantId(), pageSize, pageOffset),
-                repository.countAudit(principal.tenantId()),
-                pageSize, pageOffset);
+        return security.audit(principal, limit, offset);
     }
 
     /**
@@ -167,17 +141,6 @@ public class CustodyConsoleSecurityController {
             throw new CustodyForbiddenException("tenant administrator required");
         }
         return principal;
-    }
-
-    /**
-     * 校验文本参数非空且不超过长度限制。
-     */
-    private static String requireText(String value, String field, int maxLength) {
-        String result = value == null ? "" : value.trim();
-        if (result.isBlank() || result.length() > maxLength) {
-            throw new IllegalArgumentException(field + " is required and must not exceed " + maxLength + " characters");
-        }
-        return result;
     }
 
     /**

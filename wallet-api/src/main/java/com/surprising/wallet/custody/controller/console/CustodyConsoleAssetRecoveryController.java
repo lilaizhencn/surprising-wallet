@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.UUID;
 
 import com.surprising.wallet.custody.model.PageView;
-import com.surprising.wallet.repository.CustodyAssetRecoveryRepository;
 import com.surprising.wallet.service.CustodyAssetRecoveryService;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 
@@ -40,7 +39,7 @@ public class CustodyConsoleAssetRecoveryController {
      * 按状态分页查询当前租户找回记录。
      */
     @GetMapping
-    public PageView<CustodyAssetRecoveryRepository.RecoveryRecord> list(
+    public PageView<CustodyAssetRecoveryService.RecoveryView> list(
             @RequestParam(defaultValue = "") String status,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
@@ -53,7 +52,7 @@ public class CustodyConsoleAssetRecoveryController {
      * 提交一笔资产找回申请并返回创建后的记录。
      */
     @PostMapping
-    public CustodyAssetRecoveryRepository.RecoveryRecord submit(
+    public CustodyAssetRecoveryService.RecoveryView submit(
             @RequestBody CustodyAssetRecoveryService.SubmitCommand body,
             HttpServletRequest request) {
         return recoveries.submit(CustodyRequestSupport.requirePrincipal(request), body,
@@ -64,7 +63,7 @@ public class CustodyConsoleAssetRecoveryController {
      * 取消未执行或可取消状态的找回申请。
      */
     @PostMapping("/{id}/cancel")
-    public CustodyAssetRecoveryRepository.RecoveryRecord cancel(
+    public CustodyAssetRecoveryService.RecoveryView cancel(
             @PathVariable UUID id, HttpServletRequest request) {
         return recoveries.cancel(CustodyRequestSupport.requirePrincipal(request), id,
                 CustodyRequestSupport.clientIp(request));

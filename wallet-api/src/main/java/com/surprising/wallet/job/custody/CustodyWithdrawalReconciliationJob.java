@@ -1,19 +1,11 @@
 package com.surprising.wallet.job.custody;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.repository.CustodyRepository.WithdrawalStatusChange;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.service.CustodyWithdrawalReconciliationService;
 
 /**
  * 托管提现状态对账任务。
@@ -26,22 +18,17 @@ import com.surprising.wallet.repository.CustodyRepository;
  */
 @Component
 public class CustodyWithdrawalReconciliationJob {
-    /** 需要标记为失败的状态集合。 */
-    private static final Set<String> FAILURE_STATES = Set.of("FAILED", "REJECTED", "CANCELLED");
-
-    /** 账务仓储。 */
-    private final CustodyRepository repository;
-    /** JSON 序列化器。 */
-    private final ObjectMapper objectMapper;
+    /** 提现状态对账服务。 */
+    private final CustodyWithdrawalReconciliationService reconciliation;
     /** 防并发开关。 */
     private final AtomicBoolean running = new AtomicBoolean();
 
     /**
      * 构造注入仓储与序列化组件。
      */
-    public CustodyWithdrawalReconciliationJob(CustodyRepository repository, ObjectMapper objectMapper) {
-        this.repository = repository;
-        this.objectMapper = objectMapper;
+    public CustodyWithdrawalReconciliationJob(
+            CustodyWithdrawalReconciliationService reconciliation) {
+        this.reconciliation = reconciliation;
     }
 
     /**
@@ -53,55 +40,9 @@ public class CustodyWithdrawalReconciliationJob {
             return;
         }
         try {
-            for (WithdrawalStatusChange change : repository.findWithdrawalStatusChanges(100)) {
-                String eventType = eventType(change.nextStatus());
-                UUID eventId = eventType == null ? null : UUID.randomUUID();
-                repository.applyWithdrawalStatusChange(
-                        change, eventId, eventType,
-                        eventType == null ? null : payload(eventId, eventType, change));
-            }
+            reconciliation.reconcile();
         } finally {
             running.set(false);
-        }
-    }
-
-    /**
-     * 根据状态映射事件类型（广播/失败/确认）。
-     */
-    private String eventType(String status) {
-        return switch (status) {
-            case "SENT" -> "WITHDRAWAL.BROADCAST";
-            case "BROADCAST_UNKNOWN" -> "WITHDRAWAL.BROADCAST_UNKNOWN";
-            case "CONFIRMED" -> "WITHDRAWAL.CONFIRMED";
-            default -> FAILURE_STATES.contains(status) ? "WITHDRAWAL.FAILED" : null;
-        };
-    }
-
-    /**
-     * 组织提现事件 payload，供 webhook/审计消费。
-     */
-    private String payload(UUID eventId, String eventType, WithdrawalStatusChange change) {
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("withdrawalId", change.id());
-        data.put("custodyAddressId", change.custodyAddressId());
-        data.put("externalReference", change.externalReference());
-        data.put("orderNo", change.orderNo());
-        data.put("chain", change.chain());
-        data.put("asset", change.assetSymbol());
-        data.put("toAddress", change.toAddress());
-        data.put("amount", change.amount());
-        data.put("fee", change.fee());
-        data.put("status", change.nextStatus());
-        data.put("txHash", change.txHash());
-        data.put("errorMessage", change.errorMessage());
-        try {
-            return objectMapper.writeValueAsString(Map.of(
-                    "id", eventId,
-                    "type", eventType,
-                    "createdAt", Instant.now(),
-                    "data", data));
-        } catch (JacksonException e) {
-            throw new IllegalStateException("failed to serialize withdrawal event", e);
         }
     }
 }

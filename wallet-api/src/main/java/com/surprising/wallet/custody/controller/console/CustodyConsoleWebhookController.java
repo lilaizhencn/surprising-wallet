@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.service.CustodyWebhookService;
 
@@ -61,7 +60,7 @@ public class CustodyConsoleWebhookController {
      * 手工触发单条 webhook 地址校验。
      */
     @PostMapping("/webhooks/{endpointId}/verify")
-    public CustodyRepository.WebhookEndpointRecord verify(
+    public CustodyWebhookService.WebhookEndpointView verify(
             @PathVariable UUID endpointId, HttpServletRequest request) {
         return webhooks.verify(CustodyRequestSupport.requirePrincipal(request), endpointId,
                 CustodyRequestSupport.clientIp(request));

@@ -52,7 +52,7 @@ public class CustodyTenantService {
      * 构建或生成 {@code create} 对应的结果，并执行输入和状态校验。
      */
     @Transactional(rollbackFor = Throwable.class)
-    public TenantRecord create(CustodyPrincipal actor, CreateTenantCommand command, String sourceIp) {
+    public TenantView create(CustodyPrincipal actor, CreateTenantCommand command, String sourceIp) {
         requirePlatformAdmin(actor);
         String slug = normalizeSlug(command.slug());
         String name = required(command.name(), "tenant name", 160);
@@ -65,7 +65,7 @@ public class CustodyTenantService {
         repository.audit(tenantId, "PLATFORM_USER", actor.actorId().toString(), "TENANT.CREATE",
                 "TENANT", tenantId.toString(), sourceIp,
                 json(Map.of("slug", slug, "name", name, "adminEmail", email)));
-        return result;
+        return toView(result);
     }
 
     /**
@@ -94,7 +94,7 @@ public class CustodyTenantService {
         requirePlatformAdmin(actor);
         TenantRecord tenant = repository.requireTenant(tenantId);
         return new TenantDetail(
-                tenant,
+                toView(tenant),
                 repository.tenantOperationsSummary(tenantId),
                 repository.onboardingStatus(tenantId),
                 repository.listTenantUsers(tenantId),
@@ -114,8 +114,8 @@ public class CustodyTenantService {
      * 设置或更新 {@code update} 对应的状态，并保持相关业务字段一致。
      */
     @Transactional(rollbackFor = Throwable.class)
-    public TenantRecord update(CustodyPrincipal actor, UUID tenantId,
-                               UpdateTenantCommand command, String sourceIp) {
+    public TenantView update(CustodyPrincipal actor, UUID tenantId,
+                             UpdateTenantCommand command, String sourceIp) {
         requirePlatformAdmin(actor);
         TenantRecord current = repository.requireTenant(tenantId);
         String name = command.name() == null
@@ -130,14 +130,14 @@ public class CustodyTenantService {
                 json(Map.of(
                         "name", name,
                         "displayCurrency", displayCurrency)));
-        return repository.requireTenant(tenantId);
+        return toView(repository.requireTenant(tenantId));
     }
 
     /**
      * 设置或更新 {@code updateStatus} 对应的状态，并保持相关业务字段一致。
      */
     @Transactional(rollbackFor = Throwable.class)
-    public TenantRecord updateStatus(CustodyPrincipal actor, UUID tenantId, String status, String sourceIp) {
+    public TenantView updateStatus(CustodyPrincipal actor, UUID tenantId, String status, String sourceIp) {
         requirePlatformAdmin(actor);
         String normalized = status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
         if (!SetHolder.TENANT_STATUSES.contains(normalized)) {
@@ -151,7 +151,7 @@ public class CustodyTenantService {
                 "TENANT", tenantId.toString(), sourceIp, json(Map.of(
                         "status", normalized,
                         "revokedSessions", revokedSessions)));
-        return repository.requireTenant(tenantId);
+        return toView(repository.requireTenant(tenantId));
     }
 
     /**
@@ -186,6 +186,14 @@ public class CustodyTenantService {
         } catch (JacksonException e) {
             throw new IllegalStateException("failed to serialize audit detail", e);
         }
+    }
+
+    /** 将持久化租户记录转换为应用层返回模型。 */
+    private static TenantView toView(TenantRecord tenant) {
+        return new TenantView(
+                tenant.id(), tenant.slug(), tenant.name(), tenant.status(),
+                tenant.derivationNamespace(), tenant.ipAllowlistEnabled(),
+                tenant.displayCurrency(), tenant.createdAt(), tenant.updatedAt());
     }
     /**
      * 转换或计算 {@code normalizeSlug} 对应的值，统一金额、格式和边界规则。
@@ -284,8 +292,22 @@ public class CustodyTenantService {
     ) {
     }
 
+    /** 租户应用层返回模型。 */
+    public record TenantView(
+            UUID id,
+            String slug,
+            String name,
+            String status,
+            int derivationNamespace,
+            boolean ipAllowlistEnabled,
+            String displayCurrency,
+            java.time.Instant createdAt,
+            java.time.Instant updatedAt
+    ) {
+    }
+
     public record TenantDetail(
-            TenantRecord tenant,
+            TenantView tenant,
             Map<String, Object> statistics,
             Map<String, Object> onboarding,
             List<Map<String, Object>> administrators,

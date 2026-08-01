@@ -1,20 +1,9 @@
 package com.surprising.wallet.job.withdraw;
 
-import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
-import com.surprising.wallet.common.json.JacksonJson;
-import com.surprising.wallet.common.pojo.WithdrawTransaction;
-import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.chain.BlockchainRuntimeService;
-import com.surprising.wallet.config.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.ObjectMapper;
 
-import java.util.List;
+import com.surprising.wallet.service.UtxoSigningRecoveryService;
 
 /**
  * UTXO 链签名恢复任务。
@@ -31,58 +20,21 @@ import java.util.List;
  *
  * @author atomex
  */
-@Slf4j
 @Component
 public class UtxoSigningRecoveryJob {
+    /** 签名恢复业务服务。 */
+    private final UtxoSigningRecoveryService recoveryService;
 
-    /** 重试阈值（秒）：超过该时长仍在 SIGNING 状态则认为卡住。 */
-    private static final long STALE_SECONDS = 60;
-    /** 统一扫描链列表。 */
-    private static final List<String> CHAINS = List.of("BTC", "BCH", "LTC", "DOGE");
-
-    /** 签名交易仓储。 */
-    @Autowired
-    private ChainJdbcRepository repository;
-    /** 链元数据服务。 */
-    @Autowired
-    private BlockchainRuntimeService blockchainRuntimeService;
-    /** 任务开关服务。 */
-    @Autowired
-    private WalletRuntimeConfigService runtimeConfigService;
-    /**
-     * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
-     */
-    @Autowired
-    private StringRedisTemplate redis;
-    /** Jackson 3 对象映射器，用于重新写入签名恢复队列。 */
-    @Autowired
-    private ObjectMapper objectMapper;
+    /** 构造签名恢复调度器。 */
+    public UtxoSigningRecoveryJob(UtxoSigningRecoveryService recoveryService) {
+        this.recoveryService = recoveryService;
+    }
 
     /**
      * 每 30 秒扫描一次待签名悬挂交易，回推至首次签名队列，避免重启后遗留交易丢失。
      */
     @Scheduled(scheduler = "withdrawTaskScheduler", fixedDelay = 30_000)
     public void execute() {
-        for (String chain : CHAINS) {
-            try {
-                if (!runtimeConfigService.isTaskEnabled(chain, WalletRuntimeConfigService.TASK_WITHDRAW)) {
-                    continue;
-                }
-                AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata(chain);
-                for (WithdrawTransaction tx : repository.findStaleBitcoinLikeSigningTransactions(
-                        currency, STALE_SECONDS)) {
-                    if (!repository.claimBitcoinLikeSigningRecovery(
-                            currency, tx.getId(), STALE_SECONDS)) {
-                        continue;
-                    }
-                    currency.applyTo(tx);
-                    redis.opsForList().leftPush(
-                            Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, JacksonJson.writeValue(objectMapper, tx));
-                    log.info("requeued stale {} signing transaction id={}", chain, tx.getId());
-                }
-            } catch (Throwable e) {
-                log.error("UTXO signing recovery failed for chain {}: {}", chain, e.getMessage(), e);
-            }
-        }
+        recoveryService.recover();
     }
 }

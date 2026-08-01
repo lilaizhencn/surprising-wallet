@@ -27,7 +27,7 @@ public class AccountChainDepositScanJob {
      * （SOLANA、TRON、APTOS、SUI、TON、XRP、ADA、NEAR 及 EVM 非 7702 链），
      * 调用对应的链适配器逐块扫描充值交易并写入 deposit_record。
      * <p>
-     * 注意：BTC/BCH/LTC/DOGE 等 UTXO 链由独立的 {@code ScanBlockJob} 子类处理。
+     * 注意：BTC/BCH/LTC/DOGE 等 UTXO 链由独立的 UTXO 扫描调度任务处理。
      */
     @Scheduled(
             scheduler = "accountTaskScheduler",

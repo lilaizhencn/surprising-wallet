@@ -92,16 +92,16 @@ public class CustodyAssetDashboardService {
     /**
      * 执行 {@code prices} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
-    public List<CustodyAssetDashboardRepository.AssetPrice> prices(CustodyPrincipal principal) {
+    public List<AssetPriceView> prices(CustodyPrincipal principal) {
         requirePlatformAdmin(principal);
-        return repository.prices();
+        return repository.prices().stream().map(CustodyAssetDashboardService::toView).toList();
     }
 
     /**
      * 设置或更新 {@code setPrice} 对应的状态，并保持相关业务字段一致。
      */
     @Transactional(rollbackFor = Throwable.class)
-    public CustodyAssetDashboardRepository.AssetPrice setPrice(
+    public AssetPriceView setPrice(
             CustodyPrincipal principal, String symbolValue, SetPriceCommand command, String sourceIp) {
         requirePlatformAdmin(principal);
         String symbol = normalizeSymbol(symbolValue);
@@ -122,7 +122,14 @@ public class CustodyAssetDashboardService {
         custody.audit(null, principal.actorType().name(), principal.actorId().toString(),
                 "ASSET_PRICE.UPDATE", "ASSET_PRICE", symbol, sourceIp,
                 "{\"assetSymbol\":\"" + symbol + "\",\"source\":\"" + source + "\"}");
-        return saved;
+        return toView(saved);
+    }
+
+    /** 将持久化资产价格转换为应用层返回模型。 */
+    private static AssetPriceView toView(CustodyAssetDashboardRepository.AssetPrice price) {
+        return new AssetPriceView(
+                price.assetSymbol(), price.usdPrice(), price.source(),
+                price.observedAt(), price.updatedAt());
     }
     /**
      * 转换或计算 {@code normalizeSymbol} 对应的值，统一金额、格式和边界规则。
@@ -312,5 +319,14 @@ public class CustodyAssetDashboardService {
     ) {
     }
     public record SetPriceCommand(BigDecimal usdPrice, String source, Instant observedAt) {
+    }
+
+    /** 平台资产价格应用层返回模型。 */
+    public record AssetPriceView(
+            String assetSymbol,
+            BigDecimal usdPrice,
+            String source,
+            Instant observedAt,
+            Instant updatedAt) {
     }
 }

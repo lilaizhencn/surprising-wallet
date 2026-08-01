@@ -61,9 +61,15 @@ wallet-api/job/
 
 ### 命名约定
 
-- Job 类名不要 `Abstract` 前缀：使用 `ScanBlockJob`（不是 `AbstractScanBlockJob`）、`UtxoBatchJob`。
+- Job 类名不要 `Abstract` 前缀：使用 `UtxoDepositScanJob`（不是 `AbstractUtxoDepositScanJob`）、`BtcUtxoBatchJob`。
 - 类名体现职责：UTXO 批处理包含提现+归集，用 `*UtxoBatchJob`（不是 `*WithdrawJob`）。
 - Account-Chain 通用 job 使用简短模式：`AccountChain{DepositScan,Collection,Monero,WithdrawalProcess,WithdrawalConfirm}Job`。
+
+### MVC 入口边界
+
+- `wallet-api/job/**` 只负责调度、节流、防并发和异常隔离；选币、状态流转、队列消费、RPC 调用和审计必须由 `service/**` 承担。
+- `wallet-api/custody/controller/**` 只负责 HTTP 参数校验、身份上下文和响应映射，不得直接依赖 `repository/**`。
+- Service 使用构造器注入；可选基础设施依赖使用 `Optional<T>` 表达，不使用可变字段注入。
 
 ## SaaS 改造原则
 

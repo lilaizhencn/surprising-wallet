@@ -13,7 +13,6 @@ import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
@@ -46,35 +45,45 @@ public class TransactionService {
     /**
      * 地址服务，负责解析地址归属关系，用于内部转账识别。
      */
-    @Autowired
-    AddressService addressService;
+    private final AddressService addressService;
 
     /**
      * 链运行时服务，提供资产元数据、链上确认数和广播能力。
      */
-    @Autowired
-    BlockchainRuntimeService blockchainRuntimeService;
+    private final BlockchainRuntimeService blockchainRuntimeService;
 
     /**
      * 共享仓储，处理提现状态、UTXO 绑定、入账记录和冻结余额更新。
      */
-    @Autowired
-    ChainJdbcRepository chainJdbcRepository;
+    private final ChainJdbcRepository chainJdbcRepository;
 
     /**
      * 运行时配置服务，用于校验任务开关和链路状态。
      */
-    @Autowired
-    WalletRuntimeConfigService runtimeConfigService;
+    private final WalletRuntimeConfigService runtimeConfigService;
 
     /**
      * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
      */
-    @Autowired
-    StringRedisTemplate redis;
+    private final StringRedisTemplate redis;
     /** Jackson 3 对象映射器，用于处理队列和签名元数据 JSON。 */
-    @Autowired
-    ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
+
+    /** 构造充值提现事务服务。 */
+    public TransactionService(
+            AddressService addressService,
+            BlockchainRuntimeService blockchainRuntimeService,
+            ChainJdbcRepository chainJdbcRepository,
+            WalletRuntimeConfigService runtimeConfigService,
+            StringRedisTemplate redis,
+            ObjectMapper objectMapper) {
+        this.addressService = addressService;
+        this.blockchainRuntimeService = blockchainRuntimeService;
+        this.chainJdbcRepository = chainJdbcRepository;
+        this.runtimeConfigService = runtimeConfigService;
+        this.redis = redis;
+        this.objectMapper = objectMapper;
+    }
 
     /**
      * 充值，把充值交易推送到各自的业务线队列

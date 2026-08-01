@@ -5,9 +5,6 @@ import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.repository.ChainJdbcRepository;
-import com.surprising.wallet.service.AddressService;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -23,15 +20,18 @@ import java.util.Optional;
  * @author lilaizhen
  * @date 2018-03-27
  */
-@Slf4j
 @Service
 public class AddressServiceImpl implements AddressService {
 
     /**
      * 链地址仓库，负责按链名/资产标识查询钱包地址及用户绑定关系。
      */
-    @Autowired
-    private ChainJdbcRepository chainJdbcRepository;
+    private final ChainJdbcRepository chainJdbcRepository;
+
+    /** 构造地址服务。 */
+    public AddressServiceImpl(ChainJdbcRepository chainJdbcRepository) {
+        this.chainJdbcRepository = chainJdbcRepository;
+    }
 
     /**
      * 将数据库地址记录映射为业务可消费的 Address 模型。

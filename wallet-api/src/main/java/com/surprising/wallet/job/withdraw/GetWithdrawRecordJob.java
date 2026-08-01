@@ -5,7 +5,6 @@ import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -26,16 +25,22 @@ import java.util.stream.Collectors;
 @Slf4j
 public class GetWithdrawRecordJob {
     /** 提现交易服务，负责把请求转为待签名订单。 */
-    @Autowired
-    private TransactionService txService;
+    private final TransactionService txService;
     /**
      * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
      */
-    @Autowired
-    private StringRedisTemplate redis;
+    private final StringRedisTemplate redis;
     /** Jackson 3 对象映射器，用于处理待提现队列中的 JSON。 */
-    @Autowired
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
+
+    /** 构造提现请求拉取任务。 */
+    public GetWithdrawRecordJob(TransactionService txService,
+                                StringRedisTemplate redis,
+                                ObjectMapper objectMapper) {
+        this.txService = txService;
+        this.redis = redis;
+        this.objectMapper = objectMapper;
+    }
 
     /**
      * 执行一次取数与提交：读取待提现队列、去重、入流水并对失败请求回写重试队列。

@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.surprising.wallet.custody.exception.CustodyForbiddenException;
@@ -70,22 +71,33 @@ public class CustodyAddressService {
     /**
      * 保存 {@code evm7702Repository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    @Autowired(required = false)
-    private Evm7702CollectionRepository evm7702Repository;
+    private final Optional<Evm7702CollectionRepository> evm7702Repository;
 
     /**
      * 构造 {@code CustodyAddressService}，初始化该组件运行所需的状态和依赖。
      */
+    @Autowired
     public CustodyAddressService(CustodyRepository custodyRepository,
                                  ChainJdbcRepository chainRepository,
                                  BlockchainRuntimeService runtime,
                                  CustodyTenantChainService tenantChains,
-                                 ObjectMapper objectMapper) {
+                                 ObjectMapper objectMapper,
+                                 Optional<Evm7702CollectionRepository> evm7702Repository) {
         this.custodyRepository = custodyRepository;
         this.chainRepository = chainRepository;
         this.runtime = runtime;
         this.tenantChains = tenantChains;
         this.objectMapper = objectMapper;
+        this.evm7702Repository = evm7702Repository;
+    }
+
+    /** 提供不启用 EIP-7702 仓储时的测试构造函数。 */
+    public CustodyAddressService(CustodyRepository custodyRepository,
+                                 ChainJdbcRepository chainRepository,
+                                 BlockchainRuntimeService runtime,
+                                 CustodyTenantChainService tenantChains,
+                                 ObjectMapper objectMapper) {
+        this(custodyRepository, chainRepository, runtime, tenantChains, objectMapper, Optional.empty());
     }
 
     /**
@@ -166,10 +178,8 @@ public class CustodyAddressService {
                 generated.getIndex(),
                 "CONSOLE".equals(normalizedSource) ? principal.actorId() : null);
         if ("evm".equalsIgnoreCase(runtimeChain.family())) {
-            if (evm7702Repository != null) {
-                evm7702Repository.createAccountProjection(
-                        tenant.id(), addressId, chain, runtimeChain.network(), chainAddress.getAddress());
-            }
+            evm7702Repository.ifPresent(repository -> repository.createAccountProjection(
+                    tenant.id(), addressId, chain, runtimeChain.network(), chainAddress.getAddress()));
         }
         AddressView result = toView(saved);
         custodyRepository.audit(

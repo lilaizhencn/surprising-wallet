@@ -1,6 +1,7 @@
 package com.surprising.wallet.job.deposit;
 
 import com.surprising.wallet.config.WalletRuntimeConfigService;
+import com.surprising.wallet.service.BitcoinLikeDepositScanService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -27,7 +28,7 @@ public class UtxoDepositScanJob {
     private static final List<String> CHAINS = List.of("BTC", "BCH", "LTC", "DOGE");
 
     /** 区块扫描器。 */
-    private final ScanBlockJob scanBlockJob;
+    private final BitcoinLikeDepositScanService depositScanService;
     /** 数据库运行时总开关、链开关及统一扫描周期策略。 */
     private final WalletRuntimeConfigService runtimeConfigService;
     /** 每条 UTXO 链下次允许扫描的时间。 */
@@ -54,7 +55,7 @@ public class UtxoDepositScanJob {
                 continue;
             }
             try {
-                scanBlockJob.scan(chain);
+                depositScanService.scan(chain);
             } catch (Throwable e) {
                 log.error("UTXO scan failed for chain {}: {}", chain, e.getMessage(), e);
             } finally {

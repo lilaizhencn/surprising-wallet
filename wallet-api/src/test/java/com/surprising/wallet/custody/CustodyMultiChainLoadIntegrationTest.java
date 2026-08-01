@@ -46,8 +46,10 @@ import com.surprising.wallet.custody.model.CustodySecurityProperties;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
 import com.surprising.wallet.job.custody.CustodyWebhookDispatcher;
 import com.surprising.wallet.custody.model.CustodyWebhookRetryPolicy;
+import com.surprising.wallet.service.CustodyWebhookDispatchService;
 import com.surprising.wallet.service.CustodyWebhookService;
 import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
+import com.surprising.wallet.service.CustodyWithdrawalReconciliationService;
 
 /**
  * 验证 {@code CustodyMultiChainLoadIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
@@ -125,7 +127,8 @@ class CustodyMultiChainLoadIntegrationTest {
             Duration withdrawalDuration = Duration.between(withdrawalStarted, Instant.now());
 
             CustodyWithdrawalReconciliationJob reconciliation =
-                    new CustodyWithdrawalReconciliationJob(custody, objectMapper);
+                    new CustodyWithdrawalReconciliationJob(
+                            new CustodyWithdrawalReconciliationService(custody, objectMapper));
             for (int pass = 0; pass < users / 100 + 5; pass++) {
                 reconciliation.reconcile();
                 if (count(jdbc, "select count(*) from custody_withdrawal where status <> 'CONFIRMED'") == 0) {
@@ -140,7 +143,8 @@ class CustodyMultiChainLoadIntegrationTest {
             List<CustodyWebhookDispatcher> dispatchers = new ArrayList<>();
             for (int worker = 0; worker < webhookWorkers; worker++) {
                 dispatchers.add(new CustodyWebhookDispatcher(
-                        custody, crypto, webhooks, new CustodyWebhookRetryPolicy()));
+                        new CustodyWebhookDispatchService(
+                                custody, crypto, webhooks, new CustodyWebhookRetryPolicy())));
             }
             Instant webhookStarted = Instant.now();
             drainDueWebhooks(jdbc, dispatchers, concurrency);

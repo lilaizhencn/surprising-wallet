@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.service.CustodyGasReconciliationService;
 
 /**
  * 托管 Gas 费用对账任务。
@@ -24,15 +24,15 @@ public class CustodyGasReconciliationJob {
             LoggerFactory.getLogger(CustodyGasReconciliationJob.class);
 
     /** 账务仓储。 */
-    private final CustodyRepository repository;
+    private final CustodyGasReconciliationService reconciliation;
     /** 防并发开关，避免重复 reconcile。 */
     private final AtomicBoolean running = new AtomicBoolean();
 
     /**
      * 每次调度执行 gas 用量结算。
      */
-    public CustodyGasReconciliationJob(CustodyRepository repository) {
-        this.repository = repository;
+    public CustodyGasReconciliationJob(CustodyGasReconciliationService reconciliation) {
+        this.reconciliation = reconciliation;
     }
 
     /**
@@ -44,22 +44,7 @@ public class CustodyGasReconciliationJob {
             return;
         }
         try {
-            for (CustodyRepository.GasUsageRecord usage
-                    : repository.listOverdueGasUsage(100)) {
-                try {
-                    repository.settleGasUsage(
-                            usage.tenantId(),
-                            usage.operationType(),
-                            usage.operationId(),
-                            usage.actualAmount(),
-                            usage.pricingSource(),
-                            usage.txHash());
-                } catch (RuntimeException error) {
-                    log.warn(
-                            "custody gas reconciliation failed: usageId={} error={}",
-                            usage.id(), error.getMessage());
-                }
-            }
+            reconciliation.reconcile();
         } finally {
             running.set(false);
         }

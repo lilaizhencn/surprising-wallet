@@ -1,33 +1,23 @@
 package com.surprising.wallet.job.withdraw;
 
-import lombok.extern.slf4j.Slf4j;
+import com.surprising.wallet.service.UtxoBatchService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/**
- * BTC 批处理任务（提现 + 归集）。
- * <p>
- * 每 30 秒执行一次：从 DB 拉取 BTC 链所有待签名订单，
- * 构建批量 UTXO 多签交易并推送到签名队列。
- */
+/** BTC 链提现与归集批处理调度任务。 */
 @Component
-@Slf4j
-public class BtcUtxoBatchJob extends UtxoBatchJob {
+public class BtcUtxoBatchJob {
+    /** UTXO 批处理业务服务。 */
+    private final UtxoBatchService batchService;
 
-    /**
-     * 返回 BTC 链标识给基类路由。
-     */
-    @Override
-    protected String chain() {
-        return "BTC";
+    /** 构造 BTC 批处理调度器。 */
+    public BtcUtxoBatchJob(UtxoBatchService batchService) {
+        this.batchService = batchService;
     }
 
-    /**
-     * 以 withdrawTaskScheduler 调度每 30 秒批处理一次 BTC 签名交易。
-     */
+    /** 每 30 秒触发一次 BTC 批处理。 */
     @Scheduled(scheduler = "withdrawTaskScheduler", cron = "0/30 * * * * ?")
-    @Override
     public void execute() {
-        super.execute();
+        batchService.execute("BTC");
     }
 }

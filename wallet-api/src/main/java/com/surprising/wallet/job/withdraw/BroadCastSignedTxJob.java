@@ -6,7 +6,6 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,16 +27,22 @@ public class BroadCastSignedTxJob {
     private static final long COUNT = 100L;
 
     /** 交易服务，负责链上广播动作。 */
-    @Autowired
-    private TransactionService txService;
+    private final TransactionService txService;
     /**
      * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
      */
-    @Autowired
-    private StringRedisTemplate redis;
+    private final StringRedisTemplate redis;
     /** Jackson 3 对象映射器，用于解析签名完成队列中的交易 JSON。 */
-    @Autowired
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
+
+    /** 构造链上交易广播任务。 */
+    public BroadCastSignedTxJob(TransactionService txService,
+                                StringRedisTemplate redis,
+                                ObjectMapper objectMapper) {
+        this.txService = txService;
+        this.redis = redis;
+        this.objectMapper = objectMapper;
+    }
 
     /**
      * 每 30 秒执行一次广播流程：读取已签名交易、逐笔广播、失败项回填队列。

@@ -5,7 +5,6 @@ import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.config.WalletRuntimeConfigService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -40,17 +39,23 @@ public class FeeRateUpdater {
             .build();
 
     /** 链元数据服务。 */
-    @Autowired
-    private BlockchainRuntimeService blockchainRuntimeService;
+    private final BlockchainRuntimeService blockchainRuntimeService;
 
     /** 运行时开关服务。 */
-    @Autowired
-    private WalletRuntimeConfigService runtimeConfigService;
+    private final WalletRuntimeConfigService runtimeConfigService;
     /**
      * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
      */
-    @Autowired
-    private StringRedisTemplate redis;
+    private final StringRedisTemplate redis;
+
+    /** 构造费率更新任务。 */
+    public FeeRateUpdater(BlockchainRuntimeService blockchainRuntimeService,
+                          WalletRuntimeConfigService runtimeConfigService,
+                          StringRedisTemplate redis) {
+        this.blockchainRuntimeService = blockchainRuntimeService;
+        this.runtimeConfigService = runtimeConfigService;
+        this.redis = redis;
+    }
 
     /**
      * 每 2 分钟更新 BTC 费率。

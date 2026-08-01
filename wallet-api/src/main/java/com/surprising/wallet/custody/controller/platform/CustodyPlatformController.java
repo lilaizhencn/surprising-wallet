@@ -19,11 +19,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 import java.util.UUID;
 
-import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
 import com.surprising.wallet.service.CustodyAssetDashboardService;
 import com.surprising.wallet.service.CustodyAuthService;
 import com.surprising.wallet.custody.model.CustodyPrincipal;
-import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.custody.model.CustodyRequestSupport;
 import com.surprising.wallet.custody.model.CustodySessionCookie;
 import com.surprising.wallet.service.CustodyTenantService;
@@ -110,7 +108,7 @@ public class CustodyPlatformController {
      * 创建新租户。
      */
     @PostMapping("/tenants")
-    public CustodyRepository.TenantRecord createTenant(@RequestBody CreateTenantCommand body,
+    public CustodyTenantService.TenantView createTenant(@RequestBody CreateTenantCommand body,
                                                         HttpServletRequest request) {
         return tenants.create(CustodyRequestSupport.requirePrincipal(request), body,
                 CustodyRequestSupport.clientIp(request));
@@ -129,7 +127,7 @@ public class CustodyPlatformController {
      * 更新租户基本信息。
      */
     @PatchMapping("/tenants/{tenantId}")
-    public CustodyRepository.TenantRecord updateTenant(
+    public CustodyTenantService.TenantView updateTenant(
             @PathVariable UUID tenantId,
             @RequestBody UpdateTenantCommand body,
             HttpServletRequest request) {
@@ -144,9 +142,9 @@ public class CustodyPlatformController {
      * 更新租户状态（启用/禁用）。
      */
     @PatchMapping("/tenants/{tenantId}/status")
-    public CustodyRepository.TenantRecord status(@PathVariable UUID tenantId,
-                                                 @RequestBody TenantStatusRequest body,
-                                                 HttpServletRequest request) {
+    public CustodyTenantService.TenantView status(@PathVariable UUID tenantId,
+                                                  @RequestBody TenantStatusRequest body,
+                                                  HttpServletRequest request) {
         return tenants.updateStatus(CustodyRequestSupport.requirePrincipal(request), tenantId,
                 body.status(), CustodyRequestSupport.clientIp(request));
     }
@@ -170,7 +168,7 @@ public class CustodyPlatformController {
      * 查询资产价格设置。
      */
     @GetMapping("/asset-prices")
-    public java.util.List<CustodyAssetDashboardRepository.AssetPrice> assetPrices(
+    public java.util.List<CustodyAssetDashboardService.AssetPriceView> assetPrices(
             HttpServletRequest request) {
         return assets.prices(CustodyRequestSupport.requirePrincipal(request));
     }
@@ -179,7 +177,7 @@ public class CustodyPlatformController {
      * 更新资产价格快照。
      */
     @PutMapping("/asset-prices/{symbol}")
-    public CustodyAssetDashboardRepository.AssetPrice setAssetPrice(
+    public CustodyAssetDashboardService.AssetPriceView setAssetPrice(
             @PathVariable String symbol,
             @RequestBody CustodyAssetDashboardService.SetPriceCommand body,
             HttpServletRequest request) {

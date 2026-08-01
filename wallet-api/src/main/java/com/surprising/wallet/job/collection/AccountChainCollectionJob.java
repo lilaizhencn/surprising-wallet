@@ -31,7 +31,7 @@ public class AccountChainCollectionJob {
      * 构建签名交易推送到 Redis 签名队列，签名完成广播后确认上链状态。
      * <p>
      * EVM 链若启用了 EIP-7702，则由 {@code Evm7702CollectionJob} 单独处理归集。
-     * 注意：UTXO 链归集合并在 {@code *UtxoBatchJob} 中与提现一起处理。
+     * 注意：UTXO 链归集合并在 UTXO 批处理服务中与提现一起处理。
      */
     @Scheduled(scheduler = "accountTaskScheduler", cron = "17/30 * * * * ?")
     public void run() {

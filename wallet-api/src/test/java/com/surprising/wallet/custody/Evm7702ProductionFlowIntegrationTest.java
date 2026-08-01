@@ -1,5 +1,6 @@
 package com.surprising.wallet.custody;
 import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
+import com.surprising.wallet.service.CustodyWithdrawalReconciliationService;
 import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.service.CustodyCryptoService;
 import com.surprising.wallet.service.CustodyWithdrawalService;
@@ -225,7 +226,7 @@ class Evm7702ProductionFlowIntegrationTest {
                 withdrawalRepository, withdrawalCoordinator, chainRepository,
                 rpcNodes, keyService, crypto, runtimeConfig);
         reconciliationJob = new CustodyWithdrawalReconciliationJob(
-                custodyRepository, objectMapper);
+                new CustodyWithdrawalReconciliationService(custodyRepository, objectMapper));
     }
 
     /**

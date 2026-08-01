@@ -4,7 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.service.CustodySecurityMaintenanceService;
 
 /**
  * 托管系统安全维护任务。
@@ -18,13 +18,13 @@ import com.surprising.wallet.repository.CustodyRepository;
 @Component
 public class CustodyMaintenanceJob {
     /** 仓储服务，执行安全数据清理。 */
-    private final CustodyRepository repository;
+    private final CustodySecurityMaintenanceService maintenance;
 
     /**
      * 注入仓储服务。
      */
-    public CustodyMaintenanceJob(CustodyRepository repository) {
-        this.repository = repository;
+    public CustodyMaintenanceJob(CustodySecurityMaintenanceService maintenance) {
+        this.maintenance = maintenance;
     }
 
     /**
@@ -32,7 +32,7 @@ public class CustodyMaintenanceJob {
      */
     @Scheduled(scheduler = "custodyTaskScheduler", cron = "${sw.wallet.custody.security-cleanup-cron:0 17 3 * * *}")
     public void cleanupExpiredSecurityRows() {
-        int deleted = repository.cleanupExpiredSecurityRows();
+        int deleted = maintenance.cleanupExpiredSecurityRows();
         if (deleted > 0) {
             log.info("Deleted {} expired custody security rows", deleted);
         }

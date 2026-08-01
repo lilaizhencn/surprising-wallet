@@ -18,6 +18,7 @@ import com.surprising.wallet.repository.DevFaucetRepository.Candidate;
 import com.surprising.wallet.devfaucet.model.DevFaucetAmountGenerator;
 import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
 import com.surprising.wallet.job.devfaucet.DevFaucetJob;
+import com.surprising.wallet.service.DevFaucetService;
 import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
 import com.surprising.wallet.repository.DevFaucetRepository;
 import com.surprising.wallet.service.DevFaucetRpcClient;
@@ -44,7 +45,7 @@ class DevFaucetJobTest {
             context.registerBean(DevFaucetRpcClient.class, FakeRpcClient::new);
             context.registerBean(CustodyRepository.class, FakeCustodyRepository::new);
             context.registerBean(ObjectMapper.class, () -> new ObjectMapper());
-            context.register(DevFaucetJob.class);
+            context.register(DevFaucetService.class, DevFaucetJob.class);
             context.refresh();
 
             assertEquals(1, context.getBeansOfType(DevFaucetJob.class).size());
@@ -70,13 +71,13 @@ class DevFaucetJobTest {
                         "TENANT_GAS")));
         FakeRpcClient rpc = new FakeRpcClient();
         DevFaucetProperties properties = DevFaucetPropertiesTest.validProperties();
-        DevFaucetJob job = new DevFaucetJob(
+        DevFaucetService service = new DevFaucetService(
                 properties, repository, rpc, new FakeCustodyRepository(),
                 new ObjectMapper(), new DevFaucetAmountGenerator(new java.util.Random(1)), "test");
 
-        job.validate();
-        job.runOnce();
-        job.runOnce();
+        service.validate();
+        service.runOnce();
+        service.runOnce();
 
         assertEquals(4, rpc.sent.size());
         assertEquals(List.of("ETH", "USDT", "USDC", "ETH"),

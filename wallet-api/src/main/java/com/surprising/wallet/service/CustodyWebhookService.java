@@ -114,7 +114,7 @@ public class CustodyWebhookService {
      * 验证 {@code verify} 对应的签名、交易或数据证明是否有效。
      */
     @Transactional(rollbackFor = Throwable.class)
-    public WebhookEndpointRecord verify(CustodyPrincipal principal, UUID endpointId, String sourceIp) {
+    public WebhookEndpointView verify(CustodyPrincipal principal, UUID endpointId, String sourceIp) {
         requireTenantAdmin(principal);
         WebhookEndpointRecord endpoint = repository.requireWebhookEndpoint(principal.tenantId(), endpointId);
         if (!"PENDING_VERIFICATION".equals(endpoint.status())) {
@@ -145,7 +145,7 @@ public class CustodyWebhookService {
         repository.markWebhookVerified(principal.tenantId(), endpointId);
         repository.audit(principal.tenantId(), "TENANT_USER", principal.actorId().toString(),
                 "WEBHOOK.VERIFY", "WEBHOOK_ENDPOINT", endpointId.toString(), sourceIp, "{}");
-        return repository.requireWebhookEndpoint(principal.tenantId(), endpointId);
+        return toView(repository.requireWebhookEndpoint(principal.tenantId(), endpointId));
     }
 
     /**
@@ -321,6 +321,14 @@ public class CustodyWebhookService {
         }
         return result;
     }
+
+    /** 将持久化 Webhook 记录转换为应用层返回模型。 */
+    private static WebhookEndpointView toView(WebhookEndpointRecord endpoint) {
+        return new WebhookEndpointView(
+                endpoint.id(), endpoint.tenantId(), endpoint.name(), endpoint.url(),
+                endpoint.status(), endpoint.verifiedAt(), endpoint.lastDeliveryAt(),
+                endpoint.createdAt(), endpoint.updatedAt());
+    }
     /**
      * 校验 {@code requireTenantAdmin} 对应的前置条件，不满足时抛出明确异常。
      */
@@ -338,6 +346,19 @@ public class CustodyWebhookService {
         }
     }
     public record CreateWebhookCommand(String name, String url) {
+    }
+
+    /** Webhook 端点应用层返回模型，不暴露加密密钥和校验令牌。 */
+    public record WebhookEndpointView(
+            UUID id,
+            UUID tenantId,
+            String name,
+            String url,
+            String status,
+            Instant verifiedAt,
+            Instant lastDeliveryAt,
+            Instant createdAt,
+            Instant updatedAt) {
     }
 
     public record CreatedWebhook(

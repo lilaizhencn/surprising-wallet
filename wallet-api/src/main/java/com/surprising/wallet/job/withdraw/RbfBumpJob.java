@@ -1,23 +1,8 @@
 package com.surprising.wallet.job.withdraw;
 
-import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
-import com.surprising.wallet.common.json.JacksonJson;
-import com.surprising.wallet.common.pojo.UtxoTransaction;
-import com.surprising.wallet.common.pojo.WithdrawRecord;
-import com.surprising.wallet.common.pojo.WithdrawTransaction;
-import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.chain.BlockchainRuntimeService;
-import com.surprising.wallet.config.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import com.surprising.wallet.service.RbfBumpService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-
-import java.util.List;
 
 /**
  * RBF (Replace-By-Fee) 手续费替换任务。
@@ -44,134 +29,22 @@ import java.util.List;
  *
  * @author lilaizhencn
  */
-@Slf4j
 @Component
 public class RbfBumpJob {
 
-    /** RBF 触发队列 */
-    public static final String WALLET_WITHDRAW_RBF_KEY = "sw:wallet:withdraw:rbf";
+    /** RBF 业务服务。 */
+    private final RbfBumpService bumpService;
 
-    /** 默认费率倍数（当操作人员忘记手动提高 Redis 费率时使用） */
-    private static final double DEFAULT_FEE_BUMP_FACTOR = 2.0;
-
-    /**
-     * 保存 {@code chainJdbcRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    @Autowired
-    private ChainJdbcRepository chainJdbcRepository;
-    /**
-     * 保存 {@code blockchainRuntimeService}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    @Autowired
-    private BlockchainRuntimeService blockchainRuntimeService;
-    /**
-     * 保存 {@code runtimeConfigService}，用于保存运行配置和策略参数。
-     */
-    @Autowired
-    private WalletRuntimeConfigService runtimeConfigService;
-    /**
-     * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
-     */
-    @Autowired
-    private StringRedisTemplate redis;
-    /** Jackson 3 对象映射器，用于读写 RBF 签名元数据。 */
-    @Autowired
-    private ObjectMapper objectMapper;
+    /** 构造 RBF 调度器。 */
+    public RbfBumpJob(RbfBumpService bumpService) {
+        this.bumpService = bumpService;
+    }
 
     /**
      * 每 30 秒检查一次 RBF 触发队列，发现请求即执行重报流程。
      */
     @Scheduled(scheduler = "withdrawTaskScheduler", cron = "0/30 * * * * ?")
     public void execute() {
-        if (!runtimeConfigService.isTaskEnabled("BTC", WalletRuntimeConfigService.TASK_WITHDRAW)) {
-            log.warn("RBF bump skipped: BTC withdraw switch disabled");
-            return;
-        }
-        Long len = redis.opsForList().size(WALLET_WITHDRAW_RBF_KEY);
-        if (len == null || len == 0) return;
-
-        while (len > 0) {
-            String txIdStr = redis.opsForList().rightPop(WALLET_WITHDRAW_RBF_KEY);
-            if (txIdStr == null) break;
-
-            try {
-                int txId = Integer.parseInt(txIdStr.trim());
-                bumpFee(txId);
-            } catch (Exception e) {
-                log.error("RBF bump 失败 txId={}", txIdStr, e);
-            }
-            len--;
-        }
-    }
-
-    /**
-     * 按交易 id 重建 fee 更高的签名 payload，并回推到签名队列。
-     */
-    private void bumpFee(int txId) {
-        // 1. 找到原始交易
-        AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata("BTC");
-        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        java.util.Optional<WithdrawTransaction> txOpt =
-                chainJdbcRepository.findBitcoinLikeSigningTransactionById(currency, txId);
-        if (txOpt.isEmpty()) {
-            log.error("RBF: 交易不存在 id={}", txId);
-            return;
-        }
-        WithdrawTransaction tx = txOpt.get();
-
-        ObjectNode sigJson = JacksonJson.readObject(objectMapper, tx.getSignature());
-        String firstSignTx = JacksonJson.text(sigJson, "firstSignTx");
-        if (firstSignTx == null || firstSignTx.isEmpty()) {
-            log.error("RBF: 交易尚未完成首次签名 id={}", txId);
-            return;
-        }
-
-        log.info("RBF bump 开始: txId={}, 原txid={}, 原fee={}",
-                txId, tx.getTxId(), JacksonJson.longValue(sigJson, "fee"));
-
-        // 2. 提取原始 UTXO
-        List<UtxoTransaction> utxos = JacksonJson.toList(objectMapper, sigJson.get("utxos"), UtxoTransaction.class);
-
-        // 3. RBF 继续复用同一组输入，并确保它们仍由当前签名交易 id 持有锁。
-        for (UtxoTransaction utxo : utxos) {
-            chainJdbcRepository.lockUtxo(chain, utxo.getTxId(), utxo.getSeq(), String.valueOf(txId));
-        }
-        log.info("RBF: {} 个UTXO 使用统一表保持锁定", utxos.size());
-
-        // 4. 订单继续保持 SIGNING；不回写旧提现表。
-        List<WithdrawRecord> records = JacksonJson.toList(objectMapper, sigJson.get("withdraw"), WithdrawRecord.class);
-        for (WithdrawRecord record : records) {
-            chainJdbcRepository.updateWithdrawalStatus(
-                    chain, record.getWithdrawId(), "SIGNING", null, null, null);
-        }
-        log.info("RBF: {} 条提现订单保持签名中", records.size());
-
-        // 5. 提高费率
-        long oldFeeRate = JacksonJson.longValue(sigJson, "feeRate");
-        String configuredFeeRateValue =
-                redis.opsForValue().get(Constants.WALLET_FEE + currency.getIndex());
-        Integer configuredFeeRate =
-                configuredFeeRateValue == null ? null : Integer.valueOf(configuredFeeRateValue);
-        long newFeeRate = configuredFeeRate == null ? 0L : configuredFeeRate;
-
-        if (newFeeRate <= oldFeeRate) {
-            // MemPool API 还没刷新，自动 x2
-            newFeeRate = Math.max((long) (oldFeeRate * DEFAULT_FEE_BUMP_FACTOR), oldFeeRate + 5);
-            log.warn("RBF: 费率过低，自动提高 {} sat/vB (原 {})", newFeeRate, oldFeeRate);
-        }
-
-        sigJson.put("feeRate", newFeeRate);
-        tx.setSignature(JacksonJson.writeValue(objectMapper, sigJson));
-        tx.setStatus(Constants.WAITING);
-        tx.setTxId("rbf-" + txId);
-        currency.applyTo(tx);
-        chainJdbcRepository.updateBitcoinLikeSigningTransaction(currency, tx);
-
-        // 6. 重新推送签名队列
-        String val = JacksonJson.writeValue(objectMapper, tx);
-        redis.opsForList().leftPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, val);
-
-        log.info("RBF bump 完成: txId={}, 新费率={} sat/vB, 已推送首签队列",
-                txId, newFeeRate);
+        bumpService.process();
     }
 }

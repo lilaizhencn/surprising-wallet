@@ -69,7 +69,7 @@ public class CustodyAssetRecoveryService {
     /**
      * 发送或广播 {@code submit} 对应的链上请求，并返回节点处理结果。
      */
-    public RecoveryRecord submit(CustodyPrincipal principal, SubmitCommand command, String sourceIp) {
+    public RecoveryView submit(CustodyPrincipal principal, SubmitCommand command, String sourceIp) {
         requireTenant(principal);
         String actualChain = upper(command.actualChain(), "actualChain", 32);
         String expectedChain = optionalUpper(command.expectedChain(), 32);
@@ -97,7 +97,7 @@ public class CustodyAssetRecoveryService {
             RecoveryRecord existing = repository.findByRequest(
                     actualChain, txHash, destinationAddress, assetSymbol, tokenContract).orElse(null);
             if (existing != null) {
-                return requireSameTenant(principal.tenantId(), existing);
+                return toView(requireSameTenant(principal.tenantId(), existing));
             }
         }
         RecoveryRecord recovery;
@@ -109,13 +109,13 @@ public class CustodyAssetRecoveryService {
         } catch (DuplicateKeyException e) {
             RecoveryRecord existing = repository.findByTransaction(actualChain, txHash, requestedLogIndex)
                     .orElseThrow(() -> new IllegalStateException("recovery request already exists"));
-            return requireSameTenant(principal.tenantId(), existing);
+            return toView(requireSameTenant(principal.tenantId(), existing));
         }
         custody.audit(principal.tenantId(), principal.actorType().name(),
                 principal.actorId().toString(), "ASSET_RECOVERY.SUBMIT", "ASSET_RECOVERY",
                 recovery.id().toString(), sourceIp,
                 "{\"actualChain\":\"" + actualChain + "\",\"txHash\":\"" + txHash + "\"}");
-        return verifyInternal(recovery, ownership, command.logIndex());
+        return toView(verifyInternal(recovery, ownership, command.logIndex()));
     }
     /**
      * 校验 {@code requireSameTenant} 对应的前置条件，不满足时抛出明确异常。
@@ -130,14 +130,15 @@ public class CustodyAssetRecoveryService {
     /**
      * 执行 {@code tenantList} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
-    public PageView<RecoveryRecord> tenantList(CustodyPrincipal principal, String status,
-                                               int limit, int offset) {
+    public PageView<RecoveryView> tenantList(CustodyPrincipal principal, String status,
+                                             int limit, int offset) {
         requireTenant(principal);
         String normalizedStatus = normalizedStatus(status);
         int pageSize = pageSize(limit);
         int pageOffset = offset(offset);
         return new PageView<>(
-                repository.list(principal.tenantId(), normalizedStatus, pageSize, pageOffset),
+                repository.list(principal.tenantId(), normalizedStatus, pageSize, pageOffset)
+                        .stream().map(CustodyAssetRecoveryService::toView).toList(),
                 repository.count(principal.tenantId(), normalizedStatus),
                 pageSize, pageOffset);
     }
@@ -145,21 +146,22 @@ public class CustodyAssetRecoveryService {
     /**
      * 执行 {@code platformList} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
-    public PageView<RecoveryRecord> platformList(CustodyPrincipal principal, String status,
-                                                 int limit, int offset) {
+    public PageView<RecoveryView> platformList(CustodyPrincipal principal, String status,
+                                               int limit, int offset) {
         requirePlatform(principal);
         String normalizedStatus = normalizedStatus(status);
         int pageSize = pageSize(limit);
         int pageOffset = offset(offset);
         return new PageView<>(
-                repository.list(null, normalizedStatus, pageSize, pageOffset),
+                repository.list(null, normalizedStatus, pageSize, pageOffset)
+                        .stream().map(CustodyAssetRecoveryService::toView).toList(),
                 repository.count(null, normalizedStatus),
                 pageSize, pageOffset);
     }
     /**
      * 验证 {@code verify} 对应的签名、交易或数据证明是否有效。
      */
-    public RecoveryRecord verify(CustodyPrincipal principal, UUID id, String sourceIp) {
+    public RecoveryView verify(CustodyPrincipal principal, UUID id, String sourceIp) {
         requirePlatform(principal);
         RecoveryRecord recovery = repository.require(id);
         Ownership ownership = requireOwnership(
@@ -170,15 +172,15 @@ public class CustodyAssetRecoveryService {
         custody.audit(recovery.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                 "ASSET_RECOVERY.VERIFY", "ASSET_RECOVERY", id.toString(), sourceIp,
                 "{\"status\":\"" + result.status() + "\"}");
-        return result;
+        return toView(result);
     }
 
     /**
      * 执行 {@code approve} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     @Transactional(rollbackFor = Throwable.class)
-    public RecoveryRecord approve(CustodyPrincipal principal, UUID id,
-                                  ApproveCommand command, String sourceIp) {
+    public RecoveryView approve(CustodyPrincipal principal, UUID id,
+                                ApproveCommand command, String sourceIp) {
         requirePlatform(principal);
         RecoveryRecord existing = repository.require(id);
         String recoveryAddress = required(command.recoveryAddress(), "recoveryAddress", 160)
@@ -193,12 +195,12 @@ public class CustodyAssetRecoveryService {
         custody.audit(existing.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                 "ASSET_RECOVERY.APPROVE", "ASSET_RECOVERY", id.toString(), sourceIp,
                 "{\"recoveryAddress\":\"" + recoveryAddress + "\"}");
-        return result;
+        return toView(result);
     }
     /**
      * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
      */
-    public RecoveryRecord execute(CustodyPrincipal principal, UUID id, String sourceIp) {
+    public RecoveryView execute(CustodyPrincipal principal, UUID id, String sourceIp) {
         requirePlatform(principal);
         RecoveryRecord existing = repository.require(id);
         if (!repository.claimExecution(id)) {
@@ -219,15 +221,15 @@ public class CustodyAssetRecoveryService {
             custody.audit(existing.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                     "ASSET_RECOVERY.EXECUTE", "ASSET_RECOVERY", id.toString(), sourceIp,
                     "{\"recoveryTxHash\":\"" + recoveryTxHash + "\"}");
-            return result;
+            return toView(result);
         } catch (RuntimeException e) {
-            return repository.executionFailed(id, friendly(e));
+            return toView(repository.executionFailed(id, friendly(e)));
         }
     }
     /**
      * 处理 {@code confirm} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
      */
-    public RecoveryRecord confirm(CustodyPrincipal principal, UUID id, String sourceIp) {
+    public RecoveryView confirm(CustodyPrincipal principal, UUID id, String sourceIp) {
         requirePlatform(principal);
         RecoveryRecord result = confirm(repository.require(id));
         if ("RECOVERED".equals(result.status())) {
@@ -235,7 +237,7 @@ public class CustodyAssetRecoveryService {
                     "ASSET_RECOVERY.CONFIRM", "ASSET_RECOVERY", id.toString(), sourceIp,
                     "{\"recoveryTxHash\":\"" + result.recoveryTxHash() + "\"}");
         }
-        return result;
+        return toView(result);
     }
     /**
      * 处理 {@code confirmBroadcastRecoveries} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
@@ -313,8 +315,8 @@ public class CustodyAssetRecoveryService {
      * 执行 {@code reject} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     @Transactional(rollbackFor = Throwable.class)
-    public RecoveryRecord reject(CustodyPrincipal principal, UUID id,
-                                 RejectCommand command, String sourceIp) {
+    public RecoveryView reject(CustodyPrincipal principal, UUID id,
+                               RejectCommand command, String sourceIp) {
         requirePlatform(principal);
         RecoveryRecord existing = repository.require(id);
         String reason = required(command.reason(), "reason", 500);
@@ -322,19 +324,19 @@ public class CustodyAssetRecoveryService {
         custody.audit(existing.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                 "ASSET_RECOVERY.REJECT", "ASSET_RECOVERY", id.toString(), sourceIp,
                 "{\"reason\":\"" + reason.replace("\"", "'") + "\"}");
-        return result;
+        return toView(result);
     }
 
     /**
      * 判断 {@code cancel} 对应的条件是否成立，并返回明确的布尔结果。
      */
     @Transactional(rollbackFor = Throwable.class)
-    public RecoveryRecord cancel(CustodyPrincipal principal, UUID id, String sourceIp) {
+    public RecoveryView cancel(CustodyPrincipal principal, UUID id, String sourceIp) {
         requireTenant(principal);
         RecoveryRecord result = repository.cancel(principal.tenantId(), id);
         custody.audit(principal.tenantId(), principal.actorType().name(), principal.actorId().toString(),
                 "ASSET_RECOVERY.CANCEL", "ASSET_RECOVERY", id.toString(), sourceIp, "{}");
-        return result;
+        return toView(result);
     }
 
     /**
@@ -508,6 +510,33 @@ public class CustodyAssetRecoveryService {
             throw new IllegalArgumentException("value must not exceed " + max + " characters");
         }
         return result.isEmpty() ? null : result;
+    }
+
+    /** 将持久化记录转换为应用层返回模型，避免 Web 层依赖 Repository 类型。 */
+    private static RecoveryView toView(RecoveryRecord record) {
+        return new RecoveryView(
+                record.id(), record.tenantId(), record.custodyAddressId(), record.actualChain(),
+                record.expectedChain(), record.assetSymbol(), record.tokenContract(),
+                record.tokenDecimals(), record.txHash(), record.logIndex(), record.requestedLogIndex(),
+                record.destinationAddress(), record.recoveryAddress(), record.claimedAmount(),
+                record.verifiedAmount(), record.blockHeight(), record.blockHash(),
+                record.confirmations(), record.status(), record.verificationDetails(),
+                record.failureReason(), record.recoveryTxHash(), record.requestedBy(),
+                record.reviewedBy(), record.executedBy(), record.approvedAt(), record.executedAt(),
+                record.createdAt(), record.updatedAt());
+    }
+
+    /** 资产找回应用层返回模型。 */
+    public record RecoveryView(
+            UUID id, UUID tenantId, UUID custodyAddressId, String actualChain,
+            String expectedChain, String assetSymbol, String tokenContract,
+            Integer tokenDecimals, String txHash, long logIndex, Long requestedLogIndex,
+            String destinationAddress, String recoveryAddress, BigDecimal claimedAmount,
+            BigDecimal verifiedAmount, Long blockHeight, String blockHash, int confirmations,
+            String status, String verificationDetails, String failureReason,
+            String recoveryTxHash, UUID requestedBy, UUID reviewedBy, UUID executedBy,
+            java.time.Instant approvedAt, java.time.Instant executedAt,
+            java.time.Instant createdAt, java.time.Instant updatedAt) {
     }
 
     public record SubmitCommand(String actualChain, String expectedChain, String assetSymbol,
