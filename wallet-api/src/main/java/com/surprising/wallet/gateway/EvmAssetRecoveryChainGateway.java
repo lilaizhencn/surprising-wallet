@@ -1,4 +1,4 @@
-package com.surprising.wallet.service.custody;
+package com.surprising.wallet.gateway;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;

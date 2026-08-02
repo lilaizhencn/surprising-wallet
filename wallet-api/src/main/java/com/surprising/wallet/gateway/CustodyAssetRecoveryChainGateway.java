@@ -1,4 +1,4 @@
-package com.surprising.wallet.service.custody;
+package com.surprising.wallet.gateway;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 

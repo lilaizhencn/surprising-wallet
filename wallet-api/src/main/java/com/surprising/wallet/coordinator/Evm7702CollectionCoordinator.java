@@ -5,7 +5,7 @@ import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
 import com.surprising.wallet.chain.evm.Evm7702ReceiptParser;
 import com.surprising.wallet.chain.evm.EvmFeeSupport;
 import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -20,7 +20,7 @@ import com.surprising.wallet.repository.Evm7702CollectionRepository;
  * <p>负责原子完成中继 nonce 预留、签名出站记录、Gas 预留和回执后的费用结算，
  * 保证链上批次与租户账务记录保持一致。</p>
  */
-@Service
+@Component
 public class Evm7702CollectionCoordinator {
     /**
      * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。

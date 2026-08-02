@@ -1,4 +1,4 @@
-package com.surprising.wallet.config.custody;
+package com.surprising.wallet.model;
 
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;

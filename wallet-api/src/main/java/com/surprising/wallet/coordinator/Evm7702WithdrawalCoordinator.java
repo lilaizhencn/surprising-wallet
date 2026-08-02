@@ -5,7 +5,7 @@ import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
 import com.surprising.wallet.chain.evm.Evm7702PayoutReceiptParser;
 import com.surprising.wallet.chain.evm.EvmFeeSupport;
 import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -20,7 +20,7 @@ import com.surprising.wallet.repository.Evm7702WithdrawalRepository;
  * <p>负责 nonce 预留、Gas 预留释放、逐笔提现状态推进、失败重试和最终账务结算，
  * 防止回执结果与提现锁定余额发生不一致。</p>
  */
-@Service
+@Component
 public class Evm7702WithdrawalCoordinator {
     /**
      * 定义 {@code MAX_ITEM_FAILURES} 常量，作为当前组件统一使用的固定协议、网络或配置值。

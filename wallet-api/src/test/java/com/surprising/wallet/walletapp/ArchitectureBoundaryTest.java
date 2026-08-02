@@ -28,13 +28,40 @@ class ArchitectureBoundaryTest {
         Path configRoot = sourceRoot.resolve("config");
         Path jobRoot = sourceRoot.resolve("job");
         Path controllerRoot = sourceRoot.resolve("controller");
+        Path filterRoot = sourceRoot.resolve("filter");
+        Path modelRoot = sourceRoot.resolve("model");
+        Path chainModelRoot = sourceRoot.resolve("chain/model");
+        Path gatewayRoot = sourceRoot.resolve("gateway");
+        Path coordinatorRoot = sourceRoot.resolve("coordinator");
 
         assertTrue(Files.isDirectory(serviceRoot), "service package must exist");
         assertTrue(Files.isDirectory(repositoryRoot), "repository package must exist");
+        assertTrue(Files.isDirectory(filterRoot), "filter package must exist");
+        assertTrue(Files.isDirectory(modelRoot), "model package must exist");
+        assertTrue(Files.isDirectory(chainModelRoot), "chain model package must exist");
+        assertTrue(Files.isDirectory(gatewayRoot), "gateway package must exist");
+        assertTrue(Files.isDirectory(coordinatorRoot), "coordinator package must exist");
+        assertFalse(Files.exists(configRoot.resolve("CustodyApiAuthenticationFilter.java")),
+                "authentication filters must stay outside config");
+        assertFalse(Files.exists(configRoot.resolve("CustodyConsoleAuthenticationFilter.java")),
+                "authentication filters must stay outside config");
+        assertFalse(Files.exists(configRoot.resolve("custody/CachedBodyHttpServletRequest.java")),
+                "Servlet request wrappers must stay outside config");
+        assertFalse(Files.exists(jobRoot.resolve("deposit/model/BestBlockHeight.java")),
+                "deposit checkpoint models must stay outside job");
+        assertFalse(Files.exists(serviceRoot.resolve("custody/CustodyAssetRecoveryChainGateway.java")),
+                "chain gateways must stay outside service");
+        assertFalse(Files.exists(serviceRoot.resolve("custody/EvmAssetRecoveryChainGateway.java")),
+                "chain gateways must stay outside service");
         for (Path file : javaFiles(configRoot)) {
             String source = Files.readString(file);
             assertFalse(source.contains("@Service"),
                     "configuration package must not contain application Service: " + file);
+        }
+        for (Path file : javaFiles(coordinatorRoot)) {
+            String source = Files.readString(file);
+            assertFalse(source.contains("@Service"),
+                    "coordinator must be an infrastructure component, not an application Service: " + file);
         }
         assertFalse(Files.exists(sourceRoot.resolve("account/service")),
                 "business services must not return to account subpackages");

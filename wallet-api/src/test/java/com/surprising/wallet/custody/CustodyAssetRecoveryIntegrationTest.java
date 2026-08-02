@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.surprising.wallet.service.custody.CustodyAssetRecoveryChainGateway;
+import com.surprising.wallet.gateway.CustodyAssetRecoveryChainGateway;
 import com.surprising.wallet.repository.CustodyAssetRecoveryRepository;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;

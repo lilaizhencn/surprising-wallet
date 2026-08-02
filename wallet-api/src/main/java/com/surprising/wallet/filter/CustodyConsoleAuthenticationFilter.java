@@ -1,4 +1,4 @@
-package com.surprising.wallet.config;
+package com.surprising.wallet.filter;
 
 import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;

@@ -6,7 +6,7 @@ import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.repository.DepositRecordRepository;
-import com.surprising.wallet.service.custody.CustodyAssetRecoveryChainGateway;
+import com.surprising.wallet.gateway.CustodyAssetRecoveryChainGateway;
 import com.surprising.wallet.exception.CustodyForbiddenException;
 import com.surprising.wallet.model.CustodyPrincipal;
 import tools.jackson.core.JacksonException;

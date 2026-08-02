@@ -36,9 +36,9 @@
 
   <rect x="30"  y="194" width="665" height="118" class="svc"/>
   <text x="362" y="219" text-anchor="middle" class="label">wallet-api · Spring MVC 单体应用</text>
-  <text x="362" y="241" text-anchor="middle" class="desc">Web：Controller · Job(调度) · Config · Exception · Filter · Model</text>
+  <text x="362" y="241" text-anchor="middle" class="desc">Web：controller/** · job/** · config/** · exception/** · filter/** · model/**</text>
   <text x="362" y="259" text-anchor="middle" class="desc">Application：service/** · Workflow · 业务编排与状态流转</text>
-  <text x="362" y="277" text-anchor="middle" class="desc">Domain/Infrastructure：Chain · repository/** · Gateway · Coordinator</text>
+  <text x="362" y="277" text-anchor="middle" class="desc">Domain/Infrastructure：chain/** · repository/** · gateway/** · coordinator/** · observer/**</text>
   <text x="362" y="295" text-anchor="middle" class="desc">SQL @Repository：一表一仓储 · @Component 门面仅做 Java 组合</text>
 
   <rect x="720" y="194" width="340" height="100" class="svc"/>

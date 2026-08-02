@@ -1,4 +1,4 @@
-package com.surprising.wallet.job.deposit.model;
+package com.surprising.wallet.chain.model;
 
 import lombok.*;
 

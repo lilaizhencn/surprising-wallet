@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.surprising.wallet.service.custody.CustodyAssetRecoveryChainGateway;
+import com.surprising.wallet.gateway.CustodyAssetRecoveryChainGateway;
 
 /**
  * 资产误转恢复仓储，管理资产误转恢复案例的全生命周期状态流转。

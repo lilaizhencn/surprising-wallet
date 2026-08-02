@@ -1,4 +1,4 @@
-package com.surprising.wallet.config;
+package com.surprising.wallet.filter;
 
 import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
@@ -12,7 +12,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-import com.surprising.wallet.config.custody.CachedBodyHttpServletRequest;
+import com.surprising.wallet.model.CachedBodyHttpServletRequest;
 import com.surprising.wallet.service.CustodyApiKeyService;
 import com.surprising.wallet.exception.CustodyForbiddenException;
 import com.surprising.wallet.model.CustodyHttpErrors;
