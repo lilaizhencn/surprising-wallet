@@ -24,7 +24,8 @@ public class CustodyIdempotencyRepository {
         return jdbc.queryForList("""
                 select request_hash, response_status, response_body::text as response_json, expires_at
                   from custody_idempotency_key
-                 where tenant_id = ? and idempotency_key = ? and operation = ? and expires_at > now()
+                 where tenant_id = ? and idempotency_key = ? and operation = ?
+                   and (expires_at is null or expires_at > now())
                 """, tenantId, key, operation);
     }
 

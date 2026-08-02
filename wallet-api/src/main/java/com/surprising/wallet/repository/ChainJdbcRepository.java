@@ -1585,6 +1585,11 @@ public class ChainJdbcRepository {
     public boolean isEvm7702Managed(String chain, String network) {
         return evm7702ConfigRepository.existsManaged(chain, network);
     }
+
+    /** 判断指定链的批量提现是否由 EIP-7702 接管。 */
+    public boolean isEvm7702BatchWithdrawalManaged(String chain, String network) {
+        return evm7702ConfigRepository.existsManagedBatchWithdrawal(chain, network);
+    }
     /**
      * 判断 {@code isEvm7702NativeCollectionActive} 对应的条件是否成立，并返回明确的布尔结果。
      */

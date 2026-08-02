@@ -177,7 +177,7 @@
 
   <!-- EIP-7702 note -->
   <rect x="285" y="620" width="680" height="22" class="db"/>
-  <text x="625" y="635" text-anchor="middle" class="small">EIP-7702: relayer 支付当前链原生 Gas · 签名前校验链上余额 · type-4 激活 / type-2 已委托 · 批量归集</text>
+  <text x="625" y="635" text-anchor="middle" class="small">EIP-7702: relayer 支付 Gas · 余额校验 · type-4/type-2 · 未知广播恢复 · 三次失败终态</text>
 
   <!-- ====== PHASE 5: 提现 ====== -->
   <rect x="20" y="664" width="1140" height="148" class="phase-bg"/>
@@ -216,7 +216,7 @@
   <text x="455" y="780" text-anchor="middle" class="small">TRON: 带宽/能量估算 · Gas 预充值 · waiting_gas 状态</text>
 
   <rect x="705" y="766" width="430" height="20" class="db"/>
-  <text x="920" y="780" text-anchor="middle" class="small">EIP-7702 批量提现: 执行费 + L1/DA + Operator Fee · relayer 余额保护</text>
+  <text x="920" y="780" text-anchor="middle" class="small">EIP-7702 批量提现（能力位接管）: 执行费 + L1/DA + Operator Fee · relayer 余额保护</text>
 
   <!-- ====== BOTTOM INFRA ====== -->
   <rect x="20" y="830" width="1140" height="46" class="phase-bg"/>

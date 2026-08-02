@@ -180,7 +180,9 @@ public class CollectionRecordRepository {
         String sql = """
                 select id, tenant_id, custody_address_id, collection_no, chain, asset_symbol, from_address,
                        to_address, amount, fee, tx_hash, status, error_message, raw_payload, created_at, updated_at
-                  from collection_record where """ + predicate + " order by id limit ?";
+                  from collection_record
+                 where
+                """ + predicate + " order by id limit ?";
         return jdbc.query(sql, (rs, rowNum) -> map(rs), args);
     }
 

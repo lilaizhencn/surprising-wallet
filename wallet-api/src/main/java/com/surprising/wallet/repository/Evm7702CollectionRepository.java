@@ -462,7 +462,7 @@ public class Evm7702CollectionRepository {
         }
         for (Map<String, Object> item : batchItemRepository.listForRelease(batch.tenantId(), batch.id())) {
             long collectionId = ((Number) item.get("collection_record_id")).longValue();
-            String status = batchItemRepository.countFailedHistory(batch.tenantId(), collectionId) >= 3
+            String status = batchItemRepository.countAttemptHistory(batch.tenantId(), collectionId) >= 3
                     ? "FAILED" : "RETRYABLE";
             if (batchItemRepository.markReleased(batch.tenantId(), batch.id(),
                     ((Number) item.get("item_index")).intValue(), status, errorCode) != 1) {

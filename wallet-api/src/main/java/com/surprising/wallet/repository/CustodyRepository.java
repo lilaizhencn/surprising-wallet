@@ -962,7 +962,8 @@ public class CustodyRepository {
             result.add(new WithdrawalStatusChange(uuid(row.get("id")), tenantId, uuid(row.get("custody_address_id")), text(row.get("order_no")),
                     text(row.get("external_reference")), text(row.get("chain")), text(row.get("asset_symbol")), text(row.get("to_address")),
                     (BigDecimal) row.get("amount"), (BigDecimal) row.get("fee"), text(row.get("status")), next,
-                    text(order.get("tx_hash")), text(order.get("error_message")), text(order.get("debit_account_id")), text(address.get("source"))));
+                    (String) order.get("tx_hash"), (String) order.get("error_message"),
+                    text(order.get("debit_account_id")), text(address.get("source"))));
         }
         return result;
     }
@@ -973,7 +974,7 @@ public class CustodyRepository {
                                                String eventType, String payloadJson) {
         if (!change.previousStatus().equals(change.nextStatus())) {
             withdrawalOrders.updateStatus(change.tenantId(), change.chain(), change.orderNo(), change.nextStatus(),
-                    change.txHash(), change.errorMessage(), null);
+                    null, change.txHash(), change.errorMessage());
             custodyWithdrawals.updateStatus(change.tenantId(), change.id(), change.nextStatus());
         }
         if ("CONFIRMED".equals(change.nextStatus())) {

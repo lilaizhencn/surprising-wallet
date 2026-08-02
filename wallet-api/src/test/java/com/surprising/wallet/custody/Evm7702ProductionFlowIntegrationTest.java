@@ -185,7 +185,13 @@ class Evm7702ProductionFlowIntegrationTest {
         observers.addBean("custodyDepositCreditObserver", depositObserver);
         chainRepository = new ChainJdbcRepository(
                 jdbc, observers.getBeanProvider(DepositCreditObserver.class));
-        jdbc.update("update chain_profile set network = 'local', chain_id = ?, withdraw_confirmations = 1 where chain = ? and enabled = true",
+        jdbc.update("""
+                update chain_profile
+                   set network = 'local', chain_id = ?, withdraw_confirmations = 1,
+                       scan_enabled = true, withdraw_enabled = true,
+                       collection_enabled = true, transfer_enabled = true
+                 where chain = ? and enabled = true
+                """,
                 chainId, chain);
         jdbc.update("update token_config set network = 'local' where chain = ? and enabled = true", chain);
         jdbc.update("""

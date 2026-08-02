@@ -39,7 +39,7 @@ public class CustodyGasAccountRepository {
     /** 查询租户指定链上的启用 Gas 账户。 */
     public List<Map<String, Object>> listActiveByTenantAndChain(UUID tenantId, String chain) {
         return jdbc.queryForList("""
-                select id, tenant_id, custody_address_id, chain, network, account_id, status
+                select id, tenant_id, custody_address_id, chain, network, status
                   from custody_gas_account
                  where tenant_id = ? and chain = ? and status = 'ACTIVE'
                 """, tenantId, chain);

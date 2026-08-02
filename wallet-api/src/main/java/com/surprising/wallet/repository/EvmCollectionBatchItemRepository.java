@@ -106,11 +106,11 @@ public class EvmCollectionBatchItemRepository {
         return count == null ? 0 : count;
     }
 
-    /** 查询指定归集记录历史失败批次数。 */
-    public int countFailedHistory(UUID tenantId, long collectionRecordId) {
+    /** 查询指定归集记录已经创建过的批次项次数，用于限制连续失败重试次数。 */
+    public int countAttemptHistory(UUID tenantId, long collectionRecordId) {
         Integer count = jdbc.queryForObject("""
                 select count(*) from evm_collection_batch_item
-                 where tenant_id = ? and collection_record_id = ? and status = 'FAILED'
+                 where tenant_id = ? and collection_record_id = ?
                 """, Integer.class, tenantId, collectionRecordId);
         return count == null ? 0 : count;
     }

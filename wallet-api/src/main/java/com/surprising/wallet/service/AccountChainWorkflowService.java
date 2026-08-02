@@ -224,7 +224,7 @@ public class AccountChainWorkflowService {
             return;
         }
         if ("evm".equalsIgnoreCase(profile.getFamily())
-                && repository.isEvm7702Managed(
+                && repository.isEvm7702BatchWithdrawalManaged(
                         profile.getChain(), profile.getNetwork())) {
             return;
         }

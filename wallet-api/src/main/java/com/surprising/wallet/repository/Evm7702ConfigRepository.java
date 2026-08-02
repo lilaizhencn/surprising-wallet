@@ -37,6 +37,17 @@ public class Evm7702ConfigRepository {
                 """, chain, network).isEmpty();
     }
 
+    /** 判断批量提现是否由 EIP-7702 接管，包括启用和暂停状态。 */
+    public boolean existsManagedBatchWithdrawal(String chain, String network) {
+        return !jdbc.queryForList("""
+                select id from evm_7702_config
+                 where lower(chain) = lower(?) and lower(network) = lower(?)
+                   and status in ('ACTIVE', 'PAUSED')
+                   and batch_withdrawal_enabled = true
+                 limit 1
+                """, chain, network).isEmpty();
+    }
+
     /** 判断原生资产归集是否启用。 */
     public boolean existsActiveNativeCollection(String chain, String network) {
         return !jdbc.queryForList("""
@@ -68,7 +79,9 @@ public class Evm7702ConfigRepository {
                        block_gas_ratio, gas_limit_multiplier, signature_ttl_seconds, required_confirmations,
                        native_collection_enabled, batch_withdrawal_enabled, withdrawal_max_wait_ms,
                        withdrawal_max_batch_items
-                  from evm_7702_config where """ + predicate, args);
+                  from evm_7702_config
+                 where
+                """ + predicate, args);
     }
 
     /** 查询全部配置，供服务层与链配置组合运行目标。 */
