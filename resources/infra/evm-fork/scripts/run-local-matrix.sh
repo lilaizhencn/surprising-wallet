@@ -194,34 +194,11 @@ WHERE chain = :'chain'
 UPDATE token_config
 SET enabled = (
         chain = :'chain'
+        AND network = :'network'
         AND symbol = ANY (string_to_array(:'token_symbols', ','))
-        AND (
-            network = :'network'
-            OR NOT EXISTS (
-                SELECT 1
-                  FROM token_config target_network
-                 WHERE target_network.chain = token_config.chain
-                   AND target_network.symbol = token_config.symbol
-                   AND target_network.network = :'network'
-            )
-        )
     ),
     updated_at = now();
 SQL
-
-  configured_tokens=$(local_pg_psql "$EVM_MATRIX_DB" -Atqc \
-    "select coalesce(string_agg(symbol, ',' order by symbol), '') from token_config where chain='$chain' and enabled=true")
-  expected_tokens=$(tr ',' '\n' <<<"$token_symbols" | sed '/^$/d' | sort | paste -sd, -)
-  if [[ "$configured_tokens" != "$expected_tokens" ]]; then
-    printf '%s token matrix mismatch: database=%s expected=%s\n' \
-      "$chain" "$configured_tokens" "$expected_tokens" >&2
-    exit 1
-  fi
-
-  if [[ "$test_eip7702" == "true" ]]; then
-    HARDHAT_CHAIN_ID="$chain_id" HARDHAT_DISABLE_TELEMETRY_PROMPT=true \
-      npm --prefix "$EVM_MATRIX_BUILD_ROOT/resources/infra/evm-fork" run test:7702
-  fi
 
   hardhat_log="$EVM_MATRIX_TMP/$chain.hardhat.log"
   (
@@ -239,12 +216,27 @@ SQL
   DEPLOYMENT_OUT_DIR="$EVM_MATRIX_TMP/deployments" \
     npm --prefix "$EVM_MATRIX_BUILD_ROOT/resources/infra/evm-fork" run deploy:mock >/dev/null
 
+  configured_tokens=$(local_pg_psql "$EVM_MATRIX_DB" -Atqc \
+    "select coalesce(string_agg(symbol, ',' order by symbol), '') from token_config where chain='$chain' and network='$network' and enabled=true")
+  expected_tokens=$(tr ',' '\n' <<<"$token_symbols" | sed '/^$/d' | sort | paste -sd, -)
+  if [[ "$configured_tokens" != "$expected_tokens" ]]; then
+    printf '%s token matrix mismatch: database=%s expected=%s network=%s\n' \
+      "$chain" "$configured_tokens" "$expected_tokens" "$network" >&2
+    exit 1
+  fi
+
+  if [[ "$test_eip7702" == "true" ]]; then
+    HARDHAT_CHAIN_ID="$chain_id" HARDHAT_DISABLE_TELEMETRY_PROMPT=true \
+      npm --prefix "$EVM_MATRIX_BUILD_ROOT/resources/infra/evm-fork" run test:7702
+  fi
+
   mvn -q -f "$EVM_MATRIX_BUILD_ROOT/pom.xml" \
     -pl wallet-api -am \
-    -Dtest=EvmForkFullChainIntegrationTest,EvmForkMultiUserBusinessFlowIntegrationTest \
+    -Dtest=EvmForkFullChainIntegrationTest,EvmForkMultiUserBusinessFlowIntegrationTest,EvmForkTransactionServiceIntegrationTest \
     -Dsurefire.failIfNoSpecifiedTests=false \
     -Devm.fork.enabled=true \
     -Devm.multiuser.enabled=true \
+    -Devm.service.enabled=true \
     -Devm.fork.chain="$chain" \
     -Devm.native.symbol="$native_symbol" \
     -Devm.expected.chainId="$chain_id" \

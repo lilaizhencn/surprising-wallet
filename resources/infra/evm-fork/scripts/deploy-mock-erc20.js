@@ -24,21 +24,37 @@ const TOKEN_DEFINITIONS = {
 };
 
 async function upsertTokenConfig(client, chain, token) {
+  if (!NETWORK) {
+    throw new Error("EVM_NETWORK is required for isolated mock token deployment");
+  }
   const updated = await client.query(
-    `update token_config
-        set contract_address = $3,
-            contract_address_hex = $3,
-            decimals = $4,
-            standard = 'ERC20',
-            token_standard = 'ERC20',
-            network = coalesce($5, network),
-            collect_enabled = true,
-            updated_at = now()
-      where chain = $1 and symbol = $2 and enabled = true`,
+    `insert into token_config(
+        chain, symbol, standard, contract_address, decimals, enabled,
+        min_deposit, min_withdraw, collect_enabled, created_at, updated_at,
+        network, token_standard, contract_address_hex, min_deposit_amount,
+        min_withdraw_amount, collect_threshold, gas_strategy, confirmation_required)
+     values ($1, $2, 'ERC20', $3, $4, true,
+             1, 1, true, now(), now(),
+             $5, 'ERC20', $3, 1, 1, 1, 'native-gas', 1)
+     on conflict (chain, network, symbol) do update set
+        standard = excluded.standard,
+        contract_address = excluded.contract_address,
+        decimals = excluded.decimals,
+        enabled = true,
+        collect_enabled = true,
+        token_standard = excluded.token_standard,
+        contract_address_hex = excluded.contract_address_hex,
+        min_deposit_amount = excluded.min_deposit_amount,
+        min_withdraw_amount = excluded.min_withdraw_amount,
+        collect_threshold = excluded.collect_threshold,
+        gas_strategy = excluded.gas_strategy,
+        confirmation_required = excluded.confirmation_required,
+        updated_at = now()
+     returning id`,
     [chain, token.symbol, token.address, token.decimals, NETWORK]
   );
   if (updated.rowCount !== 1) {
-    throw new Error(`${chain}/${token.symbol} must have exactly one enabled token configuration`);
+    throw new Error(`${chain}/${NETWORK}/${token.symbol} token configuration was not created`);
   }
   await client.query(
     `update chain_asset
