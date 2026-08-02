@@ -33,10 +33,12 @@ EVM_CHAINS=(
   "SCROLL|ETH_SCROLL|534351|USDC|sepolia|false"
   "SONEIUM|ETH_SONEIUM|1946|USDC_E,USDT|minato|true"
   "UNICHAIN|ETH_UNICHAIN|1301|USDC|sepolia|false"
+  "ZKSYNC|ETH_ZKSYNC|300|USDC|sepolia|false"
   "WORLD_CHAIN|ETH_WORLD|4801|USDC|sepolia|true"
   "X_LAYER|OKB|1952|USDC,USDT|testnet|true"
   "DEGEN|DEGEN|666666666|USDC,USDT|mainnet|true"
   "ROBINHOOD_CHAIN|ETH_ROBINHOOD|46630|USDG|testnet|true"
+  "OKT_CHAIN|OKT|65|USDT|testnet|false"
   "ETHERLINK|XTZ|127823|USDC,USDT|shadownet|true"
   "IOTA_EVM|IOTA|1076|USDC_E,USDT|testnet|true"
   "OASIS_EMERALD|ROSE|42261||testnet|true"
@@ -193,6 +195,16 @@ UPDATE token_config
 SET enabled = (
         chain = :'chain'
         AND symbol = ANY (string_to_array(:'token_symbols', ','))
+        AND (
+            network = :'network'
+            OR NOT EXISTS (
+                SELECT 1
+                  FROM token_config target_network
+                 WHERE target_network.chain = token_config.chain
+                   AND target_network.symbol = token_config.symbol
+                   AND target_network.network = :'network'
+            )
+        )
     ),
     updated_at = now();
 SQL

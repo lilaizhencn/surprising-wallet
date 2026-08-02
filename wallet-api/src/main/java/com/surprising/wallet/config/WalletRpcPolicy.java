@@ -41,6 +41,9 @@ public final class WalletRpcPolicy {
         if ("HYPERCORE".equalsIgnoreCase(chain)) {
             return List.of("info", "exchange");
         }
+        if ("STARKNET".equalsIgnoreCase(chain)) {
+            return List.of("rpc", "scan", "broadcast");
+        }
         return List.of("rpc");
     }
     /**

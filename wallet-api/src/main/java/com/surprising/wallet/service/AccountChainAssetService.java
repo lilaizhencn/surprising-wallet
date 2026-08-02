@@ -194,6 +194,7 @@ class AccountChainAssetService {
                 case "SUI" -> configured.max(new BigDecimal("0.02"));
                 case "APTOS" -> configured.max(new BigDecimal("0.05"));
                 case "TRON" -> configured.max(new BigDecimal("1"));
+                case "STARKNET" -> configured.max(new BigDecimal("0.001"));
                 default -> configured;
             };
         }

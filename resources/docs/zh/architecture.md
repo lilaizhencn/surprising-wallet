@@ -29,7 +29,7 @@
 
 | 表 | 作用 |
 |---|---|
-| `chain_profile` | 链 key、链族、启用网络、确认策略、扫描/提现/归集/划转开关、扫描起始高度、BIP44 coin type |
+| `chain_profile` | 链 key、链族、启用网络、确认策略、扫描/提现/归集/划转开关、扫描起始高度、BIP44 coin type、Starknet account class hash |
 | `chain_rpc_node` | 每条链的 RPC/fullnode/indexer/faucet 节点、环境标签、优先级、认证和备注 |
 | `wallet_system_config` | 全局扫描/提现/归集/划转总开关 |
 | `chain_asset` | 原生资产和链内资产定义 |
@@ -43,7 +43,7 @@
 
 | 模块 | 职责 |
 |---|---|
-| `wallet-api` | Spring MVC 单体应用：Custody/Console REST API、Servlet/Cookie 与 HTTP 异常映射、Job 调度、业务 Service、链领域与持久化模型、链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、充值、账本、提现、归集、Gas、Webhook 和启动校验 |
+| `wallet-api` | Spring MVC 单体应用：Custody/Console REST API、Servlet/Cookie 与 HTTP 异常映射、Job 调度、业务 Service、链领域与持久化模型、链适配器（Bitcoin-like/EVM/Starknet/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、充值、账本、提现、归集、Gas、Webhook 和启动校验 |
 | `wallet-sig1` | BTC-like 2-of-3 第一签服务：对 BTC、BCH、LTC、DOGE 提现交易生成部分签名，轮询 Redis 队列 |
 | `wallet-sig2` | 第二签服务：对 BTC、BCH、LTC、DOGE、ETH、ERC20、TRON 交易完成最终签名并广播 |
 | `common` | 无 Web/Redis 耦合、且至少被两个上层模块使用的共享契约：运行时链/资产契约、签名交易 DTO、钱包密钥配置与加载、通用常量 |
@@ -89,9 +89,10 @@ Bitcoin-like RPC DTO 与 Ed25519 链枚举、派生结果和 SLIP-0010 密钥提
 | 链族 | 链 | 本地测试支持 | live/testnet 支持 |
 |---|---|---|---|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH | Docker regtest 节点 | 外部 RPC 配置 |
-| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD, OASIS_EMERALD, CRONOS, SONIC, PULSECHAIN, ZETACHAIN, CORE, SOMNIA, RONIN, CHILIZ, IOTEX, KAIA, PLASMA, STORY, SEI, CONFLUX, VECTOR_SMART_CHAIN, KROWN | Hardhat fork | Sepolia、BSC testnet、Amoy、Berachain Bepolia、Gnosis Chiado、Monad Testnet、Oasis Emerald Testnet、Cronos Testnet、Sonic Testnet、PulseChain Testnet V4、ZetaChain Athens、Core Testnet2、Somnia Shannon、Ronin Saigon、Chiliz Spicy、IoTeX Testnet、Kaia Kairos、Plasma Testnet、Story Aeneid、Sei Atlantic-2、Conflux eSpace Testnet（不含 Core Space）、Vector Smart Chain Mainnet（无可信官方测试网）、Krown Mainnet（无可信官方测试网） |
-| EVM L2 / L3 | ARBITRUM, OPTIMISM, BASE, AVAX_C, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK, KATANA, MEGAETH, X_LAYER, DEGEN, ROBINHOOD_CHAIN, ETHERLINK, IOTA_EVM | Hardhat fork | Sepolia L2、Avalanche Fuji、Celo Sepolia、World Chain Sepolia、Ink Sepolia、Taiko Hoodi、Soneium Minato、Mode Sepolia、Lisk Sepolia、Katana Bokuto、MegaETH Carrot、X Layer Testnet、Degen Chain Mainnet、Robinhood Chain Testnet、Etherlink Shadownet、IOTA EVM Testnet |
+| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD, OASIS_EMERALD, CRONOS, SONIC, PULSECHAIN, ZETACHAIN, CORE, SOMNIA, RONIN, CHILIZ, IOTEX, KAIA, PLASMA, STORY, SEI, CONFLUX, VECTOR_SMART_CHAIN, KROWN, OKT_CHAIN | Hardhat fork | Sepolia、BSC testnet、Amoy、Berachain Bepolia、Gnosis Chiado、Monad Testnet、Oasis Emerald Testnet、Cronos Testnet、Sonic Testnet、PulseChain Testnet V4、ZetaChain Athens、Core Testnet2、Somnia Shannon、Ronin Saigon、Chiliz Spicy、IoTeX Testnet、Kaia Kairos、Plasma Testnet、Story Aeneid、Sei Atlantic-2、Conflux eSpace Testnet、OKT Chain testnet（不含 Core Space）、Vector Smart Chain Mainnet（无可信官方测试网）、Krown Mainnet（无可信官方测试网） |
+| EVM L2 / L3 | ARBITRUM, OPTIMISM, BASE, AVAX_C, CELO, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK, KATANA, MEGAETH, X_LAYER, DEGEN, ROBINHOOD_CHAIN, ETHERLINK, IOTA_EVM, ZKSYNC | Hardhat fork | Sepolia L2、Avalanche Fuji、Celo Sepolia、World Chain Sepolia、Ink Sepolia、Taiko Hoodi、Soneium Minato、Mode Sepolia、Lisk Sepolia、Katana Bokuto、MegaETH Carrot、X Layer Testnet、Degen Chain Mainnet、Robinhood Chain Testnet、Etherlink Shadownet、IOTA EVM Testnet、zkSync Sepolia |
 | EVM L2 (新增) | MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM | Hardhat fork | Mantle Sepolia、Linea Sepolia、Scroll Sepolia、Unichain Sepolia、HyperEVM testnet |
+| Starknet | STARKNET | 本地 Starknet Devnet 完整流程 | Sepolia / Mainnet（RPC、账户 class hash 和 Token 配置经审批后启用） |
 | TRON | TRON | DB 测试 | Nile live flow |
 | Solana | SOL | DB 测试 | Devnet live flow |
 | TON | TON | DB 测试 | Testnet |

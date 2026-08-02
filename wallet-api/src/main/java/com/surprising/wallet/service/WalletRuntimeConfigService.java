@@ -79,6 +79,7 @@ public class WalletRuntimeConfigService {
             Map.entry("AVAX", 2_000L),
             Map.entry("FANTOM", 2_000L),
             Map.entry("ZKSYNC", 2_000L),
+            Map.entry("OKT_CHAIN", 2_000L),
             Map.entry("MANTLE", 2_000L),
             Map.entry("UNICHAIN", 2_000L),
             Map.entry("BERACHAIN", 2_000L),

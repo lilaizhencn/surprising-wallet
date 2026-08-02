@@ -250,7 +250,7 @@ class PolkadotTransactionServiceTest {
          * 验证 {@code FakeHotWalletAddressService} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         FakeHotWalletAddressService(ChainAddressRecord hot) {
-            super(null, null, null, null, null, null, null, null, null, null, null);
+            super(null, null, null, null, null, null, null, null, null, null, null, null);
             this.hot = hot;
         }
 

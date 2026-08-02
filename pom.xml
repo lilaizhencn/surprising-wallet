@@ -51,6 +51,10 @@
         <xrpl4j.version>5.1.0</xrpl4j.version>
         <cardano-client.version>0.7.2</cardano-client.version>
         <net-i2p-crypto-eddsa.version>0.3.1</net-i2p-crypto-eddsa.version>
+        <starknet-jvm.version>0.18.0</starknet-jvm.version>
+        <starknet.serialization.version>1.7.1</starknet.serialization.version>
+        <starknet.commons-math.version>3.6.1</starknet.commons-math.version>
+        <starknet.java-semver.version>0.10.2</starknet.java-semver.version>
     </properties>
 
     <dependencyManagement>
@@ -200,6 +204,32 @@
                 <groupId>com.bloxbean.cardano</groupId>
                 <artifactId>net-i2p-crypto-eddsa</artifactId>
                 <version>${net-i2p-crypto-eddsa.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.swmansion.starknet</groupId>
+                <artifactId>starknet</artifactId>
+                <version>${starknet-jvm.version}</version>
+            </dependency>
+            <!-- Starknet JVM SDK 的运行时依赖；该 SDK 发布物为聚合 POM，显式声明避免运行期缺类。 -->
+                <dependency>
+                    <groupId>org.jetbrains.kotlinx</groupId>
+                    <artifactId>kotlinx-serialization-core-jvm</artifactId>
+                    <version>${starknet.serialization.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.jetbrains.kotlinx</groupId>
+                    <artifactId>kotlinx-serialization-json-jvm</artifactId>
+                    <version>${starknet.serialization.version}</version>
+                </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-math3</artifactId>
+                <version>${starknet.commons-math.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.zafarkhaja</groupId>
+                <artifactId>java-semver</artifactId>
+                <version>${starknet.java-semver.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

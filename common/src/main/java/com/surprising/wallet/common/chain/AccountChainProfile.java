@@ -84,6 +84,10 @@ public class AccountChainProfile {
      */
     private Long chainId;
     /**
+     * 保存 {@code accountClassHash}，用于 Starknet 账户合约的确定性地址和部署校验。
+     */
+    private String accountClassHash;
+    /**
      * 保存 {@code gasPolicy}，用于保存运行配置和策略参数。
      */
     private String gasPolicy;

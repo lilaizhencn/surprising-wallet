@@ -15,6 +15,7 @@ import com.surprising.wallet.chain.near.NearTransactionService;
 import com.surprising.wallet.chain.polkadot.PolkadotTransactionService;
 import com.surprising.wallet.chain.solana.SolanaTransactionService;
 import com.surprising.wallet.chain.sui.SuiTransactionService;
+import com.surprising.wallet.chain.starknet.StarknetTransactionService;
 import com.surprising.wallet.chain.ton.TonTransactionService;
 import com.surprising.wallet.chain.xrp.XrpTransactionService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
@@ -69,11 +70,11 @@ public class AccountChainWorkflowService {
             "XMR",
             "HYPERCORE",
             "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C", "HYPEREVM",
-            "MANTLE", "LINEA", "SCROLL", "UNICHAIN", "BERACHAIN", "GNOSIS", "CELO", "MONAD",
+            "MANTLE", "LINEA", "SCROLL", "UNICHAIN", "ZKSYNC", "BERACHAIN", "GNOSIS", "CELO", "MONAD",
             "WORLD_CHAIN", "INK", "TAIKO", "SONEIUM", "MODE", "LISK", "KATANA", "MEGAETH",
-            "X_LAYER", "DEGEN", "ROBINHOOD_CHAIN", "ETHERLINK", "IOTA_EVM", "OASIS_EMERALD", "CRONOS", "SONIC",
+            "X_LAYER", "DEGEN", "ROBINHOOD_CHAIN", "OKT_CHAIN", "ETHERLINK", "IOTA_EVM", "OASIS_EMERALD", "CRONOS", "SONIC",
             "PULSECHAIN", "ZETACHAIN", "CORE", "SOMNIA", "RONIN", "CHILIZ", "IOTEX", "KAIA", "PLASMA", "STORY", "SEI", "CONFLUX", "VECTOR_SMART_CHAIN", "KROWN",
-            "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
+            "STARKNET", "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
 
     /**
      * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
@@ -121,6 +122,8 @@ public class AccountChainWorkflowService {
     private final NearTransactionService nearTransactionService;
     /** Polkadot 链交易服务 */
     private final PolkadotTransactionService polkadotTransactionService;
+    /** Starknet 链交易服务。 */
+    private final StarknetTransactionService starknetTransactionService;
 
     /**
      * Monero 专用工作流：扫描 -> 提现 -> 确认提现 -> 归集 -> 确认归集。
@@ -398,6 +401,10 @@ public class AccountChainWorkflowService {
                         order.getToAddress(), order.getAmount());
             }
             case "TRON" -> tronWorkflow.broadcast(profile, order, from);
+            case "STARKNET" -> isNative(profile, order.getAssetSymbol())
+                    ? starknetTransactionService.sendNative(profile, from, order.getToAddress(), order.getAmount())
+                    : starknetTransactionService.sendToken(profile, from, requireToken(chain, order.getAssetSymbol()),
+                    order.getToAddress(), order.getAmount());
             default -> throw new IllegalStateException("unsupported account-chain withdrawal: " + chain);
         };
     }
@@ -443,6 +450,9 @@ public class AccountChainWorkflowService {
                     order.getOrderNo(), order.getTxHash(), order.getAssetSymbol(),
                     debitAccountId(order, from), withdrawalDebitAmount(order));
             case "TRON" -> tronWorkflow.confirmWithdrawal(profile, order, from);
+            case "STARKNET" -> starknetTransactionService.confirmWithdrawal(tenantId, profile,
+                    order.getOrderNo(), order.getAssetSymbol(), debitAccountId(order, from),
+                    withdrawalDebitAmount(order));
             default -> {
             }
         }
@@ -457,8 +467,11 @@ public class AccountChainWorkflowService {
                 ? evmTransactionService.estimateCollectionFeeReserve(
                         profile.getChain(), repository.listTokens(profile.getChain()).size())
                 : BigDecimal.ZERO;
+        BigDecimal starknetFeeReserve = "STARKNET".equalsIgnoreCase(profile.getChain())
+                ? starknetTransactionService.estimateCollectionFeeReserve(profile, repository.listTokens(profile.getChain()).size())
+                : BigDecimal.ZERO;
         for (CollectionCandidateRecord candidate : candidates) {
-            BigDecimal amount = collectionAmount(profile, candidate, evmFeeReserve);
+            BigDecimal amount = collectionAmount(profile, candidate, evmFeeReserve.add(starknetFeeReserve));
             if (amount.signum() <= 0) {
                 continue;
             }
@@ -596,6 +609,16 @@ public class AccountChainWorkflowService {
                         "SENT", actionId, null, null);
             }
             case "TRON" -> tronWorkflow.processCollection(profile, record, from);
+            case "STARKNET" -> {
+                if (isNative(profile, record.getAssetSymbol())) {
+                    starknetTransactionService.collectNative(record.getTenantId(), record.getCollectionNo(), profile,
+                            from, record.getToAddress(), record.getAmount());
+                } else {
+                    starknetTransactionService.collectToken(record.getTenantId(), record.getCollectionNo(), profile,
+                            from, requireToken(record.getChain(), record.getAssetSymbol()),
+                            record.getToAddress(), record.getAmount());
+                }
+            }
             default -> {
             }
         }
@@ -639,6 +662,8 @@ public class AccountChainWorkflowService {
             case "HYPERCORE" -> hyperCoreTransactionService.confirmCollection(
                     record.getTenantId(), record.getCollectionNo(), record.getTxHash());
             case "TRON" -> tronWorkflow.confirmCollection(profile, record);
+            case "STARKNET" -> starknetTransactionService.confirmCollection(record.getTenantId(), profile,
+                    record.getCollectionNo(), record.getAssetSymbol());
             default -> {
             }
         }

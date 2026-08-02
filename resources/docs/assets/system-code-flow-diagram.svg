@@ -239,4 +239,5 @@
   <!-- ====== LEGEND ====== -->
   <text x="590" y="910" text-anchor="middle" class="small" fill="#94a3b8">签名隔离：sig1 只持有 Root #1 私钥 · sig2 只持有 Root #2 私钥 · 恢复私钥离线保管 · 任两方即可签名</text>
   <text x="590" y="930" text-anchor="middle" class="small" fill="#94a3b8">数据库实时开关 · Scanner 按链出块速度节流 · 从 DB checkpoint 增量扫块</text>
+  <text x="590" y="950" text-anchor="middle" class="small" fill="#94a3b8">Starknet：counterfactual 账户部署 · STRK Gas · Transfer 事件扫描 · execute_v3 归集/提现</text>
 </svg>

@@ -41,7 +41,7 @@ class HotWalletAddressServiceTest {
         Bip32Node node = Bip32Node.decode(XPUB_2);
         PubKeyConfig pubKeyConfig = new PubKeyConfig(node, node, node);
         HotWalletAddressService service = new HotWalletAddressService(
-                null, pubKeyConfig, null, null, null, null, null, null, null, null, null);
+                null, pubKeyConfig, null, null, null, null, null, null, null, null, null, null);
         AccountChainProfile profile = AccountChainProfile.builder()
                 .chain("HYPERCORE")
                 .network("testnet")
@@ -67,7 +67,7 @@ class HotWalletAddressServiceTest {
         Bip32Node node = Bip32Node.decode(XPUB_2);
         PubKeyConfig pubKeyConfig = new PubKeyConfig(node, node, node);
         HotWalletAddressService service = new HotWalletAddressService(
-                null, pubKeyConfig, null, null, null, null, null, null, null, null, null);
+                null, pubKeyConfig, null, null, null, null, null, null, null, null, null, null);
         AccountChainProfile ethereum = profile("ETH", "evm", "ETH", 60);
         AccountChainProfile bnb = profile("BNB", "evm", "BNB", 714);
 
@@ -136,6 +136,7 @@ class HotWalletAddressServiceTest {
                 new SuiKeyService(ED25519_SEED),
                 new AptosKeyService(ED25519_SEED),
                 new TonKeyService(ED25519_SEED),
+                null,
                 null,
                 null,
                 null,

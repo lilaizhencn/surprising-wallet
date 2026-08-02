@@ -11,6 +11,7 @@ import com.surprising.wallet.chain.monero.MoneroAddressService;
 import com.surprising.wallet.chain.near.NearKeyService;
 import com.surprising.wallet.chain.polkadot.PolkadotKeyService;
 import com.surprising.wallet.chain.solana.SolanaKeyService;
+import com.surprising.wallet.chain.starknet.StarknetKeyService;
 import com.surprising.wallet.chain.sui.SuiKeyService;
 import com.surprising.wallet.chain.ton.TonKeyService;
 import com.surprising.wallet.chain.xrp.XrpKeyService;
@@ -41,8 +42,8 @@ import java.util.Optional;
 /**
  * 热钱包地址派生服务，负责跨链的 BIP44/Ed25519 地址派生。
  *
- * <p>支持 14 个链族：Bitcoin-like、EVM、TRON、Solana、Sui、Aptos、TON、
- * XRP、Cardano、NEAR、Polkadot、HyperCore、Monero。
+ * <p>支持 Bitcoin-like、EVM、TRON、Solana、Sui、Aptos、TON、XRP、Cardano、NEAR、
+ * Polkadot、HyperCore、Monero 和 Starknet。
  *
  * <p>默认热钱包地址（userId=0, biz=0, index=0）用于归集和提现手续费支付，
  * 启动时会校验数据库中地址与派生结果的一致性。
@@ -94,6 +95,8 @@ class HotWalletAddressService {
      * 保存 {@code moneroAddressService}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
     private final MoneroAddressService moneroAddressService;
+    /** Starknet 合约账户地址派生服务。 */
+    private final StarknetKeyService starknetKeyService;
 
     /**
      * 查找默认热钱包地址（userId=0, biz=0, index=0）。
@@ -193,9 +196,17 @@ class HotWalletAddressService {
             case "near" -> deriveNear(profile, userId, biz, addressIndex, walletRole);
             case "polkadot" -> derivePolkadot(profile, userId, biz, addressIndex, walletRole);
             case "monero" -> deriveMonero(userId, biz, addressIndex, walletRole);
+            case "starknet" -> deriveStarknet(profile, userId, biz, addressIndex, walletRole);
             default -> throw new IllegalStateException("unsupported hot wallet derivation family: "
                     + profile.getChain() + "/" + profile.getFamily());
         };
+    }
+
+    /** 派生 Starknet counterfactual 账户地址。 */
+    private ChainAddressRecord deriveStarknet(AccountChainProfile profile, long userId, int biz,
+                                              long addressIndex, String walletRole) {
+        return starknetKeyService.derive(profile, userId, biz, addressIndex)
+                .toAddressRecord(profile, userId, biz, addressIndex, walletRole);
     }
 
     /**

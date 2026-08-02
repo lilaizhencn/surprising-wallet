@@ -67,7 +67,7 @@ class PolkadotDevnetFullFlowIntegrationTest {
         setField(rpcNodes, "maxConcurrentRequestsPerProvider", 8);
         PolkadotRuntimeClient runtime = new PolkadotRuntimeClient(repository, rpcNodes);
         HotWalletAddressService hotWalletService = new HotWalletAddressService(repository,
-                null, null, null, null, null, null, null, null, keys, null);
+                null, null, null, null, null, null, null, null, keys, null, null);
         PolkadotTransactionService transactions = new PolkadotTransactionService(
                 runtime, keys, repository, hotWalletService);
         PolkadotDepositScanner scanner = new PolkadotDepositScanner(runtime, repository);

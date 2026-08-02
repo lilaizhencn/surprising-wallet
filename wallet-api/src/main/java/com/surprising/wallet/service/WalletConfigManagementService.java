@@ -6,6 +6,7 @@ import com.surprising.wallet.config.WalletEnvironmentPolicy;
 import com.surprising.wallet.config.WalletRpcPolicy;
 import com.surprising.wallet.common.chain.EvmFeeModel;
 import com.surprising.wallet.common.chain.EvmGasPolicy;
+import com.surprising.wallet.chain.starknet.StarknetKeyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -169,7 +170,7 @@ public class WalletConfigManagementService {
                 values.bip44CoinType(), values.nativeSymbol(), values.explorerUrl(),
                 values.depositConfirmations(), values.withdrawConfirmations(), values.defaultFeeRate(),
                 values.dustThreshold(), values.enabled(), values.chainId(), values.gasPolicy(),
-                values.feeModel(), values.scanBatchSize(), values.scanEnabled(), values.withdrawEnabled(),
+                values.feeModel(), values.accountClassHash(), values.scanBatchSize(), values.scanEnabled(), values.withdrawEnabled(),
                 values.collectionEnabled(), values.transferEnabled(), values.scanStartHeight(),
                 values.scanMaxBlocksPerRun());
         audit(actor, "WALLET_CHAIN.CREATE", "CHAIN_PROFILE", String.valueOf(id), sourceIp,
@@ -200,7 +201,7 @@ public class WalletConfigManagementService {
                 values.runtimeCurrencyId(), values.bip44CoinType(), values.nativeSymbol(),
                 values.explorerUrl(), values.depositConfirmations(), values.withdrawConfirmations(),
                 values.defaultFeeRate(), values.dustThreshold(), values.enabled(), values.chainId(),
-                values.gasPolicy(), values.feeModel(), values.scanBatchSize(), values.scanEnabled(),
+                values.gasPolicy(), values.feeModel(), values.accountClassHash(), values.scanBatchSize(), values.scanEnabled(),
                 values.withdrawEnabled(), values.collectionEnabled(), values.transferEnabled(),
                 values.scanStartHeight(), values.scanMaxBlocksPerRun());
         if (!current.chain().equalsIgnoreCase(values.chain())
@@ -575,6 +576,10 @@ public class WalletConfigManagementService {
                 throw new IllegalArgumentException("EVM chainId must be positive");
             }
         }
+        if ("STARKNET".equalsIgnoreCase(value.family())
+                && (value.enabled() || value.accountClassHash() != null && !value.accountClassHash().isBlank())) {
+            StarknetKeyService.parseFelt(value.accountClassHash(), "accountClassHash");
+        }
         if (value.runtimeCurrencyId() < 0 || value.bip44CoinType() < 0) {
             throw new IllegalArgumentException("runtimeCurrencyId and bip44CoinType must not be negative");
         }
@@ -859,6 +864,7 @@ public class WalletConfigManagementService {
                 or(command.dustThreshold(), current == null ? null : current.dustThreshold()),
                 or(command.enabled(), current == null ? null : current.enabled(), false),
                 or(command.chainId(), current == null ? null : current.chainId()),
+                or(command.accountClassHash(), current == null ? null : current.accountClassHash()),
                 or(command.gasPolicy(), current == null ? null : current.gasPolicy()),
                 or(command.feeModel(), current == null ? null : current.feeModel(),
                         EvmFeeModel.STANDARD.configValue()),
@@ -935,7 +941,8 @@ public class WalletConfigManagementService {
                 nullable(row.get("explorer_url")), intValue(row.get("deposit_confirmations")),
                 intValue(row.get("withdraw_confirmations")), nullableLong(row.get("default_fee_rate")),
                 nullableLong(row.get("dust_threshold")), bool(row.get("enabled")), nullableLong(row.get("chain_id")),
-                nullable(row.get("gas_policy")), string(row.get("fee_model")),
+                nullable(row.get("account_class_hash")), nullable(row.get("gas_policy")),
+                string(row.get("fee_model")),
                 intValue(row.get("scan_batch_size")),
                 bool(row.get("scan_enabled")), bool(row.get("withdraw_enabled")),
                 bool(row.get("collection_enabled")), bool(row.get("transfer_enabled")),
@@ -1230,7 +1237,7 @@ public class WalletConfigManagementService {
                                Integer bip44CoinType, String nativeSymbol, String explorerUrl,
                                Integer depositConfirmations, Integer withdrawConfirmations,
                                Long defaultFeeRate, Long dustThreshold, Boolean enabled, Long chainId,
-                               String gasPolicy, String feeModel, Integer scanBatchSize, Boolean scanEnabled,
+                               String accountClassHash, String gasPolicy, String feeModel, Integer scanBatchSize, Boolean scanEnabled,
                                Boolean withdrawEnabled, Boolean collectionEnabled, Boolean transferEnabled,
                                Long scanStartHeight, Long scanMaxBlocksPerRun) {}
     public record ChainSwitchCommand(Boolean enabled, Boolean scanEnabled, Boolean withdrawEnabled,
@@ -1238,7 +1245,8 @@ public class WalletConfigManagementService {
     public record ChainView(long id, String chain, String network, String family, int runtimeCurrencyId,
                             int bip44CoinType, String nativeSymbol, String explorerUrl,
                             int depositConfirmations, int withdrawConfirmations, Long defaultFeeRate,
-                            Long dustThreshold, boolean enabled, Long chainId, String gasPolicy, String feeModel,
+                            Long dustThreshold, boolean enabled, Long chainId, String accountClassHash,
+                            String gasPolicy, String feeModel,
                             int scanBatchSize, boolean scanEnabled, boolean withdrawEnabled,
                             boolean collectionEnabled, boolean transferEnabled, long scanStartHeight,
                             long scanMaxBlocksPerRun, List<String> tokenSymbols, int tokenCount, int rpcCount,
@@ -1248,7 +1256,8 @@ public class WalletConfigManagementService {
     private record ChainValues(String chain, String network, String family, int runtimeCurrencyId,
                                int bip44CoinType, String nativeSymbol, String explorerUrl,
                                int depositConfirmations, int withdrawConfirmations, Long defaultFeeRate,
-                               Long dustThreshold, boolean enabled, Long chainId, String gasPolicy, String feeModel,
+                               Long dustThreshold, boolean enabled, Long chainId, String accountClassHash,
+                               String gasPolicy, String feeModel,
                                int scanBatchSize, boolean scanEnabled, boolean withdrawEnabled,
                                boolean collectionEnabled, boolean transferEnabled, long scanStartHeight,
                                long scanMaxBlocksPerRun) {}

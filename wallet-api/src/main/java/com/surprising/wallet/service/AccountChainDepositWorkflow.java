@@ -9,6 +9,7 @@ import com.surprising.wallet.chain.near.NearDepositScanner;
 import com.surprising.wallet.chain.polkadot.PolkadotDepositScanner;
 import com.surprising.wallet.chain.solana.SolanaDepositScanner;
 import com.surprising.wallet.chain.sui.SuiDepositScanner;
+import com.surprising.wallet.chain.starknet.StarknetDepositScanner;
 import com.surprising.wallet.chain.ton.TonDepositScanner;
 import com.surprising.wallet.chain.tron.TronAddressCodec;
 import com.surprising.wallet.chain.tron.TronClientFactory;
@@ -99,6 +100,8 @@ public class AccountChainDepositWorkflow {
      * 保存 {@code tronDepositScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
     private final TronDepositScanner tronDepositScanner;
+    /** Starknet 充值扫描器。 */
+    private final StarknetDepositScanner starknetDepositScanner;
 
     /**
      * 扫描单条已启用账户链；链级开关关闭时不执行。
@@ -121,6 +124,7 @@ public class AccountChainDepositWorkflow {
                 case "XMR" -> moneroDepositScanner.scanAndCredit(profile);
                 case "HYPERCORE" -> hyperCoreDepositScanner.scanAndCredit(profile);
                 case "TRON" -> scanTron(profile);
+                case "STARKNET" -> starknetDepositScanner.scanAndCredit(profile);
                 default -> {
                     if ("evm".equalsIgnoreCase(profile.getFamily())) {
                         scanEvm(profile);

@@ -19,6 +19,7 @@ import com.surprising.wallet.chain.model.NearTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.chain.model.TronTransactionRecord;
 import com.surprising.wallet.chain.model.SolanaTransactionRecord;
+import com.surprising.wallet.chain.model.StarknetTransactionRecord;
 import com.surprising.wallet.chain.model.TonTransactionRecord;
 import com.surprising.wallet.chain.model.SuiTransactionRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
@@ -112,6 +113,8 @@ public class ChainJdbcRepository {
     private MoneroTransactionRepository moneroTransactionRepository;
     /** NEAR 交易单表仓储。 */
     private NearTransactionRepository nearTransactionRepository;
+    /** Starknet 交易单表仓储。 */
+    private StarknetTransactionRepository starknetTransactionRepository;
     /** 账本余额单表仓储。 */
     private LedgerBalanceRepository ledgerBalanceRepository;
     /** 充值记录单表仓储。 */
@@ -238,6 +241,7 @@ public class ChainJdbcRepository {
         this.suiTransactionRepository = new SuiTransactionRepository(jdbcTemplate);
         this.moneroTransactionRepository = new MoneroTransactionRepository(jdbcTemplate);
         this.nearTransactionRepository = new NearTransactionRepository(jdbcTemplate);
+        this.starknetTransactionRepository = new StarknetTransactionRepository(jdbcTemplate);
         this.ledgerBalanceRepository = new LedgerBalanceRepository(jdbcTemplate);
         this.depositRecordRepository = new DepositRecordRepository(jdbcTemplate);
         this.chainScanBlockRepository = new ChainScanBlockRepository(jdbcTemplate);
@@ -519,6 +523,18 @@ public class ChainJdbcRepository {
      */
     public int recordNearTransaction(NearTransactionRecord tx) {
         return nearTransactionRepository.upsert(tx);
+    }
+
+    /** 记录或更新 Starknet 交易。 */
+    public int recordStarknetTransaction(StarknetTransactionRecord tx) {
+        return starknetTransactionRepository.upsert(tx);
+    }
+
+    /** 确认 Starknet 交易并保存实际手续费。 */
+    public int markStarknetTransactionConfirmed(String chain, String txHash, BigDecimal fee,
+                                                Long blockHeight, int confirmations, String rawPayload) {
+        return starknetTransactionRepository.markConfirmed(
+                chain, txHash, fee, blockHeight, confirmations, rawPayload);
     }
 
     /**
@@ -1816,6 +1832,7 @@ public class ChainJdbcRepository {
                 .enabled(Boolean.TRUE.equals(row.get("enabled")))
                 .chainId((Long) row.get("chain_id"))
                 .gasPolicy((String) row.get("gas_policy"))
+                .accountClassHash((String) row.get("account_class_hash"))
                 .feeModel((String) row.get("fee_model"))
                 .scanBatchSize((Integer) row.get("scan_batch_size"))
                 .scanEnabled(Boolean.TRUE.equals(row.get("scan_enabled")))
@@ -1884,6 +1901,7 @@ public class ChainJdbcRepository {
                 .enabled(rs.getBoolean("enabled"))
                 .chainId(rs.getObject("chain_id", Long.class))
                 .gasPolicy(rs.getString("gas_policy"))
+                .accountClassHash(rs.getString("account_class_hash"))
                 .feeModel(rs.getString("fee_model"))
                 .scanBatchSize(rs.getObject("scan_batch_size", Integer.class))
                 .scanEnabled(rs.getBoolean("scan_enabled"))

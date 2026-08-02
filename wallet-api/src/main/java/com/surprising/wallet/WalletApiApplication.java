@@ -24,7 +24,7 @@ public class WalletApiApplication {
     /**
      * 启动应用入口，先配置 TLS 曲线后由 Spring Boot 启动整个 wallet-api 模块。
      */
-    public static void main(String[] args) {
+    static void main(String[] args) {
         configureTlsNamedGroups();
         SpringApplication.run(WalletApiApplication.class, args);
     }

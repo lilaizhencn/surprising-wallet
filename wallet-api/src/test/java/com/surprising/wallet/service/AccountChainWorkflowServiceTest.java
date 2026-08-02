@@ -356,6 +356,9 @@ class AccountChainWorkflowServiceTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 null);
     }
 
@@ -437,6 +440,7 @@ class AccountChainWorkflowServiceTest {
                 aptosService,
                 null,
                 tonService,
+                null,
                 null,
                 null,
                 null,

@@ -29,6 +29,7 @@ public class ChainProfileRepository {
                 select id, chain, network, family, runtime_currency_id, bip44_coin_type,
                        native_symbol, rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
                        default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model,
+                       account_class_hash,
                        scan_batch_size, scan_enabled, withdraw_enabled, collection_enabled,
                        transfer_enabled, scan_start_height, scan_max_blocks_per_run,
                        created_at, updated_at
@@ -44,6 +45,7 @@ public class ChainProfileRepository {
                     select id, chain, network, family, runtime_currency_id, bip44_coin_type,
                            native_symbol, rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
                            default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model,
+                           account_class_hash,
                            scan_batch_size, scan_enabled, withdraw_enabled, collection_enabled,
                            transfer_enabled, scan_start_height, scan_max_blocks_per_run,
                            created_at, updated_at
@@ -59,7 +61,7 @@ public class ChainProfileRepository {
         try {
             return Optional.of(jdbc.queryForMap("""
                     select id, chain, network, family, chain_id, native_symbol,
-                           default_fee_rate, dust_threshold, enabled,
+                           default_fee_rate, dust_threshold, enabled, account_class_hash,
                            scan_enabled, withdraw_enabled, collection_enabled, transfer_enabled
                       from chain_profile
                      where upper(chain) = upper(?) and lower(network) = lower(?)
@@ -90,21 +92,21 @@ public class ChainProfileRepository {
                        int bip44CoinType, String nativeSymbol, String explorerUrl,
                        int depositConfirmations, int withdrawConfirmations, Long defaultFeeRate,
                        Long dustThreshold, boolean enabled, Long chainId, String gasPolicy,
-                       String feeModel, int scanBatchSize, boolean scanEnabled,
+                       String feeModel, String accountClassHash, int scanBatchSize, boolean scanEnabled,
                        boolean withdrawEnabled, boolean collectionEnabled, boolean transferEnabled,
                        long scanStartHeight, long scanMaxBlocksPerRun) {
         Long id = jdbc.queryForObject("""
                 insert into chain_profile(
                     chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
                     explorer_url, deposit_confirmations, withdraw_confirmations, default_fee_rate,
-                    dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size,
+                    dust_threshold, enabled, chain_id, gas_policy, fee_model, account_class_hash, scan_batch_size,
                     scan_enabled, withdraw_enabled, collection_enabled, transfer_enabled,
                     scan_start_height, scan_max_blocks_per_run, updated_at)
                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())
                 returning id
                 """, Long.class, chain, network, family, runtimeCurrencyId, bip44CoinType,
                 nativeSymbol, explorerUrl, depositConfirmations, withdrawConfirmations,
-                defaultFeeRate, dustThreshold, enabled, chainId, gasPolicy, feeModel,
+                defaultFeeRate, dustThreshold, enabled, chainId, gasPolicy, feeModel, accountClassHash,
                 scanBatchSize, scanEnabled, withdrawEnabled, collectionEnabled, transferEnabled,
                 scanStartHeight, scanMaxBlocksPerRun);
         return id;
@@ -115,7 +117,7 @@ public class ChainProfileRepository {
                       int bip44CoinType, String nativeSymbol, String explorerUrl,
                       int depositConfirmations, int withdrawConfirmations, Long defaultFeeRate,
                       Long dustThreshold, boolean enabled, Long chainId, String gasPolicy,
-                      String feeModel, int scanBatchSize, boolean scanEnabled,
+                      String feeModel, String accountClassHash, int scanBatchSize, boolean scanEnabled,
                       boolean withdrawEnabled, boolean collectionEnabled, boolean transferEnabled,
                       long scanStartHeight, long scanMaxBlocksPerRun) {
         return jdbc.update("""
@@ -124,13 +126,14 @@ public class ChainProfileRepository {
                        bip44_coin_type = ?, native_symbol = ?, explorer_url = ?,
                        deposit_confirmations = ?, withdraw_confirmations = ?, default_fee_rate = ?,
                        dust_threshold = ?, enabled = ?, chain_id = ?, gas_policy = ?, fee_model = ?,
+                       account_class_hash = ?,
                        scan_batch_size = ?, scan_enabled = ?, withdraw_enabled = ?,
                        collection_enabled = ?, transfer_enabled = ?, scan_start_height = ?,
                        scan_max_blocks_per_run = ?, updated_at = now()
                  where id = ?
                 """, chain, network, family, runtimeCurrencyId, bip44CoinType, nativeSymbol,
                 explorerUrl, depositConfirmations, withdrawConfirmations, defaultFeeRate,
-                dustThreshold, enabled, chainId, gasPolicy, feeModel, scanBatchSize,
+                dustThreshold, enabled, chainId, gasPolicy, feeModel, accountClassHash, scanBatchSize,
                 scanEnabled, withdrawEnabled, collectionEnabled, transferEnabled,
                 scanStartHeight, scanMaxBlocksPerRun, id);
     }
@@ -246,7 +249,8 @@ public class ChainProfileRepository {
         String sql = """
                 select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
                        rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations, default_fee_rate,
-                       dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size, scan_enabled,
+                       dust_threshold, enabled, chain_id, gas_policy, fee_model, account_class_hash,
+                       scan_batch_size, scan_enabled,
                        withdraw_enabled, collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
                   from chain_profile
                 """ + predicate;
@@ -259,6 +263,7 @@ public class ChainProfileRepository {
                 .defaultFee(rs.getObject("default_fee_rate", Long.class))
                 .dustThreshold(rs.getObject("dust_threshold", Long.class)).enabled(rs.getBoolean("enabled"))
                 .chainId(rs.getObject("chain_id", Long.class)).gasPolicy(rs.getString("gas_policy"))
+                .accountClassHash(rs.getString("account_class_hash"))
                 .feeModel(rs.getString("fee_model")).scanBatchSize(rs.getObject("scan_batch_size", Integer.class))
                 .scanEnabled(rs.getBoolean("scan_enabled")).withdrawEnabled(rs.getBoolean("withdraw_enabled"))
                 .collectionEnabled(rs.getBoolean("collection_enabled")).transferEnabled(rs.getBoolean("transfer_enabled"))

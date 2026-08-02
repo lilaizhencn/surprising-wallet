@@ -6,6 +6,7 @@ import com.surprising.wallet.common.chain.EvmFeeModel;
 import com.surprising.wallet.common.chain.EvmGasPolicy;
 import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.chain.starknet.StarknetKeyService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
@@ -172,6 +173,7 @@ public class WalletStartupValidator implements ApplicationRunner {
                                 + profile.getChain() + "/" + profile.getNetwork());
             }
             validateEvmProfile(profile);
+            validateStarknetProfile(profile);
             validateRequiredRpcPurposes(profile);
         }
         validateActiveEip7702Profiles(enabledProfiles);
@@ -214,6 +216,34 @@ public class WalletStartupValidator implements ApplicationRunner {
         if (decimals == null || decimals < 0 || decimals > 18) {
             throw new IllegalStateException("EVM native asset decimals must be between 0 and 18: "
                     + profile.getChain() + "/" + profile.getNativeSymbol());
+        }
+    }
+
+    /** 校验启用 Starknet 配置的账户 class hash、STRK 资产和网络参数。 */
+    private void validateStarknetProfile(AccountChainProfile profile) {
+        if (!"starknet".equalsIgnoreCase(profile.getFamily())) {
+            return;
+        }
+        StarknetKeyService.parseFelt(profile.getAccountClassHash(), "accountClassHash");
+        String network = profile.getNetwork() == null ? "" : profile.getNetwork().toLowerCase(Locale.ROOT);
+        if (!(network.contains("main") || network.contains("sepolia") || network.contains("integration"))) {
+            throw new IllegalStateException("enabled Starknet profile requires mainnet or sepolia network: "
+                    + profile.getChain() + "/" + profile.getNetwork());
+        }
+        ChainAsset nativeAsset = repository.findAsset(profile.getChain(), profile.getNativeSymbol())
+                .orElseThrow(() -> new IllegalStateException(
+                        "enabled Starknet profile requires an active native chain_asset: "
+                                + profile.getChain() + "/" + profile.getNativeSymbol()));
+        if (repository.countActiveNativeAssets(profile.getChain()) != 1
+                || !Boolean.TRUE.equals(nativeAsset.getNativeAsset())
+                || !StringUtils.hasText(nativeAsset.getContractAddress())
+                || nativeAsset.getDecimals() == null || nativeAsset.getDecimals() != 18) {
+            throw new IllegalStateException("enabled Starknet profile requires exactly one active 18-decimal STRK asset: "
+                    + profile.getChain());
+        }
+        if (!StarknetKeyService.isValidAddress(nativeAsset.getContractAddress())) {
+            throw new IllegalStateException("invalid Starknet STRK contract address: "
+                    + nativeAsset.getContractAddress());
         }
     }
 

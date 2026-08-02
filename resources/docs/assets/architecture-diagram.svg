@@ -53,8 +53,8 @@
   <line x1="130" y1="148" x2="810" y2="194" class="arrow"/>
   <line x1="350" y1="148" x2="890" y2="194" class="arrow"/>
 
-  <!-- ====== 第三层：27 条链 ====== -->
-  <text x="30" y="328" class="sep"> 区块链适配（27 条链）</text>
+  <!-- ====== 第三层：30 条核心链 ====== -->
+  <text x="30" y="328" class="sep"> 区块链适配（30 条核心链）</text>
 
   <!-- Row 1: UTXO -->
   <rect x="30"  y="342" width="90" height="48" class="chain"/>
@@ -169,6 +169,18 @@
   <text x="675" y="480" text-anchor="middle" class="label">HyperCore</text>
   <text x="675" y="496" text-anchor="middle" class="desc">Hyperliquid</text>
 
+  <rect x="730" y="458" width="90" height="48" class="chain"/>
+  <text x="775" y="480" text-anchor="middle" class="label">ZKSYNC</text>
+  <text x="775" y="496" text-anchor="middle" class="desc">EVM L2</text>
+
+  <rect x="830" y="458" width="90" height="48" class="chain"/>
+  <text x="875" y="480" text-anchor="middle" class="label">OKT</text>
+  <text x="875" y="496" text-anchor="middle" class="desc">EVM</text>
+
+  <rect x="930" y="458" width="90" height="48" class="chain"/>
+  <text x="975" y="480" text-anchor="middle" class="label">Starknet</text>
+  <text x="975" y="496" text-anchor="middle" class="desc">Account</text>
+
   <!-- ====== 第四层：基础设施 ====== -->
   <text x="30" y="545" class="sep"> 基础设施</text>
 
@@ -193,5 +205,5 @@
   <text x="985" y="600" text-anchor="middle" class="desc">Node.js Runtime 桥接</text>
 
   <!-- 底部 -->
-  <text x="550" y="648" text-anchor="middle" class="desc" fill="#94a3b8" font-size="11">surprising-wallet — 5 Java 模块 · Java 25 · Spring Boot 4.1 · 27 条链 · 14 个链族</text>
+  <text x="550" y="648" text-anchor="middle" class="desc" fill="#94a3b8" font-size="11">surprising-wallet — 5 Java 模块 · Java 25 · Spring Boot 4.1 · 30 条核心链 · 15 个链族</text>
 </svg>
