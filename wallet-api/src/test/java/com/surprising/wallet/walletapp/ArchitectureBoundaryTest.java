@@ -74,9 +74,18 @@ class ArchitectureBoundaryTest {
     private static void verifySingleTableRepositories(Path repositoryRoot) throws IOException {
         Pattern tablePattern = Pattern.compile(
                 "(?i)\\b(?:from|join|into|update|delete\\s+from)\\s+([a-z_][a-z0-9_]*)");
+        Pattern sqlLinePattern = Pattern.compile(
+                "(?i).*\\b(?:select\\s+.+\\s+from|insert\\s+into|update\\s+[a-z_][a-z0-9_]*\\s+set|delete\\s+from)\\b.*");
         for (Path file : javaFiles(repositoryRoot)) {
             String source = Files.readString(file);
-            if (!source.contains("@Repository")) continue;
+            boolean repository = source.contains("@Repository");
+            boolean component = source.contains("@Component");
+            boolean containsSql = source.lines().anyMatch(line -> sqlLinePattern.matcher(line.trim()).matches());
+            if (component) {
+                assertFalse(containsSql,
+                        "cross-table repository facade must delegate SQL to @Repository: " + file);
+            }
+            if (!repository) continue;
             Matcher matcher = tablePattern.matcher(source);
             Set<String> tables = new HashSet<>();
             while (matcher.find()) tables.add(matcher.group(1).toLowerCase());

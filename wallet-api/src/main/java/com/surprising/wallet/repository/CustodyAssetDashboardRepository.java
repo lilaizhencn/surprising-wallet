@@ -1,11 +1,9 @@
 package com.surprising.wallet.repository;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -16,11 +14,11 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-/** custody_asset_price 单表仓储，并组合单表仓储生成资产看板数据。 */
+/** 资产看板 Java 组合门面；资产价格 SQL 由 {@link CustodyAssetPriceRepository} 执行。 */
 @Component
 public class CustodyAssetDashboardRepository {
-    /** JDBC 模板，仅用于访问 custody_asset_price。 */
-    private final JdbcTemplate jdbc;
+    /** 资产价格单表仓储。 */
+    private final CustodyAssetPriceRepository assetPrices;
     /** 托管地址单表仓储。 */
     private final CustodyAddressRepository custodyAddresses;
     /** Gas 账户单表仓储。 */
@@ -41,8 +39,9 @@ public class CustodyAssetDashboardRepository {
     private final CustodyReorgDeficitRepository reorgDeficits;
 
     /** 兼容测试和手工构造。 */
-    public CustodyAssetDashboardRepository(JdbcTemplate jdbc) {
-        this(jdbc, new CustodyAddressRepository(jdbc), new CustodyGasAccountRepository(jdbc),
+    public CustodyAssetDashboardRepository(org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        this(new CustodyAssetPriceRepository(jdbc), new CustodyAddressRepository(jdbc),
+                new CustodyGasAccountRepository(jdbc),
                 new ChainAddressRepository(jdbc), new ChainProfileRepository(jdbc),
                 new ChainAssetRepository(jdbc), new TokenConfigRepository(jdbc),
                 new CustodyTenantChainRepository(jdbc), new LedgerBalanceRepository(jdbc),
@@ -52,7 +51,7 @@ public class CustodyAssetDashboardRepository {
     /** 构造资产看板仓储，注入各自负责单表的数据访问组件。 */
     @Autowired
     public CustodyAssetDashboardRepository(
-            JdbcTemplate jdbc,
+            CustodyAssetPriceRepository assetPrices,
             CustodyAddressRepository custodyAddresses,
             CustodyGasAccountRepository gasAccounts,
             ChainAddressRepository chainAddresses,
@@ -62,7 +61,7 @@ public class CustodyAssetDashboardRepository {
             CustodyTenantChainRepository tenantChains,
             LedgerBalanceRepository ledgerBalances,
             CustodyReorgDeficitRepository reorgDeficits) {
-        this.jdbc = jdbc;
+        this.assetPrices = assetPrices;
         this.custodyAddresses = custodyAddresses;
         this.gasAccounts = gasAccounts;
         this.chainAddresses = chainAddresses;
@@ -113,14 +112,7 @@ public class CustodyAssetDashboardRepository {
 
     /** 查询全部资产价格。 */
     public List<AssetPrice> prices() {
-        return jdbc.query("""
-                select asset_symbol, usd_price, source, observed_at, updated_at
-                  from custody_asset_price
-                 order by asset_symbol
-                """, (rs, rowNum) -> new AssetPrice(
-                rs.getString("asset_symbol"), rs.getBigDecimal("usd_price"),
-                rs.getString("source"), rs.getTimestamp("observed_at").toInstant(),
-                rs.getTimestamp("updated_at").toInstant()));
+        return assetPrices.list().stream().map(CustodyAssetDashboardRepository::toAssetPrice).toList();
     }
 
     /** 查询尚未弥补的重组赤字。 */
@@ -130,20 +122,13 @@ public class CustodyAssetDashboardRepository {
 
     /** 新增或更新资产价格。 */
     public AssetPrice upsertPrice(String symbol, BigDecimal price, String source, Instant observedAt) {
-        return jdbc.queryForObject("""
-                insert into custody_asset_price(asset_symbol, usd_price, source, observed_at, updated_at)
-                values (?, ?, ?, ?, now())
-                on conflict (asset_symbol) do update set
-                    usd_price = excluded.usd_price,
-                    source = excluded.source,
-                    observed_at = excluded.observed_at,
-                    updated_at = now()
-                returning asset_symbol, usd_price, source, observed_at, updated_at
-                """, (rs, rowNum) -> new AssetPrice(
-                rs.getString("asset_symbol"), rs.getBigDecimal("usd_price"),
-                rs.getString("source"), rs.getTimestamp("observed_at").toInstant(),
-                rs.getTimestamp("updated_at").toInstant()),
-                symbol, price, source, Timestamp.from(observedAt));
+        return toAssetPrice(assetPrices.upsert(symbol, price, source, observedAt));
+    }
+
+    /** 转换资产价格单表记录。 */
+    private static AssetPrice toAssetPrice(CustodyAssetPriceRepository.PriceRow row) {
+        return new AssetPrice(row.assetSymbol(), row.usdPrice(), row.source(),
+                row.observedAt(), row.updatedAt());
     }
 
     /** 组合租户非 Gas 托管地址和其对应的链地址账户。 */

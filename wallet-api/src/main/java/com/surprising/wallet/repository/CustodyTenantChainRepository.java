@@ -1,10 +1,8 @@
 package com.surprising.wallet.repository;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,11 +10,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/** custody_tenant_chain 单表仓储。 */
+/** 租户链配置 Java 组合门面；租户链 SQL 由 {@link CustodyTenantChainTableRepository} 执行。 */
 @Component
 public class CustodyTenantChainRepository {
-    /** JDBC 模板，仅用于访问 custody_tenant_chain。 */
-    private final JdbcTemplate jdbc;
+    /** 租户链单表仓储。 */
+    private final CustodyTenantChainTableRepository tenantChainTable;
     /** 链配置单表仓储。 */
     private final ChainProfileRepository chainProfiles;
     /** 链资产单表仓储。 */
@@ -27,20 +25,21 @@ public class CustodyTenantChainRepository {
     private final Evm7702ConfigRepository evm7702Configs;
 
     /** 兼容测试和手工构造，初始化全部单表仓储。 */
-    public CustodyTenantChainRepository(JdbcTemplate jdbc) {
-        this(jdbc, new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc),
+    public CustodyTenantChainRepository(org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        this(new CustodyTenantChainTableRepository(jdbc), new ChainProfileRepository(jdbc),
+                new ChainAssetRepository(jdbc),
                 new TokenConfigRepository(jdbc), new Evm7702ConfigRepository(jdbc));
     }
 
     /** 构造租户链仓储，注入各自负责单表的数据访问组件。 */
     @Autowired
     public CustodyTenantChainRepository(
-            JdbcTemplate jdbc,
+            CustodyTenantChainTableRepository tenantChainTable,
             ChainProfileRepository chainProfiles,
             ChainAssetRepository chainAssets,
             TokenConfigRepository tokenConfigs,
             Evm7702ConfigRepository evm7702Configs) {
-        this.jdbc = jdbc;
+        this.tenantChainTable = tenantChainTable;
         this.chainProfiles = chainProfiles;
         this.chainAssets = chainAssets;
         this.tokenConfigs = tokenConfigs;
@@ -49,13 +48,9 @@ public class CustodyTenantChainRepository {
 
     /** 查询平台已启用链及租户在该链上的状态。 */
     public List<ChainRecord> list(UUID tenantId) {
-        Map<String, Map<String, Object>> tenantChains = jdbc.queryForList("""
-                        select chain, status, opened_at, closed_at
-                          from custody_tenant_chain
-                         where tenant_id = ?
-                        """, tenantId).stream()
+        Map<String, CustodyTenantChainTableRepository.ChainRow> tenantChains = tenantChainTable.list(tenantId).stream()
                 .collect(Collectors.toMap(
-                        row -> text(row.get("chain")).toUpperCase(),
+                        row -> row.chain().toUpperCase(),
                         row -> row,
                         (left, right) -> left,
                         LinkedHashMap::new));
@@ -66,7 +61,8 @@ public class CustodyTenantChainRepository {
                 .filter(row -> bool(row.get("enabled")))
                 .map(profile -> {
                     String chain = text(profile.get("chain"));
-                    Map<String, Object> tenantChain = tenantChains.get(chain.toUpperCase());
+                    CustodyTenantChainTableRepository.ChainRow tenantChain =
+                            tenantChains.get(chain.toUpperCase());
                     return new ChainRecord(
                             chain,
                             text(profile.get("network")),
@@ -76,9 +72,9 @@ public class CustodyTenantChainRepository {
                             bool(profile.get("scan_enabled")),
                             bool(profile.get("withdraw_enabled")),
                             bool(profile.get("transfer_enabled")),
-                            tenantChain == null ? "CLOSED" : text(tenantChain.get("status")),
-                            tenantChain == null ? null : instant(tenantChain.get("opened_at")),
-                            tenantChain == null ? null : instant(tenantChain.get("closed_at")),
+                            tenantChain == null ? "CLOSED" : tenantChain.status(),
+                            tenantChain == null ? null : tenantChain.openedAt(),
+                            tenantChain == null ? null : tenantChain.closedAt(),
                             tokensByChain.getOrDefault(chain, List.of()));
                 })
                 .toList();
@@ -119,46 +115,17 @@ public class CustodyTenantChainRepository {
 
     /** 判断租户是否已启用指定链，链平台配置由链配置仓储负责校验。 */
     public boolean active(UUID tenantId, String chain) {
-        return platformChainEnabled(chain) && !jdbc.queryForList("""
-                select chain
-                  from custody_tenant_chain
-                 where tenant_id = ? and upper(chain) = upper(?) and status = 'ACTIVE'
-                """, tenantId, chain).isEmpty();
+        return platformChainEnabled(chain) && tenantChainTable.active(tenantId, chain);
     }
 
     /** 查询租户当前已启用的链名称。 */
     public List<String> listActiveChains(UUID tenantId) {
-        return jdbc.queryForList("""
-                select chain
-                  from custody_tenant_chain
-                 where tenant_id = ? and status = 'ACTIVE'
-                """, String.class, tenantId);
+        return tenantChainTable.listActiveChains(tenantId);
     }
 
     /** 更新租户链启用状态。 */
     public void setStatus(UUID tenantId, String chain, String status, UUID actorId) {
-        jdbc.update("""
-                insert into custody_tenant_chain(
-                    tenant_id, chain, status, opened_by, opened_at,
-                    closed_by, closed_at, updated_at)
-                values (?, ?, ?,
-                        case when ? = 'ACTIVE' then ?::uuid end,
-                        case when ? = 'ACTIVE' then now() end,
-                        case when ? = 'CLOSED' then ?::uuid end,
-                        case when ? = 'CLOSED' then now() end,
-                        now())
-                on conflict (tenant_id, chain) do update set
-                    status = excluded.status,
-                    opened_by = case when excluded.status = 'ACTIVE' then excluded.opened_by
-                                     else custody_tenant_chain.opened_by end,
-                    opened_at = case when excluded.status = 'ACTIVE' then now()
-                                     else custody_tenant_chain.opened_at end,
-                    closed_by = case when excluded.status = 'CLOSED' then excluded.closed_by
-                                     else null end,
-                    closed_at = case when excluded.status = 'CLOSED' then now() else null end,
-                    updated_at = now()
-                """, tenantId, chain, status,
-                status, actorId, status, status, actorId, status);
+        tenantChainTable.setStatus(tenantId, chain, status, actorId);
     }
 
     /** 判断租户指定链和资产是否允许充值。 */
@@ -216,14 +183,6 @@ public class CustodyTenantChainRepository {
     /** 读取数字字段。 */
     private static int number(Object value) {
         return value instanceof Number number ? number.intValue() : Integer.parseInt(text(value));
-    }
-
-    /** 转换时间字段。 */
-    private static Instant instant(Object value) {
-        if (value instanceof Timestamp timestamp) {
-            return timestamp.toInstant();
-        }
-        return value instanceof Instant result ? result : null;
     }
 
     /** 租户链展示记录。 */
