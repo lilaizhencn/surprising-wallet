@@ -6,6 +6,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -62,6 +66,28 @@ class ArchitectureBoundaryTest {
             }
             assertFalse(source.lines().anyMatch(line -> line.trim().startsWith("@Scheduled")),
                     "scheduled entry points must stay under job/**: " + file);
+        }
+        verifySingleTableRepositories(repositoryRoot);
+    }
+
+    /** 验证每个 SQL 仓储只直接操作一张表，不允许把跨表编排重新放回数据访问层。 */
+    private static void verifySingleTableRepositories(Path repositoryRoot) throws IOException {
+        Pattern tablePattern = Pattern.compile(
+                "(?i)\\b(?:from|join|into|update|delete\\s+from)\\s+([a-z_][a-z0-9_]*)");
+        for (Path file : javaFiles(repositoryRoot)) {
+            String source = Files.readString(file);
+            if (!source.contains("@Repository")) continue;
+            Matcher matcher = tablePattern.matcher(source);
+            Set<String> tables = new HashSet<>();
+            while (matcher.find()) tables.add(matcher.group(1).toLowerCase());
+            tables.remove("set");
+            tables.remove("excluded");
+            tables.remove("skip");
+            tables.remove("cast");
+            assertFalse(source.matches("(?is).*\\bjoin\\s+[a-z_][a-z0-9_]*.*"),
+                    "single-table repository must not join tables: " + file);
+            assertTrue(tables.size() <= 1,
+                    "repository must operate on one table: " + file + " -> " + tables);
         }
     }
 

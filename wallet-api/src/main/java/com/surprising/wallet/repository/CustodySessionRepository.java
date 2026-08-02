@@ -48,6 +48,15 @@ public class CustodySessionRepository {
                 """, tokenHash);
     }
 
+    /** 统计租户当前有效会话。 */
+    public long countActive(UUID tenantId) {
+        Long count = jdbc.queryForObject("""
+                select count(*) from custody_session
+                 where tenant_id = ? and revoked_at is null and expires_at > now()
+                """, Long.class, tenantId);
+        return count == null ? 0L : count;
+    }
+
     /** 更新会话最近访问时间。 */
     public void touch(UUID sessionId) {
         jdbc.update("""
@@ -62,5 +71,14 @@ public class CustodySessionRepository {
                 update custody_session set revoked_at = now()
                  where token_hash = ? and revoked_at is null
                 """, tokenHash);
+    }
+
+    /** 删除长期过期或已撤销的会话。 */
+    public int deleteExpired() {
+        return jdbc.update("""
+                delete from custody_session
+                 where expires_at < now() - interval '7 days'
+                    or revoked_at < now() - interval '7 days'
+                """);
     }
 }

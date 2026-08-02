@@ -2,7 +2,7 @@ package com.surprising.wallet.repository;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.web3j.crypto.Hash;
 import org.web3j.utils.Numeric;
@@ -17,23 +17,61 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * 负责钱包业务数据的查询、持久化、租户隔离和事务边界管理。
  */
-@Repository
+@Component
 public class Evm7702CollectionRepository {
     /**
      * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
     private final JdbcTemplate jdbc;
+    /** EIP-7702 配置单表仓储。 */
+    private final Evm7702ConfigRepository configRepository;
+    /** EIP-7702 账户投影单表仓储。 */
+    private final Evm7702AccountRepository accountRepository;
+    /** 链地址单表仓储。 */
+    private final ChainAddressRepository chainAddressRepository;
+    /** 链配置单表仓储。 */
+    private final ChainProfileRepository chainProfileRepository;
+    /** 批量归集批次单表仓储。 */
+    private final EvmCollectionBatchRepository batchRepository;
+    /** 归集批次项单表仓储。 */
+    private final EvmCollectionBatchItemRepository batchItemRepository;
+    /** 归集批次尝试单表仓储。 */
+    private final EvmCollectionBatchAttemptRepository batchAttemptRepository;
+    /** 归集记录单表仓储。 */
+    private final CollectionRecordRepository collectionRecordRepository;
+    /** 托管地址单表仓储。 */
+    private final CustodyAddressRepository custodyAddressRepository;
+    /** Gas 账户单表仓储。 */
+    private final CustodyGasAccountRepository gasAccountRepository;
+    /** 链资产单表仓储。 */
+    private final ChainAssetRepository chainAssetRepository;
+    /** 代币配置单表仓储。 */
+    private final TokenConfigRepository tokenConfigRepository;
     /**
      * 构造 {@code Evm7702CollectionRepository}，初始化该组件运行所需的状态和依赖。
      */
     public Evm7702CollectionRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+        this.configRepository = new Evm7702ConfigRepository(jdbc);
+        this.accountRepository = new Evm7702AccountRepository(jdbc);
+        this.chainAddressRepository = new ChainAddressRepository(jdbc);
+        this.chainProfileRepository = new ChainProfileRepository(jdbc);
+        this.batchRepository = new EvmCollectionBatchRepository(jdbc);
+        this.batchItemRepository = new EvmCollectionBatchItemRepository(jdbc);
+        this.batchAttemptRepository = new EvmCollectionBatchAttemptRepository(jdbc);
+        this.collectionRecordRepository = new CollectionRecordRepository(jdbc);
+        this.custodyAddressRepository = new CustodyAddressRepository(jdbc);
+        this.gasAccountRepository = new CustodyGasAccountRepository(jdbc);
+        this.chainAssetRepository = new ChainAssetRepository(jdbc);
+        this.tokenConfigRepository = new TokenConfigRepository(jdbc);
     }
 
     /**
@@ -41,36 +79,15 @@ public class Evm7702CollectionRepository {
      */
     public void createAccountProjection(UUID tenantId, UUID custodyAddressId, String chain,
                                         String network, String authorityAddress) {
-        jdbc.update("""
-                insert into evm_7702_account(
-                    id, tenant_id, custody_address_id, chain, network, authority_address)
-                values (?, ?, ?, ?, ?, ?)
-                on conflict (tenant_id, custody_address_id, chain) do nothing
-                """, UUID.randomUUID(), tenantId, custodyAddressId, chain, network, authorityAddress);
+        accountRepository.createProjection(tenantId, custodyAddressId, chain, network, authorityAddress);
     }
     /**
      * 获取或查询 {@code findRuntimeConfig} 对应的数据，供调用方读取当前状态。
      */
     public Optional<RuntimeConfig> findRuntimeConfig(String chain, String network, String status) {
-        return jdbc.query("""
-                        select c.id, c.chain, c.network, c.chain_id, c.version,
-                               c.delegate_address, c.delegate_code_hash,
-                               c.collector_address, c.collector_code_hash,
-                               c.payout_delegate_address, c.payout_delegate_code_hash,
-                               c.relayer_address, c.status, c.max_batch_items,
-                               c.max_batch_gas, c.block_gas_ratio, c.gas_limit_multiplier,
-                               c.signature_ttl_seconds, c.required_confirmations,
-                               c.native_collection_enabled, c.batch_withdrawal_enabled,
-                               c.withdrawal_max_wait_ms, c.withdrawal_max_batch_items,
-                               ca.id relayer_chain_address_id, ca.asset_symbol,
-                               ca.account_id, ca.user_id, ca.biz, ca.address_index,
-                               ca.address, ca.owner_address, ca.derivation_path,
-                               ca.wallet_role, ca.enabled
-                          from evm_7702_config c
-                          join chain_address ca on ca.id = c.relayer_chain_address_id
-                         where c.chain = ? and c.network = ? and c.status = ?
-                        """, (rs, rowNum) -> mapConfig(rs), chain, network, status)
-                .stream().findFirst();
+        return configRepository.find(chain, network, status, null).stream()
+                .map(this::mapConfig)
+                .findFirst();
     }
     /**
      * 校验 {@code requireActiveConfig} 对应的前置条件，不满足时抛出明确异常。
@@ -84,25 +101,9 @@ public class Evm7702CollectionRepository {
      * 校验 {@code requireRuntimeConfigVersion} 对应的前置条件，不满足时抛出明确异常。
      */
     public RuntimeConfig requireRuntimeConfigVersion(String chain, String network, int version) {
-        return jdbc.query("""
-                        select c.id, c.chain, c.network, c.chain_id, c.version,
-                               c.delegate_address, c.delegate_code_hash,
-                               c.collector_address, c.collector_code_hash,
-                               c.payout_delegate_address, c.payout_delegate_code_hash,
-                               c.relayer_address, c.status, c.max_batch_items,
-                               c.max_batch_gas, c.block_gas_ratio, c.gas_limit_multiplier,
-                               c.signature_ttl_seconds, c.required_confirmations,
-                               c.native_collection_enabled, c.batch_withdrawal_enabled,
-                               c.withdrawal_max_wait_ms, c.withdrawal_max_batch_items,
-                               ca.id relayer_chain_address_id, ca.asset_symbol,
-                               ca.account_id, ca.user_id, ca.biz, ca.address_index,
-                               ca.address, ca.owner_address, ca.derivation_path,
-                               ca.wallet_role, ca.enabled
-                          from evm_7702_config c
-                          join chain_address ca on ca.id = c.relayer_chain_address_id
-                         where c.chain = ? and c.network = ? and c.version = ?
-                        """, (rs, rowNum) -> mapConfig(rs), chain, network, version)
-                .stream().findFirst().orElseThrow(() -> new IllegalStateException(
+        return configRepository.find(chain, network, null, version).stream()
+                .map(this::mapConfig)
+                .findFirst().orElseThrow(() -> new IllegalStateException(
                         "EIP-7702 configuration version is missing for "
                                 + chain + "/" + network + "/" + version));
     }
@@ -110,73 +111,91 @@ public class Evm7702CollectionRepository {
      * 获取或查询 {@code listRuntimeTargets} 对应的数据，供调用方读取当前状态。
      */
     public List<RuntimeTarget> listRuntimeTargets() {
-        return jdbc.query("""
-                select p.chain, p.network,
-                       exists(select 1 from evm_7702_config active
-                               where active.chain = p.chain and active.network = p.network
-                                 and active.status = 'ACTIVE') active
-                  from chain_profile p
-                 where p.enabled = true and lower(p.family) = 'evm'
-                   and (
-                     exists(select 1 from evm_7702_config c
-                             where c.chain = p.chain and c.network = p.network
-                               and c.status in ('ACTIVE', 'PAUSED'))
-                     or exists(select 1 from evm_collection_batch b
-                                where b.chain = p.chain and b.network = p.network
-                                  and b.status in ('BROADCAST_UNKNOWN', 'SUBMITTED', 'CONFIRMING'))
-                   )
-                 order by p.chain, p.network
-                """, (rs, rowNum) -> new RuntimeTarget(
-                rs.getString("chain"), rs.getString("network"), rs.getBoolean("active")));
+        List<RuntimeTarget> targets = new ArrayList<>();
+        List<Map<String, Object>> configs = configRepository.listAll();
+        for (Map<String, Object> profile : chainProfileRepository.listAll()) {
+            if (!Boolean.TRUE.equals(profile.get("enabled"))
+                    || !"evm".equalsIgnoreCase(String.valueOf(profile.get("family")))) {
+                continue;
+            }
+            String chain = String.valueOf(profile.get("chain"));
+            String network = String.valueOf(profile.get("network"));
+            boolean active = configs.stream().anyMatch(config -> chain.equals(config.get("chain"))
+                    && network.equals(config.get("network")) && "ACTIVE".equals(config.get("status")));
+            boolean managed = configs.stream().anyMatch(config -> chain.equals(config.get("chain"))
+                    && network.equals(config.get("network"))
+                    && Set.of("ACTIVE", "PAUSED").contains(config.get("status")));
+            if (managed || batchRepository.existsPending(chain, network)) {
+                targets.add(new RuntimeTarget(chain, network, active));
+            }
+        }
+        return targets.stream().sorted(java.util.Comparator.comparing(RuntimeTarget::chain)
+                .thenComparing(RuntimeTarget::network)).toList();
+    }
+
+    /** 将 EIP-7702 配置单表字段与链地址单表字段组合为运行时配置。 */
+    private RuntimeConfig mapConfig(Map<String, Object> row) {
+        long addressId = ((Number) row.get("relayer_chain_address_id")).longValue();
+        ChainAddressRecord relayer = chainAddressRepository.findById(addressId)
+                .map(ChainAddressRepository::mapRow)
+                .orElseThrow(() -> new IllegalStateException("configured relayer chain address is missing"));
+        String configuredRelayer = (String) row.get("relayer_address");
+        if (configuredRelayer == null || !configuredRelayer.equalsIgnoreCase(relayer.getAddress())) {
+            throw new IllegalStateException("configured relayer address does not match chain_address key path");
+        }
+        if (!Boolean.TRUE.equals(relayer.getEnabled())) {
+            throw new IllegalStateException("configured EIP-7702 relayer chain_address is disabled");
+        }
+        return new RuntimeConfig((UUID) row.get("id"), (String) row.get("chain"), (String) row.get("network"),
+                ((BigDecimal) row.get("chain_id")).toBigIntegerExact(), intValue(row.get("version")),
+                (String) row.get("delegate_address"), (String) row.get("delegate_code_hash"),
+                (String) row.get("collector_address"), (String) row.get("collector_code_hash"),
+                (String) row.get("payout_delegate_address"), (String) row.get("payout_delegate_code_hash"),
+                configuredRelayer, (String) row.get("status"), intValue(row.get("max_batch_items")),
+                longValue(row.get("max_batch_gas")), (BigDecimal) row.get("block_gas_ratio"),
+                (BigDecimal) row.get("gas_limit_multiplier"), intValue(row.get("signature_ttl_seconds")),
+                intValue(row.get("required_confirmations")), Boolean.TRUE.equals(row.get("native_collection_enabled")),
+                Boolean.TRUE.equals(row.get("batch_withdrawal_enabled")), intValue(row.get("withdrawal_max_wait_ms")),
+                intValue(row.get("withdrawal_max_batch_items")), relayer);
+    }
+
+    /** 转换配置整数。 */
+    private static int intValue(Object value) {
+        return value == null ? 0 : ((Number) value).intValue();
+    }
+
+    /** 转换配置长整数。 */
+    private static long longValue(Object value) {
+        return value == null ? 0L : ((Number) value).longValue();
     }
     /**
      * 获取或查询 {@code listUnknownAttempts} 对应的数据，供调用方读取当前状态。
      */
     public List<UnknownAttempt> listUnknownAttempts(String chain, String network, int limit) {
-        return jdbc.query("""
-                select b.tenant_id, b.id batch_id, a.tx_hash,
-                       a.signed_tx_ciphertext, a.rebroadcast_count
-                  from evm_collection_batch b
-                  join evm_collection_batch_attempt a
-                    on a.tenant_id = b.tenant_id and a.batch_id = b.id
-                 where b.chain = ? and b.network = ?
-                   and b.status = 'BROADCAST_UNKNOWN' and a.status = 'UNKNOWN'
-                   and (a.last_rebroadcast_at is null
-                        or a.last_rebroadcast_at < now() - interval '30 seconds')
-                 order by coalesce(a.last_rebroadcast_at, a.created_at), b.id
-                 limit ?
-                """, (rs, rowNum) -> new UnknownAttempt(
-                rs.getObject("tenant_id", UUID.class), rs.getObject("batch_id", UUID.class),
-                rs.getString("tx_hash"), rs.getString("signed_tx_ciphertext"),
-                rs.getInt("rebroadcast_count")), chain, network, Math.min(Math.max(limit, 1), 100));
+        Set<String> unknownBatches = batchRepository.listBroadcastUnknown(chain, network).stream()
+                .map(row -> row.get("tenant_id") + ":" + row.get("id"))
+                .collect(java.util.stream.Collectors.toSet());
+        return batchAttemptRepository.listUnknown(limit).stream()
+                .filter(row -> unknownBatches.contains(row.get("tenant_id") + ":" + row.get("batch_id")))
+                .map(row -> new UnknownAttempt((UUID) row.get("tenant_id"), (UUID) row.get("batch_id"),
+                        (String) row.get("tx_hash"), (String) row.get("signed_tx_ciphertext"),
+                        ((Number) row.get("rebroadcast_count")).intValue()))
+                .limit(Math.min(Math.max(limit, 1), 100)).toList();
     }
     /**
      * 记录或保存 {@code recordRecoveryAttempt} 对应的数据，并遵守幂等和事务约束。
      */
     public void recordRecoveryAttempt(UnknownAttempt attempt) {
-        jdbc.update("""
-                update evm_collection_batch_attempt
-                   set rebroadcast_count = rebroadcast_count + 1,
-                       last_rebroadcast_at = now(), error_code = 'REBROADCASTING',
-                       error_message = 'resubmitting the persisted raw transaction'
-                 where tenant_id = ? and batch_id = ? and tx_hash = ? and status = 'UNKNOWN'
-                """, attempt.tenantId(), attempt.batchId(), attempt.txHash());
+        batchAttemptRepository.recordRecovery(attempt.tenantId(), attempt.batchId(), attempt.txHash());
     }
     /**
      * 写入或更新 {@code markRecoveryError} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     public void markRecoveryError(UnknownAttempt attempt, String errorCode, String errorMessage) {
-        jdbc.update("""
-                update evm_collection_batch_attempt
-                   set error_code = ?, error_message = ?
-                 where tenant_id = ? and batch_id = ? and tx_hash = ? and status = 'UNKNOWN'
-                """, errorCode, truncate(errorMessage, 1000), attempt.tenantId(),
-                attempt.batchId(), attempt.txHash());
-        jdbc.update("""
-                update evm_collection_batch
-                   set error_code = ?, error_message = ?, updated_at = now()
-                 where tenant_id = ? and id = ? and status = 'BROADCAST_UNKNOWN'
-                """, errorCode, truncate(errorMessage, 1000), attempt.tenantId(), attempt.batchId());
+        String message = truncate(errorMessage, 1000);
+        batchAttemptRepository.markRecoveryError(attempt.tenantId(), attempt.batchId(), attempt.txHash(),
+                errorCode, message);
+        batchRepository.markRecoveryError(attempt.tenantId(), attempt.batchId(), errorCode, message);
     }
 
     /**
@@ -185,94 +204,65 @@ public class Evm7702CollectionRepository {
     @Transactional(rollbackFor = Throwable.class)
     public Optional<Batch> claimNextBatch(String chain, String network) {
         RuntimeConfig config = requireActiveConfig(chain, network);
-        CandidateGroup group = jdbc.query("""
-                        select cr.tenant_id, cr.asset_symbol, cr.to_address,
-                               case when asset.native_asset
-                                   then '0x0000000000000000000000000000000000000000'
-                                   else tc.contract_address end contract_address,
-                               asset.decimals
-                          from collection_record cr
-                          join custody_address ca
-                            on ca.tenant_id = cr.tenant_id
-                           and ca.id = cr.custody_address_id
-                           and ca.status = 'ACTIVE'
-                          join evm_7702_account ea
-                            on ea.tenant_id = cr.tenant_id
-                           and ea.custody_address_id = cr.custody_address_id
-                           and ea.chain = cr.chain
-                           and ea.network = ?
-                          join custody_gas_account ga
-                            on ga.tenant_id = cr.tenant_id
-                           and ga.chain = cr.chain
-                           and ga.status = 'ACTIVE'
-                          join custody_address hot
-                            on hot.tenant_id = ga.tenant_id
-                           and hot.id = ga.custody_address_id
-                           and hot.status = 'ACTIVE'
-                          join chain_asset asset
-                            on asset.chain = cr.chain
-                           and asset.symbol = cr.asset_symbol
-                           and asset.active = true
-                          left join token_config tc
-                            on tc.chain = cr.chain
-                           and tc.network = ?
-                           and tc.symbol = cr.asset_symbol
-                           and tc.enabled = true
-                           and tc.collect_enabled = true
-                         where cr.chain = ?
-                           and cr.tenant_id is not null
-                           and cr.custody_address_id is not null
-                           and cr.status in ('CREATED', 'RETRYING')
-                           and lower(cr.to_address) = lower(hot.address)
-                           and (asset.native_asset = true or tc.id is not null)
-                           and (asset.native_asset = false or ?)
-                         order by cr.id
-                         limit 1
-                        """, (rs, rowNum) -> new CandidateGroup(
-                        rs.getObject("tenant_id", UUID.class),
-                        rs.getString("asset_symbol"),
-                        rs.getString("to_address"),
-                        rs.getString("contract_address"),
-                        rs.getInt("decimals")), network, network, chain,
-                config.nativeCollectionEnabled())
-                .stream().findFirst().orElse(null);
+        List<Map<String, Object>> assets = chainAssetRepository.listActiveByChain(chain);
+        List<Map<String, Object>> tokenConfigs = tokenConfigRepository.listCollectEnabled(chain, network);
+        CandidateGroup group = null;
+        for (Map<String, Object> record : collectionRecordRepository.listClaimable(chain, 500)) {
+            UUID tenantId = (UUID) record.get("tenant_id");
+            UUID custodyId = (UUID) record.get("custody_address_id");
+            String assetSymbol = String.valueOf(record.get("asset_symbol"));
+            Map<String, Object> asset = assets.stream()
+                    .filter(row -> assetSymbol.equalsIgnoreCase(String.valueOf(row.get("symbol"))))
+                    .findFirst().orElse(null);
+            if (asset == null) continue;
+            Map<String, Object> custody = custodyAddressRepository.findByTenantAndId(tenantId, custodyId)
+                    .orElse(null);
+            if (custody == null || !"ACTIVE".equals(custody.get("status"))) continue;
+            if (!accountRepository.exists(tenantId, custodyId, chain, network)) continue;
+            Map<String, Object> hot = findHotAddress(tenantId, chain, String.valueOf(record.get("to_address")));
+            if (hot == null) continue;
+            boolean nativeAsset = Boolean.TRUE.equals(asset.get("native_asset"));
+            Map<String, Object> token = tokenConfigs.stream()
+                    .filter(row -> assetSymbol.equalsIgnoreCase(String.valueOf(row.get("symbol"))))
+                    .findFirst().orElse(null);
+            if ((!nativeAsset && token == null) || (nativeAsset && !config.nativeCollectionEnabled())) continue;
+            group = new CandidateGroup(tenantId, assetSymbol, String.valueOf(record.get("to_address")),
+                    nativeAsset ? "0x0000000000000000000000000000000000000000"
+                            : String.valueOf(token.get("contract_address")),
+                    ((Number) asset.get("decimals")).intValue());
+            break;
+        }
         if (group == null) {
             return Optional.empty();
         }
 
-        List<ClaimedItem> items = jdbc.query("""
-                        select cr.id collection_record_id, cr.collection_no,
-                               cr.tenant_id, cr.custody_address_id, cr.from_address,
-                               cr.to_address, cr.amount,
-                               chain_address.id chain_address_id,
-                               chain_address.chain native_chain,
-                               chain_address.asset_symbol native_symbol,
-                               chain_address.account_id, chain_address.user_id,
-                               chain_address.biz, chain_address.address_index,
-                               chain_address.owner_address, chain_address.derivation_path,
-                               chain_address.wallet_role, chain_address.enabled
-                          from collection_record cr
-                          join custody_address ca
-                            on ca.tenant_id = cr.tenant_id
-                           and ca.id = cr.custody_address_id
-                          join evm_7702_account ea
-                            on ea.tenant_id = ca.tenant_id
-                           and ea.custody_address_id = ca.id
-                           and ea.chain = cr.chain
-                           and ea.network = ?
-                          join chain_address
-                            on chain_address.tenant_id = ca.tenant_id
-                           and chain_address.id = ca.chain_address_id
-                         where cr.tenant_id = ? and cr.chain = ?
-                           and cr.asset_symbol = ?
-                           and lower(cr.to_address) = lower(?)
-                           and cr.status in ('CREATED', 'RETRYING')
-                         order by cr.id
-                         limit ?
-                         for update of cr skip locked
-                        """, (rs, rowNum) -> mapClaimedItem(rs, group.decimals()),
-                network, group.tenantId(), chain, group.assetSymbol(),
-                group.hotWallet(), config.maxBatchItems());
+        List<ClaimedItem> items = new ArrayList<>();
+        for (Map<String, Object> record : collectionRecordRepository.listClaimable(chain, config.maxBatchItems())) {
+            if (!group.tenantId().equals(record.get("tenant_id"))
+                    || !group.assetSymbol().equalsIgnoreCase(String.valueOf(record.get("asset_symbol")))
+                    || !group.hotWallet().equalsIgnoreCase(String.valueOf(record.get("to_address")))) continue;
+            UUID custodyId = (UUID) record.get("custody_address_id");
+            if (!accountRepository.exists(group.tenantId(), custodyId, chain, network)) continue;
+            Map<String, Object> custody = custodyAddressRepository.findByTenantAndId(group.tenantId(), custodyId)
+                    .orElse(null);
+            if (custody == null || !"ACTIVE".equals(custody.get("status"))) continue;
+            Map<String, Object> address = chainAddressRepository.findByTenantAndId(group.tenantId(),
+                    ((Number) custody.get("chain_address_id")).longValue()).orElse(null);
+            if (address == null) continue;
+            BigDecimal amount = (BigDecimal) record.get("amount");
+            BigInteger atomic;
+            try {
+                atomic = amount.movePointRight(group.decimals()).toBigIntegerExact();
+            } catch (ArithmeticException e) {
+                throw new IllegalStateException("collection amount has more precision than token decimals", e);
+            }
+            if (atomic.signum() <= 0) throw new IllegalStateException("collection amount must be positive");
+            items.add(new ClaimedItem(((Number) record.get("id")).longValue(),
+                    (String) record.get("collection_no"), group.tenantId(), custodyId,
+                    (String) record.get("from_address"), (String) record.get("to_address"), amount, atomic,
+                    ChainAddressRepository.mapRow(address)));
+            if (items.size() >= config.maxBatchItems()) break;
+        }
         if (items.isEmpty()) {
             return Optional.empty();
         }
@@ -285,35 +275,18 @@ public class Evm7702CollectionRepository {
         UUID batchId = UUID.randomUUID();
         String batchHash = Numeric.toHexString(Hash.sha3(
                 (group.tenantId() + ":" + batchId).getBytes(StandardCharsets.UTF_8)));
-        jdbc.update("""
-                insert into evm_collection_batch(
-                    id, tenant_id, chain, network, asset_symbol, token_contract,
-                    token_decimals, hot_wallet, relayer_address, delegate_version,
-                    batch_hash, status, item_count)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'LOCKED', ?)
-                """, batchId, group.tenantId(), chain, network, group.assetSymbol(),
-                group.tokenContract(), group.decimals(), group.hotWallet(),
-                config.relayerAddress(), config.version(), batchHash, items.size());
+        batchRepository.insert(batchId, group.tenantId(), chain, network, group.assetSymbol(),
+                group.tokenContract(), group.decimals(), group.hotWallet(), config.relayerAddress(),
+                config.version(), batchHash, items.size());
         Instant signatureDeadline = Instant.now().plusSeconds(config.signatureTtlSeconds());
         for (int index = 0; index < items.size(); index++) {
             ClaimedItem item = items.get(index);
-            jdbc.update("""
-                    insert into evm_collection_batch_item(
-                        id, tenant_id, batch_id, item_index, collection_record_id,
-                        custody_address_id, authority_address, token_contract,
-                        recipient, requested_amount_atomic, operation_nonce,
-                        signature_deadline, call_gas_limit, status)
-                    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 180000, 'CREATED')
-                    """, UUID.randomUUID(), group.tenantId(), batchId, index,
-                    item.collectionRecordId(), item.custodyAddressId(), item.fromAddress(),
-                    group.tokenContract(), group.hotWallet(), item.amountAtomic(),
-                    Timestamp.from(signatureDeadline));
-            if (jdbc.update("""
-                    update collection_record
-                       set status = 'SIGNING', updated_at = now()
-                     where tenant_id = ? and id = ?
-                       and status in ('CREATED', 'RETRYING')
-                    """, group.tenantId(), item.collectionRecordId()) != 1) {
+            if (batchItemRepository.insert(UUID.randomUUID(), group.tenantId(), batchId, index,
+                    item.collectionRecordId(), item.custodyAddressId(), item.fromAddress(), group.tokenContract(),
+                    group.hotWallet(), item.amountAtomic(), Timestamp.from(signatureDeadline)) != 1) {
+                throw new IllegalStateException("collection batch item insert failed");
+            }
+            if (collectionRecordRepository.claimSigning(group.tenantId(), item.collectionRecordId()) != 1) {
                 throw new IllegalStateException("collection item claim lost");
             }
         }
@@ -334,13 +307,8 @@ public class Evm7702CollectionRepository {
         if (attempt.items().size() != batch.items().size()) {
             throw new IllegalArgumentException("prepared item count mismatch");
         }
-        if (jdbc.update("""
-                update evm_collection_batch
-                   set status = 'SIGNING', estimated_gas = ?, gas_limit = ?,
-                       max_fee_per_gas = ?, max_priority_fee_per_gas = ?, updated_at = now()
-                 where tenant_id = ? and id = ? and status = 'LOCKED'
-                """, attempt.estimatedGas(), attempt.gasLimit(), attempt.maxFeePerGas(),
-                attempt.maxPriorityFeePerGas(), batch.tenantId(), batch.id()) != 1) {
+        if (batchRepository.markSigning(batch.tenantId(), batch.id(), attempt.estimatedGas(), attempt.gasLimit(),
+                attempt.maxFeePerGas(), attempt.maxPriorityFeePerGas()) != 1) {
             throw new IllegalStateException("batch is not lock-owned for signing");
         }
         for (int index = 0; index < attempt.items().size(); index++) {
@@ -348,30 +316,15 @@ public class Evm7702CollectionRepository {
             if (item.itemIndex() != index) {
                 throw new IllegalArgumentException("prepared item indexes must be contiguous");
             }
-            if (jdbc.update("""
-                    update evm_collection_batch_item
-                       set authorization_included = ?, authorization_nonce = ?,
-                           operation_nonce = ?, signature_deadline = ?,
-                           call_gas_limit = ?, status = 'SIGNED', updated_at = now()
-                     where tenant_id = ? and batch_id = ? and item_index = ?
-                       and lower(authority_address) = lower(?) and status = 'CREATED'
-                    """, item.authorizationIncluded(), item.authorizationNonce(),
-                    item.operationNonce(), Timestamp.from(item.signatureDeadline()),
-                    item.callGasLimit(), batch.tenantId(), batch.id(), index,
-                    item.authorityAddress()) != 1) {
+            if (batchItemRepository.markSigned(batch.tenantId(), batch.id(), index, item.authorityAddress(),
+                    item.authorizationIncluded(), item.authorizationNonce(), item.operationNonce(),
+                    Timestamp.from(item.signatureDeadline()), item.callGasLimit()) != 1) {
                 throw new IllegalStateException("prepared item does not match claimed item");
             }
         }
-        jdbc.update("""
-                insert into evm_collection_batch_attempt(
-                    id, tenant_id, batch_id, attempt_no, relayer_nonce, tx_hash,
-                    max_fee_per_gas, max_priority_fee_per_gas, gas_limit,
-                    calldata_hash, signed_tx_ciphertext, encryption_key_version, status)
-                values (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, 'CREATED')
-                """, UUID.randomUUID(), batch.tenantId(), batch.id(), attempt.relayerNonce(),
-                attempt.txHash(), attempt.maxFeePerGas(), attempt.maxPriorityFeePerGas(),
-                attempt.gasLimit(), attempt.calldataHash(), attempt.signedTxCiphertext(),
-                attempt.encryptionKeyVersion());
+        batchAttemptRepository.insert(UUID.randomUUID(), batch.tenantId(), batch.id(), attempt.relayerNonce(),
+                attempt.txHash(), attempt.maxFeePerGas(), attempt.maxPriorityFeePerGas(), attempt.gasLimit(),
+                attempt.calldataHash(), attempt.signedTxCiphertext(), attempt.encryptionKeyVersion());
     }
 
     /**
@@ -379,103 +332,60 @@ public class Evm7702CollectionRepository {
      */
     @Transactional(rollbackFor = Throwable.class)
     public void markSubmitted(UUID tenantId, UUID batchId, String txHash) {
-        if (jdbc.update("""
-                update evm_collection_batch
-                   set status = 'SUBMITTED', canonical_tx_hash = ?,
-                       submitted_at = coalesce(submitted_at, now()), updated_at = now()
-                 where tenant_id = ? and id = ?
-                   and status in ('SIGNING', 'BROADCAST_UNKNOWN', 'SUBMITTED', 'CONFIRMING')
-                   and (canonical_tx_hash is null or lower(canonical_tx_hash) = lower(?))
-                """, txHash, tenantId, batchId, txHash) != 1) {
+        if (batchRepository.markSubmitted(tenantId, batchId, txHash) != 1) {
             throw new IllegalStateException("batch submission transition failed");
         }
-        jdbc.update("""
-                update evm_collection_batch_attempt
-                   set status = 'SUBMITTED', submitted_at = coalesce(submitted_at, now())
-                 where tenant_id = ? and batch_id = ? and tx_hash = ?
-                   and status in ('CREATED', 'UNKNOWN', 'SUBMITTED', 'PENDING')
-                """, tenantId, batchId, txHash);
-        jdbc.update("""
-                update evm_collection_batch_item set status = 'SUBMITTED', updated_at = now()
-                 where tenant_id = ? and batch_id = ? and status = 'SIGNED'
-                """, tenantId, batchId);
-        jdbc.update("""
-                update collection_record cr
-                   set status = 'SENT', tx_hash = ?, error_message = null, updated_at = now()
-                  from evm_collection_batch_item item
-                 where item.tenant_id = ? and item.batch_id = ?
-                   and cr.tenant_id = item.tenant_id and cr.id = item.collection_record_id
-                   and cr.status in ('SIGNING', 'SENT')
-                """, txHash, tenantId, batchId);
+        batchAttemptRepository.markSubmitted(tenantId, batchId, txHash);
+        batchItemRepository.markSubmitted(tenantId, batchId);
+        for (Long collectionId : batchItemRepository.listCollectionRecordIds(tenantId, batchId)) {
+            collectionRecordRepository.markSent(tenantId, collectionId, txHash);
+        }
     }
     /**
      * 写入或更新 {@code markBroadcastUnknown} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     public void markBroadcastUnknown(UUID tenantId, UUID batchId, String errorCode, String errorMessage) {
-        jdbc.update("""
-                update evm_collection_batch
-                   set status = 'BROADCAST_UNKNOWN', error_code = ?, error_message = ?, updated_at = now()
-                 where tenant_id = ? and id = ? and status = 'SIGNING'
-                """, errorCode, truncate(errorMessage, 1000), tenantId, batchId);
-        jdbc.update("""
-                update evm_collection_batch_attempt
-                   set status = 'UNKNOWN', error_code = ?, error_message = ?
-                 where tenant_id = ? and batch_id = ? and status = 'CREATED'
-                """, errorCode, truncate(errorMessage, 1000), tenantId, batchId);
+        String message = truncate(errorMessage, 1000);
+        batchRepository.markBroadcastUnknown(tenantId, batchId, errorCode, message);
+        batchAttemptRepository.markUnknown(tenantId, batchId, errorCode, message);
     }
     /**
      * 获取或查询 {@code findPendingBatch} 对应的数据，供调用方读取当前状态。
      */
     public Optional<PendingBatch> findPendingBatch(UUID tenantId, UUID batchId) {
-        return jdbc.query("""
-                select b.tenant_id, b.id, b.canonical_tx_hash, b.status,
-                       c.required_confirmations, c.collector_address
-                  from evm_collection_batch b
-                  join evm_7702_config c
-                    on c.chain = b.chain and c.network = b.network
-                   and c.version = b.delegate_version
-                 where b.tenant_id = ? and b.id = ?
-                """, (rs, rowNum) -> new PendingBatch(
-                rs.getObject("tenant_id", UUID.class), rs.getObject("id", UUID.class),
-                rs.getString("canonical_tx_hash"), rs.getString("status"),
-                rs.getInt("required_confirmations"), rs.getString("collector_address")), tenantId, batchId)
-                .stream().findFirst();
+        return batchRepository.find(tenantId, batchId).stream().map(row -> {
+            String chain = (String) row.get("chain");
+            String network = (String) row.get("network");
+            int version = intValue(row.get("delegate_version"));
+            Map<String, Object> config = configRepository.find(chain, network, null, version).stream()
+                    .findFirst().orElseThrow();
+            return new PendingBatch((UUID) row.get("tenant_id"), (UUID) row.get("id"),
+                    (String) row.get("canonical_tx_hash"), (String) row.get("status"),
+                    intValue(config.get("required_confirmations")), (String) config.get("collector_address"));
+        }).findFirst();
     }
     /**
      * 获取或查询 {@code listPendingBatches} 对应的数据，供调用方读取当前状态。
      */
     public List<PendingBatch> listPendingBatches(String chain, String network, int limit) {
-        return jdbc.query("""
-                select b.tenant_id, b.id, b.canonical_tx_hash, b.status,
-                       c.required_confirmations, c.collector_address
-                  from evm_collection_batch b
-                  join evm_7702_config c
-                    on c.chain = b.chain and c.network = b.network
-                   and c.version = b.delegate_version
-                 where b.chain = ? and b.network = ?
-                   and b.status in ('SUBMITTED', 'CONFIRMING')
-                 order by b.submitted_at, b.id
-                 limit ?
-                """, (rs, rowNum) -> new PendingBatch(
-                rs.getObject("tenant_id", UUID.class), rs.getObject("id", UUID.class),
-                rs.getString("canonical_tx_hash"), rs.getString("status"),
-                rs.getInt("required_confirmations"), rs.getString("collector_address")),
-                chain, network, Math.min(Math.max(limit, 1), 200));
+        return batchRepository.listPending(chain, network, limit).stream().map(row -> {
+            int version = intValue(row.get("delegate_version"));
+            Map<String, Object> config = configRepository.find(chain, network, null, version).stream()
+                    .findFirst().orElseThrow();
+            return new PendingBatch((UUID) row.get("tenant_id"), (UUID) row.get("id"),
+                    (String) row.get("canonical_tx_hash"), (String) row.get("status"),
+                    intValue(config.get("required_confirmations")), (String) config.get("collector_address"));
+        }).toList();
     }
     /**
      * 获取或查询 {@code listBatchItemIdentities} 对应的数据，供调用方读取当前状态。
      */
     public List<BatchItemIdentity> listBatchItemIdentities(UUID tenantId, UUID batchId) {
-        return jdbc.query("""
-                select item_index, authority_address, token_contract, recipient,
-                       requested_amount_atomic
-                  from evm_collection_batch_item
-                 where tenant_id = ? and batch_id = ?
-                 order by item_index
-                """, (rs, rowNum) -> new BatchItemIdentity(
-                rs.getInt("item_index"), rs.getString("authority_address"),
-                rs.getString("token_contract"), rs.getString("recipient"),
-                rs.getBigDecimal("requested_amount_atomic").toBigIntegerExact()), tenantId, batchId);
+        return batchItemRepository.listIdentities(tenantId, batchId).stream()
+                .map(row -> new BatchItemIdentity(((Number) row.get("item_index")).intValue(),
+                        (String) row.get("authority_address"), (String) row.get("token_contract"),
+                        (String) row.get("recipient"), ((BigDecimal) row.get("requested_amount_atomic")).toBigIntegerExact()))
+                .toList();
     }
 
     /**
@@ -505,76 +415,36 @@ public class Evm7702CollectionRepository {
             }
             String itemStatus = result.success() ? "CONFIRMED" : "RETRYABLE";
             if (!result.success()) failures++;
-            if (jdbc.update("""
-                    update evm_collection_batch_item
-                       set actual_received_atomic = ?, status = ?, log_index = ?,
-                           error_hash = ?, updated_at = now()
-                     where tenant_id = ? and batch_id = ? and item_index = ?
-                       and status = 'SUBMITTED'
-                    """, result.actualReceived(), itemStatus, result.logIndex(),
-                    result.success() ? null : result.errorHash(), tenantId, batchId, index) != 1) {
+            if (batchItemRepository.complete(tenantId, batchId, index, result.actualReceived(), itemStatus,
+                    (long) result.logIndex(), result.success() ? null : result.errorHash()) != 1) {
                 throw new IllegalStateException("batch item completion transition failed");
             }
             String collectionStatus = result.success() ? "CONFIRMED" : "RETRYING";
-            jdbc.update("""
-                    update collection_record cr
-                       set status = ?, tx_hash = ?, error_message = ?, updated_at = now()
-                      from evm_collection_batch_item item
-                     where item.tenant_id = ? and item.batch_id = ? and item.item_index = ?
-                       and cr.id = item.collection_record_id and cr.tenant_id = item.tenant_id
-                    """, collectionStatus, txHash,
-                    result.success() ? null : "EIP-7702 item execution failed: " + result.errorHash(),
-                    tenantId, batchId, index);
-            if (jdbc.update("""
-                    update evm_7702_account account
-                       set delegation_status = 'ACTIVE',
-                           activation_tx_hash = case when batch.authorization_included
-                               then coalesce(activation_tx_hash, ?) else activation_tx_hash end,
-                           delegate_address = batch.delegate_address,
-                           delegate_version = batch.delegate_version,
-                           observed_operation_nonce = batch.operation_nonce + case when ? then 1 else 0 end,
-                           updated_at = now()
-                      from (
-                        select i.custody_address_id, i.authorization_included,
-                               i.operation_nonce, b.delegate_version,
-                               c.delegate_address
-                          from evm_collection_batch_item i
-                          join evm_collection_batch b
-                            on b.tenant_id = i.tenant_id and b.id = i.batch_id
-                          join evm_7702_config c
-                            on c.chain = b.chain and c.network = b.network
-                           and c.version = b.delegate_version
-                         where i.tenant_id = ? and i.batch_id = ? and i.item_index = ?
-                      ) batch
-                     where account.tenant_id = ?
-                       and account.custody_address_id = batch.custody_address_id
-                    """, txHash, result.success(), tenantId, batchId, index, tenantId) != 1) {
+            Map<String, Object> itemRow = batchItemRepository.findForCompletion(tenantId, batchId, index)
+                    .stream().findFirst().orElseThrow();
+            long collectionId = ((Number) itemRow.get("collection_record_id")).longValue();
+            collectionRecordRepository.updateExecution(tenantId, collectionId, collectionStatus, txHash,
+                    result.success() ? null : "EIP-7702 item execution failed: " + result.errorHash());
+            Map<String, Object> batchRow = batchRepository.find(tenantId, batchId).stream()
+                    .findFirst().orElseThrow();
+            int version = intValue(batchRow.get("delegate_version"));
+            Map<String, Object> configRow = configRepository.find((String) batchRow.get("chain"),
+                    (String) batchRow.get("network"), null, version).stream().findFirst().orElseThrow();
+            if (accountRepository.markCollectionCompleted(tenantId, (UUID) itemRow.get("custody_address_id"),
+                    Boolean.TRUE.equals(itemRow.get("authorization_included")), txHash,
+                    (String) configRow.get("delegate_address"), version,
+                    longValue(itemRow.get("operation_nonce"))) != 1) {
                 throw new IllegalStateException("EIP-7702 account projection completion failed");
             }
         }
         BigInteger totalFee = l2Fee.add(l1Fee).add(operatorFee);
         String batchStatus = failures == 0 ? "CONFIRMED"
                 : failures == results.size() ? "FAILED" : "PARTIAL_FAILED";
-        if (jdbc.update("""
-                update evm_collection_batch
-                   set status = ?, actual_gas_used = ?, effective_gas_price = ?,
-                       l2_fee_atomic = ?, l1_fee_atomic = ?, operator_fee_atomic = ?,
-                       total_fee_atomic = ?, actual_fee = ?,
-                       confirmed_block_number = ?, confirmed_block_hash = ?,
-                       confirmed_at = now(), updated_at = now()
-                 where tenant_id = ? and id = ? and canonical_tx_hash = ?
-                   and status in ('SUBMITTED', 'CONFIRMING')
-                """, batchStatus, gasUsed, effectiveGasPrice,
-                l2Fee, l1Fee, operatorFee, totalFee, actualFee,
-                blockNumber, blockHash, tenantId, batchId, txHash) != 1) {
+        if (batchRepository.complete(tenantId, batchId, txHash, batchStatus, gasUsed, effectiveGasPrice,
+                l2Fee, l1Fee, operatorFee, totalFee, actualFee, blockNumber, blockHash) != 1) {
             throw new IllegalStateException("batch completion transition failed");
         }
-        jdbc.update("""
-                update evm_collection_batch_attempt
-                   set status = 'CONFIRMED', observed_at = now()
-                 where tenant_id = ? and batch_id = ? and tx_hash = ?
-                   and status in ('SUBMITTED', 'PENDING')
-                """, tenantId, batchId, txHash);
+        batchAttemptRepository.markConfirmed(tenantId, batchId, txHash);
     }
 
     /**
@@ -582,44 +452,39 @@ public class Evm7702CollectionRepository {
      */
     @Transactional(rollbackFor = Throwable.class)
     public void releaseUnbroadcastBatch(Batch batch, String errorCode, String errorMessage) {
-        int attempts = Optional.ofNullable(jdbc.queryForObject("""
-                select count(*) from evm_collection_batch_attempt
-                 where tenant_id = ? and batch_id = ?
-                """, Integer.class, batch.tenantId(), batch.id())).orElse(0);
+        int attempts = batchAttemptRepository.countByBatch(batch.tenantId(), batch.id());
         if (attempts != 0) {
             throw new IllegalStateException("signed/outbox batch cannot be released as unbroadcast");
         }
-        if (jdbc.update("""
-                update evm_collection_batch
-                   set status = 'FAILED', error_code = ?, error_message = ?, updated_at = now()
-                 where tenant_id = ? and id = ? and status in ('LOCKED', 'SIGNING')
-                """, errorCode, truncate(errorMessage, 1000), batch.tenantId(), batch.id()) != 1) {
+        String message = truncate(errorMessage, 1000);
+        if (batchRepository.markFailedIfUnbroadcast(batch.tenantId(), batch.id(), errorCode, message) != 1) {
             throw new IllegalStateException("unbroadcast batch failure transition failed");
         }
-        jdbc.update("""
-                update evm_collection_batch_item item
-                   set status = case when (
-                         select count(*)
-                           from evm_collection_batch_item history
-                           join evm_collection_batch failed_batch
-                             on failed_batch.tenant_id = history.tenant_id
-                            and failed_batch.id = history.batch_id
-                          where history.tenant_id = item.tenant_id
-                            and history.collection_record_id = item.collection_record_id
-                            and failed_batch.status = 'FAILED'
-                       ) >= 3 then 'FAILED' else 'RETRYABLE' end,
-                       error_code = ?, updated_at = now()
-                 where item.tenant_id = ? and item.batch_id = ? and item.status = 'CREATED'
-                """, errorCode, batch.tenantId(), batch.id());
-        jdbc.update("""
-                update collection_record cr
-                   set status = case when item.status = 'FAILED' then 'FAILED' else 'RETRYING' end,
-                       error_message = ?, updated_at = now()
-                  from evm_collection_batch_item item
-                 where item.tenant_id = ? and item.batch_id = ?
-                   and cr.tenant_id = item.tenant_id and cr.id = item.collection_record_id
-                   and cr.status = 'SIGNING'
-                """, truncate(errorMessage, 1000), batch.tenantId(), batch.id());
+        for (Map<String, Object> item : batchItemRepository.listForRelease(batch.tenantId(), batch.id())) {
+            long collectionId = ((Number) item.get("collection_record_id")).longValue();
+            String status = batchItemRepository.countFailedHistory(batch.tenantId(), collectionId) >= 3
+                    ? "FAILED" : "RETRYABLE";
+            if (batchItemRepository.markReleased(batch.tenantId(), batch.id(),
+                    ((Number) item.get("item_index")).intValue(), status, errorCode) != 1) {
+                throw new IllegalStateException("unbroadcast batch item transition failed");
+            }
+            collectionRecordRepository.updateExecution(batch.tenantId(), collectionId,
+                    "FAILED".equals(status) ? "FAILED" : "RETRYING", null, message);
+        }
+    }
+
+    /** 查询指定租户链上的启用 Gas 热地址。 */
+    private Map<String, Object> findHotAddress(UUID tenantId, String chain, String address) {
+        for (Map<String, Object> gas : gasAccountRepository.listActiveByTenantAndChain(tenantId, chain)) {
+            UUID custodyId = (UUID) gas.get("custody_address_id");
+            Map<String, Object> hot = custodyAddressRepository.findByTenantAndId(tenantId, custodyId)
+                    .orElse(null);
+            if (hot != null && "ACTIVE".equals(hot.get("status"))
+                    && address.equalsIgnoreCase(String.valueOf(hot.get("address")))) {
+                return hot;
+            }
+        }
+        return null;
     }
     /**
      * 执行 {@code mapConfig} 对应的辅助逻辑，完成数据处理并维护状态边界。

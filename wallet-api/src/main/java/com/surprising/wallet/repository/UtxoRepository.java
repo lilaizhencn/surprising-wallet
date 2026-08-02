@@ -123,6 +123,15 @@ public class UtxoRepository {
                         """, confirmations, Timestamp.from(Instant.now()), chain, txHash, vout);
     }
 
+    /** 将指定区块中的未花费 UTXO 标记为孤儿。 */
+    public int markOrphaned(String chain, long blockHeight, String replacementHash) {
+        return jdbc.update("""
+                update utxo_record
+                   set state = 'ORPHANED', confirmations = 0, credited = false, updated_at = ?
+                 where chain = ? and block_height = ? and lower(block_hash) <> lower(?) and state <> 'SPENT'
+                """, Timestamp.from(Instant.now()), chain, blockHeight, replacementHash);
+    }
+
     /**
      * 获取或查询 {@code listSpendable} 对应的数据，供调用方读取当前状态。
      */

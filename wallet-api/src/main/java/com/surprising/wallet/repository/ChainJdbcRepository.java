@@ -32,7 +32,7 @@ import com.surprising.wallet.observer.DepositReorgObserver;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -68,7 +68,7 @@ import java.util.stream.Collectors;
  * @see DepositCreditObserver
  * @see DepositReorgObserver
  */
-@Repository
+@Component
 public class ChainJdbcRepository {
     /**
      * 保存 {@code jdbcTemplate}，用于访问当前业务所依赖的仓储、客户端或服务。
@@ -90,6 +90,60 @@ public class ChainJdbcRepository {
     private final WalletSystemConfigRepository walletSystemConfigRepository;
     /** chain_rpc_node 单表仓储。 */
     private final ChainRpcNodeRepository chainRpcNodeRepository;
+    /** 各链交易表的单表仓储。 */
+    private AccountSequenceRepository accountSequenceRepository;
+    /** EVM nonce 单表仓储。 */
+    private EvmNonceRepository evmNonceRepository;
+    /** EVM 交易单表仓储。 */
+    private EvmTransactionRepository evmTransactionRepository;
+    /** TRON 交易单表仓储。 */
+    private TronTransactionRepository tronTransactionRepository;
+    /** XRP 交易单表仓储。 */
+    private XrpTransactionRepository xrpTransactionRepository;
+    /** Solana 交易单表仓储。 */
+    private SolanaTransactionRepository solanaTransactionRepository;
+    /** TON 交易单表仓储。 */
+    private TonTransactionRepository tonTransactionRepository;
+    /** Aptos 交易单表仓储。 */
+    private AptosTransactionRepository aptosTransactionRepository;
+    /** Sui 交易单表仓储。 */
+    private SuiTransactionRepository suiTransactionRepository;
+    /** Monero 交易单表仓储。 */
+    private MoneroTransactionRepository moneroTransactionRepository;
+    /** NEAR 交易单表仓储。 */
+    private NearTransactionRepository nearTransactionRepository;
+    /** 账本余额单表仓储。 */
+    private LedgerBalanceRepository ledgerBalanceRepository;
+    /** 充值记录单表仓储。 */
+    private DepositRecordRepository depositRecordRepository;
+    /** 扫描区块和高度单表仓储。 */
+    private ChainScanBlockRepository chainScanBlockRepository;
+    /** 扫描高度单表仓储。 */
+    private ChainScanHeightRepository chainScanHeightRepository;
+    /** 代币转账单表仓储。 */
+    private EvmTokenTransferRepository evmTokenTransferRepository;
+    /** TRON 代币转账单表仓储。 */
+    private TronTokenTransferRepository tronTokenTransferRepository;
+    /** 签名交易单表仓储。 */
+    private ChainSigningTransactionRepository chainSigningTransactionRepository;
+    /** 归集记录单表仓储。 */
+    private CollectionRecordRepository collectionRecordRepository;
+    /** 提现订单单表仓储。 */
+    private WithdrawalOrderRepository withdrawalOrderRepository;
+    /** 重组赤字单表仓储。 */
+    private CustodyReorgDeficitRepository custodyReorgDeficitRepository;
+    /** EIP-7702 配置单表仓储。 */
+    private Evm7702ConfigRepository evm7702ConfigRepository;
+    /** 托管 Gas 账户单表仓储。 */
+    private CustodyGasAccountRepository custodyGasAccountRepository;
+    /** 托管地址单表仓储。 */
+    private CustodyAddressRepository custodyAddressRepository;
+    /** EVM 批量提现项与批次单表仓储。 */
+    private EvmWithdrawalBatchItemRepository evmWithdrawalBatchItemRepository;
+    private EvmWithdrawalBatchRepository evmWithdrawalBatchRepository;
+    /** EVM 批量归集项与批次单表仓储。 */
+    private EvmCollectionBatchItemRepository evmCollectionBatchItemRepository;
+    private EvmCollectionBatchRepository evmCollectionBatchRepository;
 
     /** 充值入账观察者列表（通过 Spring ObjectProvider 注入） */
     private final List<DepositCreditObserver> depositCreditObservers;
@@ -110,6 +164,7 @@ public class ChainJdbcRepository {
         this.tokenConfigRepository = new TokenConfigRepository(jdbcTemplate);
         this.walletSystemConfigRepository = new WalletSystemConfigRepository(jdbcTemplate);
         this.chainRpcNodeRepository = new ChainRpcNodeRepository(jdbcTemplate);
+        initializeTableRepositories(jdbcTemplate);
         this.depositCreditObservers = List.of();
         this.depositReorgObservers = List.of();
     }
@@ -130,6 +185,7 @@ public class ChainJdbcRepository {
         this.tokenConfigRepository = new TokenConfigRepository(jdbcTemplate);
         this.walletSystemConfigRepository = new WalletSystemConfigRepository(jdbcTemplate);
         this.chainRpcNodeRepository = new ChainRpcNodeRepository(jdbcTemplate);
+        initializeTableRepositories(jdbcTemplate);
         this.depositCreditObservers = depositCreditObservers.orderedStream().toList();
         this.depositReorgObservers = List.of();
     }
@@ -164,166 +220,95 @@ public class ChainJdbcRepository {
         this.tokenConfigRepository = new TokenConfigRepository(jdbcTemplate);
         this.walletSystemConfigRepository = new WalletSystemConfigRepository(jdbcTemplate);
         this.chainRpcNodeRepository = new ChainRpcNodeRepository(jdbcTemplate);
+        initializeTableRepositories(jdbcTemplate);
         this.depositCreditObservers = depositCreditObservers.orderedStream().toList();
         this.depositReorgObservers = depositReorgObservers.orderedStream().toList();
+    }
+
+    /** 初始化链领域各单表仓储。 */
+    private void initializeTableRepositories(JdbcTemplate jdbcTemplate) {
+        this.accountSequenceRepository = new AccountSequenceRepository(jdbcTemplate);
+        this.evmNonceRepository = new EvmNonceRepository(jdbcTemplate);
+        this.evmTransactionRepository = new EvmTransactionRepository(jdbcTemplate);
+        this.tronTransactionRepository = new TronTransactionRepository(jdbcTemplate);
+        this.xrpTransactionRepository = new XrpTransactionRepository(jdbcTemplate);
+        this.solanaTransactionRepository = new SolanaTransactionRepository(jdbcTemplate);
+        this.tonTransactionRepository = new TonTransactionRepository(jdbcTemplate);
+        this.aptosTransactionRepository = new AptosTransactionRepository(jdbcTemplate);
+        this.suiTransactionRepository = new SuiTransactionRepository(jdbcTemplate);
+        this.moneroTransactionRepository = new MoneroTransactionRepository(jdbcTemplate);
+        this.nearTransactionRepository = new NearTransactionRepository(jdbcTemplate);
+        this.ledgerBalanceRepository = new LedgerBalanceRepository(jdbcTemplate);
+        this.depositRecordRepository = new DepositRecordRepository(jdbcTemplate);
+        this.chainScanBlockRepository = new ChainScanBlockRepository(jdbcTemplate);
+        this.chainScanHeightRepository = new ChainScanHeightRepository(jdbcTemplate);
+        this.evmTokenTransferRepository = new EvmTokenTransferRepository(jdbcTemplate);
+        this.tronTokenTransferRepository = new TronTokenTransferRepository(jdbcTemplate);
+        this.chainSigningTransactionRepository = new ChainSigningTransactionRepository(jdbcTemplate);
+        this.collectionRecordRepository = new CollectionRecordRepository(jdbcTemplate);
+        this.withdrawalOrderRepository = new WithdrawalOrderRepository(jdbcTemplate);
+        this.custodyReorgDeficitRepository = new CustodyReorgDeficitRepository(jdbcTemplate);
+        this.evm7702ConfigRepository = new Evm7702ConfigRepository(jdbcTemplate);
+        this.custodyGasAccountRepository = new CustodyGasAccountRepository(jdbcTemplate);
+        this.custodyAddressRepository = new CustodyAddressRepository(jdbcTemplate);
+        this.evmWithdrawalBatchItemRepository = new EvmWithdrawalBatchItemRepository(jdbcTemplate);
+        this.evmWithdrawalBatchRepository = new EvmWithdrawalBatchRepository(jdbcTemplate);
+        this.evmCollectionBatchItemRepository = new EvmCollectionBatchItemRepository(jdbcTemplate);
+        this.evmCollectionBatchRepository = new EvmCollectionBatchRepository(jdbcTemplate);
     }
     /**
      * 写入或更新 {@code upsertChainAsset} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     public int upsertChainAsset(ChainAsset asset) {
-        return jdbcTemplate.update("""
-                insert into chain_asset(chain, symbol, asset_kind, contract_address, decimals, native_asset, active,
-                                        min_transfer, min_withdraw, created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict (chain, symbol) do update set
-                    asset_kind = excluded.asset_kind,
-                    contract_address = excluded.contract_address,
-                    decimals = excluded.decimals,
-                    native_asset = excluded.native_asset,
-                    active = excluded.active,
-                    min_transfer = excluded.min_transfer,
-                    min_withdraw = excluded.min_withdraw,
-                    updated_at = excluded.updated_at
-                """,
-                asset.getChain(), asset.getSymbol(), asset.getAssetKind(), asset.getContractAddress(),
-                asset.getDecimals(), asset.getNativeAsset(), asset.getActive(), asset.getMinTransfer(),
-                asset.getMinWithdraw(), toTs(nowOr(asset.getCreatedAt())), toTs(nowOr(asset.getUpdatedAt())));
+        return chainAssetRepository.upsert(asset);
     }
     /**
      * 获取或查询 {@code findBitcoinLikeProfile} 对应的数据，供调用方读取当前状态。
      */
     public Optional<BitcoinLikeChainProfile> findBitcoinLikeProfile(String chain, String network) {
-        List<BitcoinLikeChainProfile> results = jdbcTemplate.query("""
-                        select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
-                               rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size, scan_enabled, withdraw_enabled,
-                               collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
-                        from chain_profile
-                        where chain = ? and network = ? and enabled = true
-                        """,
-                (rs, rowNum) -> mapBitcoinLikeProfile(rs),
-                chain, network);
-        return results.stream().findFirst();
+        return chainProfileRepository.findBitcoinLike(chain, network);
     }
     /**
      * 获取或查询 {@code findAccountChainProfile} 对应的数据，供调用方读取当前状态。
      */
     public Optional<AccountChainProfile> findAccountChainProfile(String chain, String network) {
-        List<AccountChainProfile> results = jdbcTemplate.query("""
-                        select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
-                               rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size, scan_enabled, withdraw_enabled,
-                               collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
-                        from chain_profile
-                        where chain = ? and network = ? and enabled = true
-                        """,
-                (rs, rowNum) -> mapAccountProfile(rs),
-                chain, network);
-        return results.stream().findFirst();
+        return chainProfileRepository.findAccount(chain, network);
     }
     /**
      * 获取或查询 {@code findProfileByRuntimeCurrencyId} 对应的数据，供调用方读取当前状态。
      */
     public Optional<AccountChainProfile> findProfileByRuntimeCurrencyId(int runtimeCurrencyId) {
-        List<AccountChainProfile> results = jdbcTemplate.query("""
-                        select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
-                               rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size, scan_enabled, withdraw_enabled,
-                               collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
-                        from chain_profile
-                        where runtime_currency_id = ? and enabled = true
-                        order by case network
-                            when 'regtest' then 0
-                            when 'testnet' then 1
-                            when 'testnet3' then 1
-                            when 'devnet' then 1
-                            else 2
-                        end
-                        limit 1
-                        """,
-                (rs, rowNum) -> mapAccountProfile(rs),
-                runtimeCurrencyId);
-        return results.stream().findFirst();
+        return chainProfileRepository.findAccountByRuntimeCurrency(runtimeCurrencyId);
     }
     /**
      * 获取或查询 {@code findProfileByChain} 对应的数据，供调用方读取当前状态。
      */
     public Optional<AccountChainProfile> findProfileByChain(String chain) {
-        List<AccountChainProfile> results = jdbcTemplate.query("""
-                        select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
-                               rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-                               default_fee_rate, dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size, scan_enabled, withdraw_enabled,
-                               collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
-                        from chain_profile
-                        where upper(chain) = upper(?) and enabled = true
-                        order by case network
-                            when 'regtest' then 0
-                            when 'testnet' then 1
-                            when 'testnet3' then 1
-                            when 'devnet' then 1
-                            else 2
-                        end
-                        limit 1
-                        """,
-                (rs, rowNum) -> mapAccountProfile(rs),
-                chain);
-        return results.stream().findFirst();
+        return chainProfileRepository.findAccountByChain(chain);
     }
     /**
      * 获取或查询 {@code findChainByRuntimeCurrencyId} 对应的数据，供调用方读取当前状态。
      */
     public Optional<String> findChainByRuntimeCurrencyId(int runtimeCurrencyId) {
-        List<String> results = jdbcTemplate.queryForList("""
-                        select distinct chain
-                        from chain_profile
-                        where runtime_currency_id = ? and enabled = true
-                        order by chain
-                        limit 1
-                        """, String.class, runtimeCurrencyId);
-        return results.stream().findFirst();
+        return chainProfileRepository.findChainByRuntimeCurrency(runtimeCurrencyId);
     }
     /**
      * 获取或查询 {@code findNetworkByRuntimeCurrencyId} 对应的数据，供调用方读取当前状态。
      */
     public Optional<String> findNetworkByRuntimeCurrencyId(int runtimeCurrencyId) {
-        List<String> results = jdbcTemplate.queryForList("""
-                        select distinct network
-                        from chain_profile
-                        where runtime_currency_id = ? and enabled = true
-                        order by network
-                        limit 1
-                        """, String.class, runtimeCurrencyId);
-        return results.stream().findFirst();
+        return chainProfileRepository.findNetworkByRuntimeCurrency(runtimeCurrencyId);
     }
     /**
      * 判断 {@code isRuntimeCurrencyFamily} 对应的条件是否成立，并返回明确的布尔结果。
      */
     public boolean isRuntimeCurrencyFamily(int runtimeCurrencyId, String family) {
-        Boolean exists = jdbcTemplate.queryForObject("""
-                        select exists(
-                            select 1 from chain_profile
-                            where runtime_currency_id = ?
-                              and lower(family) = lower(?)
-                              and enabled = true
-                        )
-                        """, Boolean.class, runtimeCurrencyId, family);
-        return Boolean.TRUE.equals(exists);
+        return chainProfileRepository.isRuntimeCurrencyFamily(runtimeCurrencyId, family);
     }
     /**
      * 执行 {@code reserveNonce} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     public int reserveNonce(EvmNonceRecord nonceRecord) {
-        return jdbcTemplate.update("""
-                insert into evm_nonce(chain, address, chain_nonce, reserved_nonce, status, created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?)
-                on conflict (chain, address) do update set
-                    chain_nonce = greatest(evm_nonce.chain_nonce, excluded.chain_nonce),
-                    reserved_nonce = excluded.reserved_nonce,
-                    status = excluded.status,
-                    updated_at = excluded.updated_at
-                """,
-                nonceRecord.getChain(), nonceRecord.getAddress(), nonceRecord.getChainNonce(),
-                nonceRecord.getReservedNonce(), nonceRecord.getStatus(), toTs(now()), toTs(now()));
+        return evmNonceRepository.upsert(nonceRecord);
     }
 
     /**
@@ -342,125 +327,37 @@ public class ChainJdbcRepository {
         if (chainNonce == null || chainNonce.signum() < 0 || chainNonce.bitLength() > 256) {
             throw new IllegalArgumentException("EVM nonce must be a valid uint256");
         }
-        jdbcTemplate.update("""
-                        insert into evm_nonce(chain, address, chain_nonce, reserved_nonce, status, created_at, updated_at)
-                        values (?, ?, ?, ?, 'ACTIVE', ?, ?)
-                        on conflict (chain, address) do nothing
-                        """,
-                chain, address, chainNonce, chainNonce, toTs(now()), toTs(now()));
-        BigDecimal nextValue = jdbcTemplate.queryForObject("""
-                        select reserved_nonce from evm_nonce
-                        where chain = ? and address = ?
-                        for update
-                        """, BigDecimal.class, chain, address);
-        BigInteger next = nextValue == null ? chainNonce : nextValue.toBigIntegerExact();
-        BigInteger reserved = chainNonce.max(next);
-        jdbcTemplate.update("""
-                        update evm_nonce
-                        set chain_nonce = greatest(chain_nonce, ?),
-                            reserved_nonce = ?,
-                            status = 'ACTIVE',
-                            updated_at = ?
-                        where chain = ? and address = ?
-                        """,
-                chainNonce, reserved.add(BigInteger.ONE), toTs(now()), chain, address);
-        return reserved;
+        return evmNonceRepository.reserve(chain, address, chainNonce);
     }
     /**
      * 记录或保存 {@code recordEvmTransaction} 对应的数据，并遵守幂等和事务约束。
      */
     public int recordEvmTransaction(EvmTransactionRecord tx) {
-        return jdbcTemplate.update("""
-                insert into evm_tx(chain, tx_hash, from_address, to_address, asset_symbol, contract_address,
-                                   amount, fee, nonce, block_height, confirmations, status, raw_payload,
-                                   created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict (chain, tx_hash) do update set
-                    fee = excluded.fee,
-                    block_height = coalesce(excluded.block_height, evm_tx.block_height),
-                    confirmations = excluded.confirmations,
-                    status = excluded.status,
-                    raw_payload = coalesce(excluded.raw_payload, evm_tx.raw_payload),
-                    updated_at = excluded.updated_at
-                """,
-                tx.getChain(), tx.getTxHash(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),
-                tx.getContractAddress(), tx.getAmount(), tx.getFee(), tx.getNonce(), tx.getBlockHeight(),
-                tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
+        return evmTransactionRepository.upsert(tx);
     }
     /**
      * 记录或保存 {@code recordTronTransaction} 对应的数据，并遵守幂等和事务约束。
      */
     public int recordTronTransaction(TronTransactionRecord tx) {
-        return jdbcTemplate.update("""
-                insert into tron_tx(chain, tx_hash, from_address, to_address, asset_symbol, contract_address,
-                                    amount, fee, block_height, confirmations, status, raw_payload,
-                                    created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict (chain, tx_hash) do update set
-                    fee = excluded.fee,
-                    block_height = coalesce(excluded.block_height, tron_tx.block_height),
-                    confirmations = excluded.confirmations,
-                    status = excluded.status,
-                    raw_payload = coalesce(excluded.raw_payload, tron_tx.raw_payload),
-                    updated_at = excluded.updated_at
-                """,
-                tx.getChain(), tx.getTxHash(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),
-                tx.getContractAddress(), tx.getAmount(), tx.getFee(), tx.getBlockHeight(), tx.getConfirmations(),
-                tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
+        return tronTransactionRepository.upsert(tx);
     }
     /**
      * 记录或保存 {@code recordXrpTransaction} 对应的数据，并遵守幂等和事务约束。
      */
     public int recordXrpTransaction(XrpTransactionRecord tx) {
-        return jdbcTemplate.update("""
-                        insert into xrp_transaction(
-                            chain, tx_hash, from_address, to_address, asset_symbol, issuer_address, currency_code,
-                            amount, fee_drops, ledger_index, sequence_number, confirmations, status, raw_payload,
-                            created_at, updated_at
-                        )
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        on conflict (chain, tx_hash) do update set
-                            fee_drops = coalesce(excluded.fee_drops, xrp_transaction.fee_drops),
-                            ledger_index = coalesce(excluded.ledger_index, xrp_transaction.ledger_index),
-                            sequence_number = coalesce(excluded.sequence_number, xrp_transaction.sequence_number),
-                            confirmations = greatest(xrp_transaction.confirmations, excluded.confirmations),
-                            status = excluded.status,
-                            raw_payload = coalesce(excluded.raw_payload, xrp_transaction.raw_payload),
-                            updated_at = excluded.updated_at
-                        """,
-                tx.getChain(), tx.getTxHash(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),
-                tx.getIssuerAddress(), tx.getCurrencyCode(), tx.getAmount(), tx.getFeeDrops(), tx.getLedgerIndex(),
-                tx.getSequenceNumber(), tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(),
-                toTs(now()), toTs(now()));
+        return xrpTransactionRepository.upsert(tx);
     }
     /**
      * 获取或查询 {@code findXrpTransactionAssetSymbol} 对应的数据，供调用方读取当前状态。
      */
     public Optional<String> findXrpTransactionAssetSymbol(String chain, String txHash) {
-        List<String> results = jdbcTemplate.queryForList("""
-                        select asset_symbol
-                        from xrp_transaction
-                        where chain = ? and tx_hash = ?
-                        limit 1
-                        """, String.class, chain, txHash);
-        return results.stream().findFirst();
+        return xrpTransactionRepository.findAssetSymbol(chain, txHash);
     }
     /**
      * 写入或更新 {@code upsertLedgerBalance} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     public int upsertLedgerBalance(LedgerBalanceRecord record) {
-        return jdbcTemplate.update("""
-                insert into ledger_balance(chain, asset_symbol, account_id, available_balance, locked_balance,
-                                           total_balance, created_at, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?)
-                on conflict (chain, asset_symbol, account_id) do update set
-                    available_balance = excluded.available_balance,
-                    locked_balance = excluded.locked_balance,
-                    total_balance = excluded.total_balance,
-                    updated_at = excluded.updated_at
-                """,
-                record.getChain(), record.getAssetSymbol(), record.getAccountId(), record.getAvailableBalance(),
-                record.getLockedBalance(), record.getTotalBalance(), toTs(now()), toTs(now()));
+        return ledgerBalanceRepository.upsert(record);
     }
     /**
      * 获取或查询 {@code listEnabledHotWalletAddresses} 对应的数据，供调用方读取当前状态。
@@ -472,37 +369,14 @@ public class ChainJdbcRepository {
      * 获取或查询 {@code listEnabledChainScanAddresses} 对应的数据，供调用方读取当前状态。
      */
     public Set<String> listEnabledChainScanAddresses(String chain) {
-        return jdbcTemplate.queryForList("""
-                        select lower(address) from chain_address
-                        where chain = ? and enabled = true
-                        """, String.class, chain)
-                .stream()
+        return chainAddressRepository.listEnabledAddresses(chain).stream()
                 .collect(Collectors.toSet());
     }
     /**
      * 写入或更新 {@code upsertChainAddress} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     public int upsertChainAddress(ChainAddressRecord address) {
-        return jdbcTemplate.update("""
-                insert into chain_address(
-                            tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
-                            owner_address, derivation_path, wallet_role, enabled, created_at, updated_at
-                        )
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        on conflict (chain, asset_symbol, user_id, biz, address_index, wallet_role)
-                        do update set
-                            tenant_id = excluded.tenant_id,
-                            account_id = excluded.account_id,
-                            address = excluded.address,
-                            owner_address = excluded.owner_address,
-                            derivation_path = excluded.derivation_path,
-                            enabled = excluded.enabled,
-                            updated_at = excluded.updated_at
-                        """,
-                address.getTenantId(), address.getChain(), address.getAssetSymbol(), address.getAccountId(), address.getUserId(),
-                address.getBiz(), address.getAddressIndex(), address.getAddress(), address.getOwnerAddress(),
-                address.getDerivationPath(), address.getWalletRole(), address.getEnabled(),
-                toTs(now()), toTs(now()));
+        return chainAddressRepository.upsert(address);
     }
 
     /**
@@ -510,108 +384,46 @@ public class ChainJdbcRepository {
      */
     public Optional<ChainAddressRecord> findChainAddress(String chain, String assetSymbol, long userId,
                                                          int biz, long addressIndex, String walletRole) {
-        List<ChainAddressRecord> results = jdbcTemplate.query("""
-                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
-                               owner_address, derivation_path, wallet_role, enabled
-                        from chain_address
-                        where chain = ? and asset_symbol = ? and user_id = ? and biz = ?
-                          and address_index = ? and wallet_role = ?
-                        """,
-                (rs, rowNum) -> mapChainAddress(rs),
-                chain, assetSymbol, userId, biz, addressIndex, walletRole);
-        return results.stream().findFirst();
+        return chainAddressRepository.find(chain, assetSymbol, userId, biz, addressIndex, walletRole);
     }
     /**
      * 获取或查询 {@code listDefaultHotAddressCandidates} 对应的数据，供调用方读取当前状态。
      */
     public List<ChainAddressRecord> listDefaultHotAddressCandidates(String chain, String assetSymbol) {
-        return jdbcTemplate.query("""
-                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
-                               owner_address, derivation_path, wallet_role, enabled
-                        from chain_address
-                        where chain = ?
-                          and asset_symbol = ?
-                          and user_id = ?
-                          and biz = ?
-                          and wallet_role = ?
-                        order by address_index, id
-                        """,
-                (rs, rowNum) -> mapChainAddress(rs),
-                chain,
-                assetSymbol,
-                HotWalletRules.DEFAULT_HOT_USER_ID,
-                HotWalletRules.DEFAULT_HOT_BIZ,
+        return chainAddressRepository.listDefaultHot(chain, assetSymbol,
+                HotWalletRules.DEFAULT_HOT_USER_ID, HotWalletRules.DEFAULT_HOT_BIZ,
                 HotWalletRules.DEFAULT_HOT_WALLET_ROLE);
     }
     /**
      * 获取或查询 {@code listReservedHotNamespaceAddresses} 对应的数据，供调用方读取当前状态。
      */
     public List<ChainAddressRecord> listReservedHotNamespaceAddresses(String chain) {
-        return jdbcTemplate.query("""
-                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
-                               owner_address, derivation_path, wallet_role, enabled
-                        from chain_address
-                        where chain = ?
-                          and user_id = ?
-                          and biz = ?
-                        order by asset_symbol, wallet_role, address_index, id
-                        """,
-                (rs, rowNum) -> mapChainAddress(rs),
-                chain,
-                HotWalletRules.DEFAULT_HOT_USER_ID,
-                HotWalletRules.DEFAULT_HOT_BIZ);
+        return chainAddressRepository.listReservedHot(chain,
+                HotWalletRules.DEFAULT_HOT_USER_ID, HotWalletRules.DEFAULT_HOT_BIZ);
     }
     /**
      * 获取或查询 {@code listChainAddresses} 对应的数据，供调用方读取当前状态。
      */
     public List<ChainAddressRecord> listChainAddresses(String chain, String assetSymbol) {
-        return jdbcTemplate.query("""
-                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
-                               owner_address, derivation_path, wallet_role, enabled
-                        from chain_address
-                        where chain = ? and asset_symbol = ? and enabled = true
-                        order by id
-                        """,
-                (rs, rowNum) -> mapChainAddress(rs), chain, assetSymbol);
+        return chainAddressRepository.listEnabled(chain, assetSymbol);
     }
     /**
      * 获取或查询 {@code listChainAddresses} 对应的数据，供调用方读取当前状态。
      */
     public List<ChainAddressRecord> listChainAddresses(String chain) {
-        return jdbcTemplate.query("""
-                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
-                               owner_address, derivation_path, wallet_role, enabled
-                        from chain_address
-                        where chain = ? and enabled = true
-                        order by id
-                        """,
-                (rs, rowNum) -> mapChainAddress(rs), chain);
+        return chainAddressRepository.listEnabled(chain);
     }
     /**
      * 获取或查询 {@code findChainAddressByAddress} 对应的数据，供调用方读取当前状态。
      */
     public Optional<ChainAddressRecord> findChainAddressByAddress(String chain, String address) {
-        List<ChainAddressRecord> results = jdbcTemplate.query("""
-                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
-                               owner_address, derivation_path, wallet_role, enabled
-                        from chain_address
-                        where chain = ? and address = ? and enabled = true
-                        """,
-                (rs, rowNum) -> mapChainAddress(rs), chain, address);
-        return results.stream().findFirst();
+        return chainAddressRepository.findEnabledByAddress(chain, address);
     }
     /**
      * 获取或查询 {@code findChainAddressByAddress} 对应的数据，供调用方读取当前状态。
      */
     public Optional<ChainAddressRecord> findChainAddressByAddress(String chain, String assetSymbol, String address) {
-        List<ChainAddressRecord> results = jdbcTemplate.query("""
-                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index, address,
-                               owner_address, derivation_path, wallet_role, enabled
-                        from chain_address
-                        where chain = ? and asset_symbol = ? and address = ? and enabled = true
-                        """,
-                (rs, rowNum) -> mapChainAddress(rs), chain, assetSymbol, address);
-        return results.stream().findFirst();
+        return chainAddressRepository.findEnabledByAddress(chain, assetSymbol, address);
     }
 
     /**
@@ -619,15 +431,7 @@ public class ChainJdbcRepository {
      */
     public Optional<ChainAddressRecord> findChainAddressByAddress(
             UUID tenantId, String chain, String assetSymbol, String address) {
-        List<ChainAddressRecord> results = jdbcTemplate.query("""
-                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz,
-                               address_index, address, owner_address, derivation_path, wallet_role, enabled
-                        from chain_address
-                        where tenant_id = ? and chain = ? and asset_symbol = ?
-                          and address = ? and enabled = true
-                        """,
-                (rs, rowNum) -> mapChainAddress(rs), tenantId, chain, assetSymbol, address);
-        return results.stream().findFirst();
+        return chainAddressRepository.findEnabledByTenantAndAddress(tenantId, chain, assetSymbol, address);
     }
 
     /**
@@ -635,14 +439,7 @@ public class ChainJdbcRepository {
      */
     public Optional<ChainAddressRecord> findChainAddressByAddress(
             UUID tenantId, String chain, String address) {
-        List<ChainAddressRecord> results = jdbcTemplate.query("""
-                        select id, tenant_id, chain, asset_symbol, account_id, user_id, biz,
-                               address_index, address, owner_address, derivation_path, wallet_role, enabled
-                        from chain_address
-                        where tenant_id = ? and chain = ? and address = ? and enabled = true
-                        """,
-                (rs, rowNum) -> mapChainAddress(rs), tenantId, chain, address);
-        return results.stream().findFirst();
+        return chainAddressRepository.findEnabledByTenantAndAddress(tenantId, chain, address);
     }
 
     /**
@@ -650,132 +447,44 @@ public class ChainJdbcRepository {
      */
     public Optional<Long> findMaxChainAddressIndex(String chain, String assetSymbol, long userId,
                                                    int biz, String walletRole) {
-        Long maxIndex = jdbcTemplate.queryForObject("""
-                        select max(address_index)
-                        from chain_address
-                        where chain = ?
-                          and asset_symbol = ?
-                          and user_id = ?
-                          and biz = ?
-                          and wallet_role = ?
-                          and enabled = true
-                        """, Long.class, chain, assetSymbol, userId, biz, walletRole);
-        return Optional.ofNullable(maxIndex);
+        return chainAddressRepository.findMaxIndex(chain, assetSymbol, userId, biz, walletRole);
     }
     /**
      * 记录或保存 {@code recordSolanaTransaction} 对应的数据，并遵守幂等和事务约束。
      */
     public int recordSolanaTransaction(SolanaTransactionRecord tx) {
-        return jdbcTemplate.update("""
-                        insert into sol_transaction(
-                            chain, signature, from_address, to_address, asset_symbol, mint_address,
-                            amount, fee_lamports, slot, confirmations, status, raw_payload,
-                            created_at, updated_at
-                        )
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        on conflict (chain, signature) do update set
-                            fee_lamports = excluded.fee_lamports,
-                            slot = excluded.slot,
-                            confirmations = greatest(sol_transaction.confirmations, excluded.confirmations),
-                            status = excluded.status,
-                            raw_payload = excluded.raw_payload,
-                            updated_at = excluded.updated_at
-                        """,
-                tx.getChain(), tx.getSignature(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),
-                tx.getMintAddress(), tx.getAmount(), tx.getFeeLamports(), tx.getSlot(), tx.getConfirmations(),
-                tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
+        return solanaTransactionRepository.upsert(tx);
     }
     /**
      * 记录或保存 {@code recordTonTransaction} 对应的数据，并遵守幂等和事务约束。
      */
     public int recordTonTransaction(TonTransactionRecord tx) {
-        return jdbcTemplate.update("""
-                        insert into ton_transaction(
-                            chain, tx_hash, from_address, to_address, asset_symbol, jetton_master,
-                            amount, fee_nano, logical_time, confirmations, status, raw_payload,
-                            created_at, updated_at
-                        )
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        on conflict (chain, tx_hash) do update set
-                            fee_nano = excluded.fee_nano,
-                            logical_time = excluded.logical_time,
-                            confirmations = case
-                                when ton_transaction.status = 'CONFIRMED' then ton_transaction.confirmations
-                                else greatest(ton_transaction.confirmations, excluded.confirmations)
-                            end,
-                            status = case
-                                when ton_transaction.status = 'CONFIRMED' then ton_transaction.status
-                                else excluded.status
-                            end,
-                            raw_payload = excluded.raw_payload,
-                            updated_at = excluded.updated_at
-                        """,
-                tx.getChain(), tx.getTxHash(), tx.getFromAddress(), tx.getToAddress(), tx.getAssetSymbol(),
-                tx.getJettonMaster(), tx.getAmount(), tx.getFeeNano(), tx.getLogicalTime(),
-                tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
+        return tonTransactionRepository.upsert(tx);
     }
     /**
      * 设置或更新 {@code updateTonDepositTransactionConfirmations} 对应的状态，并保持相关业务字段一致。
      */
     public int updateTonDepositTransactionConfirmations(
             String chain, String txHash, int confirmations, int requiredConfirmations) {
-        return jdbcTemplate.update("""
-                        update ton_transaction
-                           set confirmations = ?,
-                               status = case when ? >= ? then 'CONFIRMED' else 'CONFIRMING' end,
-                               updated_at = ?
-                         where chain = ? and tx_hash = ? and status <> 'CONFIRMED'
-                        """,
-                confirmations, confirmations, requiredConfirmations, toTs(now()), chain, txHash);
+        return tonTransactionRepository.updateDepositConfirmations(chain, txHash, confirmations, requiredConfirmations);
     }
     /**
      * 写入或更新 {@code markTonTransactionConfirmed} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     public int markTonTransactionConfirmed(String chain, String txHash) {
-        return jdbcTemplate.update("""
-                        update ton_transaction
-                        set confirmations = greatest(confirmations, 1),
-                            status = 'CONFIRMED',
-                            updated_at = ?
-                        where chain = ? and tx_hash = ? and status <> 'CONFIRMED'
-                        """,
-                toTs(now()), chain, txHash);
+        return tonTransactionRepository.markConfirmed(chain, txHash);
     }
     /**
      * 获取或查询 {@code findTonTransactionRawPayload} 对应的数据，供调用方读取当前状态。
      */
     public Optional<String> findTonTransactionRawPayload(String chain, String txHash) {
-        List<String> results = jdbcTemplate.queryForList("""
-                        select raw_payload from ton_transaction
-                        where chain = ? and tx_hash = ? and raw_payload is not null
-                        """, String.class, chain, txHash);
-        return results.stream().findFirst();
+        return tonTransactionRepository.findRawPayload(chain, txHash);
     }
     /**
      * 记录或保存 {@code recordAptosTransaction} 对应的数据，并遵守幂等和事务约束。
      */
     public int recordAptosTransaction(AptosTransactionRecord tx) {
-        return jdbcTemplate.update("""
-                        insert into aptos_transaction(
-                            chain, tx_hash, sender, receiver, asset_symbol, coin_type,
-                            amount, gas_used, gas_unit_price, version, sequence_number,
-                            confirmations, status, raw_payload, created_at, updated_at
-                        )
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        on conflict (chain, tx_hash) do update set
-                            gas_used = greatest(aptos_transaction.gas_used, excluded.gas_used),
-                            gas_unit_price = greatest(aptos_transaction.gas_unit_price, excluded.gas_unit_price),
-                            version = coalesce(excluded.version, aptos_transaction.version),
-                            sequence_number = coalesce(excluded.sequence_number, aptos_transaction.sequence_number),
-                            confirmations = greatest(aptos_transaction.confirmations, excluded.confirmations),
-                            status = excluded.status,
-                            raw_payload = coalesce(excluded.raw_payload, aptos_transaction.raw_payload),
-                            updated_at = excluded.updated_at
-                        """,
-                tx.getChain(), tx.getTxHash(), tx.getSender(), tx.getReceiver(), tx.getAssetSymbol(),
-                tx.getCoinType(), tx.getAmount(), tx.getGasUsed(), tx.getGasUnitPrice(), tx.getVersion(),
-                tx.getSequenceNumber(), tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(),
-                toTs(now()), toTs(now()));
+        return aptosTransactionRepository.upsert(tx);
     }
 
     /**
@@ -783,63 +492,19 @@ public class ChainJdbcRepository {
      */
     public int markAptosTransactionConfirmed(String chain, String txHash, long version,
                                              long gasUsed, long gasUnitPrice, String rawPayload) {
-        return jdbcTemplate.update("""
-                        update aptos_transaction
-                        set confirmations = greatest(confirmations, 1),
-                            status = 'CONFIRMED',
-                            version = ?,
-                            gas_used = ?,
-                            gas_unit_price = ?,
-                            raw_payload = coalesce(?, raw_payload),
-                            updated_at = ?
-                        where chain = ? and tx_hash = ? and status <> 'CONFIRMED'
-                        """,
-                version, gasUsed, gasUnitPrice, rawPayload, toTs(now()), chain, txHash);
+        return aptosTransactionRepository.markConfirmed(chain, txHash, version, gasUsed, gasUnitPrice, rawPayload);
     }
     /**
      * 记录或保存 {@code recordSuiTransaction} 对应的数据，并遵守幂等和事务约束。
      */
     public int recordSuiTransaction(SuiTransactionRecord tx) {
-        return jdbcTemplate.update("""
-                        insert into sui_transaction(
-                            chain, tx_digest, sender, receiver, asset_symbol, coin_type,
-                            amount, gas_used, checkpoint, status, raw_payload, created_at, updated_at
-                        )
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        on conflict (chain, tx_digest) do update set
-                            gas_used = greatest(sui_transaction.gas_used, excluded.gas_used),
-                            checkpoint = coalesce(excluded.checkpoint, sui_transaction.checkpoint),
-                            status = excluded.status,
-                            raw_payload = coalesce(excluded.raw_payload, sui_transaction.raw_payload),
-                            updated_at = excluded.updated_at
-                        """,
-                tx.getChain(), tx.getTxDigest(), tx.getSender(), tx.getReceiver(), tx.getAssetSymbol(),
-                tx.getCoinType(), tx.getAmount(), tx.getGasUsed(), tx.getCheckpoint(), tx.getStatus(),
-                tx.getRawPayload(), toTs(now()), toTs(now()));
+        return suiTransactionRepository.upsert(tx);
     }
     /**
      * 记录或保存 {@code recordMoneroTransaction} 对应的数据，并遵守幂等和事务约束。
      */
     public int recordMoneroTransaction(MoneroTransactionRecord tx) {
-        return jdbcTemplate.update("""
-                        insert into monero_transaction(
-                            chain, tx_hash, direction, account_index, subaddress_index, address, asset_symbol,
-                            amount, fee_atomic, block_height, confirmations, status, raw_payload,
-                            created_at, updated_at
-                        )
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        on conflict (chain, tx_hash, direction, subaddress_index) do update set
-                            amount = coalesce(excluded.amount, monero_transaction.amount),
-                            fee_atomic = coalesce(excluded.fee_atomic, monero_transaction.fee_atomic),
-                            block_height = coalesce(excluded.block_height, monero_transaction.block_height),
-                            confirmations = greatest(monero_transaction.confirmations, excluded.confirmations),
-                            status = excluded.status,
-                            raw_payload = coalesce(excluded.raw_payload, monero_transaction.raw_payload),
-                            updated_at = excluded.updated_at
-                        """,
-                tx.getChain(), tx.getTxHash(), tx.getDirection(), tx.getAccountIndex(), tx.getSubaddressIndex(),
-                tx.getAddress(), tx.getAssetSymbol(), tx.getAmount(), tx.getFeeAtomic(), tx.getBlockHeight(),
-                tx.getConfirmations(), tx.getStatus(), tx.getRawPayload(), toTs(now()), toTs(now()));
+        return moneroTransactionRepository.upsert(tx);
     }
 
     /**
@@ -847,44 +512,13 @@ public class ChainJdbcRepository {
      */
     public int markSuiTransactionConfirmed(String chain, String txDigest, long checkpoint,
                                            long gasUsed, String rawPayload) {
-        return jdbcTemplate.update("""
-                        update sui_transaction
-                        set status = 'CONFIRMED',
-                            checkpoint = ?,
-                            gas_used = ?,
-                            raw_payload = coalesce(?, raw_payload),
-                            updated_at = ?
-                        where chain = ? and tx_digest = ? and status <> 'CONFIRMED'
-                        """,
-                checkpoint, gasUsed, rawPayload, toTs(now()), chain, txDigest);
+        return suiTransactionRepository.markConfirmed(chain, txDigest, checkpoint, gasUsed, rawPayload);
     }
     /**
      * 记录或保存 {@code recordNearTransaction} 对应的数据，并遵守幂等和事务约束。
      */
     public int recordNearTransaction(NearTransactionRecord tx) {
-        return jdbcTemplate.update("""
-                        insert into near_transaction(
-                            chain, tx_hash, action_index, sender, receiver, asset_symbol,
-                            amount, gas_burnt, block_height, status, raw_payload,
-                            created_at, updated_at
-                        )
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        on conflict (chain, tx_hash, action_index) do update set
-                            sender = excluded.sender,
-                            receiver = excluded.receiver,
-                            asset_symbol = excluded.asset_symbol,
-                            amount = excluded.amount,
-                            gas_burnt = greatest(near_transaction.gas_burnt, excluded.gas_burnt),
-                            block_height = greatest(coalesce(near_transaction.block_height, 0),
-                                                     coalesce(excluded.block_height, 0)),
-                            status = excluded.status,
-                            raw_payload = coalesce(excluded.raw_payload, near_transaction.raw_payload),
-                            updated_at = excluded.updated_at
-                        """,
-                tx.getChain(), tx.getTxHash(), tx.getActionIndex() == null ? 0L : tx.getActionIndex(),
-                tx.getSender(), tx.getReceiver(), tx.getAssetSymbol(),
-                tx.getAmount(), tx.getGasBurnt(), tx.getBlockHeight(), tx.getStatus(), tx.getRawPayload(),
-                toTs(now()), toTs(now()));
+        return nearTransactionRepository.upsert(tx);
     }
 
     /**
@@ -892,26 +526,13 @@ public class ChainJdbcRepository {
      */
     public int markNearTransactionConfirmed(String chain, String txHash, long blockHeight,
                                             long gasBurnt, String rawPayload) {
-        return jdbcTemplate.update("""
-                        update near_transaction
-                        set status = 'CONFIRMED',
-                            block_height = greatest(coalesce(block_height, 0), ?),
-                            gas_burnt = greatest(gas_burnt, ?),
-                            raw_payload = coalesce(?, raw_payload),
-                            updated_at = ?
-                        where chain = ? and tx_hash = ?
-                        """,
-                blockHeight, gasBurnt, rawPayload, toTs(now()), chain, txHash);
+        return nearTransactionRepository.markConfirmed(chain, txHash, blockHeight, gasBurnt, rawPayload);
     }
     /**
      * 获取或查询 {@code findNearTransactionSender} 对应的数据，供调用方读取当前状态。
      */
     public Optional<String> findNearTransactionSender(String chain, String txHash) {
-        List<String> results = jdbcTemplate.queryForList("""
-                        select sender from near_transaction
-                        where chain = ? and tx_hash = ?
-                        """, String.class, chain, txHash);
-        return results.stream().findFirst();
+        return nearTransactionRepository.findSender(chain, txHash);
     }
 
     /**
@@ -919,47 +540,13 @@ public class ChainJdbcRepository {
      */
     @Transactional(rollbackFor = Throwable.class)
     public long reserveAccountSequence(String chain, String address, long chainSequence) {
-        jdbcTemplate.update("""
-                        insert into account_sequence(
-                            chain, address, chain_sequence, next_sequence, status, created_at, updated_at
-                        )
-                        values (?, ?, ?, ?, 'ACTIVE', ?, ?)
-                        on conflict (chain, address) do nothing
-                        """,
-                chain, address, chainSequence, chainSequence, toTs(now()), toTs(now()));
-        Long next = jdbcTemplate.queryForObject("""
-                        select next_sequence from account_sequence
-                        where chain = ? and address = ?
-                        for update
-                        """, Long.class, chain, address);
-        long reserved = Math.max(chainSequence, next == null ? chainSequence : next);
-        jdbcTemplate.update("""
-                        update account_sequence
-                        set chain_sequence = greatest(chain_sequence, ?),
-                            next_sequence = ?,
-                            status = 'ACTIVE',
-                            updated_at = ?
-                        where chain = ? and address = ?
-                        """,
-                chainSequence, reserved + 1, toTs(now()), chain, address);
-        return reserved;
+        return accountSequenceRepository.reserve(chain, address, chainSequence);
     }
     /**
      * 执行 {@code synchronizeAccountSequence} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     public void synchronizeAccountSequence(String chain, String address, long chainSequence) {
-        jdbcTemplate.update("""
-                        insert into account_sequence(
-                            chain, address, chain_sequence, next_sequence, status, created_at, updated_at
-                        )
-                        values (?, ?, ?, ?, 'ACTIVE', ?, ?)
-                        on conflict (chain, address) do update set
-                            chain_sequence = excluded.chain_sequence,
-                            next_sequence = greatest(account_sequence.next_sequence, excluded.next_sequence),
-                            status = 'ACTIVE',
-                            updated_at = excluded.updated_at
-                        """,
-                chain, address, chainSequence, chainSequence, toTs(now()), toTs(now()));
+        accountSequenceRepository.synchronize(chain, address, chainSequence);
     }
 
         /**
@@ -991,41 +578,9 @@ public class ChainJdbcRepository {
         }
         String status = event.confirmations() <= 0 ? "DETECTED"
                 : event.confirmations() < requiredConfirmations ? "CONFIRMING" : "CONFIRMED";
-        int recorded = jdbcTemplate.update("""
-                        insert into deposit_record(tenant_id, chain, asset_symbol, tx_hash, log_index, from_address, to_address,
-                                                   contract_address, amount, block_height, block_hash, confirmations, status,
-                                                   credited, credit_generation, canonical_status, account_id,
-                                                   raw_payload, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, 0, 'CANONICAL', ?, ?, ?, ?)
-                        on conflict (chain, tx_hash, log_index) do update set
-                            block_height = case
-                                when deposit_record.canonical_status = 'REORGED' then excluded.block_height
-                                else deposit_record.block_height
-                            end,
-                            block_hash = case
-                                when deposit_record.canonical_status = 'REORGED' then excluded.block_hash
-                                else deposit_record.block_hash
-                            end,
-                            confirmations = case
-                                when deposit_record.credited then deposit_record.confirmations
-                                when deposit_record.canonical_status = 'REORGED' then excluded.confirmations
-                                else greatest(deposit_record.confirmations, excluded.confirmations)
-                            end,
-                            status = case when deposit_record.credited then 'CREDITED' else excluded.status end,
-                            canonical_status = 'CANONICAL',
-                            reorged_at = null,
-                            reorg_reason = null,
-                            tenant_id = coalesce(deposit_record.tenant_id, excluded.tenant_id),
-                            account_id = excluded.account_id,
-                            raw_payload = excluded.raw_payload,
-                            updated_at = excluded.updated_at
-                        where deposit_record.tenant_id is null
-                           or deposit_record.tenant_id = excluded.tenant_id
-                        """,
-                tenantId, chain, event.assetSymbol(), event.txId(), logIndex, event.fromAddress(), event.toAddress(),
-                event.tokenAddress(), event.amount(), event.blockHeight(), event.blockHash(), event.confirmations(), status,
-                accountId,
-                event.rawPayload(), toTs(now()), toTs(now()));
+        int recorded = depositRecordRepository.upsert(tenantId, chain, event.assetSymbol(), event.txId(), logIndex,
+                event.fromAddress(), event.toAddress(), event.tokenAddress(), event.amount(), event.blockHeight(),
+                event.blockHash(), event.confirmations(), status, accountId, event.rawPayload());
         if (recorded != 1) {
             throw new IllegalStateException("deposit record belongs to another tenant");
         }
@@ -1034,14 +589,7 @@ public class ChainJdbcRepository {
             return false;
         }
 
-        int credited = jdbcTemplate.update("""
-                        update deposit_record
-                        set credited = true, credited_at = ?, status = 'CREDITED',
-                            credit_generation = credit_generation + 1, updated_at = ?
-                        where chain = ? and tx_hash = ? and log_index = ?
-                          and credited = false and canonical_status = 'CANONICAL'
-                        """,
-                toTs(now()), toTs(now()), chain, event.txId(), logIndex);
+        int credited = depositRecordRepository.markCredited(chain, event.txId(), logIndex);
         if (credited == 1) {
             incrementLedgerBalance(tenantId, chain, event.assetSymbol(), accountId, event.amount());
             for (DepositCreditObserver observer : depositCreditObservers) {
@@ -1056,33 +604,11 @@ public class ChainJdbcRepository {
      * 获取或查询 {@code listPendingDeposits} 对应的数据，供调用方读取当前状态。
      */
     public List<PendingDepositRecord> listPendingDeposits(String chain, int requiredConfirmations, int limit) {
-        return jdbcTemplate.query("""
-                        select asset_symbol, tx_hash, log_index, from_address, to_address,
-                               contract_address, amount, block_height, block_hash, confirmations,
-                               account_id, raw_payload
-                          from deposit_record
-                         where chain = ?
-                           and credited = false
-                           and canonical_status = 'CANONICAL'
-                           and status in ('DETECTED', 'CONFIRMING')
-                           and confirmations < ?
-                         order by id
-                         limit ?
-                        """,
-                (rs, rowNum) -> new PendingDepositRecord(
-                        rs.getString("asset_symbol"),
-                        rs.getString("tx_hash"),
-                        rs.getLong("log_index"),
-                        rs.getString("from_address"),
-                        rs.getString("to_address"),
-                        rs.getString("contract_address"),
-                        rs.getBigDecimal("amount"),
-                        rs.getLong("block_height"),
-                        rs.getString("block_hash"),
-                        rs.getInt("confirmations"),
-                        rs.getString("account_id"),
-                        rs.getString("raw_payload")),
-                chain, requiredConfirmations, limit);
+        return depositRecordRepository.listPending(chain, requiredConfirmations, limit).stream()
+                .map(row -> new PendingDepositRecord(row.assetSymbol(), row.txHash(), row.logIndex(),
+                        row.fromAddress(), row.toAddress(), row.contractAddress(), row.amount(), row.blockHeight(),
+                        row.blockHash(), row.confirmations(), row.accountId(), row.rawPayload()))
+                .toList();
     }
 
     public record PendingDepositRecord(
@@ -1110,105 +636,52 @@ public class ChainJdbcRepository {
         String normalizedChain = requireText(chain, "chain").toUpperCase(java.util.Locale.ROOT);
         String normalizedScanner = requireText(scannerName, "scannerName");
         String normalizedHash = requireText(blockHash, "blockHash");
-        List<String> existing = jdbcTemplate.queryForList("""
-                        select block_hash from chain_scan_block
-                         where chain = ? and scanner_name = ? and block_height = ?
-                         for update
-                        """, String.class, normalizedChain, normalizedScanner, blockHeight);
+        List<String> existing = chainScanBlockRepository.findHashForUpdate(
+                normalizedChain, normalizedScanner, blockHeight);
         if (existing.isEmpty()) {
-            jdbcTemplate.update("""
-                            insert into chain_scan_block(
-                                chain, scanner_name, block_height, block_hash, parent_hash, observed_at)
-                            values (?, ?, ?, ?, ?, ?)
-                            """, normalizedChain, normalizedScanner, blockHeight,
-                    normalizedHash, parentHash, toTs(now()));
+            chainScanBlockRepository.insert(normalizedChain, normalizedScanner, blockHeight,
+                    normalizedHash, parentHash);
             return new BlockObservation(false, null, normalizedHash, 0);
         }
         String previousHash = existing.getFirst();
         if (previousHash.equalsIgnoreCase(normalizedHash)) {
-            jdbcTemplate.update("""
-                            update chain_scan_block
-                               set parent_hash = ?, observed_at = ?
-                             where chain = ? and scanner_name = ? and block_height = ?
-                            """, parentHash, toTs(now()), normalizedChain, normalizedScanner, blockHeight);
+            chainScanBlockRepository.updateObservation(normalizedChain, normalizedScanner, blockHeight,
+                    previousHash, parentHash);
             return new BlockObservation(false, previousHash, normalizedHash, 0);
         }
 
-        List<DepositForReorg> deposits = jdbcTemplate.query("""
-                        select id, tenant_id, chain, asset_symbol, tx_hash, log_index,
-                               account_id, to_address, amount, credited, credit_generation,
-                               block_height, block_hash
-                          from deposit_record
-                         where chain = ? and block_height = ? and canonical_status = 'CANONICAL'
-                           and block_hash is not null and lower(block_hash) <> lower(?)
-                         order by id
-                         for update
-                        """, (rs, rowNum) -> new DepositForReorg(
-                        rs.getLong("id"), rs.getObject("tenant_id", UUID.class),
-                        rs.getString("chain"), rs.getString("asset_symbol"),
-                        rs.getString("tx_hash"), rs.getLong("log_index"),
-                        rs.getString("account_id"), rs.getString("to_address"),
-                        rs.getBigDecimal("amount"), rs.getBoolean("credited"),
-                        rs.getInt("credit_generation"), rs.getLong("block_height"),
-                        rs.getString("block_hash")),
+        List<DepositRecordRepository.ReorgRecord> deposits = depositRecordRepository.listForReorg(
                 normalizedChain, blockHeight, normalizedHash);
-        jdbcTemplate.update("""
-                        update utxo_record
-                           set state = 'ORPHANED', confirmations = 0, credited = false, updated_at = ?
-                         where chain = ? and block_height = ?
-                           and lower(block_hash) <> lower(?) and state <> 'SPENT'
-                        """, toTs(now()), normalizedChain, blockHeight, normalizedHash);
+        utxoRepository.markOrphaned(normalizedChain, blockHeight, normalizedHash);
         int reversed = 0;
-        for (DepositForReorg deposit : deposits) {
+        for (DepositRecordRepository.ReorgRecord deposit : deposits) {
             reverseDeposit(deposit, normalizedHash,
                     "canonical block changed from " + previousHash + " to " + normalizedHash);
             reversed++;
         }
-        jdbcTemplate.update("""
-                        update chain_scan_block
-                           set block_hash = ?, parent_hash = ?, observed_at = ?
-                         where chain = ? and scanner_name = ? and block_height = ?
-                        """, normalizedHash, parentHash, toTs(now()),
-                normalizedChain, normalizedScanner, blockHeight);
+        chainScanBlockRepository.updateObservation(normalizedChain, normalizedScanner, blockHeight,
+                normalizedHash, parentHash);
         return new BlockObservation(true, previousHash, normalizedHash, reversed);
     }
     /**
      * 执行 {@code reverseDeposit} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
-    private void reverseDeposit(DepositForReorg deposit, String replacementBlockHash, String reason) {
+    private void reverseDeposit(DepositRecordRepository.ReorgRecord deposit, String replacementBlockHash, String reason) {
         BigDecimal reversedAmount = BigDecimal.ZERO;
         BigDecimal deficitAmount = BigDecimal.ZERO;
         if (deposit.credited()) {
-            BigDecimal available = jdbcTemplate.query("""
-                            select available_balance from ledger_balance
-                             where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
-                             for update
-                            """, (rs, rowNum) -> rs.getBigDecimal(1),
-                    deposit.tenantId(), deposit.chain(), deposit.assetSymbol(), deposit.accountId())
-                    .stream().findFirst().orElse(BigDecimal.ZERO);
+            BigDecimal available = ledgerBalanceRepository.findAvailableForUpdate(
+                    deposit.tenantId(), deposit.chain(), deposit.assetSymbol(), deposit.accountId());
             reversedAmount = available.min(deposit.amount()).max(BigDecimal.ZERO);
             deficitAmount = deposit.amount().subtract(reversedAmount);
             if (reversedAmount.signum() > 0) {
-                int updated = jdbcTemplate.update("""
-                                update ledger_balance
-                                   set available_balance = available_balance - ?,
-                                       total_balance = total_balance - ?, updated_at = ?
-                                 where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
-                                   and available_balance >= ? and total_balance >= ?
-                                """, reversedAmount, reversedAmount, toTs(now()),
-                        deposit.tenantId(), deposit.chain(), deposit.assetSymbol(), deposit.accountId(),
-                        reversedAmount, reversedAmount);
-                if (updated != 1) {
+                if (!ledgerBalanceRepository.debit(deposit.chain(), deposit.assetSymbol(), deposit.accountId(),
+                        reversedAmount, deposit.tenantId())) {
                     throw new IllegalStateException("unable to reverse orphaned deposit balance");
                 }
             }
         }
-        int updated = jdbcTemplate.update("""
-                        update deposit_record
-                           set credited = false, status = 'REORGED', canonical_status = 'REORGED',
-                               confirmations = 0, reorged_at = ?, reorg_reason = ?, updated_at = ?
-                         where id = ? and canonical_status = 'CANONICAL'
-                        """, toTs(now()), reason, toTs(now()), deposit.id());
+        int updated = depositRecordRepository.markReorged(deposit.id(), reason);
         if (updated != 1) {
             throw new IllegalStateException("unable to mark deposit reorged: " + deposit.id());
         }
@@ -1237,38 +710,18 @@ public class ChainJdbcRepository {
                                    String blockHash, int reversedDepositCount) {
     }
 
-    private record DepositForReorg(
-            long id, UUID tenantId, String chain, String assetSymbol, String txHash,
-            long logIndex, String accountId, String toAddress, BigDecimal amount,
-            boolean credited, int creditGeneration, long blockHeight, String blockHash) {
-    }
-
     /**
      * 判断 {@code isInternalCollectionTransfer} 对应的条件是否成立，并返回明确的布尔结果。
      */
     private boolean isInternalCollectionTransfer(UUID tenantId, String chain,
                                                  String txHash, String toAddress) {
-        Boolean internal = jdbcTemplate.queryForObject("""
-                select exists(
-                    select 1
-                      from collection_record
-                     where tenant_id = ? and chain = ?
-                       and lower(tx_hash) = lower(?) and lower(to_address) = lower(?)
-                )
-                """, Boolean.class, tenantId, chain, txHash, toAddress);
-        return Boolean.TRUE.equals(internal);
+        return collectionRecordRepository.existsInternalTransfer(tenantId, chain, txHash, toAddress);
     }
     /**
      * 校验 {@code requireDepositTenant} 对应的前置条件，不满足时抛出明确异常。
      */
     private UUID requireDepositTenant(String chain, String accountId, String address) {
-        List<UUID> tenants = jdbcTemplate.queryForList("""
-                        select distinct tenant_id
-                          from chain_address
-                         where tenant_id is not null and enabled = true and chain = ?
-                           and (lower(account_id) = lower(?) or lower(address) = lower(?))
-                         limit 2
-                        """, UUID.class, chain, accountId, address);
+        List<UUID> tenants = chainAddressRepository.listTenantIds(chain, accountId, address);
         if (tenants.isEmpty()) {
             throw new IllegalStateException("deposit address is not assigned to a tenant");
         }
@@ -1384,14 +837,7 @@ public class ChainJdbcRepository {
      * 处理 {@code depositRecordExists} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
      */
     public boolean depositRecordExists(String chain, String txHash, int logIndex) {
-        Boolean exists = jdbcTemplate.queryForObject("""
-                        select exists(
-                            select 1 from deposit_record
-                            where chain = ? and tx_hash = ? and log_index = ?
-                        )
-                        """,
-                Boolean.class, chain, txHash, logIndex);
-        return Boolean.TRUE.equals(exists);
+        return depositRecordRepository.existsCanonical(chain, txHash, logIndex);
     }
     /**
      * 构建或生成 {@code createWithdrawalOrder} 对应的结果，并执行输入和状态校验。
@@ -1407,15 +853,8 @@ public class ChainJdbcRepository {
     public int createWithdrawalOrder(String orderNo, long userId, String chain, String assetSymbol,
                                      String fromAddress, String debitAccountId, String toAddress,
                                      BigDecimal amount, BigDecimal fee) {
-        return jdbcTemplate.update("""
-                        insert into withdrawal_order(order_no, user_id, chain, asset_symbol, from_address,
-                                                     debit_account_id, to_address, amount, fee, status,
-                                                     created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?)
-                        on conflict (chain, order_no) do nothing
-                        """,
-                orderNo, userId, chain, assetSymbol, fromAddress, debitAccountId, toAddress, amount, fee,
-                toTs(now()), toTs(now()));
+        return withdrawalOrderRepository.create(orderNo, userId, chain, assetSymbol, fromAddress,
+                debitAccountId, toAddress, amount, fee);
     }
 
     /**
@@ -1425,161 +864,77 @@ public class ChainJdbcRepository {
                                            String chain, String assetSymbol,
                                            String fromAddress, String debitAccountId,
                                            String toAddress, BigDecimal amount, BigDecimal fee) {
-        return jdbcTemplate.update("""
-                        insert into withdrawal_order(
-                            tenant_id, order_no, user_id, chain, asset_symbol, from_address,
-                            debit_account_id, to_address, amount, fee, status,
-                            created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?)
-                        on conflict (chain, order_no) do nothing
-                        """,
-                tenantId, orderNo, userId, chain, assetSymbol, fromAddress,
-                debitAccountId, toAddress, amount, fee, toTs(now()), toTs(now()));
+        return withdrawalOrderRepository.createForTenant(tenantId, orderNo, userId, chain, assetSymbol,
+                fromAddress, debitAccountId, toAddress, amount, fee);
     }
     /**
      * 获取或查询 {@code listWithdrawalsForSigning} 对应的数据，供调用方读取当前状态。
      */
     public List<WithdrawalOrderRecord> listWithdrawalsForSigning(String chain, String assetSymbol, int limit) {
-        return jdbcTemplate.query("""
-                        select w.id, w.tenant_id, w.order_no, w.user_id, w.chain, w.asset_symbol,
-                               w.from_address, w.debit_account_id, w.to_address,
-                               amount, fee, tx_hash, status, error_message, created_at, updated_at
-                        from withdrawal_order w
-                        where w.tenant_id = (
-                            select candidate.tenant_id
-                              from withdrawal_order candidate
-                             where candidate.tenant_id is not null and candidate.chain = ?
-                               and candidate.asset_symbol = ?
-                               and candidate.status in ('FROZEN', 'RETRYING')
-                             order by candidate.id
-                             limit 1
-                        )
-                          and w.chain = ? and w.asset_symbol = ?
-                          and w.status in ('FROZEN', 'RETRYING')
-                        order by w.id
-                        limit ?
-                        """,
-                (rs, rowNum) -> mapWithdrawalOrder(rs),
-                chain, assetSymbol, chain, assetSymbol, limit);
+        return withdrawalOrderRepository.listForSigning(chain, assetSymbol, limit);
     }
     /**
      * 获取或查询 {@code listWithdrawalsForSigning} 对应的数据，供调用方读取当前状态。
      */
     public List<WithdrawalOrderRecord> listWithdrawalsForSigning(String chain, int limit) {
-        return jdbcTemplate.query("""
-                        select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
-                               amount, fee, tx_hash, status, error_message, created_at, updated_at
-                        from withdrawal_order
-                        where tenant_id is not null and chain = ? and status in ('FROZEN', 'RETRYING')
-                        order by id
-                        limit ?
-                        """,
-                (rs, rowNum) -> mapWithdrawalOrder(rs),
-                chain, limit);
+        return withdrawalOrderRepository.listForSigning(chain, limit);
     }
     /**
      * 获取或查询 {@code listWithdrawalsByStatus} 对应的数据，供调用方读取当前状态。
      */
     public List<WithdrawalOrderRecord> listWithdrawalsByStatus(String chain, String status, int limit) {
-        return jdbcTemplate.query("""
-                        select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
-                               amount, fee, tx_hash, status, error_message, created_at, updated_at
-                        from withdrawal_order
-                        where tenant_id is not null and chain = ? and status = ?
-                        order by id
-                        limit ?
-                        """,
-                (rs, rowNum) -> mapWithdrawalOrder(rs),
-                chain, status, limit);
+        return withdrawalOrderRepository.listByStatus(chain, status, limit);
     }
     /**
      * 判断 {@code isWithdrawalInPendingEvm7702Batch} 对应的条件是否成立，并返回明确的布尔结果。
      */
     public boolean isWithdrawalInPendingEvm7702Batch(UUID tenantId, long withdrawalOrderId) {
-        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
-                select exists(
-                    select 1
-                      from evm_withdrawal_batch_item item
-                      join evm_withdrawal_batch batch
-                        on batch.tenant_id = item.tenant_id and batch.id = item.batch_id
-                     where item.tenant_id = ? and item.withdrawal_order_id = ?
-                       and item.status = 'SUBMITTED'
-                       and batch.status in ('SUBMITTED', 'CONFIRMING', 'BROADCAST_UNKNOWN')
-                )
-                """, Boolean.class, tenantId, withdrawalOrderId));
+        return evmWithdrawalBatchItemRepository.listSubmittedByWithdrawal(tenantId, withdrawalOrderId).stream()
+                .map(row -> (UUID) row.get("batch_id"))
+                .anyMatch(batchId -> evmWithdrawalBatchRepository.findStatuses(tenantId, batchId).stream()
+                        .anyMatch(status -> Set.of("SUBMITTED", "CONFIRMING", "BROADCAST_UNKNOWN").contains(status)));
     }
     /**
      * 判断 {@code isCollectionInPendingEvm7702Batch} 对应的条件是否成立，并返回明确的布尔结果。
      */
     public boolean isCollectionInPendingEvm7702Batch(UUID tenantId, long collectionRecordId) {
-        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
-                select exists(
-                    select 1
-                      from evm_collection_batch_item item
-                      join evm_collection_batch batch
-                        on batch.tenant_id = item.tenant_id and batch.id = item.batch_id
-                     where item.tenant_id = ? and item.collection_record_id = ?
-                       and item.status = 'SUBMITTED'
-                       and batch.status in ('SUBMITTED', 'CONFIRMING', 'BROADCAST_UNKNOWN')
-                )
-                """, Boolean.class, tenantId, collectionRecordId));
+        return evmCollectionBatchItemRepository.listSubmittedByCollection(tenantId, collectionRecordId).stream()
+                .map(row -> ((Number) row.get("batch_id")).longValue())
+                .anyMatch(batchId -> evmCollectionBatchRepository.findStatuses(tenantId, batchId).stream()
+                        .anyMatch(status -> Set.of("SUBMITTED", "CONFIRMING", "BROADCAST_UNKNOWN").contains(status)));
     }
     /**
      * 执行 {@code claimWithdrawalSigning} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     public int claimWithdrawalSigning(String chain, String orderNo, String fromAddress) {
-        return jdbcTemplate.update("""
-                        update withdrawal_order
-                        set status = 'SIGNING',
-                            from_address = coalesce(?, from_address),
-                            error_message = null,
-                            updated_at = ?
-                        where chain = ? and order_no = ? and status in ('FROZEN', 'RETRYING')
-                          and not exists (
-                              select 1 from custody_reorg_deficit deficit
-                               where deficit.tenant_id = withdrawal_order.tenant_id
-                                 and deficit.chain = withdrawal_order.chain
-                                 and deficit.asset_symbol = withdrawal_order.asset_symbol
-                                 and deficit.account_id = withdrawal_order.debit_account_id
-                                 and deficit.status = 'OPEN')
-                        """,
-                fromAddress, toTs(now()), chain, orderNo);
+        Optional<WithdrawalOrderRecord> order = withdrawalOrderRepository.find(chain, orderNo, null);
+        if (order.isEmpty() || hasOpenReorgDeficit(order.get())) {
+            return 0;
+        }
+        return withdrawalOrderRepository.claimSigning(chain, orderNo, fromAddress);
     }
     /**
      * 执行 {@code claimWithdrawalSigning} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     public int claimWithdrawalSigning(UUID tenantId, String chain, String orderNo, String fromAddress) {
-        return jdbcTemplate.update("""
-                        update withdrawal_order
-                        set status = 'SIGNING',
-                            from_address = coalesce(?, from_address),
-                            error_message = null,
-                            updated_at = ?
-                        where tenant_id = ? and chain = ? and order_no = ?
-                          and status in ('FROZEN', 'RETRYING')
-                          and not exists (
-                              select 1 from custody_reorg_deficit deficit
-                               where deficit.tenant_id = withdrawal_order.tenant_id
-                                 and deficit.chain = withdrawal_order.chain
-                                 and deficit.asset_symbol = withdrawal_order.asset_symbol
-                                 and deficit.account_id = withdrawal_order.debit_account_id
-                                 and deficit.status = 'OPEN')
-                        """,
-                fromAddress, toTs(now()), tenantId, chain, orderNo);
+        Optional<WithdrawalOrderRecord> order = withdrawalOrderRepository.find(chain, orderNo, tenantId);
+        if (order.isEmpty() || hasOpenReorgDeficit(order.get())) {
+            return 0;
+        }
+        return withdrawalOrderRepository.claimSigning(tenantId, chain, orderNo, fromAddress);
+    }
+
+    /** 判断提现账户是否存在未弥补的重组赤字。 */
+    private boolean hasOpenReorgDeficit(WithdrawalOrderRecord order) {
+        return order.getTenantId() != null && order.getDebitAccountId() != null
+                && custodyReorgDeficitRepository.existsOpen(order.getTenantId(), order.getChain(),
+                order.getAssetSymbol(), order.getDebitAccountId());
     }
     /**
      * 写入或更新 {@code markStaleSigningWithdrawalsUnknown} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     public int markStaleSigningWithdrawalsUnknown(String chain, Instant before) {
-        return jdbcTemplate.update("""
-                        update withdrawal_order
-                        set status = 'BROADCAST_UNKNOWN',
-                            error_message = 'signing state expired before a tx hash was recorded; manual chain audit required',
-                            updated_at = ?
-                        where tenant_id is not null and chain = ? and status = 'SIGNING'
-                          and tx_hash is null and updated_at < ?
-                        """,
-                toTs(now()), chain, toTs(before));
+        return withdrawalOrderRepository.markStaleSigningUnknown(chain, before);
     }
     /**
      * 写入或更新 {@code markWithdrawalSent} 对应的业务状态，并保持关联字段与审计状态一致。
@@ -1588,16 +943,7 @@ public class ChainJdbcRepository {
         if (txHash == null || txHash.isBlank()) {
             throw new IllegalArgumentException("withdrawal tx hash must not be blank");
         }
-        return jdbcTemplate.update("""
-                        update withdrawal_order
-                        set status = 'SENT',
-                            from_address = coalesce(?, from_address),
-                            tx_hash = ?,
-                            error_message = null,
-                            updated_at = ?
-                        where chain = ? and order_no = ? and status = 'SIGNING' and tx_hash is null
-                        """,
-                fromAddress, txHash, toTs(now()), chain, orderNo);
+        return withdrawalOrderRepository.markSent(chain, orderNo, fromAddress, txHash);
     }
 
     /**
@@ -1608,31 +954,13 @@ public class ChainJdbcRepository {
         if (txHash == null || txHash.isBlank()) {
             throw new IllegalArgumentException("withdrawal tx hash must not be blank");
         }
-        return jdbcTemplate.update("""
-                        update withdrawal_order
-                        set status = 'SENT',
-                            from_address = coalesce(?, from_address),
-                            tx_hash = ?,
-                            error_message = null,
-                            updated_at = ?
-                        where tenant_id = ? and chain = ? and order_no = ?
-                          and status = 'SIGNING' and tx_hash is null
-                        """,
-                fromAddress, txHash, toTs(now()), tenantId, chain, orderNo);
+        return withdrawalOrderRepository.markSent(tenantId, chain, orderNo, fromAddress, txHash);
     }
     /**
      * 写入或更新 {@code markWithdrawalBroadcastUnknown} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     public int markWithdrawalBroadcastUnknown(String chain, String orderNo, String fromAddress, String errorMessage) {
-        return jdbcTemplate.update("""
-                        update withdrawal_order
-                        set status = 'BROADCAST_UNKNOWN',
-                            from_address = coalesce(?, from_address),
-                            error_message = ?,
-                            updated_at = ?
-                        where chain = ? and order_no = ? and status = 'SIGNING' and tx_hash is null
-                        """,
-                fromAddress, errorMessage, toTs(now()), chain, orderNo);
+        return withdrawalOrderRepository.markBroadcastUnknown(chain, orderNo, fromAddress, errorMessage);
     }
 
     /**
@@ -1640,16 +968,7 @@ public class ChainJdbcRepository {
      */
     public int markWithdrawalBroadcastUnknown(UUID tenantId, String chain, String orderNo,
                                               String fromAddress, String errorMessage) {
-        return jdbcTemplate.update("""
-                        update withdrawal_order
-                        set status = 'BROADCAST_UNKNOWN',
-                            from_address = coalesce(?, from_address),
-                            error_message = ?,
-                            updated_at = ?
-                        where tenant_id = ? and chain = ? and order_no = ?
-                          and status = 'SIGNING' and tx_hash is null
-                        """,
-                fromAddress, errorMessage, toTs(now()), tenantId, chain, orderNo);
+        return withdrawalOrderRepository.markBroadcastUnknown(tenantId, chain, orderNo, fromAddress, errorMessage);
     }
 
     /**
@@ -1657,16 +976,7 @@ public class ChainJdbcRepository {
      */
     public int updateWithdrawalStatus(String chain, String orderNo, String status, String fromAddress,
                                       String txHash, String errorMessage) {
-        return jdbcTemplate.update("""
-                        update withdrawal_order
-                        set status = ?,
-                            from_address = coalesce(?, from_address),
-                            tx_hash = coalesce(?, tx_hash),
-                            error_message = ?,
-                            updated_at = ?
-                        where chain = ? and order_no = ?
-                        """,
-                status, fromAddress, txHash, errorMessage, toTs(now()), chain, orderNo);
+        return withdrawalOrderRepository.updateStatus(chain, orderNo, status, fromAddress, txHash, errorMessage);
     }
 
     /**
@@ -1674,40 +984,20 @@ public class ChainJdbcRepository {
      */
     public int updateWithdrawalStatus(UUID tenantId, String chain, String orderNo, String status,
                                       String fromAddress, String txHash, String errorMessage) {
-        return jdbcTemplate.update("""
-                        update withdrawal_order
-                        set status = ?,
-                            from_address = coalesce(?, from_address),
-                            tx_hash = coalesce(?, tx_hash),
-                            error_message = ?,
-                            updated_at = ?
-                        where tenant_id = ? and chain = ? and order_no = ?
-                        """,
-                status, fromAddress, txHash, errorMessage, toTs(now()), tenantId, chain, orderNo);
+        return withdrawalOrderRepository.updateStatus(tenantId, chain, orderNo, status,
+                fromAddress, txHash, errorMessage);
     }
     /**
      * 写入或更新 {@code markWithdrawalConfirmed} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     public int markWithdrawalConfirmed(String chain, String orderNo, String txHash) {
-        return jdbcTemplate.update("""
-                        update withdrawal_order
-                        set status = 'CONFIRMED', tx_hash = ?, error_message = null, updated_at = ?
-                        where chain = ? and order_no = ? and status in ('SENT', 'CONFIRMING')
-                          and tx_hash = ?
-                        """,
-                txHash, toTs(now()), chain, orderNo, txHash);
+        return withdrawalOrderRepository.markConfirmed(chain, orderNo, txHash);
     }
     /**
      * 写入或更新 {@code markWithdrawalConfirmed} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     public int markWithdrawalConfirmed(UUID tenantId, String chain, String orderNo, String txHash) {
-        return jdbcTemplate.update("""
-                        update withdrawal_order
-                        set status = 'CONFIRMED', tx_hash = ?, error_message = null, updated_at = ?
-                        where tenant_id = ? and chain = ? and order_no = ?
-                          and status in ('SENT', 'CONFIRMING') and tx_hash = ?
-                        """,
-                txHash, toTs(now()), tenantId, chain, orderNo, txHash);
+        return withdrawalOrderRepository.markConfirmed(tenantId, chain, orderNo, txHash);
     }
 
     /**
@@ -1779,71 +1069,42 @@ public class ChainJdbcRepository {
      * 获取或查询 {@code findWithdrawalStatus} 对应的数据，供调用方读取当前状态。
      */
     public Optional<String> findWithdrawalStatus(String chain, String orderNo) {
-        List<String> results = jdbcTemplate.queryForList("""
-                        select status from withdrawal_order where chain = ? and order_no = ?
-                        """, String.class, chain, orderNo);
-        return results.stream().findFirst();
+        return withdrawalOrderRepository.findStatus(chain, orderNo);
     }
     /**
      * 获取或查询 {@code findWithdrawalTxHash} 对应的数据，供调用方读取当前状态。
      */
     public Optional<String> findWithdrawalTxHash(String chain, String orderNo) {
-        List<String> results = jdbcTemplate.queryForList("""
-                        select tx_hash from withdrawal_order
-                        where chain = ? and order_no = ? and tx_hash is not null
-                        """, String.class, chain, orderNo);
-        return results.stream().findFirst();
+        return withdrawalOrderRepository.findTxHash(chain, orderNo, null);
     }
     /**
      * 获取或查询 {@code findWithdrawalTxHash} 对应的数据，供调用方读取当前状态。
      */
     public Optional<String> findWithdrawalTxHash(UUID tenantId, String chain, String orderNo) {
-        List<String> results = jdbcTemplate.queryForList("""
-                        select tx_hash from withdrawal_order
-                        where tenant_id = ? and chain = ? and order_no = ? and tx_hash is not null
-                        """, String.class, tenantId, chain, orderNo);
-        return results.stream().findFirst();
+        return withdrawalOrderRepository.findTxHash(chain, orderNo, tenantId);
     }
     /**
      * 校验 {@code requireWithdrawalTenant} 对应的前置条件，不满足时抛出明确异常。
      */
     public UUID requireWithdrawalTenant(String chain, String orderNo) {
-        List<UUID> tenants = jdbcTemplate.queryForList("""
-                        select tenant_id from withdrawal_order
-                        where chain = ? and order_no = ? and tenant_id is not null
-                        """, UUID.class, chain, orderNo);
-        if (tenants.size() != 1) {
+        Optional<UUID> tenant = withdrawalOrderRepository.findTenant(chain, orderNo);
+        if (tenant.isEmpty()) {
             throw new IllegalStateException(
                     "withdrawal order must belong to exactly one tenant: " + chain + ":" + orderNo);
         }
-        return tenants.getFirst();
+        return tenant.get();
     }
     /**
      * 获取或查询 {@code findWithdrawalOrder} 对应的数据，供调用方读取当前状态。
      */
     public Optional<WithdrawalOrderRecord> findWithdrawalOrder(String chain, String orderNo) {
-        List<WithdrawalOrderRecord> results = jdbcTemplate.query("""
-                        select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
-                               amount, fee, tx_hash, status, error_message, created_at, updated_at
-                        from withdrawal_order
-                        where chain = ? and order_no = ?
-                        """,
-                (rs, rowNum) -> mapWithdrawalOrder(rs),
-                chain, orderNo);
-        return results.stream().findFirst();
+        return withdrawalOrderRepository.find(chain, orderNo, null);
     }
     /**
      * 获取或查询 {@code findWithdrawalOrder} 对应的数据，供调用方读取当前状态。
      */
     public Optional<WithdrawalOrderRecord> findWithdrawalOrder(UUID tenantId, String chain, String orderNo) {
-        List<WithdrawalOrderRecord> results = jdbcTemplate.query("""
-                        select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id, to_address,
-                               amount, fee, tx_hash, status, error_message, created_at, updated_at
-                        from withdrawal_order
-                        where tenant_id = ? and chain = ? and order_no = ?
-                        """,
-                (rs, rowNum) -> mapWithdrawalOrder(rs), tenantId, chain, orderNo);
-        return results.stream().findFirst();
+        return withdrawalOrderRepository.find(chain, orderNo, tenantId);
     }
     /**
      * 执行 {@code mapWithdrawalOrder} 对应的辅助逻辑，完成数据处理并维护状态边界。
@@ -1878,48 +1139,20 @@ public class ChainJdbcRepository {
                                       String rawPayload) {
         Objects.requireNonNull(tenantId, "tenantId is required");
         Objects.requireNonNull(custodyAddressId, "custodyAddressId is required");
-        return jdbcTemplate.update("""
-                        insert into collection_record(collection_no, chain, asset_symbol, from_address, to_address,
-                                                      amount, fee, status, raw_payload, tenant_id,
-                                                      custody_address_id, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?, ?, ?, ?)
-                        on conflict (chain, collection_no) do nothing
-                        """,
-                collectionNo, chain, assetSymbol, fromAddress, toAddress, amount, fee, rawPayload,
-                tenantId, custodyAddressId,
-                toTs(now()), toTs(now()));
+        return collectionRecordRepository.create(tenantId, custodyAddressId, collectionNo, chain, assetSymbol,
+                fromAddress, toAddress, amount, fee, rawPayload);
     }
     /**
      * 获取或查询 {@code listCollectionsForSigning} 对应的数据，供调用方读取当前状态。
      */
     public List<ChainCollectionRecord> listCollectionsForSigning(String chain, int limit) {
-        return jdbcTemplate.query("""
-                        select id, tenant_id, custody_address_id, collection_no, chain, asset_symbol, from_address, to_address,
-                               amount, fee, tx_hash, status, error_message, raw_payload, created_at, updated_at
-                        from collection_record
-                        where tenant_id is not null and custody_address_id is not null
-                          and chain = ? and status in ('CREATED', 'RETRYING')
-                        order by id
-                        limit ?
-                        """,
-                (rs, rowNum) -> mapCollectionRecord(rs),
-                chain, limit);
+        return collectionRecordRepository.listForSigning(chain, limit);
     }
     /**
      * 获取或查询 {@code listCollectionsByStatus} 对应的数据，供调用方读取当前状态。
      */
     public List<ChainCollectionRecord> listCollectionsByStatus(String chain, String status, int limit) {
-        return jdbcTemplate.query("""
-                        select id, tenant_id, custody_address_id, collection_no, chain, asset_symbol, from_address, to_address,
-                               amount, fee, tx_hash, status, error_message, raw_payload, created_at, updated_at
-                        from collection_record
-                        where tenant_id is not null and custody_address_id is not null
-                          and chain = ? and status = ?
-                        order by id
-                        limit ?
-                        """,
-                (rs, rowNum) -> mapCollectionRecord(rs),
-                chain, status, limit);
+        return collectionRecordRepository.listByStatus(chain, status, limit);
     }
 
     /**
@@ -1929,18 +1162,8 @@ public class ChainJdbcRepository {
                                       String status, String txHash, String errorMessage,
                                       String rawPayload) {
         Objects.requireNonNull(tenantId, "tenantId is required");
-        return jdbcTemplate.update("""
-                        update collection_record
-                        set status = ?,
-                            tx_hash = coalesce(?, tx_hash),
-                            error_message = ?,
-                            raw_payload = coalesce(?, raw_payload),
-                            updated_at = ?
-                        where tenant_id = ?
-                          and chain = ? and collection_no = ?
-                        """,
-                status, txHash, errorMessage, rawPayload, toTs(now()),
-                tenantId, chain, collectionNo);
+        return collectionRecordRepository.updateStatus(tenantId, chain, collectionNo, status,
+                txHash, errorMessage, rawPayload);
     }
 
         /**
@@ -1949,17 +1172,7 @@ public class ChainJdbcRepository {
     public int claimCollectionSigning(UUID tenantId, String chain,
                                       String collectionNo, String rawPayload) {
         Objects.requireNonNull(tenantId, "tenantId is required");
-        return jdbcTemplate.update("""
-                        update collection_record
-                        set status = 'SIGNING',
-                            error_message = null,
-                            raw_payload = coalesce(?, raw_payload),
-                            updated_at = ?
-                        where tenant_id = ?
-                          and chain = ? and collection_no = ?
-                          and status in ('CREATED', 'RETRYING')
-                        """,
-                rawPayload, toTs(now()), tenantId, chain, collectionNo);
+        return collectionRecordRepository.claimSigning(tenantId, chain, collectionNo, rawPayload);
     }
 
     /**
@@ -1968,37 +1181,21 @@ public class ChainJdbcRepository {
     public int markCollectionConfirmed(UUID tenantId, String chain,
                                        String collectionNo, String txHash) {
         Objects.requireNonNull(tenantId, "tenantId is required");
-        return jdbcTemplate.update("""
-                        update collection_record
-                        set status = 'CONFIRMED', tx_hash = ?, error_message = null, updated_at = ?
-                        where tenant_id = ?
-                          and chain = ? and collection_no = ? and status <> 'CONFIRMED'
-                        """,
-                txHash, toTs(now()), tenantId, chain, collectionNo);
+        return collectionRecordRepository.markConfirmed(tenantId, chain, collectionNo, txHash);
     }
     /**
      * 获取或查询 {@code findCollectionStatus} 对应的数据，供调用方读取当前状态。
      */
     public Optional<String> findCollectionStatus(UUID tenantId, String chain, String collectionNo) {
         Objects.requireNonNull(tenantId, "tenantId is required");
-        List<String> results = jdbcTemplate.queryForList("""
-                        select status from collection_record
-                         where tenant_id = ?
-                           and chain = ? and collection_no = ?
-                        """, String.class, tenantId, chain, collectionNo);
-        return results.stream().findFirst();
+        return collectionRecordRepository.findStatus(tenantId, chain, collectionNo);
     }
     /**
      * 获取或查询 {@code findCollectionTxHash} 对应的数据，供调用方读取当前状态。
      */
     public Optional<String> findCollectionTxHash(UUID tenantId, String chain, String collectionNo) {
         Objects.requireNonNull(tenantId, "tenantId is required");
-        List<String> results = jdbcTemplate.queryForList("""
-                        select tx_hash from collection_record
-                         where tenant_id = ?
-                           and chain = ? and collection_no = ? and tx_hash is not null
-                        """, String.class, tenantId, chain, collectionNo);
-        return results.stream().findFirst();
+        return collectionRecordRepository.findTxHash(tenantId, chain, collectionNo);
     }
     /**
      * 执行 {@code mapCollectionRecord} 对应的辅助逻辑，完成数据处理并维护状态边界。
@@ -2051,41 +1248,8 @@ public class ChainJdbcRepository {
             String businessType,
             String businessNo,
             WithdrawTransaction transaction) {
-        List<WithdrawTransaction> inserted = jdbcTemplate.query("""
-                        insert into chain_signing_transaction(
-                            chain, asset_symbol, business_type, business_no,
-                            tx_id, balance, signature, currency, status, create_date, update_date
-                        )
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        on conflict (chain, business_type, business_no) do update set
-                            tx_id = excluded.tx_id,
-                            balance = excluded.balance,
-                            signature = excluded.signature,
-                            currency = excluded.currency,
-                            status = excluded.status,
-                            error_message = null,
-                            update_date = excluded.update_date
-                        where chain_signing_transaction.status in (?, ?)
-                        returning id, tx_id, balance, signature, currency, status, create_date, update_date
-                        """,
-                (rs, rowNum) -> mapSigningTransaction(rs),
-                chain,
-                assetSymbol,
-                businessType,
-                businessNo,
-                transaction.getTxId(),
-                transaction.getBalance(),
-                transaction.getSignature(),
-                transaction.getCurrency(),
-                transaction.getStatus(),
-                toTs(now()),
-                toTs(now()),
-                Constants.WAITING,
-                Constants.SIGNING);
-        if (!inserted.isEmpty()) {
-            return inserted.get(0);
-        }
-        return findBitcoinLikeSigningTransaction(chain, businessType, businessNo)
+        return chainSigningTransactionRepository.create(chain, assetSymbol, businessType, businessNo, transaction,
+                        Constants.WAITING, Constants.SIGNING)
                 .orElseThrow(() -> new IllegalStateException(
                         "failed to create " + chain + " signing transaction " + businessType + "/" + businessNo));
     }
@@ -2104,14 +1268,7 @@ public class ChainJdbcRepository {
      */
     public Optional<WithdrawTransaction> findBitcoinLikeSigningTransaction(
             String chain, String businessType, String businessNo) {
-        List<WithdrawTransaction> results = jdbcTemplate.query("""
-                        select id, tx_id, balance, signature, currency, status, create_date, update_date
-                        from chain_signing_transaction
-                        where chain = ? and business_type = ? and business_no = ?
-                        """,
-                (rs, rowNum) -> mapSigningTransaction(rs),
-                chain, businessType, businessNo);
-        return results.stream().findFirst();
+        return chainSigningTransactionRepository.findByBusiness(chain, businessType, businessNo);
     }
 
     /**
@@ -2120,14 +1277,7 @@ public class ChainJdbcRepository {
     public Optional<WithdrawTransaction> findBitcoinLikeSigningTransactionById(
             AssetRuntimeMetadata currency, int transactionId) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        List<WithdrawTransaction> results = jdbcTemplate.query("""
-                        select id, tx_id, balance, signature, currency, status, create_date, update_date
-                        from chain_signing_transaction
-                        where chain = ? and id = ?
-                        """,
-                (rs, rowNum) -> mapSigningTransaction(rs),
-                chain, transactionId);
-        return results.stream().findFirst();
+        return chainSigningTransactionRepository.findById(chain, transactionId);
     }
 
     /**
@@ -2136,150 +1286,59 @@ public class ChainJdbcRepository {
     public Optional<WithdrawTransaction> findBitcoinLikeSigningTransactionByTxId(
             AssetRuntimeMetadata currency, String txId) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        List<WithdrawTransaction> results = jdbcTemplate.query("""
-                        select id, tx_id, balance, signature, currency, status, create_date, update_date
-                        from chain_signing_transaction
-                        where chain = ? and tx_id = ?
-                        order by id desc
-                        limit 1
-                        """,
-                (rs, rowNum) -> mapSigningTransaction(rs),
-                chain, txId);
-        return results.stream().findFirst();
+        return chainSigningTransactionRepository.findByTxId(chain, txId);
     }
     /**
      * 执行 {@code bitcoinLikeSigningTransactionExists} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     public boolean bitcoinLikeSigningTransactionExists(AssetRuntimeMetadata currency, String txId) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        Boolean exists = jdbcTemplate.queryForObject("""
-                        select exists(
-                            select 1 from chain_signing_transaction
-                            where chain = ? and tx_id = ?
-                        )
-                        """, Boolean.class, chain, txId);
-        return Boolean.TRUE.equals(exists);
+        return chainSigningTransactionRepository.exists(chain, txId);
     }
     /**
      * 设置或更新 {@code updateBitcoinLikeSigningTransaction} 对应的状态，并保持相关业务字段一致。
      */
     public int updateBitcoinLikeSigningTransaction(AssetRuntimeMetadata currency, WithdrawTransaction transaction) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        return jdbcTemplate.update("""
-                        update chain_signing_transaction
-                        set tx_id = ?,
-                            balance = ?,
-                            signature = ?,
-                            currency = ?,
-                            status = ?,
-                            error_message = null,
-                            update_date = ?
-                        where chain = ? and id = ?
-                        """,
-                transaction.getTxId(),
-                transaction.getBalance(),
-                transaction.getSignature(),
-                transaction.getCurrency(),
-                transaction.getStatus(),
-                toTs(now()),
-                chain,
-                transaction.getId());
+        return chainSigningTransactionRepository.updateStatus(chain, transaction.getId(), transaction);
     }
     /**
      * 写入或更新 {@code markBitcoinLikeSigningError} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     public int markBitcoinLikeSigningError(AssetRuntimeMetadata currency, int transactionId, String errorMessage) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        return jdbcTemplate.update("""
-                        update chain_signing_transaction
-                        set error_message = ?,
-                            update_date = ?
-                        where chain = ? and id = ?
-                        """,
-                errorMessage, toTs(now()), chain, transactionId);
+        return chainSigningTransactionRepository.markError(chain, transactionId, errorMessage);
     }
     /**
      * 获取或查询 {@code findSentBitcoinLikeSigningTransactions} 对应的数据，供调用方读取当前状态。
      */
     public List<WithdrawTransaction> findSentBitcoinLikeSigningTransactions(AssetRuntimeMetadata currency) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        return jdbcTemplate.query("""
-                        select id, tx_id, balance, signature, currency, status, create_date, update_date
-                        from chain_signing_transaction
-                        where chain = ? and status = ?
-                        order by id
-                        """,
-                (rs, rowNum) -> mapSigningTransaction(rs),
-                chain, Constants.SENT);
+        return chainSigningTransactionRepository.listSent(chain, Constants.SENT);
     }
     /**
      * 获取或查询 {@code findLedgerBalance} 对应的数据，供调用方读取当前状态。
      */
     public Optional<LedgerBalanceRecord> findLedgerBalance(String chain, String assetSymbol, String accountId) {
-        List<LedgerBalanceRecord> results = jdbcTemplate.query("""
-                        select chain, asset_symbol, account_id, available_balance, locked_balance, total_balance,
-                               created_at, updated_at
-                        from ledger_balance
-                        where chain = ? and asset_symbol = ? and account_id = ?
-                        """,
-                (rs, rowNum) -> LedgerBalanceRecord.builder()
-                        .chain(rs.getString("chain"))
-                        .assetSymbol(rs.getString("asset_symbol"))
-                        .accountId(rs.getString("account_id"))
-                        .availableBalance(rs.getBigDecimal("available_balance"))
-                        .lockedBalance(rs.getBigDecimal("locked_balance"))
-                        .totalBalance(rs.getBigDecimal("total_balance"))
-                        .createdAt(toInstant(rs.getTimestamp("created_at")))
-                        .updatedAt(toInstant(rs.getTimestamp("updated_at")))
-                        .build(),
-                chain, assetSymbol, accountId);
-        return results.stream().findFirst();
+        return ledgerBalanceRepository.find(chain, assetSymbol, accountId);
     }
     /**
      * 获取或查询 {@code listLedgerBalances} 对应的数据，供调用方读取当前状态。
      */
     public List<LedgerBalanceRecord> listLedgerBalances() {
-        return jdbcTemplate.query("""
-                        select id, chain, asset_symbol, account_id, available_balance, locked_balance, total_balance,
-                               created_at, updated_at
-                        from ledger_balance
-                        order by chain, asset_symbol, account_id
-                        """,
-                (rs, rowNum) -> LedgerBalanceRecord.builder()
-                        .id(rs.getLong("id"))
-                        .chain(rs.getString("chain"))
-                        .assetSymbol(rs.getString("asset_symbol"))
-                        .accountId(rs.getString("account_id"))
-                        .availableBalance(rs.getBigDecimal("available_balance"))
-                        .lockedBalance(rs.getBigDecimal("locked_balance"))
-                        .totalBalance(rs.getBigDecimal("total_balance"))
-                        .createdAt(toInstant(rs.getTimestamp("created_at")))
-                        .updatedAt(toInstant(rs.getTimestamp("updated_at")))
-                        .build());
+        return ledgerBalanceRepository.listAll();
     }
     /**
      * 执行 {@code sumLedgerTotalBalance} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     public BigDecimal sumLedgerTotalBalance(String chain, String assetSymbol) {
-        BigDecimal balance = jdbcTemplate.queryForObject("""
-                        select coalesce(sum(total_balance), 0)
-                        from ledger_balance
-                        where chain = ? and asset_symbol = ?
-                        """,
-                BigDecimal.class, chain, assetSymbol);
-        return balance == null ? BigDecimal.ZERO : balance;
+        return ledgerBalanceRepository.sumTotal(chain, assetSymbol);
     }
     /**
      * 执行 {@code sumLedgerAvailableBalance} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     public BigDecimal sumLedgerAvailableBalance(String chain, String assetSymbol) {
-        BigDecimal balance = jdbcTemplate.queryForObject("""
-                        select coalesce(sum(available_balance), 0)
-                        from ledger_balance
-                        where chain = ? and asset_symbol = ?
-                        """,
-                BigDecimal.class, chain, assetSymbol);
-        return balance == null ? BigDecimal.ZERO : balance;
+        return ledgerBalanceRepository.sumAvailable(chain, assetSymbol);
     }
 
     /**
@@ -2288,17 +1347,7 @@ public class ChainJdbcRepository {
     public List<WithdrawTransaction> findStaleBitcoinLikeSigningTransactions(
             AssetRuntimeMetadata currency, long staleSeconds) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        return jdbcTemplate.query("""
-                        select id, tx_id, balance, signature, currency, status, create_date, update_date
-                        from chain_signing_transaction
-                        where chain = ?
-                          and status = ?
-                          and update_date < now() - (? * interval '1 second')
-                        order by id
-                        limit 100
-                        """,
-                (rs, rowNum) -> mapSigningTransaction(rs),
-                chain, Constants.SIGNING, staleSeconds);
+        return chainSigningTransactionRepository.listStale(chain, Constants.SIGNING, staleSeconds);
     }
 
     /**
@@ -2307,13 +1356,7 @@ public class ChainJdbcRepository {
     public boolean claimBitcoinLikeSigningRecovery(
             AssetRuntimeMetadata currency, int transactionId, long staleSeconds) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        return jdbcTemplate.update("""
-                        update chain_signing_transaction
-                        set update_date = now()
-                        where chain = ? and id = ? and status = ?
-                          and update_date < now() - (? * interval '1 second')
-                        """,
-                chain, transactionId, Constants.SIGNING, staleSeconds) == 1;
+        return chainSigningTransactionRepository.claimRecovery(chain, transactionId, Constants.SIGNING, staleSeconds);
     }
     /**
      * 执行 {@code mapSigningTransaction} 对应的辅助逻辑，完成数据处理并维护状态边界。
@@ -2334,37 +1377,13 @@ public class ChainJdbcRepository {
      * 记录或保存 {@code recordEvmTokenTransfer} 对应的数据，并遵守幂等和事务约束。
      */
     public int recordEvmTokenTransfer(DepositEvent event, long logIndex, String status) {
-        return jdbcTemplate.update("""
-                        insert into evm_token_transfer(chain, tx_hash, log_index, token_symbol, contract_address,
-                                                       from_address, to_address, amount, block_height,
-                                                       confirmations, status, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        on conflict (chain, tx_hash, log_index) do update set
-                            confirmations = greatest(evm_token_transfer.confirmations, excluded.confirmations),
-                            status = excluded.status,
-                            updated_at = excluded.updated_at
-                        """,
-                event.chainType().name(), event.txId(), logIndex, event.assetSymbol(), event.tokenAddress(),
-                event.fromAddress(), event.toAddress(), event.amount(), event.blockHeight(),
-                event.confirmations(), status, toTs(now()), toTs(now()));
+        return evmTokenTransferRepository.upsert(event, logIndex, status);
     }
     /**
      * 记录或保存 {@code recordTronTokenTransfer} 对应的数据，并遵守幂等和事务约束。
      */
     public int recordTronTokenTransfer(DepositEvent event, long logIndex, String status) {
-        return jdbcTemplate.update("""
-                        insert into tron_token_transfer(chain, tx_hash, log_index, token_symbol, contract_address,
-                                                        from_address, to_address, amount, block_height,
-                                                        confirmations, status, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        on conflict (chain, tx_hash, log_index) do update set
-                            confirmations = greatest(tron_token_transfer.confirmations, excluded.confirmations),
-                            status = excluded.status,
-                            updated_at = excluded.updated_at
-                        """,
-                event.chainType().name(), event.txId(), logIndex, event.assetSymbol(), event.tokenAddress(),
-                event.fromAddress(), event.toAddress(), event.amount(), event.blockHeight(),
-                event.confirmations(), status, toTs(now()), toTs(now()));
+        return tronTokenTransferRepository.upsert(event, logIndex, status);
     }
 
     /**
@@ -2373,19 +1392,7 @@ public class ChainJdbcRepository {
     public void incrementLedgerBalance(UUID tenantId, String chain, String assetSymbol,
                                        String accountId, BigDecimal amount) {
         Objects.requireNonNull(tenantId, "tenantId is required");
-        int updated = jdbcTemplate.update("""
-                        insert into ledger_balance(tenant_id, chain, asset_symbol, account_id, available_balance, locked_balance,
-                                                   total_balance, created_at, updated_at)
-                        values (?, ?, ?, ?, ?, 0, ?, ?, ?)
-                        on conflict (chain, asset_symbol, account_id) do update set
-                            available_balance = ledger_balance.available_balance + excluded.available_balance,
-                            total_balance = ledger_balance.total_balance + excluded.total_balance,
-                            tenant_id = coalesce(ledger_balance.tenant_id, excluded.tenant_id),
-                            updated_at = excluded.updated_at
-                        where ledger_balance.tenant_id is null
-                           or ledger_balance.tenant_id = excluded.tenant_id
-                        """,
-                tenantId, chain, assetSymbol, accountId, amount, amount, toTs(now()), toTs(now()));
+        int updated = ledgerBalanceRepository.increment(tenantId, chain, assetSymbol, accountId, amount);
         if (updated != 1) {
             throw new IllegalStateException("ledger balance belongs to another tenant");
         }
@@ -2394,16 +1401,7 @@ public class ChainJdbcRepository {
      * 执行 {@code debitLedgerBalance} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     public boolean debitLedgerBalance(String chain, String assetSymbol, String accountId, BigDecimal amount) {
-        int updated = jdbcTemplate.update("""
-                        update ledger_balance
-                        set available_balance = available_balance - ?,
-                            total_balance = total_balance - ?,
-                            updated_at = ?
-                        where chain = ? and asset_symbol = ? and account_id = ?
-                          and available_balance >= ?
-                        """,
-                amount, amount, toTs(now()), chain, assetSymbol, accountId, amount);
-        return updated == 1;
+        return ledgerBalanceRepository.debit(chain, assetSymbol, accountId, amount, null);
     }
 
     /**
@@ -2411,32 +1409,14 @@ public class ChainJdbcRepository {
      */
     public boolean debitLedgerBalance(UUID tenantId, String chain, String assetSymbol,
                                       String accountId, BigDecimal amount) {
-        int updated = jdbcTemplate.update("""
-                        update ledger_balance
-                        set available_balance = available_balance - ?,
-                            total_balance = total_balance - ?,
-                            updated_at = ?
-                        where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
-                          and available_balance >= ?
-                        """,
-                amount, amount, toTs(now()), tenantId, chain, assetSymbol, accountId, amount);
-        return updated == 1;
+        return ledgerBalanceRepository.debit(chain, assetSymbol, accountId, amount, tenantId);
     }
 
         /**
      * 执行 {@code freezeLedgerBalance} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     public boolean freezeLedgerBalance(String chain, String assetSymbol, String accountId, BigDecimal amount) {
-        int updated = jdbcTemplate.update("""
-                        update ledger_balance
-                        set available_balance = available_balance - ?,
-                            locked_balance = locked_balance + ?,
-                            updated_at = ?
-                        where chain = ? and asset_symbol = ? and account_id = ?
-                          and available_balance >= ?
-                        """,
-                amount, amount, toTs(now()), chain, assetSymbol, accountId, amount);
-        return updated == 1;
+        return ledgerBalanceRepository.freeze(chain, assetSymbol, accountId, amount, null);
     }
 
     /**
@@ -2444,32 +1424,14 @@ public class ChainJdbcRepository {
      */
     public boolean freezeLedgerBalance(UUID tenantId, String chain, String assetSymbol,
                                        String accountId, BigDecimal amount) {
-        int updated = jdbcTemplate.update("""
-                        update ledger_balance
-                        set available_balance = available_balance - ?,
-                            locked_balance = locked_balance + ?,
-                            updated_at = ?
-                        where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
-                          and available_balance >= ?
-                        """,
-                amount, amount, toTs(now()), tenantId, chain, assetSymbol, accountId, amount);
-        return updated == 1;
+        return ledgerBalanceRepository.freeze(chain, assetSymbol, accountId, amount, tenantId);
     }
 
         /**
      * 删除或释放 {@code releaseLockedBalance} 对应的资源，并收敛相关业务状态。
      */
     public boolean releaseLockedBalance(String chain, String assetSymbol, String accountId, BigDecimal amount) {
-        int updated = jdbcTemplate.update("""
-                        update ledger_balance
-                        set available_balance = available_balance + ?,
-                            locked_balance = locked_balance - ?,
-                            updated_at = ?
-                        where chain = ? and asset_symbol = ? and account_id = ?
-                          and locked_balance >= ?
-                        """,
-                amount, amount, toTs(now()), chain, assetSymbol, accountId, amount);
-        return updated == 1;
+        return ledgerBalanceRepository.release(chain, assetSymbol, accountId, amount, null);
     }
 
     /**
@@ -2477,32 +1439,14 @@ public class ChainJdbcRepository {
      */
     public boolean releaseLockedBalance(UUID tenantId, String chain, String assetSymbol,
                                         String accountId, BigDecimal amount) {
-        int updated = jdbcTemplate.update("""
-                        update ledger_balance
-                        set available_balance = available_balance + ?,
-                            locked_balance = locked_balance - ?,
-                            updated_at = ?
-                        where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
-                          and locked_balance >= ?
-                        """,
-                amount, amount, toTs(now()), tenantId, chain, assetSymbol, accountId, amount);
-        return updated == 1;
+        return ledgerBalanceRepository.release(chain, assetSymbol, accountId, amount, tenantId);
     }
 
         /**
      * 设置或更新 {@code settleLockedDebit} 对应的状态，并保持相关业务字段一致。
      */
     public boolean settleLockedDebit(String chain, String assetSymbol, String accountId, BigDecimal amount) {
-        int updated = jdbcTemplate.update("""
-                        update ledger_balance
-                        set locked_balance = locked_balance - ?,
-                            total_balance = total_balance - ?,
-                            updated_at = ?
-                        where chain = ? and asset_symbol = ? and account_id = ?
-                          and locked_balance >= ?
-                        """,
-                amount, amount, toTs(now()), chain, assetSymbol, accountId, amount);
-        return updated == 1;
+        return ledgerBalanceRepository.settle(chain, assetSymbol, accountId, amount, null);
     }
 
     /**
@@ -2510,16 +1454,7 @@ public class ChainJdbcRepository {
      */
     public boolean settleLockedDebit(UUID tenantId, String chain, String assetSymbol,
                                      String accountId, BigDecimal amount) {
-        int updated = jdbcTemplate.update("""
-                        update ledger_balance
-                        set locked_balance = locked_balance - ?,
-                            total_balance = total_balance - ?,
-                            updated_at = ?
-                        where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ?
-                          and locked_balance >= ?
-                        """,
-                amount, amount, toTs(now()), tenantId, chain, assetSymbol, accountId, amount);
-        return updated == 1;
+        return ledgerBalanceRepository.settle(chain, assetSymbol, accountId, amount, tenantId);
     }
 
     /**
@@ -2528,100 +1463,84 @@ public class ChainJdbcRepository {
     public List<CollectionCandidateRecord> listCollectableLedgerBalances(String chain,
                                                                          BigDecimal minimumAmount,
                                                                          int limit) {
-        return jdbcTemplate.query("""
-                        with collected as (
-                            select tenant_id, chain, asset_symbol, lower(from_address) as from_address,
-                                   coalesce(sum(amount), 0) amount
-                            from collection_record
-                            where chain = ?
-                              and tenant_id is not null
-                              and status <> 'FAILED'
-                            group by tenant_id, chain, asset_symbol, lower(from_address)
-                        ),
-                        deposited as (
-                            select tenant_id, chain, asset_symbol, lower(to_address) as to_address,
-                                   coalesce(sum(amount), 0) amount
-                            from deposit_record
-                            where chain = ?
-                              and tenant_id is not null
-                              and credited = true
-                            group by tenant_id, chain, asset_symbol, lower(to_address)
-                        ),
-                        pending as (
-                            select distinct tenant_id, chain, asset_symbol, lower(from_address) as from_address
-                            from collection_record
-                            where chain = ?
-                              and tenant_id is not null
-                              and status in ('CREATED', 'RETRYING', 'SIGNING', 'SENT')
-                        ),
-                        candidates as (
-                            select deposited.tenant_id, custody.id as custody_address_id,
-                                   ca.chain, deposited.asset_symbol, ca.account_id, ca.address, ca.owner_address,
-                                   ca.user_id, ca.biz, ca.address_index, ca.wallet_role,
-                                   greatest(deposited.amount - coalesce(collected.amount, 0), 0) as amount,
-                                   greatest(coalesce(a.min_transfer, 0), ?) as minimum_amount
-                            from deposited
-                            join chain_address ca
-                              on ca.tenant_id = deposited.tenant_id
-                             and ca.chain = deposited.chain
-                             and lower(ca.address) = deposited.to_address
-                             and ca.enabled = true
-                             and ca.wallet_role = 'DEPOSIT'
-                             and ca.user_id <> ?
-                            join chain_asset native_asset
-                              on native_asset.chain = ca.chain
-                             and native_asset.symbol = ca.asset_symbol
-                             and native_asset.native_asset = true
-                             and native_asset.active = true
-                            join custody_address custody
-                              on custody.tenant_id = deposited.tenant_id
-                             and custody.chain_address_id = ca.id
-                             and custody.status = 'ACTIVE'
-                            join chain_asset a
-                              on a.chain = deposited.chain
-                             and a.symbol = deposited.asset_symbol
-                             and a.active = true
-                            left join collected
-                              on collected.tenant_id = deposited.tenant_id
-                             and collected.chain = ca.chain
-                             and collected.asset_symbol = deposited.asset_symbol
-                             and collected.from_address = lower(ca.address)
-                            left join pending
-                              on pending.tenant_id = deposited.tenant_id
-                             and pending.chain = ca.chain
-                             and pending.asset_symbol = deposited.asset_symbol
-                             and pending.from_address = lower(ca.address)
-                            where deposited.chain = ?
-                              and pending.from_address is null
-                        ),
-                        positive_candidates as (
-                            select tenant_id, custody_address_id, chain, asset_symbol, account_id, address, owner_address,
-                                   user_id, biz, address_index, wallet_role, amount, minimum_amount
-                            from candidates
-                            where amount > 0
-                              and amount >= minimum_amount
-                        )
-                        select tenant_id, custody_address_id, chain, asset_symbol, account_id, address, owner_address,
-                               user_id, biz, address_index, wallet_role, amount
-                        from positive_candidates
-                        order by amount desc, address_index
-                        limit ?
-                        """,
-                (rs, rowNum) -> CollectionCandidateRecord.builder()
-                        .tenantId(rs.getObject("tenant_id", UUID.class))
-                        .custodyAddressId(rs.getObject("custody_address_id", UUID.class))
-                        .chain(rs.getString("chain"))
-                        .assetSymbol(rs.getString("asset_symbol"))
-                        .accountId(rs.getString("account_id"))
-                        .address(rs.getString("address"))
-                        .ownerAddress(rs.getString("owner_address"))
-                        .userId(rs.getLong("user_id"))
-                        .biz(rs.getInt("biz"))
-                        .addressIndex(rs.getLong("address_index"))
-                        .walletRole(rs.getString("wallet_role"))
-                        .amount(rs.getBigDecimal("amount"))
-                        .build(),
-                chain, chain, chain, minimumAmount, HotWalletRules.DEFAULT_HOT_USER_ID, chain, limit);
+        record BalanceKey(UUID tenantId, String assetSymbol, String address) { }
+        Map<BalanceKey, BigDecimal> deposited = new java.util.HashMap<>();
+        for (Map<String, Object> row : depositRecordRepository.listCreditedForCollectionBalance(chain)) {
+            BalanceKey key = new BalanceKey((UUID) row.get("tenant_id"),
+                    String.valueOf(row.get("asset_symbol")), String.valueOf(row.get("to_address")));
+            deposited.merge(key, (BigDecimal) row.get("amount"), BigDecimal::add);
+        }
+        Map<BalanceKey, BigDecimal> collected = new java.util.HashMap<>();
+        Set<BalanceKey> pending = new java.util.HashSet<>();
+        for (Map<String, Object> row : collectionRecordRepository.listForCollectionBalance(chain)) {
+            BalanceKey key = new BalanceKey((UUID) row.get("tenant_id"),
+                    String.valueOf(row.get("asset_symbol")), String.valueOf(row.get("from_address")));
+            String status = String.valueOf(row.get("status"));
+            if (!"FAILED".equals(status)) {
+                collected.merge(key, (BigDecimal) row.get("amount"), BigDecimal::add);
+            }
+            if (Set.of("CREATED", "RETRYING", "SIGNING", "SENT").contains(status)) {
+                pending.add(key);
+            }
+        }
+        Map<String, Map<String, Object>> activeAssets = new java.util.HashMap<>();
+        for (Map<String, Object> row : chainAssetRepository.listActiveByChain(chain)) {
+            activeAssets.put(String.valueOf(row.get("symbol")).toLowerCase(java.util.Locale.ROOT), row);
+        }
+        Map<Long, UUID> custodyByChainAddress = new java.util.HashMap<>();
+        for (Map<String, Object> row : custodyAddressRepository.listActiveByChain(chain)) {
+            custodyByChainAddress.put(((Number) row.get("chain_address_id")).longValue(),
+                    (UUID) row.get("id"));
+        }
+        List<CollectionCandidateRecord> result = new java.util.ArrayList<>();
+        for (Map<String, Object> address : chainAddressRepository.listEnabledByChain(chain)) {
+            UUID tenantId = (UUID) address.get("tenant_id");
+            String walletRole = String.valueOf(address.get("wallet_role"));
+            long userId = ((Number) address.get("user_id")).longValue();
+            if (tenantId == null || !"DEPOSIT".equals(walletRole)
+                    || userId == HotWalletRules.DEFAULT_HOT_USER_ID) {
+                continue;
+            }
+            Map<String, Object> nativeAsset = activeAssets.get(
+                    String.valueOf(address.get("asset_symbol")).toLowerCase(java.util.Locale.ROOT));
+            if (nativeAsset == null || !Boolean.TRUE.equals(nativeAsset.get("native_asset"))) {
+                continue;
+            }
+            Long custodyAddressId = ((Number) address.get("id")).longValue();
+            UUID custodyId = custodyByChainAddress.get(custodyAddressId);
+            if (custodyId == null) {
+                continue;
+            }
+            String sourceAddress = String.valueOf(address.get("address"))
+                    .toLowerCase(java.util.Locale.ROOT);
+            for (Map.Entry<BalanceKey, BigDecimal> entry : deposited.entrySet()) {
+                BalanceKey key = entry.getKey();
+                if (!tenantId.equals(key.tenantId()) || !sourceAddress.equals(key.address())
+                        || pending.contains(new BalanceKey(tenantId, key.assetSymbol(), sourceAddress))) {
+                    continue;
+                }
+                Map<String, Object> asset = activeAssets.get(key.assetSymbol().toLowerCase(java.util.Locale.ROOT));
+                if (asset == null) {
+                    continue;
+                }
+                BigDecimal amount = entry.getValue().subtract(collected.getOrDefault(key, BigDecimal.ZERO))
+                        .max(BigDecimal.ZERO);
+                BigDecimal minTransfer = (BigDecimal) asset.get("min_transfer");
+                BigDecimal required = (minTransfer == null ? BigDecimal.ZERO : minTransfer)
+                        .max(minimumAmount == null ? BigDecimal.ZERO : minimumAmount);
+                if (amount.signum() <= 0 || amount.compareTo(required) < 0) {
+                    continue;
+                }
+                result.add(CollectionCandidateRecord.builder().tenantId(tenantId).custodyAddressId(custodyId)
+                        .chain(chain).assetSymbol(key.assetSymbol()).accountId((String) address.get("account_id"))
+                        .address((String) address.get("address")).ownerAddress((String) address.get("owner_address"))
+                        .userId(userId).biz(((Number) address.get("biz")).intValue())
+                        .addressIndex(((Number) address.get("address_index")).longValue())
+                        .walletRole(walletRole).amount(amount).build());
+            }
+        }
+        return result.stream().sorted(java.util.Comparator.comparing(CollectionCandidateRecord::getAmount).reversed()
+                        .thenComparing(CollectionCandidateRecord::getAddressIndex)).limit(limit).toList();
     }
     /**
      * 获取或查询 {@code findActiveTenantCollectionAddress} 对应的数据，供调用方读取当前状态。
@@ -2630,117 +1549,61 @@ public class ChainJdbcRepository {
         if (tenantId == null) {
             return Optional.empty();
         }
-        return jdbcTemplate.queryForList("""
-                        select a.address
-                          from custody_gas_account g
-                          join custody_address a
-                            on a.tenant_id = g.tenant_id
-                           and a.id = g.custody_address_id
-                         where g.tenant_id = ? and g.chain = ?
-                           and g.status = 'ACTIVE' and a.status = 'ACTIVE'
-                        """, String.class, tenantId, chain)
-                .stream().findFirst();
+        return custodyGasAccountRepository.listActiveByTenantAndChain(tenantId, chain).stream()
+                .map(row -> (UUID) row.get("custody_address_id"))
+                .map(id -> custodyAddressRepository.findByTenantAndId(tenantId, id))
+                .flatMap(Optional::stream)
+                .filter(row -> "ACTIVE".equalsIgnoreCase(String.valueOf(row.get("status"))))
+                .map(row -> String.valueOf(row.get("address")))
+                .findFirst();
     }
     /**
      * 判断 {@code isEvm7702CollectionActive} 对应的条件是否成立，并返回明确的布尔结果。
      */
     public boolean isEvm7702CollectionActive(String chain, String network) {
-        Boolean active = jdbcTemplate.queryForObject("""
-                select exists(select 1 from evm_7702_config
-                               where chain = ? and network = ? and status = 'ACTIVE')
-                """, Boolean.class, chain, network);
-        return Boolean.TRUE.equals(active);
+        return evm7702ConfigRepository.existsActive(chain, network);
     }
     /**
      * 判断 {@code isEvm7702Managed} 对应的条件是否成立，并返回明确的布尔结果。
      */
     public boolean isEvm7702Managed(String chain, String network) {
-        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
-                select exists(select 1 from evm_7702_config
-                               where chain = ? and network = ?
-                                 and status in ('ACTIVE', 'PAUSED'))
-                """, Boolean.class, chain, network));
+        return evm7702ConfigRepository.existsManaged(chain, network);
     }
     /**
      * 判断 {@code isEvm7702NativeCollectionActive} 对应的条件是否成立，并返回明确的布尔结果。
      */
     public boolean isEvm7702NativeCollectionActive(String chain, String network) {
-        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
-                select exists(select 1 from evm_7702_config
-                               where chain = ? and network = ? and status = 'ACTIVE'
-                                 and native_collection_enabled = true)
-                """, Boolean.class, chain, network));
+        return evm7702ConfigRepository.existsActiveNativeCollection(chain, network);
     }
     /**
      * 判断 {@code isEvm7702BatchWithdrawalActive} 对应的条件是否成立，并返回明确的布尔结果。
      */
     public boolean isEvm7702BatchWithdrawalActive(String chain, String network) {
-        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
-                select exists(select 1 from evm_7702_config
-                               where chain = ? and network = ? and status = 'ACTIVE'
-                                 and batch_withdrawal_enabled = true)
-                """, Boolean.class, chain, network));
+        return evm7702ConfigRepository.existsActiveBatchWithdrawal(chain, network);
     }
     /**
      * 设置或更新 {@code updateScanHeight} 对应的状态，并保持相关业务字段一致。
      */
     public void updateScanHeight(String chain, String scannerName, long bestHeight, long safeHeight) {
-        jdbcTemplate.update("""
-                        insert into chain_scan_height(chain, scanner_name, best_height, safe_height, status,
-                                                      created_at, updated_at)
-                        values (?, ?, ?, ?, 'ACTIVE', ?, ?)
-                        on conflict (chain, scanner_name) do update set
-                            best_height = greatest(chain_scan_height.best_height, excluded.best_height),
-                            safe_height = case
-                                when excluded.best_height >= chain_scan_height.best_height
-                                    then excluded.safe_height
-                                else chain_scan_height.safe_height
-                            end,
-                            status = 'ACTIVE',
-                            updated_at = excluded.updated_at
-                        """,
-                chain, scannerName, bestHeight, safeHeight, toTs(now()), toTs(now()));
+        chainScanHeightRepository.upsert(chain, scannerName, bestHeight, safeHeight);
     }
     /**
      * 获取或查询 {@code findScanSafeHeight} 对应的数据，供调用方读取当前状态。
      */
     public Optional<Long> findScanSafeHeight(String chain, String scannerName) {
-        List<Long> results = jdbcTemplate.queryForList("""
-                        select safe_height from chain_scan_height
-                        where chain = ? and scanner_name = ?
-                        """, Long.class, chain, scannerName);
-        return results.stream().findFirst();
+        return chainScanHeightRepository.findSafeHeight(chain, scannerName);
     }
     /**
      * 获取或查询 {@code listCanonicalDepositBlockHeights} 对应的数据，供调用方读取当前状态。
      */
     public List<Long> listCanonicalDepositBlockHeights(String chain, long minimumHeight) {
-        return jdbcTemplate.queryForList("""
-                        select distinct block_height
-                          from deposit_record
-                         where chain = ? and block_height >= ? and credited = true
-                           and canonical_status = 'CANONICAL' and block_hash is not null
-                         order by block_height
-                        """, Long.class, chain, minimumHeight);
+        return depositRecordRepository.listCanonicalBlockHeights(chain, minimumHeight);
     }
     /**
      * 获取或查询 {@code listActiveScanHeights} 对应的数据，供调用方读取当前状态。
      */
     public List<ChainScanHeightRecord> listActiveScanHeights() {
-        return jdbcTemplate.query("""
-                        select chain, scanner_name, best_height, safe_height, status, updated_at
-                        from chain_scan_height
-                        where status = 'ACTIVE'
-                        order by chain, scanner_name
-                        """,
-                (rs, rowNum) -> ChainScanHeightRecord.builder()
-                        .chain(rs.getString("chain"))
-                        .scannerName(rs.getString("scanner_name"))
-                        .bestHeight(rs.getLong("best_height"))
-                        .safeHeight(rs.getLong("safe_height"))
-                        .status(rs.getString("status"))
-                        .updatedAt(toInstant(rs.getTimestamp("updated_at")))
-                        .build());
+        return chainScanHeightRepository.listActive();
     }
     /**
      * 获取或查询 {@code findToken} 对应的数据，供调用方读取当前状态。

@@ -63,8 +63,9 @@ Service 和 Job 统一使用构造器注入；可选基础设施依赖以 `Optio
 分别声明自身实际使用的 starter，避免依赖传递造成的隐式可用。
 
 Repository 采用“单表一仓储”约束：每个 `@Repository` 只访问一个数据库表，Repository 名称与表职责一一对应。
-Service 不持有 `JdbcTemplate`、不执行 SQL；跨表读取由 Service 调用多个单表 Repository 后在内存中组合，跨表写入由
-Service 在同一事务中编排多个单表 Repository。Repository 内禁止使用 JOIN、跨表子查询或同时读写多张业务表。
+`CustodyRepository`、`ChainJdbcRepository` 等保留名称的跨表门面使用 `@Component`，自身不执行 SQL，只在 Java 中组合
+单表仓储并维护必要的事务边界；它们不属于 SQL Repository。Service 不持有 `JdbcTemplate`、不执行 SQL，负责业务规则
+和工作流调用。任何 SQL Repository 内禁止使用 JOIN、跨表子查询或同时读写多张业务表。
 
 `com.surprising.wallet.chain.model`、业务数据库记录和转账请求模型属于 `wallet-api` 内部领域层。
 Bitcoin-like RPC DTO 与 Ed25519 链枚举、派生结果和 SLIP-0010 密钥提供者位于 `chain-sdks`；`common`

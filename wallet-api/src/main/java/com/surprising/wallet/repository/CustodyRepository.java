@@ -1,61 +1,100 @@
 package com.surprising.wallet.repository;
 
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.surprising.wallet.chain.model.LedgerBalanceRecord;
+import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Repository;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.SQLException;
-import java.sql.Timestamp;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 /**
- * 托管核心仓储，管理租户、用户、会话、API 密钥、地址、Gas 账户、Webhook、提现/充值记录等核心数据。
+ * 托管数据业务编排门面。
  *
- * <p>所有写操作均使用 JDBC 原子更新，关键事务通过 {@code @Transactional} 保证一致性。
- * 涉及的数据库表包括：</p>
- * <ul>
- *   <li>custody_tenant — 租户信息</li>
- *   <li>custody_tenant_user — 租户用户/平台管理员</li>
- *   <li>custody_session — Console 会话</li>
- *   <li>custody_api_key — API 密钥</li>
- *   <li>custody_address — 托管地址</li>
- *   <li>custody_gas_account — Gas 费用账户</li>
- *   <li>custody_deposit — 充值记录</li>
- *   <li>custody_withdrawal — 提现记录</li>
- *   <li>custody_webhook_endpoint / custody_webhook_delivery — Webhook 端点与投递</li>
- * </ul>
- *
- * @see CustodyTenantChainRepository
- * @see CustodyAssetRecoveryRepository
+ * <p>本类不执行 SQL，只组合各个单表仓储的结果并维护跨表事务边界。</p>
  */
-@Repository
+@Component
 public class CustodyRepository {
-    /**
-     * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final JdbcTemplate jdbc;
-    /**
-     * 保存 {@code securityRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final CustodySecurityRepository securityRepository;
-    /** custody_tenant 单表仓储。 */
+    /** 租户单表仓储。 */
     private final CustodyTenantTableRepository tenantTable;
-    /** custody_tenant_user 单表仓储。 */
+    /** 租户用户单表仓储。 */
     private final CustodyTenantUserRepository tenantUsers;
+    /** 安全单表仓储编排。 */
+    private final CustodySecurityRepository securityRepository;
+    /** 托管地址单表仓储。 */
+    private final CustodyAddressRepository custodyAddresses;
+    /** 链地址单表仓储。 */
+    private final ChainAddressRepository chainAddresses;
+    /** 派生主题单表仓储。 */
+    private final CustodyDerivationSubjectRepository derivationSubjects;
+    /** Gas 账户单表仓储。 */
+    private final CustodyGasAccountRepository gasAccounts;
+    /** Gas 使用单表仓储。 */
+    private final CustodyGasUsageRepository gasUsages;
+    /** 账本单表仓储。 */
+    private final LedgerBalanceRepository ledgerBalances;
+    /** 链配置单表仓储。 */
+    private final ChainProfileRepository chainProfiles;
+    /** 链资产单表仓储。 */
+    private final ChainAssetRepository chainAssets;
+    /** 代币配置单表仓储。 */
+    private final TokenConfigRepository tokenConfigs;
+    /** 幂等键单表仓储。 */
+    private final CustodyIdempotencyRepository idempotencies;
+    /** Webhook 端点单表仓储。 */
+    private final CustodyWebhookEndpointRepository webhookEndpoints;
+    /** Webhook 投递单表仓储。 */
+    private final CustodyWebhookDeliveryRepository webhookDeliveries;
+    /** Webhook 尝试单表仓储。 */
+    private final CustodyWebhookDeliveryAttemptRepository webhookAttempts;
+    /** 领域事件单表仓储。 */
+    private final CustodyEventRepository events;
+    /** 审计单表仓储。 */
+    private final CustodyAuditRepository audits;
+    /** 托管提现单表仓储。 */
+    private final CustodyWithdrawalRepository custodyWithdrawals;
+    /** 提现订单单表仓储。 */
+    private final WithdrawalOrderRepository withdrawalOrders;
+    /** 托管充值单表仓储。 */
+    private final CustodyDepositRepository custodyDeposits;
+    /** 重组赤字单表仓储。 */
+    private final CustodyReorgDeficitRepository reorgDeficits;
+    /** EVM 归集批次单表仓储。 */
+    private final EvmCollectionBatchRepository collectionBatches;
+    /** EVM 提现批次单表仓储。 */
+    private final EvmWithdrawalBatchRepository withdrawalBatches;
+    /** 租户链配置单表编排。 */
+    private final CustodyTenantChainRepository tenantChains;
+    /** EVM 交易单表仓储。 */
+    private final EvmTransactionRepository evmTransactions;
+    /** Solana 交易单表仓储。 */
+    private final SolanaTransactionRepository solanaTransactions;
+    /** Aptos 交易单表仓储。 */
+    private final AptosTransactionRepository aptosTransactions;
+    /** Sui 交易单表仓储。 */
+    private final SuiTransactionRepository suiTransactions;
+    /** TON 交易单表仓储。 */
+    private final TonTransactionRepository tonTransactions;
+    /** XRP 交易单表仓储。 */
+    private final XrpTransactionRepository xrpTransactions;
+    /** Monero 交易单表仓储。 */
+    private final MoneroTransactionRepository moneroTransactions;
+    /** TRON 交易单表仓储。 */
+    private final TronTransactionRepository tronTransactions;
+    /** 托管流水单表仓储。 */
+    private final CustodyLedgerEntryRepository ledgerEntries;
 
-    /**
-     * 构造器。
-     *
-     * @param jdbc JDBC 模板
-     */
+    /** 兼容已有手工构造方式。 */
     public CustodyRepository(JdbcTemplate jdbc) {
         this(jdbc, new CustodySecurityRepository(jdbc), new CustodyTenantTableRepository(jdbc),
                 new CustodyTenantUserRepository(jdbc));
@@ -67,22 +106,48 @@ public class CustodyRepository {
                 new CustodyTenantUserRepository(jdbc));
     }
 
-    /**
-     * 构造 {@code CustodyRepository}，初始化该组件运行所需的状态和依赖。
-     */
+    /** 构造托管数据编排门面。 */
     @Autowired
     public CustodyRepository(JdbcTemplate jdbc, CustodySecurityRepository securityRepository,
                              CustodyTenantTableRepository tenantTable,
                              CustodyTenantUserRepository tenantUsers) {
-        this.jdbc = jdbc;
-        this.securityRepository = securityRepository;
         this.tenantTable = tenantTable;
         this.tenantUsers = tenantUsers;
+        this.securityRepository = securityRepository;
+        this.custodyAddresses = new CustodyAddressRepository(jdbc);
+        this.chainAddresses = new ChainAddressRepository(jdbc);
+        this.derivationSubjects = new CustodyDerivationSubjectRepository(jdbc);
+        this.gasAccounts = new CustodyGasAccountRepository(jdbc);
+        this.gasUsages = new CustodyGasUsageRepository(jdbc);
+        this.ledgerBalances = new LedgerBalanceRepository(jdbc);
+        this.chainProfiles = new ChainProfileRepository(jdbc);
+        this.chainAssets = new ChainAssetRepository(jdbc);
+        this.tokenConfigs = new TokenConfigRepository(jdbc);
+        this.idempotencies = new CustodyIdempotencyRepository(jdbc);
+        this.webhookEndpoints = new CustodyWebhookEndpointRepository(jdbc);
+        this.webhookDeliveries = new CustodyWebhookDeliveryRepository(jdbc);
+        this.webhookAttempts = new CustodyWebhookDeliveryAttemptRepository(jdbc);
+        this.events = new CustodyEventRepository(jdbc);
+        this.audits = new CustodyAuditRepository(jdbc);
+        this.custodyWithdrawals = new CustodyWithdrawalRepository(jdbc);
+        this.withdrawalOrders = new WithdrawalOrderRepository(jdbc);
+        this.custodyDeposits = new CustodyDepositRepository(jdbc);
+        this.reorgDeficits = new CustodyReorgDeficitRepository(jdbc);
+        this.collectionBatches = new EvmCollectionBatchRepository(jdbc);
+        this.withdrawalBatches = new EvmWithdrawalBatchRepository(jdbc);
+        this.tenantChains = new CustodyTenantChainRepository(jdbc);
+        this.evmTransactions = new EvmTransactionRepository(jdbc);
+        this.solanaTransactions = new SolanaTransactionRepository(jdbc);
+        this.aptosTransactions = new AptosTransactionRepository(jdbc);
+        this.suiTransactions = new SuiTransactionRepository(jdbc);
+        this.tonTransactions = new TonTransactionRepository(jdbc);
+        this.xrpTransactions = new XrpTransactionRepository(jdbc);
+        this.moneroTransactions = new MoneroTransactionRepository(jdbc);
+        this.tronTransactions = new TronTransactionRepository(jdbc);
+        this.ledgerEntries = new CustodyLedgerEntryRepository(jdbc);
     }
 
-    /**
-     * 构建或生成 {@code createTenant} 对应的结果，并执行输入和状态校验。
-     */
+    /** 创建租户及其管理员。 */
     @Transactional(rollbackFor = Throwable.class)
     public TenantRecord createTenant(UUID tenantId, String slug, String name, UUID adminId,
                                      String adminEmail, String adminDisplayName, String passwordHash) {
@@ -90,1210 +155,562 @@ public class CustodyRepository {
         tenantUsers.insertTenantAdmin(adminId, tenantId, adminEmail, adminDisplayName, passwordHash);
         return requireTenant(tenantId);
     }
-    /**
-     * 获取或查询 {@code findTenantBySlug} 对应的数据，供调用方读取当前状态。
-     */
+
+    /** 按 slug 查询租户。 */
     public Optional<TenantRecord> findTenantBySlug(String slug) {
         return Optional.ofNullable(tenantTable.findBySlug(slug)).map(CustodyRepository::mapTenant);
     }
-    /**
-     * 校验 {@code requireTenant} 对应的前置条件，不满足时抛出明确异常。
-     */
+
+    /** 查询并校验租户。 */
     public TenantRecord requireTenant(UUID tenantId) {
         Map<String, Object> row = tenantTable.findFullById(tenantId);
-        if (row == null) {
-            throw new IllegalArgumentException("tenant not found");
-        }
+        if (row == null) throw new IllegalArgumentException("tenant not found");
         return mapTenant(row);
     }
 
-    /**
-     * 获取或查询 {@code listTenants} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> listTenants(
-            String search, String status, int limit, int offset) {
-        return jdbc.query("""
-                        select t.id, t.slug, t.name, t.status, t.derivation_namespace,
-                               t.ip_allowlist_enabled, t.display_currency, t.created_at, t.updated_at,
-                               coalesce(a.address_count, 0) as address_count,
-                               coalesce(d.deposit_count, 0) as deposit_count,
-                               coalesce(w.withdrawal_count, 0) as withdrawal_count,
-                               coalesce(e.active_webhook_count, 0) as active_webhook_count,
-                               coalesce(k.active_api_key_count, 0) as active_api_key_count,
-                               coalesce(g.gas_account_count, 0) as gas_account_count,
-                               coalesce(f.failed_webhook_delivery_count, 0)
-                                   as failed_webhook_delivery_count
-                          from custody_tenant t
-                          left join (
-                              select a.tenant_id, count(*) as address_count
-                                from custody_address a
-                               where not exists (
-                                   select 1 from custody_gas_account g
-                                    where g.custody_address_id = a.id
-                               )
-                               group by a.tenant_id
-                          ) a on a.tenant_id = t.id
-                          left join (
-                              select d.tenant_id, count(*) as deposit_count
-                                from custody_deposit d
-                               where not exists (
-                                   select 1 from custody_gas_account g
-                                    where g.custody_address_id = d.custody_address_id
-                               )
-                               group by d.tenant_id
-                          ) d on d.tenant_id = t.id
-                          left join (
-                              select tenant_id, count(*) as withdrawal_count
-                                from custody_withdrawal group by tenant_id
-                          ) w on w.tenant_id = t.id
-                          left join (
-                              select tenant_id, count(*) as active_webhook_count
-                                from custody_webhook_endpoint
-                               where status = 'ACTIVE'
-                               group by tenant_id
-                          ) e on e.tenant_id = t.id
-                          left join (
-                              select tenant_id, count(*) as active_api_key_count
-                                from custody_api_key
-                               where status = 'ACTIVE'
-                               group by tenant_id
-                          ) k on k.tenant_id = t.id
-                          left join (
-                              select tenant_id, count(*) as gas_account_count
-                                from custody_gas_account
-                               where status = 'ACTIVE'
-                               group by tenant_id
-                          ) g on g.tenant_id = t.id
-                          left join (
-                              select tenant_id, count(*) as failed_webhook_delivery_count
-                                from custody_webhook_delivery
-                               where status = 'FAILED'
-                               group by tenant_id
-                          ) f on f.tenant_id = t.id
-                         cross join (
-                             select ?::varchar as search, ?::varchar as status
-                         ) filters
-                         where (
-                             filters.search = ''
-                             or t.slug ilike '%' || filters.search || '%'
-                             or t.name ilike '%' || filters.search || '%'
-                         )
-                           and (filters.status = '' or t.status = filters.status)
-                         order by t.created_at desc, t.id
-                         limit ? offset ?
-                        """, (rs, rowNum) -> {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("id", rs.getObject("id", UUID.class));
-                    row.put("slug", rs.getString("slug"));
-                    row.put("name", rs.getString("name"));
-                    row.put("status", rs.getString("status"));
-                    row.put("derivationNamespace", rs.getInt("derivation_namespace"));
-                    row.put("ipAllowlistEnabled", rs.getBoolean("ip_allowlist_enabled"));
-                    row.put("displayCurrency", rs.getString("display_currency"));
-                    row.put("addressCount", rs.getLong("address_count"));
-                    row.put("depositCount", rs.getLong("deposit_count"));
-                    row.put("withdrawalCount", rs.getLong("withdrawal_count"));
-                    row.put("activeWebhookCount", rs.getLong("active_webhook_count"));
-                    row.put("activeApiKeyCount", rs.getLong("active_api_key_count"));
-                    row.put("gasAccountCount", rs.getLong("gas_account_count"));
-                    row.put("failedWebhookDeliveryCount",
-                            rs.getLong("failed_webhook_delivery_count"));
-                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
-                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
-                    return row;
-                }, blankToEmpty(search), blankToEmpty(status),
-                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    /** 查询租户列表，统计字段在 Java 中组合。 */
+    public List<Map<String, Object>> listTenants(String search, String status, int limit, int offset) {
+        String value = search == null ? "" : search.trim().toLowerCase();
+        return tenantTable.listAll().stream()
+                .filter(row -> value.isEmpty() || text(row.get("slug")).toLowerCase().contains(value)
+                        || text(row.get("name")).toLowerCase().contains(value))
+                .filter(row -> status == null || status.isBlank() || status.equals(row.get("status")))
+                .skip(Math.max(offset, 0)).limit(Math.min(Math.max(limit, 1), 500))
+                .map(row -> {
+                    Map<String, Object> result = new LinkedHashMap<>(row);
+                    UUID tenantId = uuid(row.get("id"));
+                    result.put("addressCount", custodyAddresses.listByTenant(tenantId).size());
+                    result.put("gasAccountCount", gasAccounts.listByTenant(tenantId).size());
+                    result.put("userCount", tenantUsers.listByTenant(tenantId).size());
+                    return result;
+                }).toList();
     }
-    /**
-     * 执行 {@code countTenants} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
+    /** 统计租户数量。 */
     public long countTenants(String search, String status) {
-        Long count = jdbc.queryForObject("""
-                select count(*)
-                  from custody_tenant t
-                 where (
-                     ? = ''
-                     or t.slug ilike '%' || ? || '%'
-                     or t.name ilike '%' || ? || '%'
-                 )
-                   and (? = '' or t.status = ?)
-                """, Long.class,
-                blankToEmpty(search), blankToEmpty(search), blankToEmpty(search),
-                blankToEmpty(status), blankToEmpty(status));
-        return count == null ? 0L : count;
+        return tenantTable.listAll().stream()
+                .filter(row -> search == null || search.isBlank()
+                        || text(row.get("slug")).toLowerCase().contains(search.toLowerCase())
+                        || text(row.get("name")).toLowerCase().contains(search.toLowerCase()))
+                .filter(row -> status == null || status.isBlank() || status.equals(row.get("status"))).count();
     }
-    /**
-     * 执行 {@code tenantOperationsSummary} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
+    /** 查询租户运营摘要。 */
     public Map<String, Object> tenantOperationsSummary(UUID tenantId) {
-        return jdbc.query("""
-                        select
-                            (select count(*) from custody_address a
-                              where a.tenant_id = t.id
-                                and not exists (
-                                    select 1 from custody_gas_account g
-                                     where g.custody_address_id = a.id
-                                )) as address_count,
-                            (select count(*) from custody_deposit d
-                              where d.tenant_id = t.id
-                                and not exists (
-                                    select 1 from custody_gas_account g
-                                     where g.custody_address_id = d.custody_address_id
-                                )) as deposit_count,
-                            (select count(*) from custody_withdrawal w
-                              where w.tenant_id = t.id) as withdrawal_count,
-                            (select count(*) from custody_api_key k
-                              where k.tenant_id = t.id and k.status = 'ACTIVE')
-                                as active_api_key_count,
-                            (select count(*) from custody_webhook_endpoint e
-                              where e.tenant_id = t.id and e.status = 'ACTIVE')
-                                as active_webhook_count,
-                            (select count(*) from custody_gas_account g
-                              where g.tenant_id = t.id and g.status = 'ACTIVE')
-                                as gas_account_count,
-                            (select count(*) from custody_webhook_delivery d
-                              where d.tenant_id = t.id and d.status = 'FAILED')
-                                as failed_webhook_delivery_count,
-                            (select count(*) from custody_tenant_user u
-                              where u.tenant_id = t.id) as user_count,
-                            (select count(*) from custody_session s
-                              where s.tenant_id = t.id and s.revoked_at is null
-                                and s.expires_at > now()) as active_session_count
-                          from custody_tenant t
-                         where t.id = ?
-                        """, rs -> {
-                    if (!rs.next()) {
-                        throw new IllegalArgumentException("tenant not found");
-                    }
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("addressCount", rs.getLong("address_count"));
-                    row.put("depositCount", rs.getLong("deposit_count"));
-                    row.put("withdrawalCount", rs.getLong("withdrawal_count"));
-                    row.put("activeApiKeyCount", rs.getLong("active_api_key_count"));
-                    row.put("activeWebhookCount", rs.getLong("active_webhook_count"));
-                    row.put("gasAccountCount", rs.getLong("gas_account_count"));
-                    row.put("failedWebhookDeliveryCount",
-                            rs.getLong("failed_webhook_delivery_count"));
-                    row.put("userCount", rs.getLong("user_count"));
-                    row.put("activeSessionCount", rs.getLong("active_session_count"));
-                    return row;
-                }, tenantId);
+        requireTenant(tenantId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        List<UUID> gasAddressIds = gasAccounts.listByTenant(tenantId).stream()
+                .map(row -> uuid(row.get("custody_address_id"))).toList();
+        result.put("addressCount", custodyAddresses.listByTenant(tenantId).stream()
+                .filter(row -> !gasAddressIds.contains(uuid(row.get("id")))).count());
+        result.put("gasAccountCount", gasAccounts.listByTenant(tenantId).stream()
+                .filter(row -> "ACTIVE".equals(row.get("status"))).count());
+        result.put("userCount", (long) tenantUsers.listByTenant(tenantId).size());
+        result.put("withdrawalCount", (long) custodyWithdrawals.listByTenant(tenantId, "", "", "", 500, 0).size());
+        result.put("depositCount", custodyDeposits.listByTenant(tenantId, "", "", "", 500, 0).stream()
+                .filter(row -> !gasAddressIds.contains(uuid(row.get("custody_address_id")))).count());
+        result.put("activeApiKeyCount", securityRepository.countActiveApiKeys(tenantId));
+        result.put("activeWebhookCount", webhookEndpoints.countActive(tenantId));
+        result.put("webhookEndpointCount", webhookEndpoints.list(tenantId).size());
+        result.put("failedWebhookDeliveryCount", webhookDeliveries.countFailed(tenantId));
+        result.put("activeSessionCount", securityRepository.countActiveSessions(tenantId));
+        return result;
     }
-    /**
-     * 设置或更新 {@code updateTenantProfile} 对应的状态，并保持相关业务字段一致。
-     */
+
+    /** 更新租户资料。 */
     public void updateTenantProfile(UUID tenantId, String name, String displayCurrency) {
         if (tenantTable.updateProfile(tenantId, name, displayCurrency) != 1) {
             throw new IllegalArgumentException("tenant not found");
         }
     }
-    /**
-     * 设置或更新 {@code updateTenantStatus} 对应的状态，并保持相关业务字段一致。
-     */
+
+    /** 更新租户状态。 */
     public void updateTenantStatus(UUID tenantId, String status) {
-        if (tenantTable.updateStatus(tenantId, status) != 1) {
-            throw new IllegalArgumentException("tenant not found");
-        }
+        if (tenantTable.updateStatus(tenantId, status) != 1) throw new IllegalArgumentException("tenant not found");
     }
-    /**
-     * 删除或释放 {@code revokeTenantSessions} 对应的资源，并收敛相关业务状态。
-     */
-    public int revokeTenantSessions(UUID tenantId) {
-        return securityRepository.revokeTenantSessions(tenantId);
-    }
-    /**
-     * 获取或查询 {@code findTenantUser} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<AuthUser> findTenantUser(String email) {
-        return securityRepository.findTenantUser(email);
-    }
-    /**
-     * 获取或查询 {@code findPlatformUser} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<AuthUser> findPlatformUser(String email) {
-        return securityRepository.findPlatformUser(email);
-    }
-    /**
-     * 执行 {@code platformAdminExists} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public boolean platformAdminExists() {
-        return securityRepository.platformAdminExists();
-    }
-    /**
-     * 记录或保存 {@code insertPlatformAdmin} 对应的数据，并遵守幂等和事务约束。
-     */
+
+    /** 撤销租户会话。 */
+    public int revokeTenantSessions(UUID tenantId) { return securityRepository.revokeTenantSessions(tenantId); }
+
+    /** 查询租户用户。 */
+    public Optional<AuthUser> findTenantUser(String email) { return securityRepository.findTenantUser(email); }
+
+    /** 查询平台用户。 */
+    public Optional<AuthUser> findPlatformUser(String email) { return securityRepository.findPlatformUser(email); }
+
+    /** 判断平台管理员是否存在。 */
+    public boolean platformAdminExists() { return securityRepository.platformAdminExists(); }
+
+    /** 创建平台管理员。 */
     public void insertPlatformAdmin(UUID userId, String email, String passwordHash) {
         securityRepository.insertPlatformAdmin(userId, email, passwordHash);
     }
-    /**
-     * 记录或保存 {@code recordLoginFailure} 对应的数据，并遵守幂等和事务约束。
-     */
+
+    /** 记录登录失败。 */
     public void recordLoginFailure(UUID userId, Instant lockedUntil) {
         securityRepository.recordLoginFailure(userId, lockedUntil);
     }
-    /**
-     * 记录或保存 {@code recordLoginSuccess} 对应的数据，并遵守幂等和事务约束。
-     */
-    public void recordLoginSuccess(UUID userId) {
-        securityRepository.recordLoginSuccess(userId);
+
+    /** 记录登录成功。 */
+    public void recordLoginSuccess(UUID userId) { securityRepository.recordLoginSuccess(userId); }
+
+    /** 创建会话。 */
+    public void insertSession(UUID sessionId, UUID userId, UUID tenantId, String tokenHash,
+                              Instant expiresAt, String sourceIp, String userAgent) {
+        securityRepository.insertSession(sessionId, userId, tenantId, tokenHash, sourceIp, userAgent, expiresAt);
     }
 
-    /**
-     * 记录或保存 {@code insertSession} 对应的数据，并遵守幂等和事务约束。
-     */
+    /** 兼容认证服务使用的会话参数顺序。 */
     public void insertSession(UUID sessionId, UUID userId, UUID tenantId, String tokenHash,
                               String sourceIp, String userAgent, Instant expiresAt) {
-        securityRepository.insertSession(
-                sessionId, userId, tenantId, tokenHash, sourceIp, userAgent, expiresAt);
+        securityRepository.insertSession(sessionId, userId, tenantId, tokenHash, sourceIp, userAgent, expiresAt);
     }
-    /**
-     * 获取或查询 {@code findActiveSession} 对应的数据，供调用方读取当前状态。
-     */
+
+    /** 查询有效会话。 */
     public Optional<SessionRecord> findActiveSession(String tokenHash) {
         return securityRepository.findActiveSession(tokenHash);
     }
-    /**
-     * 获取或查询 {@code listTenantUsers} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> listTenantUsers(UUID tenantId) {
-        return securityRepository.listTenantUsers(tenantId);
-    }
-    /**
-     * 执行 {@code unlockTenantAdministrator} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
+    /** 查询租户用户列表。 */
+    public List<Map<String, Object>> listTenantUsers(UUID tenantId) { return securityRepository.listTenantUsers(tenantId); }
+
+    /** 解锁租户管理员。 */
     public Map<String, Object> unlockTenantAdministrator(UUID tenantId, UUID userId) {
         return securityRepository.unlockTenantAdministrator(tenantId, userId);
     }
-    /**
-     * 编码 {@code touchSession} 对应的数据，生成链上或接口所需的表示。
-     */
-    public void touchSession(UUID sessionId) {
-        securityRepository.touchSession(sessionId);
-    }
-    /**
-     * 删除或释放 {@code revokeSession} 对应的资源，并收敛相关业务状态。
-     */
-    public void revokeSession(String tokenHash) {
-        securityRepository.revokeSession(tokenHash);
-    }
 
-    /**
-     * 记录或保存 {@code insertApiKey} 对应的数据，并遵守幂等和事务约束。
-     */
+    /** 更新会话访问时间。 */
+    public void touchSession(UUID sessionId) { securityRepository.touchSession(sessionId); }
+
+    /** 撤销会话。 */
+    public void revokeSession(String tokenHash) { securityRepository.revokeSession(tokenHash); }
+
+    /** 创建 API 密钥。 */
     public ApiKeyRecord insertApiKey(UUID id, UUID tenantId, String keyId, String name,
                                      String encryptedSecret, UUID createdBy) {
-        return securityRepository.insertApiKey(
-                id, tenantId, keyId, name, encryptedSecret, createdBy);
+        return securityRepository.insertApiKey(id, tenantId, keyId, name, encryptedSecret, createdBy);
     }
-    /**
-     * 获取或查询 {@code findActiveApiKey} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<ApiKeyRecord> findActiveApiKey(String keyId) {
-        return securityRepository.findActiveApiKey(keyId);
+
+    /** 兼容包含密钥版本和过期时间的调用方。 */
+    public ApiKeyRecord insertApiKey(UUID id, UUID tenantId, String keyId, String name,
+                                     String encryptedSecret, int secretVersion, Instant expiresAt,
+                                     UUID createdBy) {
+        return securityRepository.insertApiKey(id, tenantId, keyId, name, encryptedSecret, createdBy);
     }
-    /**
-     * 校验 {@code requireApiKey} 对应的前置条件，不满足时抛出明确异常。
-     */
-    public ApiKeyRecord requireApiKey(String keyId) {
-        return securityRepository.requireApiKey(keyId);
-    }
-    /**
-     * 获取或查询 {@code listApiKeys} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> listApiKeys(UUID tenantId) {
-        return securityRepository.listApiKeys(tenantId);
-    }
-    /**
-     * 删除或释放 {@code revokeApiKey} 对应的资源，并收敛相关业务状态。
-     */
-    public void revokeApiKey(UUID tenantId, UUID keyId) {
-        securityRepository.revokeApiKey(tenantId, keyId);
-    }
-    /**
-     * 编码 {@code touchApiKey} 对应的数据，生成链上或接口所需的表示。
-     */
-    public void touchApiKey(UUID keyId, String sourceIp) {
-        securityRepository.touchApiKey(keyId, sourceIp);
-    }
-    /**
-     * 执行 {@code reserveNonce} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
+    /** 查询有效 API 密钥。 */
+    public Optional<ApiKeyRecord> findActiveApiKey(String keyId) { return securityRepository.findActiveApiKey(keyId); }
+
+    /** 查询并校验 API 密钥。 */
+    public ApiKeyRecord requireApiKey(String keyId) { return securityRepository.requireApiKey(keyId); }
+
+    /** 查询租户 API 密钥。 */
+    public List<Map<String, Object>> listApiKeys(UUID tenantId) { return securityRepository.listApiKeys(tenantId); }
+
+    /** 撤销 API 密钥。 */
+    public void revokeApiKey(UUID tenantId, UUID keyId) { securityRepository.revokeApiKey(tenantId, keyId); }
+
+    /** 更新 API 密钥访问信息。 */
+    public void touchApiKey(UUID keyId, String sourceIp) { securityRepository.touchApiKey(keyId, sourceIp); }
+
+    /** 占用 API nonce。 */
     public boolean reserveNonce(String keyId, String nonce, Instant expiresAt) {
         return securityRepository.reserveNonce(keyId, nonce, expiresAt);
     }
-    /**
-     * 执行 {@code activeIpRules} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public List<String> activeIpRules(UUID tenantId) {
-        return securityRepository.activeIpRules(tenantId);
-    }
-    /**
-     * 获取或查询 {@code listIpRules} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> listIpRules(UUID tenantId) {
-        return securityRepository.listIpRules(tenantId);
-    }
-    /**
-     * 记录或保存 {@code insertIpRule} 对应的数据，并遵守幂等和事务约束。
-     */
+
+    /** 查询启用的 IP 规则。 */
+    public List<String> activeIpRules(UUID tenantId) { return securityRepository.activeIpRules(tenantId); }
+
+    /** 查询租户 IP 规则。 */
+    public List<Map<String, Object>> listIpRules(UUID tenantId) { return securityRepository.listIpRules(tenantId); }
+
+    /** 创建 IP 规则。 */
     public Map<String, Object> insertIpRule(UUID tenantId, UUID ruleId, String label, String cidr, UUID createdBy) {
         return securityRepository.insertIpRule(tenantId, ruleId, label, cidr, createdBy);
     }
-    /**
-     * 删除或清理 {@code deleteIpRule} 对应的数据，并处理相关状态收敛。
-     */
-    public void deleteIpRule(UUID tenantId, UUID ruleId) {
-        securityRepository.deleteIpRule(tenantId, ruleId);
-    }
-    /**
-     * 设置或更新 {@code setIpAllowlistEnabled} 对应的状态，并保持相关业务字段一致。
-     */
+
+    /** 删除 IP 规则。 */
+    public void deleteIpRule(UUID tenantId, UUID ruleId) { securityRepository.deleteIpRule(tenantId, ruleId); }
+
+    /** 更新租户 IP 白名单开关。 */
     public void setIpAllowlistEnabled(UUID tenantId, boolean enabled) {
         securityRepository.setIpAllowlistEnabled(tenantId, enabled);
     }
-    /**
-     * 获取或查询 {@code resolveDerivationSubject} 对应的数据，并向调用方返回当前业务状态。
-     */
+
+    /** 获取租户主题派生编号。 */
     public int resolveDerivationSubject(UUID tenantId, String subject) {
-        String mappingKey = tenantId + "\n" + subject;
-        jdbc.query(
-                "select pg_advisory_xact_lock(hashtextextended(?, 0))",
-                rs -> null,
-                mappingKey);
-        Integer existing = jdbc.query("""
-                        select derivation_subject
-                          from custody_derivation_subject
-                         where tenant_id = ? and subject = ?
-                        """, rs -> rs.next() ? rs.getInt(1) : null, tenantId, subject);
-        if (existing != null) {
-            return existing;
-        }
-        Integer allocated = jdbc.queryForObject("""
-                        insert into custody_derivation_subject(tenant_id, subject)
-                        values (?, ?)
-                        returning derivation_subject
-                        """, Integer.class, tenantId, subject);
-        if (allocated == null || allocated <= 0) {
-            throw new IllegalStateException("failed to allocate custody derivation subject");
-        }
-        return allocated;
-    }
-    /**
-     * 执行 {@code lockSubjectAddressAllocation} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public void lockSubjectAddressAllocation(UUID tenantId, String chain, String subject) {
-        String allocationKey = tenantId + "\n" + chain + "\n" + subject;
-        jdbc.query(
-                "select pg_advisory_xact_lock(hashtextextended(?, 1))",
-                rs -> null,
-                allocationKey);
+        return derivationSubjects.resolve(tenantId, subject);
     }
 
-    /**
-     * 记录或保存 {@code insertAddress} 对应的数据，并遵守幂等和事务约束。
-     */
+    /** 保留地址分配的事务边界。 */
+    @Transactional(rollbackFor = Throwable.class)
+    public void lockSubjectAddressAllocation(UUID tenantId, String chain, String subject) {
+        derivationSubjects.resolve(tenantId, subject);
+    }
+
+    /** 创建托管地址。 */
     public AddressRecord insertAddress(UUID id, UUID tenantId, long chainAddressId, String chain,
-                                       String network, String address, String memo,
-                                       String subject, String label, String metadataJson,
-                                       String source, int derivationSubject, long addressVersion,
-                                       long derivationChild,
+                                       String network, String address, String memo, String subject,
+                                       String label, String metadataJson, String source,
+                                       int derivationSubject, long addressVersion, long derivationChild,
                                        UUID createdBy) {
-        jdbc.update("""
-                        insert into custody_address(
-                            id, tenant_id, chain_address_id, chain, network, address, memo,
-                            subject, label, metadata, source, derivation_subject,
-                            address_version, derivation_child, created_by)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), ?, ?, ?, ?, ?)
-                        """, id, tenantId, chainAddressId, chain, network, address, memo,
-                subject, label, metadataJson, source, derivationSubject, addressVersion,
-                derivationChild, createdBy);
+        if (custodyAddresses.insert(id, tenantId, chainAddressId, chain, network, address, memo, subject,
+                label, metadataJson, source, derivationSubject, addressVersion, derivationChild, createdBy) != 1) {
+            throw new IllegalStateException("failed to create custody address");
+        }
         return requireAddress(tenantId, id);
     }
-    /**
-     * 执行 {@code assignChainAddressTenant} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
+    /** 设置链地址租户归属。 */
     public void assignChainAddressTenant(UUID tenantId, long chainAddressId) {
-        if (jdbc.update("""
-                        update chain_address
-                           set tenant_id = ?, updated_at = now()
-                         where id = ? and (tenant_id is null or tenant_id = ?)
-                        """, tenantId, chainAddressId, tenantId) != 1) {
-            throw new IllegalStateException("chain address belongs to another tenant");
+        if (chainAddresses.assignTenant(tenantId, chainAddressId) != 1) {
+            throw new IllegalArgumentException("chain address not found");
         }
     }
-    /**
-     * 校验 {@code requireAddress} 对应的前置条件，不满足时抛出明确异常。
-     */
+
+    /** 查询并校验托管地址。 */
     public AddressRecord requireAddress(UUID tenantId, UUID addressId) {
-        return jdbc.query("""
-                        select id, tenant_id, chain_address_id, chain, network, address, memo,
-                               subject, label, metadata::text as metadata, source,
-                               status, derivation_subject, address_version, derivation_child,
-                               created_at, updated_at
-                          from custody_address
-                         where tenant_id = ? and id = ?
-                        """, (rs, rowNum) -> mapAddress(rs), tenantId, addressId)
-                .stream().findFirst()
+        return custodyAddresses.findFullByTenantAndId(tenantId, addressId)
+                .map(CustodyRepository::mapAddress)
                 .orElseThrow(() -> new IllegalArgumentException("custody address not found"));
     }
 
-    /**
-     * 获取或查询 {@code findAddressBySubjectAndVersion} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<AddressRecord> findAddressBySubjectAndVersion(
-            UUID tenantId, String chain, String subject, long addressVersion) {
-        return jdbc.query("""
-                        select id, tenant_id, chain_address_id, chain, network, address, memo,
-                               subject, label, metadata::text as metadata, source,
-                               status, derivation_subject, address_version, derivation_child,
-                               created_at, updated_at
-                          from custody_address
-                         where tenant_id = ? and chain = ? and subject = ?
-                           and address_version = ?
-                        """, (rs, rowNum) -> mapAddress(rs),
-                tenantId, chain, subject, addressVersion)
-                .stream().findFirst();
+    /** 按主题和版本查询托管地址。 */
+    public Optional<AddressRecord> findAddressBySubjectAndVersion(UUID tenantId, String chain,
+                                                                   String subject, long version) {
+        return custodyAddresses.findBySubjectAndVersion(tenantId, chain, subject, version)
+                .map(CustodyRepository::mapAddress);
     }
-    /**
-     * 判断 {@code isGasAddress} 对应的条件是否成立，并返回明确的布尔结果。
-     */
+
+    /** 判断托管地址是否为 Gas 地址。 */
     public boolean isGasAddress(UUID tenantId, UUID addressId) {
-        Boolean result = jdbc.queryForObject("""
-                        select exists (
-                            select 1 from custody_gas_account
-                             where tenant_id = ? and custody_address_id = ?
-                        )
-                        """, Boolean.class, tenantId, addressId);
-        return Boolean.TRUE.equals(result);
+        return gasAccounts.listCustodyAddressIds(tenantId).contains(addressId);
     }
 
-    /**
-     * 判断 {@code hasOpenReorgDeficit} 对应的条件是否成立，并返回明确的布尔结果。
-     */
-    public boolean hasOpenReorgDeficit(UUID tenantId, UUID custodyAddressId,
-                                       String chain, String assetSymbol) {
-        Boolean result = jdbc.queryForObject("""
-                        select exists (
-                            select 1
-                              from custody_reorg_deficit deficit
-                              join custody_address custody
-                                on custody.tenant_id = deficit.tenant_id
-                               and custody.id = ?
-                              join chain_address address
-                                on address.tenant_id = custody.tenant_id
-                               and address.id = custody.chain_address_id
-                             where deficit.tenant_id = ? and deficit.chain = ?
-                               and deficit.asset_symbol = ? and deficit.status = 'OPEN'
-                               and deficit.account_id = address.account_id
-                               and deficit.recovered_amount < deficit.deficit_amount
-                        )
-                        """, Boolean.class, custodyAddressId, tenantId, chain, assetSymbol);
-        return Boolean.TRUE.equals(result);
+    /** 判断是否存在未解决的充值重组赤字。 */
+    public boolean hasOpenReorgDeficit(UUID tenantId, UUID custodyAddressId, String chain,
+                                       String assetSymbol, String accountId) {
+        return reorgDeficits.existsOpen(tenantId, chain, assetSymbol, accountId);
     }
 
-    /**
-     * 设置或更新 {@code updateAddress} 对应的状态，并保持相关业务字段一致。
-     */
-    public AddressRecord updateAddress(UUID tenantId, UUID addressId, String label,
-                                       String metadataJson, String status) {
-        if (jdbc.update("""
-                        update custody_address
-                           set label = ?,
-                               metadata = cast(? as jsonb),
-                               status = ?,
-                               updated_at = now()
-                         where tenant_id = ? and id = ?
-                        """, label, metadataJson, status, tenantId, addressId) != 1) {
+    /** 按托管地址解析账户后判断是否存在重组赤字。 */
+    public boolean hasOpenReorgDeficit(UUID tenantId, UUID custodyAddressId, String chain, String assetSymbol) {
+        Map<String, Object> custody = custodyAddresses.findByTenantAndId(tenantId, custodyAddressId).orElse(null);
+        if (custody == null) return false;
+        Map<String, Object> address = chainAddresses.findByTenantAndId(tenantId,
+                longValue(custody.get("chain_address_id"), 0)).orElse(null);
+        return address != null && reorgDeficits.existsOpen(tenantId, chain, assetSymbol, text(address.get("account_id")));
+    }
+
+    /** 更新托管地址。 */
+    public AddressRecord updateAddress(UUID tenantId, UUID addressId, String label, String memo,
+                                       String status, String metadataJson) {
+        if (custodyAddresses.update(tenantId, addressId, label, memo, status, metadataJson) != 1) {
             throw new IllegalArgumentException("custody address not found");
         }
         return requireAddress(tenantId, addressId);
     }
 
-    /**
-     * 获取或查询 {@code listAddresses} 对应的数据，供调用方读取当前状态。
-     */
-    public List<AddressRecord> listAddresses(UUID tenantId, String chain, String source,
-                                             String status, String search, int limit, int offset) {
-        String normalizedSearch = search == null ? "" : search.trim();
-        return jdbc.query("""
-                        select id, tenant_id, chain_address_id, chain, network, address, memo,
-                               subject, label, metadata::text as metadata, source,
-                               status, derivation_subject, address_version, derivation_child,
-                               created_at, updated_at
-                          from custody_address
-                         where tenant_id = ?
-                           and not exists (
-                               select 1 from custody_gas_account g
-                                where g.custody_address_id = custody_address.id
-                           )
-                           and (? = '' or chain = ?)
-                           and (? = '' or source = ?)
-                           and (? = '' or status = ?)
-                           and (? = '' or address ilike '%' || ? || '%'
-                                or subject ilike '%' || ? || '%'
-                                or coalesce(label, '') ilike '%' || ? || '%')
-                         order by created_at desc, id
-                         limit ? offset ?
-                        """, (rs, rowNum) -> mapAddress(rs),
-                tenantId,
-                blankToEmpty(chain), blankToEmpty(chain),
-                blankToEmpty(source), blankToEmpty(source),
-                blankToEmpty(status), blankToEmpty(status),
-                normalizedSearch, normalizedSearch, normalizedSearch, normalizedSearch,
-                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
-    }
-    /**
-     * 执行 {@code countAddresses} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public long countAddresses(UUID tenantId, String chain, String source,
-                               String status, String search) {
-        String normalizedSearch = search == null ? "" : search.trim();
-        Long count = jdbc.queryForObject("""
-                        select count(*)
-                          from custody_address
-                         where tenant_id = ?
-                           and not exists (
-                               select 1 from custody_gas_account g
-                                where g.custody_address_id = custody_address.id
-                           )
-                           and (? = '' or chain = ?)
-                           and (? = '' or source = ?)
-                           and (? = '' or status = ?)
-                           and (? = '' or address ilike '%' || ? || '%'
-                                or subject ilike '%' || ? || '%'
-                                or coalesce(label, '') ilike '%' || ? || '%')
-                        """, Long.class, tenantId,
-                blankToEmpty(chain), blankToEmpty(chain),
-                blankToEmpty(source), blankToEmpty(source),
-                blankToEmpty(status), blankToEmpty(status),
-                normalizedSearch, normalizedSearch, normalizedSearch, normalizedSearch);
-        return count == null ? 0L : count;
-    }
-    /**
-     * 执行 {@code tenantAssetOverview} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public List<Map<String, Object>> tenantAssetOverview(UUID tenantId) {
-        return jdbc.query("""
-                        with tenant_accounts as (
-                            select distinct c.id as custody_address_id, c.tenant_id,
-                                   related.chain, related.account_id
-                              from custody_address c
-                              join chain_address base
-                                on base.tenant_id = c.tenant_id
-                               and base.id = c.chain_address_id
-                              join chain_address related
-                                on related.tenant_id = c.tenant_id
-                               and related.chain = base.chain
-                               and related.user_id = base.user_id
-                               and related.biz = base.biz
-                               and related.address_index = base.address_index
-                               and related.wallet_role = base.wallet_role
-                               and related.enabled = true
-                             where c.tenant_id = ?
-                               and not exists (
-                                   select 1 from custody_gas_account g
-                                    where g.tenant_id = c.tenant_id
-                                      and g.custody_address_id = c.id
-                               )
-                            union
-                            select distinct c.id, c.tenant_id, base.chain, base.account_id
-                              from custody_address c
-                              join chain_address base
-                                on base.tenant_id = c.tenant_id
-                               and base.id = c.chain_address_id
-                             where c.tenant_id = ?
-                               and not exists (
-                                   select 1 from custody_gas_account g
-                                    where g.tenant_id = c.tenant_id
-                                      and g.custody_address_id = c.id
-                               )
-                        )
-                        select lb.chain, lb.asset_symbol,
-                               coalesce(sum(lb.available_balance), 0) as available_balance,
-                               coalesce(sum(lb.locked_balance), 0) as locked_balance,
-                               coalesce(sum(lb.total_balance), 0) as total_balance,
-                               count(distinct ta.custody_address_id) as address_count
-                          from tenant_accounts ta
-                          join ledger_balance lb
-                            on lb.tenant_id = ta.tenant_id
-                           and lb.chain = ta.chain
-                           and lower(lb.account_id) = lower(ta.account_id)
-                         group by lb.chain, lb.asset_symbol
-                         order by lb.asset_symbol, lb.chain
-                        """, (rs, rowNum) -> {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("chain", rs.getString("chain"));
-                    row.put("assetSymbol", rs.getString("asset_symbol"));
-                    row.put("availableBalance", rs.getBigDecimal("available_balance"));
-                    row.put("lockedBalance", rs.getBigDecimal("locked_balance"));
-                    row.put("totalBalance", rs.getBigDecimal("total_balance"));
-                    row.put("addressCount", rs.getLong("address_count"));
-                    return row;
-                }, tenantId, tenantId);
-    }
-    /**
-     * 获取或查询 {@code findGasAccount} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<GasAccountRecord> findGasAccount(UUID tenantId, String chain) {
-        return gasAccounts(tenantId, chain).stream().findFirst();
+    /** 更新托管地址元数据的兼容入口。 */
+    public AddressRecord updateAddress(UUID tenantId, UUID addressId, String label,
+                                       String metadataJson, String status) {
+        return updateAddress(tenantId, addressId, label, null, status, metadataJson);
     }
 
-    /**
-     * 记录或保存 {@code insertGasAccount} 对应的数据，并遵守幂等和事务约束。
-     */
-    public GasAccountRecord insertGasAccount(
-            UUID id, UUID tenantId, UUID custodyAddressId, String chain, String network,
-            String nativeSymbol, java.math.BigDecimal lowBalanceThreshold, UUID createdBy) {
-        jdbc.update("""
-                        insert into custody_gas_account(
-                            id, tenant_id, custody_address_id, chain, network, native_symbol,
-                            low_balance_threshold, created_by)
-                        values (?, ?, ?, ?, ?, ?, ?, ?)
-                        on conflict (tenant_id, chain) do nothing
-                        """, id, tenantId, custodyAddressId, chain, network, nativeSymbol,
-                lowBalanceThreshold, createdBy);
-        return findGasAccount(tenantId, chain)
-                .orElseThrow(() -> new IllegalStateException("failed to create gas account"));
+    /** 分页查询托管地址。 */
+    public List<AddressRecord> listAddresses(UUID tenantId, String chain, String source,
+                                              String status, int limit, int offset) {
+        return custodyAddresses.list(tenantId, blank(chain), blank(source), blank(status), limit, offset)
+                .stream().map(CustodyRepository::mapAddress).toList();
     }
-    /**
-     * 校验 {@code requireGasAccount} 对应的前置条件，不满足时抛出明确异常。
-     */
+
+    /** 分页查询托管地址并支持地址文本搜索。 */
+    public List<AddressRecord> listAddresses(UUID tenantId, String chain, String source,
+                                              String status, String search, int limit, int offset) {
+        String value = search == null ? "" : search.toLowerCase();
+        return custodyAddresses.list(tenantId, blank(chain), blank(source), blank(status), 500, 0).stream()
+                .filter(row -> !isGasAddress(tenantId, uuid(row.get("id"))))
+                .filter(row -> value.isEmpty() || (text(row.get("address")) + " " + text(row.get("subject")) + " " + text(row.get("label"))).toLowerCase().contains(value))
+                .skip(Math.max(offset, 0)).limit(Math.min(Math.max(limit, 1), 200))
+                .map(CustodyRepository::mapAddress).toList();
+    }
+
+    /** 统计托管地址。 */
+    public long countAddresses(UUID tenantId, String chain, String source, String status) {
+        return custodyAddresses.count(tenantId, blank(chain), blank(source), blank(status));
+    }
+
+    /** 统计托管地址并支持地址文本搜索。 */
+    public long countAddresses(UUID tenantId, String chain, String source, String status, String search) {
+        return listAddresses(tenantId, chain, source, status, search, Integer.MAX_VALUE, 0).size();
+    }
+
+    /** 查询租户资产概览，跨表数据在 Java 中组合。 */
+    public List<Map<String, Object>> tenantAssetOverview(UUID tenantId) {
+        List<UUID> gasAddressIds = gasAccounts.listByTenant(tenantId).stream()
+                .map(row -> uuid(row.get("custody_address_id"))).toList();
+        List<String> gasAccountIds = listGasAccounts(tenantId).stream()
+                .map(GasAccountRecord::accountId).toList();
+        Map<String, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
+        Map<String, Long> addressCounts = new LinkedHashMap<>();
+        for (Map<String, Object> balance : ledgerBalances.listByTenant(tenantId)) {
+            if (gasAccountIds.stream().anyMatch(account -> account.equalsIgnoreCase(text(balance.get("account_id"))))) {
+                continue;
+            }
+            String key = text(balance.get("chain")).toUpperCase(Locale.ROOT)
+                    + "\u0000" + text(balance.get("asset_symbol")).toUpperCase(Locale.ROOT);
+            grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(balance);
+        }
+        for (Map<String, Object> address : custodyAddresses.listByTenant(tenantId)) {
+            if (gasAddressIds.contains(uuid(address.get("id")))) continue;
+            Map<String, Object> base = chainAddresses.findByTenantAndId(
+                    tenantId, longValue(address.get("chain_address_id"), 0)).orElse(Map.of());
+            String chain = text(address.get("chain"));
+            String accountId = text(base.get("account_id"));
+            for (Map<String, Object> balance : ledgerBalances.listByTenant(tenantId)) {
+                if (chain.equalsIgnoreCase(text(balance.get("chain")))
+                        && accountId.equalsIgnoreCase(text(balance.get("account_id")))) {
+                    String key = text(balance.get("chain")).toUpperCase(Locale.ROOT)
+                            + "\u0000" + text(balance.get("asset_symbol")).toUpperCase(Locale.ROOT);
+                    addressCounts.merge(key, 1L, Long::sum);
+                }
+            }
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Map.Entry<String, List<Map<String, Object>>> entry : grouped.entrySet()) {
+            List<Map<String, Object>> balances = entry.getValue();
+            Map<String, Object> first = balances.getFirst();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("chain", first.get("chain"));
+            row.put("assetSymbol", first.get("asset_symbol"));
+            row.put("availableBalance", balances.stream().map(item -> (BigDecimal) item.get("available_balance"))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+            row.put("lockedBalance", balances.stream().map(item -> (BigDecimal) item.get("locked_balance"))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+            row.put("totalBalance", balances.stream().map(item -> (BigDecimal) item.get("total_balance"))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+            row.put("addressCount", addressCounts.getOrDefault(entry.getKey(), 0L));
+            result.add(row);
+        }
+        return result;
+    }
+
+    /** 按链查询 Gas 账户。 */
+    public Optional<GasAccountRecord> findGasAccount(UUID tenantId, String chain) {
+        return gasAccounts.findByChain(tenantId, chain).map(row -> mapGas(tenantId, row));
+    }
+
+    /** 创建 Gas 账户。 */
+    public GasAccountRecord insertGasAccount(UUID id, UUID tenantId, UUID custodyAddressId,
+                                             String chain, String network, String nativeSymbol,
+                                             BigDecimal lowBalanceThreshold, UUID createdBy) {
+        gasAccounts.insert(id, tenantId, custodyAddressId, chain, network, nativeSymbol,
+                lowBalanceThreshold, createdBy);
+        return findGasAccount(tenantId, chain).orElseThrow(() -> new IllegalStateException("failed to create gas account"));
+    }
+
+    /** 查询并校验 Gas 账户。 */
     public GasAccountRecord requireGasAccount(UUID tenantId, UUID gasAccountId) {
-        return gasAccounts(tenantId, "").stream()
-                .filter(account -> account.id().equals(gasAccountId))
-                .findFirst()
+        return gasAccounts.listByTenant(tenantId).stream()
+                .filter(row -> gasAccountId.equals(row.get("id"))).findFirst()
+                .map(row -> mapGas(tenantId, row))
                 .orElseThrow(() -> new IllegalArgumentException("gas account not found"));
     }
-    /**
-     * 获取或查询 {@code listGasAccounts} 对应的数据，供调用方读取当前状态。
-     */
+
+    /** 查询租户 Gas 账户。 */
     public List<GasAccountRecord> listGasAccounts(UUID tenantId) {
-        return gasAccounts(tenantId, "");
+        return gasAccounts.listByTenant(tenantId).stream().map(row -> mapGas(tenantId, row)).toList();
     }
 
-    /**
-     * 设置或更新 {@code updateGasAccount} 对应的状态，并保持相关业务字段一致。
-     */
-    public GasAccountRecord updateGasAccount(
-            UUID tenantId, UUID gasAccountId, java.math.BigDecimal lowBalanceThreshold,
-            String status) {
-        if (jdbc.update("""
-                        update custody_gas_account
-                           set low_balance_threshold = ?, status = ?, updated_at = now()
-                         where tenant_id = ? and id = ?
-                        """, lowBalanceThreshold, status, tenantId, gasAccountId) != 1) {
+    /** 更新 Gas 账户。 */
+    public GasAccountRecord updateGasAccount(UUID tenantId, UUID gasAccountId, BigDecimal threshold,
+                                             String status) {
+        if (gasAccounts.update(tenantId, gasAccountId, threshold, status) != 1) {
             throw new IllegalArgumentException("gas account not found");
         }
         return requireGasAccount(tenantId, gasAccountId);
     }
 
-    /**
-     * 获取或查询 {@code listGasTopups} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> listGasTopups(
-            UUID tenantId, UUID gasAccountId, int limit, int offset) {
-        return jdbc.query("""
-                        select d.id, d.chain, d.asset_symbol, d.tx_hash, d.log_index,
-                               d.amount, d.status, d.credited_at, d.created_at
-                          from custody_deposit d
-                          join custody_gas_account g
-                            on g.custody_address_id = d.custody_address_id
-                           and g.tenant_id = d.tenant_id
-                         where d.tenant_id = ? and g.id = ?
-                         order by d.created_at desc, d.id
-                         limit ? offset ?
-                        """, (rs, rowNum) -> {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("id", rs.getObject("id", UUID.class));
-                    row.put("chain", rs.getString("chain"));
-                    row.put("assetSymbol", rs.getString("asset_symbol"));
-                    row.put("txHash", rs.getString("tx_hash"));
-                    row.put("logIndex", rs.getLong("log_index"));
-                    row.put("amount", rs.getBigDecimal("amount"));
-                    row.put("status", rs.getString("status"));
-                    row.put("creditedAt", instantOrNull(rs.getTimestamp("credited_at")));
-                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
-                    return row;
-                }, tenantId, gasAccountId,
-                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    /** 查询 Gas 充值记录，关联逻辑在 Java 中完成。 */
+    public List<Map<String, Object>> listGasTopups(UUID tenantId, UUID gasAccountId, int limit, int offset) {
+        GasAccountRecord account = requireGasAccount(tenantId, gasAccountId);
+        return custodyDeposits.listByTenant(tenantId, account.chain(), account.nativeSymbol(), "", limit, offset)
+                .stream().filter(row -> account.custodyAddressId().equals(row.get("custody_address_id")))
+                .toList();
     }
-    /**
-     * 执行 {@code gasPricingMetadata} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
+    /** 查询 Gas 定价元数据。 */
     public GasPricingMetadata gasPricingMetadata(String chain, String assetSymbol) {
-        return jdbc.query("""
-                        select p.family, p.native_symbol, coalesce(p.default_fee_rate, 1) default_fee_rate,
-                               native_asset.decimals,
-                               coalesce(requested.native_asset, false) requested_native
-                          from chain_profile p
-                          join chain_asset native_asset
-                            on native_asset.chain = p.chain
-                           and native_asset.symbol = p.native_symbol
-                           and native_asset.native_asset = true
-                           and native_asset.active = true
-                          left join chain_asset requested
-                            on requested.chain = p.chain
-                           and requested.symbol = ?
-                           and requested.active = true
-                         where p.chain = ? and p.enabled = true
-                         order by p.id
-                         limit 1
-                        """, (rs, rowNum) -> new GasPricingMetadata(
-                        rs.getString("family"),
-                        rs.getString("native_symbol"),
-                        rs.getLong("default_fee_rate"),
-                        rs.getInt("decimals"),
-                        rs.getBoolean("requested_native")),
-                assetSymbol, chain).stream().findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "enabled chain gas pricing is unavailable for " + chain));
+        Map<String, Object> profile = chainProfiles.listAll().stream()
+                .filter(row -> chain.equalsIgnoreCase(text(row.get("chain")))
+                        && Boolean.TRUE.equals(row.get("enabled"))).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("enabled chain gas pricing is unavailable for " + chain));
+        Map<String, Object> nativeAsset = chainAssets.findActive(chain, text(profile.get("native_symbol")))
+                .orElseThrow(() -> new IllegalArgumentException("native asset is missing"));
+        boolean requestedNative = chainAssets.findActive(chain, assetSymbol)
+                .map(row -> Boolean.TRUE.equals(row.get("native_asset"))).orElse(false);
+        return new GasPricingMetadata(text(profile.get("family")), text(profile.get("native_symbol")),
+                longValue(profile.get("default_fee_rate"), 1L), ((Number) nativeAsset.get("decimals")).intValue(),
+                requestedNative);
     }
 
-    /**
-     * 执行 {@code reserveGasUsage} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+    /** 预留提现 Gas。 */
     @Transactional(rollbackFor = Throwable.class)
-    public GasUsageRecord reserveGasUsage(
-            UUID tenantId, UUID custodyWithdrawalId, String orderNo, String chain,
-            java.math.BigDecimal reservedAmount) {
-        return reserveGasUsage(tenantId, "WITHDRAWAL", custodyWithdrawalId,
-                orderNo, chain, reservedAmount);
+    public GasUsageRecord reserveGasUsage(UUID tenantId, UUID custodyWithdrawalId, String orderNo,
+                                           String chain, BigDecimal reservedAmount) {
+        return reserveGasUsage(tenantId, "WITHDRAWAL", custodyWithdrawalId, orderNo, chain, reservedAmount);
     }
 
-    /**
-     * 执行 {@code reserveGasUsage} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+    /** 预留业务操作 Gas，并同步冻结账本余额。 */
     @Transactional(rollbackFor = Throwable.class)
-    public GasUsageRecord reserveGasUsage(
-            UUID tenantId, String operationType, UUID operationId, String referenceNo,
-            String chain, java.math.BigDecimal reservedAmount) {
+    public GasUsageRecord reserveGasUsage(UUID tenantId, String operationType, UUID operationId,
+                                          String referenceNo, String chain, BigDecimal reservedAmount) {
+        if (reservedAmount == null || reservedAmount.signum() <= 0) {
+            throw new IllegalArgumentException("reserved gas amount must be positive");
+        }
         requireGasOperation(tenantId, operationType, operationId, chain);
         GasAccountRecord account = findGasAccount(tenantId, chain)
-                .filter(candidate -> "ACTIVE".equals(candidate.status()))
-                .orElseThrow(() -> new IllegalStateException(
-                        "set up an active " + chain + " gas account before creating withdrawals"));
-        GasFundingSource funding = gasFundingSource(account);
-        if (jdbc.update("""
-                        update ledger_balance
-                           set available_balance = available_balance - ?,
-                               locked_balance = locked_balance + ?,
-                               updated_at = now()
-                         where chain = ? and asset_symbol = ? and lower(account_id) = lower(?)
-                           and tenant_id = ?
-                           and available_balance >= ?
-                           and not exists (
-                               select 1 from custody_gas_usage u
-                                where u.tenant_id = ? and u.gas_account_id = ?
-                                  and u.status = 'OVERDUE'
-                           )
-                        """, reservedAmount, reservedAmount, chain, account.nativeSymbol(),
-                funding.accountId(), tenantId, reservedAmount, tenantId, account.id()) != 1) {
-            throw new IllegalStateException(
-                    "insufficient " + account.nativeSymbol()
-                            + " balance for network fees");
+                .filter(row -> "ACTIVE".equals(row.status()))
+                .orElseThrow(() -> new IllegalStateException("active gas account is missing"));
+        if (gasUsages.existsOverdue(tenantId, account.id())) {
+            throw new IllegalStateException("gas account has an overdue reservation");
         }
-        UUID usageId = UUID.randomUUID();
-        jdbc.update("""
-                        insert into custody_gas_usage(
-                            id, tenant_id, gas_account_id, operation_type,
-                            operation_id, reference_no, chain, native_symbol, reserved_amount)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, usageId, tenantId, account.id(), operationType,
-                operationId, referenceNo, chain, account.nativeSymbol(), reservedAmount);
-        return requireGasUsage(tenantId, operationType, operationId);
+        if (!ledgerBalances.freeze(chain, account.nativeSymbol(), account.accountId(), reservedAmount, tenantId)) {
+            throw new IllegalStateException("insufficient gas balance");
+        }
+        gasUsages.insert(UUID.randomUUID(), tenantId, account.id(), operationType, operationId,
+                referenceNo, chain, account.nativeSymbol(), reservedAmount, "CONFIGURED_RESERVE");
+        return findGasUsage(tenantId, operationType, operationId).orElseThrow();
     }
 
-    /**
-     * 删除或释放 {@code releaseGasUsage} 对应的资源，并收敛相关业务状态。
-     */
+    /** 释放提现 Gas。 */
     @Transactional(rollbackFor = Throwable.class)
     public GasUsageRecord releaseGasUsage(UUID custodyWithdrawalId, String reason) {
-        GasUsageRecord usage = requireWithdrawalGasUsage(custodyWithdrawalId);
-        return releaseGasUsage(usage.tenantId(), usage.operationType(), usage.operationId(), reason);
+        return gasUsages.findByOperationId(custodyWithdrawalId).map(row ->
+                releaseGasUsage(uuid(row.get("tenant_id")), text(row.get("operation_type")),
+                        uuid(row.get("operation_id")), reason)).orElseThrow();
     }
 
-    /**
-     * 删除或释放 {@code releaseGasUsage} 对应的资源，并收敛相关业务状态。
-     */
+    /** 释放业务操作 Gas。 */
     @Transactional(rollbackFor = Throwable.class)
-    public GasUsageRecord releaseGasUsage(UUID tenantId, String operationType,
-                                          UUID operationId, String reason) {
-        GasUsageRecord usage = requireGasUsageForUpdate(tenantId, operationType, operationId);
-        if (!"RESERVED".equals(usage.status())) {
-            return usage;
-        }
-        GasAccountRecord account = requireGasAccount(usage.tenantId(), usage.gasAccountId());
-        GasFundingSource funding = gasFundingSource(account);
-        if (jdbc.update("""
-                        update ledger_balance
-                           set available_balance = available_balance + ?,
-                               locked_balance = locked_balance - ?,
-                               updated_at = now()
-                         where chain = ? and asset_symbol = ? and lower(account_id) = lower(?)
-                           and tenant_id = ?
-                           and locked_balance >= ?
-                        """, usage.reservedAmount(), usage.reservedAmount(),
-                usage.chain(), usage.nativeSymbol(), funding.accountId(),
-                usage.tenantId(), usage.reservedAmount()) != 1) {
-            throw new IllegalStateException("gas reservation balance is inconsistent");
-        }
-        jdbc.update("""
-                        update custody_gas_usage
-                           set status = 'RELEASED', error_message = ?, updated_at = now(),
-                               settled_at = now()
-                         where tenant_id = ? and id = ? and status = 'RESERVED'
-                        """, reason, usage.tenantId(), usage.id());
-        return requireGasUsage(tenantId, operationType, operationId);
+    public GasUsageRecord releaseGasUsage(UUID tenantId, String operationType, UUID operationId, String reason) {
+        GasUsageRecord usage = gasUsages.findForUpdate(tenantId, operationType, operationId)
+                .map(CustodyRepository::mapGasUsage).orElseThrow();
+        if (!"RESERVED".equals(usage.status())) return usage;
+        GasAccountRecord account = requireGasAccount(tenantId, usage.gasAccountId());
+        if (!ledgerBalances.release(usage.chain(), usage.nativeSymbol(), account.accountId(),
+                usage.reservedAmount(), tenantId)) throw new IllegalStateException("gas balance is inconsistent");
+        gasUsages.release(tenantId, operationType, operationId, reason);
+        return findGasUsage(tenantId, operationType, operationId).orElseThrow();
     }
 
-    /**
-     * 设置或更新 {@code settleGasUsage} 对应的状态，并保持相关业务字段一致。
-     */
+    /** 结算提现 Gas。 */
     @Transactional(rollbackFor = Throwable.class)
-    public GasUsageRecord settleGasUsage(
-            UUID custodyWithdrawalId, java.math.BigDecimal actualAmount,
-            String pricingSource, String txHash) {
-        GasUsageRecord usage = requireWithdrawalGasUsage(custodyWithdrawalId);
-        return settleGasUsage(usage.tenantId(), usage.operationType(), usage.operationId(),
-                actualAmount, pricingSource, txHash);
+    public GasUsageRecord settleGasUsage(UUID custodyWithdrawalId, BigDecimal actualAmount,
+                                         String pricingSource, String txHash) {
+        return gasUsages.findByOperationId(custodyWithdrawalId).map(row -> settleGasUsage(
+                uuid(row.get("tenant_id")), text(row.get("operation_type")), uuid(row.get("operation_id")),
+                actualAmount, pricingSource, txHash)).orElseThrow();
     }
 
-    /**
-     * 设置或更新 {@code settleGasUsage} 对应的状态，并保持相关业务字段一致。
-     */
+    /** 结算业务操作 Gas。 */
     @Transactional(rollbackFor = Throwable.class)
-    public GasUsageRecord settleGasUsage(
-            UUID tenantId, String operationType, UUID operationId,
-            java.math.BigDecimal actualAmount, String pricingSource, String txHash) {
-        GasUsageRecord usage = requireGasUsageForUpdate(tenantId, operationType, operationId);
-        if (!Set.of("RESERVED", "OVERDUE").contains(usage.status())) {
-            return usage;
+    public GasUsageRecord settleGasUsage(UUID tenantId, String operationType, UUID operationId,
+                                         BigDecimal actualAmount, String pricingSource, String txHash) {
+        GasUsageRecord usage = gasUsages.findForUpdate(tenantId, operationType, operationId)
+                .map(CustodyRepository::mapGasUsage).orElseThrow();
+        if (!Set.of("RESERVED", "OVERDUE").contains(usage.status())) return usage;
+        BigDecimal actual = actualAmount == null || actualAmount.signum() <= 0
+                ? usage.reservedAmount() : actualAmount.stripTrailingZeros();
+        if (actual.signum() <= 0) throw new IllegalArgumentException("actual gas amount must be positive");
+        GasAccountRecord account = requireGasAccount(tenantId, usage.gasAccountId());
+        boolean settled = ledgerBalances.settleReserved(usage.chain(), usage.nativeSymbol(), account.accountId(),
+                usage.reservedAmount(), actual, tenantId);
+        if (!settled) {
+            gasUsages.markOverdue(tenantId, usage.id(), actual, pricingSource, txHash,
+                    "actual network fee exceeded funded gas balance");
+            return findGasUsage(tenantId, operationType, operationId).orElseThrow();
         }
-        java.math.BigDecimal actual = actualAmount == null || actualAmount.signum() <= 0
-                ? usage.reservedAmount()
-                : actualAmount.stripTrailingZeros();
-        GasAccountRecord account = requireGasAccount(usage.tenantId(), usage.gasAccountId());
-        GasFundingSource funding = gasFundingSource(account);
-        java.math.BigDecimal difference = usage.reservedAmount().subtract(actual);
-        int settled;
-        if (difference.signum() >= 0) {
-            settled = jdbc.update("""
-                            update ledger_balance
-                               set available_balance = available_balance + ?,
-                                   locked_balance = locked_balance - ?,
-                                   total_balance = total_balance - ?,
-                                   updated_at = now()
-                             where chain = ? and asset_symbol = ? and lower(account_id) = lower(?)
-                               and tenant_id = ?
-                               and locked_balance >= ? and total_balance >= ?
-                            """, difference, usage.reservedAmount(), actual,
-                    usage.chain(), usage.nativeSymbol(), funding.accountId(),
-                    usage.tenantId(), usage.reservedAmount(), actual);
-        } else {
-            java.math.BigDecimal extra = difference.negate();
-            settled = jdbc.update("""
-                            update ledger_balance
-                               set available_balance = available_balance - ?,
-                                   locked_balance = locked_balance - ?,
-                                   total_balance = total_balance - ?,
-                                   updated_at = now()
-                             where chain = ? and asset_symbol = ? and lower(account_id) = lower(?)
-                               and tenant_id = ?
-                               and available_balance >= ? and locked_balance >= ?
-                               and total_balance >= ?
-                            """, extra, usage.reservedAmount(), actual,
-                    usage.chain(), usage.nativeSymbol(), funding.accountId(),
-                    usage.tenantId(), extra, usage.reservedAmount(), actual);
-        }
-        if (settled != 1) {
-            jdbc.update("""
-                            update custody_gas_usage
-                               set status = 'OVERDUE', actual_amount = ?,
-                                   pricing_source = ?, tx_hash = ?,
-                                   error_message = 'actual network fee exceeded funded gas balance',
-                                   updated_at = now(), settled_at = null
-                             where tenant_id = ? and id = ?
-                               and status in ('RESERVED', 'OVERDUE')
-                            """, actual, pricingSource, txHash, usage.tenantId(), usage.id());
-            return requireGasUsage(tenantId, operationType, operationId);
-        }
-        jdbc.update("""
-                        update custody_gas_usage
-                           set status = 'SETTLED', actual_amount = ?,
-                               pricing_source = ?, tx_hash = ?, error_message = null,
-                               updated_at = now(), settled_at = now()
-                         where tenant_id = ? and id = ?
-                           and status in ('RESERVED', 'OVERDUE')
-                        """, actual, pricingSource, txHash, usage.tenantId(), usage.id());
-        jdbc.update("""
-                        insert into custody_ledger_entry(
-                            id, tenant_id, custody_address_id, chain, asset_symbol,
-                            account_id, entry_type, direction, amount,
-                            reference_type, reference_id)
-                        values (?, ?, ?, ?, ?, ?, 'NETWORK_FEE', 'DEBIT', ?,
-                                ?, ?)
-                        on conflict (tenant_id, entry_type, reference_type, reference_id)
-                        do nothing
-                        """, UUID.randomUUID(), usage.tenantId(), funding.custodyAddressId(),
-                usage.chain(), usage.nativeSymbol(), funding.accountId(), actual,
+        gasUsages.settleReservedOrOverdue(tenantId, usage.id(), actual, pricingSource, txHash);
+        ledgerEntries.insertIfAbsent(UUID.randomUUID(), usage.tenantId(), account.custodyAddressId(),
+                usage.chain(), usage.nativeSymbol(), account.accountId(), "NETWORK_FEE", "DEBIT", actual,
                 usage.operationType(), usage.referenceNo());
-        return requireGasUsage(tenantId, operationType, operationId);
+        return findGasUsage(tenantId, operationType, operationId).orElseThrow();
     }
 
-    /**
-     * 获取或查询 {@code listGasUsage} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> listGasUsage(
-            UUID tenantId, UUID gasAccountId, int limit, int offset) {
-        return jdbc.query("""
-                        select u.id, u.operation_type, u.operation_id, u.reference_no, u.chain,
-                               u.native_symbol, u.reserved_amount, u.actual_amount,
-                               u.status, u.pricing_source, u.tx_hash, u.error_message,
-                               u.created_at, u.updated_at, u.settled_at
-                          from custody_gas_usage u
-                         where u.tenant_id = ? and u.gas_account_id = ?
-                         order by u.created_at desc, u.id
-                         limit ? offset ?
-                        """, (rs, rowNum) -> {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("id", rs.getObject("id", UUID.class));
-                    row.put("operationType", rs.getString("operation_type"));
-                    row.put("operationId", rs.getObject("operation_id", UUID.class));
-                    row.put("referenceNo", rs.getString("reference_no"));
-                    row.put("chain", rs.getString("chain"));
-                    row.put("nativeSymbol", rs.getString("native_symbol"));
-                    row.put("reservedAmount", rs.getBigDecimal("reserved_amount"));
-                    row.put("actualAmount", rs.getBigDecimal("actual_amount"));
-                    row.put("status", rs.getString("status"));
-                    row.put("pricingSource", rs.getString("pricing_source"));
-                    row.put("txHash", rs.getString("tx_hash"));
-                    row.put("errorMessage", rs.getString("error_message"));
-                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
-                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
-                    row.put("settledAt", instantOrNull(rs.getTimestamp("settled_at")));
-                    return row;
-                }, tenantId, gasAccountId,
-                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    /** 查询 Gas 使用记录列表。 */
+    public List<Map<String, Object>> listGasUsage(UUID tenantId, String chain, String status,
+                                                  int limit, int offset) {
+        return gasUsages.list(tenantId, blank(chain), blank(status), limit, offset);
     }
-    /**
-     * 获取或查询 {@code listOverdueGasUsage} 对应的数据，供调用方读取当前状态。
-     */
+
+    /** 查询指定 Gas 账户的使用记录。 */
+    public List<Map<String, Object>> listGasUsage(UUID tenantId, UUID gasAccountId, int limit, int offset) {
+        return gasUsages.list(tenantId, null, null, 500, 0).stream()
+                .filter(row -> gasAccountId.equals(row.get("gas_account_id")))
+                .skip(Math.max(offset, 0)).limit(Math.min(Math.max(limit, 1), 200)).map(row -> {
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("id", row.get("id")); result.put("operationType", row.get("operation_type"));
+                    result.put("operationId", row.get("operation_id")); result.put("referenceNo", row.get("reference_no"));
+                    result.put("chain", row.get("chain")); result.put("nativeSymbol", row.get("native_symbol"));
+                    result.put("reservedAmount", row.get("reserved_amount")); result.put("actualAmount", row.get("actual_amount"));
+                    result.put("status", row.get("status")); result.put("pricingSource", row.get("pricing_source"));
+                    result.put("txHash", row.get("tx_hash")); result.put("errorMessage", row.get("error_message"));
+                    result.put("createdAt", instant(row.get("created_at"))); result.put("updatedAt", instant(row.get("updated_at")));
+                    result.put("settledAt", instant(row.get("settled_at"))); return result;
+                }).toList();
+    }
+
+    /** 查询逾期 Gas 使用记录。 */
     public List<GasUsageRecord> listOverdueGasUsage(int limit) {
-        return jdbc.query("""
-                        select id, tenant_id, gas_account_id, operation_type, operation_id,
-                               reference_no, chain, native_symbol, reserved_amount,
-                               actual_amount, status, pricing_source, tx_hash,
-                               error_message, created_at, updated_at, settled_at
-                          from custody_gas_usage
-                         where status = 'OVERDUE' and actual_amount is not null
-                         order by updated_at, id
-                         limit ?
-                        """, (rs, rowNum) -> new GasUsageRecord(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("tenant_id", UUID.class),
-                        rs.getObject("gas_account_id", UUID.class),
-                        rs.getString("operation_type"),
-                        rs.getObject("operation_id", UUID.class),
-                        rs.getString("reference_no"),
-                        rs.getString("chain"),
-                        rs.getString("native_symbol"),
-                        rs.getBigDecimal("reserved_amount"),
-                        rs.getBigDecimal("actual_amount"),
-                        rs.getString("status"),
-                        rs.getString("pricing_source"),
-                        rs.getString("tx_hash"),
-                        rs.getString("error_message"),
-                        rs.getTimestamp("created_at").toInstant(),
-                        rs.getTimestamp("updated_at").toInstant(),
-                        instantOrNull(rs.getTimestamp("settled_at"))),
-                Math.min(Math.max(limit, 1), 200));
-    }
-    /**
-     * 校验 {@code requireGasUsage} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private GasUsageRecord requireGasUsage(UUID tenantId, String operationType, UUID operationId) {
-        return findGasUsage(tenantId, operationType, operationId)
-                .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
+        return gasUsages.listOverdue(limit).stream().map(CustodyRepository::mapGasUsage).toList();
     }
 
-    /**
-     * 校验 {@code requireGasUsageForUpdate} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private GasUsageRecord requireGasUsageForUpdate(
-            UUID tenantId, String operationType, UUID operationId) {
-        return jdbc.query("""
-                        select id, tenant_id, gas_account_id, operation_type, operation_id,
-                               reference_no, chain, native_symbol, reserved_amount,
-                               actual_amount, status, pricing_source, tx_hash,
-                               error_message, created_at, updated_at, settled_at
-                          from custody_gas_usage
-                         where tenant_id = ? and operation_type = ? and operation_id = ?
-                           for update
-                        """, (rs, rowNum) -> new GasUsageRecord(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("tenant_id", UUID.class),
-                        rs.getObject("gas_account_id", UUID.class),
-                        rs.getString("operation_type"),
-                        rs.getObject("operation_id", UUID.class),
-                        rs.getString("reference_no"),
-                        rs.getString("chain"),
-                        rs.getString("native_symbol"),
-                        rs.getBigDecimal("reserved_amount"),
-                        rs.getBigDecimal("actual_amount"),
-                        rs.getString("status"),
-                        rs.getString("pricing_source"),
-                        rs.getString("tx_hash"),
-                        rs.getString("error_message"),
-                        rs.getTimestamp("created_at").toInstant(),
-                        rs.getTimestamp("updated_at").toInstant(),
-                        instantOrNull(rs.getTimestamp("settled_at"))),
-                tenantId, operationType, operationId).stream().findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
-    }
-    /**
-     * 获取或查询 {@code findGasUsage} 对应的数据，供调用方读取当前状态。
-     */
+    /** 查询提现 Gas 使用记录。 */
     public Optional<GasUsageRecord> findGasUsage(UUID custodyWithdrawalId) {
-        return jdbc.query("""
-                        select tenant_id from custody_gas_usage
-                         where operation_type = 'WITHDRAWAL' and operation_id = ?
-                        """, (rs, rowNum) -> rs.getObject("tenant_id", UUID.class), custodyWithdrawalId)
-                .stream().findFirst()
-                .flatMap(tenantId -> findGasUsage(tenantId, "WITHDRAWAL", custodyWithdrawalId));
+        return gasUsages.findByOperationId(custodyWithdrawalId).map(CustodyRepository::mapGasUsage);
     }
 
-    /**
-     * 获取或查询 {@code findGasUsage} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<GasUsageRecord> findGasUsage(
-            UUID tenantId, String operationType, UUID operationId) {
-        return jdbc.query("""
-                        select id, tenant_id, gas_account_id, operation_type, operation_id,
-                               reference_no, chain, native_symbol, reserved_amount,
-                               actual_amount, status, pricing_source, tx_hash,
-                               error_message, created_at, updated_at, settled_at
-                          from custody_gas_usage
-                         where tenant_id = ? and operation_type = ? and operation_id = ?
-                        """, (rs, rowNum) -> new GasUsageRecord(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("tenant_id", UUID.class),
-                        rs.getObject("gas_account_id", UUID.class),
-                        rs.getString("operation_type"),
-                        rs.getObject("operation_id", UUID.class),
-                        rs.getString("reference_no"),
-                        rs.getString("chain"),
-                        rs.getString("native_symbol"),
-                        rs.getBigDecimal("reserved_amount"),
-                        rs.getBigDecimal("actual_amount"),
-                        rs.getString("status"),
-                        rs.getString("pricing_source"),
-                        rs.getString("tx_hash"),
-                        rs.getString("error_message"),
-                        rs.getTimestamp("created_at").toInstant(),
-                        rs.getTimestamp("updated_at").toInstant(),
-                        instantOrNull(rs.getTimestamp("settled_at"))),
-                tenantId, operationType, operationId).stream().findFirst();
-    }
-    /**
-     * 校验 {@code requireWithdrawalGasUsage} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private GasUsageRecord requireWithdrawalGasUsage(UUID custodyWithdrawalId) {
-        return findGasUsage(custodyWithdrawalId)
-                .orElseThrow(() -> new IllegalArgumentException("gas usage not found"));
+    /** 查询业务 Gas 使用记录。 */
+    public Optional<GasUsageRecord> findGasUsage(UUID tenantId, String operationType, UUID operationId) {
+        return gasUsages.find(tenantId, operationType, operationId).map(CustodyRepository::mapGasUsage);
     }
 
-    /**
-     * 校验 {@code requireGasOperation} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void requireGasOperation(UUID tenantId, String operationType,
-                                     UUID operationId, String chain) {
-        String type = operationType == null ? "" : operationType.trim().toUpperCase(java.util.Locale.ROOT);
-        Boolean valid = switch (type) {
-            case "WITHDRAWAL" -> jdbc.queryForObject("""
-                    select exists(select 1 from custody_withdrawal
-                                   where tenant_id = ? and id = ? and chain = ?)
-                    """, Boolean.class, tenantId, operationId, chain);
-            case "COLLECTION_BATCH" -> jdbc.queryForObject("""
-                    select exists(select 1 from evm_collection_batch
-                                   where tenant_id = ? and id = ? and chain = ?)
-                    """, Boolean.class, tenantId, operationId, chain);
-            case "WITHDRAWAL_BATCH" -> jdbc.queryForObject("""
-                    select exists(select 1 from evm_withdrawal_batch
-                                   where tenant_id = ? and id = ? and chain = ?)
-                    """, Boolean.class, tenantId, operationId, chain);
-            default -> throw new IllegalArgumentException("unsupported gas operation type");
-        };
-        if (!Boolean.TRUE.equals(valid)) {
-            throw new IllegalArgumentException("gas operation does not belong to tenant and chain");
-        }
-    }
-    /**
-     * 执行 {@code gasFundingSource} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private static GasFundingSource gasFundingSource(GasAccountRecord gasAccount) {
-        return new GasFundingSource(
-                gasAccount.custodyAddressId(), gasAccount.accountId());
-    }
-    private record GasFundingSource(UUID custodyAddressId, String accountId) {
-    }
-
-    /**
-     * 处理 {@code confirmedNetworkFee} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public Optional<NetworkFee> confirmedNetworkFee(
-            String chain, String orderNo, String txHash, int nativeDecimals) {
-        if (txHash == null || txHash.isBlank()) {
-            return Optional.empty();
-        }
-        Optional<java.math.BigDecimal> amount;
+    /** 查询已确认网络费用。 */
+    public Optional<NetworkFee> confirmedNetworkFee(String chain, String orderNo, String txHash, int nativeDecimals) {
+        if (txHash == null || txHash.isBlank()) return Optional.empty();
+        String normalizedChain = chain == null ? "" : chain.toUpperCase(Locale.ROOT);
+        Optional<BigDecimal> amount;
         String source;
-        switch (chain) {
+        switch (normalizedChain) {
             case "SOLANA" -> {
-                amount = atomicFee("""
-                        select fee_lamports from sol_transaction
-                         where chain = ? and signature = ? and status = 'CONFIRMED'
-                         limit 1
-                        """, chain, txHash, 9);
+                amount = solanaTransactions.findConfirmedFeeAtomic(chain, txHash)
+                        .map(value -> value.movePointLeft(9));
                 source = "CHAIN_CONFIRMED";
             }
             case "APTOS" -> {
-                amount = atomicFee("""
-                        select gas_used * gas_unit_price from aptos_transaction
-                         where chain = ? and tx_hash = ? and status = 'CONFIRMED'
-                         limit 1
-                        """, chain, txHash, 8);
+                amount = aptosTransactions.findConfirmedFeeAtomic(chain, txHash)
+                        .map(value -> value.movePointLeft(8));
                 source = "CHAIN_CONFIRMED";
             }
             case "SUI" -> {
-                amount = atomicFee("""
-                        select gas_used from sui_transaction
-                         where chain = ? and tx_digest = ? and status = 'CONFIRMED'
-                         limit 1
-                        """, chain, txHash, 9);
+                amount = suiTransactions.findConfirmedFeeAtomic(chain, txHash)
+                        .map(value -> value.movePointLeft(9));
                 source = "CHAIN_CONFIRMED";
             }
             case "TON" -> {
-                amount = atomicFee("""
-                        select fee_nano from ton_transaction
-                         where chain = ? and tx_hash = ? and status = 'CONFIRMED'
-                         limit 1
-                        """, chain, txHash, 9);
+                amount = tonTransactions.findConfirmedFeeAtomic(chain, txHash)
+                        .map(value -> value.movePointLeft(9));
                 source = "CHAIN_CONFIRMED";
             }
             case "XRP" -> {
-                amount = atomicFee("""
-                        select fee_drops from xrp_transaction
-                         where chain = ? and tx_hash = ? and status = 'CONFIRMED'
-                         limit 1
-                        """, chain, txHash, 6);
+                amount = xrpTransactions.findConfirmedFeeAtomic(chain, txHash)
+                        .map(value -> value.movePointLeft(6));
                 source = "CHAIN_CONFIRMED";
             }
             case "XMR" -> {
-                amount = atomicFee("""
-                        select fee_atomic from monero_transaction
-                         where chain = ? and tx_hash = ? and status = 'CONFIRMED'
-                         order by updated_at desc limit 1
-                        """, chain, txHash, nativeDecimals);
+                amount = moneroTransactions.findConfirmedFeeAtomic(chain, txHash)
+                        .map(value -> value.movePointLeft(nativeDecimals));
                 source = "CHAIN_CONFIRMED";
             }
             case "NEAR" -> {
@@ -1301,1343 +718,468 @@ public class CustodyRepository {
                 source = "CONFIGURED_RESERVE";
             }
             case "TRON" -> {
-                amount = decimalFee("""
-                        select fee from tron_tx
-                         where chain = ? and tx_hash = ? and status = 'CONFIRMED'
-                         limit 1
-                        """, chain, txHash);
+                amount = tronTransactions.findConfirmedFee(chain, txHash);
                 source = "CHAIN_CONFIRMED";
             }
             default -> {
-                amount = decimalFee("""
-                        select fee from evm_tx
-                         where chain = ? and tx_hash = ? and status = 'CONFIRMED'
-                         limit 1
-                        """, chain, txHash);
+                amount = evmTransactions.findConfirmedFee(chain, txHash);
                 source = amount.isPresent() ? "CHAIN_RECORDED" : "CONFIGURED_RESERVE";
                 if (amount.isEmpty()) {
-                    amount = decimalFee("""
-                            select fee from withdrawal_order
-                             where chain = ? and order_no = ? and status = 'CONFIRMED'
-                             limit 1
-                            """, chain, orderNo);
+                    amount = withdrawalOrders.find(chain, orderNo, null).map(WithdrawalOrderRecord::getFee);
                 }
             }
         }
         String pricingSource = source;
-        return amount.filter(value -> value.signum() > 0)
+        return amount.filter(value -> value != null && value.signum() > 0)
                 .map(value -> new NetworkFee(value.stripTrailingZeros(), pricingSource));
     }
 
-    /**
-     * 执行 {@code atomicFee} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private Optional<java.math.BigDecimal> atomicFee(
-            String sql, String chain, String txHash, int decimals) {
-        return decimalFee(sql, chain, txHash)
-                .map(value -> value.movePointLeft(decimals));
-    }
-
-    /**
-     * 转换或计算 {@code decimalFee} 对应的值，统一金额、格式和边界规则。
-     */
-    private Optional<java.math.BigDecimal> decimalFee(
-            String sql, String first, String second) {
-        return jdbc.query(sql,
-                        (rs, rowNum) -> rs.getBigDecimal(1), first, second)
-                .stream().filter(java.util.Objects::nonNull).findFirst();
-    }
-    /**
-     * 执行 {@code onboardingStatus} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+    /** 查询租户初始化状态。 */
     public Map<String, Object> onboardingStatus(UUID tenantId) {
-        return jdbc.queryForObject("""
-                        select
-                            exists (
-                                select 1 from custody_api_key
-                                 where tenant_id = t.id and status = 'ACTIVE'
-                            ) as has_api_key,
-                            exists (
-                                select 1 from custody_tenant_chain tc
-                                 where tc.tenant_id = t.id and tc.status = 'ACTIVE'
-                            ) as has_open_chain,
-                            exists (
-                                select 1 from custody_webhook_endpoint
-                                 where tenant_id = t.id and status = 'ACTIVE'
-                                   and verified_at is not null
-                            ) as has_verified_webhook,
-                            t.ip_allowlist_enabled and exists (
-                                select 1 from custody_ip_rule
-                                 where tenant_id = t.id and enabled = true
-                            ) as has_ip_allowlist,
-                            exists (
-                                select 1 from custody_address a
-                                 where a.tenant_id = t.id
-                                   and not exists (
-                                       select 1 from custody_gas_account g
-                                        where g.custody_address_id = a.id
-                                   )
-                            ) as has_customer_address,
-                            exists (
-                                select 1 from custody_gas_account
-                                 where tenant_id = t.id and status = 'ACTIVE'
-                            ) as has_gas_account,
-                            exists (
-                                select 1
-                                  from custody_gas_account g
-                                  join custody_address a
-                                    on a.tenant_id = g.tenant_id
-                                   and a.id = g.custody_address_id
-                                  join chain_address base
-                                    on base.tenant_id = a.tenant_id
-                                   and base.id = a.chain_address_id
-                                  join chain_address related
-                                    on related.tenant_id = g.tenant_id
-                                   and related.chain = base.chain
-                                   and related.user_id = base.user_id
-                                   and related.biz = base.biz
-                                   and related.address_index = base.address_index
-                                   and related.wallet_role = base.wallet_role
-                                   and related.asset_symbol = g.native_symbol
-                                   and related.enabled = true
-                                  join ledger_balance lb
-                                    on lb.tenant_id = g.tenant_id
-                                   and lb.chain = g.chain
-                                   and lb.asset_symbol = g.native_symbol
-                                   and lower(lb.account_id) = lower(related.account_id)
-                                 where g.tenant_id = t.id
-                                   and g.status = 'ACTIVE'
-                                   and lb.available_balance > 0
-                            ) as has_funded_gas
-                          from custody_tenant t
-                         where t.id = ?
-                        """, (rs, rowNum) -> {
-                    Map<String, Object> result = new LinkedHashMap<>();
-                    boolean apiKey = rs.getBoolean("has_api_key");
-                    boolean openChain = rs.getBoolean("has_open_chain");
-                    boolean webhook = rs.getBoolean("has_verified_webhook");
-                    boolean allowlist = rs.getBoolean("has_ip_allowlist");
-                    boolean address = rs.getBoolean("has_customer_address");
-                    boolean gasAccount = rs.getBoolean("has_gas_account");
-                    boolean fundedGas = rs.getBoolean("has_funded_gas");
-                    result.put("apiKeyConfigured", apiKey);
-                    result.put("chainOpened", openChain);
-                    result.put("webhookConfigured", webhook);
-                    result.put("ipAllowlistConfigured", allowlist);
-                    result.put("addressCreated", address);
-                    result.put("gasAccountConfigured", gasAccount);
-                    result.put("gasAccountFunded", fundedGas);
-                    result.put("completedSteps", List.of(
-                            openChain, apiKey, webhook, allowlist, address, gasAccount, fundedGas)
-                            .stream().filter(Boolean::booleanValue).count());
-                    result.put("totalSteps", 7);
-                    result.put("ready", openChain && apiKey && webhook && allowlist && address
-                            && gasAccount && fundedGas);
-                    return result;
-                }, tenantId);
+        TenantRecord tenant = requireTenant(tenantId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        boolean openChain = !tenantChains.listActiveChains(tenantId).isEmpty();
+        boolean apiKey = securityRepository.countActiveApiKeys(tenantId) > 0;
+        boolean webhook = webhookEndpoints.list(tenantId).stream()
+                .anyMatch(row -> "ACTIVE".equals(row.get("status")) && row.get("verified_at") != null);
+        boolean allowlist = tenant.ipAllowlistEnabled() && !securityRepository.activeIpRules(tenantId).isEmpty();
+        List<Map<String, Object>> addresses = custodyAddresses.listByTenant(tenantId);
+        List<UUID> gasAddressIds = gasAccounts.listByTenant(tenantId).stream()
+                .map(row -> uuid(row.get("custody_address_id"))).toList();
+        boolean customerAddress = addresses.stream()
+                .anyMatch(row -> !gasAddressIds.contains(uuid(row.get("id"))));
+        boolean gasAccount = gasAccounts.listByTenant(tenantId).stream()
+                .anyMatch(row -> "ACTIVE".equals(row.get("status")));
+        boolean fundedGas = listGasAccounts(tenantId).stream()
+                .anyMatch(row -> "ACTIVE".equals(row.status()) && row.availableBalance().signum() > 0);
+        result.put("tenantId", tenantId);
+        result.put("apiKeyConfigured", apiKey);
+        result.put("chainOpened", openChain);
+        result.put("webhookConfigured", webhook);
+        result.put("ipAllowlistConfigured", allowlist);
+        result.put("addressCreated", customerAddress);
+        result.put("gasAccountConfigured", gasAccount);
+        result.put("gasAccountFunded", fundedGas);
+        result.put("completedSteps", List.of(openChain, apiKey, webhook, allowlist, customerAddress,
+                gasAccount, fundedGas).stream().filter(Boolean::booleanValue).count());
+        result.put("totalSteps", 7);
+        result.put("ready", openChain && apiKey && webhook && allowlist && customerAddress
+                && gasAccount && fundedGas);
+        return result;
     }
-    /**
-     * 执行 {@code gasAccounts} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private List<GasAccountRecord> gasAccounts(UUID tenantId, String chain) {
-        return jdbc.query("""
-                        select g.id, g.tenant_id, g.custody_address_id, g.chain, g.network,
-                               g.native_symbol, g.low_balance_threshold, g.status,
-                               a.address, a.memo, a.derivation_child, base.account_id,
-                               coalesce(b.available_balance, 0) as available_balance,
-                               coalesce(b.locked_balance, 0) as locked_balance,
-                               coalesce(b.total_balance, 0) as total_balance,
-                               g.created_at, g.updated_at
-                          from custody_gas_account g
-                          join custody_address a
-                            on a.tenant_id = g.tenant_id
-                           and a.id = g.custody_address_id
-                          join chain_address base
-                            on base.tenant_id = a.tenant_id
-                           and base.id = a.chain_address_id
-                          left join lateral (
-                              select coalesce(sum(lb.available_balance), 0) as available_balance,
-                                     coalesce(sum(lb.locked_balance), 0) as locked_balance,
-                                     coalesce(sum(lb.total_balance), 0) as total_balance
-                                from (
-                                    select distinct related.account_id
-                                      from chain_address related
-                                     where related.tenant_id = g.tenant_id
-                                       and related.chain = base.chain
-                                       and related.user_id = base.user_id
-                                       and related.biz = base.biz
-                                       and related.address_index = base.address_index
-                                       and related.wallet_role = base.wallet_role
-                                       and related.asset_symbol = g.native_symbol
-                                       and related.enabled = true
-                                ) account
-                                join ledger_balance lb
-                                  on lb.tenant_id = g.tenant_id
-                                 and lb.chain = g.chain
-                                 and lb.asset_symbol = g.native_symbol
-                                 and lower(lb.account_id) = lower(account.account_id)
-                          ) b on true
-                         where g.tenant_id = ?
-                           and (? = '' or g.chain = ?)
-                         order by g.chain, g.id
-                        """, (rs, rowNum) -> new GasAccountRecord(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("tenant_id", UUID.class),
-                        rs.getObject("custody_address_id", UUID.class),
-                        rs.getString("chain"),
-                        rs.getString("network"),
-                        rs.getString("native_symbol"),
-                        rs.getString("address"),
-                        rs.getString("memo"),
-                        rs.getLong("derivation_child"),
-                        rs.getString("account_id"),
-                        rs.getBigDecimal("available_balance"),
-                        rs.getBigDecimal("locked_balance"),
-                        rs.getBigDecimal("total_balance"),
-                        rs.getBigDecimal("low_balance_threshold"),
-                        rs.getString("status"),
-                        rs.getTimestamp("created_at").toInstant(),
-                        rs.getTimestamp("updated_at").toInstant()),
-                tenantId, blankToEmpty(chain), blankToEmpty(chain));
-    }
-    /**
-     * 获取或查询 {@code findIdempotency} 对应的数据，供调用方读取当前状态。
-     */
+
+    /** 查询租户幂等记录。 */
     public Optional<IdempotencyRecord> findIdempotency(UUID tenantId, String key, String operation) {
-        return jdbc.query("""
-                        select request_hash, response_status, response_body::text as response_body, expires_at
-                         from custody_idempotency_key
-                         where tenant_id = ? and idempotency_key = ? and operation = ?
-                           and (expires_at is null or expires_at > now())
-                        """, (rs, rowNum) -> new IdempotencyRecord(
-                        rs.getString("request_hash"),
-                        (Integer) rs.getObject("response_status"),
-                        rs.getString("response_body"),
-                        instantOrNull(rs.getTimestamp("expires_at"))),
-                tenantId, key, operation).stream().findFirst();
+        return idempotencies.find(tenantId, key, operation).stream().findFirst()
+                .map(row -> new IdempotencyRecord(text(row.get("request_hash")),
+                        row.get("response_status") == null ? null : ((Number) row.get("response_status")).intValue(),
+                        text(row.get("response_json")), instant(row.get("expires_at"))));
     }
 
-    /**
-     * 执行 {@code beginIdempotency} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public boolean beginIdempotency(UUID tenantId, String key, String operation,
-                                    String requestHash, Instant expiresAt) {
-        return jdbc.query("""
-                        insert into custody_idempotency_key(
-                            tenant_id, idempotency_key, operation, request_hash, expires_at)
-                        values (?, ?, ?, ?, ?)
-                        on conflict (tenant_id, idempotency_key, operation) do update
-                           set request_hash = excluded.request_hash,
-                               response_status = null,
-                               response_body = null,
-                               expires_at = excluded.expires_at,
-                               created_at = now()
-                         where custody_idempotency_key.expires_at <= now()
-                        returning true
-                        """, (rs, rowNum) -> rs.getBoolean(1),
-                tenantId, key, operation, requestHash, timestampOrNull(expiresAt))
-                .stream().findFirst().orElse(false);
+    /** 开始幂等请求。 */
+    public boolean beginIdempotency(UUID tenantId, String key, String operation, String requestHash,
+                                    Instant expiresAt) {
+        return idempotencies.begin(tenantId, key, operation, requestHash, expiresAt);
     }
 
-    /**
-     * 执行 {@code completeIdempotency} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public void completeIdempotency(UUID tenantId, String key, String operation,
-                                    int responseStatus, String responseJson) {
-        if (jdbc.update("""
-                        update custody_idempotency_key
-                           set response_status = ?, response_body = cast(? as jsonb)
-                         where tenant_id = ? and idempotency_key = ? and operation = ?
-                           and response_status is null
-                        """, responseStatus, responseJson, tenantId, key, operation) != 1) {
-            throw new IllegalStateException("idempotency reservation is missing or already completed");
-        }
+    /** 完成幂等请求。 */
+    public void completeIdempotency(UUID tenantId, String key, String operation, int responseStatus,
+                                    String responseJson) {
+        idempotencies.complete(tenantId, key, operation, responseStatus, responseJson);
     }
 
-    /**
-     * 记录或保存 {@code insertWebhookEndpoint} 对应的数据，并遵守幂等和事务约束。
-     */
-    public WebhookEndpointRecord insertWebhookEndpoint(
-            UUID id, UUID tenantId, String name, String url, String encryptedSecret,
-            String verificationTokenHash, UUID createdBy) {
-        jdbc.update("""
-                        insert into custody_webhook_endpoint(
-                            id, tenant_id, name, url, secret_ciphertext,
-                            verification_token_hash, created_by)
-                        values (?, ?, ?, ?, ?, ?, ?)
-                        """, id, tenantId, name, url, encryptedSecret,
-                verificationTokenHash, createdBy);
+    /** 创建 Webhook 端点。 */
+    public WebhookEndpointRecord insertWebhookEndpoint(UUID id, UUID tenantId, String name, String url,
+                                                       String secretCiphertext, String verificationTokenHash,
+                                                       UUID createdBy) {
+        webhookEndpoints.insert(id, tenantId, name, url, secretCiphertext, verificationTokenHash);
         return requireWebhookEndpoint(tenantId, id);
     }
-    /**
-     * 校验 {@code requireWebhookEndpoint} 对应的前置条件，不满足时抛出明确异常。
-     */
+
+    /** 查询并校验 Webhook 端点。 */
     public WebhookEndpointRecord requireWebhookEndpoint(UUID tenantId, UUID endpointId) {
-        return jdbc.query("""
-                        select id, tenant_id, name, url, secret_ciphertext,
-                               status, verification_token_hash, verified_at, last_delivery_at,
-                               created_at, updated_at
-                          from custody_webhook_endpoint
-                         where tenant_id = ? and id = ?
-                        """, (rs, rowNum) -> mapWebhookEndpoint(rs), tenantId, endpointId)
-                .stream().findFirst()
+        return webhookEndpoints.find(tenantId, endpointId).stream().findFirst()
+                .map(CustodyRepository::mapWebhookEndpoint)
                 .orElseThrow(() -> new IllegalArgumentException("webhook endpoint not found"));
     }
-    /**
-     * 获取或查询 {@code listWebhookEndpoints} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> listWebhookEndpoints(UUID tenantId) {
-        return jdbc.query("""
-                        select e.id, e.name, e.url, e.status,
-                               e.verified_at, e.last_delivery_at, e.created_at, e.updated_at,
-                               count(d.id) filter (
-                                   where d.created_at >= now() - interval '24 hours') as delivery_count_24h,
-                               count(d.id) filter (
-                                   where d.status = 'DELIVERED'
-                                     and d.created_at >= now() - interval '24 hours') as delivered_count_24h
-                          from custody_webhook_endpoint e
-                          left join custody_webhook_delivery d on d.endpoint_id = e.id
-                         where e.tenant_id = ?
-                         group by e.id
-                         order by e.created_at desc
-                        """, (rs, rowNum) -> {
-                    long attempts = rs.getLong("delivery_count_24h");
-                    long delivered = rs.getLong("delivered_count_24h");
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("id", rs.getObject("id", UUID.class));
-                    row.put("name", rs.getString("name"));
-                    row.put("url", rs.getString("url"));
-                    row.put("status", rs.getString("status"));
-                    row.put("verifiedAt", instantOrNull(rs.getTimestamp("verified_at")));
-                    row.put("lastDeliveryAt", instantOrNull(rs.getTimestamp("last_delivery_at")));
-                    row.put("deliveryCount24h", attempts);
-                    row.put("successRate24h", attempts == 0 ? null : delivered * 100.0d / attempts);
-                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
-                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
-                    return row;
-                }, tenantId);
-    }
-    /**
-     * 写入或更新 {@code markWebhookVerified} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
+
+    /** 查询 Webhook 端点。 */
+    public List<Map<String, Object>> listWebhookEndpoints(UUID tenantId) { return webhookEndpoints.list(tenantId); }
+
+    /** 标记 Webhook 已验证。 */
     public void markWebhookVerified(UUID tenantId, UUID endpointId) {
-        if (jdbc.update("""
-                        update custody_webhook_endpoint
-                           set status = 'ACTIVE', verified_at = now(),
-                               verification_token_hash = null, updated_at = now()
-                         where tenant_id = ? and id = ?
-                           and status = 'PENDING_VERIFICATION'
-                        """, tenantId, endpointId) != 1) {
-            throw new IllegalStateException("webhook endpoint is not pending verification");
-        }
+        if (webhookEndpoints.markVerified(tenantId, endpointId) != 1) throw new IllegalArgumentException("endpoint not found");
     }
-    /**
-     * 设置或更新 {@code setWebhookStatus} 对应的状态，并保持相关业务字段一致。
-     */
+
+    /** 更新 Webhook 状态。 */
     public void setWebhookStatus(UUID tenantId, UUID endpointId, String status) {
-        if (jdbc.update("""
-                        update custody_webhook_endpoint
-                           set status = ?, updated_at = now()
-                         where tenant_id = ? and id = ?
-                        """, status, tenantId, endpointId) != 1) {
-            throw new IllegalArgumentException("webhook endpoint not found");
-        }
+        webhookEndpoints.updateStatus(tenantId, endpointId, status);
     }
 
-    /**
-     * 获取或查询 {@code listWebhookDeliveries} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> listWebhookDeliveries(UUID tenantId, UUID endpointId,
-                                                            String status, int limit, int offset) {
-        String endpointPredicate = endpointId == null ? "" : "and d.endpoint_id = ?";
-        String statusPredicate = status == null ? "" : "and d.status = ?";
-        List<Object> parameters = new ArrayList<>();
-        parameters.add(tenantId);
-        if (endpointId != null) {
-            parameters.add(endpointId);
-        }
-        if (status != null) {
-            parameters.add(status);
-        }
-        parameters.add(Math.min(Math.max(limit, 1), 200));
-        parameters.add(Math.max(offset, 0));
-        return jdbc.query("""
-                        select d.id, d.endpoint_id, d.event_id, e.event_type,
-                               e.aggregate_type, e.aggregate_id, d.status, d.attempt_count,
-                               d.total_attempt_count, d.manual_retry_count,
-                               d.next_attempt_at, d.next_attempt_trigger,
-                               d.last_http_status, d.last_error,
-                               d.delivered_at, d.created_at, d.updated_at
-                          from custody_webhook_delivery d
-                          join custody_event e on e.id = d.event_id
-                         where d.tenant_id = ?
-                           %s
-                           %s
-                         order by d.created_at desc, d.id
-                         limit ? offset ?
-                        """.formatted(endpointPredicate, statusPredicate), (rs, rowNum) -> {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("id", rs.getObject("id", UUID.class));
-                    row.put("endpointId", rs.getObject("endpoint_id", UUID.class));
-                    row.put("eventId", rs.getObject("event_id", UUID.class));
-                    row.put("eventType", rs.getString("event_type"));
-                    row.put("aggregateType", rs.getString("aggregate_type"));
-                    row.put("aggregateId", rs.getString("aggregate_id"));
-                    row.put("status", rs.getString("status"));
-                    row.put("attemptCount", rs.getInt("attempt_count"));
-                    row.put("totalAttemptCount", rs.getInt("total_attempt_count"));
-                    row.put("manualRetryCount", rs.getInt("manual_retry_count"));
-                    row.put("nextAttemptAt", instantOrNull(rs.getTimestamp("next_attempt_at")));
-                    row.put("nextAttemptTrigger", rs.getString("next_attempt_trigger"));
-                    row.put("lastHttpStatus", rs.getObject("last_http_status"));
-                    row.put("lastError", rs.getString("last_error"));
-                    row.put("deliveredAt", instantOrNull(rs.getTimestamp("delivered_at")));
-                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
-                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
-                    return row;
-                }, parameters.toArray());
+    /** 查询 Webhook 投递记录。 */
+    public List<Map<String, Object>> listWebhookDeliveries(UUID tenantId, UUID endpointId, String status,
+                                                           int limit, int offset) {
+        return webhookDeliveries.list(tenantId, endpointId, blank(status), limit, offset);
     }
 
-    /**
-     * 执行 {@code claimWebhookDeliveries} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+    /** 领取 Webhook 投递任务并组合事件和端点数据。 */
     @Transactional(rollbackFor = Throwable.class)
     public List<WebhookDeliveryTask> claimWebhookDeliveries(String workerId, int limit) {
-        List<WebhookDeliveryTask> tasks = jdbc.query("""
-                        with candidates as (
-                            select d.id,
-                                   case when d.status = 'DELIVERING'
-                                       then 'RECOVERY'
-                                       else d.next_attempt_trigger
-                                   end as attempt_trigger
-                              from custody_webhook_delivery d
-                              join custody_webhook_endpoint ep
-                                on ep.id = d.endpoint_id and ep.status = 'ACTIVE'
-                             where (
-                                   d.status in ('PENDING', 'RETRY')
-                                   and d.next_attempt_at <= now()
-                               ) or (
-                                   d.status = 'DELIVERING'
-                                   and d.locked_at < now() - interval '5 minutes'
-                               )
-                             order by d.next_attempt_at, d.created_at
-                             for update skip locked
-                             limit ?
-                        ),
-                        claimed as (
-                            update custody_webhook_delivery d
-                               set status = 'DELIVERING', locked_by = ?, locked_at = now(),
-                                   attempt_count = attempt_count + 1,
-                                   total_attempt_count = total_attempt_count + 1,
-                                   next_attempt_trigger = 'AUTOMATIC',
-                                   updated_at = now()
-                              from candidates c
-                             where d.id = c.id
-                            returning d.id, d.tenant_id, d.endpoint_id, d.event_id,
-                                      d.attempt_count, d.total_attempt_count,
-                                      d.manual_retry_count, c.attempt_trigger
-                        )
-                        select c.id, c.tenant_id, c.endpoint_id, c.event_id,
-                               c.attempt_count, c.total_attempt_count, c.manual_retry_count,
-                               c.attempt_trigger, gen_random_uuid() as attempt_id,
-                               ep.url, ep.secret_ciphertext, ev.event_type,
-                               ev.payload::text as payload
-                          from claimed c
-                          join custody_webhook_endpoint ep on ep.id = c.endpoint_id
-                          join custody_event ev on ev.id = c.event_id
-                         where ep.status = 'ACTIVE'
-                        """, (rs, rowNum) -> new WebhookDeliveryTask(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("tenant_id", UUID.class),
-                        rs.getObject("endpoint_id", UUID.class),
-                        rs.getObject("event_id", UUID.class),
-                        rs.getInt("attempt_count"),
-                        rs.getInt("total_attempt_count"),
-                        rs.getInt("manual_retry_count"),
-                        rs.getString("attempt_trigger"),
-                        rs.getObject("attempt_id", UUID.class),
-                        workerId,
-                        rs.getString("url"),
-                        rs.getString("secret_ciphertext"),
-                        rs.getString("event_type"),
-                        rs.getString("payload")),
-                Math.min(Math.max(limit, 1), 100), workerId);
-        for (WebhookDeliveryTask task : tasks) {
-            if ("RECOVERY".equals(task.attemptTrigger())) {
-                jdbc.update("""
-                                update custody_webhook_delivery_attempt
-                                   set status = 'FAILED',
-                                       error_message =
-                                           'worker lease expired; delivery was safely reclaimed',
-                                       completed_at = now(),
-                                       duration_ms = greatest(
-                                           0,
-                                           (extract(epoch from (now() - started_at)) * 1000)::bigint)
-                                 where delivery_id = ? and status = 'IN_PROGRESS'
-                                """, task.id());
+        List<WebhookDeliveryTask> result = new ArrayList<>();
+        for (Map<String, Object> row : webhookDeliveries.claim(workerId, limit)) {
+            UUID tenantId = uuid(row.get("tenant_id"));
+            UUID endpointId = uuid(row.get("endpoint_id"));
+            UUID eventId = uuid(row.get("event_id"));
+            if ("RECOVERY".equals(text(row.get("next_attempt_trigger")))) {
+                webhookAttempts.recoverStale(tenantId, uuid(row.get("id")));
             }
-            jdbc.update("""
-                            insert into custody_webhook_delivery_attempt(
-                                id, tenant_id, delivery_id, attempt_number, retry_cycle,
-                                trigger, worker_id)
-                            values (?, ?, ?, ?, ?, ?, ?)
-                            """, task.attemptId(), task.tenantId(), task.id(),
-                    task.totalAttemptCount(), task.manualRetryCount(),
-                    task.attemptTrigger(), workerId);
+            WebhookEndpointRecord endpoint = requireWebhookEndpoint(tenantId, endpointId);
+            Map<String, Object> event = events.find(tenantId, eventId).orElse(null);
+            if (event == null) continue;
+            int attemptNumber = number(row.get("attempt_count"));
+            UUID attemptId = UUID.randomUUID();
+            webhookAttempts.insert(attemptId, tenantId, uuid(row.get("id")), attemptNumber,
+                    number(row.get("manual_retry_count")), text(row.get("next_attempt_trigger")), workerId);
+            result.add(new WebhookDeliveryTask(uuid(row.get("id")), tenantId, endpointId, eventId,
+                    attemptNumber, number(row.get("total_attempt_count")), number(row.get("manual_retry_count")),
+                    text(row.get("next_attempt_trigger")), attemptId, workerId, endpoint.url(),
+                    endpoint.secretCiphertext(), text(event.get("event_type")), text(event.get("payload"))));
         }
-        return tasks;
+        return result;
     }
 
-    /**
-     * 写入或更新 {@code markWebhookDelivered} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
-    @Transactional(rollbackFor = Throwable.class)
+    /** 标记 Webhook 投递成功。 */
     public void markWebhookDelivered(WebhookDeliveryTask task, int httpStatus, String response,
                                      long durationMs) {
-        int accepted = jdbc.update("""
-                        update custody_webhook_delivery
-                           set status = 'DELIVERED', last_http_status = ?, last_response = ?,
-                               last_error = null, delivered_at = now(), locked_by = null,
-                               locked_at = null, updated_at = now()
-                         where id = ? and status = 'DELIVERING' and locked_by = ?
-                           and total_attempt_count = ?
-                        """, httpStatus, truncate(response, 4096), task.id(),
-                task.workerId(), task.totalAttemptCount());
-        jdbc.update("""
-                        update custody_webhook_delivery_attempt
-                           set status = 'DELIVERED', http_status = ?, response_body = ?,
-                               completed_at = now(), duration_ms = ?
-                         where id = ? and status = 'IN_PROGRESS'
-                        """, httpStatus, truncate(response, 4096), Math.max(durationMs, 0L),
-                task.attemptId());
-        if (accepted == 1) {
-            jdbc.update("""
-                    update custody_webhook_endpoint
-                       set last_delivery_at = now(), updated_at = now()
-                     where id = ?
-                    """, task.endpointId());
-        }
+        webhookDeliveries.delivered(task.tenantId(), task.id(), task.workerId(), httpStatus, response);
+        webhookAttempts.delivered(task.tenantId(), task.attemptId(), task.workerId(),
+                httpStatus, response, durationMs);
+        webhookEndpoints.touchDelivery(task.tenantId(), task.endpointId());
     }
 
-    /**
-     * 写入或更新 {@code markWebhookFailed} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
-    @Transactional(rollbackFor = Throwable.class)
+    /** 标记 Webhook 投递失败。 */
     public void markWebhookFailed(WebhookDeliveryTask task, Integer httpStatus, String error,
-                                  String response, Instant nextAttempt, boolean terminal,
-                                  long durationMs) {
-        jdbc.update("""
-                        update custody_webhook_delivery
-                           set status = ?, last_http_status = ?, last_error = ?,
-                               last_response = ?, next_attempt_at = ?, locked_by = null,
-                               locked_at = null, updated_at = now()
-                         where id = ? and status = 'DELIVERING' and locked_by = ?
-                           and total_attempt_count = ?
-                        """, terminal ? "FAILED" : "RETRY", httpStatus, truncate(error, 4096),
-                truncate(response, 4096), timestampOrNull(nextAttempt), task.id(),
-                task.workerId(), task.totalAttemptCount());
-        jdbc.update("""
-                        update custody_webhook_delivery_attempt
-                           set status = ?, http_status = ?, error_message = ?,
-                               response_body = ?, next_attempt_at = ?,
-                               completed_at = now(), duration_ms = ?
-                         where id = ? and status = 'IN_PROGRESS'
-                        """, terminal ? "FAILED" : "RETRY_SCHEDULED", httpStatus,
-                truncate(error, 4096), truncate(response, 4096),
-                terminal ? null : Timestamp.from(nextAttempt), Math.max(durationMs, 0L),
-                task.attemptId());
+                                  String response, Instant nextAttempt, boolean terminal, long durationMs) {
+        webhookDeliveries.failed(task.tenantId(), task.id(), task.workerId(), httpStatus, error, response,
+                terminal, nextAttempt == null ? null : java.sql.Timestamp.from(nextAttempt));
+        webhookAttempts.failed(task.tenantId(), task.attemptId(), task.workerId(), httpStatus, error, response,
+                terminal, nextAttempt == null ? null : java.sql.Timestamp.from(nextAttempt), durationMs);
     }
-    /**
-     * 处理 {@code retryWebhookDelivery} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
+
+    /** 手动重试 Webhook 投递。 */
     public void retryWebhookDelivery(UUID tenantId, UUID deliveryId) {
-        if (jdbc.update("""
-                        update custody_webhook_delivery
-                           set status = 'RETRY', attempt_count = 0,
-                               manual_retry_count = manual_retry_count + 1,
-                               next_attempt_trigger = 'MANUAL',
-                               next_attempt_at = now(), locked_by = null,
-                               locked_at = null, updated_at = now()
-                         where tenant_id = ? and id = ? and status in ('FAILED', 'RETRY')
-                        """, tenantId, deliveryId) != 1) {
-            throw new IllegalStateException("failed or retryable webhook delivery not found");
-        }
+        if (webhookDeliveries.retry(tenantId, deliveryId) != 1) throw new IllegalStateException("webhook delivery not retryable");
     }
-    /**
-     * 处理 {@code retryFailedWebhookDeliveries} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
+
+    /** 批量重试 Webhook 投递。 */
     public int retryFailedWebhookDeliveries(UUID tenantId, UUID endpointId) {
-        return jdbc.update("""
-                        update custody_webhook_delivery
-                           set status = 'RETRY', attempt_count = 0,
-                               manual_retry_count = manual_retry_count + 1,
-                               next_attempt_trigger = 'MANUAL',
-                               next_attempt_at = now(), locked_by = null,
-                               locked_at = null, updated_at = now()
-                         where tenant_id = ? and endpoint_id = ?
-                           and status in ('FAILED', 'RETRY')
-                        """, tenantId, endpointId);
+        return webhookDeliveries.retryFailed(tenantId, endpointId);
     }
 
-    /**
-     * 获取或查询 {@code listWebhookDeliveryAttempts} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> listWebhookDeliveryAttempts(
-            UUID tenantId, UUID deliveryId, int limit, int offset) {
-        return jdbc.query("""
-                        select a.id, a.attempt_number, a.retry_cycle, a.trigger, a.status,
-                               a.http_status, a.error_message, a.response_body,
-                               a.next_attempt_at, a.started_at, a.completed_at, a.duration_ms
-                          from custody_webhook_delivery_attempt a
-                          join custody_webhook_delivery d on d.id = a.delivery_id
-                         where a.tenant_id = ? and a.delivery_id = ?
-                           and d.tenant_id = ?
-                         order by a.attempt_number desc
-                         limit ? offset ?
-                        """, (rs, rowNum) -> {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("id", rs.getObject("id", UUID.class));
-                    row.put("attemptNumber", rs.getInt("attempt_number"));
-                    row.put("retryCycle", rs.getInt("retry_cycle"));
-                    row.put("trigger", rs.getString("trigger"));
-                    row.put("status", rs.getString("status"));
-                    row.put("httpStatus", rs.getObject("http_status"));
-                    row.put("errorMessage", rs.getString("error_message"));
-                    row.put("responseBody", rs.getString("response_body"));
-                    row.put("nextAttemptAt", instantOrNull(rs.getTimestamp("next_attempt_at")));
-                    row.put("startedAt", rs.getTimestamp("started_at").toInstant());
-                    row.put("completedAt", instantOrNull(rs.getTimestamp("completed_at")));
-                    row.put("durationMs", rs.getObject("duration_ms"));
-                    return row;
-                }, tenantId, deliveryId, tenantId,
-                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    /** 查询 Webhook 投递尝试。 */
+    public List<Map<String, Object>> listWebhookDeliveryAttempts(UUID tenantId, UUID deliveryId,
+                                                                  int limit, int offset) {
+        return webhookAttempts.list(tenantId, deliveryId, limit, offset);
     }
 
-    /**
-     * 记录或保存 {@code insertCustodyWithdrawal} 对应的数据，并遵守幂等和事务约束。
-     */
-    public void insertCustodyWithdrawal(
-            UUID id, UUID tenantId, UUID custodyAddressId, String orderNo,
-            String externalReference, String idempotencyKey, String chain,
-            String assetSymbol, String toAddress, java.math.BigDecimal amount,
-            java.math.BigDecimal fee, String status, String createdByType, String createdById) {
-        jdbc.update("""
-                        insert into custody_withdrawal(
-                            id, tenant_id, custody_address_id, withdrawal_order_id,
-                            order_no, external_reference,
-                            idempotency_key, chain, asset_symbol, to_address, amount, fee,
-                            status, created_by_type, created_by_id)
-                        select ?, ?, ?, orders.id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-                          from withdrawal_order orders
-                         where orders.tenant_id = ? and orders.chain = ? and orders.order_no = ?
-                        """, id, tenantId, custodyAddressId, orderNo, externalReference,
-                idempotencyKey, chain, assetSymbol, toAddress, amount, fee, status,
-                createdByType, createdById, tenantId, chain, orderNo);
+    /** 创建托管提现记录。 */
+    public void insertCustodyWithdrawal(UUID id, UUID tenantId, UUID custodyAddressId, String orderNo,
+                                        String externalReference, String idempotencyKey, String chain,
+                                        String assetSymbol, String toAddress, BigDecimal amount, BigDecimal fee,
+                                        String status, String createdByType, String createdById) {
+        long orderId = withdrawalOrders.find(chain, orderNo, tenantId)
+                .map(WithdrawalOrderRecord::getId).map(Long::longValue)
+                .orElseThrow(() -> new IllegalArgumentException("withdrawal order not found"));
+        custodyWithdrawals.insert(id, tenantId, custodyAddressId, orderId, orderNo, externalReference,
+                idempotencyKey, chain, assetSymbol, toAddress, amount, fee, status, createdByType, createdById);
     }
 
-    /**
-     * 获取或查询 {@code listCustodyWithdrawals} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> listCustodyWithdrawals(
-            UUID tenantId, String chain, String assetSymbol, String status,
-            String search, int limit, int offset) {
-        String normalizedSearch = search == null ? "" : search.trim();
-        return jdbc.query("""
-                        select w.id, w.custody_address_id, w.order_no, w.external_reference,
-                               w.chain, w.asset_symbol, w.to_address, w.amount, w.fee,
-                               wo.tx_hash, wo.status, wo.error_message, w.created_by_type,
-                               a.address as source_address, a.subject,
-                               w.created_at, greatest(w.updated_at, wo.updated_at) as updated_at
-                          from custody_withdrawal w
-                          join withdrawal_order wo
-                            on wo.tenant_id = w.tenant_id
-                           and wo.chain = w.chain and wo.order_no = w.order_no
-                          join custody_address a
-                            on a.tenant_id = w.tenant_id and a.id = w.custody_address_id
-                         where w.tenant_id = ?
-                           and (? = '' or w.chain = ?)
-                           and (? = '' or w.asset_symbol = ?)
-                           and (? = '' or wo.status = ?)
-                           and (? = ''
-                                or w.order_no ilike '%' || ? || '%'
-                                or coalesce(w.external_reference, '') ilike '%' || ? || '%'
-                                or w.to_address ilike '%' || ? || '%'
-                                or coalesce(wo.tx_hash, '') ilike '%' || ? || '%'
-                                or a.address ilike '%' || ? || '%'
-                                or a.subject ilike '%' || ? || '%')
-                         order by w.created_at desc, w.id
-                         limit ? offset ?
-                        """, (rs, rowNum) -> {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("id", rs.getObject("id", UUID.class));
-                    row.put("custodyAddressId", rs.getObject("custody_address_id", UUID.class));
-                    row.put("orderNo", rs.getString("order_no"));
-                    row.put("externalReference", rs.getString("external_reference"));
-                    row.put("chain", rs.getString("chain"));
-                    row.put("assetSymbol", rs.getString("asset_symbol"));
-                    row.put("toAddress", rs.getString("to_address"));
-                    row.put("amount", rs.getBigDecimal("amount"));
-                    row.put("fee", rs.getBigDecimal("fee"));
-                    row.put("txHash", rs.getString("tx_hash"));
-                    row.put("status", rs.getString("status"));
-                    row.put("errorMessage", rs.getString("error_message"));
-                    row.put("createdByType", rs.getString("created_by_type"));
-                    row.put("sourceAddress", rs.getString("source_address"));
-                    row.put("subject", rs.getString("subject"));
-                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
-                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
-                    return row;
-                }, tenantId,
-                blankToEmpty(chain), blankToEmpty(chain),
-                blankToEmpty(assetSymbol), blankToEmpty(assetSymbol),
-                blankToEmpty(status), blankToEmpty(status),
-                normalizedSearch, normalizedSearch, normalizedSearch, normalizedSearch,
-                normalizedSearch, normalizedSearch, normalizedSearch,
-                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
-    }
-    /**
-     * 执行 {@code countCustodyWithdrawals} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public long countCustodyWithdrawals(
-            UUID tenantId, String chain, String assetSymbol, String status, String search) {
-        String normalizedSearch = search == null ? "" : search.trim();
-        Long count = jdbc.queryForObject("""
-                        select count(*)
-                          from custody_withdrawal w
-                          join withdrawal_order wo
-                            on wo.tenant_id = w.tenant_id
-                           and wo.chain = w.chain and wo.order_no = w.order_no
-                          join custody_address a
-                            on a.tenant_id = w.tenant_id and a.id = w.custody_address_id
-                         where w.tenant_id = ?
-                           and (? = '' or w.chain = ?)
-                           and (? = '' or w.asset_symbol = ?)
-                           and (? = '' or wo.status = ?)
-                           and (? = ''
-                                or w.order_no ilike '%' || ? || '%'
-                                or coalesce(w.external_reference, '') ilike '%' || ? || '%'
-                                or w.to_address ilike '%' || ? || '%'
-                                or coalesce(wo.tx_hash, '') ilike '%' || ? || '%'
-                                or a.address ilike '%' || ? || '%'
-                                or a.subject ilike '%' || ? || '%')
-                        """, Long.class, tenantId,
-                blankToEmpty(chain), blankToEmpty(chain),
-                blankToEmpty(assetSymbol), blankToEmpty(assetSymbol),
-                blankToEmpty(status), blankToEmpty(status),
-                normalizedSearch, normalizedSearch, normalizedSearch, normalizedSearch,
-                normalizedSearch, normalizedSearch, normalizedSearch);
-        return count == null ? 0L : count;
-    }
-
-    /**
-     * 获取或查询 {@code listCustodyDeposits} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> listCustodyDeposits(
-            UUID tenantId, String chain, String assetSymbol, String status,
-            String search, int limit, int offset) {
-        String normalizedSearch = search == null ? "" : search.trim();
-        return jdbc.query("""
-                        select d.id, d.custody_address_id, a.address, a.subject,
-                               d.chain, d.asset_symbol, d.tx_hash, d.log_index, d.amount,
-                               d.status, d.credited_at, d.created_at, d.updated_at
-                          from custody_deposit d
-                         join custody_address a
-                            on a.tenant_id = d.tenant_id and a.id = d.custody_address_id
-                         where d.tenant_id = ?
-                           and (? = '' or d.chain = ?)
-                           and (? = '' or d.asset_symbol = ?)
-                           and (? = '' or d.status = ?)
-                           and (? = ''
-                                or d.tx_hash ilike '%' || ? || '%'
-                                or a.address ilike '%' || ? || '%'
-                                or a.subject ilike '%' || ? || '%'
-                                or coalesce(a.label, '') ilike '%' || ? || '%')
-                         order by d.created_at desc, d.id
-                         limit ? offset ?
-                        """, (rs, rowNum) -> {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("id", rs.getObject("id", UUID.class));
-                    row.put("custodyAddressId", rs.getObject("custody_address_id", UUID.class));
-                    row.put("address", rs.getString("address"));
-                    row.put("subject", rs.getString("subject"));
-                    row.put("chain", rs.getString("chain"));
-                    row.put("assetSymbol", rs.getString("asset_symbol"));
-                    row.put("txHash", rs.getString("tx_hash"));
-                    row.put("logIndex", rs.getLong("log_index"));
-                    row.put("amount", rs.getBigDecimal("amount"));
-                    row.put("status", rs.getString("status"));
-                    row.put("creditedAt", instantOrNull(rs.getTimestamp("credited_at")));
-                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
-                    row.put("updatedAt", rs.getTimestamp("updated_at").toInstant());
-                    return row;
-                }, tenantId,
-                blankToEmpty(chain), blankToEmpty(chain),
-                blankToEmpty(assetSymbol), blankToEmpty(assetSymbol),
-                blankToEmpty(status), blankToEmpty(status),
-                normalizedSearch, normalizedSearch, normalizedSearch,
-                normalizedSearch, normalizedSearch,
-                Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
-    }
-    /**
-     * 执行 {@code countCustodyDeposits} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public long countCustodyDeposits(
-            UUID tenantId, String chain, String assetSymbol, String status, String search) {
-        String normalizedSearch = search == null ? "" : search.trim();
-        Long count = jdbc.queryForObject("""
-                        select count(*)
-                          from custody_deposit d
-                          join custody_address a
-                            on a.tenant_id = d.tenant_id and a.id = d.custody_address_id
-                         where d.tenant_id = ?
-                           and (? = '' or d.chain = ?)
-                           and (? = '' or d.asset_symbol = ?)
-                           and (? = '' or d.status = ?)
-                           and (? = ''
-                                or d.tx_hash ilike '%' || ? || '%'
-                                or a.address ilike '%' || ? || '%'
-                                or a.subject ilike '%' || ? || '%'
-                                or coalesce(a.label, '') ilike '%' || ? || '%')
-                        """, Long.class, tenantId,
-                blankToEmpty(chain), blankToEmpty(chain),
-                blankToEmpty(assetSymbol), blankToEmpty(assetSymbol),
-                blankToEmpty(status), blankToEmpty(status),
-                normalizedSearch, normalizedSearch, normalizedSearch,
-                normalizedSearch, normalizedSearch);
-        return count == null ? 0L : count;
-    }
-    /**
-     * 获取或查询 {@code findWithdrawalStatusChanges} 对应的数据，供调用方读取当前状态。
-     */
-    public List<WithdrawalStatusChange> findWithdrawalStatusChanges(int limit) {
-        return jdbc.query("""
-                        select w.id, w.tenant_id, w.custody_address_id, w.order_no,
-                               w.external_reference, w.chain, w.asset_symbol, w.to_address,
-                               w.amount, w.fee, w.status as previous_status,
-                               wo.status as next_status, wo.tx_hash, wo.error_message,
-                               wo.debit_account_id, a.source as address_source
-                          from custody_withdrawal w
-                          join withdrawal_order wo
-                            on wo.tenant_id = w.tenant_id
-                           and wo.chain = w.chain and wo.order_no = w.order_no
-                          join custody_address a
-                            on a.tenant_id = w.tenant_id and a.id = w.custody_address_id
-                         where w.status <> wo.status
-                         order by wo.updated_at, w.id
-                         limit ?
-                        """, (rs, rowNum) -> new WithdrawalStatusChange(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("tenant_id", UUID.class),
-                        rs.getObject("custody_address_id", UUID.class),
-                        rs.getString("order_no"),
-                        rs.getString("external_reference"),
-                        rs.getString("chain"),
-                        rs.getString("asset_symbol"),
-                        rs.getString("to_address"),
-                        rs.getBigDecimal("amount"),
-                        rs.getBigDecimal("fee"),
-                        rs.getString("previous_status"),
-                        rs.getString("next_status"),
-                        rs.getString("tx_hash"),
-                        rs.getString("error_message"),
-                        rs.getString("debit_account_id"),
-                        rs.getString("address_source")),
-                Math.min(Math.max(limit, 1), 200));
-    }
-
-    /**
-     * 设置或更新 {@code applyWithdrawalStatusChange} 对应的状态，并保持相关业务字段一致。
-     */
-    @Transactional(rollbackFor = Throwable.class)
-    public boolean applyWithdrawalStatusChange(WithdrawalStatusChange change,
-                                               UUID eventId, String eventType, String payloadJson) {
-        int updated = jdbc.update("""
-                        update custody_withdrawal
-                           set status = ?, updated_at = now()
-                         where id = ? and status = ?
-                        """, change.nextStatus(), change.id(), change.previousStatus());
-        if (updated != 1) {
-            return false;
+    /** 查询托管提现记录并组合订单与地址字段。 */
+    public List<Map<String, Object>> listCustodyWithdrawals(UUID tenantId, String chain, String assetSymbol,
+                                                             String status, String search, int limit, int offset) {
+        String value = search == null ? "" : search.toLowerCase();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Map<String, Object> row : custodyWithdrawals.listByTenant(tenantId, blank(chain), blank(assetSymbol), blank(status), 500, 0)) {
+            Map<String, Object> order = withdrawalOrders.findById(tenantId, ((Number) row.get("withdrawal_order_id")).longValue()).orElse(Map.of());
+            Map<String, Object> address = custodyAddresses.findFullByTenantAndId(
+                    tenantId, uuid(row.get("custody_address_id"))).orElse(Map.of());
+            String haystack = (text(row.get("order_no")) + " " + text(row.get("external_reference")) + " "
+                    + text(row.get("to_address")) + " " + text(order.get("tx_hash")) + " " + text(address.get("address"))).toLowerCase();
+            if (!value.isEmpty() && !haystack.contains(value)) continue;
+            Map<String, Object> view = new LinkedHashMap<>();
+            view.put("id", row.get("id")); view.put("custodyAddressId", row.get("custody_address_id"));
+            view.put("orderNo", row.get("order_no")); view.put("externalReference", row.get("external_reference"));
+            view.put("chain", row.get("chain")); view.put("assetSymbol", row.get("asset_symbol"));
+            view.put("toAddress", row.get("to_address")); view.put("amount", row.get("amount")); view.put("fee", row.get("fee"));
+            view.put("txHash", order.get("tx_hash")); view.put("status", order.getOrDefault("status", row.get("status")));
+            view.put("errorMessage", order.get("error_message")); view.put("createdByType", row.get("created_by_type"));
+            view.put("sourceAddress", address.get("address")); view.put("subject", address.get("subject"));
+            view.put("createdAt", instant(row.get("created_at"))); view.put("updatedAt", instant(row.get("updated_at")));
+            result.add(view);
         }
-        if (eventType != null) {
-            insertEventWithDeliveries(
-                    eventId, change.tenantId(), eventType, "WITHDRAWAL", change.orderNo(),
-                    payloadJson, "API".equals(change.addressSource()));
+        return result.stream().skip(Math.max(offset, 0)).limit(Math.min(Math.max(limit, 1), 200)).toList();
+    }
+
+    /** 统计托管提现记录。 */
+    public long countCustodyWithdrawals(UUID tenantId, String chain, String assetSymbol, String status, String search) {
+        return listCustodyWithdrawals(tenantId, chain, assetSymbol, status, search, Integer.MAX_VALUE, 0).size();
+    }
+
+    /** 查询托管充值记录并组合地址字段。 */
+    public List<Map<String, Object>> listCustodyDeposits(UUID tenantId, String chain, String assetSymbol,
+                                                         String status, String search, int limit, int offset) {
+        String value = search == null ? "" : search.toLowerCase();
+        return custodyDeposits.listByTenant(tenantId, blank(chain), blank(assetSymbol), blank(status), 500, 0).stream()
+                .map(row -> {
+            Map<String, Object> address = custodyAddresses.findFullByTenantAndId(
+                    tenantId, uuid(row.get("custody_address_id"))).orElse(Map.of());
+            Map<String, Object> view = new LinkedHashMap<>(row);
+            view.put("address", address.get("address")); view.put("subject", address.get("subject"));
+            view.put("id", row.get("id")); view.put("custodyAddressId", row.get("custody_address_id"));
+            view.put("txHash", row.get("tx_hash")); view.put("assetSymbol", row.get("asset_symbol"));
+            view.put("logIndex", row.get("log_index"));
+                    view.put("creditedAt", instant(row.get("credited_at"))); view.put("createdAt", instant(row.get("created_at")));
+                    view.put("updatedAt", instant(row.get("updated_at")));
+                    return view;
+                }).filter(row -> value.isEmpty() || (text(row.get("tx_hash")) + " " + text(row.get("address")) + " " + text(row.get("subject"))).toLowerCase().contains(value))
+                .skip(Math.max(offset, 0)).limit(Math.min(Math.max(limit, 1), 200)).toList();
+    }
+
+    /** 统计托管充值记录。 */
+    public long countCustodyDeposits(UUID tenantId, String chain, String assetSymbol, String status, String search) {
+        return listCustodyDeposits(tenantId, chain, assetSymbol, status, search, Integer.MAX_VALUE, 0).size();
+    }
+
+    /** 查询状态不同步的提现记录。 */
+    public List<WithdrawalStatusChange> findWithdrawalStatusChanges(int limit) {
+        List<WithdrawalStatusChange> result = new ArrayList<>();
+        for (Map<String, Object> row : custodyWithdrawals.listStatusChanges(limit)) {
+            UUID tenantId = uuid(row.get("tenant_id"));
+            Map<String, Object> order = withdrawalOrders.findById(tenantId, ((Number) row.get("withdrawal_order_id")).longValue()).orElse(Map.of());
+            String next = text(order.get("status"));
+            if (next == null || next.equals(row.get("status"))) continue;
+            Map<String, Object> address = custodyAddresses.findByTenantAndId(tenantId, uuid(row.get("custody_address_id"))).orElse(Map.of());
+            result.add(new WithdrawalStatusChange(uuid(row.get("id")), tenantId, uuid(row.get("custody_address_id")), text(row.get("order_no")),
+                    text(row.get("external_reference")), text(row.get("chain")), text(row.get("asset_symbol")), text(row.get("to_address")),
+                    (BigDecimal) row.get("amount"), (BigDecimal) row.get("fee"), text(row.get("status")), next,
+                    text(order.get("tx_hash")), text(order.get("error_message")), text(order.get("debit_account_id")), text(address.get("source"))));
+        }
+        return result;
+    }
+
+    /** 应用提现状态同步。 */
+    @Transactional(rollbackFor = Throwable.class)
+    public boolean applyWithdrawalStatusChange(WithdrawalStatusChange change, UUID eventId,
+                                               String eventType, String payloadJson) {
+        if (!change.previousStatus().equals(change.nextStatus())) {
+            withdrawalOrders.updateStatus(change.tenantId(), change.chain(), change.orderNo(), change.nextStatus(),
+                    change.txHash(), change.errorMessage(), null);
+            custodyWithdrawals.updateStatus(change.tenantId(), change.id(), change.nextStatus());
         }
         if ("CONFIRMED".equals(change.nextStatus())) {
-            jdbc.update("""
-                            insert into custody_ledger_entry(
-                                id, tenant_id, custody_address_id, chain, asset_symbol,
-                                account_id, entry_type, direction, amount,
-                                reference_type, reference_id)
-                            values (?, ?, ?, ?, ?, ?, 'WITHDRAWAL', 'DEBIT', ?,
-                                    'WITHDRAWAL', ?)
-                            on conflict (tenant_id, entry_type, reference_type, reference_id)
-                            do nothing
-                            """, UUID.randomUUID(), change.tenantId(), change.custodyAddressId(),
-                    change.chain(), change.assetSymbol(), change.debitAccountId(),
-                    change.amount().add(change.fee()), change.orderNo());
+            ledgerEntries.insertIfAbsent(UUID.randomUUID(), change.tenantId(), change.custodyAddressId(),
+                    change.chain(), change.assetSymbol(), change.debitAccountId(), "WITHDRAWAL", "DEBIT",
+                    change.amount().add(change.fee()), "WITHDRAWAL", change.orderNo());
             findGasUsage(change.id()).ifPresent(usage -> {
-                GasPricingMetadata metadata = gasPricingMetadata(
-                        change.chain(), change.assetSymbol());
-                NetworkFee networkFee = confirmedNetworkFee(
-                        change.chain(), change.orderNo(), change.txHash(), metadata.decimals())
-                        .orElse(new NetworkFee(
-                                usage.reservedAmount(), "CONFIGURED_RESERVE"));
-                settleGasUsage(change.id(), networkFee.amount(),
-                        networkFee.pricingSource(), change.txHash());
+                GasPricingMetadata metadata = gasPricingMetadata(change.chain(), change.assetSymbol());
+                NetworkFee networkFee = confirmedNetworkFee(change.chain(), change.orderNo(), change.txHash(),
+                                metadata.decimals())
+                        .orElse(new NetworkFee(usage.reservedAmount(), "CONFIGURED_RESERVE"));
+                settleGasUsage(change.id(), networkFee.amount(), networkFee.pricingSource(), change.txHash());
             });
-        } else if (Set.of("FAILED", "REJECTED", "CANCELLED")
+        } else if (!Set.of("FROZEN", "SIGNING", "SENT", "CONFIRMING", "RETRYING", "BROADCAST_UNKNOWN")
                 .contains(change.nextStatus())) {
-            findGasUsage(change.id()).ifPresent(usage ->
-                    releaseGasUsage(change.id(),
-                            "withdrawal ended as " + change.nextStatus()));
+            findGasUsage(change.id()).ifPresent(usage -> releaseGasUsage(change.id(),
+                    "withdrawal ended as " + change.nextStatus()));
         }
+        if (eventType != null) insertEventWithDeliveries(eventId, change.tenantId(), eventType,
+                "WITHDRAWAL", change.orderNo(), payloadJson, "API".equals(change.addressSource()));
         return true;
     }
 
-    /**
-     * 记录或保存 {@code insertEventWithDeliveries} 对应的数据，并遵守幂等和事务约束。
-     */
+    /** 创建领域事件及其 Webhook 投递记录。 */
     @Transactional(rollbackFor = Throwable.class)
     public UUID insertEventWithDeliveries(UUID eventId, UUID tenantId, String eventType,
-                                          String aggregateType, String aggregateId,
-                                          String payloadJson, boolean webhookEligible) {
-        UUID persisted = jdbc.query("""
-                        insert into custody_event(
-                            id, tenant_id, event_type, aggregate_type, aggregate_id, payload)
-                        values (?, ?, ?, ?, ?, cast(? as jsonb))
-                        on conflict (tenant_id, event_type, aggregate_type, aggregate_id)
-                        do nothing
-                        returning id
-                        """, (rs, rowNum) -> rs.getObject("id", UUID.class),
-                eventId, tenantId, eventType, aggregateType, aggregateId, payloadJson)
-                .stream().findFirst().orElse(null);
-        if (persisted == null) {
-            persisted = jdbc.queryForObject("""
-                            select id
-                              from custody_event
-                             where tenant_id = ? and event_type = ?
-                               and aggregate_type = ? and aggregate_id = ?
-                            """, UUID.class, tenantId, eventType, aggregateType, aggregateId);
+                                          String aggregateType, String aggregateId, String payload) {
+        return insertEventWithDeliveries(eventId, tenantId, eventType, aggregateType, aggregateId, payload, true);
+    }
+
+    /** 创建领域事件的兼容入口，保留地址来源参数供调用方审计。 */
+    public UUID insertEventWithDeliveries(UUID eventId, UUID tenantId, String eventType,
+                                          String aggregateType, String aggregateId, String payload,
+                                          boolean apiSource) {
+        UUID persisted = events.insertIfAbsent(eventId, tenantId, eventType, aggregateType, aggregateId, payload)
+                .or(() -> events.findIdByBusinessKey(tenantId, eventType, aggregateType, aggregateId))
+                .orElseThrow(() -> new IllegalStateException("failed to persist custody event"));
+        if (apiSource) {
+            for (Map<String, Object> endpoint : webhookEndpoints.list(tenantId)) {
+                if ("ACTIVE".equals(endpoint.get("status"))) {
+                    webhookDeliveries.insert(UUID.randomUUID(), tenantId, uuid(endpoint.get("id")), persisted);
+                }
+            }
         }
-        if (persisted == null) {
-            throw new IllegalStateException("failed to persist custody event");
-        }
-        jdbc.update("""
-                        insert into custody_webhook_delivery(id, tenant_id, endpoint_id, event_id)
-                        select gen_random_uuid(), e.tenant_id, e.id, ?
-                         from custody_webhook_endpoint e
-                         where e.tenant_id = ? and e.status = 'ACTIVE'
-                           and ?
-                        on conflict (endpoint_id, event_id) do nothing
-                        """, persisted, tenantId, webhookEligible);
-        jdbc.update("""
-                        update custody_event
-                           set status = 'PUBLISHED',
-                               published_at = coalesce(published_at, now())
-                         where id = ?
-                        """, persisted);
+        events.markPublished(persisted);
         return persisted;
     }
 
-    /**
-     * 执行 {@code audit} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+    /** 写入审计日志。 */
     public void audit(UUID tenantId, String actorType, String actorId, String action,
                       String resourceType, String resourceId, String sourceIp, String detailsJson) {
-        jdbc.update("""
-                        insert into custody_audit_log(
-                            id, tenant_id, actor_type, actor_id, action, resource_type,
-                            resource_id, source_ip, details)
-                        values (?, ?, ?, ?, ?, ?, ?, cast(nullif(?, '') as inet), cast(? as jsonb))
-                        """, UUID.randomUUID(), tenantId, actorType, actorId, action, resourceType,
-                resourceId, sourceIp, detailsJson == null ? "{}" : detailsJson);
+        audits.insert(UUID.randomUUID(), tenantId, actorType, actorId, action, resourceType, resourceId,
+                sourceIp, detailsJson);
     }
-    /**
-     * 获取或查询 {@code listAudit} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> listAudit(UUID tenantId, int limit, int offset) {
-        return jdbc.query("""
-                        select id, actor_type, actor_id, action, resource_type, resource_id,
-                               source_ip, details::text as details, created_at
-                          from custody_audit_log
-                         where tenant_id = ?
-                         order by created_at desc, id
-                         limit ? offset ?
-                        """, (rs, rowNum) -> {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("id", rs.getObject("id", UUID.class));
-                    row.put("actorType", rs.getString("actor_type"));
-                    row.put("actorId", rs.getString("actor_id"));
-                    row.put("action", rs.getString("action"));
-                    row.put("resourceType", rs.getString("resource_type"));
-                    row.put("resourceId", rs.getString("resource_id"));
-                    row.put("sourceIp", rs.getString("source_ip"));
-                    row.put("details", rs.getString("details"));
-                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
-                    return row;
-                }, tenantId, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
-    }
-    /**
-     * 执行 {@code countAudit} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public long countAudit(UUID tenantId) {
-        Long count = jdbc.queryForObject(
-                "select count(*) from custody_audit_log where tenant_id = ?",
-                Long.class, tenantId);
-        return count == null ? 0L : count;
-    }
-    /**
-     * 获取或查询 {@code listPlatformAudit} 对应的数据，供调用方读取当前状态。
-     */
-    public List<Map<String, Object>> listPlatformAudit(int limit, int offset) {
-        return jdbc.query("""
-                        select id, actor_type, actor_id, action, resource_type, resource_id,
-                               source_ip, details::text as details, created_at
-                          from custody_audit_log
-                         where tenant_id is null
-                         order by created_at desc, id
-                         limit ? offset ?
-                        """, (rs, rowNum) -> {
-                    Map<String, Object> row = new LinkedHashMap<>();
-                    row.put("id", rs.getObject("id", UUID.class));
-                    row.put("actorType", rs.getString("actor_type"));
-                    row.put("actorId", rs.getString("actor_id"));
-                    row.put("action", rs.getString("action"));
-                    row.put("resourceType", rs.getString("resource_type"));
-                    row.put("resourceId", rs.getString("resource_id"));
-                    row.put("sourceIp", rs.getString("source_ip"));
-                    row.put("details", rs.getString("details"));
-                    row.put("createdAt", rs.getTimestamp("created_at").toInstant());
-                    return row;
-                }, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
-    }
-    /**
-     * 执行 {@code countPlatformAudit} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public long countPlatformAudit() {
-        Long count = jdbc.queryForObject(
-                "select count(*) from custody_audit_log where tenant_id is null",
-                Long.class);
-        return count == null ? 0L : count;
-    }
-    /**
-     * 执行 {@code cleanupExpiredSecurityRows} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+
+    /** 查询租户审计日志。 */
+    public List<Map<String, Object>> listAudit(UUID tenantId, int limit, int offset) { return audits.list(tenantId, limit, offset); }
+
+    /** 统计租户审计日志。 */
+    public long countAudit(UUID tenantId) { return audits.count(tenantId); }
+
+    /** 查询平台审计日志。 */
+    public List<Map<String, Object>> listPlatformAudit(int limit, int offset) { return audits.listPlatform(limit, offset); }
+
+    /** 统计平台审计日志。 */
+    public long countPlatformAudit() { return audits.countPlatform(); }
+
+    /** 清理过期安全数据。 */
     public int cleanupExpiredSecurityRows() {
-        int nonces = jdbc.update("delete from custody_api_nonce where expires_at < now()");
-        int sessions = jdbc.update("""
-                delete from custody_session
-                 where expires_at < now() - interval '7 days'
-                    or revoked_at < now() - interval '7 days'
-                """);
-        int idempotency = jdbc.update("delete from custody_idempotency_key where expires_at < now()");
-        return nonces + sessions + idempotency;
+        return securityRepository.cleanupExpiredRows() + idempotencies.deleteExpired();
     }
-    /**
-     * 执行 {@code mapAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private AddressRecord mapAddress(java.sql.ResultSet rs) throws SQLException {
-        return new AddressRecord(
-                rs.getObject("id", UUID.class),
-                rs.getObject("tenant_id", UUID.class),
-                rs.getLong("chain_address_id"),
-                rs.getString("chain"),
-                rs.getString("network"),
-                rs.getString("address"),
-                rs.getString("memo"),
-                rs.getString("subject"),
-                rs.getString("label"),
-                rs.getString("metadata"),
-                rs.getString("source"),
-                rs.getString("status"),
-                rs.getInt("derivation_subject"),
-                rs.getLong("address_version"),
-                rs.getLong("derivation_child"),
-                rs.getTimestamp("created_at").toInstant(),
-                rs.getTimestamp("updated_at").toInstant());
+
+    /** 校验 Gas 操作归属租户和链。 */
+    private void requireGasOperation(UUID tenantId, String operationType, UUID operationId, String chain) {
+        String type = operationType == null ? "" : operationType.trim().toUpperCase(Locale.ROOT);
+        boolean valid = switch (type) {
+            case "WITHDRAWAL" -> custodyWithdrawals.find(tenantId, operationId).stream()
+                    .anyMatch(row -> chain.equalsIgnoreCase(text(row.get("chain"))));
+            case "COLLECTION_BATCH" -> collectionBatches.find(tenantId, operationId).stream()
+                    .anyMatch(row -> chain.equalsIgnoreCase(text(row.get("chain"))));
+            case "WITHDRAWAL_BATCH" -> withdrawalBatches.find(tenantId, operationId).stream()
+                    .anyMatch(row -> chain.equalsIgnoreCase(text(row.get("chain"))));
+            default -> throw new IllegalArgumentException("unsupported gas operation type");
+        };
+        if (!valid) throw new IllegalArgumentException("gas operation does not belong to tenant and chain");
     }
-    /**
-     * 执行 {@code mapWebhookEndpoint} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private WebhookEndpointRecord mapWebhookEndpoint(java.sql.ResultSet rs) throws SQLException {
-        return new WebhookEndpointRecord(
-                rs.getObject("id", UUID.class),
-                rs.getObject("tenant_id", UUID.class),
-                rs.getString("name"),
-                rs.getString("url"),
-                rs.getString("secret_ciphertext"),
-                rs.getString("status"),
-                rs.getString("verification_token_hash"),
-                instantOrNull(rs.getTimestamp("verified_at")),
-                instantOrNull(rs.getTimestamp("last_delivery_at")),
-                rs.getTimestamp("created_at").toInstant(),
-                rs.getTimestamp("updated_at").toInstant());
-    }
-    /** 将 custody_tenant 单表字段转换为租户模型。 */
+
+    /** 将数据库租户字段转换为模型。 */
     private static TenantRecord mapTenant(Map<String, Object> row) {
-        return new TenantRecord(
-                uuid(row.get("id")), text(row.get("slug")), text(row.get("name")),
-                text(row.get("status")), number(row.get("derivation_namespace")),
-                bool(row.get("ip_allowlist_enabled")), text(row.get("display_currency")),
+        return new TenantRecord(uuid(row.get("id")), text(row.get("slug")), text(row.get("name")), text(row.get("status")),
+                number(row.get("derivation_namespace")), Boolean.TRUE.equals(row.get("ip_allowlist_enabled")),
+                text(row.get("display_currency")), instant(row.get("created_at")), instant(row.get("updated_at")));
+    }
+
+    /** 将数据库地址字段转换为模型。 */
+    private static AddressRecord mapAddress(Map<String, Object> row) {
+        return new AddressRecord(uuid(row.get("id")), uuid(row.get("tenant_id")), longValue(row.get("chain_address_id"), 0),
+                text(row.get("chain")), text(row.get("network")), text(row.get("address")), text(row.get("memo")),
+                text(row.get("subject")), text(row.get("label")), text(row.get("metadata_json")), text(row.get("source")),
+                text(row.get("status")), number(row.get("derivation_subject")), longValue(row.get("address_version"), 0),
+                longValue(row.get("derivation_child"), 0), instant(row.get("created_at")), instant(row.get("updated_at")));
+    }
+
+    /** 将数据库 Gas 字段和账本余额转换为模型。 */
+    private GasAccountRecord mapGas(UUID tenantId, Map<String, Object> row) {
+        UUID custodyId = uuid(row.get("custody_address_id"));
+        Map<String, Object> custody = custodyAddresses.findByTenantAndId(tenantId, custodyId).orElse(Map.of());
+        Map<String, Object> address = chainAddresses.findByTenantAndId(tenantId, longValue(custody.get("chain_address_id"), 0)).orElse(Map.of());
+        String accountId = text(address.get("account_id"));
+        LedgerBalanceRecord balance = ledgerBalances.find(tenantId, text(row.get("chain")),
+                text(row.get("native_symbol")), accountId).orElse(null);
+        BigDecimal available = balance == null ? BigDecimal.ZERO : balance.getAvailableBalance();
+        BigDecimal locked = balance == null ? BigDecimal.ZERO : balance.getLockedBalance();
+        BigDecimal total = balance == null ? BigDecimal.ZERO : balance.getTotalBalance();
+        return new GasAccountRecord(uuid(row.get("id")), tenantId, custodyId, text(row.get("chain")), text(row.get("network")),
+                text(row.get("native_symbol")), text(custody.get("address")), text(custody.get("memo")),
+                longValue(address.get("address_index"), 0), accountId, available, locked, total,
+                (BigDecimal) row.get("low_balance_threshold"), text(row.get("status")), instant(row.get("created_at")), instant(row.get("updated_at")));
+    }
+
+    /** 将数据库 Gas 使用字段转换为模型。 */
+    private static GasUsageRecord mapGasUsage(Map<String, Object> row) {
+        return new GasUsageRecord(uuid(row.get("id")), uuid(row.get("tenant_id")), uuid(row.get("gas_account_id")),
+                text(row.get("operation_type")), uuid(row.get("operation_id")), text(row.get("reference_no")),
+                text(row.get("chain")), text(row.get("native_symbol")), (BigDecimal) row.get("reserved_amount"),
+                (BigDecimal) row.get("actual_amount"), text(row.get("status")), text(row.get("pricing_source")),
+                text(row.get("tx_hash")), text(row.get("error_message")), instant(row.get("created_at")),
+                instant(row.get("updated_at")), instant(row.get("settled_at")));
+    }
+
+    /** 将数据库 Webhook 字段转换为模型。 */
+    private static WebhookEndpointRecord mapWebhookEndpoint(Map<String, Object> row) {
+        return new WebhookEndpointRecord(uuid(row.get("id")), uuid(row.get("tenant_id")), text(row.get("name")),
+                text(row.get("url")), text(row.get("secret_ciphertext")), text(row.get("status")),
+                text(row.get("verification_token_hash")), instant(row.get("verified_at")), instant(row.get("last_delivery_at")),
                 instant(row.get("created_at")), instant(row.get("updated_at")));
     }
 
-    /** 读取对象文本。 */
-    private static String text(Object value) {
-        return value == null ? null : value.toString();
-    }
-
-    /** 读取对象布尔值。 */
-    private static boolean bool(Object value) {
-        return Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(String.valueOf(value));
-    }
-
-    /** 读取对象整数。 */
-    private static int number(Object value) {
-        return value instanceof Number number ? number.intValue() : Integer.parseInt(value.toString());
-    }
-
-    /** 读取对象 UUID。 */
-    private static UUID uuid(Object value) {
-        return value instanceof UUID result ? result : value == null ? null : UUID.fromString(value.toString());
-    }
-
-    /** 读取对象时间。 */
+    /** 读取文本字段。 */
+    private static String text(Object value) { return value == null ? "" : value.toString(); }
+    /** 读取 UUID 字段。 */
+    private static UUID uuid(Object value) { return value instanceof UUID id ? id : value == null ? null : UUID.fromString(value.toString()); }
+    /** 读取整数。 */
+    private static int number(Object value) { return value == null ? 0 : ((Number) value).intValue(); }
+    /** 读取长整数。 */
+    private static long longValue(Object value, long fallback) { return value == null ? fallback : ((Number) value).longValue(); }
+    /** 读取时间字段。 */
     private static Instant instant(Object value) {
-        return value instanceof Timestamp timestamp ? timestamp.toInstant()
-                : value instanceof Instant result ? result : null;
+        if (value instanceof java.sql.Timestamp timestamp) return timestamp.toInstant();
+        if (value instanceof java.time.OffsetDateTime offsetDateTime) return offsetDateTime.toInstant();
+        return null;
     }
+    /** 规范化可选筛选参数。 */
+    private static String blank(String value) { return value == null ? "" : value.trim(); }
 
-    /**
-     * 转换或计算 {@code instantOrNull} 对应的值，统一金额、格式和边界规则。
-     */
-    private static Instant instantOrNull(Timestamp timestamp) {
-        return timestamp == null ? null : timestamp.toInstant();
+    /** 租户记录。 */
+    public record TenantRecord(UUID id, String slug, String name, String status, int derivationNamespace,
+                               boolean ipAllowlistEnabled, String displayCurrency, Instant createdAt, Instant updatedAt) { }
+    /** 认证用户记录。 */
+    public record AuthUser(UUID id, UUID tenantId, String tenantSlug, String tenantStatus, String email,
+                           String displayName, String passwordHash, String role, String status,
+                           int failedLoginCount, Instant lockedUntil) { }
+    /** 会话记录。 */
+    public record SessionRecord(UUID sessionId, UUID userId, UUID tenantId, String tenantSlug, String email,
+                               String displayName, String role, String userStatus, String tenantStatus, Instant expiresAt) { }
+    /** API 密钥记录。 */
+    public record ApiKeyRecord(UUID id, UUID tenantId, String tenantSlug, String tenantStatus,
+                               boolean ipAllowlistEnabled, String keyId, String name, String secretCiphertext,
+                               String status, Instant expiresAt, Instant createdAt) { }
+    /** 托管地址记录。 */
+    public record AddressRecord(UUID id, UUID tenantId, long chainAddressId, String chain, String network,
+                                String address, String memo, String subject, String label, String metadataJson,
+                                String source, String status, int derivationSubject, long addressVersion,
+                                long derivationChild, Instant createdAt, Instant updatedAt) { }
+    /** Gas 账户记录。 */
+    public record GasAccountRecord(UUID id, UUID tenantId, UUID custodyAddressId, String chain, String network,
+                                   String nativeSymbol, String address, String memo, long childIndex, String accountId,
+                                   BigDecimal availableBalance, BigDecimal lockedBalance, BigDecimal totalBalance,
+                                   BigDecimal lowBalanceThreshold, String status, Instant createdAt, Instant updatedAt) {
+        /** 判断 Gas 余额是否低于阈值。 */
+        public boolean lowBalance() { return "ACTIVE".equals(status) && availableBalance.compareTo(lowBalanceThreshold) < 0; }
     }
-    /**
-     * 执行 {@code timestampOrNull} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private static Timestamp timestampOrNull(Instant instant) {
-        return instant == null ? null : Timestamp.from(instant);
-    }
-    /**
-     * 转换或计算 {@code truncate} 对应的值，统一金额、格式和边界规则。
-     */
-    private static String truncate(String value, int maxLength) {
-        if (value == null) {
-            return "";
-        }
-        return value.length() <= maxLength ? value : value.substring(0, maxLength);
-    }
-    /**
-     * 校验 {@code blankToEmpty} 对应的输入或状态，失败时抛出明确异常。
-     */
-    private static String blankToEmpty(String value) {
-        return value == null ? "" : value.trim();
-    }
-
-    public record TenantRecord(
-            UUID id,
-            String slug,
-            String name,
-            String status,
-            int derivationNamespace,
-            boolean ipAllowlistEnabled,
-            String displayCurrency,
-            Instant createdAt,
-            Instant updatedAt
-    ) {
-    }
-
-    public record AuthUser(
-            UUID id,
-            UUID tenantId,
-            String tenantSlug,
-            String tenantStatus,
-            String email,
-            String displayName,
-            String passwordHash,
-            String role,
-            String status,
-            int failedLoginCount,
-            Instant lockedUntil
-    ) {
-    }
-
-    public record SessionRecord(
-            UUID sessionId,
-            UUID userId,
-            UUID tenantId,
-            String tenantSlug,
-            String email,
-            String displayName,
-            String role,
-            String userStatus,
-            String tenantStatus,
-            Instant expiresAt
-    ) {
-    }
-
-    public record ApiKeyRecord(
-            UUID id,
-            UUID tenantId,
-            String tenantSlug,
-            String tenantStatus,
-            boolean ipAllowlistEnabled,
-            String keyId,
-            String name,
-            String secretCiphertext,
-            String status,
-            Instant expiresAt,
-            Instant createdAt
-    ) {
-    }
-
-    public record AddressRecord(
-            UUID id,
-            UUID tenantId,
-            long chainAddressId,
-            String chain,
-            String network,
-            String address,
-            String memo,
-            String subject,
-            String label,
-            String metadataJson,
-            String source,
-            String status,
-            int derivationSubject,
-            long addressVersion,
-            long derivationChild,
-            Instant createdAt,
-            Instant updatedAt
-    ) {
-    }
-
-    public record GasAccountRecord(
-            UUID id,
-            UUID tenantId,
-            UUID custodyAddressId,
-            String chain,
-            String network,
-            String nativeSymbol,
-            String address,
-            String memo,
-            long childIndex,
-            String accountId,
-            java.math.BigDecimal availableBalance,
-            java.math.BigDecimal lockedBalance,
-            java.math.BigDecimal totalBalance,
-            java.math.BigDecimal lowBalanceThreshold,
-            String status,
-            Instant createdAt,
-            Instant updatedAt
-    ) {
-        /**
-         * 执行 {@code lowBalance} 对应的辅助逻辑，完成数据处理并维护状态边界。
-         */
-        public boolean lowBalance() {
-            return "ACTIVE".equals(status)
-                    && availableBalance.compareTo(lowBalanceThreshold) < 0;
-        }
-    }
-
-    public record IdempotencyRecord(
-            String requestHash,
-            Integer responseStatus,
-            String responseJson,
-            Instant expiresAt
-    ) {
-    }
-
-    public record WebhookEndpointRecord(
-            UUID id,
-            UUID tenantId,
-            String name,
-            String url,
-            String secretCiphertext,
-            String status,
-            String verificationTokenHash,
-            Instant verifiedAt,
-            Instant lastDeliveryAt,
-            Instant createdAt,
-            Instant updatedAt
-    ) {
-    }
-
-    public record WebhookDeliveryTask(
-            UUID id,
-            UUID tenantId,
-            UUID endpointId,
-            UUID eventId,
-            int attemptCount,
-            int totalAttemptCount,
-            int manualRetryCount,
-            String attemptTrigger,
-            UUID attemptId,
-            String workerId,
-            String url,
-            String secretCiphertext,
-            String eventType,
-            String payload
-    ) {
-    }
-
-    public record WithdrawalStatusChange(
-            UUID id,
-            UUID tenantId,
-            UUID custodyAddressId,
-            String orderNo,
-            String externalReference,
-            String chain,
-            String assetSymbol,
-            String toAddress,
-            java.math.BigDecimal amount,
-            java.math.BigDecimal fee,
-            String previousStatus,
-            String nextStatus,
-            String txHash,
-            String errorMessage,
-            String debitAccountId,
-            String addressSource
-    ) {
-    }
-
-    public record GasPricingMetadata(
-            String family,
-            String nativeSymbol,
-            long defaultFeeRate,
-            int decimals,
-            boolean requestedNative
-    ) {
-    }
-
-    public record GasUsageRecord(
-            UUID id,
-            UUID tenantId,
-            UUID gasAccountId,
-            String operationType,
-            UUID operationId,
-            String referenceNo,
-            String chain,
-            String nativeSymbol,
-            java.math.BigDecimal reservedAmount,
-            java.math.BigDecimal actualAmount,
-            String status,
-            String pricingSource,
-            String txHash,
-            String errorMessage,
-            Instant createdAt,
-            Instant updatedAt,
-            Instant settledAt
-    ) {
-    }
-
-    public record NetworkFee(
-            java.math.BigDecimal amount,
-            String pricingSource
-    ) {
-    }
+    /** 幂等记录。 */
+    public record IdempotencyRecord(String requestHash, Integer responseStatus, String responseJson, Instant expiresAt) { }
+    /** Webhook 端点记录。 */
+    public record WebhookEndpointRecord(UUID id, UUID tenantId, String name, String url, String secretCiphertext,
+                                        String status, String verificationTokenHash, Instant verifiedAt,
+                                        Instant lastDeliveryAt, Instant createdAt, Instant updatedAt) { }
+    /** Webhook 投递任务。 */
+    public record WebhookDeliveryTask(UUID id, UUID tenantId, UUID endpointId, UUID eventId, int attemptCount,
+                                      int totalAttemptCount, int manualRetryCount, String attemptTrigger,
+                                      UUID attemptId, String workerId, String url, String secretCiphertext,
+                                      String eventType, String payload) { }
+    /** 提现状态变化记录。 */
+    public record WithdrawalStatusChange(UUID id, UUID tenantId, UUID custodyAddressId, String orderNo,
+                                         String externalReference, String chain, String assetSymbol, String toAddress,
+                                         BigDecimal amount, BigDecimal fee, String previousStatus, String nextStatus,
+                                         String txHash, String errorMessage, String debitAccountId, String addressSource) { }
+    /** Gas 定价元数据。 */
+    public record GasPricingMetadata(String family, String nativeSymbol, long defaultFeeRate, int decimals,
+                                     boolean requestedNative) { }
+    /** Gas 使用记录。 */
+    public record GasUsageRecord(UUID id, UUID tenantId, UUID gasAccountId, String operationType, UUID operationId,
+                                 String referenceNo, String chain, String nativeSymbol, BigDecimal reservedAmount,
+                                 BigDecimal actualAmount, String status, String pricingSource, String txHash,
+                                 String errorMessage, Instant createdAt, Instant updatedAt, Instant settledAt) { }
+    /** 网络费用记录。 */
+    public record NetworkFee(BigDecimal amount, String pricingSource) { }
 }

@@ -28,4 +28,9 @@ public class CustodyApiNonceRepository {
             return false;
         }
     }
+
+    /** 删除已过期的 API nonce。 */
+    public int deleteExpired() {
+        return jdbc.update("delete from custody_api_nonce where expires_at < now()");
+    }
 }

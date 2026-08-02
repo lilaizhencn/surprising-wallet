@@ -1,5 +1,6 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.chain.model.ChainAsset;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -39,6 +40,15 @@ public class ChainAssetRepository {
                  where active = true
                  order by chain, symbol
                 """);
+    }
+
+    /** 查询指定链的启用资产字段。 */
+    public List<Map<String, Object>> listActiveByChain(String chain) {
+        return jdbc.queryForList("""
+                select chain, symbol, asset_kind, contract_address, decimals, native_asset,
+                       active, min_transfer, min_withdraw
+                  from chain_asset where chain = ? and active = true
+                """, chain);
     }
 
     /** 查询链资产。 */
@@ -81,6 +91,22 @@ public class ChainAssetRepository {
                        updated_at = now()
                 """, chain, symbol, assetKind, contractAddress, decimals, active,
                 minTransfer, minWithdraw);
+    }
+
+    /** 写入或更新完整链资产模型。 */
+    public int upsert(ChainAsset asset) {
+        return jdbc.update("""
+                insert into chain_asset(chain, symbol, asset_kind, contract_address, decimals, native_asset, active,
+                                        min_transfer, min_withdraw, created_at, updated_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict (chain, symbol) do update set
+                    asset_kind = excluded.asset_kind, contract_address = excluded.contract_address,
+                    decimals = excluded.decimals, native_asset = excluded.native_asset, active = excluded.active,
+                    min_transfer = excluded.min_transfer, min_withdraw = excluded.min_withdraw,
+                    updated_at = excluded.updated_at
+                """, asset.getChain(), asset.getSymbol(), asset.getAssetKind(), asset.getContractAddress(),
+                asset.getDecimals(), asset.getNativeAsset(), asset.getActive(), asset.getMinTransfer(),
+                asset.getMinWithdraw(), asset.getCreatedAt(), asset.getUpdatedAt());
     }
 
     /** 修改非原生资产启用状态。 */

@@ -2,7 +2,7 @@ package com.surprising.wallet.repository;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -13,7 +13,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /** custody_tenant_chain 单表仓储。 */
-@Repository
+@Component
 public class CustodyTenantChainRepository {
     /** JDBC 模板，仅用于访问 custody_tenant_chain。 */
     private final JdbcTemplate jdbc;

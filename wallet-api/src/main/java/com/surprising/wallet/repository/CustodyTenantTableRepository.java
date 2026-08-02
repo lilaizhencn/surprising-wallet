@@ -75,6 +75,25 @@ public class CustodyTenantTableRepository {
                 """, UUID.class);
     }
 
+    /** 查询全部租户单表字段。 */
+    public List<Map<String, Object>> listAll() {
+        return jdbc.queryForList("""
+                select id, slug, name, status, derivation_namespace, ip_allowlist_enabled,
+                       display_currency, created_at, updated_at from custody_tenant order by created_at desc, id
+                """);
+    }
+
+    /** 统计租户数量。 */
+    public long count(String search, String status) {
+        String value = search == null ? "" : search.trim();
+        Long count = jdbc.queryForObject("""
+                select count(*) from custody_tenant
+                 where (? = '' or slug ilike '%' || ? || '%' or name ilike '%' || ? || '%')
+                   and (? = '' or status = ?)
+                """, Long.class, value, value, value, status == null ? "" : status, status == null ? "" : status);
+        return count == null ? 0 : count;
+    }
+
     /** 按租户编号更新 IP 白名单开关。 */
     public int updateIpAllowlist(UUID tenantId, boolean enabled) {
         return jdbc.update("""

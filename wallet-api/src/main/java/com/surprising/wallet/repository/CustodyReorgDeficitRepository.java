@@ -32,4 +32,13 @@ public class CustodyReorgDeficitRepository {
                 rs.getBigDecimal("deficit_amount"), rs.getBigDecimal("recovered_amount"),
                 rs.getTimestamp("created_at").toInstant()), tenantId);
     }
+
+    /** 判断指定租户账户是否存在未弥补的重组赤字。 */
+    public boolean existsOpen(UUID tenantId, String chain, String assetSymbol, String accountId) {
+        return !jdbc.queryForList("""
+                select id from custody_reorg_deficit
+                 where tenant_id = ? and chain = ? and asset_symbol = ?
+                   and account_id = ? and status = 'OPEN' limit 1
+                """, tenantId, chain, assetSymbol, accountId).isEmpty();
+    }
 }

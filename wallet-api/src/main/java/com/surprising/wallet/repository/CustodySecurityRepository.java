@@ -5,7 +5,7 @@ import com.surprising.wallet.repository.CustodyRepository.AuthUser;
 import com.surprising.wallet.repository.CustodyRepository.SessionRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -16,7 +16,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /** 托管安全数据访问门面，实际 SQL 由身份、会话、密钥等单表仓储执行。 */
-@Repository
+@Component
 public class CustodySecurityRepository {
     /** 租户用户单表仓储。 */
     private final CustodyTenantUserRepository users;
@@ -191,6 +191,21 @@ public class CustodySecurityRepository {
     /** 预留 API nonce。 */
     public boolean reserveNonce(String keyId, String nonce, Instant expiresAt) {
         return nonces.reserve(keyId, nonce, Timestamp.from(expiresAt));
+    }
+
+    /** 清理安全域中的过期 nonce 和会话。 */
+    public int cleanupExpiredRows() {
+        return nonces.deleteExpired() + sessions.deleteExpired();
+    }
+
+    /** 统计租户有效会话。 */
+    public long countActiveSessions(UUID tenantId) {
+        return sessions.countActive(tenantId);
+    }
+
+    /** 统计租户有效 API 密钥。 */
+    public long countActiveApiKeys(UUID tenantId) {
+        return apiKeys.countActive(tenantId);
     }
 
     /** 查询启用的 IP 规则。 */

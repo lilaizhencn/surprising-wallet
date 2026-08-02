@@ -3,7 +3,7 @@ package com.surprising.wallet.repository;
 import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -16,8 +16,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /** 开发水龙头数据访问门面，实际 SQL 由单表仓储执行。 */
-@Repository
 @ConditionalOnProperty(prefix = "sw.wallet.dev-faucet", name = "enabled", havingValue = "true")
+@Component
 public class DevFaucetRepository {
     /** 水龙头资金单表仓储。 */
     private final DevFaucetFundingRepository fundings;

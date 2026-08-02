@@ -59,6 +59,15 @@ public class CustodyApiKeyRepository {
                 """, tenantId);
     }
 
+    /** 统计租户有效 API 密钥。 */
+    public long countActive(UUID tenantId) {
+        Long count = jdbc.queryForObject("""
+                select count(*) from custody_api_key
+                 where tenant_id = ? and status = 'ACTIVE'
+                """, Long.class, tenantId);
+        return count == null ? 0L : count;
+    }
+
     /** 撤销租户 API 密钥。 */
     public int revoke(UUID tenantId, UUID keyId) {
         return jdbc.update("""

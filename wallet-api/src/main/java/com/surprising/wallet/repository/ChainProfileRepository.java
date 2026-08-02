@@ -1,5 +1,7 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.chain.model.BitcoinLikeChainProfile;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -164,5 +166,103 @@ public class ChainProfileRepository {
                  order by id
                  for update
                 """, chain);
+    }
+
+    /** 查询启用的 Bitcoin-like 链配置。 */
+    public Optional<BitcoinLikeChainProfile> findBitcoinLike(String chain, String network) {
+        return jdbc.query("""
+                select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+                       rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations, default_fee_rate,
+                       dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled,
+                       withdraw_enabled, collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
+                  from chain_profile where chain = ? and network = ? and enabled = true
+                """, (rs, rowNum) -> BitcoinLikeChainProfile.builder()
+                .chain(rs.getString("chain")).network(rs.getString("network")).family(rs.getString("family"))
+                .runtimeCurrencyId(rs.getInt("runtime_currency_id")).bip44CoinType(rs.getInt("bip44_coin_type"))
+                .nativeSymbol(rs.getString("native_symbol")).rpcUrl(rs.getString("rpc_url"))
+                .explorerUrl(rs.getString("explorer_url")).depositConfirmations(rs.getInt("deposit_confirmations"))
+                .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
+                .defaultFeeRate(rs.getObject("default_fee_rate", Long.class))
+                .dustThreshold(rs.getObject("dust_threshold", Long.class)).enabled(rs.getBoolean("enabled"))
+                .chainId(rs.getObject("chain_id", Long.class)).gasPolicy(rs.getString("gas_policy"))
+                .scanBatchSize(rs.getObject("scan_batch_size", Integer.class)).scanEnabled(rs.getBoolean("scan_enabled"))
+                .withdrawEnabled(rs.getBoolean("withdraw_enabled")).collectionEnabled(rs.getBoolean("collection_enabled"))
+                .transferEnabled(rs.getBoolean("transfer_enabled"))
+                .scanStartHeight(rs.getObject("scan_start_height", Long.class))
+                .scanMaxBlocksPerRun(rs.getObject("scan_max_blocks_per_run", Long.class)).build(), chain, network)
+                .stream().findFirst();
+    }
+
+    /** 查询启用的账户链配置。 */
+    public Optional<AccountChainProfile> findAccount(String chain, String network) {
+        return queryAccount("where chain = ? and network = ? and enabled = true", chain, network)
+                .stream().findFirst();
+    }
+
+    /** 按运行时货币 ID 查询账户链配置。 */
+    public Optional<AccountChainProfile> findAccountByRuntimeCurrency(int runtimeCurrencyId) {
+        return queryAccount("""
+                where runtime_currency_id = ? and enabled = true
+                order by case network when 'regtest' then 0 when 'testnet' then 1
+                    when 'testnet3' then 1 when 'devnet' then 1 else 2 end limit 1
+                """, runtimeCurrencyId).stream().findFirst();
+    }
+
+    /** 按链名称查询账户链配置。 */
+    public Optional<AccountChainProfile> findAccountByChain(String chain) {
+        return queryAccount("""
+                where upper(chain) = upper(?) and enabled = true
+                order by case network when 'regtest' then 0 when 'testnet' then 1
+                    when 'testnet3' then 1 when 'devnet' then 1 else 2 end limit 1
+                """, chain).stream().findFirst();
+    }
+
+    /** 查询运行时货币对应的链名。 */
+    public Optional<String> findChainByRuntimeCurrency(int runtimeCurrencyId) {
+        return jdbc.queryForList("""
+                select distinct chain from chain_profile
+                 where runtime_currency_id = ? and enabled = true order by chain limit 1
+                """, String.class, runtimeCurrencyId).stream().findFirst();
+    }
+
+    /** 查询运行时货币对应的网络名。 */
+    public Optional<String> findNetworkByRuntimeCurrency(int runtimeCurrencyId) {
+        return jdbc.queryForList("""
+                select distinct network from chain_profile
+                 where runtime_currency_id = ? and enabled = true order by network limit 1
+                """, String.class, runtimeCurrencyId).stream().findFirst();
+    }
+
+    /** 判断运行时货币的链族。 */
+    public boolean isRuntimeCurrencyFamily(int runtimeCurrencyId, String family) {
+        return !jdbc.queryForList("""
+                select 1 from chain_profile
+                 where runtime_currency_id = ? and lower(family) = lower(?) and enabled = true limit 1
+                """, runtimeCurrencyId, family).isEmpty();
+    }
+
+    /** 查询账户链配置。 */
+    private List<AccountChainProfile> queryAccount(String predicate, Object... args) {
+        String sql = """
+                select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
+                       rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations, default_fee_rate,
+                       dust_threshold, enabled, chain_id, gas_policy, fee_model, scan_batch_size, scan_enabled,
+                       withdraw_enabled, collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
+                  from chain_profile
+                """ + predicate;
+        return jdbc.query(sql, (rs, rowNum) -> AccountChainProfile.builder()
+                .chain(rs.getString("chain")).network(rs.getString("network")).family(rs.getString("family"))
+                .runtimeCurrencyId(rs.getInt("runtime_currency_id")).bip44CoinType(rs.getInt("bip44_coin_type"))
+                .nativeSymbol(rs.getString("native_symbol")).rpcUrl(rs.getString("rpc_url"))
+                .explorerUrl(rs.getString("explorer_url")).depositConfirmations(rs.getInt("deposit_confirmations"))
+                .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
+                .defaultFee(rs.getObject("default_fee_rate", Long.class))
+                .dustThreshold(rs.getObject("dust_threshold", Long.class)).enabled(rs.getBoolean("enabled"))
+                .chainId(rs.getObject("chain_id", Long.class)).gasPolicy(rs.getString("gas_policy"))
+                .feeModel(rs.getString("fee_model")).scanBatchSize(rs.getObject("scan_batch_size", Integer.class))
+                .scanEnabled(rs.getBoolean("scan_enabled")).withdrawEnabled(rs.getBoolean("withdraw_enabled"))
+                .collectionEnabled(rs.getBoolean("collection_enabled")).transferEnabled(rs.getBoolean("transfer_enabled"))
+                .scanStartHeight(rs.getObject("scan_start_height", Long.class))
+                .scanMaxBlocksPerRun(rs.getObject("scan_max_blocks_per_run", Long.class)).build(), args);
     }
 }

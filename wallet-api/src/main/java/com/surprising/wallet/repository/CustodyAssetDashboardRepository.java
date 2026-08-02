@@ -2,7 +2,7 @@ package com.surprising.wallet.repository;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -17,7 +17,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /** custody_asset_price 单表仓储，并组合单表仓储生成资产看板数据。 */
-@Repository
+@Component
 public class CustodyAssetDashboardRepository {
     /** JDBC 模板，仅用于访问 custody_asset_price。 */
     private final JdbcTemplate jdbc;

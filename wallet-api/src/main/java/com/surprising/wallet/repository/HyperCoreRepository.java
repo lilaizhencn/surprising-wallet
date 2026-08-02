@@ -5,7 +5,7 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -14,7 +14,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 /** HyperCore 业务仓储门面，实际 SQL 由各单表仓储执行。 */
-@Repository
+@Component
 public class HyperCoreRepository {
     /** HyperCore 链标识。 */
     private static final String CHAIN = "HYPERCORE";
