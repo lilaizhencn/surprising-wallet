@@ -3,7 +3,7 @@ package com.surprising.wallet.chain.xrp;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.config.AccountSecp256k1KeyService;
+import com.surprising.wallet.service.AccountSecp256k1KeyService;
 import com.surprising.wallet.config.PubKeyConfig;
 import org.bitcoinj.crypto.ECKey;
 import org.spongycastle.util.encoders.Hex;

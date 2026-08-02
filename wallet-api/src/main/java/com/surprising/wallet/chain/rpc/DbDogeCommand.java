@@ -1,6 +1,6 @@
 package com.surprising.wallet.chain.rpc;
 
-import com.surprising.wallet.config.ChainRpcNodeService;
+import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.springframework.stereotype.Component;
 

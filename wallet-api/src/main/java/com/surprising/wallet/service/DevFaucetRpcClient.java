@@ -1,6 +1,6 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
+import com.surprising.wallet.devfaucet.DevFaucetFunding;
 
 /**
  * 开发水龙头 RPC 客户端接口，定义向测试环境地址发送测试币的标准操作。

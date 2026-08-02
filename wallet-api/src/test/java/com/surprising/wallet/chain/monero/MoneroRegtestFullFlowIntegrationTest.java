@@ -3,7 +3,7 @@ package com.surprising.wallet.chain.monero;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
-import com.surprising.wallet.config.ChainRpcNodeService;
+import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;

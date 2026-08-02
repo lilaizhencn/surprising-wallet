@@ -1,4 +1,4 @@
-package com.surprising.wallet.config;
+package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;

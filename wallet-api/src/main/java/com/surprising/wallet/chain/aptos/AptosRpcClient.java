@@ -5,7 +5,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.ChainRpcNode;
-import com.surprising.wallet.config.ChainRpcNodeService;
+import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;

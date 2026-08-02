@@ -1,6 +1,6 @@
 package com.surprising.wallet.repository;
 
-import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
+import com.surprising.wallet.devfaucet.DevFaucetFunding;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 

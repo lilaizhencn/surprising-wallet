@@ -5,7 +5,7 @@ import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.config.ChainRpcNodeService;
+import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Test;
 

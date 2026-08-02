@@ -7,7 +7,7 @@ import tools.jackson.databind.node.ObjectNode;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.FieldMask;
 import com.surprising.wallet.common.chain.ChainRpcNode;
-import com.surprising.wallet.config.ChainRpcNodeService;
+import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import io.grpc.Channel;
 import io.grpc.ClientInterceptors;

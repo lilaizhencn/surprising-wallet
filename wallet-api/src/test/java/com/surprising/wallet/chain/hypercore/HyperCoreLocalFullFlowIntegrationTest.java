@@ -10,7 +10,7 @@ import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.chain.WalletKeyTestFixture;
-import com.surprising.wallet.config.AccountSecp256k1KeyService;
+import com.surprising.wallet.service.AccountSecp256k1KeyService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.repository.HyperCoreRepository;
 import org.junit.jupiter.api.Assumptions;

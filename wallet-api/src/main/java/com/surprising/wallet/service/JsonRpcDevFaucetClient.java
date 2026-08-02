@@ -14,15 +14,14 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
-import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
-import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
+import com.surprising.wallet.devfaucet.DevFaucetFunding;
+import com.surprising.wallet.devfaucet.DevFaucetProperties;
 
 /**
  * JSON-RPC 开发水龙头客户端，通过 HTTP JSON-RPC 向测试地址发送测试币。

@@ -3,7 +3,7 @@ package com.surprising.wallet.job.withdraw;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.config.WalletRuntimeConfigService;
+import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;

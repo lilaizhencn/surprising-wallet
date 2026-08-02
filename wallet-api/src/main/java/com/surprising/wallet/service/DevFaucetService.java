@@ -1,8 +1,8 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.devfaucet.model.DevFaucetAmountGenerator;
-import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
-import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
+import com.surprising.wallet.devfaucet.DevFaucetAmountGenerator;
+import com.surprising.wallet.devfaucet.DevFaucetFunding;
+import com.surprising.wallet.devfaucet.DevFaucetProperties;
 import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.repository.DevFaucetRepository;
 import jakarta.annotation.PostConstruct;

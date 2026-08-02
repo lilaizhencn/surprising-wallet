@@ -25,11 +25,17 @@ class ArchitectureBoundaryTest {
         Path sourceRoot = sourceRoot();
         Path serviceRoot = sourceRoot.resolve("service");
         Path repositoryRoot = sourceRoot.resolve("repository");
+        Path configRoot = sourceRoot.resolve("config");
         Path jobRoot = sourceRoot.resolve("job");
         Path controllerRoot = sourceRoot.resolve("controller");
 
         assertTrue(Files.isDirectory(serviceRoot), "service package must exist");
         assertTrue(Files.isDirectory(repositoryRoot), "repository package must exist");
+        for (Path file : javaFiles(configRoot)) {
+            String source = Files.readString(file);
+            assertFalse(source.contains("@Service"),
+                    "configuration package must not contain application Service: " + file);
+        }
         assertFalse(Files.exists(sourceRoot.resolve("account/service")),
                 "business services must not return to account subpackages");
         assertFalse(Files.exists(sourceRoot.resolve("custody/service")),

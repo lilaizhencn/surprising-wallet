@@ -10,10 +10,8 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
-import com.surprising.wallet.devfaucet.model.DevFaucetAmountGenerator;
+
 import com.surprising.wallet.service.JsonRpcDevFaucetClient;
-import com.surprising.wallet.service.DevFaucetRpcClient;
 
 /**
  * 验证 {@code DevFaucetPropertiesTest} 覆盖的业务流程、边界条件和异常行为。

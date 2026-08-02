@@ -1,4 +1,4 @@
-package com.surprising.wallet.devfaucet.model;
+package com.surprising.wallet.devfaucet;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;

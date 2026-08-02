@@ -17,7 +17,6 @@ import com.surprising.wallet.chain.solana.SolanaTransactionService;
 import com.surprising.wallet.chain.sui.SuiTransactionService;
 import com.surprising.wallet.chain.ton.TonTransactionService;
 import com.surprising.wallet.chain.xrp.XrpTransactionService;
-import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

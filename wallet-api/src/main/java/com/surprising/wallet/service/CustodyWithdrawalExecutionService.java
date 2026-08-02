@@ -6,7 +6,6 @@ import com.surprising.wallet.chain.cardano.CardanoKeyService;
 import com.surprising.wallet.chain.monero.MoneroAddressValidator;
 import com.surprising.wallet.chain.near.NearKeyService;
 import com.surprising.wallet.chain.polkadot.PolkadotKeyService;
-import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.ChainAssetRepository;

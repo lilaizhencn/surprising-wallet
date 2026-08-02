@@ -1,6 +1,6 @@
 package com.surprising.wallet.job.deposit;
 
-import com.surprising.wallet.config.WalletRuntimeConfigService;
+import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.service.BitcoinLikeDepositScanService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

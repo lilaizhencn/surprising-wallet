@@ -15,7 +15,6 @@ import com.surprising.wallet.sdk.bitcoinj.core.P2shMultisigFeeCalculator;
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinFeePolicy;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinFeePolicy;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
-import com.surprising.wallet.config.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;

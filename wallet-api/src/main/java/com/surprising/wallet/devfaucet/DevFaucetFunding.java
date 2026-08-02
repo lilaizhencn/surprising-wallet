@@ -1,4 +1,4 @@
-package com.surprising.wallet.devfaucet.model;
+package com.surprising.wallet.devfaucet;
 
 import java.math.BigDecimal;
 import java.util.UUID;

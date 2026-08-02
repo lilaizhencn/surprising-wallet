@@ -1,6 +1,6 @@
 package com.surprising.wallet.repository;
 
-import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
+import com.surprising.wallet.devfaucet.DevFaucetFunding;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;

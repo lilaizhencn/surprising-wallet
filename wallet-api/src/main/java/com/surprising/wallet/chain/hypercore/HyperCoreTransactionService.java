@@ -6,7 +6,7 @@ import tools.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.config.AccountSecp256k1KeyService;
+import com.surprising.wallet.service.AccountSecp256k1KeyService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.repository.HyperCoreRepository;
 import lombok.RequiredArgsConstructor;

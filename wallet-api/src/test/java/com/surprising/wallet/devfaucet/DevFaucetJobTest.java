@@ -14,12 +14,9 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import com.surprising.wallet.repository.DevFaucetRepository.Candidate;
-import com.surprising.wallet.devfaucet.model.DevFaucetAmountGenerator;
-import com.surprising.wallet.devfaucet.model.DevFaucetFunding;
+
 import com.surprising.wallet.job.devfaucet.DevFaucetJob;
 import com.surprising.wallet.service.DevFaucetService;
-import com.surprising.wallet.devfaucet.model.DevFaucetProperties;
 import com.surprising.wallet.repository.DevFaucetRepository;
 import com.surprising.wallet.service.DevFaucetRpcClient;
 

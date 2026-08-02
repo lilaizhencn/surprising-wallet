@@ -8,7 +8,7 @@ import com.surprising.wallet.sdk.bitcoinj.rpc.model.ScriptPubKey;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.TxOutput;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.chain.rpc.BtcLikeCommand;
-import com.surprising.wallet.config.ChainRpcNodeService;
+import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.googlecode.jsonrpc4j.JsonRpcHttpClient;
 import org.springframework.stereotype.Component;

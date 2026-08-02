@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain.tron;
 
 import com.surprising.wallet.common.chain.ChainRpcNode;
-import com.surprising.wallet.config.ChainRpcNodeService;
+import com.surprising.wallet.service.ChainRpcNodeService;
 import org.tron.trident.abi.datatypes.Type;
 import org.tron.trident.core.ApiWrapper;
 import org.tron.trident.core.NodeType;
