@@ -6,13 +6,12 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sig.second.ISignService;
 import com.surprising.wallet.sig.second.SignContent;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.Transaction;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
@@ -20,7 +19,6 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.nio.ByteBuffer;
-import java.time.Duration;
 import java.util.HexFormat;
 
 /**
@@ -41,18 +39,10 @@ import java.util.HexFormat;
 public class SecondSignJob {
 
     /**
-     * 定义 {@code DELAY} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    private static final Duration DELAY = Duration.ofSeconds(10);
-    /**
      * 定义 {@code HEX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     private static final HexFormat HEX = HexFormat.of();
 
-    /**
-     * 保存 {@code taskScheduler}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final TaskScheduler taskScheduler;
     /**
      * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
      */
@@ -61,17 +51,11 @@ public class SecondSignJob {
     private final ObjectMapper objectMapper;
 
     /**
-     * 执行 {@code schedule} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    @PostConstruct
-    void schedule() {
-        taskScheduler.scheduleWithFixedDelay(this::execute, DELAY);
-        log.info("SecondSignJob scheduled with fixed delay {}ms", DELAY.toMillis());
-    }
-
-    /**
      * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
      */
+    @Scheduled(
+            fixedDelayString = "${sw.wallet.signing.delay:PT10S}",
+            initialDelayString = "${sw.wallet.signing.initial-delay:PT10S}")
     void execute() {
         String key = Constants.WALLET_WITHDRAW_SIG_SECOND_KEY;
         String tmp = Constants.WALLET_WITHDRAW_SIG_SECOND_TMP_KEY;
