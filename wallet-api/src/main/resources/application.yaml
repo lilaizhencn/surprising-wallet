@@ -99,11 +99,11 @@ sw:
       max-attempts: ${SW_WALLET_DEV_FAUCET_MAX_ATTEMPTS:3}
       bitcoin:
         # Bitcoin regtest JSON-RPC 地址，必须为 loopback。
-        rpc-url: http://127.0.0.1:18444
+        rpc-url: ${SW_WALLET_DEV_FAUCET_BTC_RPC_URL:http://127.0.0.1:18444}
         # regtest RPC 用户名。
-        rpc-username: wallet
+        rpc-username: ${SW_WALLET_DEV_FAUCET_BTC_RPC_USERNAME:wallet}
         # regtest RPC 密码。
-        rpc-password: wallet123
+        rpc-password: ${SW_WALLET_DEV_FAUCET_BTC_RPC_PASSWORD:wallet123}
         # Bitcoin Core 中负责出资的测试钱包名。
         wallet: ${SW_WALLET_DEV_FAUCET_BTC_WALLET:regtest-funder}
         # 转账后自动挖出的确认区块数。
