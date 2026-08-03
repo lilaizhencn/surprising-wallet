@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 const demoBaseUrl = String(process.env.DEMO_BASE_URL ?? "http://127.0.0.1:3001").replace(/\/+$/, "");
-const chain = String(process.env.TEST_CHAIN ?? "APTOS").toUpperCase();
+const chain = String(process.env.TEST_CHAIN ?? "ETH").toUpperCase();
 const runId = Date.now().toString(36);
 const email = String(process.env.TEST_USER_EMAIL ?? `verify-${runId}@wallet-test.local`).toLowerCase();
 const password = String(process.env.TEST_USER_PASSWORD ?? "verification-password");
