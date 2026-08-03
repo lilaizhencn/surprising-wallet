@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEVTEST_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+DEVTEST_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 DEVTEST_RPC_URL=${EVM_RPC_URL:-http://127.0.0.1:8545}
 DEVTEST_EXPECTED_CHAIN_ID=${EVM_EXPECTED_CHAIN_ID_HEX:-0x7a69}
 DEVTEST_DEPLOYMENT_DIR=${EIP7702_DEPLOYMENT_DIR:-/var/lib/surprising-wallet/evm-devtest}
