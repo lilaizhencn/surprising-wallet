@@ -9,6 +9,7 @@
     "test": "npm run test:node",
     "test:node": "node --test",
     "test:stress": "node scripts/stress-flow.js",
+    "test:real-withdrawal": "node scripts/real-withdrawal-stress.js",
     "test:continuous-recharge": "node scripts/continuous-recharge.js",
     "provision:test-users": "node scripts/provision-test-users.js",
     "bootstrap:tenant": "node scripts/bootstrap-tenant.js",

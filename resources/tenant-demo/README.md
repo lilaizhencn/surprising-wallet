@@ -80,6 +80,16 @@ npm run test:stress
 
 该脚本使用签名的模拟回调验证租户账务边界；真实链上充值、钱包签名、广播和归集必须再通过已部署的钱包服务及开发链验收。
 
+使用已部署的租户 API 对多个测试账号发起真实钱包提现，等待钱包回调并校验每个账号的提现状态、锁定余额和账本：
+
+```bash
+TEST_USER_CREDENTIALS='user-1@example.test=<test-password>,user-2@example.test=<test-password>' \
+STRESS_REAL_USERS=20 STRESS_REAL_AMOUNT=0.1 \
+npm run test:real-withdrawal
+```
+
+脚本会排除固定浏览账号；测试账号必须已有足够的 ETH 余额。
+
 持续为一组账号轮换充值地址，使钱包开发水龙头可以发现新地址。不同账号密码可用 `email=password` 形式传入：
 
 ```bash
@@ -89,6 +99,16 @@ npm run test:continuous-recharge
 ```
 
 设置 `CONTINUOUS_MAX_CYCLES` 可让测试在有限轮次后退出；不设置或设为 `0` 时持续运行。
+
+## Nginx 和 HTTPS
+
+`deploy/nginx-tenant-demo-http.conf` 用于证书申请前的 HTTP 源站，`deploy/nginx-tenant-demo.conf` 用于证书签发后的 80→443 跳转及 443→3001 转发。证书可以使用 Certbot 的 webroot 模式申请：
+
+```bash
+certbot certonly --webroot -w /var/www/letsencrypt \
+  -d tenant-demo.tokdou.com --non-interactive \
+  --agree-tos --register-unsafely-without-email
+```
 
 ## API 流程
 
