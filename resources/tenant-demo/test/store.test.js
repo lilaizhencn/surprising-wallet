@@ -7,7 +7,7 @@ function envelope(id, type, data) {
 }
 
 async function testStore() {
-  const store = await DemoStore.open();
+  const store = await DemoStore.open({ filename: ":memory:" });
   await store.resetForTest();
   return store;
 }
@@ -142,6 +142,123 @@ test("serializes concurrent deposits and applies each event exactly once", async
     assert.equal(balance.locked, "0");
     assert.equal((await store.ledger()).length, 40);
     assert.equal((await store.webhookEvents()).filter(event => event.processed).length, 40);
+  } finally {
+    await store.close();
+  }
+});
+
+test("finalizes multiple EIP-7702-style withdrawals sharing one transaction hash", async () => {
+  const store = await testStore();
+  try {
+    const user = await store.createUser({ externalId: "user-eip7702", displayName: "Batch User" });
+    const address = await store.saveAddress(user.id, {
+      id: "eip7702-address",
+      chain: "ETH",
+      network: "devtest",
+      address: "0x1234567890abcdef1234567890abcdef12345678",
+      addressVersion: 0,
+      status: "ACTIVE"
+    });
+    const deposit = envelope("event-eip7702-deposit", "DEPOSIT.CONFIRMED", {
+      subject: user.externalId, chain: "ETH", asset: "ETH", address: address.address,
+      amount: "5", txHash: "tx-batch-deposit", logIndex: 0
+    });
+    await store.receiveWebhook(deposit, JSON.stringify(deposit));
+    const first = await store.reserveWithdrawal({
+      userId: user.id, custodyAddressId: address.id, chain: "ETH", asset: "ETH",
+      toAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", amount: "1"
+    });
+    const second = await store.reserveWithdrawal({
+      userId: user.id, custodyAddressId: address.id, chain: "ETH", asset: "ETH",
+      toAddress: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", amount: "2"
+    });
+    await store.acceptWithdrawal(first.id, { id: "batch-withdrawal-1", status: "CREATED" });
+    await store.acceptWithdrawal(second.id, { id: "batch-withdrawal-2", status: "CREATED" });
+    for (const [index, withdrawal] of [first, second].entries()) {
+      const event = envelope(`event-eip7702-withdraw-${index}`, "WITHDRAWAL.CONFIRMED", {
+        withdrawalId: `batch-withdrawal-${index + 1}`,
+        externalReference: withdrawal.externalReference,
+        chain: "ETH", asset: "ETH", amount: withdrawal.amount,
+        status: "CONFIRMED", txHash: "0xshared-eip7702-tx"
+      });
+      await store.receiveWebhook(event, JSON.stringify(event));
+    }
+    const balance = (await store.balances())[0];
+    assert.deepEqual({ available: balance.available, locked: balance.locked }, { available: "2", locked: "0" });
+    assert.equal((await store.withdrawals()).filter(row => row.status === "CONFIRMED").length, 2);
+    assert.equal((await store.ledger()).length, 3);
+  } finally {
+    await store.close();
+  }
+});
+
+test("keeps terminal withdrawal state stable and rejects mismatched callback data", async () => {
+  const store = await testStore();
+  try {
+    const user = await store.registerUser({
+      email: "callback-order@example.test", password: "callback-password", displayName: "Callback Order"
+    });
+    const address = await store.saveAddress(user.id, {
+      id: "callback-order-address", chain: "ETH", network: "devtest",
+      address: "0x1234567890123456789012345678901234567890", addressVersion: 0, status: "ACTIVE"
+    });
+    const deposit = envelope("event-callback-order-deposit", "DEPOSIT.CONFIRMED", {
+      subject: user.externalId, chain: "ETH", asset: "ETH", address: address.address,
+      amount: "3", txHash: "callback-order-deposit", logIndex: 0
+    });
+    await store.receiveWebhook(deposit, JSON.stringify(deposit));
+    const withdrawal = await store.reserveWithdrawal({
+      userId: user.id, custodyAddressId: address.id, chain: "ETH", asset: "ETH",
+      toAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", amount: "1"
+    });
+    await store.acceptWithdrawal(withdrawal.id, { id: "callback-order-withdrawal", status: "CREATED" });
+    const mismatched = envelope("event-callback-order-mismatch", "WITHDRAWAL.CONFIRMED", {
+      withdrawalId: "callback-order-withdrawal", externalReference: withdrawal.externalReference,
+      chain: "ETH", asset: "USDC", amount: "1", status: "CONFIRMED"
+    });
+    await assert.rejects(
+      () => store.receiveWebhook(mismatched, JSON.stringify(mismatched)), /asset/
+    );
+    const confirmed = envelope("event-callback-order-confirmed", "WITHDRAWAL.CONFIRMED", {
+      withdrawalId: "callback-order-withdrawal", externalReference: withdrawal.externalReference,
+      chain: "ETH", asset: "ETH", amount: "1", status: "CONFIRMED", txHash: "shared-tx"
+    });
+    await store.receiveWebhook(confirmed, JSON.stringify(confirmed));
+    const lateFailure = envelope("event-callback-order-failed", "WITHDRAWAL.FAILED", {
+      withdrawalId: "callback-order-withdrawal", externalReference: withdrawal.externalReference,
+      chain: "ETH", asset: "ETH", amount: "1", status: "FAILED", errorMessage: "late failure"
+    });
+    await store.receiveWebhook(lateFailure, JSON.stringify(lateFailure));
+    assert.equal((await store.withdrawals(user.id))[0].status, "CONFIRMED");
+    const balance = (await store.balances(user.id))[0];
+    assert.deepEqual({ available: balance.available, locked: balance.locked }, { available: "2", locked: "0" });
+  } finally {
+    await store.close();
+  }
+});
+
+test("registers users, hashes passwords, and invalidates sessions on logout", async () => {
+  const store = await testStore();
+  try {
+    const user = await store.registerUser({
+      email: "Login-User@example.test", password: "correct-password", displayName: "Login User"
+    });
+    assert.equal(user.email, "login-user@example.test");
+    assert.equal((await store.users())[0].passwordHash, undefined);
+    await assert.rejects(
+      () => store.authenticateUser({ email: user.email, password: "wrong-password" }),
+      /email or password is incorrect/
+    );
+    const authenticated = await store.authenticateUser({ email: user.email, password: "correct-password" });
+    assert.equal(authenticated.id, user.id);
+    const token = await store.createSession(user.id);
+    assert.equal((await store.sessionUser(token)).id, user.id);
+    await store.deleteSession(token);
+    assert.equal(await store.sessionUser(token), null);
+    await assert.rejects(
+      () => store.registerUser({ email: user.email, password: "another-password", displayName: "Duplicate" }),
+      /UNIQUE/
+    );
   } finally {
     await store.close();
   }

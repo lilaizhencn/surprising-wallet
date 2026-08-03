@@ -3,104 +3,129 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Surprising Wallet · 多链租户控制台</title>
+  <title>Surprising Wallet · 租户钱包</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <header>
-    <div>
-      <p class="eyebrow">SURPRISING WALLET · TENANT</p>
-      <h1>多链托管控制台</h1>
-      <p class="subtitle">地址、资产账本、提现与 Webhook 全流程验收端；实际可用链以当前租户配置为准</p>
-    </div>
-    <div class="status"><span id="statusDot"></span><strong id="statusText">检查配置中</strong></div>
-  </header>
-
-  <main>
-    <section class="summary" id="summary"></section>
-
-    <nav>
-      <button class="active" data-tab="users">用户与地址</button>
-      <button data-tab="assets">用户资产</button>
-      <button data-tab="withdrawals">提现</button>
-      <button data-tab="events">回调明细</button>
-      <button data-tab="settings">连接配置</button>
-    </nav>
-
-    <section class="tab active" id="tab-users">
-      <div class="grid two">
-        <article class="panel">
-          <h2>创建交易所用户</h2>
-          <form id="userForm">
-            <label>用户标识<input name="externalId" placeholder="user-10001" required></label>
-            <label>显示名称<input name="displayName" placeholder="张三" required></label>
-            <button type="submit">创建用户</button>
-          </form>
-        </article>
-        <article class="panel">
-          <h2>生成充值地址</h2>
-          <p class="panel-hint">支持 BTC-like、EVM、Starknet、Solana、Aptos、Sui 等链。页面名称仅用于展示，提交时仍使用钱包 API 的链代码。</p>
-          <form id="addressForm">
-            <label>用户<select name="userId" id="addressUser" required></select></label>
-            <label>已启用链 / 网络<select name="chain" id="addressChain" required></select></label>
-            <label>地址版本<input name="addressVersion" type="number" min="0" value="0" required></label>
-            <button type="submit">调用钱包 API</button>
-          </form>
-        </article>
+  <div class="glow glow-one"></div>
+  <div class="glow glow-two"></div>
+  <main class="shell">
+    <section id="authScreen" class="auth-layout">
+      <div class="hero-copy">
+        <p class="eyebrow">SURPRISING WALLET · TENANT</p>
+        <h1>你的多链钱包入口</h1>
+        <p class="subtitle">地址生成、自动充值、资产入账和提现，全部按照交易所租户的真实流程运行。</p>
+        <div class="feature-list">
+          <span>多链充值地址</span><span>Webhook 自动入账</span><span>提现状态追踪</span>
+        </div>
       </div>
-      <article class="panel table-panel">
-        <h2>当前可用链与资产</h2>
-        <p class="panel-hint">链、网络、原生资产和 Token 均来自钱包 API，新增链启用后会自动出现在这里。</p>
-        <div id="chainsTable"></div>
-      </article>
-      <article class="panel table-panel"><h2>用户</h2><div id="usersTable"></div></article>
-      <article class="panel table-panel"><h2>充值地址</h2><div id="addressesTable"></div></article>
-    </section>
-
-    <section class="tab" id="tab-assets">
-      <div class="toolbar"><button id="refreshAssets">刷新并对账</button></div>
-      <div class="grid two">
-        <article class="panel table-panel"><h2>交易所用户账本</h2><div id="balancesTable"></div></article>
-        <article class="panel table-panel"><h2>钱包租户总资产</h2><div id="walletAssetsTable"></div></article>
-      </div>
-      <article class="panel table-panel"><h2>本地资产流水</h2><div id="ledgerTable"></div></article>
-    </section>
-
-    <section class="tab" id="tab-withdrawals">
-      <article class="panel">
-        <h2>模拟用户发起提现</h2>
-        <form id="withdrawalForm" class="form-grid">
-          <label>充值地址/用户<select name="custodyAddressId" id="withdrawalAddress" required></select></label>
-          <label>提现资产<select name="assetSymbol" id="withdrawalAsset" required disabled><option value="">请先选择充值地址</option></select></label>
-          <label>目标地址<input name="toAddress" placeholder="接收该链资产的外部地址" required></label>
-          <label>金额<input name="amount" inputmode="decimal" placeholder="0.01" required></label>
-          <button type="submit">确认提现</button>
+      <article class="panel auth-card">
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-auth="login">登录</button>
+          <button class="auth-tab" data-auth="register">注册</button>
+        </div>
+        <form id="loginForm" class="auth-form">
+          <h2>欢迎回来</h2>
+          <p class="panel-hint">使用租户用户账号登录钱包。</p>
+          <label>邮箱<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label>
+          <label>密码<input name="password" type="password" autocomplete="current-password" required></label>
+          <button type="submit">登录钱包</button>
         </form>
-      </article>
-      <article class="panel table-panel"><h2>提现记录</h2><div id="withdrawalsTable"></div></article>
-    </section>
-
-    <section class="tab" id="tab-events">
-      <div class="toolbar"><button id="refreshEvents">刷新回调</button></div>
-      <article class="panel table-panel"><h2>Webhook 接收记录</h2><div id="eventsTable"></div></article>
-    </section>
-
-    <section class="tab" id="tab-settings">
-      <article class="panel settings">
-        <h2>钱包连接配置</h2>
-        <p>Secret 只保存在本机 PostgreSQL 18 的 tenant_demo Schema，不提交到 Git。</p>
-        <form id="configForm">
-          <label>钱包服务地址<input name="walletBaseUrl" value="http://127.0.0.1:8002" required></label>
-          <label>API Key ID<input name="walletKeyId" placeholder="swk_..." required></label>
-          <label>API Secret<input name="walletApiSecret" type="password" placeholder="sws_..." required></label>
-          <label>Webhook Secret<input name="webhookSecret" type="password" placeholder="whsec_...（完成回调配置后填写）"></label>
-          <label>本 Demo 回调地址<input id="webhookUrl" readonly></label>
-          <button type="submit">保存配置</button>
+        <form id="registerForm" class="auth-form hidden">
+          <h2>创建钱包账户</h2>
+          <p class="panel-hint">注册后可以生成充值地址并管理自己的资产。</p>
+          <label>邮箱<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label>
+          <label>显示名称<input name="displayName" autocomplete="name" placeholder="你的昵称" required></label>
+          <label>密码<input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+          <button type="submit">注册并登录</button>
         </form>
+        <div id="authMessage" class="form-message"></div>
       </article>
+    </section>
+
+    <section id="appScreen" class="hidden">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">SURPRISING WALLET · TENANT</p>
+          <h1>多链钱包</h1>
+          <p class="subtitle">充值地址由钱包服务生成，到账后由回调自动更新你的可用余额。</p>
+        </div>
+        <div class="account-actions">
+          <div class="status"><span id="walletStatusDot"></span><strong id="walletStatus">钱包 API 检查中</strong></div>
+          <span id="accountName" class="account-name"></span>
+          <button id="logoutButton" class="button-quiet">退出</button>
+        </div>
+      </header>
+
+      <section class="summary" id="summary"></section>
+
+      <nav class="main-nav">
+        <button class="active" data-tab="overview">钱包总览</button>
+        <button data-tab="deposit">充值</button>
+        <button data-tab="withdrawal">提现</button>
+        <button data-tab="ledger">账本</button>
+      </nav>
+
+      <section class="tab active" id="tab-overview">
+        <div class="grid two">
+          <article class="panel">
+            <div class="panel-heading"><div><p class="eyebrow small">AVAILABLE ASSETS</p><h2>我的资产</h2></div><button id="refreshButton" class="button-quiet">刷新</button></div>
+            <div id="balancesTable"></div>
+          </article>
+          <article class="panel">
+            <p class="eyebrow small">WALLET SERVICE</p>
+            <h2>当前支持链</h2>
+            <p class="panel-hint">页面只展示当前租户实际启用的链；开发环境地址生成后，devfaucet 会自动模拟外部链上充值。</p>
+            <div id="chainsTable"></div>
+          </article>
+        </div>
+        <article class="panel table-panel"><div class="panel-heading"><div><p class="eyebrow small">DEPOSIT ADDRESSES</p><h2>我的充值地址</h2></div><button data-tab="deposit" class="button-quiet jump-button">生成地址</button></div><div id="addressesTable"></div></article>
+      </section>
+
+      <section class="tab" id="tab-deposit">
+        <div class="grid two">
+          <article class="panel">
+            <p class="eyebrow small">DEPOSIT</p>
+            <h2>生成充值地址</h2>
+            <p class="panel-hint">相同链和地址版本会幂等返回相同地址，切换版本可生成轮换地址。</p>
+            <form id="addressForm">
+              <label>链 / 网络<select name="chain" id="depositChain" required></select></label>
+              <label>地址版本<input name="addressVersion" type="number" min="0" value="0" required></label>
+              <button type="submit">调用钱包服务生成地址</button>
+            </form>
+            <div id="depositMessage" class="form-message"></div>
+          </article>
+          <article class="panel accent-panel">
+            <p class="eyebrow small">AUTOMATIC CREDIT</p>
+            <h2>等待充值回调</h2>
+            <p>开发环境会由 devfaucet 向新地址随机补充测试资产，钱包扫描确认后通过签名 Webhook 回调租户，入账后余额会自动刷新。</p>
+            <div class="flow-line"><span>地址生成</span><i>→</i><span>链上充值</span><i>→</i><span>回调入账</span></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-withdrawal">
+        <article class="panel">
+          <p class="eyebrow small">WITHDRAWAL</p>
+          <h2>发起提现</h2>
+          <p class="panel-hint">提现时先冻结用户余额，钱包服务返回结果后等待回调确认或失败释放。</p>
+          <form id="withdrawalForm" class="form-grid">
+            <label>资产来源地址<select name="custodyAddressId" id="withdrawalAddress" required></select></label>
+            <label>提现资产<select name="assetSymbol" id="withdrawalAsset" required disabled><option>请先选择地址</option></select></label>
+            <label>目标地址<input name="toAddress" placeholder="接收资产的外部地址" required></label>
+            <label>金额<input name="amount" inputmode="decimal" placeholder="0.01" required></label>
+            <button type="submit">确认提现</button>
+          </form>
+          <div id="withdrawalMessage" class="form-message"></div>
+        </article>
+        <article class="panel table-panel"><h2>提现记录</h2><div id="withdrawalsTable"></div></article>
+      </section>
+
+      <section class="tab" id="tab-ledger">
+        <article class="panel table-panel"><div class="panel-heading"><div><p class="eyebrow small">AUDIT TRAIL</p><h2>资产流水</h2></div><span class="pill">回调幂等入账</span></div><div id="ledgerTable"></div></article>
+      </section>
     </section>
   </main>
-
   <div id="toast"></div>
   <script type="module" src="/app.js"></script>
 </body>

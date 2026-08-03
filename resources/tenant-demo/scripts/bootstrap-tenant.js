@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 const walletBaseUrl = String(process.env.WALLET_BASE_URL ?? "http://127.0.0.1:8002").replace(/\/+$/, "");
 const demoBaseUrl = String(process.env.DEMO_BASE_URL ?? "http://127.0.0.1:9300").replace(/\/+$/, "");
+const demoSetupToken = String(process.env.TENANT_DEMO_SETUP_TOKEN ?? "").trim();
 const platformEmail = required("PLATFORM_ADMIN_EMAIL");
 const platformPassword = required("PLATFORM_ADMIN_PASSWORD");
 const tenantPassword = required("TENANT_ADMIN_PASSWORD");
@@ -20,6 +21,9 @@ async function request(baseUrl, path, { method = "GET", body, cookie } = {}) {
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (cookie) headers.Cookie = cookie;
+  if (baseUrl === demoBaseUrl && demoSetupToken) {
+    headers["X-Tenant-Demo-Setup-Token"] = demoSetupToken;
+  }
   const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers,

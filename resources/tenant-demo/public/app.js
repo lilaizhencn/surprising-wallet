@@ -1,169 +1,30 @@
-const state = { users: [], addresses: [], chains: [] };
-let refreshBaseRequest = 0;
+const state = { session: null, me: null, chains: [], refreshing: false };
 const $ = selector => document.querySelector(selector);
-
-const CHAIN_LABELS = Object.freeze({
-  BTC: "Bitcoin",
-  LTC: "Litecoin",
-  DOGE: "Dogecoin",
-  BCH: "Bitcoin Cash",
-  ETH: "Ethereum",
-  BNB: "BNB Chain",
-  POLYGON: "Polygon",
-  ARBITRUM: "Arbitrum One",
-  OPTIMISM: "OP Mainnet",
-  BASE: "Base",
-  AVAX_C: "Avalanche C-Chain",
-  HYPEREVM: "HyperEVM",
-  MANTLE: "Mantle",
-  LINEA: "Linea",
-  SCROLL: "Scroll",
-  UNICHAIN: "Unichain",
-  ZKSYNC: "zkSync Era",
-  BERACHAIN: "Berachain",
-  GNOSIS: "Gnosis",
-  CELO: "Celo",
-  MONAD: "Monad",
-  WORLD_CHAIN: "World Chain",
-  INK: "Ink",
-  TAIKO: "Taiko",
-  SONEIUM: "Soneium",
-  MODE: "Mode",
-  LISK: "Lisk",
-  KATANA: "Katana",
-  MEGAETH: "MegaETH",
-  X_LAYER: "X Layer",
-  DEGEN: "Degen Chain",
-  ROBINHOOD_CHAIN: "Robinhood Chain",
-  OKT_CHAIN: "OKT Chain（历史网络）",
-  STARKNET: "Starknet",
-  ETHERLINK: "Etherlink",
-  IOTA_EVM: "IOTA EVM",
-  OASIS_EMERALD: "Oasis Emerald",
-  CRONOS: "Cronos",
-  SONIC: "Sonic",
-  PULSECHAIN: "PulseChain",
-  ZETACHAIN: "ZetaChain",
-  CORE: "Core",
-  SOMNIA: "Somnia",
-  RONIN: "Ronin",
-  CHILIZ: "Chiliz Chain",
-  IOTEX: "IoTeX",
-  KAIA: "Kaia",
-  PLASMA: "Plasma",
-  STORY: "Story",
-  SEI: "Sei EVM",
-  CONFLUX: "Conflux eSpace",
-  VECTOR_SMART_CHAIN: "Vector Smart Chain",
-  KROWN: "Krown",
-  HYPERCORE: "HyperCore",
-  TRON: "TRON",
-  XRP: "XRP Ledger",
-  SOLANA: "Solana",
-  TON: "TON",
-  APTOS: "Aptos",
-  SUI: "Sui",
-  ADA: "Cardano",
-  DOT: "Polkadot",
-  NEAR: "NEAR",
+const chainLabels = Object.freeze({
+  BTC: "Bitcoin", LTC: "Litecoin", DOGE: "Dogecoin", BCH: "Bitcoin Cash", ETH: "Ethereum",
+  BNB: "BNB Chain", POLYGON: "Polygon", ARBITRUM: "Arbitrum One", OPTIMISM: "OP Mainnet",
+  BASE: "Base", AVAX_C: "Avalanche C-Chain", HYPEREVM: "HyperEVM", MANTLE: "Mantle",
+  LINEA: "Linea", SCROLL: "Scroll", UNICHAIN: "Unichain", ZKSYNC: "zkSync Era",
+  BERACHAIN: "Berachain", GNOSIS: "Gnosis", CELO: "Celo", MONAD: "Monad",
+  WORLD_CHAIN: "World Chain", INK: "Ink", TAIKO: "Taiko", SONEIUM: "Soneium", MODE: "Mode",
+  LISK: "Lisk", KATANA: "Katana", MEGAETH: "MegaETH", X_LAYER: "X Layer",
+  DEGEN: "Degen Chain", ROBINHOOD_CHAIN: "Robinhood Chain", OKT_CHAIN: "OKT Chain",
+  STARKNET: "Starknet", ETHERLINK: "Etherlink", IOTA_EVM: "IOTA EVM",
+  OASIS_EMERALD: "Oasis Emerald", CRONOS: "Cronos", SONIC: "Sonic", PULSECHAIN: "PulseChain",
+  ZETACHAIN: "ZetaChain", CORE: "Core", SOMNIA: "Somnia", RONIN: "Ronin",
+  CHILIZ: "Chiliz Chain", IOTEX: "IoTeX", KAIA: "Kaia", PLASMA: "Plasma", STORY: "Story",
+  SEI: "Sei EVM", CONFLUX: "Conflux eSpace", VECTOR_SMART_CHAIN: "Vector Smart Chain",
+  KROWN: "Krown", HYPERCORE: "HyperCore", TRON: "TRON", XRP: "XRP Ledger", SOLANA: "Solana",
+  TON: "TON", APTOS: "Aptos", SUI: "Sui", ADA: "Cardano", DOT: "Polkadot", NEAR: "NEAR",
   XMR: "Monero"
 });
-
-const FAMILY_LABELS = Object.freeze({
-  evm: "EVM",
-  utxo: "UTXO",
-  account: "账户链",
-  starknet: "Starknet",
-  solana: "Solana",
-  aptos: "Aptos",
-  sui: "Sui",
-  tron: "TRON",
-  ton: "TON",
-  xrp: "XRP",
-  cardano: "Cardano",
-  polkadot: "Polkadot",
-  near: "NEAR",
-  monero: "Monero",
-  hypercore: "HyperCore",
-  object: "对象模型",
-  privacy: "隐私链"
+const networkLabels = Object.freeze({
+  mainnet: "主网", testnet: "测试网", devnet: "开发网", devtest: "开发测试",
+  local: "本地", regtest: "Regtest", sepolia: "Sepolia", nile: "Nile 测试网", saigon: "Saigon 测试网"
 });
-
-const NETWORK_LABELS = Object.freeze({
-  mainnet: "主网",
-  testnet: "测试网",
-  devnet: "开发网",
-  devtest: "开发测试",
-  local: "本地",
-  regtest: "Regtest",
-  nile: "Nile 测试网",
-  shadownet: "Shadownet",
-  saigon: "Saigon 测试网"
+const typeLabels = Object.freeze({
+  DEPOSIT: "充值入账", WITHDRAWAL: "提现扣款", WITHDRAWAL_RELEASE: "提现失败释放"
 });
-
-const REMOTE_ASSET_LABELS = Object.freeze({
-  assetSymbol: "资产",
-  asset: "资产",
-  chain: "链",
-  network: "网络",
-  nativeAsset: "原生资产",
-  available: "可用余额",
-  locked: "冻结余额",
-  total: "总余额",
-  decimals: "精度",
-  status: "状态",
-  valueUsd: "USD 估值"
-});
-
-function chainLabel(chain) {
-  const code = String(chain ?? "").toUpperCase();
-  return CHAIN_LABELS[code] ?? code;
-}
-
-function networkLabel(network) {
-  const value = String(network ?? "");
-  return (NETWORK_LABELS[value.toLowerCase()] ?? value) || "未配置网络";
-}
-
-function familyLabel(family) {
-  const value = String(family ?? "").toLowerCase();
-  return (FAMILY_LABELS[value] ?? value) || "未分类";
-}
-
-function chainCell(row) {
-  return `${escape(chainLabel(row.chain))}<br><code>${escape(row.chain)}</code>`;
-}
-
-function networkCell(row) {
-  return `${escape(networkLabel(row.network))}<br><code>${escape(row.network)}</code>`;
-}
-
-function chainCapabilities(row) {
-  return [
-    row.scanEnabled ? "充值扫描" : "",
-    row.withdrawalEnabled ? "提现" : "",
-    row.transferEnabled ? "转账" : "",
-    row.eip7702Enabled ? "EIP-7702" : ""
-  ].filter(Boolean).join("、") || "仅配置";
-}
-
-async function request(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(options.headers ?? {}) }
-  });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.message ?? `HTTP ${response.status}`);
-  return payload;
-}
-
-function toast(message, error = false) {
-  const element = $("#toast");
-  element.textContent = message;
-  element.className = error ? "show error" : "show";
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => element.className = "", 3500);
-}
 
 function escape(value) {
   return String(value ?? "").replace(/[&<>'"]/g, character => ({
@@ -171,189 +32,311 @@ function escape(value) {
   })[character]);
 }
 
+function chainLabel(value) {
+  const code = String(value ?? "").toUpperCase();
+  return chainLabels[code] ?? code;
+}
+
+function networkLabel(value) {
+  const code = String(value ?? "");
+  return networkLabels[code.toLowerCase()] ?? (code || "未配置网络");
+}
+
+function chainText(row) {
+  return `${escape(chainLabel(row.chain))}<br><code>${escape(row.chain)}</code>`;
+}
+
+function networkText(row) {
+  return `${escape(networkLabel(row.network))}<br><code>${escape(row.network)}</code>`;
+}
+
+async function request(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", ...(options.headers ?? {}) }
+  });
+  const text = await response.text();
+  let payload = null;
+  if (text) {
+    try { payload = JSON.parse(text); } catch { payload = { message: text }; }
+  }
+  if (response.status === 401) {
+    state.session = { authenticated: false };
+    showAuth();
+    throw new Error(payload?.message ?? "请重新登录");
+  }
+  if (!response.ok) throw new Error(payload?.message ?? `HTTP ${response.status}`);
+  return payload;
+}
+
+function toast(message, isError = false) {
+  const element = $("#toast");
+  element.textContent = message;
+  element.className = isError ? "show error" : "show";
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { element.className = ""; }, 4200);
+}
+
+function formMessage(selector, message, isError = false) {
+  const element = $(selector);
+  element.textContent = message ?? "";
+  element.classList.toggle("error", isError);
+}
+
+function showAuth() {
+  $("#authScreen").classList.remove("hidden");
+  $("#appScreen").classList.add("hidden");
+  stopRefreshTimer();
+}
+
+function showApp() {
+  $("#authScreen").classList.add("hidden");
+  $("#appScreen").classList.remove("hidden");
+  $("#accountName").textContent = `${state.session.user.displayName} · ${state.session.user.email}`;
+  startRefreshTimer();
+}
+
 function table(target, columns, rows) {
-  if (!rows.length) {
-    $(target).innerHTML = '<div class="empty">暂无数据</div>';
+  const element = $(target);
+  if (!rows?.length) {
+    element.innerHTML = '<div class="empty">暂无记录</div>';
     return;
   }
-  $(target).innerHTML = `<div class="table-wrap"><table><thead><tr>${columns.map(column =>
+  element.innerHTML = `<div class="table-wrap"><table><thead><tr>${columns.map(column =>
     `<th>${escape(column.label)}</th>`).join("")}</tr></thead><tbody>${rows.map(row =>
     `<tr>${columns.map(column => `<td>${column.render ? column.render(row) : escape(row[column.key])}</td>`).join("")}</tr>`
   ).join("")}</tbody></table></div>`;
 }
 
-function options(select, rows, label) {
-  select.innerHTML = rows.length
+function setOptions(selector, rows, label, empty = "暂无可选数据") {
+  const element = $(selector);
+  element.innerHTML = rows?.length
     ? rows.map(row => `<option value="${escape(row.id ?? row.chain)}">${escape(label(row))}</option>`).join("")
-    : '<option value="">暂无可选数据</option>';
+    : `<option value="">${escape(empty)}</option>`;
 }
 
-async function refreshBase() {
-  const requestId = ++refreshBaseRequest;
-  const [status, users, addresses] = await Promise.all([
-    request("/api/status"), request("/api/users"), request("/api/addresses")
-  ]);
-  let chains = [];
-  let chainError;
-  if (status.configured) {
-    try {
-      chains = await request("/api/chains");
-    } catch (error) {
-      chainError = error;
-    }
-  }
-  if (requestId !== refreshBaseRequest) return;
-  state.users = users;
-  state.addresses = addresses;
-  state.chains = chains;
-  $("#statusDot").classList.toggle("ok", status.configured);
-  $("#statusText").textContent = status.configured ? "钱包 API 已配置" : "等待连接配置";
-  table("#usersTable", [
-    { key: "externalId", label: "用户标识" }, { key: "displayName", label: "名称" },
-    { key: "createdAt", label: "创建时间" }
-  ], users);
-  table("#addressesTable", [
-    { key: "externalId", label: "用户" }, { key: "chain", label: "链", render: chainCell },
-    { key: "network", label: "网络", render: networkCell }, { label: "地址", render: row => `<code>${escape(row.address)}</code>` },
-    { key: "memo", label: "Memo" }, { key: "addressVersion", label: "版本" }
-  ], addresses);
-  options($("#addressUser"), users, row => `${row.externalId} · ${row.displayName}`);
-  options($("#withdrawalAddress"), addresses, row => `${row.externalId} · ${chainLabel(row.chain)} · ${row.address.slice(0, 12)}…`);
-  options($("#addressChain"), state.chains,
-    row => `${chainLabel(row.chain)} · ${networkLabel(row.network)} · ${(row.assetSymbols ?? []).join("、")}`);
-  if (chainError) toast(chainError.message, true);
-  table("#chainsTable", [
-    { key: "chain", label: "链", render: chainCell },
-    { key: "network", label: "网络", render: networkCell },
-    { key: "family", label: "链族", render: row => escape(familyLabel(row.family)) },
-    { key: "nativeSymbol", label: "原生资产" },
-    { label: "可用资产", render: row => escape((row.assetSymbols ?? []).join("、") || "-") },
-    { label: "能力", render: row => escape(chainCapabilities(row)) }
-  ], state.chains);
-  $("#summary").innerHTML = [
-    [status.users, "交易所用户"], [status.addresses, "充值地址"],
-    [state.chains.length, "已启用链"], [status.events, "已接收回调"]
-  ].map(([value, label]) => `<div class="metric"><strong>${escape(value)}</strong><span>${label}</span></div>`).join("");
-  refreshWithdrawalAssets();
-  const config = status;
-  $("#configForm [name=walletBaseUrl]").value = config.walletBaseUrl ?? "";
-  $("#configForm [name=walletKeyId]").value = config.walletKeyId ?? "";
-  $("#configForm [name=walletApiSecret]").value = config.walletApiSecret ?? "";
-  $("#configForm [name=webhookSecret]").value = config.webhookSecret ?? "";
-  $("#webhookUrl").value = config.webhookUrl;
+function renderSummary() {
+  const balances = state.me.balances ?? [];
+  const pending = (state.me.withdrawals ?? []).filter(row =>
+    !["CONFIRMED", "FAILED", "CANCELLED", "REQUEST_FAILED"].includes(row.status)).length;
+  const summary = [
+    [state.me.addresses.length, "充值地址"],
+    [balances.length, "资产种类"],
+    [pending, "处理中提现"],
+    [state.me.ledger.length, "账本流水"]
+  ];
+  $("#summary").innerHTML = summary.map(([value, label]) =>
+    `<div class="metric"><strong>${escape(value)}</strong><span>${label}</span></div>`).join("");
 }
 
-async function refreshAssets() {
-  const [balances, ledger] = await Promise.all([request("/api/assets"), request("/api/ledger")]);
+function renderWalletStatus() {
+  const configured = state.chains.length > 0;
+  $("#walletStatusDot").classList.toggle("ok", configured);
+  $("#walletStatus").textContent = configured ? "钱包 API 已连接" : "钱包 API 未返回可用链";
+}
+
+function renderBalances() {
   table("#balancesTable", [
-    { key: "externalId", label: "用户" }, { key: "asset", label: "资产" },
-    { key: "chain", label: "链", render: chainCell }, { key: "available", label: "可用" }, { key: "locked", label: "冻结" }
-  ], balances);
-  table("#ledgerTable", [
-    { key: "createdAt", label: "时间" }, { key: "externalId", label: "用户" },
-    { key: "entryType", label: "类型" }, { key: "asset", label: "资产" },
-    { key: "chain", label: "链", render: chainCell }, { key: "direction", label: "方向" }, { key: "amount", label: "金额" }
-  ], ledger);
-  try {
-    const remote = await request("/api/wallet/assets");
-    table("#walletAssetsTable", Object.keys(remote[0] ?? { asset: "" }).slice(0, 7).map(key => ({
-      key, label: REMOTE_ASSET_LABELS[key] ?? key
-    })), remote);
-  } catch (error) {
-    $("#walletAssetsTable").innerHTML = `<div class="empty">${escape(error.message)}</div>`;
-  }
+    { key: "asset", label: "资产" }, { key: "chain", label: "链", render: chainText },
+    { key: "available", label: "可用" }, { key: "locked", label: "冻结" }
+  ], state.me.balances);
 }
 
-async function refreshWithdrawals() {
-  const rows = await request("/api/withdrawals");
+function renderChains() {
+  table("#chainsTable", [
+    { key: "chain", label: "链", render: chainText },
+    { key: "network", label: "网络", render: networkText },
+    { label: "资产", render: row => escape((row.assetSymbols ?? []).join("、") || "-") }
+  ], state.chains);
+}
+
+function renderAddresses() {
+  table("#addressesTable", [
+    { key: "chain", label: "链", render: chainText },
+    { key: "network", label: "网络", render: networkText },
+    { label: "地址", render: row => `<code>${escape(row.address)}</code>` },
+    { key: "addressVersion", label: "版本" }, { key: "status", label: "状态" }
+  ], state.me.addresses);
+}
+
+function renderWithdrawals() {
   table("#withdrawalsTable", [
-    { key: "createdAt", label: "时间" }, { key: "externalId", label: "用户" },
-    { key: "asset", label: "资产" }, { key: "chain", label: "链", render: chainCell },
-    { key: "amount", label: "金额" }, { key: "status", label: "状态", render: row => `<span class="pill">${escape(row.status)}</span>` },
-    { label: "TxID", render: row => `<code>${escape(row.txHash ?? "-")}</code>` }
-  ], rows);
+    { key: "createdAt", label: "时间" }, { key: "asset", label: "资产" },
+    { key: "chain", label: "链", render: chainText }, { key: "amount", label: "金额" },
+    { key: "status", label: "状态", render: row => `<span class="pill">${escape(row.status)}</span>` },
+    { label: "TxID", render: row => `<code>${escape(row.txHash ?? "等待回调")}</code>` }
+  ], state.me.withdrawals);
 }
 
-async function refreshEvents() {
-  const rows = await request("/api/events");
-  table("#eventsTable", [
-    { key: "receivedAt", label: "接收时间" }, { key: "eventType", label: "事件" },
-    { label: "Event ID", render: row => `<code>${escape(row.eventId)}</code>` },
-    { label: "签名", render: row => `<span class="pill ${row.signatureValid ? "" : "bad"}">${row.signatureValid ? "通过" : "失败"}</span>` },
-    { label: "处理", render: row => `<span class="pill ${row.processed ? "" : "bad"}">${row.processed ? "完成" : escape(row.errorMessage ?? "失败")}</span>` }
-  ], rows);
+function renderLedger() {
+  table("#ledgerTable", [
+    { key: "createdAt", label: "时间" },
+    { key: "entryType", label: "类型", render: row => escape(typeLabels[row.entryType] ?? row.entryType) },
+    { key: "asset", label: "资产" }, { key: "chain", label: "链", render: chainText },
+    { key: "direction", label: "方向" }, { key: "amount", label: "金额" },
+    { key: "referenceId", label: "参考" }
+  ], state.me.ledger);
 }
-
-document.querySelectorAll("nav button").forEach(button => button.addEventListener("click", () => {
-  document.querySelectorAll("nav button").forEach(item => item.classList.toggle("active", item === button));
-  document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active", tab.id === `tab-${button.dataset.tab}`));
-  if (button.dataset.tab === "assets") refreshAssets().catch(error => toast(error.message, true));
-  if (button.dataset.tab === "withdrawals") refreshWithdrawals().catch(error => toast(error.message, true));
-  if (button.dataset.tab === "events") refreshEvents().catch(error => toast(error.message, true));
-}));
-
-$("#userForm").addEventListener("submit", async event => {
-  event.preventDefault();
-  try {
-    await request("/api/users", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(event.target))) });
-    event.target.reset();
-    await refreshBase();
-    toast("用户已创建");
-  } catch (error) { toast(error.message, true); }
-});
 
 function refreshWithdrawalAssets() {
+  const address = state.me?.addresses.find(row => row.id === $("#withdrawalAddress").value);
+  const balances = (state.me?.balances ?? []).filter(row => row.chain === address?.chain);
   const select = $("#withdrawalAsset");
-  const address = state.addresses.find(row => row.id === $("#withdrawalAddress").value);
-  const chain = state.chains.find(row => row.chain === address?.chain);
-  const assets = chain?.assetSymbols ?? [];
-  select.innerHTML = assets.length
-    ? `<option value="">请选择资产</option>${assets.map(asset =>
-      `<option value="${escape(asset)}">${escape(asset)}</option>`).join("")}`
-    : '<option value="">当前链暂无可提现资产</option>';
-  select.disabled = assets.length === 0;
+  select.innerHTML = balances.length
+    ? balances.map(row => `<option value="${escape(row.asset)}">${escape(row.asset)} · 可用 ${escape(row.available)}</option>`).join("")
+    : "<option value=\"\">当前地址暂无资产</option>";
+  $("#withdrawalAsset").disabled = balances.length === 0;
 }
+
+function renderForms() {
+  setOptions("#depositChain", state.chains,
+    row => `${chainLabel(row.chain)} · ${networkLabel(row.network)} · ${(row.assetSymbols ?? []).join("、")}`);
+  setOptions("#withdrawalAddress", state.me.addresses,
+    row => `${chainLabel(row.chain)} · ${row.address.slice(0, 18)}…`);
+  refreshWithdrawalAssets();
+}
+
+async function refreshAll() {
+  if (state.refreshing || !state.session?.authenticated) return;
+  state.refreshing = true;
+  try {
+    const [me, chains] = await Promise.all([request("/api/me"), request("/api/chains")]);
+    state.me = me;
+    state.chains = chains;
+    renderSummary();
+    renderWalletStatus();
+    renderBalances();
+    renderChains();
+    renderAddresses();
+    renderWithdrawals();
+    renderLedger();
+    renderForms();
+  } catch (error) {
+    if (state.session?.authenticated) toast(error.message, true);
+  } finally {
+    state.refreshing = false;
+  }
+}
+
+let refreshTimer;
+function startRefreshTimer() {
+  stopRefreshTimer();
+  refreshTimer = setInterval(() => refreshAll(), 10_000);
+}
+function stopRefreshTimer() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = undefined;
+}
+
+document.querySelectorAll(".auth-tab").forEach(button => button.addEventListener("click", () => {
+  document.querySelectorAll(".auth-tab").forEach(item => item.classList.toggle("active", item === button));
+  $("#loginForm").classList.toggle("hidden", button.dataset.auth !== "login");
+  $("#registerForm").classList.toggle("hidden", button.dataset.auth !== "register");
+  formMessage("#authMessage", "");
+}));
+
+$("#loginForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  formMessage("#authMessage", "正在登录…");
+  try {
+    const result = await request("/api/auth/login", {
+      method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(event.target)))
+    });
+    state.session = { authenticated: true, user: result.user };
+    showApp();
+    await refreshAll();
+    toast("登录成功");
+  } catch (error) {
+    formMessage("#authMessage", error.message, true);
+  }
+});
+
+$("#registerForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  formMessage("#authMessage", "正在创建账户…");
+  try {
+    const result = await request("/api/auth/register", {
+      method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(event.target)))
+    });
+    state.session = { authenticated: true, user: result.user };
+    showApp();
+    await refreshAll();
+    toast("账户已创建");
+  } catch (error) {
+    formMessage("#authMessage", error.message, true);
+  }
+});
+
+$("#logoutButton").addEventListener("click", async () => {
+  await request("/api/auth/logout", { method: "POST" }).catch(() => {});
+  state.session = { authenticated: false };
+  state.me = null;
+  showAuth();
+  toast("已退出登录");
+});
+
+document.querySelectorAll(".main-nav button").forEach(button => button.addEventListener("click", () => {
+  document.querySelectorAll(".main-nav button").forEach(item => item.classList.toggle("active", item === button));
+  document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active", tab.id === `tab-${button.dataset.tab}`));
+}));
+document.querySelectorAll(".jump-button").forEach(button => button.addEventListener("click", () => {
+  const target = $(`.main-nav button[data-tab="${button.dataset.tab}"]`);
+  target?.click();
+}));
+
+$("#refreshButton").addEventListener("click", () => refreshAll().then(() => toast("数据已刷新")));
+$("#depositChain").addEventListener("change", () => formMessage("#depositMessage", ""));
+$("#withdrawalAddress").addEventListener("change", refreshWithdrawalAssets);
 
 $("#addressForm").addEventListener("submit", async event => {
   event.preventDefault();
-  const input = Object.fromEntries(new FormData(event.target));
+  formMessage("#depositMessage", "正在调用钱包服务…");
   try {
-    await request(`/api/users/${encodeURIComponent(input.userId)}/addresses`, {
+    const input = Object.fromEntries(new FormData(event.target));
+    const address = await request("/api/me/addresses", {
       method: "POST", body: JSON.stringify({ chain: input.chain, addressVersion: Number(input.addressVersion) })
     });
-    await refreshBase();
-    toast("充值地址已生成");
-  } catch (error) { toast(error.message, true); }
+    await refreshAll();
+    formMessage("#depositMessage", `地址已生成：${address.address}`);
+    toast("充值地址已生成，等待 devfaucet 自动充值");
+  } catch (error) {
+    formMessage("#depositMessage", error.message, true);
+  }
 });
 
 $("#withdrawalForm").addEventListener("submit", async event => {
   event.preventDefault();
-  const input = Object.fromEntries(new FormData(event.target));
-  const address = state.addresses.find(row => row.id === input.custodyAddressId);
+  formMessage("#withdrawalMessage", "正在发起提现…");
   try {
-    if (!address) throw new Error("请选择有效的充值地址");
-    if (!input.assetSymbol) throw new Error("请选择提现资产");
-    await request(`/api/users/${encodeURIComponent(address.userId)}/withdrawals`, {
+    const input = Object.fromEntries(new FormData(event.target));
+    const address = state.me.addresses.find(row => row.id === input.custodyAddressId);
+    if (!address) throw new Error("请选择资产来源地址");
+    const result = await request("/api/me/withdrawals", {
       method: "POST",
       body: JSON.stringify({ ...input, chain: address.chain })
     });
-    await Promise.all([refreshWithdrawals(), refreshAssets()]);
-    toast("提现请求已提交");
-  } catch (error) { toast(error.message, true); }
+    await refreshAll();
+    formMessage("#withdrawalMessage", `提现已提交，状态：${result.status}`);
+    toast("提现请求已提交，等待钱包回调");
+  } catch (error) {
+    formMessage("#withdrawalMessage", error.message, true);
+  }
 });
 
-$("#withdrawalAddress").addEventListener("change", refreshWithdrawalAssets);
-
-$("#configForm").addEventListener("submit", async event => {
-  event.preventDefault();
+async function boot() {
   try {
-    await request("/api/config", { method: "PUT", body: JSON.stringify(Object.fromEntries(new FormData(event.target))) });
-    await refreshBase();
-    toast("连接配置已保存");
-  } catch (error) { toast(error.message, true); }
-});
+    state.session = await request("/api/session");
+    if (!state.session.authenticated) {
+      showAuth();
+      return;
+    }
+    showApp();
+    await refreshAll();
+  } catch (error) {
+    showAuth();
+    formMessage("#authMessage", error.message, true);
+  }
+}
 
-$("#refreshAssets").addEventListener("click", () => refreshAssets().catch(error => toast(error.message, true)));
-$("#refreshEvents").addEventListener("click", () => refreshEvents().catch(error => toast(error.message, true)));
-
-refreshBase().catch(error => toast(error.message, true));
+boot();

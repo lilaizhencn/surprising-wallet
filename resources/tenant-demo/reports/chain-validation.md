@@ -4,7 +4,7 @@
 
 代码分支：`master`
 
-数据库：本机 PostgreSQL 18，`127.0.0.1:5432`
+钱包后端数据库：本机 PostgreSQL 18，`127.0.0.1:5432`；tenant-demo：SQLite
 
 ## 结论
 
@@ -19,7 +19,7 @@
 1. 链适配层逐链验证原生币及数据库中该链全部启用 Token，包括地址、充值、重复扫描、提现、归集、Gas/手续费、确认和资金对账。
 2. 通用 SaaS 层验证租户开链、公开 API、地址版本、API Key、Webhook、Demo 用户账本、回调重试和租户隔离。该层不包含链特有分支，并另外在 ETH、APTOS 真实资金闭环及 ETH/TRON/SOLANA/SUI 并发负载中交叉验证。
 
-所有测试脚本只使用电脑上已安装的 PostgreSQL 18。脚本可以在该实例内创建临时逻辑测试库，结束后立即删除；没有启动 Docker PostgreSQL、Testcontainers、SQLite、嵌入式数据库或其他独立数据库服务。
+钱包后端的链和托管测试使用电脑上已安装的 PostgreSQL 18；tenant-demo 独立使用 SQLite，不读取钱包业务表。没有启动 Docker PostgreSQL、Testcontainers 或其他独立数据库服务。
 
 ## 逐链结果
 
@@ -72,7 +72,7 @@
 - HYPERCORE nonce 改为数据库原子预留，32 路同地址并发没有重复 nonce；首次余额快照先建立锁定行，16 路并发只入账一次。
 - EVM 逐链入口改为覆盖数据库实际配置的 12 条链，而不是旧的 7 链说明。
 - XRP Testnet 补齐 USDT 配置和 issued-currency 全流程。
-- 所有本地测试固定连接已安装的 PostgreSQL 18，并在 `AGENTS.md` 中作为强制约束。
+- 钱包后端本地测试固定连接已安装的 PostgreSQL 18；tenant-demo 使用隔离 SQLite 文件或内存数据库，并保持与钱包服务的公开 API/Webhook 边界。
 
 ## SaaS 与租户 Demo
 
@@ -83,7 +83,7 @@
 - 同一 `subject + addressVersion` 幂等；增加 `addressVersion` 可以为用户轮换地址。
 - Webhook 无需选择订阅事件，API 创建地址关联的充值、提现状态都会投递。
 - Demo 校验 Webhook 时间戳及 HMAC-SHA256，按事件 ID 幂等维护用户可用和冻结余额。
-- ETH 与 APTOS 已通过钱包后端、公开 API、Demo、回调服务和本地链同时启动的真实 SaaS 资金闭环。
+- ETH 与 APTOS 已通过钱包后端、公开 API、Demo、回调服务和本地链同时启动的真实 SaaS 资金闭环；Demo 用户账本保存于 SQLite。
 - 通用租户数据库测试覆盖租户开链、地址共享/轮换、资产聚合、回调失败筛选、单条手动重试、批量重试和租户数据隔离。
 
 ## 多链并发系统测试

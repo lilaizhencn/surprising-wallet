@@ -1,88 +1,110 @@
 # Surprising Wallet Tenant Demo
 
-这是一个独立的模拟交易所租户，不引用钱包服务内部 Java 类。它只通过公开 Custody API 和 Webhook 集成，用于逐链验收真实租户流程。
+这是一个独立的模拟交易所租户应用，不引用钱包服务内部 Java 类，只通过公开 Custody API 和 Webhook 验证真实租户流程。
 
-当前功能：
+当前流程包括：
 
-- 创建交易所内部用户，并用用户 `externalId` 作为钱包 API 的 `subject`；
-- 为用户生成/轮换各链充值地址；
-- 校验 Webhook 时间戳和 HMAC-SHA256 签名，响应验证 Challenge；
-- 按 Event ID 幂等处理充值、提现广播、确认和失败回调；
-- 使用十进制定点算法维护用户可用/冻结资产，不使用浮点数；
-- 发起提现前冻结用户余额，API 失败或链上失败时解冻，确认后完成扣款；
-- 对比交易所用户账本与钱包租户总资产，展示地址、流水、提现和回调明细。
+- 用户注册、登录、会话和退出登录；
+- 用户按链申请充值地址，支持地址版本轮换；
+- 充值 Webhook HMAC 校验、重放幂等和用户账本入账；
+- 提现前冻结余额，等待钱包回调后确认扣款或失败解冻；
+- 多个提现订单共享一个 EIP-7702 批量交易 txid 时分别结算；
+- 用户只能查看自己的地址、余额、流水和提现记录。
 
-## 启动
+## 本地启动
 
-要求 Node.js 18 或更高版本，并复用钱包开发环境正在使用的本机 PostgreSQL 18。Demo 默认在同一个 `wallet` 数据库的 `tenant_demo` Schema 中保存数据，不启动或嵌入其他数据库。
+要求 Node.js 20 或更高版本。Node.js 22 使用内置 `node:sqlite`；Node.js 20 使用可选的 `sqlite3` 驱动。数据默认保存于 `data/tenant-demo.sqlite3`，不会连接钱包服务的业务数据库。
 
 ```bash
-cd tenant-demo
+cd resources/tenant-demo
 npm install
 npm test
 npm start
 ```
 
-钱包、Demo、API Key 和 Webhook 均配置完成后，可在另一个终端执行在线验收：
+默认监听 `127.0.0.1:3001`。可以通过 `TENANT_DEMO_PORT` 和 `TENANT_DEMO_SQLITE_PATH` 调整端口及 SQLite 文件位置。
+
+## 接入钱包 API
+
+生产或远程部署时设置 `TENANT_DEMO_SETUP_TOKEN`，然后用部署密钥写入钱包 API 配置：
 
 ```bash
-TEST_CHAIN=APTOS npm run verify:running
+curl -X PUT http://127.0.0.1:3001/api/config \
+  -H 'Content-Type: application/json' \
+  -H 'X-Tenant-Demo-Setup-Token: <setup-token>' \
+  -d '{
+    "walletBaseUrl":"http://127.0.0.1:8002",
+    "walletKeyId":"<tenant-api-key>",
+    "walletApiSecret":"<tenant-api-secret>",
+    "webhookSecret":"<webhook-signing-secret>"
+  }'
 ```
 
-该脚本会通过 Demo 创建一个独立用户，验证地址幂等、地址轮换、已开通链和租户资产 API。后续逐链测试都复用同一入口。
-
-从空 Aptos Localnet、本机 PostgreSQL 18 临时库和当前源码开始执行 APT、FA USDC、FA USDT 的真实 SaaS 资金闭环：
-
-```bash
-npm run test:aptos:e2e
-```
-
-该流程会构建并启动隔离端口的当前钱包后端与 Demo，创建租户、开通 Aptos、生成租户归集地址和用户地址，验证充值、Webhook、自动归集、提现、交易审计和账务非负，最后停止服务、节点并删除临时库。
-
-从“平台创建租户”开始执行完整初始化时，先启动钱包和 Demo，然后提供开发环境管理员凭证：
-
-```bash
-PLATFORM_ADMIN_EMAIL='platform@example.com' \
-PLATFORM_ADMIN_PASSWORD='development-password' \
-TENANT_ADMIN_PASSWORD='temporary-tenant-password' \
-TEST_CHAIN=APTOS \
-npm run bootstrap:tenant
-```
-
-脚本会依次创建隔离租户和租户管理员、登录租户、开通指定链、生成归集/Gas 地址、创建全权限 API Key、把凭证写入 Demo 本地数据库、创建并验证 Webhook。密码和生成的 Secret 不会打印。每次运行默认使用新的测试 Slug；也可以通过 `TEST_RUN_ID`、`TENANT_SLUG` 和 `TENANT_ADMIN_EMAIL` 指定。
-
-访问 <http://127.0.0.1:9300>。默认 Webhook 地址：
+配置完成后，钱包 Webhook 地址必须指向：
 
 ```text
-http://127.0.0.1:9300/webhooks/custody
+https://<tenant-domain>/webhooks/custody
 ```
 
-在租户 Console 中完成以下设置：
+API Secret、Webhook Secret 和 setup token 只放在服务器环境文件或密钥管理系统中，不写入 Git。
 
-1. 开通待测试链并生成该链归集/Gas 地址；
-2. 创建一个 API Key，将 Key ID 和只展示一次的 Secret 填入 Demo“连接配置”；
-3. 创建上面的 Webhook 地址；
-4. 将创建 Webhook 时只展示一次的 `whsec_...` 填入 Demo；
-5. 在 Console 验证并启用 Webhook。
+## 验证命令
 
-Demo 数据保存在本机 PostgreSQL 18 的 `wallet.tenant_demo` Schema。API Secret 和 Webhook Secret 仅保存在该开发库，不要使用生产凭证。
+验证正在运行的 Demo 和钱包公开 API：
 
-## 环境参数
+```bash
+DEMO_BASE_URL=http://127.0.0.1:3001 \
+TEST_CHAIN=ETH \
+npm run verify:running
+```
 
-| 参数 | 默认值 | 说明 |
-|---|---|---|
-| `TENANT_DEMO_PORT` | `9300` | Demo HTTP 端口 |
-| `TENANT_DEMO_PG_HOST` | `127.0.0.1` | 必须指向本机 PostgreSQL 18 |
-| `TENANT_DEMO_PG_PORT` | `5432` | PostgreSQL 端口 |
-| `TENANT_DEMO_PG_DATABASE` | `wallet` | 与钱包后端复用的开发数据库 |
-| `TENANT_DEMO_PG_USER` | `wallet` | PostgreSQL 用户 |
-| `TENANT_DEMO_PG_PASSWORD` | 空 | PostgreSQL 密码 |
-| `TENANT_DEMO_PG_SCHEMA` | `tenant_demo` | Demo 隔离 Schema |
+创建固定账号及测试账号。固定账号可通过 `TEST_FIXED_EMAIL`、`TEST_FIXED_PASSWORD` 指定；脚本不会打印密码：
 
-`npm test` 只会在上述本机 PostgreSQL 18 实例内创建 `surprising_wallet_test_tenant_demo_*` 临时测试库，结束后自动删除；不会启动 Docker、Testcontainers、SQLite、嵌入式或其他独立数据库实例。
+```bash
+TEST_FIXED_EMAIL='602884291@qq.com' \
+TEST_FIXED_PASSWORD='<fixed-password>' \
+TEST_USER_PASSWORD='<test-password>' \
+TEST_USER_COUNT=40 \
+TEST_CHAIN=ETH \
+npm run provision:test-users
+```
 
-## 资金核对规则
+仅验证租户的并发账务、重复充值回调和共享 txid 提现回调：
 
-用户充值确认后，Demo 增加用户可用余额。发起提现时，同额资金从可用转入冻结；`WITHDRAWAL.CONFIRMED` 后冻结余额扣除，`WITHDRAWAL.FAILED` 后退回可用余额。所有 Webhook 使用事件 ID 幂等，余额和流水在同一个 PostgreSQL 事务内更新，并通过事务级余额锁避免并发丢失更新。
+```bash
+DEMO_BASE_URL=http://127.0.0.1:3001 \
+STRESS_CHAIN=ETH STRESS_ASSET=ETH STRESS_USERS=40 \
+STRESS_WEBHOOK_SECRET='<webhook-secret>' \
+npm run test:stress
+```
 
-钱包 `/custody/api/v1/assets` 是租户链上总资产，Demo 资产是交易所内部用户负债。逐链验收报告会分别核对两者与 Gas/手续费/归集差额，不将二者错误地视为永远相等。
+该脚本使用签名的模拟回调验证租户账务边界；真实链上充值、钱包签名、广播和归集必须再通过已部署的钱包服务及开发链验收。
+
+持续为一组账号轮换充值地址，使钱包开发水龙头可以发现新地址。不同账号密码可用 `email=password` 形式传入：
+
+```bash
+TEST_USER_CREDENTIALS='602884291@qq.com=<fixed-password>,user-1@example.test=<test-password>' \
+CONTINUOUS_CHAIN=ETH CONTINUOUS_MIN_DELAY_MS=15000 CONTINUOUS_MAX_DELAY_MS=90000 \
+npm run test:continuous-recharge
+```
+
+设置 `CONTINUOUS_MAX_CYCLES` 可让测试在有限轮次后退出；不设置或设为 `0` 时持续运行。
+
+## API 流程
+
+1. `POST /api/auth/register` 或 `POST /api/auth/login` 获取 HttpOnly 会话 Cookie；
+2. `GET /api/chains` 查看租户已开通链；
+3. `POST /api/me/addresses` 调用钱包地址 API；
+4. 钱包向 `/webhooks/custody` 发送 `DEPOSIT.CONFIRMED`，Demo 给对应 `subject` 入账；
+5. `POST /api/me/withdrawals` 冻结余额并调用钱包提现 API；
+6. 钱包发送 `WITHDRAWAL.BROADCAST`、`WITHDRAWAL.CONFIRMED` 或 `WITHDRAWAL.FAILED`，Demo 更新提现状态及账本。
+
+钱包内部的充值扫描、签名、广播和归集仍属于 wallet-api/wallet-service；tenant-demo 不直接访问钱包数据库，也不模拟钱包内部归集状态。
+
+## 安全边界
+
+- SQLite 开启 WAL、外键和事务串行化，金额使用十进制定点字符串，不使用浮点数；
+- 充值按 `chain:txHash:logIndex` 幂等，提现按订单及事件幂等；
+- 登录失败按来源地址限速；会话仅保存哈希；
+- `/api/config` 和 `/api/admin/snapshot` 必须提供 setup token；
+- 不提交私钥、助记词、真实 token、RPC 密钥、生产配置或 SQLite 数据文件。

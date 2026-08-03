@@ -10,17 +10,28 @@ import { WalletClient } from "./wallet-client.js";
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const projectDir = dirname(moduleDir);
 const publicDir = join(projectDir, "public");
-const port = Number(process.env.TENANT_DEMO_PORT ?? 9300);
+const port = Number(process.env.TENANT_DEMO_PORT ?? 3001);
+const publicBaseUrl = String(process.env.TENANT_DEMO_PUBLIC_BASE_URL
+  ?? `http://127.0.0.1:${port}`).replace(/\/+$/, "");
+const cookieName = "tenant_demo_session";
+const cookieSecure = String(process.env.TENANT_DEMO_COOKIE_SECURE ?? "false") === "true";
+const setupToken = String(process.env.TENANT_DEMO_SETUP_TOKEN ?? "").trim();
 const store = await DemoStore.open();
+const loginFailures = new Map();
 
-function json(response, status, value) {
+function json(response, status, value, headers = {}) {
   const body = JSON.stringify(value);
   response.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Content-Length": Buffer.byteLength(body),
-    "Cache-Control": "no-store"
+    "Cache-Control": "no-store",
+    ...headers
   });
   response.end(body);
+}
+
+function error(message, status = 400, extra = {}) {
+  return Object.assign(new Error(message), { status, ...extra });
 }
 
 async function body(request, limit = 2 * 1024 * 1024) {
@@ -28,7 +39,7 @@ async function body(request, limit = 2 * 1024 * 1024) {
   let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > limit) throw Object.assign(new Error("request body exceeds 2 MiB"), { status: 413 });
+    if (size > limit) throw error("request body exceeds 2 MiB", 413);
     chunks.push(chunk);
   }
   return Buffer.concat(chunks).toString("utf8");
@@ -40,7 +51,41 @@ async function jsonBody(request) {
   try {
     return JSON.parse(raw);
   } catch {
-    throw Object.assign(new Error("request body must be valid JSON"), { status: 400 });
+    throw error("request body must be valid JSON", 400);
+  }
+}
+
+function parseCookies(request) {
+  return Object.fromEntries(String(request.headers.cookie ?? "").split(";")
+    .map(value => value.trim().split("="))
+    .filter(([key, value]) => key && value)
+    .map(([key, ...value]) => [key, decodeURIComponent(value.join("="))]));
+}
+
+function sessionCookie(token, maxAge = 7 * 24 * 60 * 60) {
+  return `${cookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`
+    + (cookieSecure ? "; Secure" : "");
+}
+
+function clearSessionCookie() {
+  return `${cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+    + (cookieSecure ? "; Secure" : "");
+}
+
+async function currentUser(request) {
+  const token = parseCookies(request)[cookieName];
+  return store.sessionUser(token);
+}
+
+async function requireUser(request) {
+  const user = await currentUser(request);
+  if (!user) throw error("login required", 401);
+  return user;
+}
+
+function requireSetup(request) {
+  if (!setupToken || request.headers["x-tenant-demo-setup-token"] !== setupToken) {
+    throw error("setup authorization required", 403);
   }
 }
 
@@ -55,94 +100,138 @@ async function walletClient() {
 
 async function publicConfiguration() {
   const config = await store.configuration();
-  const mask = value => value ? `${value.slice(0, 7)}••••${value.slice(-4)}` : "";
   return {
-    walletBaseUrl: config.walletBaseUrl ?? "http://127.0.0.1:8002",
-    walletKeyId: config.walletKeyId ?? "",
-    walletApiSecret: mask(config.walletApiSecret),
-    webhookSecret: mask(config.webhookSecret),
-    webhookUrl: `http://127.0.0.1:${port}/webhooks/custody`,
-    configured: Boolean(config.walletBaseUrl && config.walletKeyId && config.walletApiSecret)
+    walletBaseUrl: config.walletBaseUrl ?? "",
+    configured: Boolean(config.walletBaseUrl && config.walletKeyId && config.walletApiSecret),
+    webhookConfigured: Boolean(config.webhookSecret),
+    webhookUrl: `${publicBaseUrl}/webhooks/custody`
   };
 }
 
+function checkLoginRateLimit(ip) {
+  const entry = loginFailures.get(ip);
+  if (entry?.blockedUntil > Date.now()) throw error("too many login attempts, retry later", 429);
+}
+
+function recordLoginFailure(ip) {
+  const current = loginFailures.get(ip) ?? { count: 0, blockedUntil: 0 };
+  current.count += 1;
+  if (current.count >= 8) {
+    current.count = 0;
+    current.blockedUntil = Date.now() + 60_000;
+  }
+  loginFailures.set(ip, current);
+}
+
+function clearLoginFailures(ip) {
+  loginFailures.delete(ip);
+}
+
+async function authApi(request, response, url) {
+  if (request.method === "GET" && url.pathname === "/api/session") {
+    const user = await currentUser(request);
+    return json(response, 200, { authenticated: Boolean(user), user });
+  }
+  if (request.method === "POST" && url.pathname === "/api/auth/register") {
+    const input = await jsonBody(request);
+    try {
+      const user = await store.registerUser(input);
+      const token = await store.createSession(user.id);
+      return json(response, 201, { user }, { "Set-Cookie": sessionCookie(token) });
+    } catch (cause) {
+      if (String(cause.message).includes("UNIQUE")) throw error("email is already registered", 409);
+      throw cause;
+    }
+  }
+  if (request.method === "POST" && url.pathname === "/api/auth/login") {
+    const ip = request.socket.remoteAddress ?? "unknown";
+    checkLoginRateLimit(ip);
+    try {
+      const user = await store.authenticateUser(await jsonBody(request));
+      clearLoginFailures(ip);
+      const token = await store.createSession(user.id);
+      return json(response, 200, { user }, { "Set-Cookie": sessionCookie(token) });
+    } catch (cause) {
+      recordLoginFailure(ip);
+      throw error(cause.message === "email or password is incorrect"
+        ? cause.message : "email or password is incorrect", 401);
+    }
+  }
+  if (request.method === "POST" && url.pathname === "/api/auth/logout") {
+    await store.deleteSession(parseCookies(request)[cookieName]);
+    return json(response, 200, { ok: true }, { "Set-Cookie": clearSessionCookie() });
+  }
+  return false;
+}
+
 async function api(request, response, url) {
+  const handledAuth = await authApi(request, response, url);
+  if (handledAuth !== false) return handledAuth;
   if (request.method === "GET" && url.pathname === "/api/status") {
     const [configuration, users, addresses, events] = await Promise.all([
       publicConfiguration(), store.users(), store.addresses(), store.webhookEvents()
     ]);
     return json(response, 200, {
-      ...configuration,
-      users: users.length,
-      addresses: addresses.length,
-      events: events.length
+      ...configuration, users: users.length, addresses: addresses.length, events: events.length
     });
   }
   if (request.method === "PUT" && url.pathname === "/api/config") {
+    requireSetup(request);
     const input = await jsonBody(request);
     const current = await store.configuration();
     const update = {
-      walletBaseUrl: input.walletBaseUrl ?? current.walletBaseUrl ?? "http://127.0.0.1:8002",
+      walletBaseUrl: input.walletBaseUrl ?? current.walletBaseUrl,
       walletKeyId: input.walletKeyId ?? current.walletKeyId,
       walletApiSecret: input.walletApiSecret && !input.walletApiSecret.includes("••")
-        ? input.walletApiSecret
-        : current.walletApiSecret,
+        ? input.walletApiSecret : current.walletApiSecret,
       webhookSecret: input.webhookSecret && !input.webhookSecret.includes("••")
-        ? input.webhookSecret
-        : current.webhookSecret
+        ? input.webhookSecret : current.webhookSecret
     };
     if (!update.walletBaseUrl || !update.walletKeyId || !update.walletApiSecret) {
-      throw new Error("walletBaseUrl, walletKeyId and walletApiSecret are required");
+      throw error("walletBaseUrl, walletKeyId and walletApiSecret are required", 400);
     }
     await store.saveConfiguration(update);
     return json(response, 200, await publicConfiguration());
   }
-  if (request.method === "GET" && url.pathname === "/api/users") {
-    return json(response, 200, await store.users());
+  if (request.method === "GET" && url.pathname === "/api/chains") {
+    await requireUser(request);
+    return json(response, 200, await (await walletClient()).chains());
   }
-  if (request.method === "POST" && url.pathname === "/api/users") {
-    return json(response, 201, await store.createUser(await jsonBody(request)));
+
+  const user = await requireUser(request);
+  if (request.method === "GET" && url.pathname === "/api/me") {
+    const [addresses, balances, ledger, withdrawals] = await Promise.all([
+      store.addresses(user.id), store.balances(user.id), store.ledger(user.id), store.withdrawals(user.id)
+    ]);
+    return json(response, 200, { user, addresses, balances, ledger, withdrawals });
   }
-  if (request.method === "GET" && url.pathname === "/api/addresses") {
-    return json(response, 200, await store.addresses());
+  if (request.method === "GET" && url.pathname === "/api/me/addresses") {
+    return json(response, 200, await store.addresses(user.id));
   }
-  const addressMatch = /^\/api\/users\/([^/]+)\/addresses$/.exec(url.pathname);
-  if (request.method === "POST" && addressMatch) {
-    const user = await store.user(decodeURIComponent(addressMatch[1]));
+  if (request.method === "POST" && url.pathname === "/api/me/addresses") {
     const input = await jsonBody(request);
     const remote = await (await walletClient()).createAddress(
       String(input.chain ?? "").toUpperCase(), user.externalId, Number(input.addressVersion ?? 0)
     );
     return json(response, 201, await store.saveAddress(user.id, remote));
   }
-  if (request.method === "GET" && url.pathname === "/api/chains") {
-    return json(response, 200, await (await walletClient()).chains());
+  if (request.method === "GET" && url.pathname === "/api/me/balances") {
+    return json(response, 200, await store.balances(user.id));
   }
-  if (request.method === "GET" && url.pathname === "/api/assets") {
-    return json(response, 200, await store.balances());
+  if (request.method === "GET" && url.pathname === "/api/me/ledger") {
+    return json(response, 200, await store.ledger(user.id));
   }
-  if (request.method === "GET" && url.pathname === "/api/ledger") {
-    return json(response, 200, await store.ledger());
+  if (request.method === "GET" && url.pathname === "/api/me/withdrawals") {
+    return json(response, 200, await store.withdrawals(user.id));
   }
-  if (request.method === "GET" && url.pathname === "/api/wallet/assets") {
-    return json(response, 200, await (await walletClient()).assets());
-  }
-  if (request.method === "GET" && url.pathname === "/api/wallet/deposits") {
-    return json(response, 200, await (await walletClient()).deposits());
-  }
-  if (request.method === "GET" && url.pathname === "/api/withdrawals") {
-    return json(response, 200, await store.withdrawals());
-  }
-  const withdrawalMatch = /^\/api\/users\/([^/]+)\/withdrawals$/.exec(url.pathname);
-  if (request.method === "POST" && withdrawalMatch) {
-    const userId = decodeURIComponent(withdrawalMatch[1]);
+  if (request.method === "POST" && url.pathname === "/api/me/withdrawals") {
     const input = await jsonBody(request);
     const reserved = await store.reserveWithdrawal({
-      userId,
+      userId: user.id,
       custodyAddressId: input.custodyAddressId,
-      chain: String(input.chain ?? "").toUpperCase(),
-      asset: String(input.assetSymbol ?? "").toUpperCase(),
-      toAddress: String(input.toAddress ?? "").trim(),
+      chain: input.chain,
+      asset: input.assetSymbol,
+      toAddress: input.toAddress,
       amount: input.amount
     });
     try {
@@ -156,23 +245,26 @@ async function api(request, response, url) {
         confirmed: true
       }, reserved.idempotencyKey);
       return json(response, 201, await store.acceptWithdrawal(reserved.id, remote));
-    } catch (error) {
-      await store.releaseWithdrawal(reserved.id, error.message);
-      throw error;
+    } catch (cause) {
+      await store.releaseWithdrawal(reserved.id, cause.message);
+      throw cause;
     }
   }
-  if (request.method === "GET" && url.pathname === "/api/events") {
-    return json(response, 200, await store.webhookEvents());
+  if (request.method === "GET" && url.pathname === "/api/wallet/assets") {
+    return json(response, 200, await (await walletClient()).assets());
   }
-  if (request.method === "GET" && url.pathname === "/api/snapshot") {
-    const [users, addresses, balances, withdrawals, events] = await Promise.all([
-      store.users(), store.addresses(), store.balances(), store.withdrawals(), store.webhookEvents()
+  if (request.method === "GET" && url.pathname === "/api/wallet/deposits") {
+    return json(response, 200, await (await walletClient()).deposits());
+  }
+  if (request.method === "GET" && url.pathname === "/api/admin/snapshot") {
+    requireSetup(request);
+    const [users, addresses, balances, ledger, withdrawals, events] = await Promise.all([
+      store.users(), store.addresses(), store.balances(), store.ledger(),
+      store.withdrawals(), store.webhookEvents()
     ]);
-    return json(response, 200, {
-      users, addresses, balances, withdrawals, events
-    });
+    return json(response, 200, { users, addresses, balances, ledger, withdrawals, events });
   }
-  json(response, 404, { error: "NOT_FOUND", message: "API route not found" });
+  throw error("API route not found", 404);
 }
 
 async function webhook(request, response) {
@@ -212,12 +304,13 @@ async function staticFile(response, pathname) {
     const content = await readFile(file);
     response.writeHead(200, {
       "Content-Type": types[extname(file)] ?? "application/octet-stream",
-      "Content-Length": content.length
+      "Content-Length": content.length,
+      "Cache-Control": "no-cache"
     });
     response.end(content);
-  } catch (error) {
-    if (error.code === "ENOENT") return json(response, 404, { error: "NOT_FOUND" });
-    throw error;
+  } catch (cause) {
+    if (cause.code === "ENOENT") return json(response, 404, { error: "NOT_FOUND" });
+    throw cause;
   }
 }
 
@@ -232,21 +325,19 @@ const server = http.createServer(async (request, response) => {
     }
     if (url.pathname.startsWith("/api/")) return await api(request, response, url);
     if (request.method === "GET") return await staticFile(response, url.pathname);
-    json(response, 404, { error: "NOT_FOUND" });
-  } catch (error) {
-    console.error(`[${randomUUID()}] ${request.method} ${url.pathname}: ${error.stack ?? error}`);
-    json(response, error.status ?? 400, {
-      error: error.name === "WalletApiError" ? "WALLET_API_ERROR" : "DEMO_ERROR",
-      message: error.message,
-      walletStatus: error.status,
-      walletPayload: error.payload
+    return json(response, 404, { error: "NOT_FOUND" });
+  } catch (cause) {
+    console.error(`[${randomUUID()}] ${request.method} ${url.pathname}: ${cause.stack ?? cause}`);
+    return json(response, cause.status ?? 400, {
+      error: cause.name === "WalletApiError" ? "WALLET_API_ERROR" : "DEMO_ERROR",
+      message: cause.message, walletStatus: cause.status, walletPayload: cause.payload
     });
   }
 });
 
 server.listen(port, "127.0.0.1", () => {
-  console.log(`Tenant exchange demo: http://127.0.0.1:${port}`);
-  console.log(`Custody webhook URL: http://127.0.0.1:${port}/webhooks/custody`);
+  console.log(`Tenant wallet demo: ${publicBaseUrl}`);
+  console.log(`Custody webhook URL: ${publicBaseUrl}/webhooks/custody`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"]) {

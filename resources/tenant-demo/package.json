@@ -3,19 +3,21 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "A small exchange-style tenant application for end-to-end Surprising Wallet validation.",
+  "description": "A login-enabled exchange-style tenant application for end-to-end Surprising Wallet validation.",
   "scripts": {
     "start": "node src/server.js",
-    "test": "bash scripts/test-local-pg.sh",
+    "test": "npm run test:node",
     "test:node": "node --test",
-    "test:aptos:e2e": "bash scripts/run-aptos-e2e.sh",
+    "test:stress": "node scripts/stress-flow.js",
+    "test:continuous-recharge": "node scripts/continuous-recharge.js",
+    "provision:test-users": "node scripts/provision-test-users.js",
     "bootstrap:tenant": "node scripts/bootstrap-tenant.js",
     "verify:running": "node scripts/verify-running.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
-  "dependencies": {
-    "pg": "^8.16.3"
+  "optionalDependencies": {
+    "sqlite3": "^5.1.7"
   }
 }
