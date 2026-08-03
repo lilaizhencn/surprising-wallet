@@ -146,6 +146,8 @@ class Evm7702ProductionFlowIntegrationTest {
      * 保存 {@code withdrawalWorkflow}，记录测试开关、处理状态、确认结果或重试信息。
      */
     private Evm7702WithdrawalWorkflowService withdrawalWorkflow;
+    /** 保存 EIP-7702 提现仓储，用于验证批量提现运行目标发现。 */
+    private Evm7702WithdrawalRepository withdrawalRepository;
     /**
      * 保存 {@code reconciliationJob}，用于承载当前测试夹具的配置或运行数据。
      */
@@ -233,8 +235,7 @@ class Evm7702ProductionFlowIntegrationTest {
         workflow = new Evm7702CollectionWorkflowService(
                 collectionRepository, coordinator, chainRepository, rpcNodes, keyService, crypto,
                 runtimeConfig);
-        Evm7702WithdrawalRepository withdrawalRepository =
-                new Evm7702WithdrawalRepository(jdbc, collectionRepository);
+        withdrawalRepository = new Evm7702WithdrawalRepository(jdbc, collectionRepository);
         Evm7702WithdrawalCoordinator withdrawalCoordinator = new Evm7702WithdrawalCoordinator(
                 withdrawalRepository, custodyRepository, chainRepository);
         withdrawalWorkflow = new Evm7702WithdrawalWorkflowService(
@@ -297,6 +298,8 @@ class Evm7702ProductionFlowIntegrationTest {
                     relayerChainAddressId, relayer.getAddress());
             assertEquals(List.of(new Evm7702CollectionRepository.RuntimeTarget(chain, "local", true)),
                     collectionRepository.listRuntimeTargets());
+            assertEquals(List.of(new Evm7702WithdrawalRepository.RuntimeTarget(chain, "local", true)),
+                    withdrawalRepository.listRuntimeTargets());
             configureToken("USDT", usdt.address());
             configureToken("USDC", usdc.address());
 

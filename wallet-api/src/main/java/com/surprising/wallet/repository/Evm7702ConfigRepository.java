@@ -68,10 +68,16 @@ public class Evm7702ConfigRepository {
 
     /** 查询完整 EIP-7702 配置字段。 */
     public List<Map<String, Object>> find(String chain, String network, String status, Integer version) {
-        String predicate = version == null
-                ? "chain = ? and network = ? and status = ?"
-                : "chain = ? and network = ? and version = ?";
-        Object[] args = version == null ? new Object[]{chain, network, status} : new Object[]{chain, network, version};
+        StringBuilder predicate = new StringBuilder("chain = ? and network = ?");
+        List<Object> args = new java.util.ArrayList<>(List.of(chain, network));
+        if (status != null) {
+            predicate.append(" and status = ?");
+            args.add(status);
+        }
+        if (version != null) {
+            predicate.append(" and version = ?");
+            args.add(version);
+        }
         return jdbc.queryForList("""
                 select id, chain, network, chain_id, version, delegate_address, delegate_code_hash,
                        collector_address, collector_code_hash, payout_delegate_address, payout_delegate_code_hash,
@@ -81,7 +87,7 @@ public class Evm7702ConfigRepository {
                        withdrawal_max_batch_items
                   from evm_7702_config
                  where
-                """ + predicate, args);
+                """ + predicate, args.toArray());
     }
 
     /** 查询全部配置，供服务层与链配置组合运行目标。 */
