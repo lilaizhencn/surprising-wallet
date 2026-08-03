@@ -1,0 +1,25 @@
+[Unit]
+Description=Surprising Wallet Signature Service 2
+After=network-online.target redis-server.service
+Wants=network-online.target
+Requires=redis-server.service
+
+[Service]
+Type=simple
+User=wallet
+Group=wallet
+WorkingDirectory=/opt/surprising-wallet-backend/repo
+EnvironmentFile=/etc/surprising-wallet/wallet.env
+ExecStart=/usr/bin/java -Xms256m -Xmx1g -XX:+ExitOnOutOfMemoryError -jar /opt/surprising-wallet-backend/repo/wallet-sig2/target/wallet-sig2-1.0.0-SNAPSHOT.jar
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+SuccessExitStatus=143
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/surprising-wallet/logs
+
+[Install]
+WantedBy=multi-user.target
