@@ -20,7 +20,7 @@ h2 { margin: 0 0 18px; font-size: 17px; }
 .status span { width: 9px; height: 9px; border-radius: 50%; background: #ffb45e; }
 .status span.ok { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
 main { max-width: 1400px; margin: auto; padding: 0 32px 60px; }
-.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 22px; }
+.summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
 .metric { border: 1px solid var(--line); background: rgba(17, 23, 32, .86); border-radius: 16px; padding: 18px; }
 .metric strong { display: block; font-size: 28px; }
 .metric span { color: var(--muted); }
@@ -32,6 +32,7 @@ nav button.active { border-color: var(--accent); color: var(--text); }
 .grid { display: grid; gap: 16px; margin-bottom: 16px; }
 .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .panel { background: rgba(17, 23, 32, .94); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-bottom: 16px; }
+.panel-hint { margin: -8px 0 16px; color: var(--muted); font-size: 12px; }
 form { display: grid; gap: 12px; }
 .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
