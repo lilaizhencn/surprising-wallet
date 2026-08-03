@@ -150,6 +150,10 @@ public final class JsonRpcDevFaucetClient implements DevFaucetRpcClient {
             }
             HttpResponse<String> response = httpClient.send(
                     request.build(), HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400 && response.statusCode() < 500) {
+                throw new RejectedException(
+                        "dev faucet RPC rejected HTTP " + response.statusCode(), null);
+            }
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new AmbiguousException(
                         "dev faucet RPC returned HTTP " + response.statusCode(), null);

@@ -146,7 +146,7 @@ public class DevFaucetService {
                     "error", error == null ? "" : error));
             custodyRepository.audit(
                     funding.tenantId(), "SYSTEM", "dev-faucet", action,
-                    "DEV_FAUCET_FUNDING", funding.id().toString(), "", details);
+                    "DEV_FAUCET_FUNDING", funding.id().toString(), null, details);
         } catch (RuntimeException auditError) {
             log.error("failed to write dev faucet audit for {}", funding.id(), auditError);
         }
