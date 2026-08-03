@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 const walletBaseUrl = String(process.env.WALLET_BASE_URL ?? "http://127.0.0.1:8002").replace(/\/+$/, "");
 const demoBaseUrl = String(process.env.DEMO_BASE_URL ?? "http://127.0.0.1:9300").replace(/\/+$/, "");
 const demoSetupToken = String(process.env.TENANT_DEMO_SETUP_TOKEN ?? "").trim();
+const webhookUrlOverride = String(process.env.TENANT_DEMO_WEBHOOK_URL ?? "").trim();
 const platformEmail = required("PLATFORM_ADMIN_EMAIL");
 const platformPassword = required("PLATFORM_ADMIN_PASSWORD");
 const tenantPassword = required("TENANT_ADMIN_PASSWORD");
@@ -94,7 +95,7 @@ await request(demoBaseUrl, "/api/config", {
 const webhook = (await request(walletBaseUrl, "/custody/console/v1/webhooks", {
   method: "POST",
   cookie: tenantCookie,
-  body: { name: `Tenant Demo ${runId}`, url: demoStatus.webhookUrl }
+  body: { name: `Tenant Demo ${runId}`, url: webhookUrlOverride || demoStatus.webhookUrl }
 })).payload;
 await request(demoBaseUrl, "/api/config", {
   method: "PUT",
