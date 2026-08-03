@@ -38,4 +38,4 @@ sw:
       recovery-seed: Y2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2M=
       ed25519-seed: ZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGQ=
     # 当前钱包网络类别；必须与 wallet-api、wallet-sig1 一致。
-    network: test
+    network: ${SW_WALLET_NETWORK:test}

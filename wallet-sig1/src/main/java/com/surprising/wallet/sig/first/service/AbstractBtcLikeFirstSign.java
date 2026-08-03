@@ -5,7 +5,8 @@ import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sdk.bitcoinj.core.WitnessTransactionBuilder;import com.surprising.wallet.sig.first.config.PubKeyConfig;
 import lombok.extern.slf4j.Slf4j;import org.bitcoinj.base.Coin;import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.crypto.ECKey;import org.bitcoinj.params.TestNet3Params;import org.springframework.beans.factory.annotation.Autowired;
+import org.bitcoinj.crypto.ECKey;import org.bitcoinj.params.MainNetParams;import org.bitcoinj.params.RegTestParams;
+import org.bitcoinj.params.TestNet3Params;import org.springframework.beans.factory.annotation.Autowired;import org.springframework.beans.factory.annotation.Value;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -33,6 +34,9 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
     /** 密钥材料提供者 */
     @Autowired
     protected WalletKeyMaterialProvider keyMaterial;
+    /** 当前签名服务使用的 Bitcoin 网络。 */
+    @Value("${sw.wallet.network:test}")
+    protected String network;
     /** Jackson 3 对象映射器，用于解析和序列化签名元数据。 */
     @Autowired
     protected ObjectMapper objectMapper;
@@ -47,7 +51,13 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
      *
      * @return BTC 测试网参数
      */
-    protected NetworkParameters getNetworkParameters() { return TestNet3Params.get(); }
+    protected NetworkParameters getNetworkParameters() {
+        if ("main".equalsIgnoreCase(network) || "mainnet".equalsIgnoreCase(network)) {
+            return MainNetParams.get();
+        }
+        return "regtest".equalsIgnoreCase(network)
+                ? RegTestParams.get() : TestNet3Params.get();
+    }
 
     /**
      * 对 BTC-like P2WSH 提现交易执行第一次签名。

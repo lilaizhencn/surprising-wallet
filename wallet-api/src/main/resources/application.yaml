@@ -82,7 +82,7 @@ sw:
       # 管理账号密码；空值时相关登录能力不可用。
       password: ${SW_WALLET_ADMIN_PASSWORD:}
     # 钱包网络类别；当前测试环境使用 test，生产上线改为 main。
-    network: test
+    network: ${SW_WALLET_NETWORK:test}
     # 开发测试水龙头。只能连接 loopback RPC，生产环境会拒绝启用。
     dev-faucet:
       # 是否启用自动测试币补给；非本地链测试时应关闭。
