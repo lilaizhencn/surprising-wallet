@@ -1,0 +1,24 @@
+[Unit]
+Description=Surprising Wallet Tenant Demo
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wallet
+Group=wallet
+WorkingDirectory=/opt/surprising-wallet/resources/tenant-demo
+EnvironmentFile=/etc/surprising-wallet/tenant-demo.env
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/tenant-demo
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
