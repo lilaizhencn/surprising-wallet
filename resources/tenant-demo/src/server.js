@@ -197,6 +197,14 @@ async function api(request, response, url) {
     await requireUser(request);
     return json(response, 200, await (await walletClient()).chains());
   }
+  if (request.method === "GET" && url.pathname === "/api/admin/snapshot") {
+    requireSetup(request);
+    const [users, addresses, balances, ledger, withdrawals, events] = await Promise.all([
+      store.users(), store.addresses(), store.balances(), store.ledger(),
+      store.withdrawals(), store.webhookEvents()
+    ]);
+    return json(response, 200, { users, addresses, balances, ledger, withdrawals, events });
+  }
 
   const user = await requireUser(request);
   if (request.method === "GET" && url.pathname === "/api/me") {
@@ -255,14 +263,6 @@ async function api(request, response, url) {
   }
   if (request.method === "GET" && url.pathname === "/api/wallet/deposits") {
     return json(response, 200, await (await walletClient()).deposits());
-  }
-  if (request.method === "GET" && url.pathname === "/api/admin/snapshot") {
-    requireSetup(request);
-    const [users, addresses, balances, ledger, withdrawals, events] = await Promise.all([
-      store.users(), store.addresses(), store.balances(), store.ledger(),
-      store.withdrawals(), store.webhookEvents()
-    ]);
-    return json(response, 200, { users, addresses, balances, ledger, withdrawals, events });
   }
   throw error("API route not found", 404);
 }
