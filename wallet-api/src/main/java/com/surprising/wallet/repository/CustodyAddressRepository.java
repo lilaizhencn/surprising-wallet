@@ -143,8 +143,8 @@ public class CustodyAddressRepository {
                        metadata::text as metadata_json, source, status, derivation_subject, address_version,
                        derivation_child, created_at, updated_at
                   from custody_address
-                 where tenant_id = ? and (? is null or chain = ?) and (? is null or source = ?)
-                   and (? is null or status = ?)
+                 where tenant_id = ? and (cast(? as varchar) is null or chain = ?) and (cast(? as varchar) is null or source = ?)
+                   and (cast(? as varchar) is null or status = ?)
                  order by created_at desc, id desc limit ? offset ?
                 """, tenantId, chain, chain, source, source, status, status,
                 Math.min(Math.max(limit, 1), 500), Math.max(offset, 0));
@@ -154,8 +154,8 @@ public class CustodyAddressRepository {
     public long count(UUID tenantId, String chain, String source, String status) {
         Long count = jdbc.queryForObject("""
                 select count(*) from custody_address
-                 where tenant_id = ? and (? is null or chain = ?) and (? is null or source = ?)
-                   and (? is null or status = ?)
+                 where tenant_id = ? and (cast(? as varchar) is null or chain = ?) and (cast(? as varchar) is null or source = ?)
+                   and (cast(? as varchar) is null or status = ?)
                 """, Long.class, tenantId, chain, chain, source, source, status, status);
         return count == null ? 0 : count;
     }

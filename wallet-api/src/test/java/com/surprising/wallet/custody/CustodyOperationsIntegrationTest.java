@@ -741,7 +741,7 @@ class CustodyOperationsIntegrationTest {
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER,
                     administratorId, tenantId, slug, "TENANT_ADMIN",
-                    Set.of("addresses:write"));
+                    Set.of("addresses:read", "addresses:write"));
 
             var ethFirst = service.create(
                     principal,
@@ -789,6 +789,9 @@ class CustodyOperationsIntegrationTest {
                     select count(distinct derivation_subject) from custody_address
                      where tenant_id = ? and subject = 'user_10086'
                     """, Integer.class, tenantId));
+            var addressPage = service.page(principal, "", "", "", "", 50, 0);
+            assertEquals(4L, addressPage.total());
+            assertEquals(4, addressPage.items().size());
             status.setRollbackOnly();
         });
     }

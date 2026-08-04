@@ -203,9 +203,9 @@ public class CustodyAddressService {
         requireScope(principal, "addresses:read");
         return custodyRepository.listAddresses(
                         principal.tenantId(),
-                        upperOrEmpty(chain),
-                        upperOrEmpty(source),
-                        upperOrEmpty(status),
+                        upperOrNull(chain),
+                        upperOrNull(source),
+                        upperOrNull(status),
                         search,
                         limit,
                         offset)
@@ -222,9 +222,9 @@ public class CustodyAddressService {
         requireScope(principal, "addresses:read");
         int pageSize = Math.min(Math.max(limit, 1), 200);
         int pageOffset = Math.max(offset, 0);
-        String normalizedChain = upperOrEmpty(chain);
-        String normalizedSource = upperOrEmpty(source);
-        String normalizedStatus = upperOrEmpty(status);
+        String normalizedChain = upperOrNull(chain);
+        String normalizedSource = upperOrNull(source);
+        String normalizedStatus = upperOrNull(status);
         return new PageView<>(
                 custodyRepository.listAddresses(
                                 principal.tenantId(), normalizedChain, normalizedSource,
@@ -411,10 +411,11 @@ public class CustodyAddressService {
         return source;
     }
     /**
-     * 转换或计算 {@code upperOrEmpty} 对应的值，统一金额、格式和边界规则。
+     * 转换可选筛选值，统一大小写并将空值转换为无筛选语义。
      */
-    private static String upperOrEmpty(String value) {
-        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+    private static String upperOrNull(String value) {
+        String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+        return normalized.isBlank() ? null : normalized;
     }
     /**
      * 校验 {@code requireScope} 对应的前置条件，不满足时抛出明确异常。

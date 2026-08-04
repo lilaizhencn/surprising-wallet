@@ -428,7 +428,7 @@ public class CustodyRepository {
     public List<AddressRecord> listAddresses(UUID tenantId, String chain, String source,
                                               String status, String search, int limit, int offset) {
         String value = search == null ? "" : search.toLowerCase();
-        return custodyAddresses.list(tenantId, blank(chain), blank(source), blank(status), 500, 0).stream()
+        return custodyAddresses.list(tenantId, optionalBlank(chain), optionalBlank(source), optionalBlank(status), 500, 0).stream()
                 .filter(row -> !isGasAddress(tenantId, uuid(row.get("id"))))
                 .filter(row -> value.isEmpty() || (text(row.get("address")) + " " + text(row.get("subject")) + " " + text(row.get("label"))).toLowerCase().contains(value))
                 .skip(Math.max(offset, 0)).limit(Math.min(Math.max(limit, 1), 200))
@@ -1129,6 +1129,11 @@ public class CustodyRepository {
     }
     /** 规范化可选筛选参数。 */
     private static String blank(String value) { return value == null ? "" : value.trim(); }
+    /** 将地址查询的空筛选参数转换为无筛选语义。 */
+    private static String optionalBlank(String value) {
+        String normalized = blank(value);
+        return normalized.isEmpty() ? null : normalized;
+    }
 
     /** 租户记录。 */
     public record TenantRecord(UUID id, String slug, String name, String status, int derivationNamespace,
