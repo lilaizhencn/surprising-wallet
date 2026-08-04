@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="data:,">
   <title>Surprising Wallet · 租户钱包</title>
-  <link rel="stylesheet" href="/styles.css?v=20260804-withdrawal-summary">
+  <link rel="stylesheet" href="/styles.css?v=20260804-withdrawal-search">
 </head>
 <body>
   <div class="glow glow-one"></div>
@@ -137,7 +137,19 @@
           </form>
           <div id="withdrawalMessage" class="form-message"></div>
         </article>
-        <article class="panel table-panel"><h2>提现记录</h2><p class="panel-hint">这里只展示提现到的地址和提现金额；目标地址保留首尾显示，点击或悬停可查看完整地址。</p><div id="withdrawalsTable"></div></article>
+        <article class="panel table-panel">
+          <h2>提现记录</h2>
+          <p class="panel-hint">展示提现地址、金额和手续费；支持按租户业务订单号、提现地址或 TxID 查询。</p>
+          <div class="ledger-filters withdrawal-filters" id="withdrawalFilters">
+            <label>租户业务订单号<input id="withdrawalBusinessOrderFilter" type="search" placeholder="输入业务订单号" autocomplete="off"></label>
+            <label>提现地址<input id="withdrawalAddressFilter" type="search" placeholder="输入目标地址" autocomplete="off"></label>
+            <label>TxID<input id="withdrawalTxFilter" type="search" placeholder="输入交易哈希" autocomplete="off"></label>
+            <button type="button" id="applyWithdrawalFilters" class="button-primary">查询</button>
+            <button type="button" id="clearWithdrawalFilters" class="button-quiet">清除筛选</button>
+          </div>
+          <div id="withdrawalFilterSummary" class="filter-summary"></div>
+          <div id="withdrawalsTable"></div>
+        </article>
       </section>
 
   <section class="tab" id="tab-ledger">
@@ -174,6 +186,6 @@
       <div id="addressHistoryPagination"></div>
     </article>
   </div>
-  <script type="module" data-cfasync="false" src="/app.js?v=20260804-withdrawal-summary"></script>
+  <script type="module" data-cfasync="false" src="/app.js?v=20260804-withdrawal-search"></script>
 </body>
 </html>

@@ -2,7 +2,8 @@ const state = {
   session: null, me: null, chains: [], refreshing: false,
   platformAddresses: [], addressHistory: { chain: "", page: 1, pageSize: 5 },
   pendingWithdrawal: null,
-  ledgerFilters: { entryType: "", txId: "", address: "" }
+  ledgerFilters: { entryType: "", txId: "", address: "" },
+  withdrawalFilters: { businessOrderNo: "", address: "", txId: "" }
 };
 const $ = selector => document.querySelector(selector);
 const chainLabels = Object.freeze({
@@ -68,6 +69,12 @@ function addressCell(value) {
   return address
     ? `<code class="address-cell" title="${escape(address)}">${escape(shortAddress(address))}</code>`
     : "—";
+}
+
+/** 展示钱包服务返回的提现手续费。 */
+function withdrawalFeeText(row) {
+  const fee = String(row.fee ?? "0");
+  return compareAmounts(fee, "0") === 0 ? escape(fee) : `${escape(fee)} ${escape(row.asset)}`;
 }
 
 function decimalParts(value) {
@@ -266,15 +273,27 @@ function renderAddresses() {
 }
 
 function renderWithdrawals() {
+  const filters = state.withdrawalFilters;
+  const allRows = state.me?.withdrawals ?? [];
+  const rows = allRows.filter(row => {
+    const businessOrderNo = String(row.externalReference ?? "").toLowerCase();
+    const address = String(row.toAddress ?? "").toLowerCase();
+    const txId = String(row.txHash ?? "").toLowerCase();
+    return (!filters.businessOrderNo || businessOrderNo.includes(filters.businessOrderNo.toLowerCase()))
+      && (!filters.address || address.includes(filters.address.toLowerCase()))
+      && (!filters.txId || txId.includes(filters.txId.toLowerCase()));
+  });
+  $("#withdrawalFilterSummary").textContent = `显示 ${rows.length} / ${allRows.length} 条提现记录`;
   table("#withdrawalsTable", [
     { key: "createdAt", label: "时间" },
     { label: "提现地址", render: row => addressCell(row.toAddress) },
     { label: "提现金额", render: row => `${escape(row.amount)} ${escape(row.asset)}` },
+    { label: "手续费", render: withdrawalFeeText },
     { label: "ID", render: row => `<code title="平台提现记录 ID">${escape(row.custodyWithdrawalId ?? row.id ?? "等待平台返回")}</code>` },
     { label: "租户业务订单号", render: row => `<code title="租户生成的业务订单号">${escape(row.externalReference ?? "—")}</code>` },
     { key: "status", label: "状态", render: row => `<span class="pill">${escape(row.status)}</span>` },
     { label: "TxID", render: row => `<code>${escape(row.txHash ?? "等待回调")}</code>` }
-  ], state.me.withdrawals);
+  ], rows);
 }
 
 function renderLedger() {
@@ -561,6 +580,27 @@ document.querySelectorAll(".jump-button").forEach(button => button.addEventListe
 }));
 
 $("#refreshButton").addEventListener("click", () => refreshAll().then(() => toast("数据已刷新")));
+$("#withdrawalBusinessOrderFilter").addEventListener("input", event => {
+  state.withdrawalFilters.businessOrderNo = event.target.value.trim();
+});
+$("#withdrawalAddressFilter").addEventListener("input", event => {
+  state.withdrawalFilters.address = event.target.value.trim();
+});
+$("#withdrawalTxFilter").addEventListener("input", event => {
+  state.withdrawalFilters.txId = event.target.value.trim();
+});
+$("#applyWithdrawalFilters").addEventListener("click", () => renderWithdrawals());
+["#withdrawalBusinessOrderFilter", "#withdrawalAddressFilter", "#withdrawalTxFilter"]
+  .forEach(selector => $(selector).addEventListener("keydown", event => {
+    if (event.key === "Enter") renderWithdrawals();
+  }));
+$("#clearWithdrawalFilters").addEventListener("click", () => {
+  state.withdrawalFilters = { businessOrderNo: "", address: "", txId: "" };
+  $("#withdrawalBusinessOrderFilter").value = "";
+  $("#withdrawalAddressFilter").value = "";
+  $("#withdrawalTxFilter").value = "";
+  renderWithdrawals();
+});
 $("#ledgerTypeFilter").addEventListener("change", event => {
   state.ledgerFilters.entryType = event.target.value;
 });
