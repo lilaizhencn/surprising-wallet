@@ -105,6 +105,7 @@ td { padding: 12px 8px; border-top: 1px solid rgba(36, 66, 64, .7); overflow-wra
 code { color: #b9e9da; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
 .table-wrap code { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
 .address-cell { white-space: nowrap; cursor: help; }
+#withdrawalsTable { width: 100%; min-width: 0; }
 .empty { padding: 20px 0; color: var(--muted); font-size: 12px; }
 .pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; color: var(--muted); font-size: 12px; }
 .pagination-actions { display: flex; gap: 7px; }
@@ -123,5 +124,18 @@ code { color: #b9e9da; font-family: ui-monospace, SFMono-Regular, Menlo, monospa
 #toast.error { border-color: var(--danger); background: #492323; }
 @media (max-width: 900px) { .auth-layout { grid-template-columns: 1fr; gap: 34px; min-height: auto; padding: 50px 0; } .auth-card { max-width: 520px; } .app-header { align-items: start; flex-direction: column; } .account-actions { flex-wrap: wrap; } }
 @media (max-width: 900px) { .ledger-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 681px) { .table-wrap td:first-child { white-space: nowrap; overflow-wrap: normal; word-break: normal; } }
+@media (min-width: 681px) {
+  .table-wrap td:first-child { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+  #withdrawalsTable .table-wrap, #withdrawalsTable table { width: 100%; max-width: 100%; }
+  #withdrawalsTable table { min-width: 100%; table-layout: fixed; }
+  #withdrawalsTable th:nth-child(1), #withdrawalsTable td:nth-child(1) { width: 13%; }
+  #withdrawalsTable th:nth-child(2), #withdrawalsTable td:nth-child(2) { width: 12%; }
+  #withdrawalsTable th:nth-child(3), #withdrawalsTable td:nth-child(3) { width: 10%; white-space: nowrap; }
+  #withdrawalsTable th:nth-child(4), #withdrawalsTable td:nth-child(4) { width: 9%; white-space: nowrap; }
+  #withdrawalsTable th:nth-child(5), #withdrawalsTable td:nth-child(5) { width: 14%; }
+  #withdrawalsTable th:nth-child(6), #withdrawalsTable td:nth-child(6) { width: 15%; }
+  #withdrawalsTable th:nth-child(7), #withdrawalsTable td:nth-child(7) { width: 10%; white-space: nowrap; }
+  #withdrawalsTable th:nth-child(8), #withdrawalsTable td:nth-child(8) { width: 17%; }
+  #withdrawalsTable .address-cell { white-space: normal; overflow-wrap: anywhere; }
+}
 @media (max-width: 680px) { .shell { padding: 28px 16px 50px; } .summary, .grid.two, .form-grid, .ledger-filters { grid-template-columns: 1fr; } .summary { gap: 10px; } .main-nav { gap: 20px; } .panel { padding: 17px; } .account-actions { align-items: start; flex-direction: column; } .form-grid button, .wide-field { grid-column: auto; } .confirm-row { grid-template-columns: 1fr; gap: 4px; } .modal-card { padding: 17px; } }
