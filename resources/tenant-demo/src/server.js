@@ -62,14 +62,24 @@ function parseCookies(request) {
     .map(([key, ...value]) => [key, decodeURIComponent(value.join("="))]));
 }
 
-function sessionCookie(token, maxAge = 7 * 24 * 60 * 60) {
-  return `${cookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`
-    + (cookieSecure ? "; Secure" : "");
+function requestProtocol(request) {
+  const forwarded = String(request.headers["x-forwarded-proto"] ?? "")
+    .split(",", 1)[0].trim().toLowerCase();
+  return forwarded || (request.socket.encrypted ? "https" : "http");
 }
 
-function clearSessionCookie() {
+function shouldUseSecureCookie(request) {
+  return cookieSecure && requestProtocol(request) === "https";
+}
+
+function sessionCookie(request, token, maxAge = 7 * 24 * 60 * 60) {
+  return `${cookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`
+    + (shouldUseSecureCookie(request) ? "; Secure" : "");
+}
+
+function clearSessionCookie(request) {
   return `${cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
-    + (cookieSecure ? "; Secure" : "");
+    + (shouldUseSecureCookie(request) ? "; Secure" : "");
 }
 
 async function currentUser(request) {
@@ -137,7 +147,7 @@ async function authApi(request, response, url) {
     try {
       const user = await store.registerUser(input);
       const token = await store.createSession(user.id);
-      return json(response, 201, { user }, { "Set-Cookie": sessionCookie(token) });
+      return json(response, 201, { user }, { "Set-Cookie": sessionCookie(request, token) });
     } catch (cause) {
       if (String(cause.message).includes("UNIQUE")) throw error("email is already registered", 409);
       throw cause;
@@ -150,7 +160,7 @@ async function authApi(request, response, url) {
       const user = await store.authenticateUser(await jsonBody(request));
       clearLoginFailures(ip);
       const token = await store.createSession(user.id);
-      return json(response, 200, { user }, { "Set-Cookie": sessionCookie(token) });
+      return json(response, 200, { user }, { "Set-Cookie": sessionCookie(request, token) });
     } catch (cause) {
       recordLoginFailure(ip);
       throw error(cause.message === "email or password is incorrect"
@@ -159,7 +169,7 @@ async function authApi(request, response, url) {
   }
   if (request.method === "POST" && url.pathname === "/api/auth/logout") {
     await store.deleteSession(parseCookies(request)[cookieName]);
-    return json(response, 200, { ok: true }, { "Set-Cookie": clearSessionCookie() });
+    return json(response, 200, { ok: true }, { "Set-Cookie": clearSessionCookie(request) });
   }
   return false;
 }
