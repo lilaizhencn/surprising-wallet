@@ -70,6 +70,7 @@
         <div class="grid two">
           <article class="panel">
             <div class="panel-heading"><div><p class="eyebrow small">AVAILABLE ASSETS</p><h2>我的资产</h2></div><button id="refreshButton" class="button-quiet">刷新</button></div>
+            <div id="assetTotals" class="asset-summary"></div>
             <div id="balancesTable"></div>
           </article>
           <article class="panel">
@@ -79,26 +80,32 @@
             <div id="chainsTable"></div>
           </article>
         </div>
-        <article class="panel table-panel"><div class="panel-heading"><div><p class="eyebrow small">DEPOSIT ADDRESSES</p><h2>我的充值地址</h2></div><button data-tab="deposit" class="button-quiet jump-button">生成地址</button></div><div id="addressesTable"></div></article>
+        <article class="panel table-panel"><div class="panel-heading"><div><p class="eyebrow small">DEPOSIT ADDRESSES</p><h2>我的充值地址</h2><p class="panel-hint">每个币种展示最新地址，历史地址可分页查看。</p></div><button data-tab="deposit" class="button-quiet jump-button">获取地址</button></div><div id="addressesTable"></div></article>
       </section>
 
       <section class="tab" id="tab-deposit">
         <div class="grid two">
           <article class="panel">
             <p class="eyebrow small">DEPOSIT</p>
-            <h2>生成充值地址</h2>
-            <p class="panel-hint">相同链和地址版本会幂等返回相同地址，切换版本可生成轮换地址。</p>
+            <h2>获取充值地址</h2>
+            <p class="panel-hint">请先选择充值币种，再选择对应的充值链。只有选择完成后才会显示地址。</p>
             <form id="addressForm">
-              <label>链 / 网络<select name="chain" id="depositChain" required></select></label>
-              <label>地址版本<input name="addressVersion" type="number" min="0" value="0" required></label>
-              <button type="submit">调用钱包服务生成地址</button>
+              <label>充值币种<select name="asset" id="depositAsset" required></select></label>
+              <label>充值链<select name="chain" id="depositChain" required disabled></select></label>
+              <button type="submit" id="depositAddressButton" disabled>获取充值地址</button>
             </form>
+            <div id="depositAddressPanel" class="address-result hidden">
+              <div><span class="label-muted">充值地址</span><code id="depositAddress"></code></div>
+              <div id="depositAddressMeta" class="panel-hint"></div>
+              <button type="button" id="newDepositAddressButton" class="button-quiet">获取新地址</button>
+            </div>
             <div id="depositMessage" class="form-message"></div>
           </article>
           <article class="panel accent-panel">
             <p class="eyebrow small">AUTOMATIC CREDIT</p>
-            <h2>等待充值回调</h2>
-            <p>开发环境会由 devfaucet 向新地址随机补充测试资产，钱包扫描确认后通过签名 Webhook 回调租户，入账后余额会自动刷新。</p>
+            <h2>充值规则</h2>
+            <p id="depositRuleHint">请选择币种和链查看最小充值数量。</p>
+            <p>请务必使用对应的链充值，否则不会到账。开发环境地址生成后，devfaucet 会自动模拟外部链上充值。</p>
             <div class="flow-line"><span>地址生成</span><i>→</i><span>链上充值</span><i>→</i><span>回调入账</span></div>
           </article>
         </div>
@@ -108,12 +115,15 @@
         <article class="panel">
           <p class="eyebrow small">WITHDRAWAL</p>
           <h2>发起提现</h2>
-          <p class="panel-hint">提现时先冻结用户余额，钱包服务返回结果后等待回调确认或失败释放。</p>
+          <p class="panel-hint">提现时先冻结用户余额；钱包确认后扣除，失败或请求异常会自动解冻。</p>
+          <div id="withdrawalFunds" class="funds-strip"></div>
           <form id="withdrawalForm" class="form-grid">
-            <label>资产来源地址<select name="custodyAddressId" id="withdrawalAddress" required></select></label>
-            <label>提现资产<select name="assetSymbol" id="withdrawalAsset" required disabled><option>请先选择地址</option></select></label>
-            <label>目标地址<input name="toAddress" placeholder="接收资产的外部地址" required></label>
-            <label>金额<input name="amount" inputmode="decimal" placeholder="0.01" required></label>
+            <label>提现链<select name="chain" id="withdrawalChain" required></select></label>
+            <label>提现资产<select name="assetSymbol" id="withdrawalAsset" required disabled><option>请先选择提现链</option></select></label>
+            <label class="wide-field">目标地址<input name="toAddress" id="withdrawalTarget" list="platformAddressOptions" placeholder="输入目标地址，或从平台地址中选择" autocomplete="off" required></label>
+            <datalist id="platformAddressOptions"></datalist>
+            <div id="platformAddressHints" class="address-hints wide-field"></div>
+            <label>金额<input name="amount" id="withdrawalAmount" inputmode="decimal" pattern="[0-9]+(\.[0-9]+)?" placeholder="0.01" required><span id="withdrawalAmountHint" class="field-hint"></span></label>
             <button type="submit">确认提现</button>
           </form>
           <div id="withdrawalMessage" class="form-message"></div>
@@ -124,9 +134,26 @@
       <section class="tab" id="tab-ledger">
         <article class="panel table-panel"><div class="panel-heading"><div><p class="eyebrow small">AUDIT TRAIL</p><h2>资产流水</h2></div><span class="pill">回调幂等入账</span></div><div id="ledgerTable"></div></article>
       </section>
-    </section>
+  </section>
   </main>
   <div id="toast"></div>
+  <div id="withdrawalConfirmModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="withdrawalConfirmTitle">
+    <div class="modal-backdrop" data-close-withdrawal-modal></div>
+    <article class="modal-card">
+      <div class="panel-heading"><div><p class="eyebrow small">CONFIRM WITHDRAWAL</p><h2 id="withdrawalConfirmTitle">请确认提现信息</h2></div><button type="button" class="button-quiet" data-close-withdrawal-modal>关闭</button></div>
+      <div id="withdrawalConfirmDetails" class="confirm-details"></div>
+      <p class="panel-hint">确认后会立即冻结对应资产并提交到钱包服务，请确认链、地址和金额无误。</p>
+      <div class="modal-actions"><button type="button" class="button-quiet" data-close-withdrawal-modal>返回修改</button><button type="button" id="confirmWithdrawalButton">确认提交</button></div>
+    </article>
+  </div>
+  <div id="addressHistoryModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="addressHistoryTitle">
+    <div class="modal-backdrop" data-close-address-history></div>
+    <article class="modal-card">
+      <div class="panel-heading"><div><p class="eyebrow small">ADDRESS HISTORY</p><h2 id="addressHistoryTitle">历史充值地址</h2></div><button type="button" class="button-quiet" data-close-address-history>关闭</button></div>
+      <div id="addressHistoryTable"></div>
+      <div id="addressHistoryPagination"></div>
+    </article>
+  </div>
   <script type="module" data-cfasync="false" src="/app.js"></script>
 </body>
 </html>

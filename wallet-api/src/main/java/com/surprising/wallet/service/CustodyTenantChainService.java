@@ -6,6 +6,7 @@ import com.surprising.wallet.chain.BlockchainAdapterRegistry;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -146,7 +147,7 @@ public class CustodyTenantChainService {
     private static TokenView tokenView(CustodyTenantChainRepository.TokenRecord row) {
         return new TokenView(
                 row.symbol(), row.standard(), row.contractAddress(), row.decimals(),
-                row.platformEnabled());
+                row.platformEnabled(), row.minDeposit());
     }
     /**
      * 校验 {@code requireAdapter} 对应的前置条件，不满足时抛出明确异常。
@@ -223,7 +224,8 @@ public class CustodyTenantChainService {
             String standard,
             String contractAddress,
             int decimals,
-            boolean platformEnabled
+            boolean platformEnabled,
+            BigDecimal minDeposit
     ) {
     }
 }

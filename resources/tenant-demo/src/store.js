@@ -497,6 +497,76 @@ export class DemoStore {
     `, userId ? [userId] : []);
   }
 
+  /** 查询当前用户按链分页的历史充值地址。 */
+  async addressHistory(userId, chain, page = 1, pageSize = 5) {
+    const normalizedChain = String(chain ?? "").trim().toUpperCase();
+    if (!normalizedChain) throw new Error("chain is required");
+    const safePage = Math.max(Number(page) || 1, 1);
+    const safePageSize = Math.min(Math.max(Number(pageSize) || 5, 1), 20);
+    const offset = (safePage - 1) * safePageSize;
+    const totalRow = await get(this.db, `
+      SELECT count(*) AS total FROM addresses WHERE user_id = ? AND chain = ?
+    `, [userId, normalizedChain]);
+    const items = await all(this.db, `
+      SELECT a.id, a.user_id AS userId, u.email, u.external_id AS externalId,
+             u.display_name AS displayName, a.chain, a.network, a.address, a.memo,
+             a.address_version AS addressVersion, a.status, a.created_at AS createdAt
+      FROM addresses a JOIN users u ON u.id = a.user_id
+      WHERE a.user_id = ? AND a.chain = ?
+      ORDER BY a.address_version DESC, a.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [userId, normalizedChain, safePageSize, offset]);
+    const total = Number(totalRow?.total ?? 0);
+    return {
+      items,
+      total,
+      page: safePage,
+      pageSize: safePageSize,
+      pages: Math.max(Math.ceil(total / safePageSize), 1)
+    };
+  }
+
+  /** 查询指定链上当前用户最新的有效充值地址。 */
+  async latestAddress(userId, chain) {
+    const normalizedChain = String(chain ?? "").trim().toUpperCase();
+    if (!normalizedChain) throw new Error("chain is required");
+    const row = await get(this.db, `
+      SELECT id FROM addresses
+      WHERE user_id = ? AND chain = ? AND status = 'ACTIVE'
+      ORDER BY address_version DESC, created_at DESC
+      LIMIT 1
+    `, [userId, normalizedChain]);
+    return row ? this.address(row.id) : null;
+  }
+
+  /** 查询平台内其他用户的有效充值地址，供测试提现目标地址使用。 */
+  async platformAddresses(userId, chain = "", limit = 100) {
+    const normalizedChain = String(chain ?? "").trim().toUpperCase();
+    const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 200);
+    const chainPredicate = normalizedChain ? "AND a.chain = ?" : "";
+    const parameters = normalizedChain ? [userId, normalizedChain, safeLimit] : [userId, safeLimit];
+    return all(this.db, `
+      SELECT a.id, a.user_id AS userId, u.email, u.external_id AS externalId,
+             u.display_name AS displayName, a.chain, a.network, a.address, a.memo,
+             a.address_version AS addressVersion, a.status, a.created_at AS createdAt
+      FROM addresses a JOIN users u ON u.id = a.user_id
+      WHERE a.user_id <> ? AND a.status = 'ACTIVE' ${chainPredicate}
+      ORDER BY a.created_at DESC, a.address_version DESC
+      LIMIT ?
+    `, parameters);
+  }
+
+  /** 为指定链计算当前用户下一版本的充值地址版本号。 */
+  async nextAddressVersion(userId, chain) {
+    const normalizedChain = String(chain ?? "").trim().toUpperCase();
+    if (!normalizedChain) throw new Error("chain is required");
+    const row = await get(this.db, `
+      SELECT coalesce(max(address_version), -1) + 1 AS next_version
+      FROM addresses WHERE user_id = ? AND chain = ?
+    `, [userId, normalizedChain]);
+    return Number(row?.next_version ?? 0);
+  }
+
   async balances(userId = null) {
     const predicate = userId ? "WHERE b.user_id = ?" : "";
     return all(this.db, `
@@ -510,17 +580,31 @@ export class DemoStore {
 
   async ledger(userId = null) {
     const predicate = userId ? "WHERE l.user_id = ?" : "";
-    return all(this.db, `
+    const rows = await all(this.db, `
       SELECT l.id, l.event_id AS eventId, l.user_id AS userId,
              u.email, u.external_id AS externalId, l.chain, l.asset,
              l.entry_type AS entryType, l.direction, l.amount,
-             l.reference_id AS referenceId, l.created_at AS createdAt
+             l.reference_id AS referenceId, l.raw_json AS rawJson, l.created_at AS createdAt
       FROM ledger_entries l JOIN users u ON u.id = l.user_id
       ${predicate} ORDER BY l.created_at DESC
     `, userId ? [userId] : []);
+    return rows.map(row => {
+      let data = {};
+      try {
+        data = JSON.parse(row.rawJson ?? "{}").data ?? {};
+      } catch {
+        data = {};
+      }
+      const { rawJson, ...view } = row;
+      return {
+        ...view,
+        txHash: data.txHash ?? null,
+        depositAddress: data.address ?? null
+      };
+    });
   }
 
-  async reserveWithdrawal({ userId, custodyAddressId, chain, asset, toAddress, amount }) {
+  async reserveWithdrawal({ userId, custodyAddressId = null, chain, asset, toAddress, amount }) {
     const normalizedAmount = requirePositiveDecimal(amount);
     const normalizedChain = String(chain ?? "").toUpperCase();
     const normalizedAsset = String(asset ?? "").toUpperCase();
@@ -533,7 +617,10 @@ export class DemoStore {
     const idempotencyKey = `demo:${id}`;
     await this.#transaction(async database => {
       await this.#user(database, userId);
-      const address = await this.#address(database, custodyAddressId);
+      const address = custodyAddressId
+        ? await this.#address(database, custodyAddressId)
+        : await this.#latestAddress(database, userId, normalizedChain);
+      if (!address) throw new Error("no active withdrawal address for selected chain");
       if (address.userId !== userId) throw new Error("withdrawal address does not belong to user");
       if (address.chain !== normalizedChain) throw new Error("withdrawal address belongs to a different chain");
       if (address.status !== "ACTIVE") throw new Error("withdrawal address is not active");
@@ -548,7 +635,7 @@ export class DemoStore {
           id, user_id, custody_address_id, external_reference, idempotency_key,
           chain, asset, to_address, amount, status, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTING', ?, ?)
-      `, [id, userId, custodyAddressId, externalReference, idempotencyKey,
+      `, [id, userId, address.id, externalReference, idempotencyKey,
         normalizedChain, normalizedAsset, destination, normalizedAmount, timestamp, timestamp]);
     });
     return this.withdrawal(id);
@@ -582,6 +669,14 @@ export class DemoStore {
         UPDATE withdrawals SET status = 'REQUEST_FAILED', error_message = ?,
           balance_finalized = 1, updated_at = ? WHERE id = ?
       `, [String(message).slice(0, 500), now(), id]);
+      await run(database, `
+        INSERT OR IGNORE INTO ledger_entries(
+          id, event_id, user_id, chain, asset, entry_type, direction,
+          amount, reference_id, raw_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, 'WITHDRAWAL_RELEASE', 'CREDIT', ?, ?, ?, ?)
+      `, [randomUUID(), `request-failed-${id}`, withdrawal.userId, withdrawal.chain,
+        withdrawal.asset, withdrawal.amount, withdrawal.externalReference,
+        JSON.stringify({ reason: String(message).slice(0, 500) }), now()]);
     });
   }
 
@@ -597,6 +692,17 @@ export class DemoStore {
     if (!row) throw new Error("withdrawal not found");
     row.balanceFinalized = Boolean(row.balanceFinalized);
     return row;
+  }
+
+  /** 在事务中查询指定用户指定链的最新有效地址。 */
+  async #latestAddress(queryable, userId, chain) {
+    const row = await get(queryable, `
+      SELECT id FROM addresses
+      WHERE user_id = ? AND chain = ? AND status = 'ACTIVE'
+      ORDER BY address_version DESC, created_at DESC
+      LIMIT 1
+    `, [userId, chain]);
+    return row ? this.#address(queryable, row.id) : null;
   }
 
   async withdrawal(id) {

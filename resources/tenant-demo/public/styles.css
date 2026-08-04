@@ -70,14 +70,43 @@ button[type="submit"]:hover { background: #88f0ca; }
 .flow-line i { color: var(--muted); font-style: normal; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .form-grid button { grid-column: 1 / -1; }
+.wide-field { grid-column: 1 / -1; }
+.field-hint, .label-muted { color: var(--muted); font-size: 11px; }
+.asset-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px; margin-bottom: 14px; }
+.asset-card { border: 1px solid rgba(97, 230, 182, .22); border-radius: 12px; padding: 11px 12px; background: rgba(24, 67, 57, .35); }
+.asset-card strong { display: block; font-size: 16px; }
+.asset-card span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.address-result { display: grid; gap: 10px; margin-top: 16px; border: 1px solid rgba(97, 230, 182, .35); border-radius: 12px; padding: 14px; background: rgba(18, 61, 50, .42); }
+.address-result code { display: block; margin-top: 6px; overflow-wrap: anywhere; line-height: 1.6; }
+.address-result button { justify-self: start; }
+.funds-strip { display: grid; gap: 7px; margin: 0 0 18px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(8, 22, 22, .55); }
+.funds-title { color: var(--text) !important; font-weight: 700; }
+.funds-strip strong { color: var(--accent); }
+.funds-strip span { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.address-hints { display: flex; flex-wrap: wrap; gap: 7px; margin-top: -3px; }
+.address-hints:empty { display: none; }
+.address-hint { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; color: var(--muted); background: transparent; text-align: left; font-size: 11px; }
+.address-hint:hover { border-color: var(--accent); color: var(--text); }
 .table-wrap { width: 100%; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
 th { padding: 10px 8px; color: var(--muted); text-align: left; font-weight: 600; white-space: nowrap; }
 td { padding: 12px 8px; border-top: 1px solid rgba(36, 66, 64, .7); white-space: nowrap; }
 code { color: #b9e9da; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
 .empty { padding: 20px 0; color: var(--muted); font-size: 12px; }
+.pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; color: var(--muted); font-size: 12px; }
+.pagination-actions { display: flex; gap: 7px; }
+.pagination-actions button:disabled { cursor: not-allowed; opacity: .45; }
+.modal { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 20px; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, .68); backdrop-filter: blur(4px); }
+.modal-card { position: relative; width: min(560px, 100%); max-height: min(720px, 90vh); overflow: auto; margin: 0; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: #102120; box-shadow: 0 24px 80px rgba(0, 0, 0, .35); }
+.confirm-details { display: grid; gap: 10px; margin: 18px 0; }
+.confirm-row { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(36, 66, 64, .7); }
+.confirm-row span { color: var(--muted); font-size: 12px; }
+.confirm-row strong, .confirm-row code { overflow-wrap: anywhere; color: var(--text); font-size: 12px; line-height: 1.5; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 9px; }
+.modal-actions button:last-child, #confirmWithdrawalButton { border: 1px solid #51d8a8; border-radius: 10px; padding: 10px 14px; color: #06251c; background: var(--accent); font-weight: 800; }
 #toast { position: fixed; right: 24px; bottom: 24px; z-index: 5; max-width: 360px; transform: translateY(18px); opacity: 0; border: 1px solid var(--accent); border-radius: 12px; padding: 12px 15px; color: var(--text); background: #123d32; transition: .2s ease; pointer-events: none; }
 #toast.show { transform: translateY(0); opacity: 1; }
 #toast.error { border-color: var(--danger); background: #492323; }
 @media (max-width: 900px) { .auth-layout { grid-template-columns: 1fr; gap: 34px; min-height: auto; padding: 50px 0; } .auth-card { max-width: 520px; } .app-header { align-items: start; flex-direction: column; } .account-actions { flex-wrap: wrap; } }
-@media (max-width: 680px) { .shell { padding: 28px 16px 50px; } .summary, .grid.two, .form-grid { grid-template-columns: 1fr; } .summary { gap: 10px; } .main-nav { gap: 20px; } .panel { padding: 17px; } .account-actions { align-items: start; flex-direction: column; } .form-grid button { grid-column: auto; } }
+@media (max-width: 680px) { .shell { padding: 28px 16px 50px; } .summary, .grid.two, .form-grid { grid-template-columns: 1fr; } .summary { gap: 10px; } .main-nav { gap: 20px; } .panel { padding: 17px; } .account-actions { align-items: start; flex-direction: column; } .form-grid button, .wide-field { grid-column: auto; } .confirm-row { grid-template-columns: 1fr; gap: 4px; } .modal-card { padding: 17px; } }

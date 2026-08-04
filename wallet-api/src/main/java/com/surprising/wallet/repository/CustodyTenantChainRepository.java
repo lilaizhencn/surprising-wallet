@@ -3,6 +3,7 @@ package com.surprising.wallet.repository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -100,7 +101,8 @@ public class CustodyTenantChainRepository {
                                 .map(token -> new TokenRecord(
                                         text(asset.get("chain")), text(asset.get("symbol")),
                                         text(token.get("standard")), text(token.get("contract_address")),
-                                        number(token.get("decimals")), bool(token.get("enabled")))))
+                                        number(token.get("decimals")), bool(token.get("enabled")),
+                                        decimal(token.get("min_deposit")))))
                         .flatMap(java.util.Optional::stream))
                 .sorted(java.util.Comparator.comparing(TokenRecord::chain)
                         .thenComparing(TokenRecord::symbol))
@@ -185,6 +187,11 @@ public class CustodyTenantChainRepository {
         return value instanceof Number number ? number.intValue() : Integer.parseInt(text(value));
     }
 
+    /** 读取可选金额字段。 */
+    private static BigDecimal decimal(Object value) {
+        return value == null ? null : new BigDecimal(value.toString());
+    }
+
     /** 租户链展示记录。 */
     public record ChainRecord(
             String chain,
@@ -209,7 +216,8 @@ public class CustodyTenantChainRepository {
             String standard,
             String contractAddress,
             int decimals,
-            boolean platformEnabled
+            boolean platformEnabled,
+            BigDecimal minDeposit
     ) {
     }
 }

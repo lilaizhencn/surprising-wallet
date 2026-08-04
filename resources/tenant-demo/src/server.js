@@ -216,10 +216,28 @@ async function api(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/me/addresses") {
     return json(response, 200, await store.addresses(user.id));
   }
+  if (request.method === "GET" && url.pathname === "/api/me/address-history") {
+    return json(response, 200, await store.addressHistory(
+      user.id, url.searchParams.get("chain"), url.searchParams.get("page"),
+      url.searchParams.get("pageSize")));
+  }
+  if (request.method === "GET" && url.pathname === "/api/me/platform-addresses") {
+    return json(response, 200, await store.platformAddresses(
+      user.id, url.searchParams.get("chain"), url.searchParams.get("limit")));
+  }
   if (request.method === "POST" && url.pathname === "/api/me/addresses") {
     const input = await jsonBody(request);
+    const chain = String(input.chain ?? "").trim().toUpperCase();
+    if (!chain) throw error("chain is required", 400);
+    const addressVersion = input.addressVersion === undefined || input.addressVersion === null
+      || String(input.addressVersion).trim() === ""
+      ? await store.nextAddressVersion(user.id, chain)
+      : Number(input.addressVersion);
+    if (!Number.isInteger(addressVersion) || addressVersion < 0) {
+      throw error("addressVersion must be a non-negative integer", 400);
+    }
     const remote = await (await walletClient()).createAddress(
-      String(input.chain ?? "").toUpperCase(), user.externalId, Number(input.addressVersion ?? 0)
+      chain, user.externalId, addressVersion
     );
     return json(response, 201, await store.saveAddress(user.id, remote));
   }
@@ -236,7 +254,7 @@ async function api(request, response, url) {
     const input = await jsonBody(request);
     const reserved = await store.reserveWithdrawal({
       userId: user.id,
-      custodyAddressId: input.custodyAddressId,
+      custodyAddressId: input.custodyAddressId || null,
       chain: input.chain,
       asset: input.assetSymbol,
       toAddress: input.toAddress,

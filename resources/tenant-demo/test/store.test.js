@@ -70,7 +70,11 @@ test("credits deposits idempotently and finalizes a confirmed withdrawal", async
       { available: "0.85", locked: "0" }
     );
     assert.equal((await store.withdrawals())[0].status, "CONFIRMED");
-    assert.equal((await store.ledger()).length, 2);
+    const ledger = await store.ledger();
+    assert.equal(ledger.length, 2);
+    assert.equal(ledger.find(row => row.entryType === "DEPOSIT").txHash, "tx-deposit");
+    assert.equal(ledger.find(row => row.entryType === "DEPOSIT").depositAddress, address.address);
+    assert.equal(ledger.find(row => row.entryType === "WITHDRAWAL").txHash, "tx-withdraw");
   } finally {
     await store.close();
   }
@@ -112,6 +116,7 @@ test("releases reserved user funds when the wallet API request fails", async () 
       { available: "5", locked: "0" }
     );
     assert.equal((await store.withdrawals())[0].status, "REQUEST_FAILED");
+    assert.equal((await store.ledger())[0].entryType, "WITHDRAWAL_RELEASE");
   } finally {
     await store.close();
   }
@@ -165,11 +170,11 @@ test("finalizes multiple EIP-7702-style withdrawals sharing one transaction hash
     });
     await store.receiveWebhook(deposit, JSON.stringify(deposit));
     const first = await store.reserveWithdrawal({
-      userId: user.id, custodyAddressId: address.id, chain: "ETH", asset: "ETH",
+      userId: user.id, chain: "ETH", asset: "ETH",
       toAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", amount: "1"
     });
     const second = await store.reserveWithdrawal({
-      userId: user.id, custodyAddressId: address.id, chain: "ETH", asset: "ETH",
+      userId: user.id, chain: "ETH", asset: "ETH",
       toAddress: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", amount: "2"
     });
     await store.acceptWithdrawal(first.id, { id: "batch-withdrawal-1", status: "CREATED" });
@@ -187,6 +192,31 @@ test("finalizes multiple EIP-7702-style withdrawals sharing one transaction hash
     assert.deepEqual({ available: balance.available, locked: balance.locked }, { available: "2", locked: "0" });
     assert.equal((await store.withdrawals()).filter(row => row.status === "CONFIRMED").length, 2);
     assert.equal((await store.ledger()).length, 3);
+  } finally {
+    await store.close();
+  }
+});
+
+test("pages address history and exposes other users' addresses for withdrawal testing", async () => {
+  const store = await testStore();
+  try {
+    const first = await store.createUser({ externalId: "history-user-1", displayName: "History One" });
+    const second = await store.createUser({ externalId: "history-user-2", displayName: "History Two" });
+    for (const [userId, version] of [[first.id, 0], [first.id, 1], [first.id, 2], [second.id, 0]]) {
+      await store.saveAddress(userId, {
+        id: `history-address-${userId}-${version}`, chain: "ETH", network: "devtest",
+        address: `0x${String(version).padStart(40, "0")}`, addressVersion: version, status: "ACTIVE"
+      });
+    }
+    const page = await store.addressHistory(first.id, "ETH", 2, 2);
+    assert.deepEqual({ total: page.total, page: page.page, pages: page.pages },
+      { total: 3, page: 2, pages: 2 });
+    assert.equal(page.items.length, 1);
+    assert.equal(page.items[0].addressVersion, 0);
+    assert.equal((await store.latestAddress(first.id, "ETH")).addressVersion, 2);
+    const others = await store.platformAddresses(first.id, "ETH");
+    assert.equal(others.length, 1);
+    assert.equal(others[0].userId, second.id);
   } finally {
     await store.close();
   }

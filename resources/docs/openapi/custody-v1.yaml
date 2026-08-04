@@ -1443,6 +1443,7 @@ components:
         contractAddress: { type: [string, 'null'] }
         decimals: { type: integer }
         platformEnabled: { type: boolean }
+        minDeposit: { type: [number, string, 'null'] }
     TenantChain:
       type: object
       required: [chain, network, family, nativeSymbol, eip7702Enabled, assetSymbols, tokens, status, enabled, scanEnabled, withdrawalEnabled, transferEnabled, capabilities]
