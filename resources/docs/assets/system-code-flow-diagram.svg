@@ -177,7 +177,7 @@
 
   <!-- EIP-7702 note -->
   <rect x="285" y="620" width="680" height="36" class="db"/>
-  <text x="625" y="633" text-anchor="middle" class="small">EIP-7702：链上/服务器较晚时间 + TTL · 无交易/尝试的预广播失败释放余额并回调</text>
+  <text x="625" y="633" text-anchor="middle" class="small">EIP-7702：无交易/尝试的预广播失败释放未决余额并回调 · 已终态订单只收敛批次项</text>
   <text x="625" y="648" text-anchor="middle" class="small">可恢复 RPC 错误回 RETRYING · relayer 支付 Gas · type-4/type-2 · 未知广播恢复</text>
 
   <!-- ====== PHASE 5: 提现 ====== -->

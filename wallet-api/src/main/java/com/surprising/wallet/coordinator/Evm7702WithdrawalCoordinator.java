@@ -211,7 +211,8 @@ public class Evm7702WithdrawalCoordinator {
                         item.amount().add(item.fee()))) {
                     throw new IllegalStateException("pre-broadcast payout locked balance is inconsistent");
                 }
-            } else if (!repository.isUnbroadcastWithdrawalFailed(item)) {
+            } else if (!repository.isUnbroadcastWithdrawalFailed(item)
+                    && !repository.isTerminalWithdrawal(item)) {
                 throw new IllegalStateException("pre-broadcast payout withdrawal failure transition lost");
             }
             int itemUpdated = repository.markUnbroadcastItemFailed(

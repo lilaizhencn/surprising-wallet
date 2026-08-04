@@ -357,6 +357,13 @@ public class Evm7702WithdrawalRepository {
                 .orElse(false);
     }
 
+    /** 判断提现订单是否已经进入不需要再次扣账的终态。 */
+    public boolean isTerminalWithdrawal(BatchItemIdentity item) {
+        return withdrawalOrderRepository.findById(item.tenantId(), item.withdrawalOrderId())
+                .map(row -> Set.of("FAILED", "CONFIRMED").contains(String.valueOf(row.get("status"))))
+                .orElse(false);
+    }
+
     /** 将未广播批次项标记为最终失败，并保持批次审计记录。 */
     public int markUnbroadcastItemFailed(BatchItemIdentity item, String code) {
         return batchItemRepository.markPreBroadcastFailed(

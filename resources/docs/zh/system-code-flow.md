@@ -91,7 +91,8 @@ external withdrawal request
 EIP-7702 请求的签名有效期以目标链最新区块时间与服务器当前时间中较晚者为起点，再加配置 TTL，
 避免开发节点的 `latest` 时间落后而被 `eth_estimateGas` 的模拟环境判定为 `ExpiredRequest`。
 估算或签名准备阶段如果批次已经明确标记为 `PREPARATION_FAILED`，且没有链上交易哈希和签名尝试，批次保留失败审计记录、
-批次项进入 `FAILED`、提现订单释放锁定余额并由状态对账发送 `WITHDRAWAL.FAILED`；可恢复的 RPC/网络错误才回到 `RETRYING`。
+批次项进入 `FAILED`；仍处于未决状态的提现订单释放锁定余额并由状态对账发送 `WITHDRAWAL.FAILED`，已确认或已失败的历史订单只收敛批次项不重复扣账；
+可恢复的 RPC/网络错误才回到 `RETRYING`。
 已写入签名 outbox 后才允许进入未知广播恢复流程，禁止在广播结果不确定时直接重建交易。
 
 当具体链/网络存在 EIP-7702 配置且 `batch_withdrawal_enabled=true` 时，普通 EVM 提现由
