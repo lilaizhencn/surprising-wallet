@@ -108,6 +108,63 @@ class CustodyDepositProjectionIntegrationTest {
         });
     }
 
+    /** 验证同一租户多个地址版本共用账户标识时仍只归属最新精确地址。 */
+    @Test
+    void sharedAccountIdAcrossAddressVersionsProjectsToExactAddress() {
+        ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
+        CustodyRepository custodyRepository = new CustodyRepository(jdbc);
+        CustodyDepositCreditObserver observer =
+                new CustodyDepositCreditObserver(
+                        jdbc, objectMapper, custodyRepository,
+                        new CustodyTenantChainRepository(jdbc));
+        StaticListableBeanFactory beans = new StaticListableBeanFactory(
+                Map.of("custodyDepositCreditObserver", observer));
+        ChainJdbcRepository chainRepository = new ChainJdbcRepository(
+                jdbc, beans.getBeanProvider(DepositCreditObserver.class));
+
+        transactions.executeWithoutResult(status -> {
+            DepositFixture first = createFixture("versioned-user", "ACTIVE");
+            Long firstChainAddressId = jdbc.queryForObject(
+                    "select chain_address_id from custody_address where id = ?",
+                    Long.class, first.custodyAddressId());
+            Map<String, Object> base = jdbc.queryForMap("""
+                    select tenant_id, user_id, biz from chain_address where id = ?
+                    """, firstChainAddressId);
+            String latestAddress = "0x" + UUID.randomUUID().toString().replace("-", "")
+                    + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+            long latestDerivationSubject = ((Number) base.get("user_id")).longValue() + 1;
+            Long latestChainAddressId = jdbc.queryForObject("""
+                    insert into chain_address(
+                        tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                        address, derivation_path, wallet_role, enabled)
+                    values (?, 'ETH', 'ETH', '69', ?, ?, 1, ?, ?, 'DEPOSIT', true)
+                    returning id
+                    """, Long.class, base.get("tenant_id"), base.get("user_id"), base.get("biz"),
+                    latestAddress, "m/44'/60'/history/1");
+            UUID latestCustodyAddressId = UUID.randomUUID();
+            jdbc.update("""
+                    insert into custody_address(
+                        id, tenant_id, chain_address_id, chain, network, address,
+                        subject, source, status, derivation_subject, derivation_child, address_version)
+                    values (?, ?, ?, 'ETH', 'integration', ?, 'versioned-user', 'API', 'ACTIVE', ?, 0, 1)
+                    """, latestCustodyAddressId, first.tenantId(), latestChainAddressId,
+                    latestAddress, latestDerivationSubject);
+            jdbc.update("update chain_address set account_id = '69' where id = ?", firstChainAddressId);
+
+            DepositEvent event = event(latestAddress, new BigDecimal("6.50"));
+            assertTrue(chainRepository.recordAndCreditDeposit(event, 0L, 12, "69"));
+            assertEquals(latestCustodyAddressId, jdbc.queryForObject("""
+                    select custody_address_id from custody_deposit
+                     where tenant_id = ? and tx_hash = ?
+                    """, UUID.class, first.tenantId(), event.txId()));
+            assertEquals(1, jdbc.queryForObject("""
+                    select count(*) from custody_deposit
+                     where tenant_id = ? and tx_hash = ?
+                    """, Integer.class, first.tenantId(), event.txId()));
+            status.setRollbackOnly();
+        });
+    }
+
     /**
      * 验证 {@code observerFailureRollsBackDepositAndBalance} 对应的测试场景，明确输入、预期结果和异常边界。
      */

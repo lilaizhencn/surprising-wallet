@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Surprising Wallet · 租户钱包</title>
-  <link rel="stylesheet" href="/styles.css?v=20260804-session-loading">
+  <link rel="stylesheet" href="/styles.css?v=20260804-ledger-query-button">
 </head>
 <body>
   <div class="glow glow-one"></div>
@@ -146,6 +146,7 @@
         <label>类型<select id="ledgerTypeFilter"><option value="">全部</option><option value="DEPOSIT">充值</option><option value="WITHDRAWAL">提现</option><option value="WITHDRAWAL_RELEASE">提现释放</option></select></label>
         <label>TxID<input id="ledgerTxFilter" type="search" placeholder="输入交易哈希，支持部分匹配" autocomplete="off"></label>
         <label>地址<input id="ledgerAddressFilter" type="search" placeholder="输入充值地址或提现目标地址" autocomplete="off"></label>
+        <button type="button" id="applyLedgerFilters" class="button-primary">查询</button>
         <button type="button" id="clearLedgerFilters" class="button-quiet">清除筛选</button>
       </div>
       <div id="ledgerFilterSummary" class="filter-summary"></div>
@@ -172,6 +173,6 @@
       <div id="addressHistoryPagination"></div>
     </article>
   </div>
-  <script type="module" data-cfasync="false" src="/app.js?v=20260804-session-loading"></script>
+  <script type="module" data-cfasync="false" src="/app.js?v=20260804-ledger-query-button"></script>
 </body>
 </html>

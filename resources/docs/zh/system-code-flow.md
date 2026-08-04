@@ -31,6 +31,7 @@
 
 链上扫描器
   -> 在同一事务中写 deposit_record 并增加 ledger_balance
+  -> 充值地址按交易目标地址优先匹配；同一租户的历史地址版本按 tenant 去重
   -> 写 custody_deposit 投影
   -> 写持久化 custody_event
   -> 仅当充值地址由公开 API 创建时，为每个端点生成 webhook_delivery
@@ -87,10 +88,11 @@ external withdrawal request
 提现状态对账只更新状态变化和真实的非空 `tx_hash`，不会把数据库中的 `NULL` 交易哈希转换为空字符串，
 避免重试订单因 `tx_hash is null` 条件失效而停留在 `SIGNING`。
 
-EIP-7702 请求的签名有效期以目标链最新区块的 `block.timestamp` 加配置 TTL 计算，不能使用服务器本地时间，
-避免开发节点或测试节点时钟领先服务器时被合约判定为 `ExpiredRequest`。在签名和 outbox 写入之前失败时，
-批次保留失败审计记录，批次项进入 `RETRYABLE`，对应提现订单必须从 `SIGNING` 回到 `RETRYING`，
-由下一轮工作流重新领取；已写入签名 outbox 后才允许进入未知广播恢复流程，禁止在广播结果不确定时直接重建交易。
+EIP-7702 请求的签名有效期以目标链最新区块时间与服务器当前时间中较晚者为起点，再加配置 TTL，
+避免开发节点的 `latest` 时间落后而被 `eth_estimateGas` 的模拟环境判定为 `ExpiredRequest`。
+估算阶段如果链上明确返回 revert/custom error，批次保留失败审计记录、批次项进入 `FAILED`、提现订单释放锁定余额并由
+状态对账发送 `WITHDRAWAL.FAILED`；可恢复的 RPC/网络错误才回到 `RETRYING`。已写入签名 outbox 后才允许进入未知广播恢复流程，
+禁止在广播结果不确定时直接重建交易。
 
 当具体链/网络存在 EIP-7702 配置且 `batch_withdrawal_enabled=true` 时，普通 EVM 提现由
 EIP-7702 批量提现工作流接管；配置为 `PAUSED` 时只做恢复和确认，不创建新批次。

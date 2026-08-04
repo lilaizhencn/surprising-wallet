@@ -193,6 +193,39 @@ public class Evm7702WithdrawalCoordinator {
     }
 
     /**
+     * 收敛签名和广播之前失败的批次，释放每笔提现锁定余额并触发失败状态对账。
+     *
+     * <p>该路径没有链上交易，也没有批次 Gas 预留；只有订单从未决状态第一次变为 FAILED
+     * 时才释放余额，重复恢复同一批次不会重复释放资金。</p>
+     */
+    @Transactional(rollbackFor = Throwable.class)
+    public void failUnbroadcast(Evm7702WithdrawalRepository.UnbroadcastBatch batch) {
+        List<Evm7702WithdrawalRepository.BatchItemIdentity> items =
+                repository.listBatchItems(batch.tenantId(), batch.batchId());
+        String error = batch.errorMessage() == null ? "EIP-7702 payout preparation failed" : batch.errorMessage();
+        for (Evm7702WithdrawalRepository.BatchItemIdentity item : items) {
+            int transitioned = repository.markUnbroadcastWithdrawalFailed(item, error);
+            if (transitioned == 1) {
+                if (!chainRepository.releaseLockedBalance(
+                        item.tenantId(), batch.chain(), item.assetSymbol(), item.debitAccountId(),
+                        item.amount().add(item.fee()))) {
+                    throw new IllegalStateException("pre-broadcast payout locked balance is inconsistent");
+                }
+            } else if (!repository.isUnbroadcastWithdrawalFailed(item)) {
+                throw new IllegalStateException("pre-broadcast payout withdrawal failure transition lost");
+            }
+            int itemUpdated = repository.markUnbroadcastItemFailed(
+                    item, "PREPARATION_FAILED");
+            if (itemUpdated != 1 && !"FAILED".equalsIgnoreCase(item.status())) {
+                throw new IllegalStateException("pre-broadcast payout item failure transition lost");
+            }
+        }
+        if (repository.markUnbroadcastBatchFailed(batch, "PREPARATION_FAILED", error) == 0) {
+            throw new IllegalStateException("pre-broadcast payout batch failure transition lost");
+        }
+    }
+
+    /**
      * 按链上原子费用和数据库中的原生资产精度计算提现批次账务费用。
      */
     private BigDecimal actualFee(

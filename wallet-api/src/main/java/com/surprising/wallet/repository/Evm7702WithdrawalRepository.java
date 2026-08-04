@@ -281,6 +281,24 @@ public class Evm7702WithdrawalRepository {
                     (String) row.get("hot_wallet"), ((Number) config.get("required_confirmations")).intValue());
         }).toList();
     }
+
+    /** 查询没有广播交易的预广播失败批次，过滤掉已经写入签名尝试的批次。 */
+    public List<UnbroadcastBatch> listFailedUnbroadcastBatches(String chain, String network, int limit) {
+        return batchRepository.listFailedUnbroadcast(chain, network, limit).stream()
+                .filter(row -> {
+                    UUID tenantId = (UUID) row.get("tenant_id");
+                    UUID batchId = (UUID) row.get("id");
+                    return batchAttemptRepository.countByBatch(tenantId, batchId) == 0;
+                })
+                .map(row -> new UnbroadcastBatch(
+                        (UUID) row.get("tenant_id"),
+                        (UUID) row.get("id"),
+                        String.valueOf(row.get("chain")),
+                        String.valueOf(row.get("network")),
+                        String.valueOf(row.get("error_code")),
+                        (String) row.get("error_message")))
+                .toList();
+    }
     /**
      * 获取或查询 {@code listBatchItems} 对应的数据，供调用方读取当前状态。
      */
@@ -288,7 +306,7 @@ public class Evm7702WithdrawalRepository {
         return batchItemRepository.listByBatch(tenantId, batchId).stream().map(item -> {
             long orderId = ((Number) item.get("withdrawal_order_id")).longValue();
             Map<String, Object> order = withdrawalOrderRepository.findById(tenantId, orderId).orElseThrow();
-            return new BatchItemIdentity(tenantId, ((Number) item.get("item_index")).intValue(), orderId,
+            return new BatchItemIdentity(tenantId, batchId, ((Number) item.get("item_index")).intValue(), orderId,
                     (UUID) item.get("custody_withdrawal_id"), (String) order.get("order_no"),
                     Numeric.hexStringToByteArray((String) item.get("withdrawal_id_hash")),
                     (String) item.get("token_contract"), (String) item.get("recipient"),
@@ -323,6 +341,31 @@ public class Evm7702WithdrawalRepository {
      */
     public int markWithdrawalFailed(BatchItemIdentity item, String error) {
         return withdrawalOrderRepository.markFailed(item.tenantId(), item.withdrawalOrderId(), truncate(error, 1000));
+    }
+
+    /** 将未广播订单标记为最终失败，并允许调用方据返回值释放一次锁定余额。 */
+    public int markUnbroadcastWithdrawalFailed(BatchItemIdentity item, String error) {
+        return withdrawalOrderRepository.markPreBroadcastFailed(
+                item.tenantId(), item.withdrawalOrderId(), truncate(error, 1000));
+    }
+
+    /** 判断未广播订单是否已经完成最终失败收敛。 */
+    public boolean isUnbroadcastWithdrawalFailed(BatchItemIdentity item) {
+        return withdrawalOrderRepository.findById(item.tenantId(), item.withdrawalOrderId())
+                .map(row -> "FAILED".equals(row.get("status")) && row.get("tx_hash") == null)
+                .orElse(false);
+    }
+
+    /** 将未广播批次项标记为最终失败，并保持批次审计记录。 */
+    public int markUnbroadcastItemFailed(BatchItemIdentity item, String code) {
+        return batchItemRepository.markPreBroadcastFailed(
+                item.tenantId(), item.batchId(), item.itemIndex(), code);
+    }
+
+    /** 将未广播批次标记为失败，重复执行保持幂等。 */
+    public int markUnbroadcastBatchFailed(UnbroadcastBatch batch, String code, String message) {
+        return batchRepository.markFailedIfUnbroadcast(
+                batch.tenantId(), batch.batchId(), code, truncate(message, 1000));
     }
 
     /**
@@ -517,13 +560,16 @@ public class Evm7702WithdrawalRepository {
 
     public record PendingBatch(UUID tenantId, UUID batchId, String chain, String txHash, String status,
                                String hotWallet, int requiredConfirmations) { }
+    /** 没有签名尝试和链上交易的预广播失败批次。 */
+    public record UnbroadcastBatch(UUID tenantId, UUID batchId, String chain, String network,
+                                   String errorCode, String errorMessage) { }
     public record UnknownAttempt(UUID tenantId, UUID batchId, String txHash,
                                  String signedTxCiphertext, int rebroadcastCount) { }
     public record RuntimeTarget(String chain, String network, boolean active) { }
     public record BatchState(BigInteger operationNonce, int delegateVersion,
                              boolean authorizationIncluded) { }
 
-    public record BatchItemIdentity(UUID tenantId, int itemIndex, long withdrawalOrderId,
+    public record BatchItemIdentity(UUID tenantId, UUID batchId, int itemIndex, long withdrawalOrderId,
                                     UUID custodyWithdrawalId, String orderNo,
                                     byte[] withdrawalId, String token, String recipient,
                                     BigInteger amountAtomic, String assetSymbol,

@@ -289,6 +289,16 @@ public class WithdrawalOrderRepository {
                 """, error, tenantId, id);
     }
 
+    /** 将没有广播交易的提现订单标记为最终失败并保持交易哈希为空。 */
+    public int markPreBroadcastFailed(UUID tenantId, long id, String error) {
+        return jdbc.update("""
+                update withdrawal_order set status = 'FAILED', tx_hash = null,
+                    error_message = ?, updated_at = now()
+                 where tenant_id = ? and id = ? and tx_hash is null
+                   and status in ('FROZEN', 'RETRYING', 'SIGNING')
+                """, error, tenantId, id);
+    }
+
     /** 按租户和状态查询提现订单。 */
     private List<WithdrawalOrderRecord> listByTenantAndStatuses(UUID tenantId, String chain,
                                                                  String assetSymbol, int limit) {

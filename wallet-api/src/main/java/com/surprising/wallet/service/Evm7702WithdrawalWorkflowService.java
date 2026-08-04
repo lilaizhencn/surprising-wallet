@@ -160,6 +160,7 @@ public class Evm7702WithdrawalWorkflowService {
                             || !profile.getNetwork().equalsIgnoreCase(target.network())) {
                         throw new IllegalStateException("EIP-7702 payout target/profile network mismatch");
                     }
+                    recoverFailedUnbroadcast(profile);
                     recoverUnknown(profile);
                     confirm(profile);
                     if (target.active() && runtimeConfig.isTaskEnabled(
@@ -173,6 +174,17 @@ public class Evm7702WithdrawalWorkflowService {
             }
         } finally {
             running.set(false);
+        }
+    }
+
+    /** 恢复历史预广播失败批次，释放余额并让提现对账任务发送失败回调。 */
+    private void recoverFailedUnbroadcast(AccountChainProfile profile) {
+        for (Evm7702WithdrawalRepository.UnbroadcastBatch batch
+                : repository.listFailedUnbroadcastBatches(profile.getChain(), profile.getNetwork(), 100)) {
+            if (!isDeterministicPreparationFailure(batch.errorMessage())) {
+                continue;
+            }
+            coordinator.failUnbroadcast(batch);
         }
     }
     /**
@@ -257,6 +269,10 @@ public class Evm7702WithdrawalWorkflowService {
             if (outboxPersisted) {
                 repository.markBroadcastUnknown(
                         batch.tenantId(), batch.id(), "BROADCAST_UNCERTAIN", e.getMessage());
+            } else if (isDeterministicPreparationFailure(e)) {
+                coordinator.failUnbroadcast(new Evm7702WithdrawalRepository.UnbroadcastBatch(
+                        batch.tenantId(), batch.id(), batch.chain(), batch.network(),
+                        "PREPARATION_FAILED", e.getMessage()));
             } else {
                 repository.releaseUnbroadcastBatch(batch, "PREPARATION_FAILED", e.getMessage());
             }
@@ -336,7 +352,9 @@ public class Evm7702WithdrawalWorkflowService {
         EthBlock.Block latestBlock = web3j.ethGetBlockByNumber(
                 DefaultBlockParameterName.LATEST, false).send().getBlock();
         Instant chainTimestamp = chainBlockTimestamp(latestBlock);
-        Instant signatureDeadline = chainTimestamp.plusSeconds(config.signatureTtlSeconds());
+        Instant wallClock = Instant.now();
+        Instant deadlineBase = chainTimestamp.isAfter(wallClock) ? chainTimestamp : wallClock;
+        Instant signatureDeadline = deadlineBase.plusSeconds(config.signatureTtlSeconds());
         requireCodeHash(web3j, config.payoutDelegateAddress(),
                 config.payoutDelegateCodeHash(), "payout delegate");
         Credentials relayer = credentials(profile, config.relayerChainAddress());
@@ -397,9 +415,17 @@ public class Evm7702WithdrawalWorkflowService {
         BigInteger maxFee = feeQuote.maxFeePerGas();
         BigInteger relayerPendingNonce = web3j.ethGetTransactionCount(
                 relayer.getAddress(), DefaultBlockParameterName.PENDING).send().getTransactionCount();
-        BigInteger estimated = estimateGas(
-                http, relayer.getAddress(), batch.hotWallet(), calldata,
-                priority, maxFee, authorizations);
+        BigInteger estimated;
+        try {
+            estimated = estimateGas(
+                    http, relayer.getAddress(), batch.hotWallet(), calldata,
+                    priority, maxFee, authorizations);
+        } catch (RuntimeException error) {
+            throw new IllegalStateException(
+                    "payout gas estimation rejected; chainTimestamp=" + chainTimestamp
+                            + ", wallClock=" + wallClock + ", deadline=" + signatureDeadline
+                            + ": " + error.getMessage(), error);
+        }
         BigInteger gasLimit = new BigDecimal(estimated).multiply(config.gasLimitMultiplier())
                 .setScale(0, RoundingMode.UP).toBigIntegerExact();
         BigInteger blockCap = new BigDecimal(latestBlock.getGasLimit())
@@ -421,6 +447,24 @@ public class Evm7702WithdrawalWorkflowService {
             throw new IllegalStateException("latest EVM block timestamp is unavailable");
         }
         return Instant.ofEpochSecond(latestBlock.getTimestamp().longValueExact());
+    }
+
+    /** 判断估算失败是否为链上合约明确拒绝，避免把确定性失败无限重试。 */
+    private static boolean isDeterministicPreparationFailure(Throwable error) {
+        StringBuilder message = new StringBuilder();
+        for (Throwable current = error; current != null; current = current.getCause()) {
+            if (current.getMessage() != null) message.append(' ').append(current.getMessage());
+        }
+        String lower = message.toString().toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("eth_estimategas failed")
+                && (lower.contains("revert") || lower.contains("custom error")
+                || lower.contains("return data:"));
+    }
+
+    /** 判断持久化的预广播错误文本是否来自链上明确拒绝。 */
+    private static boolean isDeterministicPreparationFailure(String errorMessage) {
+        return errorMessage != null
+                && isDeterministicPreparationFailure(new IllegalStateException(errorMessage));
     }
 
     /**

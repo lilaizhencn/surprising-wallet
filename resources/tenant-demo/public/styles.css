@@ -57,6 +57,8 @@ button[type="submit"]:hover { background: #88f0ca; }
 .account-name { color: var(--text); font-size: 13px; }
 .button-quiet { border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px; color: var(--muted); background: transparent; }
 .button-quiet:hover { border-color: var(--accent); color: var(--text); }
+.button-primary { border: 1px solid #51d8a8; border-radius: 9px; padding: 9px 14px; color: #06251c; background: var(--accent); font-weight: 800; }
+.button-primary:hover { background: #88f0ca; }
 .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 26px; }
 .metric { border: 1px solid var(--line); border-radius: 15px; padding: 17px; background: rgba(15, 28, 29, .86); }
 .metric strong { display: block; font-size: 28px; letter-spacing: -.04em; }
@@ -92,7 +94,7 @@ button[type="submit"]:hover { background: #88f0ca; }
 .address-hint { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; color: var(--muted); background: transparent; text-align: left; font-size: 11px; }
 .address-hint:hover { border-color: var(--accent); color: var(--text); }
 .table-wrap { width: 100%; overflow-x: auto; }
-.ledger-filters { display: grid; grid-template-columns: minmax(150px, .7fr) minmax(220px, 1fr) minmax(220px, 1fr) auto; align-items: end; gap: 10px; margin: 0 0 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(8, 22, 22, .55); }
+.ledger-filters { display: grid; grid-template-columns: minmax(150px, .7fr) minmax(220px, 1fr) minmax(220px, 1fr) auto auto; align-items: end; gap: 10px; margin: 0 0 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(8, 22, 22, .55); }
 .ledger-filters label { min-width: 0; }
 .ledger-filters button { white-space: nowrap; }
 .filter-summary { min-height: 18px; margin-bottom: 6px; color: var(--muted); font-size: 11px; }

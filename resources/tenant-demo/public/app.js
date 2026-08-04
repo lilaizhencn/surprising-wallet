@@ -546,16 +546,17 @@ document.querySelectorAll(".jump-button").forEach(button => button.addEventListe
 $("#refreshButton").addEventListener("click", () => refreshAll().then(() => toast("数据已刷新")));
 $("#ledgerTypeFilter").addEventListener("change", event => {
   state.ledgerFilters.entryType = event.target.value;
-  renderLedger();
 });
 $("#ledgerTxFilter").addEventListener("input", event => {
   state.ledgerFilters.txId = event.target.value.trim();
-  renderLedger();
 });
 $("#ledgerAddressFilter").addEventListener("input", event => {
   state.ledgerFilters.address = event.target.value.trim();
-  renderLedger();
 });
+$("#applyLedgerFilters").addEventListener("click", () => renderLedger());
+["#ledgerTxFilter", "#ledgerAddressFilter"].forEach(selector => $(selector).addEventListener("keydown", event => {
+  if (event.key === "Enter") renderLedger();
+}));
 $("#clearLedgerFilters").addEventListener("click", () => {
   state.ledgerFilters = { entryType: "", txId: "", address: "" };
   $("#ledgerTypeFilter").value = "";

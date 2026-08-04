@@ -111,6 +111,17 @@ public class EvmWithdrawalBatchRepository {
                 """, chain, network);
     }
 
+    /** 查询没有签名尝试和链上交易的预广播失败批次。 */
+    public List<Map<String, Object>> listFailedUnbroadcast(String chain, String network, int limit) {
+        return jdbc.queryForList("""
+                select tenant_id, id, chain, network, error_code, error_message
+                  from evm_withdrawal_batch
+                 where chain = ? and network = ? and status = 'FAILED'
+                   and canonical_tx_hash is null and error_code = 'PREPARATION_FAILED'
+                 order by updated_at, id limit ?
+                """, chain, network, Math.min(Math.max(limit, 1), 200));
+    }
+
     /** 完成提现批次。 */
     public int complete(UUID tenantId, UUID batchId, String txHash, String status, BigInteger gasUsed,
                         BigInteger effectiveGasPrice, BigInteger l2Fee, BigInteger l1Fee,
@@ -132,6 +143,15 @@ public class EvmWithdrawalBatchRepository {
         return jdbc.update("""
                 update evm_withdrawal_batch set status = 'FAILED', error_code = ?, error_message = ?, updated_at = now()
                  where tenant_id = ? and id = ? and status = 'LOCKED'
+                """, code, message, tenantId, batchId);
+    }
+
+    /** 将没有广播交易的锁定批次记录为最终失败，重复执行保持幂等。 */
+    public int markFailedIfUnbroadcast(UUID tenantId, UUID batchId, String code, String message) {
+        return jdbc.update("""
+                update evm_withdrawal_batch set status = 'FAILED', error_code = ?, error_message = ?, updated_at = now()
+                 where tenant_id = ? and id = ? and canonical_tx_hash is null
+                   and status in ('LOCKED', 'FAILED')
                 """, code, message, tenantId, batchId);
     }
 }

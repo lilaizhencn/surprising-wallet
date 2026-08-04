@@ -76,7 +76,8 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
     public void onDepositCredited(DepositEvent event, long logIndex, String accountId) {
         String chain = event.chainType().name();
         List<AddressOwner> owners = jdbc.query("""
-                        select c.id as custody_address_id, c.tenant_id, c.subject,
+                        select distinct on (c.tenant_id)
+                               c.id as custody_address_id, c.tenant_id, c.subject,
                                c.address, c.memo, c.source,
                                case when exists (
                                    select 1 from custody_gas_account g
@@ -101,6 +102,9 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
                                   and (lower(related.account_id) = lower(?)
                                        or lower(related.address) = lower(?))
                            )
+                         order by c.tenant_id,
+                                  case when lower(c.address) = lower(?) then 0 else 1 end,
+                                  c.address_version desc, c.created_at desc
                          limit 2
                         """, (rs, rowNum) -> new AddressOwner(
                         rs.getObject("custody_address_id", UUID.class),
@@ -110,7 +114,7 @@ public class CustodyDepositCreditObserver implements DepositCreditObserver {
                         rs.getString("memo"),
                         rs.getString("source"),
                         rs.getString("purpose")),
-                chain, accountId, event.toAddress());
+                chain, accountId, event.toAddress(), event.toAddress());
         if (owners.isEmpty()) {
             return;
         }

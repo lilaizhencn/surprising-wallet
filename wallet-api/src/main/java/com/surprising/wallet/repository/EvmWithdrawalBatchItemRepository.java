@@ -113,4 +113,14 @@ public class EvmWithdrawalBatchItemRepository {
                  where tenant_id = ? and batch_id = ? and item_index = ? and status = 'CREATED'
                 """, code, tenantId, batchId, itemIndex);
     }
+
+    /** 将没有广播交易的批次项记录为最终失败，重复执行保持幂等。 */
+    public int markPreBroadcastFailed(UUID tenantId, UUID batchId, int itemIndex, String code) {
+        return jdbc.update("""
+                update evm_withdrawal_batch_item
+                   set status = 'FAILED', error_code = ?, actual_received_atomic = 0, updated_at = now()
+                 where tenant_id = ? and batch_id = ? and item_index = ?
+                   and status in ('CREATED', 'SIGNED', 'RETRYABLE')
+                """, code, tenantId, batchId, itemIndex);
+    }
 }
