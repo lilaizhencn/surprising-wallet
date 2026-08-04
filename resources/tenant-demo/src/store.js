@@ -2,7 +2,13 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypt
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { addDecimal, normalizeDecimal, requirePositiveDecimal, subtractDecimal } from "./decimal.js";
+import {
+  addDecimal,
+  compareDecimal,
+  normalizeDecimal,
+  requirePositiveDecimal,
+  subtractDecimal
+} from "./decimal.js";
 
 let BuiltinDatabaseSync;
 try {
@@ -254,9 +260,11 @@ export class DemoStore {
         external_reference TEXT NOT NULL UNIQUE,
         idempotency_key TEXT NOT NULL UNIQUE,
         chain TEXT NOT NULL,
+        network TEXT,
         asset TEXT NOT NULL,
         to_address TEXT NOT NULL,
         amount TEXT NOT NULL,
+        order_no TEXT,
         fee TEXT NOT NULL DEFAULT '0',
         status TEXT NOT NULL,
         tx_hash TEXT,
@@ -275,6 +283,20 @@ export class DemoStore {
         received_at TEXT NOT NULL,
         processed_at TEXT
       );
+    `);
+    const withdrawalColumns = await all(this.db, "PRAGMA table_info(withdrawals)");
+    if (!withdrawalColumns.some(column => column.name === "network")) {
+      await exec(this.db, "ALTER TABLE withdrawals ADD COLUMN network TEXT");
+    }
+    if (!withdrawalColumns.some(column => column.name === "order_no")) {
+      await exec(this.db, "ALTER TABLE withdrawals ADD COLUMN order_no TEXT");
+    }
+    await run(this.db, `
+      UPDATE withdrawals
+      SET network = (
+        SELECT a.network FROM addresses a WHERE a.id = withdrawals.custody_address_id
+      )
+      WHERE network IS NULL
     `);
   }
 
@@ -634,22 +656,33 @@ export class DemoStore {
       await run(database, `
         INSERT INTO withdrawals(
           id, user_id, custody_address_id, external_reference, idempotency_key,
-          chain, asset, to_address, amount, status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTING', ?, ?)
+          chain, network, asset, to_address, amount, status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTING', ?, ?)
       `, [id, userId, address.id, externalReference, idempotencyKey,
-        normalizedChain, normalizedAsset, destination, normalizedAmount, timestamp, timestamp]);
+        normalizedChain, address.network ?? null, normalizedAsset, destination,
+        normalizedAmount, timestamp, timestamp]);
     });
     return this.withdrawal(id);
   }
 
   async acceptWithdrawal(id, remote) {
     await this.#transaction(async database => {
+      const current = await this.#withdrawal(database, id);
+      const nextFee = normalizeDecimal(remote.fee ?? current.fee ?? "0");
+      if (compareDecimal(nextFee, current.fee) > 0) {
+        await this.#reserveAdditionalWithdrawalFee(
+          database, current, subtractDecimal(nextFee, current.fee));
+      } else if (compareDecimal(nextFee, current.fee) < 0) {
+        await this.#releaseAdditionalWithdrawalFee(
+          database, current, subtractDecimal(current.fee, nextFee));
+      }
       await run(database, `
         UPDATE withdrawals SET custody_withdrawal_id = coalesce(custody_withdrawal_id, ?),
+          order_no = coalesce(order_no, ?),
           fee = ?, status = CASE WHEN status = 'REQUESTING' THEN ? ELSE status END,
           tx_hash = coalesce(tx_hash, ?), error_message = coalesce(error_message, ?), updated_at = ?
         WHERE id = ?
-      `, [remote.id ?? null, normalizeDecimal(remote.fee ?? "0"), remote.status ?? "CREATED",
+      `, [remote.id ?? null, remote.orderNo ?? null, nextFee, remote.status ?? "CREATED",
         remote.txHash ?? null, remote.errorMessage ?? null, now(), id]);
     });
     return this.withdrawal(id);
@@ -658,12 +691,13 @@ export class DemoStore {
   async releaseWithdrawal(id, message) {
     await this.#transaction(async database => {
       const withdrawal = await this.#withdrawal(database, id);
+      const reservedAmount = addDecimal(withdrawal.amount, withdrawal.fee);
       if (!withdrawal.balanceFinalized) {
         await this.#lockBalance(database, withdrawal.userId, withdrawal.chain, withdrawal.asset);
         const balance = await this.#balance(database, withdrawal.userId, withdrawal.chain, withdrawal.asset);
         await this.#writeBalance(
           database, withdrawal.userId, withdrawal.chain, withdrawal.asset,
-          addDecimal(balance.available, withdrawal.amount), subtractDecimal(balance.locked, withdrawal.amount)
+          addDecimal(balance.available, reservedAmount), subtractDecimal(balance.locked, reservedAmount)
         );
       }
       await run(database, `
@@ -676,7 +710,7 @@ export class DemoStore {
           amount, reference_id, raw_json, created_at
         ) VALUES (?, ?, ?, ?, ?, 'WITHDRAWAL_RELEASE', 'CREDIT', ?, ?, ?, ?)
       `, [randomUUID(), `request-failed-${id}`, withdrawal.userId, withdrawal.chain,
-        withdrawal.asset, withdrawal.amount, withdrawal.externalReference,
+        withdrawal.asset, reservedAmount, withdrawal.externalReference,
         JSON.stringify({ reason: String(message).slice(0, 500) }), now()]);
     });
   }
@@ -685,14 +719,43 @@ export class DemoStore {
     const row = await get(queryable, `
       SELECT id, custody_withdrawal_id AS custodyWithdrawalId, user_id AS userId,
              custody_address_id AS custodyAddressId, external_reference AS externalReference,
-             idempotency_key AS idempotencyKey, chain, asset, to_address AS toAddress,
-             amount, fee, status, tx_hash AS txHash, error_message AS errorMessage,
+             idempotency_key AS idempotencyKey, chain, network, asset,
+             to_address AS toAddress, amount, order_no AS orderNo, fee, status,
+             tx_hash AS txHash, error_message AS errorMessage,
              balance_finalized AS balanceFinalized, created_at AS createdAt, updated_at AS updatedAt
       FROM withdrawals WHERE id = ?
     `, [id]);
     if (!row) throw new Error("withdrawal not found");
     row.balanceFinalized = Boolean(row.balanceFinalized);
     return row;
+  }
+
+  /** 为已创建的提现补充锁定用户资产侧的手续费预留。 */
+  async #reserveAdditionalWithdrawalFee(database, withdrawal, additionalFee) {
+    await this.#lockBalance(database, withdrawal.userId, withdrawal.chain, withdrawal.asset);
+    const balance = await this.#balance(database, withdrawal.userId, withdrawal.chain, withdrawal.asset);
+    await this.#writeBalance(
+      database,
+      withdrawal.userId,
+      withdrawal.chain,
+      withdrawal.asset,
+      subtractDecimal(balance.available, additionalFee),
+      addDecimal(balance.locked, additionalFee)
+    );
+  }
+
+  /** 释放提现手续费预留，并保持租户 demo 的余额与钱包服务一致。 */
+  async #releaseAdditionalWithdrawalFee(database, withdrawal, releasedFee) {
+    await this.#lockBalance(database, withdrawal.userId, withdrawal.chain, withdrawal.asset);
+    const balance = await this.#balance(database, withdrawal.userId, withdrawal.chain, withdrawal.asset);
+    await this.#writeBalance(
+      database,
+      withdrawal.userId,
+      withdrawal.chain,
+      withdrawal.asset,
+      addDecimal(balance.available, releasedFee),
+      subtractDecimal(balance.locked, releasedFee)
+    );
   }
 
   /** 在事务中查询指定用户指定链的最新有效地址。 */
@@ -716,7 +779,8 @@ export class DemoStore {
       SELECT w.id, w.custody_withdrawal_id AS custodyWithdrawalId,
              w.user_id AS userId, u.email, u.external_id AS externalId,
              w.custody_address_id AS custodyAddressId, w.external_reference AS externalReference,
-             w.chain, w.asset, w.to_address AS toAddress, w.amount, w.fee, w.status,
+             w.chain, w.network, w.asset, w.to_address AS toAddress, w.amount,
+             w.order_no AS orderNo, w.fee, w.status,
              w.tx_hash AS txHash, w.error_message AS errorMessage,
              w.created_at AS createdAt, w.updated_at AS updatedAt
       FROM withdrawals w JOIN users u ON u.id = w.user_id
@@ -826,10 +890,13 @@ export class DemoStore {
     if ((terminalConfirmed || terminalFailed) && !current.balanceFinalized) {
       await this.#lockBalance(database, current.userId, current.chain, current.asset);
       const balance = await this.#balance(database, current.userId, current.chain, current.asset);
-      const available = terminalFailed ? addDecimal(balance.available, current.amount) : balance.available;
+      const reservedAmount = addDecimal(current.amount, current.fee);
+      const available = terminalFailed
+        ? addDecimal(balance.available, reservedAmount)
+        : balance.available;
       await this.#writeBalance(
         database, current.userId, current.chain, current.asset,
-        available, subtractDecimal(balance.locked, current.amount)
+        available, subtractDecimal(balance.locked, reservedAmount)
       );
       await run(database, `
         INSERT INTO ledger_entries(
@@ -838,7 +905,7 @@ export class DemoStore {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [randomUUID(), eventId, current.userId, current.chain, current.asset,
         terminalConfirmed ? "WITHDRAWAL" : "WITHDRAWAL_RELEASE",
-        terminalConfirmed ? "DEBIT" : "CREDIT", current.amount,
+        terminalConfirmed ? "DEBIT" : "CREDIT", reservedAmount,
         current.externalReference, rawPayload, now()]);
     }
     await run(database, `

@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
   <title>Surprising Wallet · 租户钱包</title>
-  <link rel="stylesheet" href="/styles.css?v=20260804-ledger-query-button">
+  <link rel="stylesheet" href="/styles.css?v=20260804-withdrawal-details">
 </head>
 <body>
   <div class="glow glow-one"></div>
@@ -123,7 +124,7 @@
         <article class="panel">
           <p class="eyebrow small">WITHDRAWAL</p>
           <h2>发起提现</h2>
-          <p class="panel-hint">提现时先冻结用户余额；钱包确认后扣除，失败或请求异常会自动解冻。</p>
+          <p class="panel-hint">提现时先冻结用户余额；钱包确认后扣除，失败或请求异常会自动解冻。订单号由钱包服务生成用于链上追踪，外部引用由租户生成用于关联本次请求。手续费预留是用户资产侧的扣收金额；当前网络 Gas 由租户 Gas 账户承担。</p>
           <div id="withdrawalFunds" class="funds-strip"></div>
           <form id="withdrawalForm" class="form-grid">
             <label>提现链<select name="chain" id="withdrawalChain" required></select></label>
@@ -136,7 +137,7 @@
           </form>
           <div id="withdrawalMessage" class="form-message"></div>
         </article>
-        <article class="panel table-panel"><h2>提现记录</h2><div id="withdrawalsTable"></div></article>
+        <article class="panel table-panel"><h2>提现记录</h2><p class="panel-hint">目标地址保留首尾显示，点击或悬停可查看完整地址；订单号、外部引用和 TxID 用于不同系统间的追踪。</p><div id="withdrawalsTable"></div></article>
       </section>
 
   <section class="tab" id="tab-ledger">
@@ -173,6 +174,6 @@
       <div id="addressHistoryPagination"></div>
     </article>
   </div>
-  <script type="module" data-cfasync="false" src="/app.js?v=20260804-ledger-query-button"></script>
+  <script type="module" data-cfasync="false" src="/app.js?v=20260804-withdrawal-details"></script>
 </body>
 </html>

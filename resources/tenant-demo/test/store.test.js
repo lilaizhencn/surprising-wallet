@@ -53,6 +53,7 @@ test("credits deposits idempotently and finalizes a confirmed withdrawal", async
     );
     await store.acceptWithdrawal(reserved.id, {
       id: "6b26cc92-e53d-40cd-9aa9-33b3eedb1396",
+      orderNo: "CW-demo-order-1",
       fee: "0.00001",
       status: "CREATED"
     });
@@ -67,14 +68,18 @@ test("credits deposits idempotently and finalizes a confirmed withdrawal", async
     balance = (await store.balances())[0];
     assert.deepEqual(
       { available: balance.available, locked: balance.locked },
-      { available: "0.85", locked: "0" }
+      { available: "0.84999", locked: "0" }
     );
-    assert.equal((await store.withdrawals())[0].status, "CONFIRMED");
+    const withdrawalView = (await store.withdrawals())[0];
+    assert.equal(withdrawalView.status, "CONFIRMED");
+    assert.equal(withdrawalView.network, "regtest");
+    assert.equal(withdrawalView.orderNo, "CW-demo-order-1");
     const ledger = await store.ledger();
     assert.equal(ledger.length, 2);
     assert.equal(ledger.find(row => row.entryType === "DEPOSIT").txHash, "tx-deposit");
     assert.equal(ledger.find(row => row.entryType === "DEPOSIT").depositAddress, address.address);
     assert.equal(ledger.find(row => row.entryType === "WITHDRAWAL").txHash, "tx-withdraw");
+    assert.equal(ledger.find(row => row.entryType === "WITHDRAWAL").amount, "0.40001");
   } finally {
     await store.close();
   }
