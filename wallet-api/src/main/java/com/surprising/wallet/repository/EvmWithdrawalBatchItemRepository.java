@@ -67,6 +67,16 @@ public class EvmWithdrawalBatchItemRepository {
                 """, tenantId, batchId);
     }
 
+    /** 判断批次是否仍有需要收敛的预广播失败项。 */
+    public boolean hasPreBroadcastRecoverableItems(UUID tenantId, UUID batchId) {
+        Integer count = jdbc.queryForObject("""
+                select count(*) from evm_withdrawal_batch_item
+                 where tenant_id = ? and batch_id = ?
+                   and status in ('CREATED', 'SIGNED', 'RETRYABLE')
+                """, Integer.class, tenantId, batchId);
+        return count != null && count > 0;
+    }
+
     /** 更新提现批次项执行结果。 */
     public int markResult(UUID tenantId, UUID batchId, int itemIndex,
                           Evm7702PayoutReceiptParser.ItemResult result, String status) {

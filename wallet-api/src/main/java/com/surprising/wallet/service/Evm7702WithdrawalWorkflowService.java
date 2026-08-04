@@ -179,12 +179,15 @@ public class Evm7702WithdrawalWorkflowService {
 
     /** 恢复历史预广播失败批次，释放余额并让提现对账任务发送失败回调。 */
     private void recoverFailedUnbroadcast(AccountChainProfile profile) {
+        int recovered = 0;
         for (Evm7702WithdrawalRepository.UnbroadcastBatch batch
                 : repository.listFailedUnbroadcastBatches(profile.getChain(), profile.getNetwork(), 100)) {
-            if (!isDeterministicPreparationFailure(batch.errorMessage())) {
-                continue;
-            }
             coordinator.failUnbroadcast(batch);
+            recovered++;
+        }
+        if (recovered > 0) {
+            log.info("EIP-7702 pre-broadcast failures recovered: chain={} network={} batches={}",
+                    profile.getChain(), profile.getNetwork(), recovered);
         }
     }
     /**

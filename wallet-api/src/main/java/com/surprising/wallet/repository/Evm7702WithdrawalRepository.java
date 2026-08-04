@@ -288,7 +288,8 @@ public class Evm7702WithdrawalRepository {
                 .filter(row -> {
                     UUID tenantId = (UUID) row.get("tenant_id");
                     UUID batchId = (UUID) row.get("id");
-                    return batchAttemptRepository.countByBatch(tenantId, batchId) == 0;
+                    return batchAttemptRepository.countByBatch(tenantId, batchId) == 0
+                            && batchItemRepository.hasPreBroadcastRecoverableItems(tenantId, batchId);
                 })
                 .map(row -> new UnbroadcastBatch(
                         (UUID) row.get("tenant_id"),
