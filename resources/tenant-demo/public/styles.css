@@ -103,7 +103,6 @@ th { padding: 10px 8px; color: var(--muted); text-align: left; font-weight: 600;
 td { padding: 12px 8px; border-top: 1px solid rgba(36, 66, 64, .7); white-space: nowrap; }
 code { color: #b9e9da; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
 .address-cell { white-space: nowrap; cursor: help; }
-small { color: var(--muted); font-size: 10px; }
 .empty { padding: 20px 0; color: var(--muted); font-size: 12px; }
 .pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; color: var(--muted); font-size: 12px; }
 .pagination-actions { display: flex; gap: 7px; }

@@ -70,19 +70,6 @@ function addressCell(value) {
     : "—";
 }
 
-/** 读取提现记录的网络，兼容历史记录没有单独保存 network 的情况。 */
-function withdrawalNetwork(row) {
-  return row.network ?? selectedChain(row.chain)?.network ?? "";
-}
-
-/** 展示用户资产侧手续费预留，并明确当前 Gas 账户承担规则。 */
-function withdrawalFeeText(row) {
-  const fee = String(row.fee ?? "0");
-  return compareAmounts(fee, "0") === 0
-    ? `<span title="当前网络 Gas 从租户 Gas 账户支付，未从用户提现资产中扣收">${escape(fee)} <small>Gas 账户支付</small></span>`
-    : `${escape(fee)} ${escape(row.asset)}`;
-}
-
 function decimalParts(value) {
   const text = String(value ?? "").trim();
   const match = /^(\d+)(?:\.(\d+))?$/.exec(text);
@@ -281,13 +268,10 @@ function renderAddresses() {
 function renderWithdrawals() {
   table("#withdrawalsTable", [
     { key: "createdAt", label: "时间" },
-    { key: "chain", label: "提现链", render: chainText },
-    { label: "网络", render: row => networkText({ network: withdrawalNetwork(row) }) },
-    { key: "asset", label: "资产" }, { key: "amount", label: "金额" },
-    { label: "目标地址", render: row => addressCell(row.toAddress) },
-    { label: "手续费预留", render: withdrawalFeeText },
-    { label: "订单号（钱包）", render: row => `<code title="钱包服务生成的链上订单号">${escape(row.orderNo ?? "等待钱包返回")}</code>` },
-    { label: "外部引用（租户）", render: row => `<code title="租户生成的请求关联标识">${escape(row.externalReference ?? "—")}</code>` },
+    { label: "提现地址", render: row => addressCell(row.toAddress) },
+    { label: "提现金额", render: row => `${escape(row.amount)} ${escape(row.asset)}` },
+    { label: "ID", render: row => `<code title="平台提现记录 ID">${escape(row.custodyWithdrawalId ?? row.id ?? "等待平台返回")}</code>` },
+    { label: "租户业务订单号", render: row => `<code title="租户生成的业务订单号">${escape(row.externalReference ?? "—")}</code>` },
     { key: "status", label: "状态", render: row => `<span class="pill">${escape(row.status)}</span>` },
     { label: "TxID", render: row => `<code>${escape(row.txHash ?? "等待回调")}</code>` }
   ], state.me.withdrawals);
@@ -478,8 +462,7 @@ function showWithdrawalConfirmation(input, balance) {
   $("#withdrawalConfirmDetails").innerHTML = [
     ["提现链", chainLabel(input.chain)], ["网络", networkLabel(chain?.network)],
     ["提现资产", input.assetSymbol], ["目标地址", input.toAddress], ["提现金额", `${input.amount} ${input.assetSymbol}`],
-    ["可用上限", `${balance.available} ${balance.asset}`],
-    ["手续费预留", "当前用户资产侧为 0；网络 Gas 由租户 Gas 账户承担"]
+    ["可用上限", `${balance.available} ${balance.asset}`]
   ].map(([label, value]) => `<div class="confirm-row"><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join("");
   $("#withdrawalConfirmModal").classList.remove("hidden");
 }
