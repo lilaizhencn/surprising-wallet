@@ -398,8 +398,10 @@ public class Evm7702WithdrawalRepository {
         if (attempts != 0) throw new IllegalStateException("signed payout batch cannot be released");
         String text = truncate(message, 1000);
         for (Map<String, Object> item : batchItemRepository.listCreated(batch.tenantId(), batch.id())) {
-            withdrawalOrderRepository.markRetrying(batch.tenantId(),
-                    ((Number) item.get("withdrawal_order_id")).longValue(), text);
+            if (withdrawalOrderRepository.markRetrying(batch.tenantId(),
+                    ((Number) item.get("withdrawal_order_id")).longValue(), text) != 1) {
+                throw new IllegalStateException("unbroadcast payout withdrawal retry transition failed");
+            }
             batchItemRepository.markRetryable(batch.tenantId(), batch.id(),
                     ((Number) item.get("item_index")).intValue(), code);
         }

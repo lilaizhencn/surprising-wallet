@@ -277,7 +277,7 @@ public class WithdrawalOrderRepository {
     public int markRetrying(UUID tenantId, long id, String error) {
         return jdbc.update("""
                 update withdrawal_order set status = 'RETRYING', tx_hash = null, error_message = ?, updated_at = now()
-                 where tenant_id = ? and id = ? and status = 'SENT'
+                 where tenant_id = ? and id = ? and status in ('SIGNING', 'SENT')
                 """, error, tenantId, id);
     }
 

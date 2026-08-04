@@ -333,6 +333,10 @@ public class Evm7702WithdrawalWorkflowService {
                 || !rpcChainId.equals(BigInteger.valueOf(profile.getChainId()))) {
             throw new IllegalStateException("RPC/config/profile chainId mismatch");
         }
+        EthBlock.Block latestBlock = web3j.ethGetBlockByNumber(
+                DefaultBlockParameterName.LATEST, false).send().getBlock();
+        Instant chainTimestamp = chainBlockTimestamp(latestBlock);
+        Instant signatureDeadline = chainTimestamp.plusSeconds(config.signatureTtlSeconds());
         requireCodeHash(web3j, config.payoutDelegateAddress(),
                 config.payoutDelegateCodeHash(), "payout delegate");
         Credentials relayer = credentials(profile, config.relayerChainAddress());
@@ -384,8 +388,8 @@ public class Evm7702WithdrawalWorkflowService {
         Evm7702PayoutRequest request = new Evm7702PayoutRequest(
                 Numeric.hexStringToByteArray(batch.batchHash()), batch.hotWallet(),
                 config.relayerAddress(), items, operationNonce,
-                BigInteger.valueOf(batch.signatureDeadline().getEpochSecond()));
-        request.requireNotExpired(Instant.now());
+                BigInteger.valueOf(signatureDeadline.getEpochSecond()));
+        request.requireNotExpired(chainTimestamp);
         String calldata = payoutCodec.encode(
                 request, payoutSigner.sign(config.chainId(), request, authority));
         EvmFeeSupport.FeeQuote feeQuote = EvmFeeSupport.quote(web3j, profile);
@@ -398,8 +402,6 @@ public class Evm7702WithdrawalWorkflowService {
                 priority, maxFee, authorizations);
         BigInteger gasLimit = new BigDecimal(estimated).multiply(config.gasLimitMultiplier())
                 .setScale(0, RoundingMode.UP).toBigIntegerExact();
-        EthBlock.Block latestBlock = web3j.ethGetBlockByNumber(
-                DefaultBlockParameterName.LATEST, false).send().getBlock();
         BigInteger blockCap = new BigDecimal(latestBlock.getGasLimit())
                 .multiply(config.blockGasRatio()).setScale(0, RoundingMode.DOWN).toBigIntegerExact();
         if (gasLimit.compareTo(BigInteger.valueOf(config.maxBatchGas()).min(blockCap)) > 0
@@ -410,7 +412,15 @@ public class Evm7702WithdrawalWorkflowService {
                 relayer, config.chainId(), relayerPendingNonce, priority, maxFee,
                 gasLimit, estimated, batch.hotWallet(), calldata, authorizations,
                 includeAuthorization, includeAuthorization ? authorityNonce : null,
-                operationNonce, batch.signatureDeadline());
+                operationNonce, signatureDeadline);
+    }
+
+    /** 读取链上最新区块时间，签名有效期和过期校验必须使用同一时钟。 */
+    private static Instant chainBlockTimestamp(EthBlock.Block latestBlock) {
+        if (latestBlock == null || latestBlock.getTimestamp() == null) {
+            throw new IllegalStateException("latest EVM block timestamp is unavailable");
+        }
+        return Instant.ofEpochSecond(latestBlock.getTimestamp().longValueExact());
     }
 
     /**

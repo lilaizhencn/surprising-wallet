@@ -338,6 +338,10 @@ public class Evm7702CollectionWorkflowService {
         if (!rpcChainId.equals(config.chainId()) || !rpcChainId.equals(BigInteger.valueOf(profile.getChainId()))) {
             throw new IllegalStateException("RPC/config/profile chainId mismatch");
         }
+        EthBlock.Block latestBlock = web3j.ethGetBlockByNumber(
+                DefaultBlockParameterName.LATEST, false).send().getBlock();
+        Instant chainTimestamp = chainBlockTimestamp(latestBlock);
+        Instant signatureDeadline = chainTimestamp.plusSeconds(config.signatureTtlSeconds());
         requireCodeHash(web3j, config.delegateAddress(), config.delegateCodeHash(), "delegate");
         requireCodeHash(web3j, config.collectorAddress(), config.collectorCodeHash(), "collector");
         Credentials relayer = credentials(profile, config.relayerChainAddress());
@@ -382,14 +386,14 @@ public class Evm7702CollectionWorkflowService {
             Evm7702CollectionRequest request = new Evm7702CollectionRequest(
                     batchId, BigInteger.valueOf(index), item.fromAddress(), config.collectorAddress(),
                     batch.tokenContract(), batch.hotWallet(), item.amountAtomic(), operationNonce,
-                    BigInteger.valueOf(batch.signatureDeadline().getEpochSecond()), DEFAULT_ITEM_GAS);
-            request.requireNotExpired(Instant.now());
+                    BigInteger.valueOf(signatureDeadline.getEpochSecond()), DEFAULT_ITEM_GAS);
+            request.requireNotExpired(chainTimestamp);
             requests.add(request);
             signatures.add(operationSigner.sign(config.chainId(), request, authority));
             preparedItems.add(new Evm7702CollectionRepository.PreparedItem(
                     index, item.fromAddress(), includeAuthorization,
                     includeAuthorization ? authorityNonce : null, operationNonce,
-                    batch.signatureDeadline(), DEFAULT_ITEM_GAS.longValueExact()));
+                    signatureDeadline, DEFAULT_ITEM_GAS.longValueExact()));
         }
         String calldata = contractCodec.encodeCollectBatch(requests, signatures);
         EvmFeeSupport.FeeQuote feeQuote = EvmFeeSupport.quote(web3j, profile);
@@ -403,8 +407,6 @@ public class Evm7702CollectionWorkflowService {
                 priority, maxFee, authorizations);
         BigInteger gasLimit = new BigDecimal(estimated)
                 .multiply(config.gasLimitMultiplier()).setScale(0, RoundingMode.UP).toBigIntegerExact();
-        EthBlock.Block latestBlock = web3j.ethGetBlockByNumber(
-                DefaultBlockParameterName.LATEST, false).send().getBlock();
         BigInteger blockCap = new BigDecimal(latestBlock.getGasLimit())
                 .multiply(config.blockGasRatio()).setScale(0, RoundingMode.DOWN).toBigIntegerExact();
         BigInteger configuredCap = BigInteger.valueOf(config.maxBatchGas());
@@ -416,6 +418,14 @@ public class Evm7702CollectionWorkflowService {
                 relayer, config.chainId(), relayerPendingNonce, priority, maxFee, gasLimit,
                 estimated, config.collectorAddress(), calldata, List.copyOf(authorizations),
                 List.copyOf(preparedItems));
+    }
+
+    /** 读取链上最新区块时间，签名有效期和过期校验必须使用同一时钟。 */
+    private static Instant chainBlockTimestamp(EthBlock.Block latestBlock) {
+        if (latestBlock == null || latestBlock.getTimestamp() == null) {
+            throw new IllegalStateException("latest EVM block timestamp is unavailable");
+        }
+        return Instant.ofEpochSecond(latestBlock.getTimestamp().longValueExact());
     }
 
     /**
