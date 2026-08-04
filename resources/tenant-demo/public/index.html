@@ -4,13 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Surprising Wallet · 租户钱包</title>
-  <link rel="stylesheet" href="/styles.css?v=51e54bd">
+  <link rel="stylesheet" href="/styles.css?v=20260804-session-loading">
 </head>
 <body>
   <div class="glow glow-one"></div>
   <div class="glow glow-two"></div>
   <main class="shell">
-    <section id="authScreen" class="auth-layout">
+    <section id="sessionLoading" class="session-loading" aria-live="polite">
+      <div class="session-loading-card">
+        <span class="eyebrow small">SURPRISING WALLET · TENANT</span>
+        <strong>正在恢复登录状态…</strong>
+        <span>请稍候，正在读取当前会话。</span>
+      </div>
+    </section>
+
+    <section id="authScreen" class="auth-layout hidden">
       <div class="hero-copy">
         <p class="eyebrow">SURPRISING WALLET · TENANT</p>
         <h1>你的多链钱包入口</h1>
@@ -131,9 +139,19 @@
         <article class="panel table-panel"><h2>提现记录</h2><div id="withdrawalsTable"></div></article>
       </section>
 
-      <section class="tab" id="tab-ledger">
-        <article class="panel table-panel"><div class="panel-heading"><div><p class="eyebrow small">AUDIT TRAIL</p><h2>资产流水</h2></div><span class="pill">回调幂等入账</span></div><div id="ledgerTable"></div></article>
-      </section>
+  <section class="tab" id="tab-ledger">
+    <article class="panel table-panel">
+      <div class="panel-heading"><div><p class="eyebrow small">AUDIT TRAIL</p><h2>资产流水</h2></div><span class="pill">回调幂等入账</span></div>
+      <div class="ledger-filters" id="ledgerFilters">
+        <label>类型<select id="ledgerTypeFilter"><option value="">全部</option><option value="DEPOSIT">充值</option><option value="WITHDRAWAL">提现</option><option value="WITHDRAWAL_RELEASE">提现释放</option></select></label>
+        <label>TxID<input id="ledgerTxFilter" type="search" placeholder="输入交易哈希，支持部分匹配" autocomplete="off"></label>
+        <label>地址<input id="ledgerAddressFilter" type="search" placeholder="输入充值地址或提现目标地址" autocomplete="off"></label>
+        <button type="button" id="clearLedgerFilters" class="button-quiet">清除筛选</button>
+      </div>
+      <div id="ledgerFilterSummary" class="filter-summary"></div>
+      <div id="ledgerTable"></div>
+    </article>
+  </section>
   </section>
   </main>
   <div id="toast"></div>
@@ -154,6 +172,6 @@
       <div id="addressHistoryPagination"></div>
     </article>
   </div>
-  <script type="module" data-cfasync="false" src="/app.js?v=51e54bd"></script>
+  <script type="module" data-cfasync="false" src="/app.js?v=20260804-session-loading"></script>
 </body>
 </html>

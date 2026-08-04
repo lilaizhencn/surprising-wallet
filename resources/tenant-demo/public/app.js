@@ -1,7 +1,8 @@
 const state = {
   session: null, me: null, chains: [], refreshing: false,
   platformAddresses: [], addressHistory: { chain: "", page: 1, pageSize: 5 },
-  pendingWithdrawal: null
+  pendingWithdrawal: null,
+  ledgerFilters: { entryType: "", txId: "", address: "" }
 };
 const $ = selector => document.querySelector(selector);
 const chainLabels = Object.freeze({
@@ -139,12 +140,14 @@ function formMessage(selector, message, isError = false) {
 }
 
 function showAuth() {
+  $("#sessionLoading").classList.add("hidden");
   $("#authScreen").classList.remove("hidden");
   $("#appScreen").classList.add("hidden");
   stopRefreshTimer();
 }
 
 function showApp() {
+  $("#sessionLoading").classList.add("hidden");
   $("#authScreen").classList.add("hidden");
   $("#appScreen").classList.remove("hidden");
   $("#accountName").textContent = `${state.session.user.displayName} · ${state.session.user.email}`;
@@ -258,6 +261,16 @@ function renderWithdrawals() {
 }
 
 function renderLedger() {
+  const filters = state.ledgerFilters;
+  const allRows = state.me.ledger ?? [];
+  const rows = allRows.filter(row => {
+    const txId = String(row.txHash ?? "").toLowerCase();
+    const address = String(row.address ?? row.depositAddress ?? "").toLowerCase();
+    return (!filters.entryType || row.entryType === filters.entryType)
+      && (!filters.txId || txId.includes(filters.txId.toLowerCase()))
+      && (!filters.address || address.includes(filters.address.toLowerCase()));
+  });
+  $("#ledgerFilterSummary").textContent = `显示 ${rows.length} / ${allRows.length} 条流水`;
   table("#ledgerTable", [
     { key: "createdAt", label: "时间" },
     { key: "entryType", label: "类型", render: row => escape(typeLabels[row.entryType] ?? row.entryType) },
@@ -265,7 +278,7 @@ function renderLedger() {
     { key: "direction", label: "方向" }, { key: "amount", label: "金额" },
     { key: "txHash", label: "TxID", render: row => `<code>${escape(row.txHash ?? "—")}</code>` },
     { key: "depositAddress", label: "充值地址", render: row => `<code>${escape(row.depositAddress ?? "—")}</code>` }
-  ], state.me.ledger);
+  ], rows);
 }
 
 function refreshWithdrawalAssets() {
@@ -531,6 +544,25 @@ document.querySelectorAll(".jump-button").forEach(button => button.addEventListe
 }));
 
 $("#refreshButton").addEventListener("click", () => refreshAll().then(() => toast("数据已刷新")));
+$("#ledgerTypeFilter").addEventListener("change", event => {
+  state.ledgerFilters.entryType = event.target.value;
+  renderLedger();
+});
+$("#ledgerTxFilter").addEventListener("input", event => {
+  state.ledgerFilters.txId = event.target.value.trim();
+  renderLedger();
+});
+$("#ledgerAddressFilter").addEventListener("input", event => {
+  state.ledgerFilters.address = event.target.value.trim();
+  renderLedger();
+});
+$("#clearLedgerFilters").addEventListener("click", () => {
+  state.ledgerFilters = { entryType: "", txId: "", address: "" };
+  $("#ledgerTypeFilter").value = "";
+  $("#ledgerTxFilter").value = "";
+  $("#ledgerAddressFilter").value = "";
+  renderLedger();
+});
 $("#depositAsset").addEventListener("change", () => {
   formMessage("#depositMessage", "");
   updateDepositChainOptions();

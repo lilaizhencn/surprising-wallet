@@ -599,7 +599,8 @@ export class DemoStore {
       return {
         ...view,
         txHash: data.txHash ?? null,
-        depositAddress: data.address ?? null
+        depositAddress: data.address ?? null,
+        address: data.address ?? data.toAddress ?? null
       };
     });
   }
