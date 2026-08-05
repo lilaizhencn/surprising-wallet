@@ -20,6 +20,8 @@ BRANCH=master
 TRIGGER_SOURCE="$REPO_DIR/scripts/deploy/backend-deploy-trigger.sh"
 TRIGGER_TARGET=/usr/local/sbin/surprising-wallet-backend-deploy
 TRIGGER_BACKUP=/usr/local/sbin/surprising-wallet-backend-deploy.before-durable-20260805
+SYSTEMD_DIR=/etc/systemd/system
+SYSTEMD_UNITS=(surprising-wallet.service surprising-wallet-sig1.service surprising-wallet-sig2.service)
 
 # ── 1. pull ──────────────────────────────────────────────────────────
 if [[ ! -d $REPO_DIR ]]; then
@@ -69,6 +71,7 @@ install -d -m 0750 "$DEPLOY_RELEASE"
 install -o wallet -g wallet -m 0640 "$JAR_SOURCE" "$DEPLOY_RELEASE/wallet-server.jar"
 install -o wallet -g wallet -m 0640 "$SIG1_JAR_SOURCE" "$DEPLOY_RELEASE/wallet-sig1.jar"
 install -o wallet -g wallet -m 0640 "$SIG2_JAR_SOURCE" "$DEPLOY_RELEASE/wallet-sig2.jar"
+install -d -o root -g wallet -m 0750 "$DEPLOY_RELEASE/.previous-systemd"
 
 SQL_COUNT=0
 if [[ -d $SQL_SOURCE ]]; then
@@ -154,6 +157,12 @@ if [[ -L $CURRENT_DIR ]]; then
   PREVIOUS_TARGET=$(readlink -f "$CURRENT_DIR")
 fi
 
+for unit in "${SYSTEMD_UNITS[@]}"; do
+  if [[ -f "$SYSTEMD_DIR/$unit" ]]; then
+    install -o root -g root -m 0644 "$SYSTEMD_DIR/$unit" "$DEPLOY_RELEASE/.previous-systemd/$unit"
+  fi
+done
+
 install -o root -g root -m 0644 "$REPO_DIR/resources/infra/systemd/surprising-wallet.service" \
   /etc/systemd/system/surprising-wallet.service
 install -o root -g root -m 0644 "$REPO_DIR/resources/infra/systemd/surprising-wallet-sig1.service" \
@@ -190,6 +199,12 @@ printf 'backend release %s failed health check; rolling back\n' "$DEPLOY_SHA" >&
 if [[ -n $PREVIOUS_TARGET && -d $PREVIOUS_TARGET ]]; then
   ln -sfn "$PREVIOUS_TARGET" "$CURRENT_DIR.next"
   mv -Tf "$CURRENT_DIR.next" "$CURRENT_DIR"
-  systemctl restart surprising-wallet.service surprising-wallet-sig1.service surprising-wallet-sig2.service
+  for unit in "${SYSTEMD_UNITS[@]}"; do
+    if [[ -f "$DEPLOY_RELEASE/.previous-systemd/$unit" ]]; then
+      install -o root -g root -m 0644 "$DEPLOY_RELEASE/.previous-systemd/$unit" "$SYSTEMD_DIR/$unit"
+    fi
+  done
+  systemctl daemon-reload
+  systemctl restart "${SYSTEMD_UNITS[@]}"
 fi
 exit 1

@@ -4,6 +4,7 @@ import com.surprising.wallet.model.CustodyWebhookRetryPolicy;
 import com.surprising.wallet.repository.CustodyRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
@@ -45,6 +46,7 @@ public class CustodyWebhookDispatchService {
             CustodyCryptoService crypto,
             CustodyWebhookService webhooks,
             CustodyWebhookRetryPolicy retryPolicy,
+            @Qualifier("custodyWebhookExecutor")
             TaskExecutor deliveryExecutor) {
         this.repository = repository;
         this.crypto = crypto;
