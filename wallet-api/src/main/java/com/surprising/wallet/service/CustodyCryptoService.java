@@ -137,10 +137,14 @@ public class CustodyCryptoService {
      * 转换或计算 {@code hmacSha256} 对应的值，统一金额、格式和边界规则。
      */
     public String hmacSha256(String secret, String value) {
+        return hmacSha256(secret, value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public String hmacSha256(String secret, byte[] value) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            return URL_ENCODER.encodeToString(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
+            return URL_ENCODER.encodeToString(mac.doFinal(value));
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("failed to sign custody message", e);
         }

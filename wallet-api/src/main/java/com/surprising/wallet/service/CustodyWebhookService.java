@@ -237,8 +237,13 @@ public class CustodyWebhookService {
                                   String eventType, String body) {
         URI uri = validateEndpoint(url);
         long timestamp = Instant.now().getEpochSecond();
-        String signature = crypto.hmacSha256(secret,
-                timestamp + "." + eventId + "." + eventType + "." + body);
+        byte[] prefix = (timestamp + "." + eventId + "." + eventType + ".")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] bodyBytes = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] message = new byte[prefix.length + bodyBytes.length];
+        System.arraycopy(prefix, 0, message, 0, prefix.length);
+        System.arraycopy(bodyBytes, 0, message, prefix.length, bodyBytes.length);
+        String signature = crypto.hmacSha256(secret, message);
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofSeconds(10))
                 .header("Content-Type", "application/json")
