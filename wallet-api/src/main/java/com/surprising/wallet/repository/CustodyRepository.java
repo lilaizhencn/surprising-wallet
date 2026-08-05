@@ -10,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -447,33 +449,57 @@ public class CustodyRepository {
 
     /** 查询租户资产概览，跨表数据在 Java 中组合。 */
     public List<Map<String, Object>> tenantAssetOverview(UUID tenantId) {
-        List<UUID> gasAddressIds = gasAccounts.listByTenant(tenantId).stream()
-                .map(row -> uuid(row.get("custody_address_id"))).toList();
-        List<String> gasAccountIds = listGasAccounts(tenantId).stream()
-                .map(GasAccountRecord::accountId).toList();
+        List<Map<String, Object>> gasRows = gasAccounts.listByTenant(tenantId);
+        Set<UUID> gasAddressIds = new HashSet<>();
+        Set<String> gasAccountIds = new HashSet<>();
+        for (Map<String, Object> gasRow : gasRows) {
+            UUID addressId = uuid(gasRow.get("custody_address_id"));
+            if (addressId != null) gasAddressIds.add(addressId);
+        }
+
+        List<Map<String, Object>> balances = ledgerBalances.listByTenant(tenantId);
+        Map<Long, Map<String, Object>> chainRowsById = new HashMap<>();
+        for (Map<String, Object> row : chainAddresses.listByTenant(tenantId)) {
+            chainRowsById.put(longValue(row.get("id"), 0), row);
+        }
+        List<Map<String, Object>> custodyRows = custodyAddresses.listByTenant(tenantId);
+        Map<UUID, Map<String, Object>> custodyRowsById = new HashMap<>();
+        for (Map<String, Object> row : custodyRows) {
+            UUID addressId = uuid(row.get("id"));
+            if (addressId != null) custodyRowsById.put(addressId, row);
+        }
+        for (UUID gasAddressId : gasAddressIds) {
+            Map<String, Object> custody = custodyRowsById.get(gasAddressId);
+            if (custody == null) continue;
+            Map<String, Object> chain = chainRowsById.get(longValue(custody.get("chain_address_id"), 0));
+            if (chain != null) {
+                gasAccountIds.add(text(chain.get("account_id")).toLowerCase(Locale.ROOT));
+            }
+        }
+
+        Map<String, Set<UUID>> customerAddressIdsByPair = new HashMap<>();
+        for (Map<String, Object> address : custodyRows) {
+            UUID addressId = uuid(address.get("id"));
+            if (addressId == null || gasAddressIds.contains(addressId)) continue;
+            Map<String, Object> base = chainRowsById.get(longValue(address.get("chain_address_id"), 0));
+            if (base == null) continue;
+            String pair = pairKey(text(address.get("chain")), text(base.get("account_id")));
+            customerAddressIdsByPair.computeIfAbsent(pair, ignored -> new HashSet<>()).add(addressId);
+        }
+
         Map<String, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
         Map<String, Long> addressCounts = new LinkedHashMap<>();
-        for (Map<String, Object> balance : ledgerBalances.listByTenant(tenantId)) {
-            if (gasAccountIds.stream().anyMatch(account -> account.equalsIgnoreCase(text(balance.get("account_id"))))) {
+        for (Map<String, Object> balance : balances) {
+            if (gasAccountIds.contains(text(balance.get("account_id")).toLowerCase(Locale.ROOT))) {
                 continue;
             }
             String key = text(balance.get("chain")).toUpperCase(Locale.ROOT)
                     + "\u0000" + text(balance.get("asset_symbol")).toUpperCase(Locale.ROOT);
             grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(balance);
-        }
-        for (Map<String, Object> address : custodyAddresses.listByTenant(tenantId)) {
-            if (gasAddressIds.contains(uuid(address.get("id")))) continue;
-            Map<String, Object> base = chainAddresses.findByTenantAndId(
-                    tenantId, longValue(address.get("chain_address_id"), 0)).orElse(Map.of());
-            String chain = text(address.get("chain"));
-            String accountId = text(base.get("account_id"));
-            for (Map<String, Object> balance : ledgerBalances.listByTenant(tenantId)) {
-                if (chain.equalsIgnoreCase(text(balance.get("chain")))
-                        && accountId.equalsIgnoreCase(text(balance.get("account_id")))) {
-                    String key = text(balance.get("chain")).toUpperCase(Locale.ROOT)
-                            + "\u0000" + text(balance.get("asset_symbol")).toUpperCase(Locale.ROOT);
-                    addressCounts.merge(key, 1L, Long::sum);
-                }
+            Set<UUID> addressIds = customerAddressIdsByPair.get(
+                    pairKey(text(balance.get("chain")), text(balance.get("account_id"))));
+            if (addressIds != null) {
+                addressCounts.merge(key, (long) addressIds.size(), Long::sum);
             }
         }
         List<Map<String, Object>> result = new ArrayList<>();
@@ -493,6 +519,11 @@ public class CustodyRepository {
             result.add(row);
         }
         return result;
+    }
+
+    /** 生成链和账户的大小写不敏感组合键。 */
+    private static String pairKey(String chain, String accountId) {
+        return chain.toLowerCase(Locale.ROOT) + "\u0000" + accountId.toLowerCase(Locale.ROOT);
     }
 
     /** 按链查询 Gas 账户。 */
