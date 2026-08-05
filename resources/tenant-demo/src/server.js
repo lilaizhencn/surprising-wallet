@@ -300,6 +300,8 @@ async function webhook(request, response) {
   const config = await store.configuration();
   const verified = verifyWebhook({
     secret: config.webhookSecret,
+    eventId: request.headers["x-custody-event-id"],
+    eventType: request.headers["x-custody-event-type"],
     timestamp: request.headers["x-custody-timestamp"],
     signature: request.headers["x-custody-signature"],
     body: raw

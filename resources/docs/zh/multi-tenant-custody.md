@@ -184,10 +184,10 @@ X-Custody-Signature: v1=<base64url-hmac>
 签名内容为：
 
 ```text
-timestamp + "." + 原始请求 Body
+timestamp + "." + X-Custody-Event-Id + "." + X-Custody-Event-Type + "." + 原始请求 Body
 ```
 
-接收方应先验签，再按事件 ID 幂等处理，并拒绝过期时间戳。事件与投递记录在同一个数据库事务
+接收方应先验签，再校验 Body 的 `id`、`type` 与对应请求头完全一致，之后按事件 ID 幂等处理，并拒绝过期时间戳。事件与投递记录在同一个数据库事务
 中持久化。Worker 使用 `SKIP LOCKED` 抢占任务、指数退避重试并限制响应/错误保存长度，失败记录
 可以在 Console 手动重试。
 

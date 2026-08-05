@@ -131,13 +131,13 @@
 
   <rect x="705" y="410" width="200" height="56" class="dep"/>
   <text x="805" y="434" text-anchor="middle" class="bold">持久化 Custody 事件</text>
-  <text x="805" y="452" text-anchor="middle" class="small">API 地址投递 · Console 不自动投递</text>
+  <text x="805" y="452" text-anchor="middle" class="small">API 投递 · Event ID/Type 绑定签名</text>
 
   <line x1="905" y1="438" x2="940" y2="438" class="arrow"/>
 
   <rect x="940" y="410" width="195" height="56" class="ext"/>
   <text x="1037" y="434" text-anchor="middle" class="bold">API 地址租户接收通知</text>
-  <text x="1037" y="452" text-anchor="middle" class="small">匹配 externalReference 入账</text>
+  <text x="1037" y="452" text-anchor="middle" class="small">验签与字段匹配后入账</text>
 
   <!-- PHASE 3 bottom dotted feedback: reorg detection -->
   <rect x="380" y="476" width="380" height="24" class="db"/>

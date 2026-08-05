@@ -39,10 +39,12 @@ async function sendWebhook(id, type, data) {
   const body = webhookBody(id, type, data);
   const timestamp = String(Math.floor(Date.now() / 1000));
   const signature = createHmac("sha256", webhookSecret)
-    .update(`${timestamp}.${body}`).digest("base64url");
+    .update(`${timestamp}.${id}.${type}.${body}`).digest("base64url");
   return request("/webhooks/custody", {
     method: "POST",
     headers: {
+      "X-Custody-Event-Id": id,
+      "X-Custody-Event-Type": type,
       "X-Custody-Timestamp": timestamp,
       "X-Custody-Signature": `v1=${signature}`
     }, body

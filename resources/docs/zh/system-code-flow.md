@@ -36,11 +36,20 @@
   -> 写持久化 custody_event
   -> 仅当充值地址由公开 API 创建时，为每个端点生成 webhook_delivery
   -> 签名回调 DEPOSIT.CONFIRMED，并带回 subject 和充值地址；Console 地址不自动投递
+  -> 签名绑定 eventId、eventType 和原始 Body，接收方验签后再校验 Body 身份字段
 ```
 
 Console 可附带标签和元数据手动创建地址；公开 API 不接收这些管理字段。地址仍计入租户资产总额，但其后续充值不自动投递 Webhook。创建地址本身也不产生 Webhook。所有 Console/API 查询和变更都强制应用租户隔离。
 
 提现请求要求幂等键，服务保留七天并复用现有的资金锁定、广播和确认流程；API 与 Console 使用同一幂等语义，从持久化投递记录发送签名生命周期 Webhook。
+
+Webhook 接收方必须使用原始请求体验签，并校验以下规范请求串：
+
+```text
+timestamp + "." + eventId + "." + eventType + "." + rawBody
+```
+
+`X-Custody-Event-Id`、`X-Custody-Event-Type` 必须分别与 Body 的 `id`、`type` 完全一致；时间戳超过允许窗口或任一身份字段不一致时，必须拒绝并且不能领取事件幂等记录。
 
 提现任务的可靠性边界：
 
