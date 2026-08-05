@@ -47,7 +47,7 @@ public class WalletOutboxRepository {
                     or (status = 'DISPATCHING' and locked_at < now() - interval '5 minutes'))
                  order by next_attempt_at, created_at, id
                  limit ? for update skip locked
-                """, (rs, rowNum) -> map(rs), topic, Math.min(Math.max(limit, 1), 200));
+                """, (rs, rowNum) -> map(rs, rowNum), topic, Math.min(Math.max(limit, 1), 200));
         for (OutboxRecord record : records) {
             jdbc.update("""
                     update wallet_outbox
