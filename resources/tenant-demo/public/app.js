@@ -766,9 +766,13 @@ $("#withdrawalAmount").addEventListener("input", event => {
 document.addEventListener("click", event => {
   const copyButton = event.target.closest("[data-copy]");
   if (copyButton) {
-    navigator.clipboard?.writeText(copyButton.dataset.copy ?? "")
-      .then(() => toast("已复制"))
-      .catch(() => toast("复制失败，请手动选择文本", true));
+    const copyPromise = navigator.clipboard?.writeText(copyButton.dataset.copy ?? "");
+    if (copyPromise) {
+      copyPromise.then(() => toast("已复制"))
+        .catch(() => toast("复制失败，请手动选择文本", true));
+    } else {
+      toast("当前浏览器不支持自动复制，请手动选择文本", true);
+    }
     return;
   }
   const detail = event.target.closest("[data-transaction-detail]");
