@@ -36,11 +36,11 @@ spring:
     # PostgreSQL JDBC 驱动。
     driver-class-name: org.postgresql.Driver
     # 测试数据库地址；可用 SW_DB_URL 临时覆盖，格式为 jdbc:postgresql://host:port/database。
-    url: ${SW_DB_URL:jdbc:postgresql://172.31.6.134:5432/wallet}
+    url: ${SW_DB_URL:jdbc:postgresql://127.0.0.1:5432/wallet}
     # 测试数据库账号。
     username: ${SW_DB_USERNAME:wallet}
     # 测试数据库密码；上线前迁移到安全配置中心。
-    password: ${SW_DB_PASSWORD:wallet123}
+    password: ${SW_DB_PASSWORD:}
     hikari:
       # 最大数据库连接数；需同时考虑 PostgreSQL 上限和服务实例数。
       maximum-pool-size: 20
@@ -51,7 +51,7 @@ spring:
   data:
     redis:
       # Redis 主机，用于签名队列及缓存；当前指向 test2。
-      host: ${SW_REDIS_HOST:172.31.6.134}
+      host: ${SW_REDIS_HOST:127.0.0.1}
       # Redis TCP 端口。
       port: ${SW_REDIS_PORT:6379}
       # Redis 密码；空值表示测试实例未启用认证。
@@ -69,25 +69,25 @@ sw:
   app:
     env:
       # 当前环境标识；用于 RPC 节点筛选和生产网络保护。
-      name: ${SW_APP_ENV:test2}
+      name: ${SW_APP_ENV:dev}
   rpc:
     provider:
       # 单个 RPC provider 的最大并发请求数；测试环境保守设为 1。
       max-concurrent-requests: 1
   warning:
     # 告警联系人；填写值班手机号或通知系统接收标识。
-    contacts: "13261645368"
+    contacts: ${SW_WARNING_CONTACTS:}
   wallet:
     # 测试钱包根 Seed：必须是 4 个互不相同的 Base64 编码 32 字节值。
     # 三个进程必须使用完全相同的配置；更换后既有派生地址将无法签名。
     keys:
-      sig1-seed: YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=
-      sig2-seed: YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=
-      recovery-seed: Y2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2M=
-      ed25519-seed: ZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGQ=
+      sig1-seed: ${SW_WALLET_SIG1_SEED:}
+      sig2-seed: ${SW_WALLET_SIG2_SEED:}
+      recovery-seed: ${SW_WALLET_RECOVERY_SEED:}
+      ed25519-seed: ${SW_WALLET_ED25519_SEED:}
     admin:
       # 旧钱包后台基础账号；仅用于仍依赖该账号的管理入口。
-      username: ${SW_WALLET_ADMIN_USERNAME:admin}
+      username: ${SW_WALLET_ADMIN_USERNAME:}
       # 管理账号密码；空值时相关登录能力不可用。
       password: ${SW_WALLET_ADMIN_PASSWORD:}
     # 钱包网络类别；当前测试环境使用 test，生产上线改为 main。
@@ -112,7 +112,7 @@ sw:
         # regtest RPC 用户名。
         rpc-username: ${SW_WALLET_DEV_FAUCET_BTC_RPC_USERNAME:wallet}
         # regtest RPC 密码。
-        rpc-password: ${SW_WALLET_DEV_FAUCET_BTC_RPC_PASSWORD:wallet123}
+        rpc-password: ${SW_WALLET_DEV_FAUCET_BTC_RPC_PASSWORD:}
         # Bitcoin Core 中负责出资的测试钱包名。
         wallet: ${SW_WALLET_DEV_FAUCET_BTC_WALLET:regtest-funder}
         # 转账后自动挖出的确认区块数。
@@ -163,11 +163,11 @@ sw:
       network: ${SW_WALLET_DEV_EIP7702_NETWORK:devtest}
     custody:
       # 测试环境托管敏感字段加密主密钥（64 位十六进制）；上线必须迁移 KMS。
-      secret-master-key: 339c28dcd013766105fe1c470b03b9e5637d99c4c260d04bbf2ead36f763b944
+      secret-master-key: ${SW_CUSTODY_SECRET_MASTER_KEY:}
       # Console 会话有效期。
       session-ttl: ${SW_CUSTODY_SESSION_TTL:PT12H}
       # HTTP 测试环境为 false；HTTPS 上线必须设为 true。
-      session-cookie-secure: false
+      session-cookie-secure: ${SW_CUSTODY_SESSION_COOKIE_SECURE:false}
       # HMAC API 请求允许的最大时钟偏差。
       api-clock-skew: ${SW_CUSTODY_API_CLOCK_SKEW:PT5M}
       platform-admin:

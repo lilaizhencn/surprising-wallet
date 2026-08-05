@@ -74,7 +74,7 @@ mvn -pl wallet-api -am test -DskipTests
 
 ## 5. 密钥与运行配置
 
-四个根 Seed 通过 Spring `sw.wallet.keys` 配置：sig1、sig2、recovery 三个 BIP32 Seed，以及一个 Ed25519 Seed。四个值必须互不相同，统一使用 Base64 编码的 32 字节数据。当前测试环境的值直接放在三个应用各自唯一的 `application.yaml`，不再写数据库，也不再通过 Console 查看或修改。
+四个根 Seed 通过 Spring `sw.wallet.keys` 配置：sig1、sig2、recovery 三个 BIP32 Seed，以及一个 Ed25519 Seed。四个值必须互不相同，统一使用 Base64 编码的 32 字节数据。三个应用只从环境变量读取这些值，不写入仓库、数据库，也不通过 Console 查看或修改。
 
 wallet-api 从 Keyset 派生三组 public root；sig1/sig2 分别只保留各自需要的 private root。修改配置必须重启对应进程，启动时会立即校验；已有派生地址后不得更换整套 Keyset，否则既有地址将无法签名。
 
@@ -82,10 +82,10 @@ wallet-api 从 Keyset 派生三组 public root；sig1/sig2 分别只保留各自
 sw:
   wallet:
     keys:
-      sig1-seed: <Base64 编码的 32 字节 Seed>
-      sig2-seed: <Base64 编码的 32 字节 Seed>
-      recovery-seed: <Base64 编码的 32 字节 Seed>
-      ed25519-seed: <Base64 编码的 32 字节 Seed>
+      sig1-seed: ${SW_WALLET_SIG1_SEED}
+      sig2-seed: ${SW_WALLET_SIG2_SEED}
+      recovery-seed: ${SW_WALLET_RECOVERY_SEED}
+      ed25519-seed: ${SW_WALLET_ED25519_SEED}
 ```
 
 wallet-api 常用环境变量：
@@ -102,6 +102,10 @@ export SW_APP_ENV='dev'
 export SW_WALLET_ADMIN_USERNAME='<钱包后台配置账号>'
 export SW_WALLET_ADMIN_PASSWORD='<钱包后台配置密码>'
 export SW_CUSTODY_SECRET_MASTER_KEY='<32 字节 Base64 或 64 位十六进制密钥>'
+export SW_WALLET_SIG1_SEED='<Base64 编码的 32 字节 Seed>'
+export SW_WALLET_SIG2_SEED='<Base64 编码的 32 字节 Seed>'
+export SW_WALLET_RECOVERY_SEED='<Base64 编码的 32 字节 Seed>'
+export SW_WALLET_ED25519_SEED='<Base64 编码的 32 字节 Seed>'
 export SW_CUSTODY_PLATFORM_ADMIN_EMAIL='<初始平台管理员邮箱>'
 export SW_CUSTODY_PLATFORM_ADMIN_PASSWORD='<初始平台管理员密码>'
 export SW_CUSTODY_CORS_ORIGINS='https://console.example.com'
