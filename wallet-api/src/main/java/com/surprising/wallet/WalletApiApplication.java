@@ -1,6 +1,7 @@
 package com.surprising.wallet;
 
 import lombok.extern.slf4j.Slf4j;
+import org.web3j.utils.Async;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -26,6 +27,7 @@ public class WalletApiApplication {
      */
     static void main(String[] args) {
         configureTlsNamedGroups();
+        initializeWeb3jAsyncExecutor();
         SpringApplication.run(WalletApiApplication.class, args);
     }
 
@@ -35,5 +37,15 @@ public class WalletApiApplication {
     private static void configureTlsNamedGroups() {
         System.setProperty("jdk.tls.namedGroups",
                 "secp256r1,secp384r1,secp521r1,ffdhe2048,ffdhe3072");
+    }
+
+    /**
+     * 在应用启动阶段初始化 Web3j 异步执行器。
+     *
+     * <p>Web3j 默认会在第一次链调用时注册 JVM shutdown hook。提前初始化可以避免服务收到停止信号后，
+     * 正在退出的 JVM 又尝试注册新的 shutdown hook。</p>
+     */
+    private static void initializeWeb3jAsyncExecutor() {
+        Async.defaultExecutorService();
     }
 }

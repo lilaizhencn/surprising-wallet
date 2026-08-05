@@ -21,6 +21,7 @@ public class DevFaucetJob {
 
     /** 定时触发一轮补币流程，业务异常由调度边界隔离。 */
     @Scheduled(
+            scheduler = "custodyTaskScheduler",
             fixedDelayString = "${sw.wallet.dev-faucet.delay:PT10S}",
             initialDelayString = "${sw.wallet.dev-faucet.delay:PT10S}")
     public void execute() {
