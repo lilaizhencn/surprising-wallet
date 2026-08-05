@@ -2,8 +2,13 @@
 server:
   # 服务端口；同机部署时不要与 wallet-api/wallet-sig1 冲突。
   port: ${SW_SIG2_HTTP_PORT:8081}
+  # 停机时先停止接收新请求，并等待进行中的请求完成。
+  shutdown: graceful
 
 spring:
+  lifecycle:
+    # 为签名轮询任务、HTTP 服务和 Redis 连接预留有序关闭时间。
+    timeout-per-shutdown-phase: 60s
   task:
     scheduling:
       pool:
@@ -11,6 +16,10 @@ spring:
         size: 4
       # 线程名前缀，用于日志和线程栈定位。
       thread-name-prefix: sig2-scheduler-
+      shutdown:
+        # 关闭时等待当前签名任务完成，避免任务状态停在处理中。
+        await-termination: true
+        await-termination-period: 60s
   application:
     # Spring 应用名。
     name: wallet-sig2

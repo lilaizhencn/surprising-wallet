@@ -4,6 +4,9 @@ server:
   port: ${SW_SIG1_HTTP_PORT:8004}
 
 spring:
+  lifecycle:
+    # 为签名轮询任务和 Redis 连接预留有序关闭时间。
+    timeout-per-shutdown-phase: 60s
   task:
     scheduling:
       pool:
@@ -11,6 +14,10 @@ spring:
         size: 4
       # 线程名前缀，用于日志和线程栈定位。
       thread-name-prefix: sig1-scheduler-
+      shutdown:
+        # 关闭时等待当前签名任务完成，避免任务状态停在处理中。
+        await-termination: true
+        await-termination-period: 60s
   application:
     # Spring 应用名。
     name: wallet-sig1

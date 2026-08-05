@@ -6,6 +6,8 @@
 server:
   # HTTP 监听端口；同机部署多个服务时必须避免冲突。
   port: ${SW_HTTP_PORT:8002}
+  # 停机时先停止接收新请求，并等待进行中的请求完成。
+  shutdown: graceful
 
 logging:
   level:
@@ -16,6 +18,9 @@ spring:
   application:
     # Spring 应用名，用于日志、指标和未来配置中心标识。
     name: wallet-api
+  lifecycle:
+    # 为任务池、数据库、Redis 和 HTTP 服务的有序关闭预留时间。
+    timeout-per-shutdown-phase: 60s
   task:
     scheduling:
       pool:
@@ -23,6 +28,10 @@ spring:
         size: 4
       # 默认调度线程名前缀，便于日志定位。
       thread-name-prefix: wallet-scheduler-
+      shutdown:
+        # 默认调度器关闭时等待正在执行的任务。
+        await-termination: true
+        await-termination-period: 60s
   datasource:
     # PostgreSQL JDBC 驱动。
     driver-class-name: org.postgresql.Driver
