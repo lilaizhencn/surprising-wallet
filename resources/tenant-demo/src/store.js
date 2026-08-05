@@ -155,6 +155,39 @@ function safePassword(value) {
   return password;
 }
 
+/** 校验租户业务订单号，拒绝空值、控制字符和过长输入。 */
+function safeBusinessOrderNo(value, { required = false } = {}) {
+  const orderNo = String(value ?? "").trim();
+  if (!orderNo && !required) return "";
+  if (!orderNo || orderNo.length > 160 || /[\u0000-\u001f\u007f]/.test(orderNo)) {
+    throw new Error("business order number must contain 1 to 160 printable characters");
+  }
+  return orderNo;
+}
+
+/** 校验本地请求幂等键，保证网络重试不会生成第二笔提现。 */
+function safeIdempotencyKey(value) {
+  const key = String(value ?? "").trim();
+  if (!key || key.length > 200 || /[\u0000-\u001f\u007f]/.test(key)) {
+    throw new Error("idempotency key must contain 1 to 200 printable characters");
+  }
+  return key;
+}
+
+/** 将数组切分为稳定的分页结果。 */
+function pageResult(rows, page, pageSize) {
+  const total = rows.length;
+  const pages = Math.max(Math.ceil(total / pageSize), 1);
+  const safePage = Math.min(Math.max(page, 1), pages);
+  return {
+    items: rows.slice((safePage - 1) * pageSize, safePage * pageSize),
+    total,
+    page: safePage,
+    pageSize,
+    pages
+  };
+}
+
 function userView(row) {
   return row ? {
     id: row.id,
@@ -622,24 +655,48 @@ export class DemoStore {
         ...view,
         txHash: data.txHash ?? null,
         depositAddress: data.address ?? null,
-        address: data.address ?? data.toAddress ?? null
+        address: data.address ?? data.toAddress ?? null,
+        network: data.network ?? null,
+        status: data.status ?? null,
+        errorMessage: data.errorMessage ?? null,
+        platformId: data.withdrawalId ?? null,
+        businessOrderNo: data.externalReference
+          ?? (String(view.entryType).startsWith("WITHDRAWAL") ? view.referenceId : null),
+        platformOrderNo: data.orderNo ?? null
       };
     });
   }
 
-  async reserveWithdrawal({ userId, custodyAddressId = null, chain, asset, toAddress, amount }) {
+  /** 查询指定用户的提现幂等记录，供重复 HTTP 请求直接返回原订单。 */
+  async withdrawalByIdempotency(userId, idempotencyKey) {
+    const key = safeIdempotencyKey(idempotencyKey);
+    const row = await get(this.db, `
+      SELECT id FROM withdrawals WHERE user_id = ? AND idempotency_key = ?
+    `, [userId, key]);
+    return row ? this.withdrawal(row.id) : null;
+  }
+
+  /** 预留提现资金，并持久化租户业务订单号和本次请求幂等键。 */
+  async reserveWithdrawal({
+    userId, custodyAddressId = null, chain, asset, toAddress, amount,
+    businessOrderNo = "", idempotencyKey = ""
+  }) {
     const normalizedAmount = requirePositiveDecimal(amount);
     const normalizedChain = String(chain ?? "").toUpperCase();
     const normalizedAsset = String(asset ?? "").toUpperCase();
     const destination = String(toAddress ?? "").trim();
+    const normalizedIdempotencyKey = safeIdempotencyKey(idempotencyKey || `demo:${randomUUID()}`);
     if (!normalizedChain || !normalizedAsset || !destination || destination.length > 160) {
       throw new Error("chain, asset and toAddress are required");
     }
     const id = randomUUID();
-    const externalReference = `demo-${id}`;
-    const idempotencyKey = `demo:${id}`;
+    const externalReference = safeBusinessOrderNo(businessOrderNo) || `demo-${id}`;
     await this.#transaction(async database => {
       await this.#user(database, userId);
+      const duplicateOrder = await get(database, `
+        SELECT id FROM withdrawals WHERE external_reference = ?
+      `, [externalReference]);
+      if (duplicateOrder) throw new Error("business order number already exists");
       const address = custodyAddressId
         ? await this.#address(database, custodyAddressId)
         : await this.#latestAddress(database, userId, normalizedChain);
@@ -658,7 +715,7 @@ export class DemoStore {
           id, user_id, custody_address_id, external_reference, idempotency_key,
           chain, network, asset, to_address, amount, status, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTING', ?, ?)
-      `, [id, userId, address.id, externalReference, idempotencyKey,
+      `, [id, userId, address.id, externalReference, normalizedIdempotencyKey,
         normalizedChain, address.network ?? null, normalizedAsset, destination,
         normalizedAmount, timestamp, timestamp]);
     });
@@ -688,18 +745,26 @@ export class DemoStore {
     return this.withdrawal(id);
   }
 
+  /** 将无法确认钱包请求结果的提现置为待核对，保留冻结资金等待回调。 */
+  async markWithdrawalPending(id, message) {
+    await run(this.db, `
+      UPDATE withdrawals SET status = 'PENDING_REVIEW', error_message = ?, updated_at = ?
+      WHERE id = ? AND balance_finalized = 0
+    `, [String(message ?? "wallet request result is unknown").slice(0, 500), now(), id]);
+    return this.withdrawal(id);
+  }
+
   async releaseWithdrawal(id, message) {
     await this.#transaction(async database => {
       const withdrawal = await this.#withdrawal(database, id);
+      if (withdrawal.balanceFinalized) return;
       const reservedAmount = addDecimal(withdrawal.amount, withdrawal.fee);
-      if (!withdrawal.balanceFinalized) {
-        await this.#lockBalance(database, withdrawal.userId, withdrawal.chain, withdrawal.asset);
-        const balance = await this.#balance(database, withdrawal.userId, withdrawal.chain, withdrawal.asset);
-        await this.#writeBalance(
-          database, withdrawal.userId, withdrawal.chain, withdrawal.asset,
-          addDecimal(balance.available, reservedAmount), subtractDecimal(balance.locked, reservedAmount)
-        );
-      }
+      await this.#lockBalance(database, withdrawal.userId, withdrawal.chain, withdrawal.asset);
+      const balance = await this.#balance(database, withdrawal.userId, withdrawal.chain, withdrawal.asset);
+      await this.#writeBalance(
+        database, withdrawal.userId, withdrawal.chain, withdrawal.asset,
+        addDecimal(balance.available, reservedAmount), subtractDecimal(balance.locked, reservedAmount)
+      );
       await run(database, `
         UPDATE withdrawals SET status = 'REQUEST_FAILED', error_message = ?,
           balance_finalized = 1, updated_at = ? WHERE id = ?
@@ -719,6 +784,8 @@ export class DemoStore {
     const row = await get(queryable, `
       SELECT id, custody_withdrawal_id AS custodyWithdrawalId, user_id AS userId,
              custody_address_id AS custodyAddressId, external_reference AS externalReference,
+             external_reference AS businessOrderNo,
+             custody_withdrawal_id AS platformId,
              idempotency_key AS idempotencyKey, chain, network, asset,
              to_address AS toAddress, amount, order_no AS orderNo, fee, status,
              tx_hash AS txHash, error_message AS errorMessage,
@@ -779,6 +846,8 @@ export class DemoStore {
       SELECT w.id, w.custody_withdrawal_id AS custodyWithdrawalId,
              w.user_id AS userId, u.email, u.external_id AS externalId,
              w.custody_address_id AS custodyAddressId, w.external_reference AS externalReference,
+             w.external_reference AS businessOrderNo,
+             w.custody_withdrawal_id AS platformId,
              w.chain, w.network, w.asset, w.to_address AS toAddress, w.amount,
              w.order_no AS orderNo, w.fee, w.status,
              w.tx_hash AS txHash, w.error_message AS errorMessage,
@@ -786,6 +855,86 @@ export class DemoStore {
       FROM withdrawals w JOIN users u ON u.id = w.user_id
       ${predicate} ORDER BY w.created_at DESC
     `, userId ? [userId] : []);
+  }
+
+  /** 按租户条件分页查询提现，筛选逻辑集中在后端避免前端漏数据。 */
+  async withdrawalsPage(userId, filters = {}) {
+    const pageSize = Math.min(Math.max(Number(filters.pageSize) || 10, 1), 100);
+    const page = Math.max(Number(filters.page) || 1, 1);
+    const normalized = {
+      businessOrderNo: String(filters.businessOrderNo ?? "").trim().toLowerCase(),
+      address: String(filters.address ?? "").trim().toLowerCase(),
+      txId: String(filters.txId ?? "").trim().toLowerCase(),
+      status: String(filters.status ?? "").trim().toUpperCase()
+    };
+    const rows = (await this.withdrawals(userId)).filter(row =>
+      (!normalized.businessOrderNo || String(row.businessOrderNo ?? "").toLowerCase().includes(normalized.businessOrderNo))
+      && (!normalized.address || String(row.toAddress ?? "").toLowerCase().includes(normalized.address))
+      && (!normalized.txId || String(row.txHash ?? "").toLowerCase().includes(normalized.txId))
+      && (!normalized.status || row.status === normalized.status));
+    return pageResult(rows, page, pageSize);
+  }
+
+  /** 按租户条件分页查询资产流水。 */
+  async ledgerPage(userId, filters = {}) {
+    const pageSize = Math.min(Math.max(Number(filters.pageSize) || 10, 1), 100);
+    const page = Math.max(Number(filters.page) || 1, 1);
+    const normalized = {
+      entryType: String(filters.entryType ?? "").trim().toUpperCase(),
+      txId: String(filters.txId ?? "").trim().toLowerCase(),
+      address: String(filters.address ?? "").trim().toLowerCase(),
+      businessOrderNo: String(filters.businessOrderNo ?? "").trim().toLowerCase()
+    };
+    const rows = (await this.ledger(userId)).filter(row =>
+      (!normalized.entryType || row.entryType === normalized.entryType)
+      && (!normalized.txId || String(row.txHash ?? "").toLowerCase().includes(normalized.txId))
+      && (!normalized.address || String(row.address ?? "").toLowerCase().includes(normalized.address))
+      && (!normalized.businessOrderNo
+        || String(row.businessOrderNo ?? "").toLowerCase().includes(normalized.businessOrderNo)));
+    return pageResult(rows, page, pageSize);
+  }
+
+  /** 查询单笔账本详情，返回租户可见的完整字段。 */
+  async ledgerDetail(userId, id) {
+    const row = (await this.ledger(userId)).find(item => item.id === id);
+    if (!row) throw new Error("ledger entry not found");
+    return { entry: row };
+  }
+
+  /** 查询单笔提现详情及其回调状态时间线。 */
+  async withdrawalDetail(userId, id) {
+    const withdrawal = await this.#withdrawal(this.db, id);
+    if (withdrawal.userId !== userId) throw new Error("withdrawal not found");
+    const events = await all(this.db, `
+      SELECT event_id AS eventId, event_type AS eventType, payload,
+             error_message AS errorMessage, received_at AS receivedAt, processed_at AS processedAt
+      FROM webhook_events ORDER BY received_at ASC
+    `);
+    const timeline = [{
+      eventId: `created-${withdrawal.id}`,
+      eventType: "WITHDRAWAL.CREATED",
+      status: "CREATED",
+      receivedAt: withdrawal.createdAt,
+      processedAt: withdrawal.createdAt,
+      errorMessage: null
+    }];
+    for (const event of events) {
+      let payload;
+      try { payload = JSON.parse(event.payload); } catch { payload = null; }
+      const data = payload?.data ?? {};
+      if (data.withdrawalId !== withdrawal.platformId
+        && data.externalReference !== withdrawal.businessOrderNo) continue;
+      timeline.push({
+        eventId: event.eventId,
+        eventType: event.eventType,
+        status: data.status ?? event.eventType.split(".").at(-1),
+        txHash: data.txHash ?? null,
+        receivedAt: event.receivedAt,
+        processedAt: event.processedAt,
+        errorMessage: event.errorMessage ?? data.errorMessage ?? null
+      });
+    }
+    return { withdrawal, timeline };
   }
 
   async receiveWebhook(event, rawPayload) {
@@ -887,10 +1036,20 @@ export class DemoStore {
     const status = String(data.status ?? eventType.split(".").at(-1));
     const terminalConfirmed = eventType === "WITHDRAWAL.CONFIRMED";
     const terminalFailed = eventType === "WITHDRAWAL.FAILED";
+    const nextFee = normalizeDecimal(data.fee ?? current.fee);
+    if (compareDecimal(nextFee, current.fee) > 0) {
+      await this.#reserveAdditionalWithdrawalFee(
+        database, current, subtractDecimal(nextFee, current.fee)
+      );
+    } else if (compareDecimal(nextFee, current.fee) < 0) {
+      await this.#releaseAdditionalWithdrawalFee(
+        database, current, subtractDecimal(current.fee, nextFee)
+      );
+    }
     if ((terminalConfirmed || terminalFailed) && !current.balanceFinalized) {
       await this.#lockBalance(database, current.userId, current.chain, current.asset);
       const balance = await this.#balance(database, current.userId, current.chain, current.asset);
-      const reservedAmount = addDecimal(current.amount, current.fee);
+      const reservedAmount = addDecimal(current.amount, nextFee);
       const available = terminalFailed
         ? addDecimal(balance.available, reservedAmount)
         : balance.available;
@@ -913,7 +1072,7 @@ export class DemoStore {
         fee = ?, status = ?, tx_hash = coalesce(?, tx_hash), error_message = ?,
         balance_finalized = CASE WHEN ? THEN 1 ELSE balance_finalized END, updated_at = ?
       WHERE id = ?
-    `, [data.withdrawalId ?? null, normalizeDecimal(data.fee ?? current.fee), status,
+    `, [data.withdrawalId ?? null, nextFee, status,
       data.txHash ?? null, data.errorMessage ?? null,
       terminalConfirmed || terminalFailed ? 1 : 0, now(), current.id]);
   }

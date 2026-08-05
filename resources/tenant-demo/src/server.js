@@ -137,6 +137,19 @@ function clearLoginFailures(ip) {
   loginFailures.delete(ip);
 }
 
+/** 判断钱包 API 是否明确拒绝了请求；网络错误和 5xx 结果不能直接解冻。 */
+function isDefinitiveWalletRejection(cause) {
+  const status = Number(cause?.status);
+  return Number.isInteger(status) && status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
+/** 读取分页参数并限制单次返回量，避免 Console 请求拖垮租户 Demo。 */
+function pageParameter(value, fallback, maximum) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(Math.max(parsed, 1), maximum);
+}
+
 async function authApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/session") {
     const user = await currentUser(request);
@@ -217,6 +230,13 @@ async function api(request, response, url) {
   }
 
   const user = await requireUser(request);
+  const detailMatch = /^\/api\/me\/(ledger|withdrawals)\/([^/]+)$/.exec(url.pathname);
+  if (request.method === "GET" && detailMatch) {
+    const id = decodeURIComponent(detailMatch[2]);
+    return json(response, 200, detailMatch[1] === "ledger"
+      ? await store.ledgerDetail(user.id, id)
+      : await store.withdrawalDetail(user.id, id));
+  }
   if (request.method === "GET" && url.pathname === "/api/me") {
     const [addresses, balances, ledger, withdrawals] = await Promise.all([
       store.addresses(user.id), store.balances(user.id), store.ledger(user.id), store.withdrawals(user.id)
@@ -255,21 +275,53 @@ async function api(request, response, url) {
     return json(response, 200, await store.balances(user.id));
   }
   if (request.method === "GET" && url.pathname === "/api/me/ledger") {
-    return json(response, 200, await store.ledger(user.id));
+    return json(response, 200, await store.ledgerPage(user.id, {
+      entryType: url.searchParams.get("entryType"),
+      txId: url.searchParams.get("txId"),
+      address: url.searchParams.get("address"),
+      businessOrderNo: url.searchParams.get("businessOrderNo"),
+      page: pageParameter(url.searchParams.get("page"), 1, 1000000),
+      pageSize: pageParameter(url.searchParams.get("pageSize"), 10, 100)
+    }));
   }
   if (request.method === "GET" && url.pathname === "/api/me/withdrawals") {
-    return json(response, 200, await store.withdrawals(user.id));
+    return json(response, 200, await store.withdrawalsPage(user.id, {
+      businessOrderNo: url.searchParams.get("businessOrderNo"),
+      address: url.searchParams.get("address"),
+      txId: url.searchParams.get("txId"),
+      status: url.searchParams.get("status"),
+      page: pageParameter(url.searchParams.get("page"), 1, 1000000),
+      pageSize: pageParameter(url.searchParams.get("pageSize"), 10, 100)
+    }));
   }
   if (request.method === "POST" && url.pathname === "/api/me/withdrawals") {
     const input = await jsonBody(request);
-    const reserved = await store.reserveWithdrawal({
-      userId: user.id,
-      custodyAddressId: input.custodyAddressId || null,
-      chain: input.chain,
-      asset: input.assetSymbol,
-      toAddress: input.toAddress,
-      amount: input.amount
-    });
+    const idempotencyKey = String(request.headers["idempotency-key"] ?? "").trim();
+    if (!idempotencyKey) throw error("Idempotency-Key is required", 400);
+    const existing = await store.withdrawalByIdempotency(user.id, idempotencyKey);
+    if (existing) return json(response, 202, existing);
+    let reserved;
+    try {
+      reserved = await store.reserveWithdrawal({
+        userId: user.id,
+        custodyAddressId: input.custodyAddressId || null,
+        chain: input.chain,
+        asset: input.assetSymbol,
+        toAddress: input.toAddress,
+        amount: input.amount,
+        businessOrderNo: input.businessOrderNo,
+        idempotencyKey
+      });
+    } catch (cause) {
+      if (String(cause.message).includes("UNIQUE") || String(cause.message).includes("idempotency")) {
+        const duplicate = await store.withdrawalByIdempotency(user.id, idempotencyKey);
+        if (duplicate) return json(response, 202, duplicate);
+      }
+      if (String(cause.message).includes("business order number already exists")) {
+        throw error(cause.message, 409);
+      }
+      throw cause;
+    }
     try {
       const remote = await (await walletClient()).createWithdrawal({
         custodyAddressId: reserved.custodyAddressId,
@@ -282,8 +334,11 @@ async function api(request, response, url) {
       }, reserved.idempotencyKey);
       return json(response, 202, await store.acceptWithdrawal(reserved.id, remote));
     } catch (cause) {
-      await store.releaseWithdrawal(reserved.id, cause.message);
-      throw cause;
+      if (isDefinitiveWalletRejection(cause)) {
+        await store.releaseWithdrawal(reserved.id, cause.message);
+        throw cause;
+      }
+      return json(response, 202, await store.markWithdrawalPending(reserved.id, cause.message));
     }
   }
   if (request.method === "GET" && url.pathname === "/api/wallet/assets") {

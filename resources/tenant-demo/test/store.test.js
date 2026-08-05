@@ -272,6 +272,49 @@ test("keeps terminal withdrawal state stable and rejects mismatched callback dat
   }
 });
 
+test("persists tenant order idempotently, accounts callback fee changes, and exposes detail timeline", async () => {
+  const store = await testStore();
+  try {
+    const user = await store.createUser({ externalId: "user-idempotency", displayName: "Idempotency User" });
+    const address = await store.saveAddress(user.id, {
+      id: "idempotency-address", chain: "ETH", network: "devtest",
+      address: "0x1234567890123456789012345678901234567890", addressVersion: 0, status: "ACTIVE"
+    });
+    const deposit = envelope("event-idempotency-deposit", "DEPOSIT.CONFIRMED", {
+      subject: user.externalId, chain: "ETH", asset: "ETH", address: address.address,
+      amount: "3", txHash: "idempotency-deposit", logIndex: 0
+    });
+    await store.receiveWebhook(deposit, JSON.stringify(deposit));
+    const reserved = await store.reserveWithdrawal({
+      userId: user.id, custodyAddressId: address.id, chain: "ETH", asset: "ETH",
+      toAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", amount: "1",
+      businessOrderNo: "tenant-order-001", idempotencyKey: "request-001"
+    });
+    assert.equal((await store.withdrawalByIdempotency(user.id, "request-001")).id, reserved.id);
+    assert.equal((await store.withdrawals(user.id))[0].businessOrderNo, "tenant-order-001");
+    await assert.rejects(() => store.reserveWithdrawal({
+      userId: user.id, chain: "ETH", asset: "ETH",
+      toAddress: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", amount: "1",
+      businessOrderNo: "tenant-order-002", idempotencyKey: "request-001"
+    }), /UNIQUE/);
+    await store.acceptWithdrawal(reserved.id, { id: "idempotency-withdrawal", fee: "0.1", status: "CREATED" });
+    const confirmed = envelope("event-idempotency-confirmed", "WITHDRAWAL.CONFIRMED", {
+      withdrawalId: "idempotency-withdrawal", externalReference: reserved.externalReference,
+      chain: "ETH", asset: "ETH", amount: "1", fee: "0.2", status: "CONFIRMED", txHash: "idempotency-tx"
+    });
+    await store.receiveWebhook(confirmed, JSON.stringify(confirmed));
+    const balance = (await store.balances(user.id))[0];
+    assert.deepEqual({ available: balance.available, locked: balance.locked }, { available: "1.8", locked: "0" });
+    const detail = await store.withdrawalDetail(user.id, reserved.id);
+    assert.equal(detail.withdrawal.fee, "0.2");
+    assert.equal(detail.timeline.length, 2);
+    await store.releaseWithdrawal(reserved.id, "late duplicate release");
+    assert.equal((await store.ledger(user.id)).filter(row => row.entryType === "WITHDRAWAL_RELEASE").length, 0);
+  } finally {
+    await store.close();
+  }
+});
+
 test("registers users, hashes passwords, and invalidates sessions on logout", async () => {
   const store = await testStore();
   try {

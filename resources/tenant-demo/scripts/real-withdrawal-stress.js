@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 
 const demoBaseUrl = String(process.env.DEMO_BASE_URL ?? "http://127.0.0.1:3001").replace(/\/+$/, "");
 const requestedUsers = Number(process.env.STRESS_REAL_USERS ?? 20);
@@ -42,7 +43,7 @@ const accounts = await Promise.all(selected.map(async credential => {
 
 const withdrawals = await Promise.all(accounts.map((account, index) => request("/api/me/withdrawals", {
   method: "POST",
-  headers: { Cookie: account.cookie },
+  headers: { Cookie: account.cookie, "Idempotency-Key": randomUUID() },
   body: JSON.stringify({
     custodyAddressId: account.address.id,
     chain: "ETH",

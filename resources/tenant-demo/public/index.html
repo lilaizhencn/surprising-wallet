@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="data:,">
   <title>Surprising Wallet · 租户钱包</title>
-  <link rel="stylesheet" href="/styles.css?v=20260804-withdrawal-table-wide">
+  <link rel="stylesheet" href="/styles.css?v=20260805-console-ux">
 </head>
 <body>
   <div class="glow glow-one"></div>
@@ -62,6 +62,7 @@
         <div class="account-actions">
           <div class="status"><span id="walletStatusDot"></span><strong id="walletStatus">钱包 API 检查中</strong></div>
           <span id="accountName" class="account-name"></span>
+          <span id="refreshMeta" class="refresh-meta">正在同步…</span>
           <button id="logoutButton" class="button-quiet">退出</button>
         </div>
       </header>
@@ -118,6 +119,10 @@
             <div class="flow-line"><span>地址生成</span><i>→</i><span>链上充值</span><i>→</i><span>回调入账</span></div>
           </article>
         </div>
+        <article class="panel table-panel deposit-record-panel">
+          <div class="panel-heading"><div><p class="eyebrow small">DEPOSIT HISTORY</p><h2>充值记录</h2><p class="panel-hint">链上交易确认后才会入账；点击记录可查看 TxID、充值地址和入账详情。</p></div><button type="button" id="depositRecordsRefresh" class="button-quiet">刷新记录</button></div>
+          <div id="depositRecords"></div>
+        </article>
       </section>
 
       <section class="tab" id="tab-withdrawal">
@@ -129,10 +134,12 @@
           <form id="withdrawalForm" class="form-grid">
             <label>提现链<select name="chain" id="withdrawalChain" required></select></label>
             <label>提现资产<select name="assetSymbol" id="withdrawalAsset" required disabled><option>请先选择提现链</option></select></label>
+            <label>租户业务订单号<input name="businessOrderNo" id="withdrawalBusinessOrderNo" placeholder="例如 order-20260805-001" maxlength="160" required><span class="field-hint">用于关联你的业务订单，提交后不可修改。</span></label>
             <label class="wide-field">目标地址<input name="toAddress" id="withdrawalTarget" list="platformAddressOptions" placeholder="输入目标地址，或从平台地址中选择" autocomplete="off" required></label>
             <datalist id="platformAddressOptions"></datalist>
             <div id="platformAddressHints" class="address-hints wide-field"></div>
             <label>金额<input name="amount" id="withdrawalAmount" inputmode="decimal" pattern="[0-9]+(\.[0-9]+)?" placeholder="0.01" required><span id="withdrawalAmountHint" class="field-hint"></span></label>
+            <div class="fee-preview" id="withdrawalFeePreview"><span>手续费</span><strong>提交后由钱包服务返回</strong></div>
             <button type="submit">确认提现</button>
           </form>
           <div id="withdrawalMessage" class="form-message"></div>
@@ -156,16 +163,16 @@
     <article class="panel table-panel">
       <div class="panel-heading"><div><p class="eyebrow small">AUDIT TRAIL</p><h2>资产流水</h2></div><span class="pill">回调幂等入账</span></div>
       <div class="ledger-filters" id="ledgerFilters">
-        <label>类型<select id="ledgerTypeFilter"><option value="">全部</option><option value="DEPOSIT">充值</option><option value="WITHDRAWAL">提现</option><option value="WITHDRAWAL_RELEASE">提现释放</option></select></label>
-        <label>TxID<input id="ledgerTxFilter" type="search" placeholder="输入交易哈希，支持部分匹配" autocomplete="off"></label>
-        <label>地址<input id="ledgerAddressFilter" type="search" placeholder="输入充值地址或提现目标地址" autocomplete="off"></label>
-        <button type="button" id="applyLedgerFilters" class="button-primary">查询</button>
+            <label>类型<select id="ledgerTypeFilter"><option value="">全部</option><option value="DEPOSIT">充值</option><option value="WITHDRAWAL">提现</option><option value="WITHDRAWAL_RELEASE">提现释放</option></select></label>
+            <label>TxID<input id="ledgerTxFilter" type="search" placeholder="输入交易哈希，支持部分匹配" autocomplete="off"></label>
+            <label>地址<input id="ledgerAddressFilter" type="search" placeholder="输入充值地址或提现目标地址" autocomplete="off"></label>
+            <label>租户业务订单号<input id="ledgerBusinessOrderFilter" type="search" placeholder="输入业务订单号" autocomplete="off"></label>
+            <button type="button" id="applyLedgerFilters" class="button-primary">查询</button>
         <button type="button" id="clearLedgerFilters" class="button-quiet">清除筛选</button>
       </div>
       <div id="ledgerFilterSummary" class="filter-summary"></div>
       <div id="ledgerTable"></div>
     </article>
-  </section>
   </section>
   </main>
   <div id="toast"></div>
@@ -186,6 +193,13 @@
       <div id="addressHistoryPagination"></div>
     </article>
   </div>
-  <script type="module" data-cfasync="false" src="/app.js?v=20260804-withdrawal-table-wide"></script>
+  <div id="transactionDetailModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="transactionDetailTitle">
+    <div class="modal-backdrop" data-close-transaction-detail></div>
+    <article class="modal-card detail-modal-card">
+      <div class="panel-heading"><div><p class="eyebrow small">TRANSACTION DETAIL</p><h2 id="transactionDetailTitle">交易详情</h2></div><button type="button" class="button-quiet" data-close-transaction-detail>关闭</button></div>
+      <div id="transactionDetailBody"></div>
+    </article>
+  </div>
+  <script type="module" data-cfasync="false" src="/app.js?v=20260805-console-ux"></script>
 </body>
 </html>

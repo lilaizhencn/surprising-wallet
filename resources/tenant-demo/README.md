@@ -116,10 +116,12 @@ certbot certonly --webroot -w /var/www/letsencrypt \
 2. `GET /api/chains` 查看租户已开通链；
 3. `POST /api/me/addresses` 调用钱包地址 API；
 4. 钱包向 `/webhooks/custody` 发送 `DEPOSIT.CONFIRMED`，Demo 给对应 `subject` 入账；
-5. `POST /api/me/withdrawals` 冻结余额并调用钱包提现 API；
+5. `POST /api/me/withdrawals` 携带 `Idempotency-Key` 和租户业务订单号，冻结余额并调用钱包提现 API；重复请求返回同一笔提现；
 6. 钱包发送 `WITHDRAWAL.BROADCAST`、`WITHDRAWAL.CONFIRMED` 或 `WITHDRAWAL.FAILED`，Demo 更新提现状态及账本。
 
 页面交互约束：充值必须先选择币种和对应链，地址只在链选择完成后展示，并提示最小充值数量；提现由服务端自动选择用户该链最新有效地址作为资产来源，目标地址可从同租户其他用户地址中选择，提交前需要二次确认。地址历史通过 `GET /api/me/address-history` 分页查询，平台测试地址通过 `GET /api/me/platform-addresses` 查询。
+
+账本和提现列表支持服务端分页筛选：`GET /api/me/ledger` 支持 `entryType`、`txId`、`address`、`businessOrderNo`、`page`、`pageSize`；`GET /api/me/withdrawals` 支持 `businessOrderNo`、`address`、`txId`、`status`、`page`、`pageSize`。单笔详情分别使用 `GET /api/me/ledger/{id}` 和 `GET /api/me/withdrawals/{id}`，提现详情会返回钱包回调时间线。钱包 API 明确拒绝时才释放冻结余额；网络超时、5xx 或结果不明确时进入 `PENDING_REVIEW` 并保留冻结，等待回调或人工核对。
 
 钱包内部的充值扫描、签名、广播和归集仍属于 wallet-api/wallet-service；tenant-demo 不直接访问钱包数据库，也不模拟钱包内部归集状态。
 
