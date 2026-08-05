@@ -108,6 +108,32 @@ for migration in "$DEPLOY_RELEASE"/*.sql; do
   psql "$DB_URL" -c "INSERT INTO _deploy_migrations(filename) VALUES('$name') ON CONFLICT DO NOTHING"
 done
 
+printf '=== verify durable processing schema ===\n'
+psql --set=ON_ERROR_STOP=1 "$DB_URL" <<'SQL'
+DO $$
+BEGIN
+  IF to_regclass('public.wallet_task_lease') IS NULL
+     OR to_regclass('public.wallet_outbox') IS NULL THEN
+    RAISE EXCEPTION 'durable processing tables are missing';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'withdrawal_order'
+       AND column_name = 'next_attempt_at'
+  ) THEN
+    RAISE EXCEPTION 'withdrawal_order lease columns are missing';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'chain_signing_transaction'
+       AND column_name = 'broadcast_lease_until'
+  ) THEN
+    RAISE EXCEPTION 'chain_signing_transaction broadcast lease columns are missing';
+  END IF;
+END
+$$;
+SQL
+
 # ── 5. switch ────────────────────────────────────────────────────────
 PREVIOUS_TARGET=
 if [[ -L $CURRENT_DIR ]]; then
