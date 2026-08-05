@@ -457,7 +457,7 @@ public class CustodyRepository {
             if (addressId != null) gasAddressIds.add(addressId);
         }
 
-        List<Map<String, Object>> balances = ledgerBalances.listByTenant(tenantId);
+        List<Map<String, Object>> balanceRows = ledgerBalances.listByTenant(tenantId);
         Map<Long, Map<String, Object>> chainRowsById = new HashMap<>();
         for (Map<String, Object> row : chainAddresses.listByTenant(tenantId)) {
             chainRowsById.put(longValue(row.get("id"), 0), row);
@@ -489,7 +489,7 @@ public class CustodyRepository {
 
         Map<String, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
         Map<String, Long> addressCounts = new LinkedHashMap<>();
-        for (Map<String, Object> balance : balances) {
+        for (Map<String, Object> balance : balanceRows) {
             if (gasAccountIds.contains(text(balance.get("account_id")).toLowerCase(Locale.ROOT))) {
                 continue;
             }
