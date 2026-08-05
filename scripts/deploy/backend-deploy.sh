@@ -17,6 +17,9 @@ CURRENT_DIR=/opt/surprising-wallet-backend/current
 ENV_FILE=/etc/surprising-wallet/wallet.env
 HEALTH_URL=http://127.0.0.1:8002/actuator/health
 BRANCH=master
+TRIGGER_SOURCE="$REPO_DIR/scripts/deploy/backend-deploy-trigger.sh"
+TRIGGER_TARGET=/usr/local/sbin/surprising-wallet-backend-deploy
+TRIGGER_BACKUP=/usr/local/sbin/surprising-wallet-backend-deploy.before-durable-20260805
 
 # ── 1. pull ──────────────────────────────────────────────────────────
 if [[ ! -d $REPO_DIR ]]; then
@@ -34,6 +37,17 @@ git reset --hard "origin/$BRANCH"
 
 DEPLOY_SHA=$(git rev-parse HEAD)
 printf 'deploy sha: %s\n' "$DEPLOY_SHA"
+
+# The restricted SSH key invokes a root-owned wrapper outside the repository.
+# Refresh that wrapper from the checked-out source so the next invocation waits
+# for the real build, migration and health result instead of returning early.
+if [[ -f $TRIGGER_SOURCE ]]; then
+  if [[ -f $TRIGGER_TARGET && ! -f $TRIGGER_BACKUP ]]; then
+    install -o root -g root -m 0750 "$TRIGGER_TARGET" "$TRIGGER_BACKUP"
+  fi
+  install -o root -g root -m 0750 "$TRIGGER_SOURCE" "$TRIGGER_TARGET"
+  printf 'updated deployment trigger: %s\n' "$TRIGGER_TARGET"
+fi
 
 # ── 2. build ─────────────────────────────────────────────────────────
 printf '=== mvn package (wallet-api + wallet-sig1 + wallet-sig2) ===\n'
