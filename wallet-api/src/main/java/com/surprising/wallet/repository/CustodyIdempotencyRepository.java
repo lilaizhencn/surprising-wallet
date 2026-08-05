@@ -1,9 +1,10 @@
 package com.surprising.wallet.repository;
 
+import java.sql.Timestamp;
+import java.time.Instant;
+
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
-
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,6 +32,8 @@ public class CustodyIdempotencyRepository {
 
     /** 开始幂等请求，返回是否成功占用。 */
     public boolean begin(UUID tenantId, String key, String operation, String requestHash, Instant expiresAt) {
+        // PostgreSQL JDBC 不能从 Instant 推断 PreparedStatement 类型，显式绑定为 SQL 时间戳。
+        Timestamp expiresTimestamp = expiresAt == null ? null : Timestamp.from(expiresAt);
         int count = jdbc.update("""
                 insert into custody_idempotency_key(tenant_id, idempotency_key, operation, request_hash, expires_at)
                 values (?, ?, ?, ?, ?)
@@ -42,7 +45,7 @@ public class CustodyIdempotencyRepository {
                     created_at = now()
                  where custody_idempotency_key.expires_at is not null
                    and custody_idempotency_key.expires_at <= now()
-                """, tenantId, key, operation, requestHash, expiresAt);
+                """, tenantId, key, operation, requestHash, expiresTimestamp);
         return count == 1;
     }
 
