@@ -50,6 +50,11 @@ jobs:
           DEPLOY_HOST: ${{ secrets.BACKEND_DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.BACKEND_DEPLOY_USER }}
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-            -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST"
+          deployment_output=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+            -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST")
+          printf '%s\n' "$deployment_output"
+          if ! grep -Fxq 'backend deployment verified' <<<"$deployment_output"; then
+            echo "The server only accepted the deployment trigger; build/migration/health verification was not returned" >&2
+            exit 1
+          fi
           echo "Backend deployment built, migrated, restarted, and passed server health checks"
