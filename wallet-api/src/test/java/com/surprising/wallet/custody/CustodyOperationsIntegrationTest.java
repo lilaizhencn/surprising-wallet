@@ -342,7 +342,7 @@ class CustodyOperationsIntegrationTest {
             List<Map<String, Object>> withdrawals = repository.listCustodyWithdrawals(
                     tenantId, "ETH", "USDT", "CONFIRMED", "payout-alpha", 20, 0);
             assertEquals(1, withdrawals.size());
-            assertEquals(address.address(), withdrawals.getFirst().get("sourceAddress"));
+            assertFalse(withdrawals.getFirst().containsKey("sourceAddress"));
             assertEquals(destination, withdrawals.getFirst().get("toAddress"));
             assertEquals("customer-alpha", withdrawals.getFirst().get("subject"));
             assertTrue(repository.listCustodyWithdrawals(

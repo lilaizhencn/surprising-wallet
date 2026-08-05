@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # surprising-wallet backend deploy script
-# Server-side: git pull → mvn package → migrate → switch → verify.
+# Server-side: git pull → build all wallet jars → migrate → switch → verify.
 # Invoked by GitHub Actions via SSH (command= restricted key).
 # Migrations are idempotent: each SQL file runs at most once (tracked in _deploy_migrations).
 
@@ -36,21 +36,25 @@ DEPLOY_SHA=$(git rev-parse HEAD)
 printf 'deploy sha: %s\n' "$DEPLOY_SHA"
 
 # ── 2. build ─────────────────────────────────────────────────────────
-printf '=== mvn package ===\n'
-mvn -pl wallet-api -am -DskipTests package -q
+printf '=== mvn package (wallet-api + wallet-sig1 + wallet-sig2) ===\n'
+mvn -DskipTests package -q
 
 # ── 3. stage release ─────────────────────────────────────────────────
 DEPLOY_RELEASE="$RELEASE_DIR/$DEPLOY_SHA"
 JAR_SOURCE="$REPO_DIR/wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar"
+SIG1_JAR_SOURCE="$REPO_DIR/wallet-sig1/target/wallet-sig1-1.0.0-SNAPSHOT.jar"
+SIG2_JAR_SOURCE="$REPO_DIR/wallet-sig2/target/wallet-sig2-1.0.0-SNAPSHOT.jar"
 SQL_SOURCE="$REPO_DIR/resources/docs/db"
 
-if [[ ! -f $JAR_SOURCE ]]; then
-  printf 'build did not produce wallet-api JAR\n' >&2
+if [[ ! -f $JAR_SOURCE || ! -f $SIG1_JAR_SOURCE || ! -f $SIG2_JAR_SOURCE ]]; then
+  printf 'build did not produce all wallet JARs\n' >&2
   exit 1
 fi
 
 install -d -m 0750 "$DEPLOY_RELEASE"
 install -o wallet -g wallet -m 0640 "$JAR_SOURCE" "$DEPLOY_RELEASE/wallet-server.jar"
+install -o wallet -g wallet -m 0640 "$SIG1_JAR_SOURCE" "$DEPLOY_RELEASE/wallet-sig1.jar"
+install -o wallet -g wallet -m 0640 "$SIG2_JAR_SOURCE" "$DEPLOY_RELEASE/wallet-sig2.jar"
 
 SQL_COUNT=0
 if [[ -d $SQL_SOURCE ]]; then
@@ -110,15 +114,26 @@ if [[ -L $CURRENT_DIR ]]; then
   PREVIOUS_TARGET=$(readlink -f "$CURRENT_DIR")
 fi
 
+install -o root -g root -m 0644 "$REPO_DIR/resources/infra/systemd/surprising-wallet.service" \
+  /etc/systemd/system/surprising-wallet.service
+install -o root -g root -m 0644 "$REPO_DIR/resources/infra/systemd/surprising-wallet-sig1.service" \
+  /etc/systemd/system/surprising-wallet-sig1.service
+install -o root -g root -m 0644 "$REPO_DIR/resources/infra/systemd/surprising-wallet-sig2.service" \
+  /etc/systemd/system/surprising-wallet-sig2.service
+systemctl daemon-reload
+
 ln -sfn "$DEPLOY_RELEASE" "$CURRENT_DIR.next"
 mv -Tf "$CURRENT_DIR.next" "$CURRENT_DIR"
-systemctl restart surprising-wallet.service
+systemctl restart surprising-wallet.service surprising-wallet-sig1.service surprising-wallet-sig2.service
 
 # ── 6. verify ────────────────────────────────────────────────────────
 healthy=false
 for _ in $(seq 1 45); do
   if curl --fail --silent --max-time 2 "$HEALTH_URL" 2>/dev/null \
-      | grep -q '"status":"UP"'; then
+      | grep -q '"status":"UP"' \
+      && systemctl is-active --quiet surprising-wallet.service \
+      && systemctl is-active --quiet surprising-wallet-sig1.service \
+      && systemctl is-active --quiet surprising-wallet-sig2.service; then
     healthy=true
     break
   fi
@@ -135,6 +150,6 @@ printf 'backend release %s failed health check; rolling back\n' "$DEPLOY_SHA" >&
 if [[ -n $PREVIOUS_TARGET && -d $PREVIOUS_TARGET ]]; then
   ln -sfn "$PREVIOUS_TARGET" "$CURRENT_DIR.next"
   mv -Tf "$CURRENT_DIR.next" "$CURRENT_DIR"
-  systemctl restart surprising-wallet.service
+  systemctl restart surprising-wallet.service surprising-wallet-sig1.service surprising-wallet-sig2.service
 fi
 exit 1

@@ -134,7 +134,7 @@ public class CustodyPublicApiController {
      * 新建提现请求，入库后进入提现等待队列。
      */
     @PostMapping("/withdrawals")
-    @ResponseStatus(HttpStatus.CREATED)
+    @ResponseStatus(HttpStatus.ACCEPTED)
     public CustodyWithdrawalService.WithdrawalView createWithdrawal(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestBody CustodyWithdrawalService.CreateWithdrawalCommand body,

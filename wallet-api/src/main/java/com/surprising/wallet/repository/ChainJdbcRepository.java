@@ -791,6 +791,14 @@ public class ChainJdbcRepository {
     public int markUtxosSpent(String chain, String lockRef, String spentTxHash) {
         return utxoRepository.markSpent(chain, lockRef, spentTxHash);
     }
+
+    /** 领取 Bitcoin-like 签名交易的广播租约。 */
+    public boolean claimBitcoinLikeBroadcast(AssetRuntimeMetadata currency, long transactionId,
+                                             String ownerId) {
+        return chainSigningTransactionRepository.claimBroadcast(
+                currency.getName().toUpperCase(Locale.ROOT), transactionId, ownerId, 300,
+                Constants.SENT);
+    }
     /**
      * 设置或更新 {@code updateUtxoConfirmations} 对应的状态，并保持相关业务字段一致。
      */

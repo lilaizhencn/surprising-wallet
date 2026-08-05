@@ -43,7 +43,7 @@
 
   <rect x="720" y="194" width="340" height="100" class="svc"/>
   <text x="890" y="222" text-anchor="middle" class="label">wallet-sig1 · wallet-sig2</text>
-  <text x="890" y="244" text-anchor="middle" class="desc">单一 application.yaml · Redis 队列轮询</text>
+  <text x="890" y="244" text-anchor="middle" class="desc">单一 application.yaml · Redis 租约与队列轮询</text>
   <text x="890" y="262" text-anchor="middle" class="desc">BTC/BCH/LTC/DOGE → 第一签 → 第二签</text>
   <text x="890" y="280" text-anchor="middle" class="desc">ETH/ERC20/TRON 最终签名与广播</text>
 
@@ -186,11 +186,11 @@
 
   <rect x="30"  y="558" width="230" height="58" class="infra"/>
   <text x="145" y="580" text-anchor="middle" class="label">PostgreSQL</text>
-  <text x="145" y="600" text-anchor="middle" class="desc">多租户账本 · 链配置 · 审计日志</text>
+  <text x="145" y="600" text-anchor="middle" class="desc">多租户账本 · 数据库租约 · Outbox · 审计</text>
 
   <rect x="280" y="558" width="170" height="58" class="infra"/>
   <text x="365" y="580" text-anchor="middle" class="label">Redis</text>
-  <text x="365" y="600" text-anchor="middle" class="desc">Spring Data · 签名队列</text>
+  <text x="365" y="600" text-anchor="middle" class="desc">Spring Data · 签名传输队列</text>
 
   <rect x="470" y="558" width="200" height="58" class="infra"/>
   <text x="570" y="580" text-anchor="middle" class="label">Docker Regtest</text>

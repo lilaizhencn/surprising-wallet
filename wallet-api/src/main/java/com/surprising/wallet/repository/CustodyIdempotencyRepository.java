@@ -34,7 +34,14 @@ public class CustodyIdempotencyRepository {
         int count = jdbc.update("""
                 insert into custody_idempotency_key(tenant_id, idempotency_key, operation, request_hash, expires_at)
                 values (?, ?, ?, ?, ?)
-                on conflict (tenant_id, idempotency_key, operation) do nothing
+                on conflict (tenant_id, idempotency_key, operation) do update set
+                    request_hash = excluded.request_hash,
+                    response_status = null,
+                    response_body = null,
+                    expires_at = excluded.expires_at,
+                    created_at = now()
+                 where custody_idempotency_key.expires_at is not null
+                   and custody_idempotency_key.expires_at <= now()
                 """, tenantId, key, operation, requestHash, expiresAt);
         return count == 1;
     }

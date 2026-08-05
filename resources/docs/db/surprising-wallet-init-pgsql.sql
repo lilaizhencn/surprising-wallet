@@ -8014,6 +8014,85 @@ VALUES (
     'ACTIVE')
 ON CONFLICT (id) DO NOTHING;
 
+-- 钱包定时任务数据库租约和可靠 Outbox 基线。
+CREATE TABLE public.wallet_task_lease (
+    task_name character varying(256) NOT NULL,
+    owner_id character varying(256) NOT NULL,
+    lease_until timestamp with time zone NOT NULL,
+    heartbeat_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT wallet_task_lease_pkey PRIMARY KEY (task_name)
+);
+
+CREATE TABLE public.wallet_outbox (
+    id uuid NOT NULL,
+    tenant_id uuid,
+    topic character varying(64) NOT NULL,
+    aggregate_type character varying(64) NOT NULL,
+    aggregate_id character varying(192) NOT NULL,
+    dedupe_key character varying(256) NOT NULL,
+    payload jsonb NOT NULL,
+    status character varying(24) NOT NULL DEFAULT 'PENDING',
+    attempt_count integer NOT NULL DEFAULT 0,
+    next_attempt_at timestamp with time zone NOT NULL DEFAULT now(),
+    locked_by character varying(256),
+    locked_at timestamp with time zone,
+    last_error text,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    dispatched_at timestamp with time zone,
+    CONSTRAINT wallet_outbox_pkey PRIMARY KEY (id),
+    CONSTRAINT wallet_outbox_status_check CHECK (status IN ('PENDING', 'DISPATCHING', 'DISPATCHED', 'FAILED', 'DEAD')),
+    CONSTRAINT wallet_outbox_attempt_check CHECK (attempt_count >= 0),
+    CONSTRAINT wallet_outbox_dedupe_key_check CHECK (length(trim(dedupe_key)) > 0),
+    CONSTRAINT wallet_outbox_topic_dedupe_key UNIQUE (topic, dedupe_key)
+);
+
+ALTER TABLE public.withdrawal_order
+    ADD COLUMN lease_owner character varying(256),
+    ADD COLUMN lease_until timestamp with time zone,
+    ADD COLUMN attempt_count integer NOT NULL DEFAULT 0,
+    ADD COLUMN next_attempt_at timestamp with time zone NOT NULL DEFAULT now(),
+    ADD COLUMN last_error_code character varying(64),
+    ADD COLUMN last_attempt_at timestamp with time zone;
+
+ALTER TABLE public.chain_signing_transaction
+    ADD COLUMN broadcast_owner character varying(256),
+    ADD COLUMN broadcast_lease_until timestamp with time zone;
+
+CREATE INDEX wallet_outbox_due_idx
+    ON public.wallet_outbox(status, next_attempt_at, created_at)
+    WHERE status IN ('PENDING', 'FAILED', 'DISPATCHING');
+
+CREATE INDEX wallet_outbox_tenant_time_idx
+    ON public.wallet_outbox(tenant_id, created_at DESC);
+
+CREATE INDEX withdrawal_order_fair_queue_idx
+    ON public.withdrawal_order(chain, asset_symbol, status, tenant_id, id)
+    WHERE tenant_id IS NOT NULL AND status IN ('FROZEN', 'RETRYING');
+
+CREATE INDEX withdrawal_order_lease_idx
+    ON public.withdrawal_order(status, lease_until, next_attempt_at, id)
+    WHERE status IN ('PROCESSING', 'SIGNING', 'BROADCAST_UNKNOWN');
+
+CREATE INDEX chain_signing_transaction_broadcast_lease_idx
+    ON public.chain_signing_transaction(status, broadcast_lease_until, id);
+
+ALTER TABLE public.custody_withdrawal
+    ADD CONSTRAINT custody_withdrawal_amount_check CHECK (amount > 0),
+    ADD CONSTRAINT custody_withdrawal_fee_check CHECK (fee >= 0);
+
+ALTER TABLE public.ledger_balance
+    ADD CONSTRAINT ledger_balance_non_negative_check CHECK (
+        available_balance >= 0 AND locked_balance >= 0 AND total_balance >= 0
+    ),
+    ADD CONSTRAINT ledger_balance_invariant_check CHECK (
+        total_balance = available_balance + locked_balance
+    );
+
+ALTER TABLE public.withdrawal_order
+    ADD CONSTRAINT withdrawal_order_amount_check CHECK (amount > 0 AND fee >= 0);
+
 -- Development task default: only local BTC regtest and ETH devtest jobs are active.
 UPDATE public.chain_profile
 SET scan_enabled = (chain = 'BTC' AND network = 'regtest')

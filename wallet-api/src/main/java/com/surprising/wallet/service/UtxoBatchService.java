@@ -47,6 +47,8 @@ public class UtxoBatchService {
     private final WalletRuntimeConfigService runtimeConfigService;
     /** Redis 队列。 */
     private final StringRedisTemplate redis;
+    /** 签名 Outbox 仓储，保证数据库提交后任务不会丢失。 */
+    private final WalletOutboxRepository outbox;
     /** Jackson 3 对象映射器，用于构建和序列化签名队列 JSON。 */
     private final ObjectMapper objectMapper;
 
@@ -58,12 +60,14 @@ public class UtxoBatchService {
             ChainJdbcRepository chainJdbcRepository,
             WalletRuntimeConfigService runtimeConfigService,
             StringRedisTemplate redis,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            WalletOutboxRepository outbox) {
         this.blockchainRuntimeService = blockchainRuntimeService;
         this.chainJdbcRepository = chainJdbcRepository;
         this.runtimeConfigService = runtimeConfigService;
         this.redis = redis;
         this.objectMapper = objectMapper;
+        this.outbox = outbox;
     }
 
     /**
@@ -80,19 +84,19 @@ public class UtxoBatchService {
 
         try {
             while (true) {
-                List<WithdrawalOrderRecord> orders =
+                List<WithdrawalOrderRecord> queuedOrders =
                         chainJdbcRepository.listWithdrawalsForSigning(chain, chain, COUNT);
-                if (orders == null || orders.isEmpty()) {
+                if (queuedOrders == null || queuedOrders.isEmpty()) {
                     break;
                 }
+                UUID tenantId = Objects.requireNonNull(
+                        queuedOrders.getFirst().getTenantId(), "withdrawal tenantId is required");
+                List<WithdrawalOrderRecord> orders = queuedOrders.stream()
+                        .filter(order -> tenantId.equals(order.getTenantId()))
+                        .toList();
                 List<WithdrawRecord> records = orders.stream()
                         .map(order -> toWithdrawRecord(order, currency))
                         .toList();
-                UUID tenantId = Objects.requireNonNull(
-                        orders.getFirst().getTenantId(), "withdrawal tenantId is required");
-                if (orders.stream().anyMatch(order -> !tenantId.equals(order.getTenantId()))) {
-                    throw new IllegalStateException("withdraw batch cannot contain multiple tenants");
-                }
                 WithdrawTransaction transaction = buildTransaction(tenantId, records, currency);
                 if (transaction == null) {
                     log.error("UTXO批处理异常 交易创建失败 币种:{}", currency.getName());
@@ -101,22 +105,26 @@ public class UtxoBatchService {
                 // 将签名交易对象序列化后推送到签名服务队列
                 String val = JacksonJson.writeValue(objectMapper, transaction);
 
-                if (SINGLE_SIG_CURRENCY.contains(currency)) {
-                    redis.opsForList().leftPush(Constants.WALLET_WITHDRAW_SIG_SECOND_KEY, val);
-                    log.info("交易推送到第二次签名服务{}", transaction.getId());
+                String topic = SINGLE_SIG_CURRENCY.contains(currency)
+                        ? WalletOutboxDispatchService.SIGNING_SECOND_TOPIC
+                        : WalletOutboxDispatchService.SIGNING_FIRST_TOPIC;
+                int persisted = outbox.insert(
+                        UUID.randomUUID(), tenantId, topic, "CHAIN_SIGNING_TRANSACTION",
+                        transaction.getId().toString(), transaction.getId().toString(), val);
+                if (persisted == 1) {
+                    log.info("签名任务写入 Outbox topic={} id={}", topic, transaction.getId());
                 } else {
-                    redis.opsForList().leftPush(Constants.WALLET_WITHDRAW_SIG_FIRST_KEY, val);
-                    log.info("交易推送到第一次签名服务{}", transaction.getId());
+                    log.info("签名任务已存在于 Outbox，保持幂等 topic={} id={}", topic, transaction.getId());
                 }
-                log.info("构建交易成功 id:{}", transaction.getId());
 
                 // 说明数据库中没有等待签名的交易了，不需要继续循环
-                if (records.size() < COUNT) {
+                if (queuedOrders.size() < COUNT) {
                     break;
                 }
             }
         } catch (Throwable e) {
             log.error("UTXO批处理扫描数据,构建交易,发送到redis队列出现异常 币种id:{}", currency.getName(), e);
+            throw new IllegalStateException("UTXO batch transaction rolled back", e);
         }
 
         log.info("UTXO批处理结束 币种:{}", currency.getName());

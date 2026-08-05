@@ -67,6 +67,8 @@ public class TransactionService {
     private final StringRedisTemplate redis;
     /** Jackson 3 对象映射器，用于处理队列和签名元数据 JSON。 */
     private final ObjectMapper objectMapper;
+    /** 广播租约工作者标识。 */
+    private final String broadcastOwner;
 
     /** 构造充值提现事务服务。 */
     public TransactionService(
@@ -75,13 +77,15 @@ public class TransactionService {
             ChainJdbcRepository chainJdbcRepository,
             WalletRuntimeConfigService runtimeConfigService,
             StringRedisTemplate redis,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            WalletTaskLeaseService leaseService) {
         this.addressService = addressService;
         this.blockchainRuntimeService = blockchainRuntimeService;
         this.chainJdbcRepository = chainJdbcRepository;
         this.runtimeConfigService = runtimeConfigService;
         this.redis = redis;
         this.objectMapper = objectMapper;
+        this.broadcastOwner = leaseService.ownerId() + "-broadcast";
     }
 
     /**
@@ -202,6 +206,12 @@ public class TransactionService {
                     currency.getName(), transaction.getId(), persisted.get().getTxId());
             return true;
         }
+        if (isUnifiedBitcoinLike(currency)
+                && !chainJdbcRepository.claimBitcoinLikeBroadcast(
+                currency, transaction.getId(), broadcastOwner)) {
+            log.info("广播任务已被其他工作者领取，跳过交易 id={}", transaction.getId());
+            return true;
+        }
         String txId = blockchainRuntimeService.broadcastSignedTransaction(currency, transaction);
 
         if (!StringUtils.hasText(txId)) {
@@ -209,7 +219,7 @@ public class TransactionService {
             if (isUnifiedBitcoinLike(currency)) {
                 markBitcoinLikeBroadcastUnknown(transaction, currency, signature, "broadcast failed");
             }
-            return false;
+            return true;
         }
 
         // String txId = wallet.getTxId(transaction);

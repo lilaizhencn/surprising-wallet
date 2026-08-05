@@ -2,11 +2,14 @@ package com.surprising.wallet.controller;
 
 import com.surprising.wallet.service.CustodyWithdrawalService.CreateWithdrawalCommand;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -70,13 +73,15 @@ public class CustodyConsoleTransferController {
 
     /**
      * 提交控制台提现请求，来源打标记为 CONSOLE。
-     */
+    */
     @PostMapping("/withdrawals")
+    @ResponseStatus(HttpStatus.ACCEPTED)
     public CustodyWithdrawalService.WithdrawalView create(
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestBody CreateWithdrawalCommand body,
             HttpServletRequest request) {
         return transfers.create(
-                CustodyRequestSupport.requirePrincipal(request), body, "CONSOLE", null,
+                CustodyRequestSupport.requirePrincipal(request), body, "CONSOLE", idempotencyKey,
                 CustodyRequestSupport.clientIp(request));
     }
 }

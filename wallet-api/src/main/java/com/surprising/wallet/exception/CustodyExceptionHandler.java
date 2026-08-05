@@ -24,7 +24,7 @@ import java.util.Map;
  *   <li>未预期的运行时异常 → 500（仅暴露错误码，不泄露内部细节）</li>
  * </ul>
  */
-@RestControllerAdvice(basePackages = "com.surprising.wallet.custody")
+@RestControllerAdvice(basePackages = "com.surprising.wallet")
 public class CustodyExceptionHandler {
     /**
      * 未授权异常统一转为 401，返回标准错误码与消息。
@@ -63,7 +63,10 @@ public class CustodyExceptionHandler {
      */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, Object>> state(IllegalStateException e) {
-        return error(HttpStatus.CONFLICT, "INVALID_STATE", e.getMessage());
+        String message = e.getMessage();
+        String code = message != null && message.contains("still processing")
+                ? "WITHDRAWAL_ALREADY_PROCESSING" : "INVALID_STATE";
+        return error(HttpStatus.CONFLICT, code, message);
     }
 
     /**

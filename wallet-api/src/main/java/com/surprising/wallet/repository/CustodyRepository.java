@@ -904,7 +904,7 @@ public class CustodyRepository {
             Map<String, Object> address = custodyAddresses.findFullByTenantAndId(
                     tenantId, uuid(row.get("custody_address_id"))).orElse(Map.of());
             String haystack = (text(row.get("order_no")) + " " + text(row.get("external_reference")) + " "
-                    + text(row.get("to_address")) + " " + text(order.get("tx_hash")) + " " + text(address.get("address"))).toLowerCase();
+                    + text(row.get("to_address")) + " " + text(order.get("tx_hash"))).toLowerCase();
             if (!value.isEmpty() && !haystack.contains(value)) continue;
             Map<String, Object> view = new LinkedHashMap<>();
             view.put("id", row.get("id")); view.put("custodyAddressId", row.get("custody_address_id"));
@@ -913,7 +913,7 @@ public class CustodyRepository {
             view.put("toAddress", row.get("to_address")); view.put("amount", row.get("amount")); view.put("fee", row.get("fee"));
             view.put("txHash", order.get("tx_hash")); view.put("status", order.getOrDefault("status", row.get("status")));
             view.put("errorMessage", order.get("error_message")); view.put("createdByType", row.get("created_by_type"));
-            view.put("sourceAddress", address.get("address")); view.put("subject", address.get("subject"));
+            view.put("subject", address.get("subject"));
             view.put("createdAt", instant(row.get("created_at"))); view.put("updatedAt", instant(row.get("updated_at")));
             result.add(view);
         }
@@ -988,8 +988,12 @@ public class CustodyRepository {
                         .orElse(new NetworkFee(usage.reservedAmount(), "CONFIGURED_RESERVE"));
                 settleGasUsage(change.id(), networkFee.amount(), networkFee.pricingSource(), change.txHash());
             });
-        } else if (!Set.of("FROZEN", "SIGNING", "SENT", "CONFIRMING", "RETRYING", "BROADCAST_UNKNOWN")
-                .contains(change.nextStatus())) {
+        } else if (Set.of("FAILED", "REJECTED", "CANCELLED").contains(change.nextStatus())) {
+            if (!ledgerBalances.release(change.chain(), change.assetSymbol(), change.debitAccountId(),
+                    change.amount().add(change.fee()), change.tenantId())) {
+                throw new IllegalStateException("unable to release locked withdrawal balance for "
+                        + change.orderNo());
+            }
             findGasUsage(change.id()).ifPresent(usage -> releaseGasUsage(change.id(),
                     "withdrawal ended as " + change.nextStatus()));
         }

@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.Transaction;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
@@ -19,7 +20,10 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * 第二次签名服务（sig2）。
@@ -38,6 +42,15 @@ import java.util.HexFormat;
 @RequiredArgsConstructor
 public class SecondSignJob {
 
+    /** 同类签名实例的 Redis 租约有效期。 */
+    private static final Duration LOCK_TTL = Duration.ofMinutes(5);
+    /** 第二次签名任务的 Redis 租约键。 */
+    private static final String LOCK_KEY = Constants.WALLET_WITHDRAW_SIG_SECOND_KEY + ":lock";
+    /** 原子释放 Redis 租约脚本。 */
+    private static final DefaultRedisScript<Long> RELEASE_LOCK = new DefaultRedisScript<>(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+            Long.class);
+
     /**
      * 定义 {@code HEX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
@@ -49,7 +62,8 @@ public class SecondSignJob {
     private final StringRedisTemplate redis;
     /** Jackson 3 对象映射器，用于处理 Redis 队列中的交易 JSON。 */
     private final ObjectMapper objectMapper;
-
+    /** 当前签名实例的 Redis 租约所有者。 */
+    private final String ownerId = "sig2-" + UUID.randomUUID();
     /**
      * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
      */
@@ -59,8 +73,12 @@ public class SecondSignJob {
     void execute() {
         String key = Constants.WALLET_WITHDRAW_SIG_SECOND_KEY;
         String tmp = Constants.WALLET_WITHDRAW_SIG_SECOND_TMP_KEY;
+        if (!Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(LOCK_KEY, ownerId, LOCK_TTL))) {
+            return;
+        }
 
         try {
+            recoverProcessing(key, tmp);
             String txStr = redis.opsForList().rightPopAndLeftPush(key, tmp);
             if (ObjectUtils.isEmpty(txStr)) {
                 return;
@@ -103,6 +121,15 @@ public class SecondSignJob {
             log.info("Signature second job redis error", e);
         } catch (Throwable e) {
             log.error("Signature second job error, will retry", e);
+        } finally {
+            redis.execute(RELEASE_LOCK, List.of(LOCK_KEY), ownerId);
+        }
+    }
+
+    /** 将进程异常退出时遗留在处理中队列的任务恢复到待签名队列。 */
+    private void recoverProcessing(String key, String processing) {
+        while (redis.opsForList().rightPopAndLeftPush(processing, key) != null) {
+            log.warn("恢复第二次签名处理中任务 processingKey={}", processing);
         }
     }
 }

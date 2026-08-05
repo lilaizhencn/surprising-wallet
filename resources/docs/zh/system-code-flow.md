@@ -40,7 +40,23 @@
 
 Console 可附带标签和元数据手动创建地址；公开 API 不接收这些管理字段。地址仍计入租户资产总额，但其后续充值不自动投递 Webhook。创建地址本身也不产生 Webhook。所有 Console/API 查询和变更都强制应用租户隔离。
 
-提现请求使用永久幂等键，复用现有的资金锁定、广播和确认流程，并从持久化投递记录发送签名生命周期 Webhook。
+提现请求要求幂等键，服务保留七天并复用现有的资金锁定、广播和确认流程；API 与 Console 使用同一幂等语义，从持久化投递记录发送签名生命周期 Webhook。
+
+提现任务的可靠性边界：
+
+```text
+@Scheduled 入口
+  -> wallet_task_lease：按任务名获取数据库租约并心跳续租
+  -> tenant-fair claim：按租户公平领取待处理订单
+  -> 业务事务：锁定余额/UTXO、写 chain_signing_transaction、写 wallet_outbox
+  -> 提交后 Outbox 派发：Redis sig1/sig2 队列
+  -> 广播处理中队列 + chain_signing_transaction 广播租约
+  -> SENT/CONFIRMED：结算账本与 Gas
+  -> FAILED/REJECTED/CANCELLED：释放锁定本金、手续费与 Gas
+  -> BROADCAST_UNKNOWN：禁止盲目重建，等待链上对账与人工审计
+```
+
+数据库是 wallet-api 订单、租约、Outbox、账本和审计的事实来源；Redis 队列用于跨进程传输，sig1/sig2 额外使用 Redis 租约保护签名轮询。任务或进程中断后，数据库租约、Outbox 的超时领取、签名处理中队列和广播处理中队列都能恢复，回调失败则按租户公平领取和指数退避重试。
 
 ## 资产解析
 

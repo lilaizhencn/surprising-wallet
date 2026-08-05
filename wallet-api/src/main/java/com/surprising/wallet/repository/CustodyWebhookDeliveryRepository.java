@@ -2,6 +2,7 @@ package com.surprising.wallet.repository;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
@@ -54,16 +55,26 @@ public class CustodyWebhookDeliveryRepository {
     }
 
     /** 原子领取待投递记录并返回本次领取的单表字段。 */
+    @Transactional(rollbackFor = Throwable.class)
     public List<Map<String, Object>> claim(String workerId, int limit) {
         List<Map<String, Object>> rows = jdbc.queryForList("""
-                select id, tenant_id, endpoint_id, event_id, attempt_count, total_attempt_count,
-                       manual_retry_count,
-                       case when status = 'DELIVERING' then 'RECOVERY' else next_attempt_trigger end
+                with queued as (
+                    select id, row_number() over (partition by tenant_id order by next_attempt_at, id)
+                        as tenant_rank
+                      from custody_webhook_delivery
+                     where (status in ('PENDING', 'RETRY') and next_attempt_at <= now())
+                        or (status = 'DELIVERING' and locked_at < now() - interval '5 minutes')
+                ), candidates as (
+                    select id from queued order by tenant_rank, id limit ?
+                )
+                select d.id, d.tenant_id, d.endpoint_id, d.event_id, d.attempt_count, d.total_attempt_count,
+                       d.manual_retry_count,
+                       case when d.status = 'DELIVERING' then 'RECOVERY' else d.next_attempt_trigger end
                            as next_attempt_trigger
-                  from custody_webhook_delivery
-                 where (status in ('PENDING', 'RETRY') and next_attempt_at <= now())
-                    or (status = 'DELIVERING' and locked_at < now() - interval '5 minutes')
-                 order by next_attempt_at, id limit ? for update skip locked
+                  from custody_webhook_delivery d
+                  join candidates c on c.id = d.id
+                 order by d.next_attempt_at, d.id
+                 for update of d skip locked
                 """, Math.min(Math.max(limit, 1), 100));
         for (Map<String, Object> row : rows) {
             jdbc.update("""

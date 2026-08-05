@@ -149,6 +149,7 @@ public class UtxoRepository {
                           and ur.confirmations >= ?
                         order by ur.id
                         limit ? offset ?
+                        for update skip locked
                         """, (rs, rowNum) -> map(rs, chain, runtimeCurrencyId),
                 runtimeCurrencyId, chain, assetSymbol, requiredConfirmations, limit, offset);
     }
@@ -173,6 +174,7 @@ public class UtxoRepository {
                    and lower(ur.address) in (%s)
                  order by ur.id
                  limit ? offset ?
+                 for update skip locked
                 """.formatted(placeholders);
         return jdbc.query(sql, (rs, rowNum) -> map(rs, chain, runtimeCurrencyId),
                 buildArguments(runtimeCurrencyId, chain, assetSymbol, requiredConfirmations,

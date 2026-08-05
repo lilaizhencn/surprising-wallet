@@ -3,6 +3,8 @@ package com.surprising.wallet.service;
 import com.surprising.wallet.model.CustodyWebhookRetryPolicy;
 import com.surprising.wallet.repository.CustodyRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -22,6 +24,8 @@ public class CustodyWebhookDispatchService {
     private final CustodyWebhookService webhooks;
     /** Webhook 重试策略。 */
     private final CustodyWebhookRetryPolicy retryPolicy;
+    /** Webhook 并发执行器。 */
+    private final TaskExecutor deliveryExecutor;
     /** 当前进程的 Worker 标识。 */
     private final String workerId = "webhook-" + UUID.randomUUID();
 
@@ -31,10 +35,22 @@ public class CustodyWebhookDispatchService {
             CustodyCryptoService crypto,
             CustodyWebhookService webhooks,
             CustodyWebhookRetryPolicy retryPolicy) {
+        this(repository, crypto, webhooks, retryPolicy, Runnable::run);
+    }
+
+    /** 构造带租户隔离执行池的 Webhook 投递服务。 */
+    @Autowired
+    public CustodyWebhookDispatchService(
+            CustodyRepository repository,
+            CustodyCryptoService crypto,
+            CustodyWebhookService webhooks,
+            CustodyWebhookRetryPolicy retryPolicy,
+            TaskExecutor deliveryExecutor) {
         this.repository = repository;
         this.crypto = crypto;
         this.webhooks = webhooks;
         this.retryPolicy = retryPolicy;
+        this.deliveryExecutor = deliveryExecutor;
     }
 
     /** 领取并投递一批待处理 Webhook。 */
@@ -42,7 +58,7 @@ public class CustodyWebhookDispatchService {
         List<CustodyRepository.WebhookDeliveryTask> tasks =
                 repository.claimWebhookDeliveries(workerId, 25);
         for (CustodyRepository.WebhookDeliveryTask task : tasks) {
-            deliver(task);
+            deliveryExecutor.execute(() -> deliver(task));
         }
     }
 

@@ -32,6 +32,12 @@ const typeLabels = Object.freeze({
   DEPOSIT: "充值入账", WITHDRAWAL: "提现扣款", WITHDRAWAL_RELEASE: "提现失败释放"
 });
 const terminalWithdrawalStatuses = new Set(["CONFIRMED", "FAILED", "CANCELLED", "REQUEST_FAILED"]);
+const withdrawalStatusLabels = Object.freeze({
+  CREATED: "已创建", FROZEN: "已冻结", RETRYING: "重试中", SIGNING: "签名中",
+  SENT: "已广播", CONFIRMING: "确认中", CONFIRMED: "已完成", FAILED: "失败",
+  CANCELLED: "已取消", BROADCAST_UNKNOWN: "广播待核对", REQUEST_FAILED: "请求失败",
+  PENDING_REVIEW: "人工审核中"
+});
 
 function escape(value) {
   return String(value ?? "").replace(/[&<>'"]/g, character => ({
@@ -75,6 +81,12 @@ function addressCell(value) {
 function withdrawalFeeText(row) {
   const fee = String(row.fee ?? "0");
   return compareAmounts(fee, "0") === 0 ? escape(fee) : `${escape(fee)} ${escape(row.asset)}`;
+}
+
+/** 将钱包服务状态转换成租户可理解的文案。 */
+function withdrawalStatusText(status) {
+  const value = String(status ?? "");
+  return withdrawalStatusLabels[value] ?? (value || "处理中");
 }
 
 function decimalParts(value) {
@@ -291,7 +303,7 @@ function renderWithdrawals() {
     { label: "手续费", render: withdrawalFeeText },
     { label: "ID", render: row => `<code title="平台提现记录 ID">${escape(row.custodyWithdrawalId ?? row.id ?? "等待平台返回")}</code>` },
     { label: "租户业务订单号", render: row => `<code title="租户生成的业务订单号">${escape(row.externalReference ?? "—")}</code>` },
-    { key: "status", label: "状态", render: row => `<span class="pill">${escape(row.status)}</span>` },
+    { key: "status", label: "状态", render: row => `<span class="pill">${escape(withdrawalStatusText(row.status))}</span>` },
     { label: "TxID", render: row => `<code>${escape(row.txHash ?? "等待回调")}</code>` }
   ], rows);
 }
@@ -702,7 +714,7 @@ $("#confirmWithdrawalButton").addEventListener("click", async () => {
     });
     closeWithdrawalConfirmation();
     await refreshAll();
-    formMessage("#withdrawalMessage", `提现已提交，状态：${result.status}`);
+    formMessage("#withdrawalMessage", `提现已提交，状态：${withdrawalStatusText(result.status)}`);
     toast("提现请求已提交，处理中提现已更新");
   } catch (error) {
     formMessage("#withdrawalMessage", error.message, true);

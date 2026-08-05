@@ -12,7 +12,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
-import java.util.List;
 
 /**
  * 链上交易广播任务。
@@ -24,7 +23,9 @@ import java.util.List;
 @Slf4j
 public class BroadCastSignedTxJob {
     /** 每批次最多读取并尝试广播的交易数量。 */
-    private static final long COUNT = 100L;
+    private static final int COUNT = 100;
+    /** 广播任务的处理中队列，任务进程崩溃后可以恢复。 */
+    private static final String PROCESSING_SUFFIX = ":processing";
 
     /** 交易服务，负责链上广播动作。 */
     private final TransactionService txService;
@@ -50,25 +51,44 @@ public class BroadCastSignedTxJob {
     @Scheduled(scheduler = "withdrawTaskScheduler", fixedDelay = 30_000)
     public void run() {
         String key = Constants.WALLET_WITHDRAW_SIG_DONE_KEY;
+        String processing = key + PROCESSING_SUFFIX;
         try {
-            List<String> withdrawStr = redis.opsForList().range(key, 0L, COUNT);
-            if (withdrawStr != null && !withdrawStr.isEmpty()) {
-                log.info("广播交易开始 待广播数量:{}", withdrawStr.size());
-                java.util.ArrayList<String> retry = new java.util.ArrayList<>();
-                withdrawStr.forEach(str -> {
-                    WithdrawTransaction transaction = JacksonJson.readValue(objectMapper, str, WithdrawTransaction.class);
-                    if (!txService.sendWithdrawTransaction(transaction)) {
-                        retry.add(str);
+            recoverProcessing(key, processing);
+            int processed = 0;
+            while (processed++ < COUNT) {
+                String value = redis.opsForList().rightPopAndLeftPush(key, processing);
+                if (value == null || value.isBlank()) {
+                    break;
+                }
+                boolean retry = false;
+                try {
+                    WithdrawTransaction transaction = JacksonJson.readValue(objectMapper, value, WithdrawTransaction.class);
+                    retry = !txService.sendWithdrawTransaction(transaction);
+                } catch (DataAccessException | JsonRpcClientException error) {
+                    retry = true;
+                    log.warn("广播交易调用 RPC 失败，将任务放回队列", error);
+                } catch (Throwable error) {
+                    retry = true;
+                    log.warn("广播交易异常，将任务放回队列", error);
+                } finally {
+                    redis.opsForList().remove(processing, 1, value);
+                    if (retry) {
+                        redis.opsForList().rightPush(key, value);
                     }
-                });
-                log.info("广播交易结束 数量:{}", withdrawStr.size());
-                redis.opsForList().trim(key, withdrawStr.size(), -1L);
-                retry.forEach(str -> redis.opsForList().rightPush(key, str));
+                }
             }
-        } catch (DataAccessException | JsonRpcClientException e) {
-            log.info("广播交易调用rpc响应错误", e);
         } catch (Throwable e) {
-            log.info("广播交易异常", e);
+            log.warn("广播交易队列处理异常", e);
+        }
+    }
+
+    /** 将上一次进程崩溃遗留的处理中任务恢复到主队列。 */
+    private void recoverProcessing(String key, String processing) {
+        while (true) {
+            String value = redis.opsForList().rightPopAndLeftPush(processing, key);
+            if (value == null) {
+                return;
+            }
         }
     }
 }

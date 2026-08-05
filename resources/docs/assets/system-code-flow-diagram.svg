@@ -218,15 +218,16 @@
 
   <rect x="705" y="766" width="430" height="20" class="db"/>
   <text x="920" y="780" text-anchor="middle" class="small">EIP-7702 批量提现（能力位接管）：执行费 + L1/DA + Operator Fee · relayer 余额保护</text>
+  <text x="590" y="805" text-anchor="middle" class="small">数据库租约防重复调度 · wallet_outbox 防提交后丢签名任务 · 广播未知进入对账，不盲目重建</text>
 
   <!-- ====== BOTTOM INFRA ====== -->
   <rect x="20" y="830" width="1140" height="46" class="phase-bg"/>
 
   <rect x="40" y="840" width="200" height="26" class="db"/>
-  <text x="140" y="858" text-anchor="middle" class="small">PostgreSQL · 账本 · 链配置 · 审计</text>
+  <text x="140" y="858" text-anchor="middle" class="small">PostgreSQL · 账本 · 租约 · Outbox · 审计</text>
 
   <rect x="260" y="840" width="200" height="26" class="db"/>
-  <text x="360" y="858" text-anchor="middle" class="small">Redis · sig1 queue · sig2 queue</text>
+  <text x="360" y="858" text-anchor="middle" class="small">Redis · sig1/sig2 队列 · 签名租约</text>
 
   <rect x="480" y="840" width="200" height="26" class="db"/>
   <text x="580" y="858" text-anchor="middle" class="small">API · HMAC 签名 · IP 白名单</text>

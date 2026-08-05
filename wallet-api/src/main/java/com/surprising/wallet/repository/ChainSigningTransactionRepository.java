@@ -88,9 +88,22 @@ public class ChainSigningTransactionRepository {
         return jdbc.query("""
                 select id, tx_id, balance, signature, currency, status, create_date, update_date
                   from chain_signing_transaction
-                 where chain = ? and status = ? and update_date < now() - (? * interval '1 second')
+                 where chain = ? and status = ? and error_message is null
+                   and update_date < now() - (? * interval '1 second')
                  order by id limit 100
                 """, (rs, rowNum) -> map(rs), chain, signingStatus, staleSeconds);
+    }
+
+    /** 原子领取广播处理权，避免多个广播工作者同时向链上发送同一笔交易。 */
+    public boolean claimBroadcast(String chain, long id, String ownerId, long leaseSeconds, short sentStatus) {
+        return jdbc.update("""
+                update chain_signing_transaction
+                   set broadcast_owner = ?, broadcast_lease_until = now() + (? * interval '1 second'),
+                       update_date = now()
+                 where chain = ? and id = ? and status < ? and error_message is null
+                   and (broadcast_lease_until is null or broadcast_lease_until <= now()
+                        or broadcast_owner = ?)
+                """, ownerId, leaseSeconds, chain, id, sentStatus, ownerId) == 1;
     }
 
     /** 领取超时签名交易的恢复处理权。 */
@@ -106,7 +119,8 @@ public class ChainSigningTransactionRepository {
     public int updateStatus(String chain, long id, WithdrawTransaction transaction) {
         return jdbc.update("""
                 update chain_signing_transaction set tx_id = ?, balance = ?, signature = ?, currency = ?,
-                    status = ?, error_message = null, update_date = ? where chain = ? and id = ?
+                    status = ?, error_message = null, broadcast_owner = null, broadcast_lease_until = null,
+                    update_date = ? where chain = ? and id = ?
                 """, transaction.getTxId(), transaction.getBalance(), transaction.getSignature(),
                 transaction.getCurrency(), transaction.getStatus(), Timestamp.from(Instant.now()), chain, id);
     }
@@ -114,7 +128,8 @@ public class ChainSigningTransactionRepository {
     /** 将签名失败信息写入交易状态。 */
     public int markError(String chain, long id, String errorMessage) {
         return jdbc.update("""
-                update chain_signing_transaction set error_message = ?, update_date = ? where chain = ? and id = ?
+                update chain_signing_transaction set error_message = ?, broadcast_owner = null,
+                    broadcast_lease_until = null, update_date = ? where chain = ? and id = ?
                 """, errorMessage, Timestamp.from(Instant.now()), chain, id);
     }
 

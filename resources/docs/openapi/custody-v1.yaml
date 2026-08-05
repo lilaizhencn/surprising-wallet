@@ -118,7 +118,7 @@ paths:
       tags: [Public API]
       summary: Create a withdrawal
       description: >-
-        Idempotency-Key is permanent for withdrawal creation. The destination
+        Idempotency-Key is retained for seven days for withdrawal creation. The destination
         is a validated external chain address and does not need to be an address
         previously allocated by this wallet service.
       security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
@@ -130,7 +130,7 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/CreateWithdrawal' }
       responses:
-        '201':
+        '202':
           description: Accepted withdrawal
           content:
             application/json:
@@ -428,14 +428,16 @@ paths:
       tags: [Console transfers]
       summary: Create a withdrawal from Console
       security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/CreateWithdrawal' }
       responses:
-        '200':
-          description: Created withdrawal
+        '202':
+          description: Accepted withdrawal
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Withdrawal' }

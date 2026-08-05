@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -114,24 +115,20 @@ public class CustodyWithdrawalService {
                 address.id() + "\n" + chain + "\n" + symbol + "\n"
                         + toAddress + "\n" + amount + "\n" + externalReference);
 
-        String normalizedIdempotencyKey = null;
-        if ("API".equals(normalizedSource)) {
-            normalizedIdempotencyKey = requireIdempotencyKey(idempotencyKey);
-            WithdrawalView replay = replay(
-                    principal.tenantId(), normalizedIdempotencyKey, requestHash);
+        String normalizedIdempotencyKey = requireIdempotencyKey(idempotencyKey);
+        WithdrawalView replay = replay(principal.tenantId(), normalizedIdempotencyKey, requestHash);
+        if (replay != null) {
+            return replay;
+        }
+        if (!repository.beginIdempotency(
+                principal.tenantId(), normalizedIdempotencyKey, CREATE_OPERATION,
+                requestHash, Instant.now().plus(Duration.ofDays(7)))) {
+            replay = replay(principal.tenantId(), normalizedIdempotencyKey, requestHash);
             if (replay != null) {
                 return replay;
             }
-            if (!repository.beginIdempotency(
-                    principal.tenantId(), normalizedIdempotencyKey, CREATE_OPERATION,
-                    requestHash, null)) {
-                replay = replay(principal.tenantId(), normalizedIdempotencyKey, requestHash);
-                if (replay != null) {
-                    return replay;
-                }
-                throw new IllegalStateException(
-                        "a withdrawal request with this idempotency key is still processing");
-            }
+            throw new IllegalStateException(
+                    "a withdrawal request with this idempotency key is still processing");
         }
 
         TenantRecord tenant = repository.requireTenant(principal.tenantId());
@@ -183,10 +180,8 @@ public class CustodyWithdrawalService {
                         "assetSymbol", symbol,
                         "amount", amountValue,
                         "source", normalizedSource)));
-        if ("API".equals(normalizedSource)) {
-            repository.completeIdempotency(
-                    tenant.id(), normalizedIdempotencyKey, CREATE_OPERATION, 201, json(view));
-        }
+        repository.completeIdempotency(
+                tenant.id(), normalizedIdempotencyKey, CREATE_OPERATION, 202, json(view));
         return view;
     }
 

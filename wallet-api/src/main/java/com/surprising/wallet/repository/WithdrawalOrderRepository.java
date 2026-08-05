@@ -69,15 +69,20 @@ public class WithdrawalOrderRepository {
 
     /** 查询租户下一批待签名提现。 */
     public List<WithdrawalOrderRecord> listForSigning(String chain, String assetSymbol, int limit) {
-        List<UUID> tenants = jdbc.queryForList("""
-                select tenant_id from withdrawal_order
-                 where tenant_id is not null and chain = ? and asset_symbol = ?
-                   and status in ('FROZEN', 'RETRYING') order by id limit 1
-                """, UUID.class, chain, assetSymbol);
-        if (tenants.isEmpty()) {
-            return List.of();
-        }
-        return listByTenantAndStatuses(tenants.getFirst(), chain, assetSymbol, limit);
+        return jdbc.query("""
+                select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id,
+                       to_address, amount, fee, tx_hash, status, error_message, created_at, updated_at
+                  from (
+                       select o.*, row_number() over (partition by tenant_id order by id) as tenant_rank
+                         from withdrawal_order o
+                        where tenant_id is not null and chain = ? and asset_symbol = ?
+                          and status in ('FROZEN', 'RETRYING')
+                          and (next_attempt_at is null or next_attempt_at <= now())
+                  ) queued
+                 order by tenant_rank, id, tenant_id
+                 limit ?
+                """, (rs, rowNum) -> map(rs), chain, assetSymbol,
+                Math.min(Math.max(limit, 1), 500));
     }
 
     /** 查询指定链的待签名提现。 */
@@ -85,9 +90,14 @@ public class WithdrawalOrderRepository {
         return jdbc.query("""
                 select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id,
                        to_address, amount, fee, tx_hash, status, error_message, created_at, updated_at
-                  from withdrawal_order
-                 where tenant_id is not null and chain = ? and status in ('FROZEN', 'RETRYING')
-                 order by id limit ?
+                  from (
+                       select o.*, row_number() over (partition by tenant_id order by id) as tenant_rank
+                         from withdrawal_order o
+                        where tenant_id is not null and chain = ? and status in ('FROZEN', 'RETRYING')
+                          and (next_attempt_at is null or next_attempt_at <= now())
+                  ) queued
+                 order by tenant_rank, id, tenant_id
+                 limit ?
                 """, (rs, rowNum) -> map(rs), chain, limit);
     }
 
@@ -105,7 +115,8 @@ public class WithdrawalOrderRepository {
     public int claimSigning(UUID tenantId, String chain, String orderNo, String fromAddress) {
         return jdbc.update("""
                 update withdrawal_order set status = 'SIGNING', from_address = coalesce(?, from_address),
-                    error_message = null, updated_at = ?
+                    error_message = null, last_attempt_at = now(),
+                    attempt_count = attempt_count + 1, lease_until = now() + interval '5 minutes', updated_at = ?
                  where tenant_id = ? and chain = ? and order_no = ? and status in ('FROZEN', 'RETRYING')
                 """, fromAddress, Timestamp.from(Instant.now()), tenantId, chain, orderNo);
     }
@@ -114,7 +125,8 @@ public class WithdrawalOrderRepository {
     public int claimSigning(String chain, String orderNo, String fromAddress) {
         return jdbc.update("""
                 update withdrawal_order set status = 'SIGNING', from_address = coalesce(?, from_address),
-                    error_message = null, updated_at = ?
+                    error_message = null, last_attempt_at = now(),
+                    attempt_count = attempt_count + 1, lease_until = now() + interval '5 minutes', updated_at = ?
                  where chain = ? and order_no = ? and status in ('FROZEN', 'RETRYING')
                 """, fromAddress, Timestamp.from(Instant.now()), chain, orderNo);
     }
@@ -124,7 +136,7 @@ public class WithdrawalOrderRepository {
         return jdbc.update("""
                 update withdrawal_order set status = 'BROADCAST_UNKNOWN',
                     error_message = 'signing state expired before a tx hash was recorded; manual chain audit required',
-                    updated_at = ?
+                    lease_owner = null, lease_until = null, updated_at = ?
                  where tenant_id is not null and chain = ? and status = 'SIGNING'
                    and tx_hash is null and updated_at < ?
                 """, Timestamp.from(Instant.now()), chain, Timestamp.from(before));
@@ -134,7 +146,7 @@ public class WithdrawalOrderRepository {
     public int markSent(UUID tenantId, String chain, String orderNo, String fromAddress, String txHash) {
         return jdbc.update("""
                 update withdrawal_order set status = 'SENT', from_address = coalesce(?, from_address),
-                    tx_hash = ?, error_message = null, updated_at = ?
+                    tx_hash = ?, error_message = null, lease_owner = null, lease_until = null, updated_at = ?
                  where tenant_id = ? and chain = ? and order_no = ? and status = 'SIGNING' and tx_hash is null
                 """, fromAddress, txHash, Timestamp.from(Instant.now()), tenantId, chain, orderNo);
     }
@@ -143,7 +155,7 @@ public class WithdrawalOrderRepository {
     public int markSent(String chain, String orderNo, String fromAddress, String txHash) {
         return jdbc.update("""
                 update withdrawal_order set status = 'SENT', from_address = coalesce(?, from_address),
-                    tx_hash = ?, error_message = null, updated_at = ?
+                    tx_hash = ?, error_message = null, lease_owner = null, lease_until = null, updated_at = ?
                  where chain = ? and order_no = ? and status = 'SIGNING' and tx_hash is null
                 """, fromAddress, txHash, Timestamp.from(Instant.now()), chain, orderNo);
     }
@@ -153,7 +165,7 @@ public class WithdrawalOrderRepository {
                                     String fromAddress, String errorMessage) {
         return jdbc.update("""
                 update withdrawal_order set status = 'BROADCAST_UNKNOWN', from_address = coalesce(?, from_address),
-                    error_message = ?, updated_at = ?
+                    error_message = ?, lease_owner = null, lease_until = null, updated_at = ?
                  where tenant_id = ? and chain = ? and order_no = ? and status = 'SIGNING' and tx_hash is null
                 """, fromAddress, errorMessage, Timestamp.from(Instant.now()), tenantId, chain, orderNo);
     }
@@ -162,7 +174,7 @@ public class WithdrawalOrderRepository {
     public int markBroadcastUnknown(String chain, String orderNo, String fromAddress, String errorMessage) {
         return jdbc.update("""
                 update withdrawal_order set status = 'BROADCAST_UNKNOWN', from_address = coalesce(?, from_address),
-                    error_message = ?, updated_at = ?
+                    error_message = ?, lease_owner = null, lease_until = null, updated_at = ?
                  where chain = ? and order_no = ? and status = 'SIGNING' and tx_hash is null
                 """, fromAddress, errorMessage, Timestamp.from(Instant.now()), chain, orderNo);
     }
@@ -172,7 +184,8 @@ public class WithdrawalOrderRepository {
                             String fromAddress, String txHash, String errorMessage) {
         return jdbc.update("""
                 update withdrawal_order set status = ?, from_address = coalesce(?, from_address),
-                    tx_hash = coalesce(?, tx_hash), error_message = ?, updated_at = now()
+                    tx_hash = coalesce(?, tx_hash), error_message = ?, lease_owner = null,
+                    lease_until = null, updated_at = now()
                  where tenant_id = ? and chain = ? and order_no = ?
                 """, status, fromAddress, txHash, errorMessage, tenantId, chain, orderNo);
     }

@@ -280,7 +280,7 @@ async function api(request, response, url) {
         externalReference: reserved.externalReference,
         confirmed: true
       }, reserved.idempotencyKey);
-      return json(response, 201, await store.acceptWithdrawal(reserved.id, remote));
+      return json(response, 202, await store.acceptWithdrawal(reserved.id, remote));
     } catch (cause) {
       await store.releaseWithdrawal(reserved.id, cause.message);
       throw cause;

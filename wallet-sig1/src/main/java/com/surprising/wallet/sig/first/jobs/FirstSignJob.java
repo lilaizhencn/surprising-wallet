@@ -11,11 +11,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * 第一次签名服务（sig1）。
@@ -34,13 +39,23 @@ import tools.jackson.databind.node.ObjectNode;
 @RequiredArgsConstructor
 public class FirstSignJob {
 
+    /** 同类签名实例的 Redis 租约有效期。 */
+    private static final Duration LOCK_TTL = Duration.ofMinutes(5);
+    /** 第一次签名任务的 Redis 租约键。 */
+    private static final String LOCK_KEY = Constants.WALLET_WITHDRAW_SIG_FIRST_KEY + ":lock";
+    /** 原子释放 Redis 租约脚本。 */
+    private static final DefaultRedisScript<Long> RELEASE_LOCK = new DefaultRedisScript<>(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+            Long.class);
+
     /**
      * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
      */
     private final StringRedisTemplate redis;
     /** Jackson 3 对象映射器，用于处理 Redis 队列中的交易 JSON。 */
     private final ObjectMapper objectMapper;
-
+    /** 当前签名实例的 Redis 租约所有者。 */
+    private final String ownerId = "sig1-" + UUID.randomUUID();
     /**
      * 保存 {@code signContent}，用于承载当前对象的运行配置或业务数据。
      */
@@ -56,8 +71,12 @@ public class FirstSignJob {
     void execute() {
         String key = Constants.WALLET_WITHDRAW_SIG_FIRST_KEY;
         String tmp = Constants.WALLET_WITHDRAW_SIG_FIRST_TMP_KEY;
+        if (!Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(LOCK_KEY, ownerId, LOCK_TTL))) {
+            return;
+        }
 
         try {
+            recoverProcessing(key, tmp);
             String txStr = redis.opsForList().rightPopAndLeftPush(key, tmp);
             if (ObjectUtils.isEmpty(txStr)) {
                 return;
@@ -94,6 +113,15 @@ public class FirstSignJob {
             log.info("Signature first job error", e);
         } catch (Throwable e) {
             log.error("Signature first job error, will retry", e);
+        } finally {
+            redis.execute(RELEASE_LOCK, List.of(LOCK_KEY), ownerId);
+        }
+    }
+
+    /** 将进程异常退出时遗留在处理中队列的任务恢复到待签名队列。 */
+    private void recoverProcessing(String key, String processing) {
+        while (redis.opsForList().rightPopAndLeftPush(processing, key) != null) {
+            log.warn("恢复第一次签名处理中任务 processingKey={}", processing);
         }
     }
 }

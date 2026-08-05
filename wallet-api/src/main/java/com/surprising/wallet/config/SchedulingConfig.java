@@ -3,6 +3,7 @@ package com.surprising.wallet.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
  * 按任务类型隔离调度线程池，避免单个慢任务影响其他定时任务。
@@ -80,5 +81,19 @@ public class SchedulingConfig {
         s.setWaitForTasksToCompleteOnShutdown(true);
         s.setAwaitTerminationSeconds(60);
         return s;
+    }
+
+    /** Webhook 投递执行池，避免单个租户的慢回调阻塞其他租户。 */
+    @Bean(name = "custodyWebhookExecutor", destroyMethod = "shutdown")
+    public ThreadPoolTaskExecutor custodyWebhookExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(8);
+        executor.setMaxPoolSize(32);
+        executor.setQueueCapacity(256);
+        executor.setThreadNamePrefix("custody-webhook-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.initialize();
+        return executor;
     }
 }
