@@ -27,6 +27,8 @@ DROP TABLE IF EXISTS public.evm_collection_batch_item;
 DROP TABLE IF EXISTS public.evm_collection_batch;
 DROP TABLE IF EXISTS public.evm_7702_account;
 DROP TABLE IF EXISTS public.evm_7702_config;
+DROP TABLE IF EXISTS public.wallet_outbox;
+DROP TABLE IF EXISTS public.wallet_task_lease;
 ALTER TABLE IF EXISTS ONLY public.collection_record DROP CONSTRAINT IF EXISTS collection_record_custody_fk;
 ALTER TABLE IF EXISTS ONLY public.collection_record DROP CONSTRAINT IF EXISTS collection_record_tenant_fk;
 ALTER TABLE IF EXISTS ONLY public.collection_record DROP CONSTRAINT IF EXISTS collection_record_tenant_id_key;
