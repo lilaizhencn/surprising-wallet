@@ -718,10 +718,10 @@ export class DemoStore {
         INSERT INTO withdrawals(
           id, user_id, custody_address_id, external_reference, idempotency_key,
           chain, network, asset, to_address, amount, fee, status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTING', ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '0', 'REQUESTING', ?, ?)
       `, [id, userId, address.id, externalReference, normalizedIdempotencyKey,
         normalizedChain, address.network ?? null, normalizedAsset, destination,
-        normalizedAmount, normalizedFee, timestamp, timestamp]);
+        normalizedAmount, timestamp, timestamp]);
     });
     return this.withdrawal(id);
   }
@@ -729,8 +729,7 @@ export class DemoStore {
   async acceptWithdrawal(id, remote) {
     await this.#transaction(async database => {
       const current = await this.#withdrawal(database, id);
-      const nextFeeRaw = normalizeDecimal(remote.fee ?? current.fee ?? "0");
-      const nextFee = compareDecimal(nextFeeRaw, current.fee) > 0 ? nextFeeRaw : current.fee;
+      const nextFee = normalizeDecimal(remote.fee ?? current.fee ?? "0");
       if (compareDecimal(nextFee, current.fee) > 0) {
         await this.#reserveAdditionalWithdrawalFee(
           database, current, subtractDecimal(nextFee, current.fee));
@@ -1035,8 +1034,8 @@ export class DemoStore {
     if (data.asset && String(data.asset).toUpperCase() !== current.asset) {
       throw new Error("withdrawal callback asset does not match request");
     }
-    if (data.amount !== undefined && normalizeDecimal(data.amount) !== current.amount) {
-      throw new Error("withdrawal callback amount does not match request");
+    if (data.amount !== undefined && compareDecimal(normalizeDecimal(data.amount), current.amount) > 0) {
+      throw new Error("withdrawal callback amount exceeds request amount");
     }
     const status = String(data.status ?? eventType.split(".").at(-1));
     const terminalConfirmed = eventType === "WITHDRAWAL.CONFIRMED";
