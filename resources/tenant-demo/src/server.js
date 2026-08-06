@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import http from "node:http";
 import { dirname, extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import { subtractDecimal } from "./decimal.js";
 import { DemoStore } from "./store.js";
 import { verifyWebhook } from "./webhook.js";
 import { WalletClient } from "./wallet-client.js";
@@ -18,6 +19,22 @@ const cookieSecure = String(process.env.TENANT_DEMO_COOKIE_SECURE ?? "false") ==
 const setupToken = String(process.env.TENANT_DEMO_SETUP_TOKEN ?? "").trim();
 const store = await DemoStore.open();
 const loginFailures = new Map();
+const defaultWithdrawalFees = Object.freeze({
+  USDT: "1", USDC: "1", DAI: "1", BUSD: "1", TUSD: "1",
+  ETH: "0.001", BTC: "0.0001", SOL: "0.01", BNB: "0.001",
+  MATIC: "1", POL: "1", AVAX: "0.01", DOT: "0.1", NEAR: "0.1",
+  ADA: "1", XRP: "0.1", TRX: "1", TON: "0.01", SUI: "0.01",
+  APTOS: "0.01", LTC: "0.001", DOGE: "1", BCH: "0.001"
+});
+
+async function withdrawalFeeConfig() {
+  const config = await store.configuration();
+  try {
+    const parsed = config.withdrawalFees ? JSON.parse(config.withdrawalFees) : null;
+    if (parsed && typeof parsed === "object") return { ...defaultWithdrawalFees, ...parsed };
+  } catch { /* ignore corrupt json */ }
+  return { ...defaultWithdrawalFees };
+}
 
 function json(response, status, value, headers = {}) {
   const body = JSON.stringify(value);
@@ -191,11 +208,13 @@ async function api(request, response, url) {
   const handledAuth = await authApi(request, response, url);
   if (handledAuth !== false) return handledAuth;
   if (request.method === "GET" && url.pathname === "/api/status") {
-    const [configuration, users, addresses, events] = await Promise.all([
-      publicConfiguration(), store.users(), store.addresses(), store.webhookEvents()
+    const [configuration, users, addresses, events, fees] = await Promise.all([
+      publicConfiguration(), store.users(), store.addresses(), store.webhookEvents(),
+      withdrawalFeeConfig()
     ]);
     return json(response, 200, {
-      ...configuration, users: users.length, addresses: addresses.length, events: events.length
+      ...configuration, users: users.length, addresses: addresses.length, events: events.length,
+      withdrawalFees: fees
     });
   }
   if (request.method === "PUT" && url.pathname === "/api/config") {
@@ -300,6 +319,8 @@ async function api(request, response, url) {
     if (!idempotencyKey) throw error("Idempotency-Key is required", 400);
     const existing = await store.withdrawalByIdempotency(user.id, idempotencyKey);
     if (existing) return json(response, 202, existing);
+    const fees = await withdrawalFeeConfig();
+    const platformFee = fees[String(input.assetSymbol ?? "").toUpperCase().trim()] ?? "0";
     let reserved;
     try {
       reserved = await store.reserveWithdrawal({
@@ -310,7 +331,8 @@ async function api(request, response, url) {
         toAddress: input.toAddress,
         amount: input.amount,
         businessOrderNo: input.businessOrderNo,
-        idempotencyKey
+        idempotencyKey,
+        platformFee
       });
     } catch (cause) {
       if (String(cause.message).includes("UNIQUE") || String(cause.message).includes("idempotency")) {
@@ -323,12 +345,15 @@ async function api(request, response, url) {
       throw cause;
     }
     try {
+      const netAmount = platformFee && platformFee !== "0"
+        ? subtractDecimal(reserved.amount, platformFee)
+        : reserved.amount;
       const remote = await (await walletClient()).createWithdrawal({
         custodyAddressId: reserved.custodyAddressId,
         chain: reserved.chain,
         assetSymbol: reserved.asset,
         toAddress: reserved.toAddress,
-        amount: reserved.amount,
+        amount: netAmount,
         externalReference: reserved.externalReference,
         confirmed: true
       }, reserved.idempotencyKey);

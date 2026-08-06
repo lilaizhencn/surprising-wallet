@@ -679,9 +679,13 @@ export class DemoStore {
   /** 预留提现资金，并持久化租户业务订单号和本次请求幂等键。 */
   async reserveWithdrawal({
     userId, custodyAddressId = null, chain, asset, toAddress, amount,
-    businessOrderNo = "", idempotencyKey = ""
+    businessOrderNo = "", idempotencyKey = "", platformFee = "0"
   }) {
     const normalizedAmount = requirePositiveDecimal(amount);
+    const normalizedFee = normalizeDecimal(platformFee);
+    if (compareDecimal(platformFee, "0") > 0 && compareDecimal(normalizedFee, normalizedAmount) >= 0) {
+      throw new Error("platform fee must be less than the withdrawal amount");
+    }
     const normalizedChain = String(chain ?? "").toUpperCase();
     const normalizedAsset = String(asset ?? "").toUpperCase();
     const destination = String(toAddress ?? "").trim();
@@ -713,11 +717,11 @@ export class DemoStore {
       await run(database, `
         INSERT INTO withdrawals(
           id, user_id, custody_address_id, external_reference, idempotency_key,
-          chain, network, asset, to_address, amount, status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTING', ?, ?)
+          chain, network, asset, to_address, amount, fee, status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'REQUESTING', ?, ?)
       `, [id, userId, address.id, externalReference, normalizedIdempotencyKey,
         normalizedChain, address.network ?? null, normalizedAsset, destination,
-        normalizedAmount, timestamp, timestamp]);
+        normalizedAmount, normalizedFee, timestamp, timestamp]);
     });
     return this.withdrawal(id);
   }
@@ -725,7 +729,8 @@ export class DemoStore {
   async acceptWithdrawal(id, remote) {
     await this.#transaction(async database => {
       const current = await this.#withdrawal(database, id);
-      const nextFee = normalizeDecimal(remote.fee ?? current.fee ?? "0");
+      const nextFeeRaw = normalizeDecimal(remote.fee ?? current.fee ?? "0");
+      const nextFee = compareDecimal(nextFeeRaw, current.fee) > 0 ? nextFeeRaw : current.fee;
       if (compareDecimal(nextFee, current.fee) > 0) {
         await this.#reserveAdditionalWithdrawalFee(
           database, current, subtractDecimal(nextFee, current.fee));

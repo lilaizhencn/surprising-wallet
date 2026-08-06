@@ -3,7 +3,8 @@ const state = {
   platformAddresses: [], addressHistory: { chain: "", page: 1, pageSize: 5 },
   pendingWithdrawal: null,
   ledgerFilters: { entryType: "", txId: "", address: "", businessOrderNo: "" },
-  withdrawalFilters: { businessOrderNo: "", address: "", txId: "" }
+  withdrawalFilters: { businessOrderNo: "", address: "", txId: "" },
+  withdrawalFees: {}
 };
 const $ = selector => document.querySelector(selector);
 const chainLabels = Object.freeze({
@@ -63,10 +64,22 @@ function networkText(row) {
   return `${escape(networkLabel(row.network))}<br><code>${escape(row.network)}</code>`;
 }
 
-/** 生成地址的可读摘要，同时保留地址尾部用于区分测试地址。 */
+/** 优先从行数据获取网络标签，若缺失则从已加载的链配置中推导。 */
+function derivedNetworkLabel(row) {
+  if (row.network) return networkLabel(row.network);
+  const config = state.chains.find(c => c.chain === row.chain);
+  return config?.network ? networkLabel(config.network) : "—";
+}
+
+/** 获取当前选中资产的平台提现手续费。 */
+function withdrawalFeeForAsset(asset) {
+  return state.withdrawalFees?.[String(asset ?? "").toUpperCase()] ?? "0";
+}
+
+/** 生成地址的可读摘要，保留更多地址字符以便辨认。 */
 function shortAddress(value) {
   const address = String(value ?? "");
-  return address.length > 24 ? `${address.slice(0, 10)}…${address.slice(-10)}` : address;
+  return address.length > 48 ? `${address.slice(0, 16)}…${address.slice(-16)}` : address;
 }
 
 /** 输出带完整地址悬浮提示的安全地址单元格。 */
@@ -333,11 +346,14 @@ function renderWithdrawals() {
   $("#withdrawalFilterSummary").textContent = `显示 ${rows.length} / ${allRows.length} 条提现记录`;
   table("#withdrawalsTable", [
     { key: "createdAt", label: "时间", render: row => escape(dateText(row.createdAt)) },
-    { label: "网络", render: row => `${escape(chainLabel(row.chain))}<br><small>${escape(networkLabel(row.network))}</small>` },
-    { label: "提现地址", render: row => addressCell(row.toAddress) },
-    { label: "提现金额", render: row => `${escape(row.amount)} ${escape(row.asset)}` },
-    { label: "手续费", render: withdrawalFeeText },
-    { label: "订单", render: orderCell },
+    { label: "链", render: row => escape(chainLabel(row.chain)) },
+    { label: "网络", render: row => escape(derivedNetworkLabel(row)) },
+    { label: "目标地址", render: row => addressCell(row.toAddress) },
+    { key: "amount", label: "数量" },
+    { key: "asset", label: "币种" },
+    { label: "手续费", render: row => row.fee && row.fee !== "0" ? `${escape(row.fee)} ${escape(row.asset)}` : "—" },
+    { label: "平台ID", render: row => { const pid = row.platformId ?? row.id; return `<code title="${escape(pid)}">${escape(shortAddress(pid))}</code>`; }},
+    { label: "业务订单号", render: row => escape(row.businessOrderNo ?? "—") },
     { key: "status", label: "状态", render: row => statusCell(row.status) },
     { label: "TxID", render: row => `${txCell(row.txHash)}<div class="table-actions">${detailButton("withdrawal", row.id)}</div>` }
   ], rows);
@@ -359,9 +375,9 @@ function renderLedger() {
   table("#ledgerTable", [
     { key: "createdAt", label: "时间", render: row => escape(dateText(row.createdAt)) },
     { key: "entryType", label: "类型", render: row => escape(typeLabels[row.entryType] ?? row.entryType) },
-    { key: "asset", label: "资产" }, { label: "链/网络", render: row => `${escape(chainLabel(row.chain))}<br><small>${escape(networkLabel(row.network))}</small>` },
+    { key: "asset", label: "资产" }, { label: "链", render: row => `${escape(chainLabel(row.chain))}<br><small>${escape(derivedNetworkLabel(row))}</small>` },
     { key: "direction", label: "方向" }, { key: "amount", label: "金额" },
-    { key: "txHash", label: "TxID", render: txCell },
+    { key: "txHash", label: "TxID", render: row => txCell(row.txHash) },
     { key: "address", label: "地址", render: row => addressCell(row.address ?? row.depositAddress) },
     { label: "业务订单号", render: row => escape(row.businessOrderNo ?? "—") },
     { label: "操作", render: row => detailButton("ledger", row.id) }
@@ -373,9 +389,11 @@ function renderDepositRecords() {
   const rows = (state.me?.ledger ?? []).filter(row => row.entryType === "DEPOSIT");
   table("#depositRecords", [
     { key: "createdAt", label: "到账时间", render: row => escape(dateText(row.createdAt)) },
-    { label: "链/网络", render: row => `${escape(chainLabel(row.chain))}<br><small>${escape(networkLabel(row.network))}</small>` },
-    { label: "资产", render: row => `${escape(row.amount)} ${escape(row.asset)}` },
-    { label: "TxID", render: txCell },
+    { label: "链", render: row => escape(chainLabel(row.chain)) },
+    { label: "网络", render: row => escape(derivedNetworkLabel(row)) },
+    { key: "amount", label: "数量" },
+    { key: "asset", label: "币种" },
+    { label: "TxID", render: row => txCell(row.txHash) },
     { label: "充值地址", render: row => addressCell(row.depositAddress ?? row.address) },
     { label: "操作", render: row => detailButton("ledger", row.id) }
   ], rows);
@@ -477,9 +495,19 @@ function refreshWithdrawalFunds() {
 
 function refreshWithdrawalAmountHint() {
   const balance = selectedBalance();
-  $("#withdrawalAmountHint").textContent = balance
-    ? `最大可提现：${balance.available} ${balance.asset}`
-    : "请选择链和提现资产";
+  const asset = $("#withdrawalAsset")?.value ?? "";
+  const fee = withdrawalFeeForAsset(asset);
+  if (!balance) {
+    $("#withdrawalAmountHint").textContent = "请选择链和提现资产";
+    return;
+  }
+  const feePart = fee !== "0" ? ` · 手续费：${fee} ${balance.asset}` : "";
+  try {
+    const totalNeeded = addAmounts([balance.available, fee]); // for display: max you can withdraw
+    $("#withdrawalAmountHint").innerHTML = `最大可提现：${escape(balance.available)} ${escape(balance.asset)}<br><small>含平台手续费 ${escape(fee)} ${escape(balance.asset)}，实际到账 = 提现金额 − 手续费</small>`;
+  } catch {
+    $("#withdrawalAmountHint").textContent = `最大可提现：${balance.available} ${balance.asset} · 手续费：${fee} ${balance.asset}`;
+  }
 }
 
 async function refreshPlatformAddresses() {
@@ -542,11 +570,12 @@ function closeAddressHistory() {
 
 function showWithdrawalConfirmation(input, balance) {
   const chain = selectedChain(input.chain);
+  const fee = withdrawalFeeForAsset(input.assetSymbol);
   $("#withdrawalConfirmDetails").innerHTML = [
     ["提现链", chainLabel(input.chain)], ["网络", networkLabel(chain?.network)],
     ["提现资产", input.assetSymbol], ["租户业务订单号", input.businessOrderNo],
     ["目标地址", input.toAddress], ["提现金额", `${input.amount} ${input.assetSymbol}`],
-    ["手续费", "提交后由钱包服务返回"],
+    ["平台手续费", fee !== "0" ? `${fee} ${input.assetSymbol}` : "无"],
     ["可用上限", `${balance.available} ${balance.asset}`]
   ].map(([label, value]) => `<div class="confirm-row"><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join("");
   $("#withdrawalConfirmModal").classList.remove("hidden");
@@ -577,7 +606,7 @@ async function openTransactionDetail(type, id) {
         <div><span>类型</span><strong>${escape(typeLabels[entry.entryType] ?? entry.entryType)}</strong></div>
         <div><span>状态</span><strong>${escape(entry.status ?? "已入账")}</strong></div>
         <div><span>资产</span><strong>${escape(entry.amount)} ${escape(entry.asset)}</strong></div>
-        <div><span>链/网络</span><strong>${escape(chainLabel(entry.chain))} · ${escape(networkLabel(entry.network))}</strong></div>
+        <div><span>链/网络</span><strong>${escape(chainLabel(entry.chain))} · ${escape(derivedNetworkLabel(entry))}</strong></div>
         <div><span>方向</span><strong>${escape(entry.direction)}</strong></div>
         <div><span>时间</span><strong>${escape(dateText(entry.createdAt))}</strong></div>
         <div class="detail-wide"><span>TxID</span><strong>${txCell(entry.txHash)}</strong></div>
@@ -590,7 +619,7 @@ async function openTransactionDetail(type, id) {
     $("#transactionDetailTitle").textContent = "提现详情";
     body.innerHTML = `<div class="detail-grid">
       <div><span>提现链</span><strong>${escape(chainLabel(withdrawal.chain))}</strong></div>
-      <div><span>网络</span><strong>${escape(networkLabel(withdrawal.network))}</strong></div>
+      <div><span>网络</span><strong>${escape(derivedNetworkLabel(withdrawal))}</strong></div>
       <div><span>资产金额</span><strong>${escape(withdrawal.amount)} ${escape(withdrawal.asset)}</strong></div>
       <div><span>手续费</span><strong>${withdrawalFeeText(withdrawal)}</strong></div>
       <div class="detail-wide"><span>目标地址</span><strong>${addressCell(withdrawal.toAddress)}</strong></div>
@@ -612,6 +641,10 @@ async function refreshAll() {
   state.refreshing = true;
   try {
     const [me, chains] = await Promise.all([request("/api/me"), request("/api/chains")]);
+    // 异步加载提现手续费配置，非关键路径不阻塞主刷新
+    request("/api/status").then(status => {
+      if (status?.withdrawalFees) state.withdrawalFees = status.withdrawalFees;
+    }).catch(() => {});
     state.me = me;
     state.chains = chains;
     renderSummary();
