@@ -346,14 +346,11 @@ function renderWithdrawals() {
   $("#withdrawalFilterSummary").textContent = `显示 ${rows.length} / ${allRows.length} 条提现记录`;
   table("#withdrawalsTable", [
     { key: "createdAt", label: "时间", render: row => escape(dateText(row.createdAt)) },
-    { label: "链", render: row => escape(chainLabel(row.chain)) },
-    { label: "网络", render: row => escape(derivedNetworkLabel(row)) },
+    { label: "链/网络", render: row => `<span>${escape(chainLabel(row.chain))}</span><small>${escape(derivedNetworkLabel(row))}</small>` },
     { label: "目标地址", render: row => addressCell(row.toAddress) },
-    { key: "amount", label: "数量" },
-    { key: "asset", label: "币种" },
+    { label: "金额", render: row => `${escape(row.amount)} ${escape(row.asset)}` },
     { label: "手续费", render: row => row.fee && row.fee !== "0" ? `${escape(row.fee)} ${escape(row.asset)}` : "—" },
-    { label: "平台ID", render: row => { const pid = row.platformId ?? row.id; return `<code title="${escape(pid)}">${escape(shortAddress(pid))}</code>`; }},
-    { label: "业务订单号", render: row => escape(row.businessOrderNo ?? "—") },
+    { label: "平台ID", render: row => { const pid = row.platformId ?? row.id; return `<code class="compact-id" title="${escape(pid)}">${escape(pid.slice(0,12))}…</code>`; }},
     { key: "status", label: "状态", render: row => statusCell(row.status) },
     { label: "TxID", render: row => `${txCell(row.txHash)}<div class="table-actions">${detailButton("withdrawal", row.id)}</div>` }
   ], rows);
