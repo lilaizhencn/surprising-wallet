@@ -62,6 +62,7 @@ class EvmForkTransactionServiceIntegrationTest {
         AccountChainProfile originalProfile = repository.findProfileByChain(chain.name()).orElseThrow();
         String originalNetwork = originalProfile.getNetwork();
         Web3j web3j = Web3j.build(new HttpService(LOCAL_RPC));
+        EvmHttpServiceFactory httpServices = new EvmHttpServiceFactory();
         try {
             List<String> accounts = web3j.ethAccounts().send().getAccounts();
             assertTrue(accounts.size() >= 3, "Hardhat must expose deployer and recipients");
@@ -84,7 +85,7 @@ class EvmForkTransactionServiceIntegrationTest {
 
             ChainRpcNodeService rpcNodes = fixedRpcNodes(repository, localProfile);
             EvmAccountTransactionService service = new EvmAccountTransactionService(
-                    repository, rpcNodes, keyService, new EvmTransactionBuilder());
+                    repository, rpcNodes, keyService, new EvmTransactionBuilder(), httpServices);
 
             sendUnlockedNative(web3j, accounts.getFirst(), from.getAddress(), new BigDecimal("2"));
             String nativeHash = service.sendNative(
@@ -114,6 +115,7 @@ class EvmForkTransactionServiceIntegrationTest {
             assertEquals(configuredTokens.isEmpty() ? BigInteger.ONE : BigInteger.TWO, pendingNonce,
                     "service must reserve consecutive nonces for configured asset transfers");
         } finally {
+            httpServices.close();
             jdbc.update("update chain_profile set network = ?, updated_at = now() "
                             + "where chain = ? and network = 'local'",
                     originalNetwork, chain.name());

@@ -18,7 +18,6 @@ import org.web3j.protocol.core.methods.response.EthBlock;
 import org.web3j.protocol.core.methods.response.EthLog;
 import org.web3j.protocol.core.methods.response.Log;
 import org.web3j.protocol.core.methods.response.Transaction;
-import org.web3j.protocol.http.HttpService;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -67,6 +66,7 @@ public class EvmDepositScanner {
      * 保存 {@code fixedConfirmations}，记录开关、处理状态、确认结果或重试信息。
      */
     private final int fixedConfirmations;
+    private final EvmHttpServiceFactory httpServices;
 
     /**
      * 保存 {@code runtimeConfigService}，用于保存运行配置和策略参数。
@@ -79,12 +79,14 @@ public class EvmDepositScanner {
      */
     @Autowired
     public EvmDepositScanner(ChainJdbcRepository repository, EvmLogScanner logScanner,
-                             ChainRpcNodeService rpcNodeService) {
+                             ChainRpcNodeService rpcNodeService,
+                             EvmHttpServiceFactory httpServices) {
         this.repository = repository;
         this.logScanner = logScanner;
         this.rpcNodeService = rpcNodeService;
         this.fixedRpcUrl = null;
         this.fixedConfirmations = 0;
+        this.httpServices = httpServices;
     }
 
     /**
@@ -101,11 +103,19 @@ public class EvmDepositScanner {
      */
     public EvmDepositScanner(ChainJdbcRepository repository, EvmLogScanner logScanner,
                              String sepoliaRpcUrl, int sepoliaConfirmations) {
+        this(repository, logScanner, sepoliaRpcUrl, sepoliaConfirmations,
+                new EvmHttpServiceFactory());
+    }
+
+    public EvmDepositScanner(ChainJdbcRepository repository, EvmLogScanner logScanner,
+                             String sepoliaRpcUrl, int sepoliaConfirmations,
+                             EvmHttpServiceFactory httpServices) {
         this.repository = repository;
         this.logScanner = logScanner;
         this.rpcNodeService = null;
         this.fixedRpcUrl = sepoliaRpcUrl;
         this.fixedConfirmations = sepoliaConfirmations;
+        this.httpServices = httpServices;
     }
     /**
      * 获取或查询 {@code getNativeBalance} 对应的数据，供调用方读取当前状态。
@@ -396,7 +406,7 @@ public class EvmDepositScanner {
      * 执行 {@code web3j} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private Web3j web3j(String rpcUrl) {
-        return Web3j.build(new HttpService(rpcUrl));
+        return Web3j.build(httpServices.create(rpcUrl));
     }
     /**
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。

@@ -78,6 +78,7 @@ public class EvmAccountTransactionService {
      * 保存 {@code transactionBuilder}，用于标识交易、区块或业务记录。
      */
     private final EvmTransactionBuilder transactionBuilder;
+    private final EvmHttpServiceFactory httpServices;
 
     /**
      * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
@@ -408,7 +409,7 @@ public class EvmAccountTransactionService {
      */
     private <T> T withWeb3(AccountChainProfile profile, Web3Request<T> request) {
         return rpcNodeService.withFailover(profile.getChain(), profile.getNetwork(), node -> {
-            HttpService http = new HttpService(node.getRpcUrl());
+            HttpService http = httpServices.create(node.getRpcUrl());
             Web3j web3j = Web3j.build(http);
             try {
                 return request.apply(web3j, http);

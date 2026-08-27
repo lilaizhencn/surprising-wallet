@@ -754,7 +754,7 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code FailingEvmService} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private FailingEvmService() {
-            super(null, null, null, null);
+            super(null, null, null, null, null);
         }
 
         /**
@@ -779,7 +779,7 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code CapturingEvmFeeService} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private CapturingEvmFeeService() {
-            super(null, null, null, null);
+            super(null, null, null, null, null);
         }
 
         /**

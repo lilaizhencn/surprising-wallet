@@ -28,6 +28,7 @@ import com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator;
 import com.surprising.wallet.repository.Evm7702WithdrawalRepository;
 import com.surprising.wallet.service.Evm7702WithdrawalWorkflowService;
 import com.surprising.wallet.chain.evm.EvmDepositScanner;
+import com.surprising.wallet.chain.evm.EvmHttpServiceFactory;
 import com.surprising.wallet.chain.evm.EvmLogScanner;
 import com.surprising.wallet.service.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.ChainRpcNodeService;
@@ -41,6 +42,7 @@ import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
 import com.surprising.wallet.observer.DepositCreditObserver;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
@@ -164,6 +166,7 @@ class Evm7702ProductionFlowIntegrationTest {
      * 保存 {@code chainId}，表示测试所覆盖的链、网络、资产或代币配置。
      */
     private long chainId;
+    private EvmHttpServiceFactory httpServices;
 
     /**
      * 验证 {@code setUp} 对应的测试场景，明确输入、预期结果和异常边界。
@@ -174,6 +177,7 @@ class Evm7702ProductionFlowIntegrationTest {
                 "start Hardhat Prague, deploy the 7702 contracts, and set the integration properties");
         chain = System.getProperty("evm.7702.test.chain", "ETH").trim().toUpperCase(java.util.Locale.ROOT);
         chainId = Long.parseLong(System.getProperty("evm.7702.test.chain-id", "31337"));
+        httpServices = new EvmHttpServiceFactory();
         DriverManagerDataSource dataSource = CustodyIntegrationDatabase.dataSource();
         CustodyIntegrationDatabase.reset(dataSource);
         jdbc = new JdbcTemplate(dataSource);
@@ -208,7 +212,7 @@ class Evm7702ProductionFlowIntegrationTest {
         profile = chainRepository.findProfileByChain(chain).orElseThrow();
         nativeSymbol = profile.getNativeSymbol();
         depositScanner = new EvmDepositScanner(
-                chainRepository, new EvmLogScanner(), RPC, 1);
+                chainRepository, new EvmLogScanner(), RPC, 1, httpServices);
 
         ChainRpcNodeService rpcNodes = new ChainRpcNodeService(chainRepository);
         setField(rpcNodes, "environmentName", "eip7702-test");
@@ -234,15 +238,22 @@ class Evm7702ProductionFlowIntegrationTest {
                 collectionRepository, custodyRepository, chainRepository);
         workflow = new Evm7702CollectionWorkflowService(
                 collectionRepository, coordinator, chainRepository, rpcNodes, keyService, crypto,
-                runtimeConfig);
+                runtimeConfig, httpServices);
         withdrawalRepository = new Evm7702WithdrawalRepository(jdbc, collectionRepository);
         Evm7702WithdrawalCoordinator withdrawalCoordinator = new Evm7702WithdrawalCoordinator(
                 withdrawalRepository, custodyRepository, chainRepository);
         withdrawalWorkflow = new Evm7702WithdrawalWorkflowService(
                 withdrawalRepository, withdrawalCoordinator, chainRepository,
-                rpcNodes, keyService, crypto, runtimeConfig);
+                rpcNodes, keyService, crypto, runtimeConfig, httpServices);
         reconciliationJob = new CustodyWithdrawalReconciliationJob(
                 new CustodyWithdrawalReconciliationService(custodyRepository, objectMapper));
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (httpServices != null) {
+            httpServices.close();
+        }
     }
 
     /**

@@ -9,6 +9,7 @@ import com.surprising.wallet.chain.evm.Evm7702ContractCodec;
 import com.surprising.wallet.chain.evm.Evm7702OperationSigner;
 import com.surprising.wallet.chain.evm.Evm7702ReceiptParser;
 import com.surprising.wallet.chain.evm.EvmFeeSupport;
+import com.surprising.wallet.chain.evm.EvmHttpServiceFactory;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.bitcoinj.crypto.ECKey;
 import org.slf4j.Logger;
@@ -99,6 +100,7 @@ public class Evm7702CollectionWorkflowService {
      * 保存 {@code runtimeConfig}，用于保存运行配置和策略参数。
      */
     private final WalletRuntimeConfigService runtimeConfig;
+    private final EvmHttpServiceFactory httpServices;
     /**
      * 保存 {@code authorizationService}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
@@ -134,7 +136,8 @@ public class Evm7702CollectionWorkflowService {
             ChainRpcNodeService rpcNodes,
             AccountSecp256k1KeyService keyService,
             CustodyCryptoService crypto,
-            WalletRuntimeConfigService runtimeConfig) {
+            WalletRuntimeConfigService runtimeConfig,
+            EvmHttpServiceFactory httpServices) {
         this.repository = repository;
         this.coordinator = coordinator;
         this.chainRepository = chainRepository;
@@ -142,6 +145,7 @@ public class Evm7702CollectionWorkflowService {
         this.keyService = keyService;
         this.crypto = crypto;
         this.runtimeConfig = runtimeConfig;
+        this.httpServices = httpServices;
     }
     /**
      * 执行或处理 {@code run} 对应的业务流程，并维护状态和异常边界。
@@ -586,9 +590,7 @@ public class Evm7702CollectionWorkflowService {
      * 执行 {@code http} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private HttpService http(ChainRpcNode node) {
-        HttpService service = new HttpService(node.getRpcUrl());
-        service.addHeaders(rpcNodes.authHeaders(node));
-        return service;
+        return httpServices.create(node.getRpcUrl(), rpcNodes.authHeaders(node));
     }
     /**
      * 执行 {@code delegationCode} 对应的辅助逻辑，完成数据处理并维护状态边界。

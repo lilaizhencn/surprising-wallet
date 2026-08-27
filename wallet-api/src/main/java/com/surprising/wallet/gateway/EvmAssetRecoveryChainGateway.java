@@ -6,6 +6,7 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.chain.evm.EvmAccountTransactionService;
+import com.surprising.wallet.chain.evm.EvmHttpServiceFactory;
 import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.springframework.stereotype.Component;
@@ -15,7 +16,6 @@ import org.web3j.protocol.core.methods.request.Transaction;
 import org.web3j.protocol.core.methods.response.EthBlock;
 import org.web3j.protocol.core.methods.response.Log;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
-import org.web3j.protocol.http.HttpService;
 import org.web3j.utils.Numeric;
 
 import java.math.BigDecimal;
@@ -63,6 +63,7 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
      * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
      */
     private final ObjectMapper objectMapper;
+    private final EvmHttpServiceFactory httpServices;
 
     /**
      * 构造 {@code EvmAssetRecoveryChainGateway}，初始化该组件运行所需的状态和依赖。
@@ -70,11 +71,13 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
     public EvmAssetRecoveryChainGateway(ChainJdbcRepository repository,
                                         ChainRpcNodeService rpcNodes,
                                         EvmAccountTransactionService transactions,
-                                        ObjectMapper objectMapper) {
+                                        ObjectMapper objectMapper,
+                                        EvmHttpServiceFactory httpServices) {
         this.repository = repository;
         this.rpcNodes = rpcNodes;
         this.transactions = transactions;
         this.objectMapper = objectMapper;
+        this.httpServices = httpServices;
     }
 
     /**
@@ -275,7 +278,7 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
      */
     private <T> T withWeb3(AccountChainProfile profile, Web3Request<T> request) {
         return rpcNodes.withFailover(profile.getChain(), profile.getNetwork(), node -> {
-            Web3j web3j = Web3j.build(new HttpService(node.getRpcUrl()));
+            Web3j web3j = Web3j.build(httpServices.create(node.getRpcUrl()));
             try {
                 return request.apply(web3j);
             } catch (RuntimeException e) {
