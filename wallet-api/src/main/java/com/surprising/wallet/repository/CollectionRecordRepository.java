@@ -139,8 +139,12 @@ public class CollectionRecordRepository {
     /** 查询指定链的归集记录字段，供服务层按租户和地址组合统计。 */
     public List<java.util.Map<String, Object>> listForCollectionBalance(String chain) {
         return jdbc.queryForList("""
-                select tenant_id, asset_symbol, lower(from_address) as from_address, amount, status
-                  from collection_record where chain = ? and tenant_id is not null
+                select tenant_id, asset_symbol, lower(from_address) as from_address,
+                       coalesce(sum(amount) filter (where status <> 'FAILED'), 0) as amount,
+                       coalesce(bool_or(status in ('CREATED', 'RETRYING', 'SIGNING', 'SENT')), false) as pending
+                  from collection_record
+                 where chain = ? and tenant_id is not null
+                 group by tenant_id, asset_symbol, lower(from_address)
                 """, chain);
     }
 

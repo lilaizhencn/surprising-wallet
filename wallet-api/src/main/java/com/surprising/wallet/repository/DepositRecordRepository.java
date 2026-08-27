@@ -130,8 +130,10 @@ public class DepositRecordRepository {
     /** 查询指定链已入账充值字段，供服务层按租户和地址组合统计。 */
     public List<java.util.Map<String, Object>> listCreditedForCollectionBalance(String chain) {
         return jdbc.queryForList("""
-                select tenant_id, asset_symbol, lower(to_address) as to_address, amount
-                  from deposit_record where chain = ? and tenant_id is not null and credited = true
+                select tenant_id, asset_symbol, lower(to_address) as to_address, sum(amount) as amount
+                  from deposit_record
+                 where chain = ? and tenant_id is not null and credited = true
+                 group by tenant_id, asset_symbol, lower(to_address)
                 """, chain);
     }
 

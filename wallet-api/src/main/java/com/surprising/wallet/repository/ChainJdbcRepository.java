@@ -1489,22 +1489,26 @@ public class ChainJdbcRepository {
                                                                          BigDecimal minimumAmount,
                                                                          int limit) {
         record BalanceKey(UUID tenantId, String assetSymbol, String address) { }
+        record AddressKey(UUID tenantId, String address) { }
         Map<BalanceKey, BigDecimal> deposited = new java.util.HashMap<>();
         for (Map<String, Object> row : depositRecordRepository.listCreditedForCollectionBalance(chain)) {
             BalanceKey key = new BalanceKey((UUID) row.get("tenant_id"),
                     String.valueOf(row.get("asset_symbol")), String.valueOf(row.get("to_address")));
             deposited.merge(key, (BigDecimal) row.get("amount"), BigDecimal::add);
         }
+        Map<AddressKey, List<Map.Entry<BalanceKey, BigDecimal>>> depositedByAddress = new java.util.HashMap<>();
+        for (Map.Entry<BalanceKey, BigDecimal> entry : deposited.entrySet()) {
+            BalanceKey key = entry.getKey();
+            depositedByAddress.computeIfAbsent(new AddressKey(key.tenantId(), key.address()),
+                    ignored -> new java.util.ArrayList<>()).add(entry);
+        }
         Map<BalanceKey, BigDecimal> collected = new java.util.HashMap<>();
         Set<BalanceKey> pending = new java.util.HashSet<>();
         for (Map<String, Object> row : collectionRecordRepository.listForCollectionBalance(chain)) {
             BalanceKey key = new BalanceKey((UUID) row.get("tenant_id"),
                     String.valueOf(row.get("asset_symbol")), String.valueOf(row.get("from_address")));
-            String status = String.valueOf(row.get("status"));
-            if (!"FAILED".equals(status)) {
-                collected.merge(key, (BigDecimal) row.get("amount"), BigDecimal::add);
-            }
-            if (Set.of("CREATED", "RETRYING", "SIGNING", "SENT").contains(status)) {
+            collected.put(key, (BigDecimal) row.get("amount"));
+            if (Boolean.TRUE.equals(row.get("pending"))) {
                 pending.add(key);
             }
         }
@@ -1518,7 +1522,7 @@ public class ChainJdbcRepository {
                     (UUID) row.get("id"));
         }
         List<CollectionCandidateRecord> result = new java.util.ArrayList<>();
-        for (Map<String, Object> address : chainAddressRepository.listEnabledByChain(chain)) {
+        for (Map<String, Object> address : chainAddressRepository.listCollectionCandidatesByChain(chain)) {
             UUID tenantId = (UUID) address.get("tenant_id");
             String walletRole = String.valueOf(address.get("wallet_role"));
             long userId = ((Number) address.get("user_id")).longValue();
@@ -1538,10 +1542,10 @@ public class ChainJdbcRepository {
             }
             String sourceAddress = String.valueOf(address.get("address"))
                     .toLowerCase(java.util.Locale.ROOT);
-            for (Map.Entry<BalanceKey, BigDecimal> entry : deposited.entrySet()) {
+            for (Map.Entry<BalanceKey, BigDecimal> entry : depositedByAddress.getOrDefault(
+                    new AddressKey(tenantId, sourceAddress), List.of())) {
                 BalanceKey key = entry.getKey();
-                if (!tenantId.equals(key.tenantId()) || !sourceAddress.equals(key.address())
-                        || pending.contains(new BalanceKey(tenantId, key.assetSymbol(), sourceAddress))) {
+                if (pending.contains(key)) {
                     continue;
                 }
                 Map<String, Object> asset = activeAssets.get(key.assetSymbol().toLowerCase(java.util.Locale.ROOT));

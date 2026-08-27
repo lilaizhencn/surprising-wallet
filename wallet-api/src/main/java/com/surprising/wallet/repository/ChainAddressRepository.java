@@ -267,6 +267,16 @@ public class ChainAddressRepository {
                 """, chain);
     }
 
+    public List<Map<String, Object>> listCollectionCandidatesByChain(String chain) {
+        return jdbc.queryForList("""
+                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                       address, owner_address, wallet_role, enabled
+                  from chain_address
+                 where chain = ? and enabled = true and tenant_id is not null
+                   and wallet_role = 'DEPOSIT' and user_id <> 0
+                """, chain);
+    }
+
     /** 将链地址归属到租户。 */
     public int assignTenant(UUID tenantId, long chainAddressId) {
         return jdbc.update("update chain_address set tenant_id = ?, updated_at = now() where id = ?",

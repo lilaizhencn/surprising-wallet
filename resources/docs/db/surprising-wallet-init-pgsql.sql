@@ -119,6 +119,10 @@ DROP INDEX IF EXISTS public.idx_chain_signing_transaction_tx_id;
 DROP INDEX IF EXISTS public.idx_chain_signing_transaction_status;
 DROP INDEX IF EXISTS public.idx_chain_address_scan;
 DROP INDEX IF EXISTS public.idx_chain_address_owner;
+DROP INDEX IF EXISTS public.idx_chain_address_collection_candidates;
+DROP INDEX IF EXISTS public.idx_collection_record_collection_balance;
+DROP INDEX IF EXISTS public.idx_custody_address_collection_candidates;
+DROP INDEX IF EXISTS public.idx_deposit_record_collection_balance;
 DROP INDEX IF EXISTS public.custody_withdrawal_tenant_time_idx;
 DROP INDEX IF EXISTS public.custody_withdrawal_idempotency_key;
 DROP INDEX IF EXISTS public.custody_webhook_endpoint_active_idx;
@@ -4131,6 +4135,18 @@ CREATE INDEX idx_chain_address_owner ON public.chain_address USING btree (chain,
 --
 
 CREATE INDEX idx_chain_address_scan ON public.chain_address USING btree (chain, asset_symbol, enabled);
+
+
+CREATE INDEX idx_chain_address_collection_candidates ON public.chain_address USING btree (chain) WHERE ((enabled = true) AND (tenant_id IS NOT NULL) AND ((wallet_role)::text = 'DEPOSIT'::text) AND (user_id <> 0));
+
+
+CREATE INDEX idx_collection_record_collection_balance ON public.collection_record USING btree (chain, tenant_id, asset_symbol, lower((from_address)::text)) INCLUDE (amount, status) WHERE (tenant_id IS NOT NULL);
+
+
+CREATE INDEX idx_custody_address_collection_candidates ON public.custody_address USING btree (chain) WHERE ((status)::text = 'ACTIVE'::text);
+
+
+CREATE INDEX idx_deposit_record_collection_balance ON public.deposit_record USING btree (chain, tenant_id, asset_symbol, lower((to_address)::text)) INCLUDE (amount) WHERE ((tenant_id IS NOT NULL) AND (credited = true));
 
 
 --

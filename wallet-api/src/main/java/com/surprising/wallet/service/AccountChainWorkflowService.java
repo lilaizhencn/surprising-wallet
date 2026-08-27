@@ -31,8 +31,11 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -463,6 +466,9 @@ public class AccountChainWorkflowService {
     private void createCollectionCandidates(AccountChainProfile profile) {
         List<CollectionCandidateRecord> candidates = repository.listCollectableLedgerBalances(
                 profile.getChain(), BigDecimal.ZERO, COLLECTION_LIMIT);
+        if (candidates.isEmpty()) {
+            return;
+        }
         BigDecimal evmFeeReserve = "evm".equalsIgnoreCase(profile.getFamily())
                 ? evmTransactionService.estimateCollectionFeeReserve(
                         profile.getChain(), repository.listTokens(profile.getChain()).size())
@@ -470,13 +476,17 @@ public class AccountChainWorkflowService {
         BigDecimal starknetFeeReserve = "STARKNET".equalsIgnoreCase(profile.getChain())
                 ? starknetTransactionService.estimateCollectionFeeReserve(profile, repository.listTokens(profile.getChain()).size())
                 : BigDecimal.ZERO;
+        record TenantChainKey(UUID tenantId, String chain) { }
+        Map<TenantChainKey, Optional<String>> collectionAddresses = new HashMap<>();
         for (CollectionCandidateRecord candidate : candidates) {
             BigDecimal amount = collectionAmount(profile, candidate, evmFeeReserve.add(starknetFeeReserve));
             if (amount.signum() <= 0) {
                 continue;
             }
-            String hotAddress = repository.findActiveTenantCollectionAddress(
-                            candidate.getTenantId(), candidate.getChain())
+            TenantChainKey key = new TenantChainKey(candidate.getTenantId(), candidate.getChain());
+            String hotAddress = collectionAddresses.computeIfAbsent(key,
+                            ignored -> repository.findActiveTenantCollectionAddress(
+                                    candidate.getTenantId(), candidate.getChain()))
                     .orElseThrow(() -> new IllegalStateException(
                             "active tenant collection/gas address is required for "
                                     + candidate.getChain() + " collection"));

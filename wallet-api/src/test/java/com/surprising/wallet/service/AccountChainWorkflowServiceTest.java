@@ -115,6 +115,31 @@ class AccountChainWorkflowServiceTest {
         assertTrue(repository.created);
     }
 
+    @Test
+    void emptyCollectionCandidatesSkipEvmFeeRpc() throws Exception {
+        EmptyCollectionRepository repository = new EmptyCollectionRepository();
+        CapturingEvmFeeService evm = new CapturingEvmFeeService();
+        AccountChainWorkflowService service = service(repository, evm);
+
+        createCollectionCandidates(service, profile());
+
+        assertEquals(0, evm.estimateCalls);
+    }
+
+    @Test
+    void collectionAddressLookupIsCachedPerTenantAndChainWithinOneCycle() throws Exception {
+        TenantCollectionRepository repository = new TenantCollectionRepository(2);
+        AccountChainWorkflowService service = service(repository, new CapturingAptosService());
+        AccountChainProfile profile = AccountChainProfile.builder()
+                .chain("APTOS").network("testnet").family("aptos").nativeSymbol("APT")
+                .defaultFee(5_000_000L).dustThreshold(0L).enabled(true).build();
+
+        createCollectionCandidates(service, profile);
+
+        assertEquals(1, repository.collectionAddressLookups);
+        assertEquals(2, repository.createdCount);
+    }
+
     /**
      * 验证 {@code broadcastFailureKeepsFundsLockedForManualAudit} 对应的测试场景，明确输入、预期结果和异常边界。
      */
@@ -261,6 +286,14 @@ class AccountChainWorkflowServiceTest {
                 "processWithdrawal", AccountChainProfile.class, WithdrawalOrderRecord.class);
         method.setAccessible(true);
         method.invoke(service, profile, order);
+    }
+
+    private static void createCollectionCandidates(AccountChainWorkflowService service,
+                                                   AccountChainProfile profile) throws Exception {
+        Method method = AccountChainWorkflowService.class.getDeclaredMethod(
+                "createCollectionCandidates", AccountChainProfile.class);
+        method.setAccessible(true);
+        method.invoke(service, profile);
     }
 
     /**
@@ -677,12 +710,20 @@ class AccountChainWorkflowServiceTest {
          * 保存 {@code created}，用于记录测试时间边界或审计时间。
          */
         private boolean created;
+        private final int candidateCount;
+        private int collectionAddressLookups;
+        private int createdCount;
 
         /**
          * 验证 {@code TenantCollectionRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private TenantCollectionRepository() {
+            this(1);
+        }
+
+        private TenantCollectionRepository(int candidateCount) {
             super(null);
+            this.candidateCount = candidateCount;
         }
 
         /**
@@ -691,20 +732,14 @@ class AccountChainWorkflowServiceTest {
         @Override
         public List<CollectionCandidateRecord> listCollectableLedgerBalances(
                 String chain, BigDecimal minimumAmount, int limit) {
-            return List.of(CollectionCandidateRecord.builder()
-                    .tenantId(TENANT_ID)
-                    .custodyAddressId(custodyAddressId)
-                    .chain("APTOS")
-                    .assetSymbol("APT")
-                    .accountId("0xdeposit")
-                    .address("0xdeposit")
-                    .ownerAddress("0xdeposit")
-                    .userId(1L)
-                    .biz(0)
-                    .addressIndex(0L)
-                    .walletRole("DEPOSIT")
-                    .amount(BigDecimal.ONE)
-                    .build());
+            return java.util.stream.IntStream.range(0, candidateCount)
+                    .mapToObj(index -> CollectionCandidateRecord.builder()
+                            .tenantId(TENANT_ID).custodyAddressId(custodyAddressId).chain("APTOS")
+                            .assetSymbol("APT").accountId("0xdeposit" + index)
+                            .address("0xdeposit" + index).ownerAddress("0xdeposit" + index)
+                            .userId(1L).biz(0).addressIndex((long) index).walletRole("DEPOSIT")
+                            .amount(BigDecimal.ONE).build())
+                    .toList();
         }
 
         /**
@@ -712,6 +747,7 @@ class AccountChainWorkflowServiceTest {
          */
         @Override
         public Optional<String> findActiveTenantCollectionAddress(UUID tenantId, String chain) {
+            collectionAddressLookups++;
             return Optional.of("0xtenant-collection");
         }
 
@@ -742,7 +778,25 @@ class AccountChainWorkflowServiceTest {
             collectionTarget = toAddress;
             collectionAmount = amount;
             created = true;
+            createdCount++;
             return 1;
+        }
+    }
+
+    private static final class EmptyCollectionRepository extends ChainJdbcRepository {
+        private EmptyCollectionRepository() {
+            super(null);
+        }
+
+        @Override
+        public List<CollectionCandidateRecord> listCollectableLedgerBalances(
+                String chain, BigDecimal minimumAmount, int limit) {
+            return List.of();
+        }
+
+        @Override
+        public List<TokenDefinition> listTokens(String chain) {
+            return List.of();
         }
     }
 
@@ -774,6 +828,7 @@ class AccountChainWorkflowServiceTest {
          * 保存 {@code enabledTokenCount}，表示测试所覆盖的链、网络、资产或代币配置。
          */
         private int enabledTokenCount;
+        private int estimateCalls;
 
         /**
          * 验证 {@code CapturingEvmFeeService} 对应的测试场景，明确输入、预期结果和异常边界。
@@ -787,6 +842,7 @@ class AccountChainWorkflowServiceTest {
          */
         @Override
         public BigDecimal estimateCollectionFeeReserve(String chain, int enabledTokenCount) {
+            estimateCalls++;
             this.enabledTokenCount = enabledTokenCount;
             return new BigDecimal("0.0005");
         }
