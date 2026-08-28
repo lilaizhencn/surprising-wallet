@@ -72,16 +72,20 @@ public class WithdrawalOrderRepository {
         return jdbc.query("""
                 select id, tenant_id, order_no, user_id, chain, asset_symbol, from_address, debit_account_id,
                        to_address, amount, fee, tx_hash, status, error_message, created_at, updated_at
-                  from (
-                       select o.*, row_number() over (partition by tenant_id order by id) as tenant_rank
-                         from withdrawal_order o
+                  from withdrawal_order
+                 where tenant_id = (
+                       select tenant_id from withdrawal_order
                         where tenant_id is not null and chain = ? and asset_symbol = ?
                           and status in ('FROZEN', 'RETRYING')
                           and (next_attempt_at is null or next_attempt_at <= now())
-                  ) queued
-                 order by tenant_rank, id, tenant_id
+                        order by id limit 1
+                 )
+                   and chain = ? and asset_symbol = ?
+                   and status in ('FROZEN', 'RETRYING')
+                   and (next_attempt_at is null or next_attempt_at <= now())
+                 order by id
                  limit ?
-                """, (rs, rowNum) -> map(rs), chain, assetSymbol,
+                """, (rs, rowNum) -> map(rs), chain, assetSymbol, chain, assetSymbol,
                 Math.min(Math.max(limit, 1), 500));
     }
 

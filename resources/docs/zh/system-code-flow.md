@@ -57,6 +57,7 @@ timestamp + "." + eventId + "." + eventType + "." + rawBody
 @Scheduled 入口
   -> wallet_task_lease：按任务名获取数据库租约并心跳续租
   -> tenant-fair claim：按租户公平领取待处理订单
+  -> UTXO 待签名选择：先确定最早待处理租户，每个签名批次只包含一个 tenant_id
   -> 业务事务：锁定余额/UTXO、写 chain_signing_transaction、写 wallet_outbox
   -> 提交后 Outbox 派发：Redis sig1/sig2 队列
   -> 广播处理中队列 + chain_signing_transaction 广播租约

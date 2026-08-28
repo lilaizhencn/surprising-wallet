@@ -198,7 +198,7 @@
 
   <rect x="480" y="702" width="190" height="56" class="withdraw"/>
   <text x="575" y="726" text-anchor="middle" class="bold">构建 &amp; 签名交易</text>
-  <text x="575" y="744" text-anchor="middle" class="small">UTXO: sig1→sig2 管道</text>
+  <text x="575" y="744" text-anchor="middle" class="small">UTXO: 单租户批次 · sig1→sig2</text>
 
   <line x1="670" y1="730" x2="705" y2="730" class="arrow"/>
 
