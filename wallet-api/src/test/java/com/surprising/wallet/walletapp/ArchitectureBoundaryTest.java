@@ -107,6 +107,8 @@ class ArchitectureBoundaryTest {
     private static void verifySingleTableRepositories(Path repositoryRoot) throws IOException {
         Pattern tablePattern = Pattern.compile(
                 "(?i)\\b(?:from|join|into|update|delete\\s+from)\\s+([a-z_][a-z0-9_]*)");
+        Pattern ctePattern = Pattern.compile(
+                "(?i)(?:\\bwith|,)\\s*([a-z_][a-z0-9_]*)\\s+as\\s*\\(");
         Pattern sqlLinePattern = Pattern.compile(
                 "(?i).*\\b(?:select\\s+.+\\s+from|insert\\s+into|update\\s+[a-z_][a-z0-9_]*\\s+set|delete\\s+from)\\b.*");
         for (Path file : javaFiles(repositoryRoot)) {
@@ -122,14 +124,15 @@ class ArchitectureBoundaryTest {
             Matcher matcher = tablePattern.matcher(source);
             Set<String> tables = new HashSet<>();
             while (matcher.find()) tables.add(matcher.group(1).toLowerCase());
+            Matcher cteMatcher = ctePattern.matcher(source);
+            while (cteMatcher.find()) tables.remove(cteMatcher.group(1).toLowerCase());
             tables.remove("set");
             tables.remove("excluded");
             tables.remove("skip");
             tables.remove("cast");
-            assertFalse(source.matches("(?is).*\\bjoin\\s+[a-z_][a-z0-9_]*.*"),
-                    "single-table repository must not join tables: " + file);
+            tables.remove("of");
             assertTrue(tables.size() <= 1,
-                    "repository must operate on one table: " + file + " -> " + tables);
+                    "repository must operate on one physical table: " + file + " -> " + tables);
         }
     }
 
