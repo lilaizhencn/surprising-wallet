@@ -56,7 +56,7 @@ printf '=== mvn package (wallet-api + wallet-sig1 + wallet-sig2) ===\n'
 # Lombok 1.18.46 still depends on javac internals removed by JDK 27.
 # Keep the server/runtime default on JDK 27, but use the installed JDK 25
 # toolchain for Maven until Lombok publishes JDK 27 support.
-BUILD_JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64
+BUILD_JAVA_HOME=${SW_BUILD_JAVA_HOME:-/usr/lib/jvm/java-25-openjdk-amd64}
 if [[ ! -x $BUILD_JAVA_HOME/bin/java ]]; then
   printf 'required build JDK is missing: %s\n' "$BUILD_JAVA_HOME" >&2
   exit 1
