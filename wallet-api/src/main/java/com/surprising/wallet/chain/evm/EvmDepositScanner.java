@@ -232,7 +232,7 @@ public class EvmDepositScanner {
     public void reconcileCreditedDeposits(ChainType chainType, long latestHeight) throws IOException {
         long minimumHeight = Math.max(0L, latestHeight - FINALITY_AUDIT_DEPTH + 1L);
         List<Long> heights = repository.listCanonicalDepositBlockHeights(
-                chainType.name(), minimumHeight);
+                chainType.name(), minimumHeight, latestHeight);
         if (heights.isEmpty()) {
             return;
         }

@@ -119,12 +119,18 @@ public class DepositRecordRepository {
 
     /** 查询已经入账且仍处于 canonical 状态的充值区块高度。 */
     public List<Long> listCanonicalBlockHeights(String chain, long minimumHeight) {
+        return listCanonicalBlockHeights(chain, minimumHeight, Long.MAX_VALUE);
+    }
+
+    /** 查询指定高度范围内已经入账且仍处于 canonical 状态的充值区块高度。 */
+    public List<Long> listCanonicalBlockHeights(String chain, long minimumHeight, long maximumHeight) {
         return jdbc.queryForList("""
                 select distinct block_height from deposit_record
                  where chain = ? and block_height >= ? and credited = true
+                   and block_height <= ?
                    and canonical_status = 'CANONICAL' and block_hash is not null
                  order by block_height
-                """, Long.class, chain, minimumHeight);
+                """, Long.class, chain, minimumHeight, maximumHeight);
     }
 
     /** 查询指定链已入账充值字段，供服务层按租户和地址组合统计。 */

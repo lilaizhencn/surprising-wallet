@@ -1633,6 +1633,11 @@ public class ChainJdbcRepository {
     public List<Long> listCanonicalDepositBlockHeights(String chain, long minimumHeight) {
         return depositRecordRepository.listCanonicalBlockHeights(chain, minimumHeight);
     }
+
+    /** 查询指定高度范围内已入账充值对应的 canonical 区块。 */
+    public List<Long> listCanonicalDepositBlockHeights(String chain, long minimumHeight, long maximumHeight) {
+        return depositRecordRepository.listCanonicalBlockHeights(chain, minimumHeight, maximumHeight);
+    }
     /**
      * 获取或查询 {@code listActiveScanHeights} 对应的数据，供调用方读取当前状态。
      */
