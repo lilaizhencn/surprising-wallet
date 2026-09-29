@@ -22,11 +22,19 @@ public final class CustodyRequestSupport {
     }
 
     /**
-     * 读取远端地址，并去除两端空白，供审计与日志记录。
+     * 读取容器解析的远端地址，移除 IPv6 URI 方括号，供 inet 字段和 IP 白名单使用。
+     * 不直接信任客户端提供的转发头。
      */
     public static String clientIp(HttpServletRequest request) {
         String value = request.getRemoteAddr();
-        return value == null ? "" : value.trim();
+        if (value == null) {
+            return "";
+        }
+        String address = value.trim();
+        if (address.startsWith("[") && address.endsWith("]") && address.contains(":")) {
+            return address.substring(1, address.length() - 1);
+        }
+        return address;
     }
 
     /**
