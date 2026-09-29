@@ -59,14 +59,14 @@ timestamp + "." + eventId + "." + eventType + "." + rawBody
   -> tenant-fair claim：按租户公平领取待处理订单
   -> UTXO 待签名选择：先确定最早待处理租户，每个签名批次只包含一个 tenant_id
   -> 业务事务：锁定余额/UTXO、写 chain_signing_transaction、写 wallet_outbox
-  -> 提交后 Outbox 派发：Redis sig1/sig2 队列
-  -> 广播处理中队列 + chain_signing_transaction 广播租约
+  -> Outbox 派发事务：PGMQ 入队 + Outbox 标记成功
+  -> PGMQ sig1 → sig2 → 广播队列；处理事务行锁 + 广播业务租约
   -> SENT/CONFIRMED：结算账本与 Gas
   -> FAILED/REJECTED/CANCELLED：释放锁定本金、手续费与 Gas
   -> BROADCAST_UNKNOWN：禁止盲目重建，等待链上对账与人工审计
 ```
 
-数据库是 wallet-api 订单、租约、Outbox、账本和审计的事实来源；Redis 队列用于跨进程传输，sig1/sig2 额外使用 Redis 租约保护签名轮询。任务或进程中断后，数据库租约、Outbox 的超时领取、签名处理中队列和广播处理中队列都能恢复，回调失败则按租户公平领取和指数退避重试。
+数据库是订单、租约、Outbox、账本、队列和审计的事实来源。Outbox 派发与 PGMQ 入队同事务；签名阶段推进与当前消息归档同事务。消费者崩溃后未确认消息超时可再次领取；失败最多 20 次后进入死信队列，可带原因回放。签名服务按消息行锁消费，read_ct 校验阻止旧消费者确认新领取的消息。广播保留交易 ID 幂等与未知结果对账。
 
 ## 资产解析
 
@@ -201,3 +201,9 @@ Starknet：
 
 - 地址生成、账户部署、STRK 原生转账、ERC-20 转账、Transfer 扫描入账、原生币归集、Token 归集和交易确认已通过本地 Devnet 完整流程测试。
 - 生产启用前必须为每个网络分别核验 account class hash、STRK 合约地址、Token 合约地址、RPC 的 `rpc/scan/broadcast` 三类用途和链上实际手续费；测试网配置默认关闭。
+
+费用报价：FeeRateUpdater → FeeRateUpdateService → ChainFeeRateService → ChainFeeRateRepository → chain_fee_rate；队列和业务事务共用同一 PostgreSQL 数据源。
+
+每轮新签名请求（含 RBF）带唯一 signingRequestId，广播前与数据库当前请求校验；旧请求的死信回放不得覆盖新交易。
+
+UTXO 充值扫描的批量 saveTransaction 入口也开启事务，确保批内入账与 PGMQ 充值事件一起提交或回滚。

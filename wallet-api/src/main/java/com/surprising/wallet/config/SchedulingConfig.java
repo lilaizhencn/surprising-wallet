@@ -85,7 +85,7 @@ public class SchedulingConfig {
      * 创建具有统一关闭策略的定时任务线程池。
      *
      * <p>关闭上下文后不再接收新任务，也不继续执行已经排队的周期任务；正在执行的任务在限定时间内完成，
-     * 避免依赖的 RPC、Redis 或数据库连接已经销毁后，定时任务又发起新的调用。</p>
+     * 避免依赖的 RPC、PostgreSQL / PGMQ 或数据库连接已经销毁后，定时任务又发起新的调用。</p>
      *
      * @param poolSize 线程池大小
      * @param threadNamePrefix 线程名前缀
@@ -109,7 +109,7 @@ public class SchedulingConfig {
      * 在 Spring 开始销毁业务依赖前，先停止所有业务任务池。
      *
      * <p>ContextClosedEvent 发生在单例销毁之前。并行关闭各个任务池可以避免某一个慢链 RPC 独占关闭预算，
-     * 同时保证任务不会在 Web3j、Redis 等依赖关闭后再次启动。</p>
+     * 同时保证任务不会在 Web3j、PostgreSQL / PGMQ 等依赖关闭后再次启动。</p>
      */
     @Bean(name = "walletTaskSchedulerShutdownCoordinator")
     public WalletTaskSchedulerShutdownCoordinator walletTaskSchedulerShutdownCoordinator(

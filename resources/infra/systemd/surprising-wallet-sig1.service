@@ -1,8 +1,8 @@
 [Unit]
 Description=Surprising Wallet Signature Service 1
-After=network-online.target redis-server.service
+After=network-online.target postgresql.service
 Wants=network-online.target
-Requires=redis-server.service
+Requires=postgresql.service
 
 [Service]
 Type=simple

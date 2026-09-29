@@ -25,7 +25,7 @@ public class AccountChainWithdrawalProcessJob {
      * <p>
      * 每 30 秒（offset 13s）执行一次：遍历所有启用的 account-chain 链，
      * 从 DB 拉取待签名的 withdrawal_order，构建签名交易并推送到
-     * Redis 签名队列（sig:first → sig1 → sig2 → sig:done → 广播）。
+     * PostgreSQL / PGMQ 签名队列（sig:first → sig1 → sig2 → sig:done → 广播）。
      * <p>
      * EVM 链若启用了 EIP-7702，则跳过（由 {@code Evm7702WithdrawalJob} 单独处理）。
      * <p>

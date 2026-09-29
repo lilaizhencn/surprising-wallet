@@ -8,7 +8,7 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
  *
  * <p>每个实现类对应一条链的一种资产类型（如 BTC P2WSH、BCH P2SH、DOGE P2SH）。
  * sig1 持有第一组密钥分片，签名后将结果（firstSignTx）写入 transaction.signature，
- * 由调度任务推送到 Redis 二签队列。
+ * 由调度任务推送到 PostgreSQL / PGMQ 二签队列。
  *
  * @author lilaizhen
  */

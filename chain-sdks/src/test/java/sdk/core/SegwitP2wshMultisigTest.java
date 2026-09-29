@@ -193,13 +193,13 @@ class SegwitP2wshMultisigTest {
     }
 
     /**
-     * 验证 {@code redisSerializedTx_shouldKeepWitness} 对应的测试场景，明确输入、预期结果和异常边界。
+     * 验证 {@code queueSerializedTx_shouldKeepWitness} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     @Test
-    void redisSerializedTx_shouldKeepWitness() {
+    void queueSerializedTx_shouldKeepWitness() {
         SignedFixture fixture = signedFixture();
-        String redisValue = "rawTransaction:" + fixture.fullHex;
-        String restoredHex = redisValue.substring("rawTransaction:".length());
+        String queueValue = "rawTransaction:" + fixture.fullHex;
+        String restoredHex = queueValue.substring("rawTransaction:".length());
         Transaction restored = Transaction.read(ByteBuffer.wrap(HEX.parseHex(restoredHex)));
 
         assertEquals(4, restored.getInput(0).getWitness().getPushCount());

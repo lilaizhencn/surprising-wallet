@@ -12,7 +12,10 @@ import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import com.surprising.wallet.common.queue.PgmqClient;
+import com.surprising.wallet.common.queue.QueueTenant;
+import java.util.UUID;
+import com.surprising.wallet.common.queue.WalletQueue;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +28,7 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 
-import static com.surprising.wallet.common.utils.Constants.WALLET_DEPOSIT_KEY;
+
 
 /**
  * 充值/提现事务服务。
@@ -62,9 +65,9 @@ public class TransactionService {
     private final WalletRuntimeConfigService runtimeConfigService;
 
     /**
-     * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
+     * PGMQ 消息生产者，与业务写入共用 PostgreSQL 事务。
      */
-    private final StringRedisTemplate redis;
+    private final PgmqClient queue;
     /** Jackson 3 对象映射器，用于处理队列和签名元数据 JSON。 */
     private final ObjectMapper objectMapper;
     /** 广播租约工作者标识。 */
@@ -76,14 +79,14 @@ public class TransactionService {
             BlockchainRuntimeService blockchainRuntimeService,
             ChainJdbcRepository chainJdbcRepository,
             WalletRuntimeConfigService runtimeConfigService,
-            StringRedisTemplate redis,
+            PgmqClient queue,
             ObjectMapper objectMapper,
             WalletTaskLeaseService leaseService) {
         this.addressService = addressService;
         this.blockchainRuntimeService = blockchainRuntimeService;
         this.chainJdbcRepository = chainJdbcRepository;
         this.runtimeConfigService = runtimeConfigService;
-        this.redis = redis;
+        this.queue = queue;
         this.objectMapper = objectMapper;
         this.broadcastOwner = leaseService.ownerId() + "-broadcast";
     }
@@ -91,6 +94,7 @@ public class TransactionService {
     /**
      * 充值，把充值交易推送到各自的业务线队列
      */
+    @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_COMMITTED)
     public void saveTransaction(List<TransactionDTO> dtos) {
         log.info("saveTransactions dto begin");
         dtos.forEach(this::saveTransaction);
@@ -117,10 +121,11 @@ public class TransactionService {
                 || (dto.getConfirmNum() != null && dto.getConfirmNum() >= requiredConfirmations)) {
             creditDepositIfNeeded(dto, currency, requiredConfirmations);
         }
-        // String depositKey = WALLET_DEPOSIT_KEY + dto.getBiz();
-        String depositKey = WALLET_DEPOSIT_KEY;
         String val = JacksonJson.writeValue(objectMapper, dto);
-        redis.opsForList().rightPush(depositKey, val);
+        UUID tenant = chainJdbcRepository.findChainAddressByAddress(chainName(currency), dto.getAddress())
+                .map(com.surprising.wallet.common.chain.ChainAddressRecord::getTenantId)
+                .orElseThrow(() -> new IllegalStateException("deposit tenant missing"));
+        queue.send(WalletQueue.DEPOSIT_EVENT, val, QueueTenant.headers(tenant));
         log.info("saveTransaction dto: {} end", dto.getTxId());
     }
 
@@ -129,7 +134,7 @@ public class TransactionService {
      * 把提现记录入库，账户类型的币直接发出提现请求，但是utxo类型的币在 {@link com.surprising.wallet.jobs.withdraw}中批量汇出
      */
     @Transactional(rollbackFor = {Throwable.class}, isolation = Isolation.READ_COMMITTED)
-    public boolean withdraw(WithdrawRecord record) {
+    public boolean withdraw(WithdrawRecord record, UUID tenantId) {
         log.info("提现操作 开始 提现id:{}", record.getWithdrawId());
 
         AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata(record.getCurrency());
@@ -137,12 +142,12 @@ public class TransactionService {
                 "legacy withdraw");
         if (isUnifiedBitcoinLike(currency)) {
             String chain = chainName(currency);
-            if (chainJdbcRepository.findWithdrawalStatus(chain, record.getWithdrawId()).isPresent()) {
+            if (chainJdbcRepository.findWithdrawalOrder(tenantId, chain, record.getWithdrawId()).isPresent()) {
                 log.info("提现操作 重复提现id已存在:{}", record.getWithdrawId());
                 return true;
             }
-            int created = chainJdbcRepository.createWithdrawalOrder(
-                    record.getWithdrawId(),
+            int created = chainJdbcRepository.createTenantWithdrawalOrder(
+                    tenantId, record.getWithdrawId(),
                     record.getUserId(),
                     chain,
                     chain,
@@ -156,13 +161,13 @@ public class TransactionService {
             }
             BigDecimal frozenAmount = withdrawFrozenAmount(record);
             if (!chainJdbcRepository.freezeLedgerBalance(
-                    chain, chain, record.getUserId().toString(), frozenAmount)) {
+                    tenantId, chain, chain, record.getUserId().toString(), frozenAmount)) {
                 chainJdbcRepository.updateWithdrawalStatus(
-                        chain, record.getWithdrawId(), "FAILED", null, null, "ledger freeze failed");
+                        tenantId, chain, record.getWithdrawId(), "FAILED", null, null, "ledger freeze failed");
                 return false;
             }
             chainJdbcRepository.updateWithdrawalStatus(
-                    chainName(currency), record.getWithdrawId(), "FROZEN", null, null, null);
+                    tenantId, chainName(currency), record.getWithdrawId(), "FROZEN", null, null, null);
             log.info("提现操作 结束 提现id:{}", record.getWithdrawId());
             return true;
         }
@@ -174,7 +179,7 @@ public class TransactionService {
     /**
      * 把已经签好的交易发送出去
      * 更新withdrawrecord表和utxo表中的txid
-     * 把数据推送到 {@Link Constants.WALLET_WITHDRAW_TX_BIZ_KEY}各个业务线的队列，回写txid
+     * 把数据推送到 提现事件各个业务线的队列，回写txid
      *
      * @param transaction 已经签好的交易
      */
@@ -184,18 +189,17 @@ public class TransactionService {
         ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
         AssetRuntimeMetadata currency = transactionAsset(transaction);
 
-        //签名是否成功
-        if (!signature.has("valid") || !JacksonJson.booleanValue(signature, "valid")) {
-            log.error("广播签名后的交易 签名失败 币种id:{} 交易id:{}", transaction.getCurrency(), transaction.getId());
-            if (isUnifiedBitcoinLike(currency)) {
-                failBitcoinLikeTransaction(transaction, currency, JacksonJson.text(signature, "error"));
-            }
-            return true;
-        }
-
         var persisted = isUnifiedBitcoinLike(currency)
                 ? chainJdbcRepository.findBitcoinLikeSigningTransactionById(currency, transaction.getId())
                 : java.util.Optional.<WithdrawTransaction>empty();
+        if (persisted.isEmpty()) throw new IllegalStateException("signing transaction missing");
+        ObjectNode original = JacksonJson.readObject(objectMapper, persisted.get().getSignature());
+        if (!original.path("tenantId").asText().equals(signature.path("tenantId").asText()))
+            throw new IllegalArgumentException("signing transaction tenant mismatch");
+        UUID requestId = UUID.fromString(signature.path("signingRequestId").asText());
+        if (!requestId.toString().equals(original.path("signingRequestId").asText()))
+            throw new IllegalArgumentException("stale signing request");
+        if (persisted.get().getStatus() != null && persisted.get().getStatus() == Constants.DELETE) return true;
         if (persisted.isPresent()
                 && persisted.get().getStatus() != null
                 && persisted.get().getStatus() >= Constants.SENT
@@ -206,6 +210,15 @@ public class TransactionService {
                     currency.getName(), transaction.getId(), persisted.get().getTxId());
             return true;
         }
+        //签名是否成功
+        if (!signature.has("valid") || !JacksonJson.booleanValue(signature, "valid")) {
+            log.error("广播签名后的交易 签名失败 币种id:{} 交易id:{}", transaction.getCurrency(), transaction.getId());
+            if (isUnifiedBitcoinLike(currency)) {
+                failBitcoinLikeTransaction(transaction, currency, JacksonJson.text(signature, "error"));
+            }
+            return true;
+        }
+
         if (isUnifiedBitcoinLike(currency)
                 && !chainJdbcRepository.claimBitcoinLikeBroadcast(
                 currency, transaction.getId(), broadcastOwner)) {
@@ -243,11 +256,11 @@ public class TransactionService {
             record.setStatus((byte) status);
             record.setUpdateDate(Date.from(Instant.now()));
             chainJdbcRepository.updateWithdrawalStatus(
+                    UUID.fromString(signature.path("tenantId").asText()),
                     chainName(currency), record.getWithdrawId(), "SENT", null, txId, null);
-            // String key = Constants.WALLET_WITHDRAW_TX_BIZ_KEY + record.getBiz();
-            String key = Constants.WALLET_WITHDRAW_TX_BIZ_KEY;
             String val = JacksonJson.writeValue(objectMapper, record);
-            redis.opsForList().leftPush(key, val);
+            queue.send(WalletQueue.WITHDRAW_EVENT, val, QueueTenant.headers(
+                    UUID.fromString(signature.path("tenantId").asText())));
         });
         log.info("广播签名后的交易 成功 更新数据库完成 币种id:{} 交易id:{}", currency.getName(), transaction.getTxId());
         return true;
@@ -262,7 +275,7 @@ public class TransactionService {
         chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
         List<WithdrawRecord> records = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
         records.forEach(record -> chainJdbcRepository.updateWithdrawalStatus(
-                chain, record.getWithdrawId(), "BROADCAST_UNKNOWN", null, null, error));
+                UUID.fromString(signature.path("tenantId").asText()), chain, record.getWithdrawId(), "BROADCAST_UNKNOWN", null, null, error));
     }
 
     /**
@@ -281,11 +294,12 @@ public class TransactionService {
         List<WithdrawRecord> records = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
         records.forEach(record -> {
             BigDecimal amount = withdrawFrozenAmount(record);
-            String debitAccountId = withdrawalDebitAccount(chain, record);
+            UUID tenant = UUID.fromString(signature.path("tenantId").asText());
+            String debitAccountId = withdrawalDebitAccount(tenant, chain, record);
             chainJdbcRepository.releaseLockedBalance(
-                    chain, chain, debitAccountId, amount);
+                    tenant, chain, chain, debitAccountId, amount);
             chainJdbcRepository.updateWithdrawalStatus(
-                    chain, record.getWithdrawId(), "FAILED", null, null, error);
+                    tenant, chain, record.getWithdrawId(), "FAILED", null, null, error);
             record.setStatus((byte) Constants.DELETE);
             record.setUpdateDate(Date.from(Instant.now()));
         });
@@ -356,8 +370,8 @@ public class TransactionService {
     /**
      * 查询提现订单对应的 debited 账户标识，默认回退到用户 ID。
      */
-    private String withdrawalDebitAccount(String chain, WithdrawRecord record) {
-        return chainJdbcRepository.findWithdrawalOrder(chain, record.getWithdrawId())
+    private String withdrawalDebitAccount(UUID tenant, String chain, WithdrawRecord record) {
+        return chainJdbcRepository.findWithdrawalOrder(tenant, chain, record.getWithdrawId())
                 .map(order -> order.getDebitAccountId())
                 .filter(StringUtils::hasText)
                 .orElse(record.getUserId().toString());

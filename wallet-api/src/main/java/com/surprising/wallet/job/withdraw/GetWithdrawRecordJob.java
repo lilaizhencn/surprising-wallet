@@ -1,80 +1,14 @@
 package com.surprising.wallet.job.withdraw;
 
-import com.surprising.wallet.common.pojo.WithdrawRecord;
-import com.surprising.wallet.common.json.JacksonJson;
-import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.service.TransactionService;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataAccessException;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import com.surprising.wallet.service.WithdrawalQueueService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.ObjectMapper;
 
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-/**
- * 提现请求拉取任务。
- * <p>
- * 每 30 秒执行一次：从 Redis 待提现队列读取提现请求，触发提现编排，
- * 失败的请求写入失败队列等待重试。
- */
 @Component
-@Slf4j
+@RequiredArgsConstructor
 public class GetWithdrawRecordJob {
-    /** 提现交易服务，负责把请求转为待签名订单。 */
-    private final TransactionService txService;
-    /**
-     * 保存 {@code redis}，用于承载当前对象的运行配置或业务数据。
-     */
-    private final StringRedisTemplate redis;
-    /** Jackson 3 对象映射器，用于处理待提现队列中的 JSON。 */
-    private final ObjectMapper objectMapper;
-
-    /** 构造提现请求拉取任务。 */
-    public GetWithdrawRecordJob(TransactionService txService,
-                                StringRedisTemplate redis,
-                                ObjectMapper objectMapper) {
-        this.txService = txService;
-        this.redis = redis;
-        this.objectMapper = objectMapper;
-    }
-
-    /**
-     * 执行一次取数与提交：读取待提现队列、去重、入流水并对失败请求回写重试队列。
-     */
-    @Scheduled(scheduler = "withdrawTaskScheduler", fixedDelay = 30_000)
-    public void run() {
-        String key = Constants.WALLET_WITHDRAW_WAIT_KEY;
-        String failKey = Constants.WALLET_WITHDRAW_FAIL_KEY;
-        try {
-            long count = 100L;
-            List<String> withdrawStr = redis.opsForList().range(key, 0L, count);
-            if (withdrawStr != null && !withdrawStr.isEmpty()) {
-                Set<WithdrawRecord> withdrawRecordSet = withdrawStr.parallelStream().map(str -> {
-                    WithdrawRecord withdrawRecord = JacksonJson.readValue(objectMapper, str, WithdrawRecord.class);
-                    log.info("打印提现请求:{}", withdrawRecord);
-                    return withdrawRecord;
-                }).collect(Collectors.toSet());
-                withdrawRecordSet.parallelStream().forEach(record -> {
-                    boolean success = false;
-                    try {
-                        success = txService.withdraw(record);
-                    } catch (Throwable e) {
-                        log.error("执行提现服务失败 币种:{} 提现地址:{}", record.getCurrency(), record.getAddress(), e);
-                    }
-                    if (!success) {
-                        redis.opsForList().leftPush(failKey, JacksonJson.writeValue(objectMapper, record));
-                    }
-                });
-                redis.opsForList().trim(key, withdrawStr.size(), -1L);
-            }
-        } catch (DataAccessException e) {
-            log.info("get waiting for withdraw error", e);
-        } catch (Throwable e) {
-            log.info("get waiting for withdraw quit", e);
-        }
-    }
+    private final WithdrawalQueueService service;
+    @Scheduled(scheduler = "withdrawTaskScheduler", fixedDelay = 1000)
+    public void run() { service.withdraw(); }
 }

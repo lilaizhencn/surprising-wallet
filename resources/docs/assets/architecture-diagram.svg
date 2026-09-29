@@ -24,7 +24,7 @@
   <rect x="30"  y="70" width="200" height="78" class="lib"/>
   <text x="130" y="98" text-anchor="middle" class="label">common</text>
   <text x="130" y="118" text-anchor="middle" class="desc">跨模块契约 · 签名 DTO · 密钥校验</text>
-  <text x="130" y="135" text-anchor="middle" class="desc">无 Web / JDBC / Redis 依赖</text>
+  <text x="130" y="135" text-anchor="middle" class="desc">PGMQ JDBC 适配器 · 无 Web 依赖</text>
 
   <rect x="250" y="70" width="200" height="78" class="lib"/>
   <text x="350" y="98" text-anchor="middle" class="label">chain-sdks</text>
@@ -43,9 +43,9 @@
 
   <rect x="720" y="194" width="340" height="100" class="svc"/>
   <text x="890" y="222" text-anchor="middle" class="label">wallet-sig1 · wallet-sig2</text>
-  <text x="890" y="244" text-anchor="middle" class="desc">单一 application.yaml · Redis 租约与队列轮询</text>
+  <text x="890" y="244" text-anchor="middle" class="desc">独立数据库账号 · PGMQ 按消息领取</text>
   <text x="890" y="262" text-anchor="middle" class="desc">BTC/BCH/LTC/DOGE → 第一签 → 第二签</text>
-  <text x="890" y="280" text-anchor="middle" class="desc">ETH/ERC20/TRON 最终签名与广播</text>
+  <text x="890" y="280" text-anchor="middle" class="desc">事务内推进签名阶段与消息归档</text>
 
   <!-- providers → consumers -->
   <line x1="130" y1="148" x2="270" y2="194" class="arrow"/>
@@ -185,8 +185,8 @@
   <text x="145" y="600" text-anchor="middle" class="desc">多租户账本 · 数据库租约 · Outbox · 审计</text>
 
   <rect x="280" y="558" width="170" height="58" class="infra"/>
-  <text x="365" y="580" text-anchor="middle" class="label">Redis</text>
-  <text x="365" y="600" text-anchor="middle" class="desc">Spring Data · 签名传输队列</text>
+  <text x="365" y="580" text-anchor="middle" class="label">PGMQ（PG 扩展）</text>
+  <text x="365" y="600" text-anchor="middle" class="desc">JDBC · 行锁 · 归档 · 死信</text>
 
   <rect x="470" y="558" width="200" height="58" class="infra"/>
   <text x="570" y="580" text-anchor="middle" class="label">Docker Regtest</text>

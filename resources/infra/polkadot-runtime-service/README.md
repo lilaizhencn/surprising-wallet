@@ -30,7 +30,7 @@ The Java service calls this service through `chain_rpc_node` rows with
 `chain=DOT`, `purpose=runtime`, and a private/internal `rpc_url`, for example
 `http://127.0.0.1:8787`.
 
-For a split test2 deployment where PostgreSQL/Redis and this runtime service run
+For a split test2 deployment where PostgreSQL with PGMQ and this runtime service run
 on a Linux host and `wallet-server` runs on another host, bind the service to the
 Linux private IP and store that private URL in `chain_rpc_node.rpc_url`:
 

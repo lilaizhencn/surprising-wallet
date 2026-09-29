@@ -1,8 +1,8 @@
 [Unit]
 Description=Surprising Wallet API
-After=network-online.target postgresql.service redis-server.service
+After=network-online.target postgresql.service
 Wants=network-online.target
-Requires=postgresql.service redis-server.service
+Requires=postgresql.service postgresql.service
 
 [Service]
 Type=simple

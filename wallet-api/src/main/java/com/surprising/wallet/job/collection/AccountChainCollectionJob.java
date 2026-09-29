@@ -28,7 +28,7 @@ public class AccountChainCollectionJob {
      * <p>
      * 每 30 秒（offset 17s）执行一次：遍历所有启用的 account-chain 链，
      * 执行归集流程——为每个链创建归集候选（collection_record），
-     * 构建签名交易推送到 Redis 签名队列，签名完成广播后确认上链状态。
+     * 构建签名交易推送到 PostgreSQL / PGMQ 签名队列，签名完成广播后确认上链状态。
      * <p>
      * EVM 链若启用了 EIP-7702，则由 {@code Evm7702CollectionJob} 单独处理归集。
      * 注意：UTXO 链归集合并在 UTXO 批处理服务中与提现一起处理。

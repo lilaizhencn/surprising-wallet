@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Bean;
  * <p>sig2 与 sig1 独立部署，各自持有不同的密钥分片，
  * 任一服务被攻破都无法单方面签名交易。
  */
+@org.springframework.context.annotation.Import(com.surprising.wallet.common.queue.PgmqConfiguration.class)
 @EnableScheduling
 @SpringBootApplication(scanBasePackages = "com.surprising.wallet.sig.second")
 public class WalletSig2Application {

@@ -161,7 +161,7 @@
 
   <rect x="530" y="556" width="200" height="56" class="sig"/>
   <text x="630" y="580" text-anchor="middle" class="bold">签名管道</text>
-  <text x="630" y="598" text-anchor="middle" class="small">sig1 → Redis → sig2</text>
+  <text x="630" y="598" text-anchor="middle" class="small">sig1 → PGMQ → sig2</text>
 
   <line x1="730" y1="584" x2="765" y2="584" class="arrow"/>
 
@@ -218,16 +218,16 @@
 
   <rect x="705" y="766" width="430" height="20" class="db"/>
   <text x="920" y="780" text-anchor="middle" class="small">EIP-7702 批量提现（能力位接管）：执行费 + L1/DA + Operator Fee · relayer 余额保护</text>
-  <text x="590" y="805" text-anchor="middle" class="small">数据库租约防重复调度 · wallet_outbox 防提交后丢签名任务 · 广播未知进入对账，不盲目重建</text>
+  <text x="590" y="805" text-anchor="middle" class="small">Outbox 与入队同事务 · 消费/阶段推进/归档同事务 · 失败退避 → 死信 → 审计回放</text>
 
   <!-- ====== BOTTOM INFRA ====== -->
   <rect x="20" y="830" width="1140" height="46" class="phase-bg"/>
 
   <rect x="40" y="840" width="200" height="26" class="db"/>
-  <text x="140" y="858" text-anchor="middle" class="small">PostgreSQL · 账本 · 租约 · Outbox · 审计</text>
+  <text x="140" y="858" text-anchor="middle" class="small">PostgreSQL · 入账/消息同事务 · 审计</text>
 
   <rect x="260" y="840" width="200" height="26" class="db"/>
-  <text x="360" y="858" text-anchor="middle" class="small">Redis · sig1/sig2 队列 · 签名租约</text>
+  <text x="360" y="858" text-anchor="middle" class="small">PGMQ · 行锁 · 请求校验 · 死信</text>
 
   <rect x="480" y="840" width="200" height="26" class="db"/>
   <text x="580" y="858" text-anchor="middle" class="small">API · HMAC 签名 · IP 白名单</text>

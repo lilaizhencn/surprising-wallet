@@ -6,8 +6,18 @@ server:
   shutdown: graceful
 
 spring:
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${SW_DB_URL:jdbc:postgresql://127.0.0.1:5432/wallet}
+    username: ${SW_SIG2_DB_USERNAME:wallet_sig2}
+    password: ${SW_SIG2_DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 6
+  sql:
+    init:
+      mode: never
   lifecycle:
-    # 为签名轮询任务、HTTP 服务和 Redis 连接预留有序关闭时间。
+    # 为签名轮询任务、HTTP 服务和 PostgreSQL / PGMQ 连接预留有序关闭时间。
     timeout-per-shutdown-phase: 60s
   task:
     scheduling:
@@ -23,14 +33,6 @@ spring:
   application:
     # Spring 应用名。
     name: wallet-sig2
-  data:
-    redis:
-      # 签名队列 Redis 主机；当前指向 test2。
-      host: ${SW_REDIS_HOST:172.31.6.134}
-      # Redis TCP 端口。
-      port: ${SW_REDIS_PORT:6379}
-      # Redis 密码；空值表示测试实例未启用认证。
-      password: ${SW_REDIS_PASSWORD:}
 
 logging:
   level:

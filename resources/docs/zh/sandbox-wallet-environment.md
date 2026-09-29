@@ -26,7 +26,7 @@
 | 机器 | 建议规格 | 职责 |
 |---|---:|---|
 | 钱包服务机 | 现有 Windows 机器 | `wallet-api`、`wallet-sig1`、`wallet-sig2` |
-| 数据机 | 现有 Linux 机器 | PostgreSQL、Redis |
+| 数据机 | 现有 Linux 机器 | PostgreSQL、PostgreSQL / PGMQ |
 | 沙盒链机器 | 2C4G，系统盘 40G-80G，建议 4G-8G swap | 本地 regtest/dev 链、自动挖块、水龙头辅助进程 |
 
 2C2G 可以短期验证，但同时跑 BTC/LTC/DOGE/BCH regtest 和多条 EVM 本地链会很紧。建议直接使用 2C4G。

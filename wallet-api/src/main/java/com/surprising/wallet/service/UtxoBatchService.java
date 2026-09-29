@@ -18,7 +18,7 @@ import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.repository.WalletOutboxRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -32,7 +32,7 @@ import java.util.*;
  * UTXO 链批处理服务（提现 + 归集）。
  * <p>
  * UTXO 模型下，提现和归集天然同属一笔多输出交易——本类从 DB 拉取该链所有待签名
- * withdrawal_order（不分提现/归集），选取可用 UTXO，构建一笔批量交易推送到 Redis
+ * withdrawal_order（不分提现/归集），选取可用 UTXO，构建一笔批量交易推送到 PostgreSQL / PGMQ
  * 签名队列，由 sig1/sig2 依次签名后广播上链。
  */
 @Slf4j
@@ -46,8 +46,8 @@ public class UtxoBatchService {
     private final ChainJdbcRepository chainJdbcRepository;
     /** 提现任务开关服务。 */
     private final WalletRuntimeConfigService runtimeConfigService;
-    /** Redis 队列。 */
-    private final StringRedisTemplate redis;
+    /** PostgreSQL 网络费率报价。 */
+    private final ChainFeeRateService feeRates;
     /** 签名 Outbox 仓储，保证数据库提交后任务不会丢失。 */
     private final WalletOutboxRepository outbox;
     /** Jackson 3 对象映射器，用于构建和序列化签名队列 JSON。 */
@@ -60,13 +60,13 @@ public class UtxoBatchService {
             BlockchainRuntimeService blockchainRuntimeService,
             ChainJdbcRepository chainJdbcRepository,
             WalletRuntimeConfigService runtimeConfigService,
-            StringRedisTemplate redis,
+            ChainFeeRateService feeRates,
             ObjectMapper objectMapper,
             WalletOutboxRepository outbox) {
         this.blockchainRuntimeService = blockchainRuntimeService;
         this.chainJdbcRepository = chainJdbcRepository;
         this.runtimeConfigService = runtimeConfigService;
-        this.redis = redis;
+        this.feeRates = feeRates;
         this.objectMapper = objectMapper;
         this.outbox = outbox;
     }
@@ -124,7 +124,7 @@ public class UtxoBatchService {
                 }
             }
         } catch (Throwable e) {
-            log.error("UTXO批处理扫描数据,构建交易,发送到redis队列出现异常 币种id:{}", currency.getName(), e);
+            log.error("UTXO批处理扫描数据,构建交易,发送到pgmq队列出现异常 币种id:{}", currency.getName(), e);
             throw new IllegalStateException("UTXO batch transaction rolled back", e);
         }
 
@@ -147,11 +147,11 @@ public class UtxoBatchService {
             totalAmount = totalAmount.add(record.getBalance()).add(record.getFee());
             withdrawAmount = withdrawAmount.add(record.getBalance());
         }
-        String redisFeeRateValue = redis.opsForValue().get(Constants.WALLET_FEE + currency.getIndex());
-        Integer redisFeeRate = redisFeeRateValue == null ? null : Integer.valueOf(redisFeeRateValue);
+        String configuredFeeRateValue = feeRates.get(currency.getName());
+        Integer configuredFeeRate = configuredFeeRateValue == null ? null : Integer.valueOf(configuredFeeRateValue);
         String chain = currency.getName().toUpperCase(Locale.ROOT);
-        int feeRate = redisFeeRate == null || redisFeeRate <= 0
-                ? defaultFeeRate(chain) : redisFeeRate;
+        int feeRate = configuredFeeRate == null || configuredFeeRate <= 0
+                ? defaultFeeRate(chain) : configuredFeeRate;
         long depositConfirmationThreshold = blockchainRuntimeService.depositConfirmationThreshold(currency);
         int offset = 0;
 
@@ -200,6 +200,8 @@ public class UtxoBatchService {
 
         // 初始化待签名 payload
         ObjectNode signature = objectMapper.createObjectNode();
+        signature.put("tenantId", tenantId.toString());
+        signature.put("signingRequestId", UUID.randomUUID().toString());
         Address changeAddress = defaultHotChangeAddress(tenantId, currency);
         signature.set("utxos", objectMapper.valueToTree(utxos));
         signature.set("addresses", objectMapper.valueToTree(addresses));

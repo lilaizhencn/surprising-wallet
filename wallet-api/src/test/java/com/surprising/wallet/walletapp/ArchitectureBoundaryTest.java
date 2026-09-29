@@ -103,6 +103,33 @@ class ArchitectureBoundaryTest {
         verifySingleTableRepositories(repositoryRoot);
     }
 
+    @Test
+    void queueInfrastructureAndFeeRepositoryStayWithinTheirBoundaries() throws IOException {
+        Path root = sourceRoot().getParent().getParent().getParent().getParent().getParent().getParent();
+        // Locate aggregator without relying on Maven's working directory.
+        while (!Files.isDirectory(root.resolve("common/src/main/java"))) root = root.getParent();
+        for (String module : List.of("wallet-api", "wallet-sig1", "wallet-sig2")) {
+            assertFalse(Files.readString(root.resolve(module + "/pom.xml")).contains("spring-boot-starter-data-redis"));
+            for (Path file : javaFiles(root.resolve(module + "/src/main/java"))) {
+                String source = Files.readString(file);
+                assertFalse(source.contains("org.springframework.data.redis"), file.toString());
+                if (file.toString().contains("/jobs/") || file.toString().contains("/job/")) {
+                    assertFalse(source.contains("PgmqClient") || source.contains("QueueWorker"),
+                            "jobs must delegate queue handling to services: " + file);
+                }
+            }
+        }
+        String fee = Files.readString(sourceRoot().resolve("repository/ChainFeeRateRepository.java"));
+        assertTrue(fee.contains("@Repository"));
+        assertTrue(fee.contains("chain_fee_rate"));
+        for (Path file : javaFiles(root.resolve("common/src/main/java/com/surprising/wallet/common/queue"))) {
+            String source = Files.readString(file);
+            assertFalse(source.contains("import com.surprising.wallet.service.")
+                    || source.contains("import com.surprising.wallet.repository."), file.toString());
+            assertFalse(source.contains("ledger_balance") || source.contains("withdrawal_order"), file.toString());
+        }
+    }
+
     /** 验证每个 SQL 仓储只直接操作一张表，不允许把跨表编排重新放回数据访问层。 */
     private static void verifySingleTableRepositories(Path repositoryRoot) throws IOException {
         Pattern tablePattern = Pattern.compile(

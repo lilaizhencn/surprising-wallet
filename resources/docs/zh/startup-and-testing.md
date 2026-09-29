@@ -10,7 +10,7 @@
 - JDK 25
 - Maven 3.8+
 - PostgreSQL 14+
-- Redis 6+
+- PGMQ 1.11.1 扩展（安装在现有 PostgreSQL 18 上）
 - Docker，用于 BTC/LTC/DOGE/BCH 本地 regtest 节点
 - Node.js 20.19+，用于 Console 和 EVM fork 工具
 
@@ -20,7 +20,7 @@
 java -version
 mvn -version
 psql --version
-redis-server --version
+psql -h 127.0.0.1 -p 5432 -d postgres -c "SELECT name, default_version FROM pg_available_extensions WHERE name = 'pgmq';"
 docker --version
 node --version
 npm --version
@@ -48,15 +48,17 @@ psql -U wallet -d wallet -f resources/docs/db/surprising-wallet-init-pgsql.sql
 - 它只用于全新本地库，包含重置表的行为。
 - 不要在生产或共享环境执行 destructive SQL。
 
-## 3. Redis
+## 3. PGMQ
 
-本地启动 Redis：
+在现有 PostgreSQL 18 所在主机安装扩展文件，再执行唯一初始化 SQL。无需额外消息服务。
 
 ```bash
-redis-server
+git clone --depth 1 --branch v1.11.1 https://github.com/pgmq/pgmq.git /tmp/wallet-pgmq
+make -C /tmp/wallet-pgmq/pgmq-extension
+make -C /tmp/wallet-pgmq/pgmq-extension install
 ```
 
-默认本地配置使用 `127.0.0.1:6379`。
+三个应用通过 `SW_DB_URL` 连接同一个数据库。签名服务使用独立数据库账号，只授予对应 PGMQ 队列权限。
 
 ## 4. 构建
 
@@ -95,9 +97,6 @@ export SW_HTTP_PORT='8002'
 export SW_DB_URL='jdbc:postgresql://127.0.0.1:5432/wallet'
 export SW_DB_USERNAME='wallet'
 export SW_DB_PASSWORD='<PostgreSQL 密码>'
-export SW_REDIS_HOST='127.0.0.1'
-export SW_REDIS_PORT='6379'
-export SW_REDIS_PASSWORD='<Redis 密码>'
 export SW_APP_ENV='dev'
 export SW_WALLET_ADMIN_USERNAME='<钱包后台配置账号>'
 export SW_WALLET_ADMIN_PASSWORD='<钱包后台配置密码>'
@@ -141,16 +140,15 @@ TokDou 钱包页面读取 wallet-api：
 
 | 文件 | 用途 |
 |---|---|
-| `wallet-api/src/main/resources/application.yaml` | wallet-api 唯一配置，包含数据库、Redis、密钥、调度及业务参数 |
-| `wallet-sig1/src/main/resources/application.yaml` | 第一签服务唯一配置，包含 Redis、密钥及调度参数 |
-| `wallet-sig2/src/main/resources/application.yaml` | 第二签服务唯一配置，包含 Redis、密钥及调度参数 |
+| `wallet-api/src/main/resources/application.yaml` | wallet-api 唯一配置，包含数据库、PostgreSQL / PGMQ、密钥、调度及业务参数 |
+| `wallet-sig1/src/main/resources/application.yaml` | 第一签服务唯一配置，包含 PostgreSQL / PGMQ、密钥及调度参数 |
+| `wallet-sig2/src/main/resources/application.yaml` | 第二签服务唯一配置，包含 PostgreSQL / PGMQ、密钥及调度参数 |
 
 项目不再使用 `application-{profile}.yaml`。每个属性旁均有用途和配置说明；修改运行环境时直接调整三份 `application.yaml` 并重启对应进程，三个进程的网络和四个 Seed 必须保持一致。
 
 本地必配项：
 
 - PostgreSQL URL、用户名、密码
-- Redis host/port
 - `chain_profile` 中每条启用链只能启用一个 network
 - 启用链至少有一个匹配当前 `sw.app.env.name` 的 `chain_rpc_node`
 - 启用的 `chain_rpc_node` 必须配置真实 RPC URL 和认证信息；启动时会拒绝 `CHANGE_ME`、`YOUR_*`、`REPLACE_ME` 等占位符
@@ -342,3 +340,64 @@ lsof -ti tcp:8545 | xargs kill
 - 通过 `chain_rpc_node.rpc_url` 或 `api_key` 切换私有 RPC。
 - 等待 faucet/RPC 冷却后重试。
 - CI 优先使用 DB-only 测试。
+
+## PGMQ 队列运行与验证
+
+`SW_DB_URL` 在三个应用中必须指向同一个 PostgreSQL 数据库。wallet-api 使用
+`SW_DB_USERNAME/SW_DB_PASSWORD`，签名服务分别使用
+`SW_SIG1_DB_USERNAME/SW_SIG1_DB_PASSWORD` 和 `SW_SIG2_DB_USERNAME/SW_SIG2_DB_PASSWORD`。
+由 DBA 创建独立 LOGIN 角色并安全配置密码；初始化基线由数据库所有者执行。
+下面的授权在角色创建后执行，签名服务无需业务表权限：
+
+```sql
+-- wallet-api role; business-table grants follow the existing application deployment policy.
+GRANT USAGE ON SCHEMA pgmq TO wallet;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgmq TO wallet;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA pgmq TO wallet;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA pgmq TO wallet;
+GRANT SELECT, INSERT, UPDATE ON public.chain_fee_rate TO wallet;
+GRANT USAGE ON SCHEMA pgmq TO wallet_sig1, wallet_sig2;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgmq TO wallet_sig1, wallet_sig2;
+GRANT SELECT, UPDATE, DELETE ON pgmq.q_wallet_sign_first TO wallet_sig1;
+GRANT INSERT, SELECT (msg_id) ON pgmq.a_wallet_sign_first TO wallet_sig1;
+GRANT INSERT, SELECT (msg_id) ON pgmq.q_wallet_sign_second, pgmq.q_wallet_sign_done,
+    pgmq.q_wallet_sign_first_dead TO wallet_sig1;
+GRANT USAGE, SELECT ON SEQUENCE pgmq.q_wallet_sign_second_msg_id_seq,
+    pgmq.q_wallet_sign_done_msg_id_seq, pgmq.q_wallet_sign_first_dead_msg_id_seq TO wallet_sig1;
+GRANT SELECT, UPDATE, DELETE ON pgmq.q_wallet_sign_second TO wallet_sig2;
+GRANT INSERT, SELECT (msg_id) ON pgmq.a_wallet_sign_second TO wallet_sig2;
+GRANT INSERT, SELECT (msg_id) ON pgmq.q_wallet_sign_done, pgmq.q_wallet_sign_second_dead TO wallet_sig2;
+GRANT USAGE, SELECT ON SEQUENCE pgmq.q_wallet_sign_done_msg_id_seq,
+    pgmq.q_wallet_sign_second_dead_msg_id_seq TO wallet_sig2;
+```
+
+使用普通持久化队列。队列包含 `wallet_sign_first`、`wallet_sign_second`、`wallet_sign_done`、
+`wallet_withdraw`、`wallet_rbf`、`wallet_deposit_event`、`wallet_withdraw_event`，每个队列都有对应 `_dead` 死信队列。
+队列 JSON headers 必须携带 `tenant_id`。外部业务消费充值/提现事件时，也必须按租户限定查询条件和数据库权限；
+不要向租户应用开放平台队列账号。签名 payload 的 signature JSON 同时包含 tenantId，消费者校验两者一致。
+
+消费先以 300 秒可见性超时领取，再开启处理事务并锁定该消息，事务提交时同时归档消息与投递下一阶段。
+处理中的行锁会阻止其他消费者重复领取；崩溃会释放锁并回滚，消息超时后恢复。领取后尚未开始处理就已超时的旧消费者不能确认消息。
+RPC 不属于数据库事务，交易广播仍用交易 ID 幂等和 BROADCAST_UNKNOWN 对账。不要因数据库回滚重新构造另一笔提现交易。
+失败按指数退避（最大 900 秒），第 20 次失败进入死信；归档和死信保留租户 headers，日志仅记录消息 ID、次数和异常类型。
+
+数据库所有者或单独授权的运维账号可在确认业务状态后重放死信：
+
+```sql
+SELECT public.wallet_replay_dead('wallet_sign_first', 123, 'Verified signing configuration after repair');
+```
+
+同一死信 ID 重复执行不会重复入队；原消息归档，新消息记录原因、数据库操作者、时间和原死信 ID。
+成功归档不自动回放。通过 `pgmq.metrics_all()` 监控队列数量和消息年龄，并按审计保留策略清理归档。
+
+验证只使用本机现有 PostgreSQL 18，测试自动创建并删除隔离数据库：
+
+```bash
+SW_TEST_PGMQ=true mvn -pl common -am test -Dtest=PgmqIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+部署时先安装指定扩展并初始化新的数据库，再同步部署三个服务。现有开发数据库可重建；不要在有资金数据的库运行初始化基线。
+如需回滚，先停止生产者和消费者，保留新数据库快照、未完成队列和归档，再恢复已备份的代码与数据库；不能只回滚 JAR。
+队列增加数据库写入、WAL 和归档存储负载，应监控连接池、vacuum 和磁盘占用。
+
+每轮新签名请求（含 RBF）带唯一 signingRequestId，广播前与数据库当前请求校验；旧请求的死信回放不得覆盖新交易。

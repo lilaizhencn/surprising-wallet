@@ -19,7 +19,7 @@ spring:
     # Spring 应用名，用于日志、指标和未来配置中心标识。
     name: wallet-api
   lifecycle:
-    # 为任务池、数据库、Redis 和 HTTP 服务的有序关闭预留时间。
+    # 为任务池、数据库、PostgreSQL / PGMQ 和 HTTP 服务的有序关闭预留时间。
     timeout-per-shutdown-phase: 60s
   task:
     scheduling:
@@ -36,11 +36,11 @@ spring:
     # PostgreSQL JDBC 驱动。
     driver-class-name: org.postgresql.Driver
     # 测试数据库地址；可用 SW_DB_URL 临时覆盖，格式为 jdbc:postgresql://host:port/database。
-    url: ${SW_DB_URL:jdbc:postgresql://172.31.6.134:5432/wallet}
+    url: ${SW_DB_URL:jdbc:postgresql://127.0.0.1:5432/wallet}
     # 测试数据库账号。
     username: ${SW_DB_USERNAME:wallet}
     # 测试数据库密码；上线前迁移到安全配置中心。
-    password: ${SW_DB_PASSWORD:wallet123}
+    password: ${SW_DB_PASSWORD:}
     hikari:
       # 最大数据库连接数；需同时考虑 PostgreSQL 上限和服务实例数。
       maximum-pool-size: 20
@@ -48,14 +48,6 @@ spring:
     init:
       # 禁止 Spring 自动执行 schema；数据库结构仅以 docs/db 初始化基线为准。
       mode: never
-  data:
-    redis:
-      # Redis 主机，用于签名队列及缓存；当前指向 test2。
-      host: ${SW_REDIS_HOST:172.31.6.134}
-      # Redis TCP 端口。
-      port: ${SW_REDIS_PORT:6379}
-      # Redis 密码；空值表示测试实例未启用认证。
-      password: ${SW_REDIS_PASSWORD:}
   web:
     error:
       whitelabel:

@@ -1,6 +1,6 @@
 package com.surprising.wallet.job.withdraw;
 
-import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.common.queue.WalletQueue;
 import com.surprising.wallet.service.WalletOutboxDispatchService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -20,13 +20,13 @@ public class WalletOutboxDispatchJob {
     @Scheduled(scheduler = "withdrawTaskScheduler", fixedDelay = 1000)
     public void dispatchFirstSigning() {
         dispatchService.dispatch(WalletOutboxDispatchService.SIGNING_FIRST_TOPIC,
-                Constants.WALLET_WITHDRAW_SIG_FIRST_KEY);
+                WalletQueue.SIGN_FIRST);
     }
 
     /** 每秒派发一次二次签名任务。 */
     @Scheduled(scheduler = "withdrawTaskScheduler", fixedDelay = 1000)
     public void dispatchSecondSigning() {
         dispatchService.dispatch(WalletOutboxDispatchService.SIGNING_SECOND_TOPIC,
-                Constants.WALLET_WITHDRAW_SIG_SECOND_KEY);
+                WalletQueue.SIGN_SECOND);
     }
 }

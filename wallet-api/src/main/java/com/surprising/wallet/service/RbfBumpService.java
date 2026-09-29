@@ -9,7 +9,10 @@ import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import com.surprising.wallet.common.queue.QueueWorker;
+import com.surprising.wallet.common.queue.QueueTenant;
+import java.util.UUID;
+import com.surprising.wallet.common.queue.WalletQueue;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -23,10 +26,8 @@ import java.util.Locale;
 @Slf4j
 @Service
 public class RbfBumpService {
-    /** RBF 触发队列。 */
-    public static final String WALLET_WITHDRAW_RBF_KEY = "sw:wallet:withdraw:rbf";
     /** 默认费率倍数。 */
-    private static final double DEFAULT_FEE_BUMP_FACTOR = 2.0;
+    private static final long DEFAULT_FEE_BUMP_FACTOR = 2L;
 
     /** 签名交易仓储。 */
     private final ChainJdbcRepository repository;
@@ -34,8 +35,9 @@ public class RbfBumpService {
     private final BlockchainRuntimeService blockchainRuntimeService;
     /** 提现任务开关服务。 */
     private final WalletRuntimeConfigService runtimeConfigService;
-    /** Redis 队列。 */
-    private final StringRedisTemplate redis;
+    /** PostgreSQL / PGMQ 队列。 */
+    private final QueueWorker worker;
+    private final ChainFeeRateService feeRates;
     /** JSON 序列化器。 */
     private final ObjectMapper objectMapper;
 
@@ -44,12 +46,14 @@ public class RbfBumpService {
             ChainJdbcRepository repository,
             BlockchainRuntimeService blockchainRuntimeService,
             WalletRuntimeConfigService runtimeConfigService,
-            StringRedisTemplate redis,
+            QueueWorker worker,
+            ChainFeeRateService feeRates,
             ObjectMapper objectMapper) {
         this.repository = repository;
         this.blockchainRuntimeService = blockchainRuntimeService;
         this.runtimeConfigService = runtimeConfigService;
-        this.redis = redis;
+        this.worker = worker;
+        this.feeRates = feeRates;
         this.objectMapper = objectMapper;
     }
 
@@ -59,42 +63,32 @@ public class RbfBumpService {
             log.warn("RBF bump skipped: BTC withdraw switch disabled");
             return;
         }
-        Long queueSize = redis.opsForList().size(WALLET_WITHDRAW_RBF_KEY);
-        if (queueSize == null || queueSize == 0) {
-            return;
-        }
-
-        while (queueSize > 0) {
-            String transactionId = redis.opsForList().rightPop(WALLET_WITHDRAW_RBF_KEY);
-            if (transactionId == null) {
-                break;
-            }
-            try {
-                bumpFee(Integer.parseInt(transactionId.trim()));
-            } catch (Exception error) {
-                log.error("RBF bump 失败 txId={}", transactionId, error);
-            }
-            queueSize--;
-        }
+        worker.drain(WalletQueue.RBF, 100, message -> {
+            var request = JacksonJson.readObject(objectMapper, message.body());
+            return new QueueWorker.Next(WalletQueue.SIGN_FIRST,
+                    bumpFee(request.get("transactionId").asInt(), QueueTenant.require(objectMapper, message)));
+        });
     }
 
     /** 按签名交易 ID 提高费率、恢复状态并重新投递首签队列。 */
-    private void bumpFee(int transactionId) {
+    private String bumpFee(int transactionId, UUID tenantId) {
         AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata("BTC");
         String chain = currency.getName().toUpperCase(Locale.ROOT);
         java.util.Optional<WithdrawTransaction> transactionOptional =
                 repository.findBitcoinLikeSigningTransactionById(currency, transactionId);
         if (transactionOptional.isEmpty()) {
             log.error("RBF: 交易不存在 id={}", transactionId);
-            return;
+            throw new IllegalArgumentException("transaction missing");
         }
         WithdrawTransaction transaction = transactionOptional.get();
 
         ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
+        if (!tenantId.toString().equals(signature.path("tenantId").asText()))
+            throw new IllegalArgumentException("RBF tenant mismatch");
         String firstSignTransaction = JacksonJson.text(signature, "firstSignTx");
         if (firstSignTransaction == null || firstSignTransaction.isEmpty()) {
             log.error("RBF: 交易尚未完成首次签名 id={}", transactionId);
-            return;
+            throw new IllegalStateException("first signature missing");
         }
 
         log.info("RBF bump 开始: txId={}, 原txid={}, 原fee={}",
@@ -103,7 +97,7 @@ public class RbfBumpService {
         List<UtxoTransaction> utxos = JacksonJson.toList(
                 objectMapper, signature.get("utxos"), UtxoTransaction.class);
         for (UtxoTransaction utxo : utxos) {
-            repository.lockUtxo(chain, utxo.getTxId(), utxo.getSeq(), String.valueOf(transactionId));
+            repository.lockUtxo(tenantId, chain, utxo.getTxId(), utxo.getSeq(), String.valueOf(transactionId));
         }
         log.info("RBF: {} 个UTXO 使用统一表保持锁定", utxos.size());
 
@@ -111,13 +105,13 @@ public class RbfBumpService {
                 objectMapper, signature.get("withdraw"), WithdrawRecord.class);
         for (WithdrawRecord record : records) {
             repository.updateWithdrawalStatus(
-                    chain, record.getWithdrawId(), "SIGNING", null, null, null);
+                    tenantId, chain, record.getWithdrawId(), "SIGNING", null, null, null);
         }
         log.info("RBF: {} 条提现订单保持签名中", records.size());
 
         long oldFeeRate = JacksonJson.longValue(signature, "feeRate");
         String configuredFeeRateValue =
-                redis.opsForValue().get(Constants.WALLET_FEE + currency.getIndex());
+                feeRates.get(currency.getName());
         Integer configuredFeeRate = configuredFeeRateValue == null
                 ? null : Integer.valueOf(configuredFeeRateValue);
         long newFeeRate = configuredFeeRate == null ? 0L : configuredFeeRate;
@@ -127,16 +121,13 @@ public class RbfBumpService {
         }
 
         signature.put("feeRate", newFeeRate);
+        signature.put("signingRequestId", UUID.randomUUID().toString());
         transaction.setSignature(JacksonJson.writeValue(objectMapper, signature));
         transaction.setStatus(Constants.WAITING);
         transaction.setTxId("rbf-" + transactionId);
         currency.applyTo(transaction);
         repository.updateBitcoinLikeSigningTransaction(currency, transaction);
 
-        redis.opsForList().leftPush(
-                Constants.WALLET_WITHDRAW_SIG_FIRST_KEY,
-                JacksonJson.writeValue(objectMapper, transaction));
-        log.info("RBF bump 完成: txId={}, 新费率={} sat/vB, 已推送首签队列",
-                transactionId, newFeeRate);
+        return JacksonJson.writeValue(objectMapper, transaction);
     }
 }

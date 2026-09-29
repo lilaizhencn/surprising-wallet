@@ -139,3 +139,11 @@ wallet-api/job/
 
 - 通过验证后 commit and push。
 - 不提交 `.idea/`、`logs/`、本地 key 文件、链数据目录、构建产物。
+
+## PostgreSQL queue infrastructure
+
+- PostgreSQL 18 + PGMQ 1.11.1 is the sole general middleware dependency.
+- `common.queue.PgmqClient` is an extension adapter for PGMQ-owned queue/archive tables, not a business Repository. It must never query wallet business tables.
+- `ChainFeeRateRepository` maps only to `chain_fee_rate`; network fee quotes are shared network metadata.
+- Queue handlers live in Services. Jobs only schedule. Claim receipts are fenced by `read_ct`; processing, next-stage enqueue and archive share a transaction.
+- Signing services use separate restricted database roles for queue access. Business queue headers carry tenant ownership; replay records actor and reason.

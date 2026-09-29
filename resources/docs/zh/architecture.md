@@ -44,9 +44,9 @@
 | 模块 | 职责 |
 |---|---|
 | `wallet-api` | Spring MVC 单体应用：Custody/Console REST API、Servlet/Cookie 与 HTTP 异常映射、Job 调度、业务 Service、链领域与持久化模型、链适配器（Bitcoin-like/EVM/Starknet/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、充值、账本、提现、归集、Gas、Webhook 和启动校验 |
-| `wallet-sig1` | BTC-like 2-of-3 第一签服务：对 BTC、BCH、LTC、DOGE 提现交易生成部分签名，轮询 Redis 队列；处理中任务可恢复 |
-| `wallet-sig2` | 第二签服务：对 BTC、BCH、LTC、DOGE、ETH、ERC20、TRON 交易完成最终签名并广播；处理中任务可恢复 |
-| `common` | 无 Web/Redis 耦合、且至少被两个上层模块使用的共享契约：运行时链/资产契约、签名交易 DTO、钱包密钥配置与加载、通用常量 |
+| `wallet-sig1` | BTC-like 2-of-3 第一签服务：对 BTC、BCH、LTC、DOGE 提现交易生成部分签名，轮询 PostgreSQL / PGMQ 队列；处理中任务可恢复 |
+| `wallet-sig2` | 第二签服务：完成最终签名并入 PGMQ 广播队列，由 wallet-api 广播；处理中任务可恢复 |
+| `common` | 无 Web 耦合、至少被两个上层模块使用的共享契约和 PGMQ 基础设施：运行时链/资产契约、签名交易 DTO、钱包密钥配置与加载、通用常量 |
 | `chain-sdks` | 与业务和数据库无关的链 SDK：BitcoinJ 网络参数、Bitcoin-like RPC DTO、多签地址、SegWit 交易、UTXO 选择、BIP32、SLIP-0010 Ed25519 派生与签名、TRON gRPC/Protobuf/ECKey |
 
 所有模块的 parent POM 为根目录 `pom.xml`，继承 Spring Boot starter parent，以 Java 25 作为统一编译和运行基线，并提供统一的版本和依赖管理。
@@ -62,9 +62,11 @@ Servlet 请求包装器不得放入 `config/`，充值扫描使用的检查点�
 不再按业务域拆分 `account/service`、`custody/service` 或 `devfaucet/service`，也不保留 `impl` 子包。
 所有业务域的 PostgreSQL/JDBC Repository 统一位于 `com.surprising.wallet.repository`，业务包下不再保留
 `account/repository`、`custody/repository`、`deposit/repository` 或其他分散的 Repository 子包。
-Service 和 Job 统一使用构造器注入；可选基础设施依赖以 `Optional<T>` 表达。需要 Redis 的可执行模块直接注入 Spring Data Redis 的 `StringRedisTemplate`，由 Spring Boot 自动配置
-连接工厂；`common` 不再提供静态 Redis 封装，也不携带 Redis、Servlet 或 Spring Web 依赖。各可执行模块
-分别声明自身实际使用的 starter，避免依赖传递造成的隐式可用。
+Service 和 Job 统一使用构造器注入；可选基础设施依赖以 `Optional<T>` 表达。
+`common.queue` 提供无 Web 依赖的 PGMQ JDBC 适配器和消费事务执行器，三个应用显式导入配置。
+业务 Service 通过适配器使用队列，不直接编写 SQL；`ChainFeeRateRepository` 只访问 `chain_fee_rate`。
+
+各可执行模块分别声明自身实际使用的 starter，避免依赖传递造成的隐式可用。
 
 Repository 采用“单表一仓储”约束：每个 `@Repository` 只访问一个数据库表，Repository 名称与表职责一一对应。
 `CustodyRepository`、`ChainJdbcRepository` 等保留名称的跨表门面使用 `@Component`，自身不执行 SQL，只在 Java 中组合
@@ -79,8 +81,8 @@ Bitcoin-like RPC DTO 与 Ed25519 链枚举、派生结果和 SLIP-0010 密钥提
 ## 调度与运行时开关
 
 - wallet-api 的每个 `@Scheduled` 入口都通过 `wallet_task_lease` 获取数据库租约；租约按任务名唯一，执行期间由心跳续租，实例故障后由其他实例接管。租约只负责调度所有权，业务数据仍由各自的事务和单表 Repository 维护。
-- wallet-sig1/sig2 不连接业务数据库，签名轮询使用 Redis 租约和固定处理中队列；Redis 脚本保证只由租约持有者释放，进程崩溃后下次轮询恢复处理中任务。
-- 提现签名任务在同一 PostgreSQL 事务中写入 `wallet_outbox` 后才允许提交；Outbox 派发器以租约领取记录、向 Redis 投递并按指数退避重试，Redis 只承担传输，不承担唯一事实来源。广播队列使用处理中列表，进程异常后可恢复。
+- wallet-sig1/sig2 使用独立账号连接同一个 PostgreSQL，仅访问授权的 PGMQ 队列。消费按消息领取，处理事务持有该消息行锁；read_ct 校验阻止旧消费者确认新领取的消息。
+- 签名任务与业务状态同事务写入 `wallet_outbox`；派发器将 PGMQ 入队和 Outbox 标记成功放在同一事务。消费事务原子完成业务状态更新、下一阶段入队和当前消息归档。异常回滚，指数退避重试；第 20 次失败进入死信队列。
 - 提现领取按 `tenant_id` 轮转，Webhook 领取按租户公平排序；任何租户的慢 RPC、慢回调或积压都不能长期饿死其他租户。幂等键、状态机、锁定余额、失败释放和链上对账共同构成资金闭环。
 - Account-Chain 调度器每秒做轻量到期检查，UTXO 调度器每 5 秒检查；只有达到该链扫描周期时才访问 RPC。
 - 扫描周期由 `WalletRuntimeConfigService` 集中维护，快速链为 2-5 秒，ETH 为 12 秒，ADA 为 20 秒，DOGE/LTC/BTC/BCH 为 15/30/60/60 秒，未知新链默认 10 秒。
@@ -159,3 +161,12 @@ wallet-api 启动时会先校验 `sw.wallet.keys` 四个 Seed，再检查 `chain
 ## 运行目录
 
 `resources/` 下集中存放 infra（EVM fork、Polkadot sidecar、regtest、Move 合约、systemd 服务）、docs（文档、SQL）和 scripts（测试启动脚本）。
+
+### PostgreSQL 队列与费用报价
+
+PGMQ 扩展管理 `pgmq.q_wallet_*`、对应归档表和死信队列。`common.queue.PgmqClient` 只访问扩展对象，不访问业务表。
+`ChainFeeRateRepository` 对应 `chain_fee_rate`（链、整数费率、更新时间），经 `ChainFeeRateService` 为提现和 RBF 提供网络报价。
+队列消费由 `WithdrawalQueueService`、`FirstSigningService`、`SecondSigningService` 和 `RbfBumpService` 编排；Job 仅调度。
+已移除独立失败重试和超时重投签名 Job，PGMQ 未确认消息在可见性超时后恢复。
+队列归档用于审计；运维使用 `wallet_replay_dead(queue, id, reason)` 重放死信，并记录数据库操作者和原因。
+PGMQ 的消息行锁与 read_ct 校验保证领取和确认安全，链上 RPC 仍须依赖交易 ID 幂等及未知结果对账。

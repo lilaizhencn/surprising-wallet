@@ -255,6 +255,5 @@ EVM ERC-20 充值地址后续可通过 [EIP-7702 免 Gas 批量归集目标方�
 - 通过 TLS 提供服务，Custody/Console CORS 只允许正式 Console 域名。
 - 钱包和签名网络保持私有。Webhook 出网使用白名单代理或防火墙。应用 DNS 检查只能降低 SSRF
   风险，不能替代网络层出网控制。
-- PostgreSQL 开启持续备份和时间点恢复。Custody 状态以 PostgreSQL 为事实来源；Redis 只承担
-  运行协调/缓存。
+- PostgreSQL 开启持续备份和时间点恢复。Custody 状态以 PostgreSQL 为事实来源；PGMQ 消息与归档也纳入备份；费用报价存储于 chain_fee_rate。
 - 监控 Webhook 积压和失败、提现对账延迟、扫链延迟、账本异常、RPC 健康、数据库饱和度和签名服务。

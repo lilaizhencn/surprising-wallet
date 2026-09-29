@@ -2,7 +2,7 @@
 
 Surprising Wallet is a multi-tenant blockchain custody platform for exchanges, payment providers, and digital-asset businesses. It provides tenant-isolated deposit addresses, chain monitoring, confirmations, ledger posting, withdrawals, collection, gas accounting, audit trails, and signed webhooks behind one operational control plane.
 
-The project is built for controlled custody operations: PostgreSQL is the source of truth for balances and workflow state, Redis transports signing work, and every enabled chain and asset is controlled through database configuration.
+The project is built for controlled custody operations: PostgreSQL is the source of truth for balances and workflow state, PGMQ transports signing work within the same database, and every enabled chain and asset is controlled through database configuration.
 
 ## Supported Chains
 
@@ -83,10 +83,11 @@ flowchart LR
     Services --> Adapters[Chain adapters<br/>RPC · scanners · signing · broadcast]
     Adapters --> Networks[(Supported networks)]
     API --> PostgreSQL[(PostgreSQL<br/>ledger · custody state · leases · outbox · audit)]
-    API --> Redis[(Redis<br/>signing transport)]
-    API --> Sig1[wallet-sig1<br/>first signature]
-    Sig1 --> Sig2[wallet-sig2<br/>final signature and broadcast]
-    Sig2 --> Redis
+    Services --> PGMQ[(PGMQ<br/>durable signing queues)]
+    PGMQ --- PostgreSQL
+    PGMQ <--> Sig1[wallet-sig1<br/>first signature]
+    PGMQ <--> Sig2[wallet-sig2<br/>final signature]
+    PGMQ --> Services
     Common[common] --> API
     Common --> Sig1
     Common --> Sig2
@@ -99,7 +100,7 @@ flowchart LR
 |---|---|
 | `wallet-api` | Spring MVC API and console, scheduled jobs, custody workflows, chain adapters, repositories, gas accounting, webhooks, and startup validation. |
 | `wallet-sig1` | First signature service for Bitcoin-like withdrawal transactions. |
-| `wallet-sig2` | Final signature, rebroadcast, and broadcast service for Bitcoin-like, EVM, and TRON transactions. |
+| `wallet-sig2` | Final signing stage; completed transactions return to the API through PGMQ for broadcasting. |
 | `common` | Shared chain and asset contracts, signing DTOs, wallet key configuration, and cross-module infrastructure. |
 | `chain-sdks` | Bitcoin-like, TRON, RPC, UTXO, BIP32, Ed25519, and Protobuf based SDK components. |
 
@@ -112,16 +113,17 @@ The dependency direction is `wallet-api → common, chain-sdks` and `wallet-sig1
 - JDK 25
 - Maven 3.9+
 - PostgreSQL 18
-- Redis 7+
+- PGMQ 1.11.1 extension installed on the PostgreSQL server
 - Node.js only for the Polkadot runtime bridge and selected test infrastructure
 
 ### Local development or a disposable test database
 
-The repository has one canonical database file. It is destructive by design and must be used only with a new or disposable database.
+The repository has one canonical database file. It is destructive by design and must be used only with a new or disposable database. Install PGMQ 1.11.1 on the existing PostgreSQL server first (commands below); initialize as a database administrator.
 
 ```bash
-createdb wallet
-psql -U wallet -d wallet -f resources/docs/db/surprising-wallet-init-pgsql.sql
+createdb -h 127.0.0.1 -p 5432 surprising_wallet_test_local
+psql -h 127.0.0.1 -p 5432 -d surprising_wallet_test_local -v ON_ERROR_STOP=1 -f resources/docs/db/surprising-wallet-init-pgsql.sql
+export SW_DB_URL=jdbc:postgresql://127.0.0.1:5432/surprising_wallet_test_local
 
 mvn -DskipTests package
 
@@ -130,13 +132,21 @@ java -jar wallet-sig1/target/wallet-sig1-1.0.0-SNAPSHOT.jar
 java -jar wallet-sig2/target/wallet-sig2-1.0.0-SNAPSHOT.jar
 ```
 
-Set the database, Redis, custody master key, platform administrator, wallet key, CORS, and chain RPC environment variables before starting the services. Do not put private keys, seed phrases, production credentials, or RPC secrets in Git.
+Configure queue access for the API and separate signing roles as described in [startup and testing](resources/docs/zh/startup-and-testing.md#pgmq-队列运行与验证). All three services use the same `SW_DB_URL`; signers use `SW_SIG1_DB_USERNAME/PASSWORD` and `SW_SIG2_DB_USERNAME/PASSWORD`.
+
+Set the database, custody master key, platform administrator, wallet key, CORS, and chain RPC environment variables before starting the services. Do not put private keys, seed phrases, production credentials, or RPC secrets in Git.
 
 ### Linux systemd deployment
 
 The repository includes service units for the API and both signing services under `resources/infra/systemd/`.
 
-1. Provision PostgreSQL and Redis.
+1. Provision PostgreSQL 18 with PGMQ 1.11.1. Install the extension files on the existing database host before running the initialization SQL:
+
+   ```bash
+   git clone --depth 1 --branch v1.11.1 https://github.com/pgmq/pgmq.git /tmp/wallet-pgmq
+   make -C /tmp/wallet-pgmq/pgmq-extension
+   make -C /tmp/wallet-pgmq/pgmq-extension install
+   ```
 2. Initialize a new database with `resources/docs/db/surprising-wallet-init-pgsql.sql`.
 3. Install the environment file at `/etc/surprising-wallet/wallet.env`.
 4. Install the three systemd units and enable them.

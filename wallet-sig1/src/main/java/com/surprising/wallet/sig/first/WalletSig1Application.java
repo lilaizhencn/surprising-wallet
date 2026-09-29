@@ -8,11 +8,12 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * 第一签名服务（sig1）Spring Boot 启动入口。
  *
  * <p>sig1 持有第一组密钥分片，负责对提现/归集交易生成第一次部分签名。
- * 完成后将交易推送到 Redis 二签队列，由 sig2 完成最终签名。
+ * 完成后将交易推送到 PostgreSQL / PGMQ 二签队列，由 sig2 完成最终签名。
  *
  * <p>sig1 和 sig2 独立部署，各自持有不同的 BIP32 密钥分片，
  * 任一服务被攻破都无法单方面签名交易，满足多签安全模型。
  */
+@org.springframework.context.annotation.Import(com.surprising.wallet.common.queue.PgmqConfiguration.class)
 @EnableScheduling
 @SpringBootApplication(scanBasePackages = "com.surprising.wallet.sig.first")
 public class WalletSig1Application {

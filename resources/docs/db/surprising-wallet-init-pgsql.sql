@@ -31,6 +31,7 @@ DROP TABLE IF EXISTS public.evm_collection_batch_item;
 DROP TABLE IF EXISTS public.evm_collection_batch;
 DROP TABLE IF EXISTS public.evm_7702_account;
 DROP TABLE IF EXISTS public.evm_7702_config;
+DROP TABLE IF EXISTS public.chain_fee_rate;
 DROP TABLE IF EXISTS public.wallet_outbox;
 DROP TABLE IF EXISTS public.wallet_task_lease;
 ALTER TABLE IF EXISTS ONLY public.collection_record DROP CONSTRAINT IF EXISTS collection_record_custody_fk;
@@ -5767,7 +5768,7 @@ VALUES
     ('PLASMA', 'USDT0', 'ERC20', '0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb', 6, false, false, 1, 1, now(), now()),
     ('SEI', 'SEI', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('SEI', 'USDC', 'ERC20', '0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392', 6, false, false, 1, 1, now(), now()),
-    ('SEI', 'USDT0', 'ERC20', '0x9151434b16b9763660705744891fA906F660EcC5', 6, false, false, 1, 1, now(), now()),
+    ('SEI', 'USDT0', 'ERC20', '0x9151434b16b9763660705744891fA906F660EcC5', 6, false, false, 1, 1, now(), now())
 ON CONFLICT ("chain", "symbol") DO UPDATE SET
     "asset_kind" = EXCLUDED."asset_kind",
     "contract_address" = EXCLUDED."contract_address",
@@ -5868,7 +5869,7 @@ VALUES
     ('SEI', 'USDC', 'ERC20', '0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('SEI', 'USDT0', 'ERC20', '0x9151434b16b9763660705744891fA906F660EcC5', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
+     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
     "standard" = EXCLUDED."standard",
     "contract_address" = EXCLUDED."contract_address",
@@ -6092,7 +6093,7 @@ VALUES
     ('SEI', 'mainnet', 'evm', 9040, 60, 'SEI',
      'https://evm-rpc.sei-apis.com', 'https://seiscan.io/tx/',
      1, 1, 1, 0, false, now(), now(), 1329, 'eip1559', 200,
-     false, false, false, false, 0, 200),
+     false, false, false, false, 0, 200)
 ON CONFLICT ("chain", "network") DO UPDATE SET
     "family" = EXCLUDED."family",
     "runtime_currency_id" = EXCLUDED."runtime_currency_id",
@@ -6432,7 +6433,7 @@ VALUES
     ('SEI', 'mainnet', 'prod', 'official-sei-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://evm-rpc.sei-apis.com', 'NONE', NULL, 10, 1000, false,
      'Production Sei public EVM JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
-     now(), now(), NULL),
+     now(), now(), NULL)
 ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDATE SET
     "connection_type" = EXCLUDED."connection_type",
     "rpc_url" = EXCLUDED."rpc_url",
@@ -7775,3 +7776,48 @@ VALUES (
     'TENANT_ADMIN',
     'ACTIVE')
 ON CONFLICT (id) DO NOTHING;
+
+
+-- PGMQ 1.11.1 is installed on the existing PostgreSQL 18 server before initialization.
+CREATE EXTENSION IF NOT EXISTS pgmq VERSION '1.11.1';
+DO $$
+DECLARE q text;
+BEGIN
+    FOREACH q IN ARRAY ARRAY['wallet_sign_first', 'wallet_sign_second', 'wallet_sign_done',
+        'wallet_withdraw', 'wallet_deposit_event', 'wallet_withdraw_event', 'wallet_rbf']
+    LOOP
+        PERFORM pgmq.create(q);
+        PERFORM pgmq.create(q || '_dead');
+    END LOOP;
+END $$;
+
+CREATE TABLE public.chain_fee_rate (
+    chain text PRIMARY KEY,
+    fee_rate bigint NOT NULL CHECK (fee_rate > 0),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+COMMENT ON TABLE public.chain_fee_rate IS 'Network fee quotes in atomic units per byte/vbyte; shared network metadata, not tenant balances';
+
+-- Only an operator with explicit queue privileges may replay; archive retains the original.
+-- Repeated calls for the same dead message are harmless. Reason and database actor are retained.
+CREATE OR REPLACE FUNCTION public.wallet_replay_dead(q text, dead_id bigint, reason text)
+RETURNS bigint LANGUAGE plpgsql AS $$
+DECLARE m record; new_id bigint;
+BEGIN
+    IF q <> ALL(ARRAY['wallet_sign_first','wallet_sign_second','wallet_sign_done',
+        'wallet_withdraw','wallet_deposit_event','wallet_withdraw_event','wallet_rbf']) THEN
+        RAISE EXCEPTION 'Unknown wallet queue';
+    END IF;
+    IF reason IS NULL OR length(trim(reason)) < 5 THEN
+        RAISE EXCEPTION 'Replay requires an audit reason';
+    END IF;
+    EXECUTE format('SELECT message, headers FROM pgmq.%I WHERE msg_id = $1 FOR UPDATE', 'q_' || q || '_dead')
+        INTO m USING dead_id;
+    IF m.message IS NULL THEN RETURN NULL; END IF;
+    SELECT pgmq.send(q, m.message, coalesce(m.headers, '{}'::jsonb) || jsonb_build_object(
+        'replay_reason', reason, 'replay_actor', current_user, 'replay_at', clock_timestamp(),
+        'replay_dead_id', dead_id)) INTO new_id;
+    PERFORM pgmq.archive(q || '_dead', dead_id);
+    RETURN new_id;
+END $$;
+REVOKE ALL ON FUNCTION public.wallet_replay_dead(text, bigint, text) FROM PUBLIC;
