@@ -1,0 +1,11 @@
+[Unit]
+Description=Check wallet health every minute
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=60s
+AccuracySec=5s
+Unit=wallet-monitor.service
+
+[Install]
+WantedBy=timers.target

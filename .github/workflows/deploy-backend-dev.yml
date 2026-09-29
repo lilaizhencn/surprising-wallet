@@ -19,6 +19,8 @@ on:
       - pom.xml
       - scripts/deploy/backend-deploy.sh
       - scripts/deploy/backend-deploy-trigger.sh
+      - scripts/ops/**
+      - resources/infra/monitor/**
   workflow_dispatch:
 
 permissions:
@@ -42,6 +44,10 @@ jobs:
       - name: Build single JAR and run unit tests
         # DB/chain integration tests run against the developer's existing PostgreSQL 18.
         run: mvn -B -pl wallet-api -am package '-Dtest=!*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false -Dproject.build.outputTimestamp="$(git show -s --format=%cI HEAD)"
+      - name: Validate monitoring
+        run: |
+          python3 -m unittest discover -s scripts/ops/tests -v
+          bash -n scripts/ops/install-monitor.sh
       - name: Assemble release
         run: |
           mkdir release

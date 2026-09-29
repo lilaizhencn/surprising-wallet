@@ -1,0 +1,15 @@
+/var/log/nginx/*.log {
+    create 0640 nginx root
+    daily
+    maxsize 20M
+    rotate 14
+    maxage 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    sharedscripts
+    postrotate
+        /bin/systemctl kill --kill-whom=main --signal=USR1 nginx.service 2>/dev/null || true
+    endscript
+}

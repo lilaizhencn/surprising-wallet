@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<configuration scan="true" scanPeriod="60 seconds" debug="false">
+<configuration debug="false">
 
     <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="wallet-api"/>
     <property name="logDir" value="./logs"/>
@@ -22,9 +22,12 @@
             <onMismatch>ACCEPT</onMismatch>
         </filter>
         <File>${logDir}/info.${appName}.log</File>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <FileNamePattern>${logDir}/info.${appName}.%d{yyyy-MM-dd}.log</FileNamePattern>
-            <maxHistory>90</maxHistory>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <FileNamePattern>${logDir}/archive/info.${appName}.%d{yyyy-MM-dd}.%i.log.gz</FileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>14</maxHistory>
+            <totalSizeCap>512MB</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
         </rollingPolicy>
         <encoder>
             <charset>UTF-8</charset>
@@ -38,9 +41,12 @@
             <level>ERROR</level>
         </filter>
         <File>${logDir}/error.${appName}.log</File>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <FileNamePattern>${logDir}/error.${appName}.%d{yyyy-MM-dd}.log</FileNamePattern>
-            <maxHistory>90</maxHistory>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <FileNamePattern>${logDir}/archive/error.${appName}.%d{yyyy-MM-dd}.%i.log.gz</FileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>128MB</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
         </rollingPolicy>
         <encoder>
             <charset>UTF-8</charset>

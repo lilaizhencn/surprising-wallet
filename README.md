@@ -189,3 +189,7 @@ Configure `BACKEND_DEPLOY_HOST`, `BACKEND_DEPLOY_USER`, `BACKEND_DEPLOY_SSH_KEY`
 The receiver checks the archive digest and file list, serializes deployments, checks database prerequisites, stages an immutable release, updates the unit, and verifies health. A failed activation restores the previous JAR and unit when available. Environment files and databases are never replaced by automatic deployment; configuration changes require their own backups. The all-mode unit caps the heap at 640 MiB; size connection pools and enabled chain workloads to fit the host.
 
 The canonical initialization SQL is applied only once to a new, explicitly provisioned database. Never run it during automatic deployment. Supply `SW_CUSTODY_SECRET_MASTER_KEY` and the mode-specific key variables; development faucet jobs are disabled by default. ZKSYNC profiles and USDC are retained but disabled together until explicitly configured.
+
+### Logs and monitoring
+
+Application logs rotate daily or at 20 MB and are compressed: INFO/WARN archives keep up to 14 days/512 MB, ERROR archives up to 30 days/128 MB. A Python/systemd monitor checks resources, services, HTTPS, PostgreSQL, PGMQ and errors every minute, sending Telegram alerts, recovery notices and a daily summary. An independent host checks public HTTPS for outages. See [operations and monitoring](resources/docs/zh/operations-monitoring.md) for installation, thresholds and rollback.

@@ -29,6 +29,8 @@ GitHub Actions 使用 JDK 27 / Lombok 1.18.48 构建并执行单元测试，随�
 
 新主机 PostgreSQL 18 + PGMQ 1.11.1 与应用共机运行，数据库和应用 HTTP 绑定 loopback，公网入口由 Nginx 提供。640 MiB 堆上限配合有限数据库连接池，适用于低负载起步；开链数量仍需按实际负载控制。
 
+运行监控独立于钱包 JVM：systemd 每分钟启动 Python 只读探针，读取主机资源、服务、日志、PostgreSQL/PGMQ 指标及本机/公网健康结果，通过 Telegram 发送故障、恢复和日报。第二台主机仅探测公网 HTTPS，覆盖钱包主机整体宕机；没有额外中间件，也不处理业务队列。日志有时间与容量限制，详见[日志与运行监控](operations-monitoring.md)。
+
 ## 运行模型
 
 `wallet-api` 是唯一可执行 JAR，包含两个普通签名库；默认 `api`。

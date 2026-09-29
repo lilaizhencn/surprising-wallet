@@ -1,0 +1,11 @@
+[Unit]
+Description=Send wallet status at 09:00 Asia/Shanghai
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=60
+Unit=wallet-monitor-summary.service
+
+[Install]
+WantedBy=timers.target
