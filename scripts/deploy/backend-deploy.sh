@@ -2,9 +2,8 @@
 set -euo pipefail
 
 # surprising-wallet backend deploy script
-# Server-side: git pull → build all wallet jars → migrate → switch → verify.
+# Server-side: git pull → build all wallet jars → switch → verify.
 # Invoked by GitHub Actions via SSH (command= restricted key).
-# Migrations are idempotent: each SQL file runs at most once (tracked in _deploy_migrations).
 
 if [[ ${EUID} -ne 0 ]]; then
   printf 'deploy must run as root\n' >&2
@@ -42,7 +41,7 @@ printf 'deploy sha: %s\n' "$DEPLOY_SHA"
 
 # The restricted SSH key invokes a root-owned wrapper outside the repository.
 # Refresh that wrapper from the checked-out source so the next invocation waits
-# for the real build, migration and health result instead of returning early.
+# for the real build and health result instead of returning early.
 if [[ -f $TRIGGER_SOURCE ]]; then
   if [[ -f $TRIGGER_TARGET && ! -f $TRIGGER_BACKUP ]]; then
     install -o root -g root -m 0750 "$TRIGGER_TARGET" "$TRIGGER_BACKUP"
@@ -71,7 +70,6 @@ DEPLOY_RELEASE="$RELEASE_DIR/$DEPLOY_SHA"
 JAR_SOURCE="$REPO_DIR/wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar"
 SIG1_JAR_SOURCE="$REPO_DIR/wallet-sig1/target/wallet-sig1-1.0.0-SNAPSHOT.jar"
 SIG2_JAR_SOURCE="$REPO_DIR/wallet-sig2/target/wallet-sig2-1.0.0-SNAPSHOT.jar"
-SQL_SOURCE="$REPO_DIR/resources/docs/db"
 
 if [[ ! -f $JAR_SOURCE || ! -f $SIG1_JAR_SOURCE || ! -f $SIG2_JAR_SOURCE ]]; then
   printf 'build did not produce all wallet JARs\n' >&2
@@ -84,20 +82,10 @@ install -o wallet -g wallet -m 0640 "$SIG1_JAR_SOURCE" "$DEPLOY_RELEASE/wallet-s
 install -o wallet -g wallet -m 0640 "$SIG2_JAR_SOURCE" "$DEPLOY_RELEASE/wallet-sig2.jar"
 install -d -o root -g wallet -m 0750 "$DEPLOY_RELEASE/.previous-systemd"
 
-SQL_COUNT=0
-if [[ -d $SQL_SOURCE ]]; then
-  for f in "$SQL_SOURCE"/*.sql; do
-    [[ -f $f ]] || continue
-    install -o root -g wallet -m 0640 "$f" "$DEPLOY_RELEASE/"
-    SQL_COUNT=$((SQL_COUNT + 1))
-  done
-fi
-printf 'staged %d sql file(s)\n' "$SQL_COUNT"
-
 chown root:wallet "$DEPLOY_RELEASE"
 chmod 0750 "$DEPLOY_RELEASE"
 
-# ── 4. migrate (idempotent: each file runs at most once) ─────────────
+# ── 4. verify database prerequisites ─────────────────────────────────
 if [[ ! -f $ENV_FILE ]]; then
   printf 'env file %s is missing\n' "$ENV_FILE" >&2
   exit 1
@@ -107,34 +95,10 @@ source "$ENV_FILE"
 set +a
 
 DB_URL=${SW_DB_URL#jdbc:}
-if [[ $DB_URL != postgresql://127.0.0.1:* && $DB_URL != postgresql://localhost:* ]]; then
-  printf 'automatic migration only permits loopback PostgreSQL\n' >&2
-  exit 1
-fi
 
 PGUSER=${SW_DB_USERNAME:?SW_DB_USERNAME is required}
 PGPASSWORD=${SW_DB_PASSWORD:?SW_DB_PASSWORD is required}
 export PGUSER PGPASSWORD
-
-# ensure migration tracking table (idempotent)
-psql --set=ON_ERROR_STOP=1 "$DB_URL" -c "
-  CREATE TABLE IF NOT EXISTS _deploy_migrations (
-    filename text PRIMARY KEY,
-    applied_at timestamptz NOT NULL DEFAULT now()
-  )"
-
-for migration in "$DEPLOY_RELEASE"/*.sql; do
-  [[ -f $migration ]] || continue
-  name=$(basename "$migration")
-  already=$(psql -tA "$DB_URL" -c "COPY (SELECT 1 FROM _deploy_migrations WHERE filename='$name') TO STDOUT" 2>/dev/null)
-  if [[ -n $already ]]; then
-    printf 'skipped (already applied): %s\n' "$name"
-    continue
-  fi
-  printf 'running migration: %s\n' "$name"
-  psql --set=ON_ERROR_STOP=1 "$DB_URL" --file="$migration"
-  psql "$DB_URL" -c "INSERT INTO _deploy_migrations(filename) VALUES('$name') ON CONFLICT DO NOTHING"
-done
 
 printf '=== verify durable processing schema ===\n'
 psql --set=ON_ERROR_STOP=1 "$DB_URL" <<'SQL'

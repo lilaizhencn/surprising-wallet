@@ -1,5 +1,5 @@
 name: Deploy backend dev
-# full deploy flow: push → GitHub checkout → SSH trigger → server git pull → mvn package → migrate → restart → verify
+# full deploy flow: push → GitHub checkout → SSH trigger → server git pull → mvn package → restart → verify
 
 on:
   push:
@@ -55,7 +55,7 @@ jobs:
             'exec /opt/surprising-wallet-backend/repo/scripts/deploy/backend-deploy-trigger.sh')
           printf '%s\n' "$deployment_output"
           if ! grep -Fxq 'backend deployment verified' <<<"$deployment_output"; then
-            echo "The server only accepted the deployment trigger; build/migration/health verification was not returned" >&2
+            echo "The server only accepted the deployment trigger; build/health verification was not returned" >&2
             exit 1
           fi
-          echo "Backend deployment built, migrated, restarted, and passed server health checks"
+          echo "Backend deployment built, restarted, and passed server health checks"

@@ -5,6 +5,10 @@
 
 -- Dumped from database version 18.4 (Homebrew)
 -- Dumped by pg_dump version 18.4 (Homebrew)
+--
+-- Canonical initialization baseline for a new development or test database.
+-- Schema, chain/token configuration, safety defaults, and later incremental
+-- changes are maintained in this single file.
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -7954,6 +7958,14 @@ SET fee_model = CASE
     END,
     updated_at = now()
 WHERE family = 'evm';
+
+-- Normalize the legacy value used by older databases while keeping the
+-- baseline compatible with the current runtime gas policy enum.
+UPDATE public.chain_profile
+SET gas_policy = 'eip1559',
+    updated_at = now()
+WHERE family = 'evm'
+  AND gas_policy = 'eip1559-l2';
 
 COMMIT;
 

@@ -11,7 +11,7 @@ if [[ ! -f $DEPLOY_SCRIPT ]]; then
 fi
 
 # Wait for an in-progress deployment instead of returning before the server has
-# built, migrated, restarted and health-checked the release. Each queued run
+# built, restarted and health-checked the release. Each queued run
 # fetches origin/master, so it always deploys the newest commit.
 flock "$DEPLOY_LOCK" bash "$DEPLOY_SCRIPT" \
   >>"$DEPLOY_LOG" 2>&1

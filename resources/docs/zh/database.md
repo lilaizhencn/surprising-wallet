@@ -7,8 +7,7 @@
 
 | 文件 | 用途 |
 |---|---|
-| `../db/surprising-wallet-init-pgsql.sql` | 受保护的全新数据库链 schema 和测试配置 seed。 |
-| `wallet-api/src/main/resources/db/custody-schema.sql` | wallet-api 启动时自动应用的幂等、增量多租户 Custody schema。 |
+| `../db/surprising-wallet-init-pgsql.sql` | 唯一数据库初始化文件，包含完整 schema、链/token 配置和测试 seed。 |
 
 ## 初始化顺序
 
@@ -19,8 +18,6 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 ```
 
 `surprising-wallet-init-pgsql.sql` 只用于可丢弃或全新的数据库。它包含 `pg_dump --clean` 生成的重置语句，不用于生产库原地升级。
-
-wallet-api 启动时由 Spring 应用 `custody-schema.sql`，重复执行安全。
 
 ## 种子数据范围
 
