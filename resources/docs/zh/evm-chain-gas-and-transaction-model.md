@@ -39,28 +39,18 @@ L2 交易不会直接从发送方的 Ethereum L1 地址扣款，也不能用仅�
 | BERACHAIN | bepolia (80069)<br>mainnet (80094) | BERA | BERA；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | BNB | mainnet (56)<br>testnet (97) ✓ | BNB | BNB；链自身原生币 | Type 0（legacy） | standard | 未启用；已有生产 runbook |
 | CELO | celo-sepolia (11142220)<br>mainnet (42220) | CELO | CELO；链自身原生币 | Type 2（EIP-1559） | op-stack | 未启用 |
-| CHILIZ | mainnet (88888)<br>testnet (88882) | CHZ | CHZ；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
-| CONFLUX | mainnet (1030)<br>testnet (71) | CFX | CFX；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
-| CORE | mainnet (1116)<br>testnet (1114) | CORE | CORE；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | CRONOS | mainnet (25)<br>testnet (338) | CRO | CRO；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
-| DEGEN | mainnet (666666666) | DEGEN | DEGEN；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | ETH | mainnet (1)<br>sepolia (11155111) ✓ | ETH | ETH；Ethereum L1 原生币 | Type 2（EIP-1559） | standard | 未启用；已有生产 runbook |
 | ETHERLINK | mainnet (42793)<br>shadownet (127823) | XTZ | XTZ；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | GNOSIS | chiado (10200)<br>mainnet (100) | XDAI | XDAI；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | HYPEREVM | mainnet (999)<br>testnet (998) ✓ | HYPE | HYPE；链自身原生币 | Type 0（legacy） | standard | 未启用 |
 | INK | mainnet (57073)<br>sepolia (763373) | ETH_INK | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
-| IOTA_EVM | mainnet (8822)<br>testnet (1076) | IOTA | IOTA；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
-| IOTEX | mainnet (4689)<br>testnet (4690) | IOTX | IOTX；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | KAIA | mainnet (8217)<br>testnet (1001) | KAIA | KAIA；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | KATANA | bokuto (737373)<br>mainnet (747474) | ETH_KATANA | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
-| KROWN | mainnet (1983) | KROWN | KROWN；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | LINEA | mainnet (59144)<br>sepolia (59141) ✓ | ETH_LINEA | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | standard | 未启用 |
-| LISK | mainnet (1135)<br>sepolia (4202) | ETH_LISK | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
 | MANTLE | mainnet (5000)<br>sepolia (5003) ✓ | MNT | MNT；链自身原生币 | Type 2（EIP-1559） | op-stack-l1 | 未启用 |
 | MEGAETH | carrot (6343)<br>mainnet (4326) | ETH_MEGAETH | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | standard | 未启用 |
-| MODE | mainnet (34443)<br>sepolia (919) | ETH_MODE | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
 | MONAD | mainnet (143)<br>testnet (10143) | MON | MON；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
-| OASIS_EMERALD | mainnet (42262)<br>testnet (42261) | ROSE | ROSE；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | OPTIMISM | mainnet (10)<br>sepolia (11155420) ✓ | ETH_OP | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用；已有生产 runbook |
 | PLASMA | mainnet (9745)<br>testnet (9746) | XPL | XPL；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | POLYGON | amoy (80002) ✓<br>mainnet (137) | POL | POL；链自身原生币 | Type 2（EIP-1559） | standard | 未启用；已有生产 runbook |
@@ -72,10 +62,7 @@ L2 交易不会直接从发送方的 Ethereum L1 地址扣款，也不能用仅�
 | SOMNIA | mainnet (5031)<br>testnet (50312) | SOMI | SOMI；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | SONEIUM | mainnet (1868)<br>minato (1946) | ETH_SONEIUM | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
 | SONIC | mainnet (146)<br>testnet (14601) | S | S；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
-| STORY | mainnet (1514)<br>testnet (1315) | IP | IP；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
-| TAIKO | hoodi (167013)<br>mainnet (167000) | ETH_TAIKO | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | standard | 未启用 |
 | UNICHAIN | mainnet (130)<br>sepolia (1301) ✓ | ETH_UNICHAIN | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
-| VECTOR_SMART_CHAIN | mainnet (420042) | VSG | VSG；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | WORLD_CHAIN | mainnet (480)<br>sepolia (4801) | ETH_WORLD | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
 | X_LAYER | mainnet (196)<br>testnet (1952) | OKB | OKB；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | ZKSYNC | mainnet (324)<br>sepolia (300) | ETH_ZKSYNC | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | standard | 未启用 |
@@ -86,7 +73,7 @@ L2 交易不会直接从发送方的 Ethereum L1 地址扣款，也不能用仅�
 
 - `Type 0（legacy）`：使用 `gasPrice`。当前只有 BNB 和 HYPEREVM 配置为该模型。
 - `Type 2（EIP-1559）`：使用 `maxFeePerGas` 和
-  `maxPriorityFeePerGas`。其余 44 个 EVM 链当前都使用该模型。
+  `maxPriorityFeePerGas`。其余 31 个 EVM 链当前都使用该模型。
 - `fee_model` 不决定交易信封。它只决定确认和对账时是否需要额外核算 L1 数据费、
   operator fee，或拆分 Arbitrum Nitro 父链成本。
 
@@ -114,7 +101,7 @@ EIP-7702，Celo 也已支持 Type 4，但本项目基线仍没有对应的 ACTIV
 | `fee_model` | 当前链 | 结算含义 |
 |---|---|---|
 | `standard` | Ethereum、Avalanche、BNB、Polygon、Linea 及多数独立 EVM 链 | 使用回执执行费；Linea 的 L1 成本已内化到 L2 Gas 价格，并不表示 Linea 没有 L1 成本 |
-| `op-stack` | Base、Optimism、Ink、Katana、Lisk、Mode、Soneium、Unichain、World Chain、Celo | 执行费 + L1 数据费 + 链升级后适用的 operator fee |
+| `op-stack` | Base、Optimism、Ink、Katana、Soneium、Unichain、World Chain、Celo | 执行费 + L1 数据费 + 链升级后适用的 operator fee |
 | `op-stack-l1` | Mantle | MNT 执行费 + 通过 oracle 取得的 L1 数据费；当前不计 OP operator fee |
 | `arbitrum-nitro` | Arbitrum | 父链成本已进入 Nitro gas；拆分记录时不能在总费用上二次相加 |
 | `scroll` | Scroll | ETH 执行费 + 独立 Scroll L1 数据费 |
@@ -132,8 +119,6 @@ Celo 网络上的 CELO，不能按协议能力假设本项目已经支持用 USD
 配置在正式启用前必须重新做 receipt/oracle 验证：
 
 - Robinhood Chain 官方说明其为 Arbitrum L2，但当前基线仍是 `standard`。
-- Degen Chain 是使用 DEGEN Gas 的 Arbitrum Orbit L3，但当前基线仍是
-  `standard`。
 - Katana 使用 CDK OP Geth，当前配置为 `op-stack`；正式启用前必须确认目标网络
   的 Gas Price Oracle、L1 fee 和 operator fee 接口版本。
 

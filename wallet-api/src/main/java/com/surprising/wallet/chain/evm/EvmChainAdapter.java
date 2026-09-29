@@ -218,33 +218,20 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.MONAD, "MON", 10143L, 1L);
         registerProfile(ChainType.WORLD_CHAIN, "ETH_WORLD", 4801L, 1L);
         registerProfile(ChainType.INK, "ETH_INK", 763373L, 1L);
-        registerProfile(ChainType.TAIKO, "ETH_TAIKO", 167013L, 1L);
         registerProfile(ChainType.SONEIUM, "ETH_SONEIUM", 1946L, 1L);
-        registerProfile(ChainType.MODE, "ETH_MODE", 919L, 1L);
-        registerProfile(ChainType.LISK, "ETH_LISK", 4202L, 1L);
         registerProfile(ChainType.KATANA, "ETH_KATANA", 737373L, 1L);
         registerProfile(ChainType.MEGAETH, "ETH_MEGAETH", 6343L, 1L);
         registerProfile(ChainType.X_LAYER, "OKB", 1952L, 1L);
-        registerProfile(ChainType.DEGEN, "DEGEN", 666666666L, 1L);
         registerProfile(ChainType.ROBINHOOD_CHAIN, "ETH_ROBINHOOD", 46630L, 1L);
         registerProfile(ChainType.ETHERLINK, "XTZ", 127823L, 1L);
-        registerProfile(ChainType.IOTA_EVM, "IOTA", 1076L, 1L);
-        registerProfile(ChainType.OASIS_EMERALD, "ROSE", 42261L, 1L);
         registerProfile(ChainType.CRONOS, "CRO", 338L, 1L);
         registerProfile(ChainType.SONIC, "S", 14601L, 1L);
         registerProfile(ChainType.PULSECHAIN, "PLS", 943L, 1L);
-        registerProfile(ChainType.CORE, "CORE", 1114L, 1L);
         registerProfile(ChainType.SOMNIA, "SOMI", 50312L, 1L);
         registerProfile(ChainType.RONIN, "RON", 202601L, 1L);
-        registerProfile(ChainType.CHILIZ, "CHZ", 88882L, 1L);
-        registerProfile(ChainType.IOTEX, "IOTX", 4690L, 1L);
         registerProfile(ChainType.KAIA, "KAIA", 1001L, 1L);
         registerProfile(ChainType.PLASMA, "XPL", 9746L, 1L);
-        registerProfile(ChainType.STORY, "IP", 1315L, 1L);
         registerProfile(ChainType.SEI, "SEI", 1328L, 1L);
-        registerProfile(ChainType.CONFLUX, "CFX", 71L, 400L);
-        registerProfile(ChainType.VECTOR_SMART_CHAIN, "VSG", 420042L, 12L);
-        registerProfile(ChainType.KROWN, "KROWN", 1983L, 12L);
     }
     /**
      * 添加 {@code registerDbProfiles} 对应的业务对象，并更新当前组件的集合或索引。

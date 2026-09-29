@@ -15,7 +15,6 @@ const TOKEN_DEFINITIONS = {
   USDC: { symbol: "USDC", name: "USD Coin", decimals: 6 },
   USDC_E: { symbol: "USDC_E", name: "Bridged USD Coin", decimals: 6 },
   USDT: { symbol: "USDT", name: "Tether USD", decimals: 6 },
-  IOUSDT: { symbol: "IOUSDT", name: "IoTeX Tether USD", decimals: 6 },
   USDT0: { symbol: "USDT0", name: "Tether USD0", decimals: 6 },
   USDM: { symbol: "USDM", name: "MegaUSD", decimals: 18 },
   USDG: { symbol: "USDG", name: "Global Dollar", decimals: 6 },

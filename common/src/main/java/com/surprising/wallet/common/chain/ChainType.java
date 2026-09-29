@@ -99,21 +99,9 @@ public enum ChainType {
      */
     INK("evm", "account"),
     /**
-     * 定义 {@code TAIKO} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    TAIKO("evm", "account"),
-    /**
      * 定义 {@code SONEIUM} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     SONEIUM("evm", "account"),
-    /**
-     * 定义 {@code MODE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    MODE("evm", "account"),
-    /**
-     * 定义 {@code LISK} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    LISK("evm", "account"),
     /**
      * 定义 {@code KATANA} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
@@ -127,10 +115,6 @@ public enum ChainType {
      */
     X_LAYER("evm", "account"),
     /**
-     * 定义 {@code DEGEN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    DEGEN("evm", "account"),
-    /**
      * 定义 {@code ROBINHOOD_CHAIN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     ROBINHOOD_CHAIN("evm", "account"),
@@ -142,14 +126,6 @@ public enum ChainType {
      * 定义 {@code ETHERLINK} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     ETHERLINK("evm", "account"),
-    /**
-     * 定义 {@code IOTA_EVM} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    IOTA_EVM("evm", "account"),
-    /**
-     * 定义 {@code OASIS_EMERALD} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    OASIS_EMERALD("evm", "account"),
     /**
      * 定义 {@code CRONOS} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
@@ -163,10 +139,6 @@ public enum ChainType {
      */
     PULSECHAIN("evm", "account"),
     /**
-     * 定义 {@code CORE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    CORE("evm", "account"),
-    /**
      * 定义 {@code SOMNIA} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     SOMNIA("evm", "account"),
@@ -174,14 +146,6 @@ public enum ChainType {
      * 定义 {@code RONIN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     RONIN("evm", "account"),
-    /**
-     * 定义 {@code CHILIZ} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    CHILIZ("evm", "account"),
-    /**
-     * 定义 {@code IOTEX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    IOTEX("evm", "account"),
     /**
      * 定义 {@code KAIA} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
@@ -191,25 +155,9 @@ public enum ChainType {
      */
     PLASMA("evm", "account"),
     /**
-     * 定义 {@code STORY} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    STORY("evm", "account"),
-    /**
      * 定义 {@code SEI} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     SEI("evm", "account"),
-    /**
-     * 定义 {@code CONFLUX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    CONFLUX("evm", "account"),
-    /**
-     * 定义 {@code VECTOR_SMART_CHAIN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    VECTOR_SMART_CHAIN("evm", "account"),
-    /**
-     * 定义 {@code KROWN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    KROWN("evm", "account"),
     /**
      * 定义 {@code HYPERCORE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
