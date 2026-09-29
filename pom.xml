@@ -29,7 +29,7 @@
 
     <properties>
         <surprising.version>1.0.0-SNAPSHOT</surprising.version>
-        <java.version>25</java.version>
+        <java.version>27</java.version>
         <lombok.version>1.18.48</lombok.version>
         <spring-cloud.version>2025.1.3</spring-cloud.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

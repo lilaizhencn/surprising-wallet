@@ -9,7 +9,7 @@
 
 - Node.js 18+
 - npm
-- Maven/JDK 25
+- Maven/JDK 27
 - 已使用 `../db` 初始化的 PostgreSQL 测试库
 - 可选：私有或更稳定 RPC 的环境变量
 

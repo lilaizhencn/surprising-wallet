@@ -7,9 +7,9 @@
 
 需要安装：
 
-- JDK 25
+- JDK 27
 - Maven 3.8+
-- PostgreSQL 14+
+- PostgreSQL 18
 - PGMQ 1.11.1 扩展（安装在现有 PostgreSQL 18 上）
 - Docker，用于 BTC/LTC/DOGE/BCH 本地 regtest 节点
 - Node.js 20.19+，用于 Console 和 EVM fork 工具
@@ -403,3 +403,11 @@ SW_TEST_PGMQ=true mvn -pl common -am test -Dtest=PgmqIntegrationTest -Dsurefire.
 队列增加数据库写入、WAL 和归档存储负载，应监控连接池、vacuum 和磁盘占用。
 
 每轮新签名请求（含 RBF）带唯一 signingRequestId，广播前与数据库当前请求校验；旧请求的死信回放不得覆盖新交易。
+
+## 阿里云单 JAR 发布
+
+构建与运行均使用 Java 27，Lombok 1.18.48 已支持该版本。GitHub Actions 只执行不依赖数据库/链节点的单元测试；完整数据库集成测试在开发机既有 PostgreSQL 18 的隔离测试库执行。服务端仅接收已构建的校验发布包，固定使用 `surprising-wallet-all.service`。不再在服务器上拉取代码或编译，不使用旧 `backend-activate.sh` 自动迁移入口。
+
+新实例必须通过环境变量提供 `SW_CUSTODY_SECRET_MASTER_KEY`，没有内置默认加密密钥。开发水龙头默认关闭；如需启用，必须同时补齐其资金地址与节点配置。ZKSYNC 的链配置、RPC 和 USDC 默认共同关闭，避免初始化后启动校验失败。
+
+部署回滚只覆盖 JAR 和 systemd unit，不回滚数据库或环境密钥。新部署使用新的钱包根密钥时，不能用它接管旧钱包地址。

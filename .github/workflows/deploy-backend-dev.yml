@@ -1,5 +1,5 @@
 name: Deploy backend dev
-# full deploy flow: push → GitHub checkout → SSH trigger → server git pull → mvn package → restart → verify
+# Build and test on GitHub; upload one JAR to the Alibaba Cloud all-mode service.
 
 on:
   push:
@@ -29,12 +29,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  trigger:
+  deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-
+      - uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: '27'
+          cache: maven
+      - name: Build single JAR and run unit tests
+        # DB/chain integration tests run against the developer's existing PostgreSQL 18.
+        run: mvn -B -pl wallet-api -am package '-Dtest=!*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false -Dproject.build.outputTimestamp="$(git show -s --format=%cI HEAD)"
+      - name: Assemble release
+        run: |
+          mkdir release
+          cp wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar release/wallet-server.jar
+          cp resources/infra/systemd/surprising-wallet-all.service release/
+          cp scripts/deploy/backend-deploy.sh scripts/deploy/backend-deploy-trigger.sh release/
+          tar -C release -czf wallet-release.tar.gz wallet-server.jar surprising-wallet-all.service backend-deploy.sh backend-deploy-trigger.sh
       - name: Configure SSH
         env:
           DEPLOY_KEY: ${{ secrets.BACKEND_DEPLOY_SSH_KEY }}
@@ -44,19 +58,14 @@ jobs:
           printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/backend_deploy"
           chmod 0600 "$HOME/.ssh/backend_deploy"
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 0644 "$HOME/.ssh/known_hosts"
-
-      - name: Notify server to deploy
+          chmod 0600 "$HOME/.ssh/known_hosts"
+      - name: Upload and activate on Alibaba Cloud
         env:
           DEPLOY_HOST: ${{ secrets.BACKEND_DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.BACKEND_DEPLOY_USER }}
         run: |
-          deployment_output=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+          archive_sha=$(sha256sum wallet-release.tar.gz | cut -d ' ' -f 1)
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
             -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST" \
-            'exec /opt/surprising-wallet-backend/repo/scripts/deploy/backend-deploy-trigger.sh')
-          printf '%s\n' "$deployment_output"
-          if ! grep -Fxq 'backend deployment verified' <<<"$deployment_output"; then
-            echo "The server only accepted the deployment trigger; build/health verification was not returned" >&2
-            exit 1
-          fi
-          echo "Backend deployment built, restarted, and passed server health checks"
+            "deploy $GITHUB_SHA $archive_sha" < wallet-release.tar.gz | tee deployment.log
+          grep -Fxq 'backend deployment verified' deployment.log

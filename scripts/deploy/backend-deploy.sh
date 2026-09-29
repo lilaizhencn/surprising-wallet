@@ -1,204 +1,85 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-# surprising-wallet backend deploy script
-# Server-side: git pull → build one executable wallet jar → switch → verify.
-# Invoked by GitHub Actions via SSH (command= restricted key).
-
-if [[ ${EUID} -ne 0 ]]; then
-  printf 'deploy must run as root\n' >&2
-  exit 1
-fi
-
-REPO_DIR=/opt/surprising-wallet-backend/repo
-RELEASE_DIR=/opt/surprising-wallet-backend/releases
-CURRENT_DIR=/opt/surprising-wallet-backend/current
+# Activate a CI-built, checksum-verified release; never initialize or reset a database.
+[[ ${EUID} -eq 0 && $# -eq 2 && $1 =~ ^[0-9a-f]{40}$ ]] || exit 1
+DEPLOY_SHA=$1
+STAGING=$2
+DEPLOY_ROOT=/opt/surprising-wallet-backend
+RELEASE_DIR="$DEPLOY_ROOT/releases/$DEPLOY_SHA"
+CURRENT_DIR="$DEPLOY_ROOT/current"
 ENV_FILE=/etc/surprising-wallet/wallet.env
+UNIT=surprising-wallet-all.service
+UNIT_FILE="/etc/systemd/system/$UNIT"
 HEALTH_URL=http://127.0.0.1:8002/actuator/health
-BRANCH=master
-TRIGGER_SOURCE="$REPO_DIR/scripts/deploy/backend-deploy-trigger.sh"
-TRIGGER_TARGET=/usr/local/sbin/surprising-wallet-backend-deploy
-TRIGGER_BACKUP=/usr/local/sbin/surprising-wallet-backend-deploy.before-durable-20260805
-SYSTEMD_DIR=/etc/systemd/system
-SYSTEMD_UNITS=(surprising-wallet.service surprising-wallet-sig1.service surprising-wallet-sig2.service surprising-wallet-all.service)
-
-# ── 1. pull ──────────────────────────────────────────────────────────
-if [[ ! -d $REPO_DIR ]]; then
-  printf 'repo directory does not exist; clone it first:\n' >&2
-  printf '  git clone %s %s\n' "${SW_REPO_URL:-<url>}" "$REPO_DIR" >&2
-  exit 1
-fi
-
-cd "$REPO_DIR"
-printf '=== git fetch ===\n'
-git fetch origin "$BRANCH"
-
-printf '=== git reset to origin/%s ===\n' "$BRANCH"
-git reset --hard "origin/$BRANCH"
-
-DEPLOY_SHA=$(git rev-parse HEAD)
-printf 'deploy sha: %s\n' "$DEPLOY_SHA"
-
-# The restricted SSH key invokes a root-owned wrapper outside the repository.
-# Refresh that wrapper from the checked-out source so the next invocation waits
-# for the real build and health result instead of returning early.
-if [[ -f $TRIGGER_SOURCE ]]; then
-  if [[ -f $TRIGGER_TARGET && ! -f $TRIGGER_BACKUP ]]; then
-    install -o root -g root -m 0750 "$TRIGGER_TARGET" "$TRIGGER_BACKUP"
-  fi
-  install -o root -g root -m 0750 "$TRIGGER_SOURCE" "$TRIGGER_TARGET"
-  printf 'updated deployment trigger: %s\n' "$TRIGGER_TARGET"
-fi
-
-# ── 2. build ─────────────────────────────────────────────────────────
-printf '=== mvn package (wallet-api + wallet-sig1 + wallet-sig2) ===\n'
-# Lombok 1.18.46 still depends on javac internals removed by JDK 27.
-# Keep the server/runtime default on JDK 27, but use the installed JDK 25
-# toolchain for Maven until Lombok publishes JDK 27 support.
-BUILD_JAVA_HOME=${SW_BUILD_JAVA_HOME:-/usr/lib/jvm/java-25-openjdk-amd64}
-if [[ ! -x $BUILD_JAVA_HOME/bin/java ]]; then
-  printf 'required build JDK is missing: %s\n' "$BUILD_JAVA_HOME" >&2
-  exit 1
-fi
-export JAVA_HOME="$BUILD_JAVA_HOME"
-export PATH="$JAVA_HOME/bin:$PATH"
-printf 'build JDK: %s\n' "$($JAVA_HOME/bin/java -version 2>&1 | head -n 1)"
-mvn -pl wallet-api -am -DskipTests clean package -q
-
-# ── 3. stage release ─────────────────────────────────────────────────
-DEPLOY_RELEASE="$RELEASE_DIR/$DEPLOY_SHA"
-JAR_SOURCE="$REPO_DIR/wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar"
-if [[ ! -f $JAR_SOURCE ]]; then
-  printf 'build did not produce the executable wallet JAR\n' >&2
-  exit 1
-fi
-
-install -d -m 0750 "$DEPLOY_RELEASE"
-install -o wallet -g wallet -m 0640 "$JAR_SOURCE" "$DEPLOY_RELEASE/wallet-server.jar"
-install -d -o root -g wallet -m 0750 "$DEPLOY_RELEASE/.previous-systemd"
-
-chown root:wallet "$DEPLOY_RELEASE"
-chmod 0750 "$DEPLOY_RELEASE"
-
-# ── 4. verify database prerequisites ─────────────────────────────────
-if [[ ! -f $ENV_FILE ]]; then
-  printf 'env file %s is missing\n' "$ENV_FILE" >&2
-  exit 1
-fi
+[[ -s "$STAGING/wallet-server.jar" && -f "$ENV_FILE" ]]
+/usr/bin/java -version 2>&1 | grep -Eq 'version "27([.\"]|$)'
+systemctl is-active --quiet postgresql.service
+# Only database credentials are passed to psql; never print environment contents.
 set -a
 source "$ENV_FILE"
 set +a
-
-case ${SW_DEPLOY_LAYOUT:-split} in
-  all) SELECTED_UNITS=(surprising-wallet-all.service) ;;
-  split)
-    SELECTED_UNITS=(surprising-wallet.service surprising-wallet-sig1.service surprising-wallet-sig2.service)
-    for signer in sig1 sig2; do
-      [[ -f /etc/surprising-wallet/$signer.env ]] || { printf 'missing %s.env\n' "$signer" >&2; exit 1; }
-    done
-    ;;
-  *) printf 'SW_DEPLOY_LAYOUT must be all or split\n' >&2; exit 1 ;;
-esac
-
-DB_URL=${SW_DB_URL#jdbc:}
-
-PGUSER=${SW_DB_USERNAME:?SW_DB_USERNAME is required}
-PGPASSWORD=${SW_DB_PASSWORD:?SW_DB_PASSWORD is required}
-export PGUSER PGPASSWORD
-
-printf '=== verify durable processing schema ===\n'
-psql --set=ON_ERROR_STOP=1 "$DB_URL" <<'SQL'
-DO $$
-BEGIN
-  IF to_regclass('public.wallet_task_lease') IS NULL
-     OR to_regclass('public.wallet_outbox') IS NULL THEN
-    RAISE EXCEPTION 'durable processing tables are missing';
+[[ ${SW_WALLET_MODE:-all} == all ]]
+PGUSER=${SW_DB_USERNAME:?} PGPASSWORD=${SW_DB_PASSWORD:?} \
+  psql "${SW_DB_URL#jdbc:}" --set=ON_ERROR_STOP=1 --no-psqlrc >/dev/null <<'SQL'
+DO $$ BEGIN
+  IF to_regclass('public.wallet_task_lease') IS NULL OR to_regclass('public.wallet_outbox') IS NULL
+     OR to_regclass('public.chain_fee_rate') IS NULL
+     OR NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname='pgmq' AND extversion='1.11.1') THEN
+    RAISE EXCEPTION 'wallet database prerequisites are missing';
   END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-     WHERE table_schema = 'public' AND table_name = 'withdrawal_order'
-       AND column_name = 'next_attempt_at'
-  ) THEN
-    RAISE EXCEPTION 'withdrawal_order lease columns are missing';
-  END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-     WHERE table_schema = 'public' AND table_name = 'chain_signing_transaction'
-       AND column_name = 'broadcast_lease_until'
-  ) THEN
-    RAISE EXCEPTION 'chain_signing_transaction broadcast lease columns are missing';
-  END IF;
-END
-$$;
+END $$;
 SQL
-
-# ── 5. switch ────────────────────────────────────────────────────────
-PREVIOUS_TARGET=
-if [[ -L $CURRENT_DIR ]]; then
-  PREVIOUS_TARGET=$(readlink -f "$CURRENT_DIR")
+install -d -o root -g wallet -m 0750 "$DEPLOY_ROOT/releases"
+if [[ -d $RELEASE_DIR ]]; then
+  cmp -s "$STAGING/wallet-server.jar" "$RELEASE_DIR/wallet-server.jar" || {
+    printf 'refusing to replace an existing commit with different bytes\n' >&2; exit 1;
+  }
+else
+  install -d -o root -g wallet -m 0750 "$RELEASE_DIR"
+  install -o root -g wallet -m 0640 "$STAGING/wallet-server.jar" "$RELEASE_DIR/wallet-server.jar"
 fi
-
-PREVIOUS_ACTIVE_UNITS=()
-PREVIOUS_ENABLED_UNITS=()
-for unit in "${SYSTEMD_UNITS[@]}"; do
-  if systemctl is-active --quiet "$unit"; then PREVIOUS_ACTIVE_UNITS+=("$unit"); fi
-  if systemctl is-enabled --quiet "$unit" 2>/dev/null; then PREVIOUS_ENABLED_UNITS+=("$unit"); fi
-  if [[ -f "$SYSTEMD_DIR/$unit" ]]; then
-    install -o root -g root -m 0644 "$SYSTEMD_DIR/$unit" "$DEPLOY_RELEASE/.previous-systemd/$unit"
+PREVIOUS_TARGET=$(readlink -f "$CURRENT_DIR" || true)
+PREVIOUS_UNIT=$(mktemp)
+HAD_UNIT=false
+if [[ -f $UNIT_FILE ]]; then cp -a "$UNIT_FILE" "$PREVIOUS_UNIT"; HAD_UNIT=true; fi
+rollback() {
+  local status=$?
+  trap - ERR
+  systemctl stop "$UNIT" || true
+  if [[ $HAD_UNIT == true ]]; then
+    install -m 0644 "$PREVIOUS_UNIT" "$UNIT_FILE"
+  else
+    systemctl disable "$UNIT" || true
+    rm -f "$UNIT_FILE"
   fi
-done
-
-for unit in "${SYSTEMD_UNITS[@]}"; do
-  install -o root -g root -m 0644 "$REPO_DIR/resources/infra/systemd/$unit" "$SYSTEMD_DIR/$unit"
-done
-systemctl daemon-reload
-
-ln -sfn "$DEPLOY_RELEASE" "$CURRENT_DIR.next"
-mv -Tf "$CURRENT_DIR.next" "$CURRENT_DIR"
-# Stop all consumers before changing layouts, preventing duplicate all/split services.
-systemctl stop "${SYSTEMD_UNITS[@]}"
-systemctl disable "${SYSTEMD_UNITS[@]}"
-systemctl enable "${SELECTED_UNITS[@]}"
-# A failed start also enters health verification and rollback.
-systemctl start "${SELECTED_UNITS[@]}" || true
-
-# ── 6. verify ────────────────────────────────────────────────────────
-selected_units_active() {
-  local unit
-  for unit in "${SELECTED_UNITS[@]}"; do
-    systemctl is-active --quiet "$unit" || return 1
-  done
+  systemctl daemon-reload
+  if [[ -n $PREVIOUS_TARGET && -d $PREVIOUS_TARGET ]]; then
+    ln -sfn "$PREVIOUS_TARGET" "$CURRENT_DIR.next"
+    mv -Tf "$CURRENT_DIR.next" "$CURRENT_DIR"
+    systemctl start "$UNIT" || true
+  else
+    rm -f "$CURRENT_DIR"
+  fi
+  rm -f "$PREVIOUS_UNIT"
+  printf 'deployment %s failed; previous release restored when available\n' "$DEPLOY_SHA" >&2
+  exit "$status"
 }
+trap rollback ERR
+install -o root -g root -m 0644 "$STAGING/surprising-wallet-all.service" "$UNIT_FILE"
+systemctl daemon-reload
+ln -sfn "$RELEASE_DIR" "$CURRENT_DIR.next"
+mv -Tf "$CURRENT_DIR.next" "$CURRENT_DIR"
+systemctl enable "$UNIT"
+systemctl restart "$UNIT"
 healthy=false
-for _ in $(seq 1 45); do
-  if curl --fail --silent --max-time 2 "$HEALTH_URL" 2>/dev/null \
-      | grep -q '"status":"UP"' \
-      && selected_units_active; then
+for _ in $(seq 1 60); do
+  if systemctl is-active --quiet "$UNIT" && curl --fail --silent --max-time 2 "$HEALTH_URL" | grep -q '"status":"UP"'; then
     healthy=true
     break
   fi
   sleep 2
 done
-
-if [[ $healthy == true ]]; then
-  printf 'backend release %s is healthy\n' "$DEPLOY_SHA"
-  exit 0
-fi
-
-# ── 7. rollback ──────────────────────────────────────────────────────
-printf 'backend release %s failed health check; rolling back\n' "$DEPLOY_SHA" >&2
-systemctl stop "${SYSTEMD_UNITS[@]}" || true
-systemctl disable "${SYSTEMD_UNITS[@]}" || true
-if [[ -n $PREVIOUS_TARGET && -d $PREVIOUS_TARGET ]]; then
-  ln -sfn "$PREVIOUS_TARGET" "$CURRENT_DIR.next"
-  mv -Tf "$CURRENT_DIR.next" "$CURRENT_DIR"
-  for unit in "${SYSTEMD_UNITS[@]}"; do
-    if [[ -f "$DEPLOY_RELEASE/.previous-systemd/$unit" ]]; then
-      install -o root -g root -m 0644 "$DEPLOY_RELEASE/.previous-systemd/$unit" "$SYSTEMD_DIR/$unit"
-    fi
-  done
-  systemctl daemon-reload
-  if [[ ${#PREVIOUS_ENABLED_UNITS[@]} -gt 0 ]]; then systemctl enable "${PREVIOUS_ENABLED_UNITS[@]}"; fi
-  if [[ ${#PREVIOUS_ACTIVE_UNITS[@]} -gt 0 ]]; then systemctl start "${PREVIOUS_ACTIVE_UNITS[@]}"; fi
-fi
-exit 1
+[[ $healthy == true ]]
+trap - ERR
+rm -f "$PREVIOUS_UNIT"
+printf 'release %s healthy; all mode active\n' "$DEPLOY_SHA"

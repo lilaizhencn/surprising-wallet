@@ -117,7 +117,7 @@ The dependency direction is `wallet-api → wallet-sig1, wallet-sig2, common, ch
 
 ### Requirements
 
-- JDK 25
+- JDK 27
 - Maven 3.9+
 - PostgreSQL 18
 - PGMQ 1.11.1 extension installed on the PostgreSQL server
@@ -182,8 +182,10 @@ The service units run as the unprivileged `wallet` user. The API health endpoint
 
 ### Automated backend deployment
 
-`.github/workflows/deploy-backend-dev.yml` triggers the server-side deployment through a restricted SSH command. `scripts/deploy/backend-deploy.sh` fetches the selected branch, builds one executable JAR with JDK 25, stages an immutable release, updates the systemd units, restarts the services, checks health, and rolls back the release when verification fails.
+`.github/workflows/deploy-backend-dev.yml` builds with JDK 27 and Lombok 1.18.48 on GitHub Actions, runs unit tests, and uploads one checksummed release archive to the Alibaba Cloud host over SSH. The server runs only `surprising-wallet-all.service`; it does not need Maven or a Git checkout. PostgreSQL and HTTP bind to loopback; Nginx provides the public entry point. Database integration tests use the developer machine's existing PostgreSQL 18 before release.
 
-Set `SW_DEPLOY_LAYOUT=all` or `split` (default) in `wallet.env`. Deployment stops the other layout; rollback restores the previous unit files and active layout. Back up environment files before changing modes or key configuration; release rollback does not restore secrets.
+Configure `BACKEND_DEPLOY_HOST`, `BACKEND_DEPLOY_USER`, `BACKEND_DEPLOY_SSH_KEY`, and `BACKEND_DEPLOY_KNOWN_HOSTS` in repository secrets. Pin the host key. Install `scripts/deploy/backend-deploy-trigger.sh` as `/usr/local/sbin/surprising-wallet-backend-deploy` and authorize the dedicated key with `restrict,command="/usr/local/sbin/surprising-wallet-backend-deploy"`.
 
-The canonical initialization SQL is never applied automatically to an existing deployment. Apply it manually only when provisioning a new disposable database.
+The receiver checks the archive digest and file list, serializes deployments, checks database prerequisites, stages an immutable release, updates the unit, and verifies health. A failed activation restores the previous JAR and unit when available. Environment files and databases are never replaced by automatic deployment; configuration changes require their own backups. The all-mode unit caps the heap at 640 MiB; size connection pools and enabled chain workloads to fit the host.
+
+The canonical initialization SQL is applied only once to a new, explicitly provisioned database. Never run it during automatic deployment. Supply `SW_CUSTODY_SECRET_MASTER_KEY` and the mode-specific key variables; development faucet jobs are disabled by default. ZKSYNC profiles and USDC are retained but disabled together until explicitly configured.

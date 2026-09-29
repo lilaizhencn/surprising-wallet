@@ -92,3 +92,5 @@ psql -U postgres -d wallet -c "grant all on schema public to wallet;"
 psql -U postgres -d wallet -c "grant all privileges on all tables in schema public to wallet;"
 psql -U postgres -d wallet -c "grant all privileges on all sequences in schema public to wallet;"
 ```
+
+ZKSYNC 主网、Sepolia、RPC 与 USDC 种子均默认禁用；启用 Token 前必须启用同一网络的链配置并核对合约。

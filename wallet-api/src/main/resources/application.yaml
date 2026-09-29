@@ -96,7 +96,7 @@ sw:
     # 开发测试水龙头。只能连接 loopback RPC，生产环境会拒绝启用。
     dev-faucet:
       # 是否启用自动测试币补给；非本地链测试时应关闭。
-      enabled: true
+      enabled: ${SW_WALLET_DEV_FAUCET_ENABLED:false}
       # 扫描到待补给请求后的首次延迟，ISO-8601 Duration。
       delay: ${SW_WALLET_DEV_FAUCET_DELAY:PT10S}
       # 补给失败后的重试间隔。
@@ -164,7 +164,7 @@ sw:
       network: ${SW_WALLET_DEV_EIP7702_NETWORK:devtest}
     custody:
       # 测试环境托管敏感字段加密主密钥（64 位十六进制）；上线必须迁移 KMS。
-      secret-master-key: 339c28dcd013766105fe1c470b03b9e5637d99c4c260d04bbf2ead36f763b944
+      secret-master-key: ${SW_CUSTODY_SECRET_MASTER_KEY:}
       # Console 会话有效期。
       session-ttl: ${SW_CUSTODY_SESSION_TTL:PT12H}
       # HTTP 测试环境为 false；HTTPS 上线必须设为 true。
