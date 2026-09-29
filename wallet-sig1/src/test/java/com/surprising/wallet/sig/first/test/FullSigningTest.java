@@ -58,10 +58,6 @@ public class FullSigningTest {
      * 验证 {@code main} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     public static void main(String[] args) throws Exception {
-        // Init sig2 with a different root.
-        Class.forName("com.surprising.wallet.sig.second.BipNodeUtil")
-            .getMethod("initialize", Bip32Node.class).invoke(null, ROOT2);
-
         UtxoTransaction utxo = UtxoTransaction.builder()
             .txId("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
             .seq((short)0).balance(new BigDecimal("0.001")).build();
@@ -105,7 +101,12 @@ public class FullSigningTest {
         System.out.println("  Phase 2: SecondSign (KEY 2 — cold wallet)");
         System.out.println("=============================================");
         Class<?> ssClass = Class.forName("com.surprising.wallet.sig.second.impl.BtcSecondSignService");
-        Object ss = ssClass.getDeclaredConstructor().newInstance();
+        Class<?> derivation = Class.forName("com.surprising.wallet.sig.second.Sig2KeyDerivation");
+        Object keys = derivation.getConstructor(
+                com.surprising.wallet.common.key.WalletKeyMaterialProvider.class).newInstance(
+                com.surprising.wallet.common.key.WalletKeyMaterialProvider.forSig2(
+                        java.util.Base64.getEncoder().encodeToString(java.util.HexFormat.of().parseHex("22".repeat(32)))));
+        Object ss = ssClass.getConstructor(derivation).newInstance(keys);
         set(ss, "objectMapper", OBJECT_MAPPER);
         String fullTx = (String) ssClass.getMethod("signTransaction", WithdrawTransaction.class).invoke(ss, tx);
 

@@ -4,7 +4,7 @@ import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
-import com.surprising.wallet.sig.second.BipNodeUtil;
+import com.surprising.wallet.sig.second.Sig2KeyDerivation;
 import com.surprising.wallet.sig.second.ISignService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -31,6 +31,12 @@ import java.math.BigDecimal;
 @Component
 @Slf4j
 public class TronSecondSignService implements ISignService {
+    protected final Sig2KeyDerivation keyDerivation;
+
+    public TronSecondSignService(Sig2KeyDerivation keyDerivation) {
+        this.keyDerivation = keyDerivation;
+    }
+
 
     /** Jackson 3 对象映射器，用于解析签名元数据。 */
     @Autowired
@@ -92,7 +98,7 @@ public class TronSecondSignService implements ISignService {
      * @return 32 字节私钥
      */
     private byte[] getKeyByAddress(Address address, AssetRuntimeMetadata currency) {
-        return BipNodeUtil.getBipNODE(address, currency).getEcKey().getPrivKeyBytes();
+        return keyDerivation.derive(address, currency).getEcKey().getPrivKeyBytes();
     }
 
 }

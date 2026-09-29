@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # surprising-wallet backend deploy script
-# Server-side: git pull → build all wallet jars → switch → verify.
+# Server-side: git pull → build one executable wallet jar → switch → verify.
 # Invoked by GitHub Actions via SSH (command= restricted key).
 
 if [[ ${EUID} -ne 0 ]]; then
@@ -20,7 +20,7 @@ TRIGGER_SOURCE="$REPO_DIR/scripts/deploy/backend-deploy-trigger.sh"
 TRIGGER_TARGET=/usr/local/sbin/surprising-wallet-backend-deploy
 TRIGGER_BACKUP=/usr/local/sbin/surprising-wallet-backend-deploy.before-durable-20260805
 SYSTEMD_DIR=/etc/systemd/system
-SYSTEMD_UNITS=(surprising-wallet.service surprising-wallet-sig1.service surprising-wallet-sig2.service)
+SYSTEMD_UNITS=(surprising-wallet.service surprising-wallet-sig1.service surprising-wallet-sig2.service surprising-wallet-all.service)
 
 # ── 1. pull ──────────────────────────────────────────────────────────
 if [[ ! -d $REPO_DIR ]]; then
@@ -63,23 +63,18 @@ fi
 export JAVA_HOME="$BUILD_JAVA_HOME"
 export PATH="$JAVA_HOME/bin:$PATH"
 printf 'build JDK: %s\n' "$($JAVA_HOME/bin/java -version 2>&1 | head -n 1)"
-mvn -DskipTests package -q
+mvn -pl wallet-api -am -DskipTests clean package -q
 
 # ── 3. stage release ─────────────────────────────────────────────────
 DEPLOY_RELEASE="$RELEASE_DIR/$DEPLOY_SHA"
 JAR_SOURCE="$REPO_DIR/wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar"
-SIG1_JAR_SOURCE="$REPO_DIR/wallet-sig1/target/wallet-sig1-1.0.0-SNAPSHOT.jar"
-SIG2_JAR_SOURCE="$REPO_DIR/wallet-sig2/target/wallet-sig2-1.0.0-SNAPSHOT.jar"
-
-if [[ ! -f $JAR_SOURCE || ! -f $SIG1_JAR_SOURCE || ! -f $SIG2_JAR_SOURCE ]]; then
-  printf 'build did not produce all wallet JARs\n' >&2
+if [[ ! -f $JAR_SOURCE ]]; then
+  printf 'build did not produce the executable wallet JAR\n' >&2
   exit 1
 fi
 
 install -d -m 0750 "$DEPLOY_RELEASE"
 install -o wallet -g wallet -m 0640 "$JAR_SOURCE" "$DEPLOY_RELEASE/wallet-server.jar"
-install -o wallet -g wallet -m 0640 "$SIG1_JAR_SOURCE" "$DEPLOY_RELEASE/wallet-sig1.jar"
-install -o wallet -g wallet -m 0640 "$SIG2_JAR_SOURCE" "$DEPLOY_RELEASE/wallet-sig2.jar"
 install -d -o root -g wallet -m 0750 "$DEPLOY_RELEASE/.previous-systemd"
 
 chown root:wallet "$DEPLOY_RELEASE"
@@ -93,6 +88,17 @@ fi
 set -a
 source "$ENV_FILE"
 set +a
+
+case ${SW_DEPLOY_LAYOUT:-split} in
+  all) SELECTED_UNITS=(surprising-wallet-all.service) ;;
+  split)
+    SELECTED_UNITS=(surprising-wallet.service surprising-wallet-sig1.service surprising-wallet-sig2.service)
+    for signer in sig1 sig2; do
+      [[ -f /etc/surprising-wallet/$signer.env ]] || { printf 'missing %s.env\n' "$signer" >&2; exit 1; }
+    done
+    ;;
+  *) printf 'SW_DEPLOY_LAYOUT must be all or split\n' >&2; exit 1 ;;
+esac
 
 DB_URL=${SW_DB_URL#jdbc:}
 
@@ -132,32 +138,42 @@ if [[ -L $CURRENT_DIR ]]; then
   PREVIOUS_TARGET=$(readlink -f "$CURRENT_DIR")
 fi
 
+PREVIOUS_ACTIVE_UNITS=()
+PREVIOUS_ENABLED_UNITS=()
 for unit in "${SYSTEMD_UNITS[@]}"; do
+  if systemctl is-active --quiet "$unit"; then PREVIOUS_ACTIVE_UNITS+=("$unit"); fi
+  if systemctl is-enabled --quiet "$unit" 2>/dev/null; then PREVIOUS_ENABLED_UNITS+=("$unit"); fi
   if [[ -f "$SYSTEMD_DIR/$unit" ]]; then
     install -o root -g root -m 0644 "$SYSTEMD_DIR/$unit" "$DEPLOY_RELEASE/.previous-systemd/$unit"
   fi
 done
 
-install -o root -g root -m 0644 "$REPO_DIR/resources/infra/systemd/surprising-wallet.service" \
-  /etc/systemd/system/surprising-wallet.service
-install -o root -g root -m 0644 "$REPO_DIR/resources/infra/systemd/surprising-wallet-sig1.service" \
-  /etc/systemd/system/surprising-wallet-sig1.service
-install -o root -g root -m 0644 "$REPO_DIR/resources/infra/systemd/surprising-wallet-sig2.service" \
-  /etc/systemd/system/surprising-wallet-sig2.service
+for unit in "${SYSTEMD_UNITS[@]}"; do
+  install -o root -g root -m 0644 "$REPO_DIR/resources/infra/systemd/$unit" "$SYSTEMD_DIR/$unit"
+done
 systemctl daemon-reload
 
 ln -sfn "$DEPLOY_RELEASE" "$CURRENT_DIR.next"
 mv -Tf "$CURRENT_DIR.next" "$CURRENT_DIR"
-systemctl restart surprising-wallet.service surprising-wallet-sig1.service surprising-wallet-sig2.service
+# Stop all consumers before changing layouts, preventing duplicate all/split services.
+systemctl stop "${SYSTEMD_UNITS[@]}"
+systemctl disable "${SYSTEMD_UNITS[@]}"
+systemctl enable "${SELECTED_UNITS[@]}"
+# A failed start also enters health verification and rollback.
+systemctl start "${SELECTED_UNITS[@]}" || true
 
 # ── 6. verify ────────────────────────────────────────────────────────
+selected_units_active() {
+  local unit
+  for unit in "${SELECTED_UNITS[@]}"; do
+    systemctl is-active --quiet "$unit" || return 1
+  done
+}
 healthy=false
 for _ in $(seq 1 45); do
   if curl --fail --silent --max-time 2 "$HEALTH_URL" 2>/dev/null \
       | grep -q '"status":"UP"' \
-      && systemctl is-active --quiet surprising-wallet.service \
-      && systemctl is-active --quiet surprising-wallet-sig1.service \
-      && systemctl is-active --quiet surprising-wallet-sig2.service; then
+      && selected_units_active; then
     healthy=true
     break
   fi
@@ -171,6 +187,8 @@ fi
 
 # ── 7. rollback ──────────────────────────────────────────────────────
 printf 'backend release %s failed health check; rolling back\n' "$DEPLOY_SHA" >&2
+systemctl stop "${SYSTEMD_UNITS[@]}" || true
+systemctl disable "${SYSTEMD_UNITS[@]}" || true
 if [[ -n $PREVIOUS_TARGET && -d $PREVIOUS_TARGET ]]; then
   ln -sfn "$PREVIOUS_TARGET" "$CURRENT_DIR.next"
   mv -Tf "$CURRENT_DIR.next" "$CURRENT_DIR"
@@ -180,6 +198,7 @@ if [[ -n $PREVIOUS_TARGET && -d $PREVIOUS_TARGET ]]; then
     fi
   done
   systemctl daemon-reload
-  systemctl restart "${SYSTEMD_UNITS[@]}"
+  if [[ ${#PREVIOUS_ENABLED_UNITS[@]} -gt 0 ]]; then systemctl enable "${PREVIOUS_ENABLED_UNITS[@]}"; fi
+  if [[ ${#PREVIOUS_ACTIVE_UNITS[@]} -gt 0 ]]; then systemctl start "${PREVIOUS_ACTIVE_UNITS[@]}"; fi
 fi
 exit 1

@@ -6,14 +6,16 @@
 ## 密钥加载与角色隔离
 
 ```text
-各进程唯一 application.yaml / 未来 Nacos 或 KMS
+按角色独立的环境变量 -> JAR 内唯一 application.yaml
   -> Spring sw.wallet.keys
-  -> WalletKeyConfig
-  -> 启动时校验 4 个 Base64 32 字节 Seed 且互不相同
+  -> RuntimeKeyConfiguration -> WalletKeyMaterialProvider
+  -> 按 all/api/sig1/sig2 模式校验所需的 Base64 32 字节 Seed 与扩展公钥
   -> wallet-api：sig2 私钥 + 三组 public root + Ed25519
   -> wallet-sig1：仅 sig1 私钥 + 三组 public root
-  -> wallet-sig2：仅 sig2 私钥 + 三组 public root
+  -> wallet-sig2：仅 sig2 私钥与自身 public root
 ```
+
+唯一 JAR 的 all 模式在一个进程内运行全部阶段，共享数据源但隔离签名调度池；分进程模式使用同一个 JAR。第二签没有 HTTP 入口，签名消息始终经过 PGMQ。恢复私钥不加载，只输入扩展公钥。api 模式仍承担账户链签名，需要 sig2 和 Ed25519 私钥。
 
 密钥不再写入 PostgreSQL，也没有运行时查询、明文展示或热更新接口。配置变更必须重启对应进程；已有派生地址后更换 Seed 会导致签名材料与地址不一致，因此必须作为受审计的整体密钥迁移处理。
 

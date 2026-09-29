@@ -548,16 +548,6 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         if (isValidMasterKey(fromEnv)) {
             return fromEnv.trim();
         }
-        Path yaml = projectRoot().resolve("wallet-sig2/src/main/resources/application.yaml");
-        for (String line : Files.readAllLines(yaml)) {
-            String trimmed = line.trim();
-            if (trimmed.startsWith("masterKey:")) {
-                String configured = trimmed.substring("masterKey:".length()).trim();
-                if (isValidMasterKey(configured)) {
-                    return configured;
-                }
-            }
-        }
         return testMasterKey();
     }
 

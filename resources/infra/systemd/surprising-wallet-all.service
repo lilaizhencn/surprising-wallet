@@ -1,5 +1,5 @@
 [Unit]
-Description=Surprising Wallet Signature Service 2
+Description=Surprising Wallet API and Signers
 After=network-online.target postgresql.service
 Wants=network-online.target
 Requires=postgresql.service
@@ -9,11 +9,13 @@ Type=simple
 User=wallet
 Group=wallet
 WorkingDirectory=/opt/surprising-wallet
-EnvironmentFile=/etc/surprising-wallet/sig2.env
-ExecStart=/usr/bin/java -Xms256m -Xmx1g -XX:+ExitOnOutOfMemoryError -jar /opt/surprising-wallet-backend/current/wallet-server.jar --sw.wallet.mode=sig2
+EnvironmentFile=/etc/surprising-wallet/wallet.env
+ExecStart=/usr/bin/java -Xms128m -Xmx768m -XX:+ExitOnOutOfMemoryError -jar /opt/surprising-wallet-backend/current/wallet-server.jar --sw.wallet.mode=all
 Restart=on-failure
 RestartSec=5
+TimeoutStartSec=120
 TimeoutStopSec=90
+KillMode=process
 SuccessExitStatus=143
 NoNewPrivileges=true
 PrivateTmp=true

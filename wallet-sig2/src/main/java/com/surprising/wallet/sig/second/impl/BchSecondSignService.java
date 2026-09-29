@@ -7,7 +7,7 @@ import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashMultisigTransactionBuilder;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParameters;
-import com.surprising.wallet.sig.second.BipNodeUtil;
+import com.surprising.wallet.sig.second.Sig2KeyDerivation;
 import com.surprising.wallet.sig.second.ISignService;
 import org.bitcoinj.base.Coin;
 import org.bitcoinj.crypto.ECKey;
@@ -32,6 +32,12 @@ import java.util.List;
  */
 @Component
 public class BchSecondSignService implements ISignService {
+    protected final Sig2KeyDerivation keyDerivation;
+
+    public BchSecondSignService(Sig2KeyDerivation keyDerivation) {
+        this.keyDerivation = keyDerivation;
+    }
+
 
     /** Jackson 3 对象映射器，用于解析和序列化签名元数据。 */
     @Autowired
@@ -79,7 +85,7 @@ public class BchSecondSignService implements ISignService {
                     new BitcoinCashMultisigTransactionBuilder(networkParameters());
             BigDecimal decimal = currency.getDecimal();
             for (int i = 0; i < addresses.size(); i++) {
-                keys.add(BipNodeUtil.getBipNODE(addresses.get(i), currency).getEcKey());
+                keys.add(keyDerivation.derive(addresses.get(i), currency).getEcKey());
                 UtxoTransaction utxo = utxos.get(i);
                 builder.addInput(
                         utxo.getTxId(),

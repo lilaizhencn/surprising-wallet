@@ -6,7 +6,7 @@ import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.core.LegacyMultisigTransactionBuilder;
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinNetworkParameters;
-import com.surprising.wallet.sig.second.BipNodeUtil;
+import com.surprising.wallet.sig.second.Sig2KeyDerivation;
 import com.surprising.wallet.sig.second.ISignService;
 import org.bitcoinj.crypto.ECKey;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +23,12 @@ import java.util.List;
  */
 @Component
 public class DogeSecondSignService implements ISignService {
+    protected final Sig2KeyDerivation keyDerivation;
+
+    public DogeSecondSignService(Sig2KeyDerivation keyDerivation) {
+        this.keyDerivation = keyDerivation;
+    }
+
     /** Jackson 3 对象映射器，用于解析和序列化签名元数据。 */
     @Autowired
     private ObjectMapper objectMapper;
@@ -48,7 +54,7 @@ public class DogeSecondSignService implements ISignService {
             List<String> redeemScripts = JacksonJson.toList(objectMapper, signature.get("redeemScripts"), String.class);
             List<ECKey> keys = new ArrayList<>(addresses.size());
             for (Address address : addresses) {
-                keys.add(BipNodeUtil.getBipNODE(address, currency).getEcKey());
+                keys.add(keyDerivation.derive(address, currency).getEcKey());
             }
             LegacyMultisigTransactionBuilder builder =
                     new LegacyMultisigTransactionBuilder(networkParameters());

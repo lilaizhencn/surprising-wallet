@@ -64,6 +64,52 @@ public final class WalletKeyMaterialProvider {
                         : null);
     }
 
+    private WalletKeyMaterialProvider(Mode mode, Material material) {
+        this.mode = mode;
+        this.material = material;
+    }
+
+    public static WalletKeyMaterialProvider forSig1(String seed, String sig2Public, String recoveryPublic) {
+        Bip32Node root = WalletSeedCodec.bip32Root("sig1Seed", seed);
+        Bip32Node other = extendedPublic(sig2Public);
+        Bip32Node recovery = extendedPublic(recoveryPublic);
+        requireDistinct(publicOnly(root), other, recovery);
+        return new WalletKeyMaterialProvider(Mode.SIG1,
+                new Material(root, null, publicOnly(root), other, recovery, null));
+    }
+
+    public static WalletKeyMaterialProvider forSig2(String seed) {
+        Bip32Node root = WalletSeedCodec.bip32Root("sig2Seed", seed);
+        return new WalletKeyMaterialProvider(Mode.SIG2,
+                new Material(null, root, null, publicOnly(root), null, null));
+    }
+
+    public static WalletKeyMaterialProvider forApi(String sig2Seed, String edSeed, String sig1Public, String recoveryPublic) {
+        Bip32Node root = WalletSeedCodec.bip32Root("sig2Seed", sig2Seed);
+        Bip32Node first = extendedPublic(sig1Public);
+        Bip32Node recovery = extendedPublic(recoveryPublic);
+        requireDistinct(first, publicOnly(root), recovery,
+                publicOnly(WalletSeedCodec.bip32Root("ed25519Seed", edSeed)));
+        return new WalletKeyMaterialProvider(Mode.WALLET_SERVER,
+                new Material(null, root, first, publicOnly(root), recovery,
+                        new Ed25519KeyProvider(WalletSeedCodec.decode("ed25519Seed", edSeed))));
+    }
+
+    private static Bip32Node extendedPublic(String value) {
+        if (value == null || value.isBlank()) throw new IllegalArgumentException("extended public key is required");
+        Bip32Node node = Bip32Node.decode(value);
+        if (node.getEcKey().hasPrivKey()) throw new IllegalArgumentException("expected extended public key, not private key");
+        return node;
+    }
+
+    private static void requireDistinct(Bip32Node... nodes) {
+        var keys = new java.util.HashSet<String>();
+        for (Bip32Node node : nodes) {
+            if (!keys.add(java.util.HexFormat.of().formatHex(node.getEcKey().getPubKey())))
+                throw new IllegalArgumentException("multisig public keys must differ");
+        }
+    }
+
     /**
      * 判断 {@code isConfigured} 对应的条件是否成立，并返回明确的布尔结果。
      */

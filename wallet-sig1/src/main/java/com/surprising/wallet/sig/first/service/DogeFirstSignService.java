@@ -41,6 +41,7 @@ public class DogeFirstSignService implements ISignService {
      * 保存 {@code keyMaterial}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
      */
     @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("sig1KeyMaterial")
     private WalletKeyMaterialProvider keyMaterial;
 
     /** Jackson 3 对象映射器，用于解析和序列化签名元数据。 */

@@ -17,7 +17,7 @@ logging:
 spring:
   application:
     # Spring 应用名，用于日志、指标和未来配置中心标识。
-    name: wallet-api
+    name: wallet-${sw.wallet.mode}
   lifecycle:
     # 为任务池、数据库、PostgreSQL / PGMQ 和 HTTP 服务的有序关闭预留时间。
     timeout-per-shutdown-phase: 60s
@@ -70,13 +70,22 @@ sw:
     # 告警联系人；填写值班手机号或通知系统接收标识。
     contacts: "13261645368"
   wallet:
-    # 测试钱包根 Seed：必须是 4 个互不相同的 Base64 编码 32 字节值。
-    # 三个进程必须使用完全相同的配置；更换后既有派生地址将无法签名。
+    # 按模式加载本方 Base64 32 字节 Seed 和必要的扩展公钥。
+    # 公钥必须对应原有 Seed；更换后既有派生地址将无法签名。
+    mode: ${SW_WALLET_MODE:api}
+    sig1:
+      db-username: ${SW_SIG1_DB_USERNAME:wallet_sig1}
+      db-password: ${SW_SIG1_DB_PASSWORD:}
+    sig2:
+      db-username: ${SW_SIG2_DB_USERNAME:wallet_sig2}
+      db-password: ${SW_SIG2_DB_PASSWORD:}
     keys:
-      sig1-seed: YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=
-      sig2-seed: YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=
-      recovery-seed: Y2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2M=
-      ed25519-seed: ZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGQ=
+      sig1-seed: ${SW_WALLET_SIG1_SEED:}
+      sig2-seed: ${SW_WALLET_SIG2_SEED:}
+      ed25519-seed: ${SW_WALLET_ED25519_SEED:}
+      sig1-public-root: ${SW_WALLET_SIG1_PUBLIC_ROOT:}
+      sig2-public-root: ${SW_WALLET_SIG2_PUBLIC_ROOT:}
+      recovery-public-root: ${SW_WALLET_RECOVERY_PUBLIC_ROOT:}
     admin:
       # 旧钱包后台基础账号；仅用于仍依赖该账号的管理入口。
       username: ${SW_WALLET_ADMIN_USERNAME:admin}

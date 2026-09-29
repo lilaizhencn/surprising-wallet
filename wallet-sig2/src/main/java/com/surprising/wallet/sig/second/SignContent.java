@@ -26,7 +26,7 @@ import java.util.Map;
 public class SignContent implements InitializingBean, ApplicationContextAware {
 
     /** 签名服务缓存，key 为 bean 名称，value 为签名服务实现。 */
-    private static Map<String, ISignService> cache = Maps.newHashMap();
+    private Map<String, ISignService> cache = Maps.newHashMap();
     /** Spring 应用上下文，用于获取所有 ISignService bean。 */
     private ApplicationContext context;
 
@@ -36,8 +36,8 @@ public class SignContent implements InitializingBean, ApplicationContextAware {
      * @param currency 资产运行时元数据（包含链和币种信息）
      * @return 匹配的签名服务，未找到时返回 null
      */
-    public static ISignService getSignService(AssetRuntimeMetadata currency) {
-        for (Map.Entry<String, ISignService> entry : SignContent.cache.entrySet()) {
+    public ISignService getSignService(AssetRuntimeMetadata currency) {
+        for (Map.Entry<String, ISignService> entry : cache.entrySet()) {
             ISignService sign = entry.getValue();
             if (sign.supports(currency)) {
                 return sign;
@@ -52,7 +52,7 @@ public class SignContent implements InitializingBean, ApplicationContextAware {
      */
     @Override
     public void afterPropertiesSet() {
-        SignContent.cache = context.getBeansOfType(ISignService.class);
+        cache = context.getBeansOfType(ISignService.class);
     }
 
     /**

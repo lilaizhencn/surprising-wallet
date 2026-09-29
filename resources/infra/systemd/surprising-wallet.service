@@ -2,7 +2,7 @@
 Description=Surprising Wallet API
 After=network-online.target postgresql.service
 Wants=network-online.target
-Requires=postgresql.service postgresql.service
+Requires=postgresql.service
 
 [Service]
 Type=simple
@@ -10,7 +10,7 @@ User=wallet
 Group=wallet
 WorkingDirectory=/opt/surprising-wallet
 EnvironmentFile=/etc/surprising-wallet/wallet.env
-ExecStart=/usr/bin/java -Xms512m -Xmx3g -XX:+ExitOnOutOfMemoryError -jar /opt/surprising-wallet-backend/current/wallet-server.jar
+ExecStart=/usr/bin/java -Xms512m -Xmx3g -XX:+ExitOnOutOfMemoryError -jar /opt/surprising-wallet-backend/current/wallet-server.jar --sw.wallet.mode=api
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=120

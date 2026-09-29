@@ -28,12 +28,12 @@
 
   <!-- ====== PHASE 1: 密钥种子管理 ====== -->
   <rect x="20" y="52" width="1140" height="168" class="phase-bg"/>
-  <text x="40" y="74" class="phase-label">① 密钥种子管理</text>
+  <text x="40" y="74" class="phase-label">① 按模式加载密钥：all / api / sig1 / sig2；恢复私钥离线</text>
 
   <rect x="40" y="90" width="150" height="58" class="seed"/>
-  <text x="115" y="114" text-anchor="middle" class="bold">4 × 32B Seed</text>
+  <text x="115" y="114" text-anchor="middle" class="bold">本方 Seed + 公钥</text>
   <text x="115" y="132" text-anchor="middle" class="small">Base64 · 启动校验</text>
-  <text x="115" y="147" text-anchor="middle" class="small">application.yaml</text>
+  <text x="115" y="147" text-anchor="middle" class="small">环境变量注入</text>
 
   <line x1="190" y1="119" x2="220" y2="119" class="arrow"/>
 
@@ -42,27 +42,27 @@
   <text x="295" y="132" text-anchor="middle" class="small">SOL · TON · APT · SUI</text>
   <text x="295" y="147" text-anchor="middle" class="small">SLIP-0010 派生</text>
 
-  <line x1="370" y1="119" x2="400" y2="119" class="arrow"/>
+  <path d="M190,110 V84 H510 V90" class="arrow"/>
 
   <rect x="400" y="90" width="220" height="58" class="key"/>
   <text x="510" y="112" text-anchor="middle" class="bold">BIP32 Root #1 (sig1)</text>
   <text x="510" y="132" text-anchor="middle" class="small">在线 · 第一签私钥 · wallet-sig1</text>
 
-  <line x1="620" y1="119" x2="645" y2="119" class="arrow"/>
+  <path d="M190,110 V84 H755 V90" class="arrow"/>
 
   <rect x="645" y="90" width="220" height="58" class="key"/>
   <text x="755" y="112" text-anchor="middle" class="bold">BIP32 Root #2 (sig2)</text>
-  <text x="755" y="132" text-anchor="middle" class="small">在线 · 第二签私钥 · wallet-sig2</text>
+  <text x="755" y="132" text-anchor="middle" class="small">在线 · sig2 / API 账户链</text>
 
-  <line x1="865" y1="119" x2="890" y2="119" class="arrow"/>
+  <path d="M190,110 V84 H1000 V90" class="arrow"/>
 
   <rect x="890" y="90" width="220" height="58" class="key"/>
   <text x="1000" y="112" text-anchor="middle" class="bold">BIP32 Root #3 (recovery)</text>
-  <text x="1000" y="132" text-anchor="middle" class="small">离线 · 恢复私钥 · 灾难恢复</text>
+  <text x="1000" y="132" text-anchor="middle" class="small">运行时仅加载恢复扩展公钥</text>
 
   <!-- 3 roots → BIP44 derivation + 2-of-3 -->
   <rect x="260" y="162" width="340" height="44" class="key"/>
-  <text x="430" y="182" text-anchor="middle" class="bold">BIP44 路径派生  m/44&apos;/coin_type&apos;/0&apos;/0/index</text>
+  <text x="430" y="182" text-anchor="middle" class="bold">BIP32 派生 m/44/coin/biz/user/index</text>
   <text x="430" y="198" text-anchor="middle" class="small">user_id · biz · address_index  →  确定性 key pair</text>
 
   <line x1="510" y1="148" x2="430" y2="162" class="arrow"/>

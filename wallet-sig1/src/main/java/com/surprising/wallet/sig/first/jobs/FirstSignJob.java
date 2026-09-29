@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class FirstSignJob {
     private final FirstSigningService service;
-    @Scheduled(fixedDelayString = "${sw.wallet.signing.delay:PT1S}",
+    @Scheduled(scheduler = "sig1TaskScheduler", fixedDelayString = "${sw.wallet.signing.delay:PT1S}",
             initialDelayString = "${sw.wallet.signing.initial-delay:PT10S}")
     public void execute() { service.process(); }
 }

@@ -64,7 +64,7 @@ public class WalletStartupValidator implements ApplicationRunner {
         keyMaterial.sig2PublicRoot();
         keyMaterial.recoveryPublicRoot();
         keyMaterial.ed25519();
-        log.info("wallet keyset check passed: four seeds loaded from Spring configuration");
+        log.info("wallet keyset check passed: required private material and public roots loaded for API");
     }
 
     /**

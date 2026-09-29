@@ -70,7 +70,7 @@ psql -U wallet -d wallet -f docs/db/surprising-wallet-init-pgsql.sql
 
 wallet-api 启动时会检查：
 
-- Spring `sw.wallet.keys` 的四个 Seed 必须互不相同，且均为 Base64 编码的 32 字节数据；缺失或非法时应用启动失败。
+- Spring `sw.wallet.keys` 按运行模式加载所需的 Base64 32 字节 Seed 和扩展公钥；多签公钥必须不同，Ed25519 不复用 BIP32 Seed，恢复私钥不加载。缺失或非法时启动失败。
 - 同一 `chain` 同一时刻只能启用一个 network。
 - 非生产环境可以同时保存 devnet 和 testnet 等多套 profile，并按测试场景切换启用；`sw.app.env.name=prod` 时只允许启用生产网络。
 - 每个启用 profile 必须有当前环境可用的必需 `chain_rpc_node`；例如 DOT 需要 `rpc` 和 `runtime`，启用 DOT token 时还需要 `asset_rpc`。

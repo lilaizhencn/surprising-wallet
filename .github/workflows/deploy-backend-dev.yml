@@ -12,6 +12,7 @@ on:
       - wallet-sig2/**
       - wallet-api/**
       - resources/docs/db/**
+      - resources/infra/systemd/surprising-wallet-all.service
       - resources/infra/systemd/surprising-wallet.service
       - resources/infra/systemd/surprising-wallet-sig1.service
       - resources/infra/systemd/surprising-wallet-sig2.service

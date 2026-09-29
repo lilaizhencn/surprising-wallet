@@ -32,7 +32,7 @@
   <text x="350" y="135" text-anchor="middle" class="desc">RPC DTO · Ed25519 · TRON gRPC</text>
 
   <!-- ====== 第二层：应用服务 ====== -->
-  <text x="30" y="180" class="sep"> 应用服务</text>
+  <text x="30" y="180" class="sep"> 唯一 JAR：all / api / sig1 / sig2；箭头表示依赖方指向提供方</text>
 
   <rect x="30"  y="194" width="665" height="118" class="svc"/>
   <text x="362" y="219" text-anchor="middle" class="label">wallet-api · Spring MVC 单体应用</text>
@@ -42,16 +42,17 @@
   <text x="362" y="295" text-anchor="middle" class="desc">SQL @Repository：一表一仓储 · @Component 门面仅做 Java 组合</text>
 
   <rect x="720" y="194" width="340" height="100" class="svc"/>
-  <text x="890" y="222" text-anchor="middle" class="label">wallet-sig1 · wallet-sig2</text>
-  <text x="890" y="244" text-anchor="middle" class="desc">独立数据库账号 · PGMQ 按消息领取</text>
+  <text x="890" y="222" text-anchor="middle" class="label">wallet-sig1 · wallet-sig2 普通库</text>
+  <text x="890" y="244" text-anchor="middle" class="desc">all 共享池；独立模式各自数据库账号</text>
   <text x="890" y="262" text-anchor="middle" class="desc">BTC/BCH/LTC/DOGE → 第一签 → 第二签</text>
-  <text x="890" y="280" text-anchor="middle" class="desc">事务内推进签名阶段与消息归档</text>
+  <text x="890" y="280" text-anchor="middle" class="desc">独立调度池 · 事务推进与消息归档</text>
 
-  <!-- providers → consumers -->
-  <line x1="130" y1="148" x2="270" y2="194" class="arrow"/>
-  <line x1="350" y1="148" x2="470" y2="194" class="arrow"/>
-  <line x1="130" y1="148" x2="810" y2="194" class="arrow"/>
-  <line x1="350" y1="148" x2="890" y2="194" class="arrow"/>
+  <line x1="695" y1="210" x2="720" y2="210" class="arrow"/>
+  <!-- consumers → providers -->
+  <line x1="270" y1="194" x2="130" y2="148" class="arrow"/>
+  <line x1="470" y1="194" x2="350" y2="148" class="arrow"/>
+  <line x1="810" y1="194" x2="130" y2="148" class="arrow"/>
+  <line x1="890" y1="194" x2="350" y2="148" class="arrow"/>
 
   <!-- ====== 第三层：30 条核心链 ====== -->
   <text x="30" y="328" class="sep"> 区块链适配（30 条核心链）</text>

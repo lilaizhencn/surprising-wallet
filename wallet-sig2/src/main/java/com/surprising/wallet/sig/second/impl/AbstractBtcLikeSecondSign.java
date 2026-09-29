@@ -3,7 +3,7 @@ import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.core.WitnessSigner;
-import com.surprising.wallet.sig.second.BipNodeUtil;import com.surprising.wallet.sig.second.ISignService;
+import com.surprising.wallet.sig.second.Sig2KeyDerivation;import com.surprising.wallet.sig.second.ISignService;
 import lombok.extern.slf4j.Slf4j;import org.bitcoinj.base.Coin;import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;import org.bitcoinj.core.TransactionInput;import org.bitcoinj.core.TransactionWitness;
 import org.bitcoinj.crypto.ECKey;import org.bitcoinj.crypto.TransactionSignature;import org.bitcoinj.params.TestNet3Params;import org.bitcoinj.script.Script;
@@ -23,6 +23,12 @@ import java.nio.ByteBuffer;import java.util.HexFormat;import java.util.List;
  */
 @Slf4j
 abstract public class AbstractBtcLikeSecondSign implements ISignService {
+    protected final Sig2KeyDerivation keyDerivation;
+
+    public AbstractBtcLikeSecondSign(Sig2KeyDerivation keyDerivation) {
+        this.keyDerivation = keyDerivation;
+    }
+
 
     /** 十六进制编解码器 */
     private static final HexFormat HEX = HexFormat.of();
@@ -72,7 +78,7 @@ abstract public class AbstractBtcLikeSecondSign implements ISignService {
                 int pc=ew.getPushCount(); if(pc<3){sj.put("valid",false);sj.put("error","bad witness");tx.setSignature(JacksonJson.writeValue(objectMapper, sj));return"";}
                 byte[] wsb=ew.getPush(pc-1); if(wsb==null||wsb.length==0){sj.put("valid",false);sj.put("error","no witnessScript");tx.setSignature(JacksonJson.writeValue(objectMapper, sj));return"";}
                 Script script=new Script(wsb); long vs=uva.get(i).asLong(); if(vs<=0){sj.put("valid",false);sj.put("error","bad utxoValue");tx.setSignature(JacksonJson.writeValue(objectMapper, sj));return"";}
-                Coin uv=Coin.valueOf(vs); ECKey ek=BipNodeUtil.getBipNODE(ads.get(i),currency).getEcKey();
+                Coin uv=Coin.valueOf(vs); ECKey ek=keyDerivation.derive(ads.get(i),currency).getEcKey();
                 TransactionSignature s2=stx.calculateWitnessSignature(i,ek,script,uv,Transaction.SigHash.ALL,false);
                 int required=script.getNumberOfSignaturesRequiredToSpend();
                 stx.replaceInput(i,in.withWitness(ws.mergeMultisigWitness(stx,i,ew,s2,ek,script,uv,required)));}

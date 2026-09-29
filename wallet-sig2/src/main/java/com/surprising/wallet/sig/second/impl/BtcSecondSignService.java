@@ -1,5 +1,7 @@
 package com.surprising.wallet.sig.second.impl;
 
+import com.surprising.wallet.sig.second.Sig2KeyDerivation;
+
 import com.surprising.wallet.sig.second.ISignService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -15,6 +17,10 @@ import org.springframework.stereotype.Component;
 @Component
 @Slf4j
 public class BtcSecondSignService extends AbstractBtcLikeSecondSign implements ISignService {
+    public BtcSecondSignService(Sig2KeyDerivation keyDerivation) {
+        super(keyDerivation);
+    }
+
     /**
      * 获取或查询 {@code chain} 对应的数据，并向调用方返回当前业务状态。
      */

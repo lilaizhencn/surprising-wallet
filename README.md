@@ -78,6 +78,13 @@ Icons are loaded from each project's official website favicon. Every icon and ne
 
 ```mermaid
 flowchart LR
+    subgraph Runtime["One executable JAR · all or split api/sig1/sig2"]
+    API
+    Services
+    Adapters
+    Sig1
+    Sig2
+    end
     Tenant[Tenants / Console / API clients] --> API[wallet-api<br/>Spring MVC control plane]
     API --> Services[Application services<br/>workflows · jobs · state transitions]
     Services --> Adapters[Chain adapters<br/>RPC · scanners · signing · broadcast]
@@ -88,23 +95,23 @@ flowchart LR
     PGMQ <--> Sig1[wallet-sig1<br/>first signature]
     PGMQ <--> Sig2[wallet-sig2<br/>final signature]
     PGMQ --> Services
-    Common[common] --> API
-    Common --> Sig1
-    Common --> Sig2
-    SDKs[chain-sdks] --> API
-    SDKs --> Sig1
-    SDKs --> Sig2
+    API --> Common[common]
+    Sig1 --> Common
+    Sig2 --> Common
+    API --> SDKs[chain-sdks]
+    Sig1 --> SDKs
+    Sig2 --> SDKs
 ```
 
 | Module | Responsibility |
 |---|---|
 | `wallet-api` | Spring MVC API and console, scheduled jobs, custody workflows, chain adapters, repositories, gas accounting, webhooks, and startup validation. |
-| `wallet-sig1` | First signature service for Bitcoin-like withdrawal transactions. |
-| `wallet-sig2` | Final signing stage; completed transactions return to the API through PGMQ for broadcasting. |
+| `wallet-sig1` | First signature library for Bitcoin-like withdrawal transactions. |
+| `wallet-sig2` | Final signing library; completed transactions return to the API through PGMQ for broadcasting. |
 | `common` | Shared chain and asset contracts, signing DTOs, wallet key configuration, and cross-module infrastructure. |
 | `chain-sdks` | Bitcoin-like, TRON, RPC, UTXO, BIP32, Ed25519, and Protobuf based SDK components. |
 
-The dependency direction is `wallet-api → common, chain-sdks` and `wallet-sig1/wallet-sig2 → common, chain-sdks`. Inside `wallet-api`, controllers and jobs handle boundaries and scheduling; services own workflows; chain, gateway, coordinator, observer, repository, and configuration packages implement the domain and infrastructure layers. Each SQL repository is responsible for one table.
+The dependency direction is `wallet-api → wallet-sig1, wallet-sig2, common, chain-sdks` and `wallet-sig1/wallet-sig2 → common, chain-sdks`. Inside `wallet-api`, controllers and jobs handle boundaries and scheduling; services own workflows; chain, gateway, coordinator, observer, repository, and configuration packages implement the domain and infrastructure layers. Each SQL repository is responsible for one table.
 
 ## Deployment
 
@@ -125,16 +132,35 @@ createdb -h 127.0.0.1 -p 5432 surprising_wallet_test_local
 psql -h 127.0.0.1 -p 5432 -d surprising_wallet_test_local -v ON_ERROR_STOP=1 -f resources/docs/db/surprising-wallet-init-pgsql.sql
 export SW_DB_URL=jdbc:postgresql://127.0.0.1:5432/surprising_wallet_test_local
 
-mvn -DskipTests package
-
-java -jar wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar
-java -jar wallet-sig1/target/wallet-sig1-1.0.0-SNAPSHOT.jar
-java -jar wallet-sig2/target/wallet-sig2-1.0.0-SNAPSHOT.jar
+mvn -pl wallet-api -am clean package
+java -jar wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar --sw.wallet.mode=all
 ```
 
-Configure queue access for the API and separate signing roles as described in [startup and testing](resources/docs/zh/startup-and-testing.md#pgmq-队列运行与验证). All three services use the same `SW_DB_URL`; signers use `SW_SIG1_DB_USERNAME/PASSWORD` and `SW_SIG2_DB_USERNAME/PASSWORD`.
+Configure queue access for the API and separate signing roles as described in [startup and testing](resources/docs/zh/startup-and-testing.md#pgmq-队列运行与验证). Split processes use the same `SW_DB_URL`; signers use `SW_SIG1_DB_USERNAME/PASSWORD` and `SW_SIG2_DB_USERNAME/PASSWORD`.
+
+Disable the development faucet with `SW_WALLET_DEV_FAUCET_ENABLED=false` unless its funding configuration is complete.
 
 Set the database, custody master key, platform administrator, wallet key, CORS, and chain RPC environment variables before starting the services. Do not put private keys, seed phrases, production credentials, or RPC secrets in Git.
+
+Only `wallet-api` produces an executable JAR; both signer libraries are bundled inside it. Choose a mode with `--sw.wallet.mode` or `SW_WALLET_MODE`:
+
+| Mode | Components | HTTP |
+|---|---|---|
+| `all` | API, chain jobs, both signers; one database pool, separate schedulers | Yes |
+| `api` (default) | API, chain jobs, broadcasting | Yes |
+| `sig1` | First signer | No |
+| `sig2` | Second signer | No |
+
+For split deployment, run the same JAR three times with `api`, `sig1`, and `sig2`, using separate environment files. Do not run `all` alongside the split services.
+
+| Mode | Required key variables, prefixed with `SW_WALLET_` |
+|---|---|
+| `all` | `SIG1_SEED`, `SIG2_SEED`, `ED25519_SEED`, `RECOVERY_PUBLIC_ROOT` |
+| `api` | `SIG2_SEED`, `ED25519_SEED`, `SIG1_PUBLIC_ROOT`, `RECOVERY_PUBLIC_ROOT` |
+| `sig1` | `SIG1_SEED`, `SIG2_PUBLIC_ROOT`, `RECOVERY_PUBLIC_ROOT` |
+| `sig2` | `SIG2_SEED` |
+
+Seeds are Base64-encoded 32-byte values; public roots are BIP32 extended public keys exported from the corresponding existing roots. Keep the recovery seed offline. API account-chain signing still requires sig2 and Ed25519 private material. `all` keeps both signing keys in one process and offers no process-level key isolation.
 
 ### Linux systemd deployment
 
@@ -148,14 +174,16 @@ The repository includes service units for the API and both signing services unde
    make -C /tmp/wallet-pgmq/pgmq-extension install
    ```
 2. Initialize a new database with `resources/docs/db/surprising-wallet-init-pgsql.sql`.
-3. Install the environment file at `/etc/surprising-wallet/wallet.env`.
-4. Install the three systemd units and enable them.
-5. Start or restart `surprising-wallet.service`, `surprising-wallet-sig1.service`, and `surprising-wallet-sig2.service`.
+3. Install `/etc/surprising-wallet/wallet.env`; split deployments also need `sig1.env` and `sig2.env`, containing only each role's configuration.
+4. Install the units. For one process, enable `surprising-wallet-all.service`; for split deployment, enable `surprising-wallet.service`, `surprising-wallet-sig1.service`, and `surprising-wallet-sig2.service`.
+5. Disable the unused layout before starting the selected services. All units use `current/wallet-server.jar`.
 
 The service units run as the unprivileged `wallet` user. The API health endpoint is `/actuator/health`.
 
 ### Automated backend deployment
 
-`.github/workflows/deploy-backend-dev.yml` triggers the server-side deployment through a restricted SSH command. `scripts/deploy/backend-deploy.sh` fetches the selected branch, builds the three JARs with JDK 25, stages an immutable release, updates the systemd units, restarts the services, checks health, and rolls back the release when verification fails.
+`.github/workflows/deploy-backend-dev.yml` triggers the server-side deployment through a restricted SSH command. `scripts/deploy/backend-deploy.sh` fetches the selected branch, builds one executable JAR with JDK 25, stages an immutable release, updates the systemd units, restarts the services, checks health, and rolls back the release when verification fails.
+
+Set `SW_DEPLOY_LAYOUT=all` or `split` (default) in `wallet.env`. Deployment stops the other layout; rollback restores the previous unit files and active layout. Back up environment files before changing modes or key configuration; release rollback does not restore secrets.
 
 The canonical initialization SQL is never applied automatically to an existing deployment. Apply it manually only when provisioning a new disposable database.

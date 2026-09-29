@@ -3,7 +3,11 @@ package com.surprising.wallet;
 import lombok.extern.slf4j.Slf4j;
 import org.web3j.utils.Async;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.context.annotation.Import;
+import com.surprising.wallet.bootstrap.*;
+import com.surprising.wallet.common.queue.PgmqConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -12,12 +16,15 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *
  * <p>wallet-api 是整个钱包系统的 HTTP 入口层，包含 Custody REST API、
  * Console 管理后台、定时任务调度（充值扫描、提现批处理、Gas 对账、Webhook 投递等）。
- * 组件扫描仅覆盖 {@code com.surprising.wallet}。
+ * 组件按 {@code sw.wallet.mode} 加载：all、api、sig1 或 sig2。
  *
  * <p>启动时配置 TLS 命名组以兼容旧版签名库。
  */
 @Slf4j
-@SpringBootApplication(scanBasePackages = "com.surprising.wallet")
+@SpringBootConfiguration
+@EnableAutoConfiguration
+@Import({ApiComponents.class, FirstSignerComponents.class, SecondSignerComponents.class,
+        RuntimeKeyConfiguration.class, PgmqConfiguration.class})
 @EnableConfigurationProperties
 @EnableScheduling
 public class WalletApiApplication {

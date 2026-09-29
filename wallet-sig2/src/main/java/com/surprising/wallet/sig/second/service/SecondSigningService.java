@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class SecondSigningService {
     private final QueueWorker worker;
+    private final SignContent signContent;
     private final ObjectMapper objectMapper;
     private static final HexFormat HEX = HexFormat.of();
     public void process() {
@@ -34,7 +35,7 @@ public class SecondSigningService {
             WithdrawTransaction transaction = JacksonJson.readValue(objectMapper, message.body(), WithdrawTransaction.class);
             QueueTenant.verifySignature(objectMapper, message, transaction.getSignature());
             AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
-            ISignService signService = SignContent.getSignService(currency);
+            ISignService signService = signContent.getSignService(currency);
             ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
             if (signService == null) {
                 signature.put("valid", false);

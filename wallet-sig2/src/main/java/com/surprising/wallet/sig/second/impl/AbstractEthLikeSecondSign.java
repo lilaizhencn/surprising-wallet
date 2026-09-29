@@ -5,7 +5,7 @@ import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
-import com.surprising.wallet.sig.second.BipNodeUtil;
+import com.surprising.wallet.sig.second.Sig2KeyDerivation;
 import com.surprising.wallet.sig.second.ISignService;
 import lombok.extern.slf4j.Slf4j;
 import org.spongycastle.util.encoders.Hex;
@@ -42,6 +42,12 @@ import java.util.List;
  */
 @Slf4j
 abstract public class AbstractEthLikeSecondSign implements ISignService {
+    protected final Sig2KeyDerivation keyDerivation;
+
+    public AbstractEthLikeSecondSign(Sig2KeyDerivation keyDerivation) {
+        this.keyDerivation = keyDerivation;
+    }
+
 
     /** Jackson 3 对象映射器，用于解析签名元数据。 */
     @Autowired
@@ -82,7 +88,7 @@ abstract public class AbstractEthLikeSecondSign implements ISignService {
         AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
         BigDecimal feeDecimal = feeDecimal(sigJson, currency);
         Address address = JacksonJson.toValue(objectMapper, sigJson.get("address"), Address.class);
-        Bip32Node node = BipNodeUtil.getBipNODE(address, currency);
+        Bip32Node node = keyDerivation.derive(address, currency);
         String signResult = sign(
                 BigInteger.valueOf(address.getNonce()),
                 JacksonJson.decimalValue(sigJson, "gasPrice").multiply(feeDecimal).toBigInteger(),

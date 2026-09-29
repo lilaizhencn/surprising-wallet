@@ -37,7 +37,7 @@ Controller 只负责请求边界和委托，Job 只负责 `@Scheduled` 调度编
 ### 依赖方向
 
 ```
-wallet-api → common, chain-sdks
+wallet-api → wallet-sig1, wallet-sig2, common, chain-sdks
 wallet-sig1 → common, chain-sdks
 wallet-sig2 → common, chain-sdks
 ```
@@ -60,10 +60,10 @@ wallet-api/job/
 
 ### 线程池
 
-每个包含 `@Scheduled` 的 jar 必须配置独立线程池：
+唯一可执行 JAR 为 wallet-api；wallet-sig1 / wallet-sig2 是普通库。通过 `sw.wallet.mode=all|api|sig1|sig2` 选择组件，默认 api；签名模式不启用 HTTP。每类 `@Scheduled` 必须配置独立线程池：
 
 - **wallet-api**：按 job 类别分池，`SchedulingConfig.java` 中定义 `@Bean ThreadPoolTaskScheduler`（custody/evm7702/account/deposit/withdraw 各一个）。业务 Service 不直接声明 `@Scheduled`。
-- **wallet-sig1 / wallet-sig2**：通过 `spring.task.scheduling.pool.size` + `thread-name-prefix` 配置，或显式 `@Bean TaskScheduler`。
+- **wallet-sig1 / wallet-sig2**：由 wallet-api/bootstrap 中的模式配置分别创建 `sig1TaskScheduler` 和 `sig2TaskScheduler`，Job 显式绑定；all 模式共用一个数据源。
 
 禁止所有 `@Scheduled` 共用一个默认线程池。
 

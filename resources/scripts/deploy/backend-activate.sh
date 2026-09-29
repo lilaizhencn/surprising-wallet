@@ -62,6 +62,14 @@ for migration in "${DEPLOY_MIGRATIONS[@]}"; do
     psql --set=ON_ERROR_STOP=1 "$DB_URL" --file="$migration"
 done
 
+ACTIVE_UNITS=()
+for unit in surprising-wallet.service surprising-wallet-sig1.service surprising-wallet-sig2.service surprising-wallet-all.service; do
+  if systemctl is-active --quiet "$unit"; then ACTIVE_UNITS+=("$unit"); fi
+done
+if [[ ${#ACTIVE_UNITS[@]} -eq 0 ]]; then
+  printf 'no active wallet layout; use backend-deploy.sh for initial deployment\n' >&2
+  exit 1
+fi
 PREVIOUS_TARGET=
 if [[ -L $DEPLOY_CURRENT ]]; then
   PREVIOUS_TARGET=$(readlink -f "$DEPLOY_CURRENT")
@@ -69,7 +77,7 @@ fi
 
 ln -sfn "$DEPLOY_RELEASE" "$DEPLOY_ROOT/current.next"
 mv -Tf "$DEPLOY_ROOT/current.next" "$DEPLOY_CURRENT"
-systemctl restart surprising-wallet.service
+systemctl restart "${ACTIVE_UNITS[@]}"
 
 healthy=false
 for _ in $(seq 1 45); do
@@ -90,6 +98,6 @@ printf 'backend release %s failed health check; rolling back\n' "$DEPLOY_SHA" >&
 if [[ -n $PREVIOUS_TARGET && -d $PREVIOUS_TARGET ]]; then
   ln -sfn "$PREVIOUS_TARGET" "$DEPLOY_ROOT/current.next"
   mv -Tf "$DEPLOY_ROOT/current.next" "$DEPLOY_CURRENT"
-  systemctl restart surprising-wallet.service
+  systemctl restart "${ACTIVE_UNITS[@]}"
 fi
 exit 1

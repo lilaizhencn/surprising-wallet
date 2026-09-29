@@ -1,11 +1,12 @@
 package com.surprising.wallet.sig.second.impl;
 
+import com.surprising.wallet.sig.second.Sig2KeyDerivation;
+
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
-import com.surprising.wallet.sig.second.BipNodeUtil;
 import com.surprising.wallet.sig.second.ISignService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -26,6 +27,11 @@ import java.math.BigDecimal;
 @Component
 @Slf4j
 public class Erc20SecondSignService extends AbstractEthLikeSecondSign implements ISignService {
+    public Erc20SecondSignService(Sig2KeyDerivation keyDerivation) {
+        super(keyDerivation);
+    }
+
+
     /** @return 链名称 ETH */
     @Override
     public String chain() {
@@ -68,7 +74,7 @@ public class Erc20SecondSignService extends AbstractEthLikeSecondSign implements
         ObjectNode sigJson = JacksonJson.readObject(objectMapper, sigStr);
         BigDecimal feeDecimal = feeDecimal(sigJson, currency);
         Address address = JacksonJson.toValue(objectMapper, sigJson.get("address"), Address.class);
-        Bip32Node node = BipNodeUtil.getBipNODE(address, currency);
+        Bip32Node node = keyDerivation.derive(address, currency);
         String signResult = tokenTransaction(
                 JacksonJson.decimalValue(sigJson, "gasPrice").multiply(feeDecimal).toBigInteger(),
                 JacksonJson.decimalValue(sigJson, "gas").multiply(feeDecimal).toBigInteger(),

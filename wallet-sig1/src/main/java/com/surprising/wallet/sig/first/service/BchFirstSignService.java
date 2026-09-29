@@ -43,6 +43,7 @@ public class BchFirstSignService implements ISignService {
 
     /** 密钥材料提供者（sig1 模式） */
     @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("sig1KeyMaterial")
     private WalletKeyMaterialProvider keyMaterial;
 
     /** Jackson 3 对象映射器，用于解析和序列化签名元数据。 */

@@ -76,19 +76,23 @@ mvn -pl wallet-api -am test -DskipTests
 
 ## 5. 密钥与运行配置
 
-四个根 Seed 通过 Spring `sw.wallet.keys` 配置：sig1、sig2、recovery 三个 BIP32 Seed，以及一个 Ed25519 Seed。四个值必须互不相同，统一使用 Base64 编码的 32 字节数据。当前测试环境的值直接放在三个应用各自唯一的 `application.yaml`，不再写数据库，也不再通过 Console 查看或修改。
+只有 wallet-api 产出可执行 JAR，默认 api。通过 `--sw.wallet.mode=all|api|sig1|sig2` 选择模式。all 共享数据源、各签名阶段独立调度池；sig1/sig2 强制关闭 HTTP。源码签名模块作为普通依赖打包。
 
-wallet-api 从 Keyset 派生三组 public root；sig1/sig2 分别只保留各自需要的 private root。修改配置必须重启对应进程，启动时会立即校验；已有派生地址后不得更换整套 Keyset，否则既有地址将无法签名。
+| 模式 | 必需密钥环境变量（前缀 SW_WALLET_） |
+|---|---|
+| all | SIG1_SEED、SIG2_SEED、ED25519_SEED、RECOVERY_PUBLIC_ROOT |
+| api | SIG2_SEED、ED25519_SEED、SIG1_PUBLIC_ROOT、RECOVERY_PUBLIC_ROOT |
+| sig1 | SIG1_SEED、SIG2_PUBLIC_ROOT、RECOVERY_PUBLIC_ROOT |
+| sig2 | SIG2_SEED |
 
-```yaml
-sw:
-  wallet:
-    keys:
-      sig1-seed: <Base64 编码的 32 字节 Seed>
-      sig2-seed: <Base64 编码的 32 字节 Seed>
-      recovery-seed: <Base64 编码的 32 字节 Seed>
-      ed25519-seed: <Base64 编码的 32 字节 Seed>
+Seed 为 Base64 编码的 32 字节。PUBLIC_ROOT 为对应 BIP32 根的扩展公钥（xpub/tpub），不是普通公钥十六进制，也不能是扩展私钥。恢复 Seed 始终离线，由离线工具导出公钥；三组多签公钥必须不同。沿用已有钱包时必须从原 Seed 导出相同公钥，不能重新生成。api 仍为账户链签名，保留 sig2 和 Ed25519 私钥。all 不提供两方私钥的进程隔离。配置变更需要重启。
+
+```bash
+mvn -pl wallet-api -am clean package
+java -jar wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar --sw.wallet.mode=all
 ```
+
+拆分部署时分别运行相同 JAR 的 api、sig1、sig2 模式，三个进程使用同一数据库；不要同时启用 all 和拆分服务。各进程使用独立环境文件，只配置本方密钥。可通过 `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE` 调整 API/all 连接数，独立签名模式使用 `SW_WALLET_SIGNING_DB_POOL_SIZE`（默认 4）。
 
 wallet-api 常用环境变量：
 
@@ -119,7 +123,7 @@ export SW_CUSTODY_CORS_ORIGINS='https://console.example.com'
 | 单链扫描批量 | `chain_profile.scan_batch_size` |
 | 链网络、确认数、链 ID、gas policy | `chain_profile` |
 | RPC/fullnode/indexer/faucet 节点 | `chain_rpc_node` |
-| 四个钱包根 Seed | Spring `sw.wallet.keys`（当前测试环境为各应用的 `application.yaml`） |
+| 当前模式密钥 | 环境变量注入 `sw.wallet.keys` |
 | 每链默认热提钱包 | `chain_address` 中原生资产 `user_id=0/biz=0/address_index=0/wallet_role=DEPOSIT` |
 
 部署前必须按环境提前确认 scanner checkpoint。全新系统通常把 `chain_scan_height.best_height/safe_height` 设置到当前最新安全块附近，让服务只扫描部署后的新区块；如果要补历史充值，再按业务窗口把高度往前调。不要从创世块或很早的历史高度开始扫，这会让服务长时间追块并消耗大量 RPC 配额。
@@ -141,10 +145,8 @@ TokDou 钱包页面读取 wallet-api：
 | 文件 | 用途 |
 |---|---|
 | `wallet-api/src/main/resources/application.yaml` | wallet-api 唯一配置，包含数据库、PostgreSQL / PGMQ、密钥、调度及业务参数 |
-| `wallet-sig1/src/main/resources/application.yaml` | 第一签服务唯一配置，包含 PostgreSQL / PGMQ、密钥及调度参数 |
-| `wallet-sig2/src/main/resources/application.yaml` | 第二签服务唯一配置，包含 PostgreSQL / PGMQ、密钥及调度参数 |
 
-项目不再使用 `application-{profile}.yaml`。每个属性旁均有用途和配置说明；修改运行环境时直接调整三份 `application.yaml` 并重启对应进程，三个进程的网络和四个 Seed 必须保持一致。
+项目不再使用 `application-{profile}.yaml`。每个属性旁均有用途和配置说明；修改运行环境时更新环境变量并重启对应进程，签名公钥必须与 API 派生地址使用的公钥一致。
 
 本地必配项：
 
@@ -152,7 +154,7 @@ TokDou 钱包页面读取 wallet-api：
 - `chain_profile` 中每条启用链只能启用一个 network
 - 启用链至少有一个匹配当前 `sw.app.env.name` 的 `chain_rpc_node`
 - 启用的 `chain_rpc_node` 必须配置真实 RPC URL 和认证信息；启动时会拒绝 `CHANGE_ME`、`YOUR_*`、`REPLACE_ME` 等占位符
-- `sw.wallet.keys` 已配置四个互不相同的 Base64 32 字节 Seed
+- `sw.wallet.keys` 已配置当前模式所需的 Seed 和扩展公钥
 - 每条启用链必须且只能有一条默认热提钱包地址：`chain_address` 原生资产、`user_id=0`、`biz=0`、`address_index=0`、`wallet_role=DEPOSIT`
 - wallet-api、sig1、sig2 使用同一套 Keyset 配置后再启动
 - 钱包后台配置页使用的 `SW_WALLET_ADMIN_USERNAME`、`SW_WALLET_ADMIN_PASSWORD`

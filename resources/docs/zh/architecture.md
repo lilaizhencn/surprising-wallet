@@ -25,6 +25,18 @@
 
 ## 运行模型
 
+`wallet-api` 是唯一可执行 JAR，包含两个普通签名库；默认 `api`。
+
+| `sw.wallet.mode` | 加载组件 | HTTP | 数据源 |
+|---|---|---|---|
+| `all` | API、链任务、第一签、第二签 | 开启 | 一个共享池 |
+| `api` | API、链任务、广播 | 开启 | API 账号 |
+| `sig1` | 第一签 | 关闭 | 第一签账号 |
+| `sig2` | 第二签 | 关闭 | 第二签账号 |
+
+bootstrap 包按模式显式扫描组件；签名 Bean 使用全限定名称避免冲突。第一签和第二签分别绑定单线程 `sig1TaskScheduler`、`sig2TaskScheduler`，API 保持按 Job 类别分池。签名密钥通过限定名称注入，第二签不保留静态私钥或 HTTP 签名入口。所有模式仍通过 PGMQ 推进阶段；合并进程不改变消息重试、幂等和审计路径。
+
+
 运行时资产来源：
 
 | 表 | 作用 |
@@ -51,7 +63,7 @@
 
 所有模块的 parent POM 为根目录 `pom.xml`，继承 Spring Boot starter parent，以 Java 25 作为统一编译和运行基线，并提供统一的版本和依赖管理。
 
-模块依赖遵循 `wallet-api -> common, chain-sdks`，签名服务分别直接依赖共享库和链 SDK。`wallet-api`
+模块依赖遵循 `wallet-api -> wallet-sig1, wallet-sig2, common, chain-sdks`，签名服务分别直接依赖共享库和链 SDK。`wallet-api`
 内部采用 MVC 分层：Servlet 请求、Cookie 读写和 HTTP 状态映射只存在于 Web 层的 Controller、Filter
 和异常处理器；Controller 只做参数校验和响应映射，Job 只负责调度、节流、防并发和异常隔离，选币、状态流转、队列消费、RPC 调用和审计由业务 Service 承担。
 Web 层包固定为 `controller/`、`job/`、`config/`、`exception/`、`filter/` 和 `model/`；认证过滤器及其
@@ -63,10 +75,10 @@ Servlet 请求包装器不得放入 `config/`，充值扫描使用的检查点�
 所有业务域的 PostgreSQL/JDBC Repository 统一位于 `com.surprising.wallet.repository`，业务包下不再保留
 `account/repository`、`custody/repository`、`deposit/repository` 或其他分散的 Repository 子包。
 Service 和 Job 统一使用构造器注入；可选基础设施依赖以 `Optional<T>` 表达。
-`common.queue` 提供无 Web 依赖的 PGMQ JDBC 适配器和消费事务执行器，三个应用显式导入配置。
+`common.queue` 提供无 Web 依赖的 PGMQ JDBC 适配器和消费事务执行器，唯一启动入口显式导入配置。
 业务 Service 通过适配器使用队列，不直接编写 SQL；`ChainFeeRateRepository` 只访问 `chain_fee_rate`。
 
-各可执行模块分别声明自身实际使用的 starter，避免依赖传递造成的隐式可用。
+各模块分别声明自身实际使用的 starter，避免依赖传递造成的隐式可用。
 
 Repository 采用“单表一仓储”约束：每个 `@Repository` 只访问一个数据库表，Repository 名称与表职责一一对应。
 `CustodyRepository`、`ChainJdbcRepository` 等保留名称的跨表门面使用 `@Component`，自身不执行 SQL，只在 Java 中组合
@@ -81,7 +93,7 @@ Bitcoin-like RPC DTO 与 Ed25519 链枚举、派生结果和 SLIP-0010 密钥提
 ## 调度与运行时开关
 
 - wallet-api 的每个 `@Scheduled` 入口都通过 `wallet_task_lease` 获取数据库租约；租约按任务名唯一，执行期间由心跳续租，实例故障后由其他实例接管。租约只负责调度所有权，业务数据仍由各自的事务和单表 Repository 维护。
-- wallet-sig1/sig2 使用独立账号连接同一个 PostgreSQL，仅访问授权的 PGMQ 队列。消费按消息领取，处理事务持有该消息行锁；read_ct 校验阻止旧消费者确认新领取的消息。
+- 独立 sig1/sig2 模式使用独立账号连接同一个 PostgreSQL，仅访问授权的 PGMQ 队列。消费按消息领取，处理事务持有该消息行锁；read_ct 校验阻止旧消费者确认新领取的消息。
 - 签名任务与业务状态同事务写入 `wallet_outbox`；派发器将 PGMQ 入队和 Outbox 标记成功放在同一事务。消费事务原子完成业务状态更新、下一阶段入队和当前消息归档。异常回滚，指数退避重试；第 20 次失败进入死信队列。
 - 提现领取按 `tenant_id` 轮转，Webhook 领取按租户公平排序；任何租户的慢 RPC、慢回调或积压都不能长期饿死其他租户。幂等键、状态机、锁定余额、失败释放和链上对账共同构成资金闭环。
 - Account-Chain 调度器每秒做轻量到期检查，UTXO 调度器每 5 秒检查；只有达到该链扫描周期时才访问 RPC。
@@ -115,7 +127,7 @@ HyperEVM 复用 EVM 通用路径。HyperCore 使用独立的账户层适配器�
 
 ## 签名模型
 
-四个 Base64 编码的 32 字节 Seed 从 Spring `sw.wallet.keys` 配置加载，并在应用启动时一次性校验长度、编码和互异性。三个进程各自只保留一份 `application.yaml`，当前文件直接保存测试环境配置；生产环境上线前应迁移到 Nacos 或 KMS。Bitcoin-like 链使用其中三组 BIP32 root：
+密钥通过环境变量注入唯一 application.yaml，按模式加载本方 Seed 与必要的扩展公钥。恢复私钥离线保存，运行时只配置 recovery-public-root。api 保留账户链使用的 sig2 和 Ed25519 私钥；sig1 / sig2 各自只要求本方 Seed。all 同一进程持有两方私钥，不提供进程级密钥隔离。Bitcoin-like 链使用其中三组 BIP32 root：
 
 ```text
 BIP32 root #1 -> pubKey1，在线第一签私钥 root
@@ -156,7 +168,7 @@ Collection：
 
 ## 启动配置校验
 
-wallet-api 启动时会先校验 `sw.wallet.keys` 四个 Seed，再检查 `chain_profile`、`chain_rpc_node`、默认热提钱包和 `wallet_system_config`。密钥配置缺失或非法会直接启动失败；校验通过后，默认热提钱包会通过代码推导并与 `chain_address` 比对，缺失或不一致同样会启动失败。同一链同一时刻只能启用一个网络；非生产环境可以同时保存 devnet/testnet profile 并切换启用，生产环境只允许启用生产网络。启用 profile 必须至少有一个匹配当前环境的 RPC 节点。校验结果会按链打印状态，缺失配置或关闭开关会输出 WARN。
+wallet-api 启动时会先校验当前模式所需的 `sw.wallet.keys`，再检查 `chain_profile`、`chain_rpc_node`、默认热提钱包和 `wallet_system_config`。密钥配置缺失或非法会直接启动失败；校验通过后，默认热提钱包会通过代码推导并与 `chain_address` 比对，缺失或不一致同样会启动失败。同一链同一时刻只能启用一个网络；非生产环境可以同时保存 devnet/testnet profile 并切换启用，生产环境只允许启用生产网络。启用 profile 必须至少有一个匹配当前环境的 RPC 节点。校验结果会按链打印状态，缺失配置或关闭开关会输出 WARN。
 
 ## 运行目录
 

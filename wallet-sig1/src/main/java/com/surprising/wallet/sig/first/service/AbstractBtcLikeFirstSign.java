@@ -33,6 +33,7 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
     protected PubKeyConfig pubKeyConfig;
     /** 密钥材料提供者 */
     @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("sig1KeyMaterial")
     protected WalletKeyMaterialProvider keyMaterial;
     /** 当前签名服务使用的 Bitcoin 网络。 */
     @Value("${sw.wallet.network:test}")

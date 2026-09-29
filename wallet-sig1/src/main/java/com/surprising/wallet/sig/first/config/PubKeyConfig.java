@@ -31,7 +31,7 @@ public class PubKeyConfig {
      * @param keyMaterial sig1 模式下的密钥材料提供者
      */
     @Autowired
-    public PubKeyConfig(WalletKeyMaterialProvider keyMaterial) {
+    public PubKeyConfig(@org.springframework.beans.factory.annotation.Qualifier("sig1KeyMaterial") WalletKeyMaterialProvider keyMaterial) {
         this.keyMaterial = keyMaterial;
         this.testNodes = null;
     }

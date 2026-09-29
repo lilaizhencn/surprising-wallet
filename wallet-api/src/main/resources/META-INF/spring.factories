@@ -1,0 +1,2 @@
+org.springframework.boot.EnvironmentPostProcessor=\
+com.surprising.wallet.bootstrap.WalletModeEnvironment
