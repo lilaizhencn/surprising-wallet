@@ -227,14 +227,12 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.X_LAYER, "OKB", 1952L, 1L);
         registerProfile(ChainType.DEGEN, "DEGEN", 666666666L, 1L);
         registerProfile(ChainType.ROBINHOOD_CHAIN, "ETH_ROBINHOOD", 46630L, 1L);
-        registerProfile(ChainType.OKT_CHAIN, "OKT", 65L, 1L);
         registerProfile(ChainType.ETHERLINK, "XTZ", 127823L, 1L);
         registerProfile(ChainType.IOTA_EVM, "IOTA", 1076L, 1L);
         registerProfile(ChainType.OASIS_EMERALD, "ROSE", 42261L, 1L);
         registerProfile(ChainType.CRONOS, "CRO", 338L, 1L);
         registerProfile(ChainType.SONIC, "S", 14601L, 1L);
         registerProfile(ChainType.PULSECHAIN, "PLS", 943L, 1L);
-        registerProfile(ChainType.ZETACHAIN, "ZETA", 7001L, 1L);
         registerProfile(ChainType.CORE, "CORE", 1114L, 1L);
         registerProfile(ChainType.SOMNIA, "SOMI", 50312L, 1L);
         registerProfile(ChainType.RONIN, "RON", 202601L, 1L);

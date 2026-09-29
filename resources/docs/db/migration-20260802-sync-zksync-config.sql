@@ -1,12 +1,10 @@
--- 同步 Starknet、zkSync Era 与 OKT Chain 的链配置。
--- zkSync Era 使用官方 ETH/USDC 配置；OKT Chain 仅保留历史资产和关闭的配置，
--- 因官方已提示链将停止运营，任何生产启用都必须先完成独立的生命周期与资产可恢复性确认。
+-- 同步 Starknet 与 zkSync Era 的链配置。
 -- Starknet 同时增加账户交易审计表和 chain_profile.account_class_hash 字段。
 -- 本迁移只增加配置，不修改业务数据；可重复执行。
 
 BEGIN;
 
-SELECT pg_advisory_xact_lock(hashtext('surprising-wallet:20260802:zksync-okt-chain-config'));
+SELECT pg_advisory_xact_lock(hashtext('surprising-wallet:20260802:zksync-config'));
 
 ALTER TABLE public.evm_token_transfer
     ADD COLUMN IF NOT EXISTS raw_payload text;
@@ -139,9 +137,7 @@ INSERT INTO public.chain_asset (
 )
 VALUES
     ('ZKSYNC', 'ETH_ZKSYNC', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('ZKSYNC', 'USDC', 'ERC20', '0x1d17CBcF0D6D143135aE902365D2E5e2A16538D4', 6, false, true, 1, 1, now(), now()),
-    ('OKT_CHAIN', 'OKT', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('OKT_CHAIN', 'USDT', 'KIP20', '0x382bB369d343125BfB2117af9c149795C6C65C50', 6, false, true, 1, 1, now(), now())
+    ('ZKSYNC', 'USDC', 'ERC20', '0x1d17CBcF0D6D143135aE902365D2E5e2A16538D4', 6, false, true, 1, 1, now(), now())
 ON CONFLICT (chain, symbol) DO UPDATE SET
     asset_kind = EXCLUDED.asset_kind,
     contract_address = EXCLUDED.contract_address,
@@ -162,9 +158,7 @@ VALUES
     ('ZKSYNC', 'USDC', 'ERC20', '0x1d17CBcF0D6D143135aE902365D2E5e2A16538D4', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('ZKSYNC', 'USDC', 'ERC20', '0xAe045DE5638162fa134807Cb558E15A3F5A7F853', 6, true,
-     1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('OKT_CHAIN', 'USDT', 'KIP20', '0x382bB369d343125BfB2117af9c149795C6C65C50', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'KIP20', 1, 1, 1, 'native-gas', 1)
+     1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1)
 ON CONFLICT (chain, network, symbol) DO UPDATE SET
     standard = EXCLUDED.standard,
     contract_address = EXCLUDED.contract_address,
@@ -196,14 +190,6 @@ VALUES
     ('ZKSYNC', 'mainnet', 'evm', 9044, 60, 'ETH_ZKSYNC',
      'https://mainnet.era.zksync.io', 'https://explorer.zksync.io/tx/',
      40, 40, 1, 0, false, now(), now(), 324, 'eip1559', 200,
-     false, false, false, false, 0, 200),
-    ('OKT_CHAIN', 'testnet', 'evm', 9045, 60, 'OKT',
-     'https://exchaintestrpc.okex.org', 'https://www.oklink.com/oktc/tx/',
-     40, 40, 1, 0, false, now(), now(), 65, 'eip1559', 200,
-     false, false, false, false, 0, 200),
-    ('OKT_CHAIN', 'mainnet', 'evm', 9045, 60, 'OKT',
-     'https://exchainrpc.okex.org', 'https://www.oklink.com/oktc/tx/',
-     40, 40, 1, 0, false, now(), now(), 66, 'eip1559', 200,
      false, false, false, false, 0, 200)
 ON CONFLICT (chain, network) DO UPDATE SET
     family = EXCLUDED.family,
@@ -239,13 +225,7 @@ VALUES
      'Official zkSync Era Sepolia JSON-RPC endpoint; local tests use Hardhat.', now(), now(), NULL),
     ('ZKSYNC', 'mainnet', 'prod', 'official-zksync-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://mainnet.era.zksync.io', 'NONE', NULL, 10, 1000, false,
-     'Official zkSync Era mainnet JSON-RPC endpoint; enable only after production readiness review.', now(), now(), NULL),
-    ('OKT_CHAIN', 'testnet', 'dev', 'historical-okt-chain-testnet', 'rpc', 'HTTP_JSON_RPC',
-     'https://exchaintestrpc.okex.org', 'NONE', NULL, 10, 500, false,
-     'Historical OKT Chain testnet endpoint; disabled because chain operations are being discontinued.', now(), now(), NULL),
-    ('OKT_CHAIN', 'mainnet', 'prod', 'historical-okt-chain-mainnet', 'rpc', 'HTTP_JSON_RPC',
-     'https://exchainrpc.okex.org', 'NONE', NULL, 10, 1000, false,
-     'Historical OKT Chain mainnet endpoint; keep disabled until lifecycle and asset recovery are confirmed.', now(), now(), NULL)
+     'Official zkSync Era mainnet JSON-RPC endpoint; enable only after production readiness review.', now(), now(), NULL)
 ON CONFLICT (chain, network, environment, purpose, node_label) DO UPDATE SET
     connection_type = EXCLUDED.connection_type,
     rpc_url = EXCLUDED.rpc_url,

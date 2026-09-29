@@ -174,12 +174,8 @@
   <text x="775" y="496" text-anchor="middle" class="desc">EVM L2</text>
 
   <rect x="830" y="458" width="90" height="48" class="chain"/>
-  <text x="875" y="480" text-anchor="middle" class="label">OKT</text>
-  <text x="875" y="496" text-anchor="middle" class="desc">EVM</text>
-
-  <rect x="930" y="458" width="90" height="48" class="chain"/>
-  <text x="975" y="480" text-anchor="middle" class="label">Starknet</text>
-  <text x="975" y="496" text-anchor="middle" class="desc">Account</text>
+  <text x="875" y="480" text-anchor="middle" class="label">Starknet</text>
+  <text x="875" y="496" text-anchor="middle" class="desc">Account</text>
 
   <!-- ====== 第四层：基础设施 ====== -->
   <text x="30" y="545" class="sep"> 基础设施</text>

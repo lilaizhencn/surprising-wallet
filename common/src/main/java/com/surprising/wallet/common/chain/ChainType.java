@@ -135,10 +135,6 @@ public enum ChainType {
      */
     ROBINHOOD_CHAIN("evm", "account"),
     /**
-     * 定义 {@code OKT_CHAIN} 常量，表示 OKT Chain EVM 账户链。
-     */
-    OKT_CHAIN("evm", "account"),
-    /**
      * 定义 {@code STARKNET} 常量，表示 Starknet 原生账户抽象链。
      */
     STARKNET("starknet", "account"),
@@ -166,10 +162,6 @@ public enum ChainType {
      * 定义 {@code PULSECHAIN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     PULSECHAIN("evm", "account"),
-    /**
-     * 定义 {@code ZETACHAIN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    ZETACHAIN("evm", "account"),
     /**
      * 定义 {@code CORE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */

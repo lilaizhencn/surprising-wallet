@@ -61,7 +61,6 @@ L2 交易不会直接从发送方的 Ethereum L1 地址扣款，也不能用仅�
 | MODE | mainnet (34443)<br>sepolia (919) | ETH_MODE | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
 | MONAD | mainnet (143)<br>testnet (10143) | MON | MON；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | OASIS_EMERALD | mainnet (42262)<br>testnet (42261) | ROSE | ROSE；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
-| OKT_CHAIN | mainnet (66)<br>testnet (65) | OKT | OKT；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | OPTIMISM | mainnet (10)<br>sepolia (11155420) ✓ | ETH_OP | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用；已有生产 runbook |
 | PLASMA | mainnet (9745)<br>testnet (9746) | XPL | XPL；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | POLYGON | amoy (80002) ✓<br>mainnet (137) | POL | POL；链自身原生币 | Type 2（EIP-1559） | standard | 未启用；已有生产 runbook |
@@ -79,7 +78,6 @@ L2 交易不会直接从发送方的 Ethereum L1 地址扣款，也不能用仅�
 | VECTOR_SMART_CHAIN | mainnet (420042) | VSG | VSG；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | WORLD_CHAIN | mainnet (480)<br>sepolia (4801) | ETH_WORLD | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
 | X_LAYER | mainnet (196)<br>testnet (1952) | OKB | OKB；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
-| ZETACHAIN | mainnet (7000)<br>testnet (7001) | ZETA | ZETA；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | ZKSYNC | mainnet (324)<br>sepolia (300) | ETH_ZKSYNC | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | standard | 未启用 |
 
 ## 如何理解“交易模型”

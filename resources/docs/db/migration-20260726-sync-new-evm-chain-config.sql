@@ -3,7 +3,7 @@
 -- later seed additions are not replayed automatically. This migration contains only
 -- the missing chain configuration data and is safe to retry through its UPSERT keys.
 --
--- Scope: BERACHAIN, GNOSIS, CELO, MONAD, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK, KATANA, MEGAETH, X_LAYER, DEGEN, ROBINHOOD_CHAIN, ETHERLINK, IOTA_EVM, OASIS_EMERALD, CRONOS, SONIC, PULSECHAIN, ZETACHAIN, CORE, SOMNIA, RONIN, CHILIZ, IOTEX, KAIA, PLASMA, STORY, SEI, CONFLUX, VECTOR_SMART_CHAIN, KROWN
+-- Scope: BERACHAIN, GNOSIS, CELO, MONAD, WORLD_CHAIN, INK, TAIKO, SONEIUM, MODE, LISK, KATANA, MEGAETH, X_LAYER, DEGEN, ROBINHOOD_CHAIN, ETHERLINK, IOTA_EVM, OASIS_EMERALD, CRONOS, SONIC, PULSECHAIN, CORE, SOMNIA, RONIN, CHILIZ, IOTEX, KAIA, PLASMA, STORY, SEI, CONFLUX, VECTOR_SMART_CHAIN, KROWN
 --
 -- Manual rollback (only if none of these chains has acquired business data):
 -- delete matching chain_rpc_node rows, token_config rows, chain_profile rows, then
@@ -73,9 +73,6 @@ VALUES
     ('PULSECHAIN', 'PLS', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('PULSECHAIN', 'USDC', 'ERC20', '0x15d38573d2Feeb82e7ad5187aB8c1D52810B1f07', 6, false, true, 1, 1, now(), now()),
     ('PULSECHAIN', 'USDT', 'ERC20', '0x0cb6F5a34ad42ec934882A05265A7d5f59b51A2f', 6, false, true, 1, 1, now(), now()),
-    ('ZETACHAIN', 'ZETA', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('ZETACHAIN', 'USDC_ETH', 'ERC20', '0x0cbe0dF132a6c6B4a2974Fa1b7Fb953CF0Cc798a', 6, false, true, 1, 1, now(), now()),
-    ('ZETACHAIN', 'USDT_ETH', 'ERC20', '0x7c8dDa80bbBE1254a7aACf3219EBe1481c6E01d7', 6, false, true, 1, 1, now(), now()),
     ('CORE', 'CORE', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('CORE', 'USDC', 'ERC20', '0xa4151b2b3e269645181dccf2d426ce75fcbdeca9', 6, false, true, 1, 1, now(), now()),
     ('CORE', 'USDT', 'ERC20', '0x900101d06a7426441ae63e9ab3b9b0f63be145f1', 6, false, true, 1, 1, now(), now()),
@@ -187,10 +184,6 @@ VALUES
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('PULSECHAIN', 'USDT', 'ERC20', '0x0cb6F5a34ad42ec934882A05265A7d5f59b51A2f', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('ZETACHAIN', 'USDC_ETH', 'ERC20', '0x0cbe0dF132a6c6B4a2974Fa1b7Fb953CF0Cc798a', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('ZETACHAIN', 'USDT_ETH', 'ERC20', '0x7c8dDa80bbBE1254a7aACf3219EBe1481c6E01d7', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('CORE', 'USDC', 'ERC20', '0xa4151b2b3e269645181dccf2d426ce75fcbdeca9', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('CORE', 'USDT', 'ERC20', '0x900101d06a7426441ae63e9ab3b9b0f63be145f1', 6, false,
@@ -249,7 +242,7 @@ WHERE "chain" IN (
     'BERACHAIN', 'GNOSIS', 'CELO', 'MONAD', 'WORLD_CHAIN', 'INK', 'TAIKO',
     'SONEIUM', 'MODE', 'LISK', 'KATANA', 'MEGAETH', 'X_LAYER', 'DEGEN',
     'ROBINHOOD_CHAIN', 'ETHERLINK', 'IOTA_EVM', 'OASIS_EMERALD', 'CRONOS',
-    'SONIC', 'PULSECHAIN', 'ZETACHAIN', 'CORE', 'SOMNIA', 'RONIN', 'CHILIZ',
+    'SONIC', 'PULSECHAIN', 'CORE', 'SOMNIA', 'RONIN', 'CHILIZ',
     'IOTEX', 'KAIA', 'PLASMA', 'STORY', 'SEI', 'CONFLUX',
     'VECTOR_SMART_CHAIN', 'KROWN'
 )
@@ -428,14 +421,6 @@ VALUES
     ('PULSECHAIN', 'mainnet', 'evm', 9030, 60, 'PLS',
      'https://rpc.pulsechain.com', 'https://api.scan.pulsechain.com/tx/',
      1, 1, 1, 0, false, now(), now(), 369, 'eip1559', 200,
-     false, false, false, false, 0, 200),
-    ('ZETACHAIN', 'testnet', 'evm', 9031, 60, 'ZETA',
-     'https://zetachain-athens-evm.blockpi.network/v1/rpc/public', 'https://zetachain-athens-3.blockscout.com/tx/',
-     1, 1, 1, 0, false, now(), now(), 7001, 'eip1559', 200,
-     false, false, false, false, 0, 200),
-    ('ZETACHAIN', 'mainnet', 'evm', 9031, 60, 'ZETA',
-     'https://zetachain-evm.blockpi.network/v1/rpc/public', 'https://zetascan.com/tx/',
-     1, 1, 1, 0, false, now(), now(), 7000, 'eip1559', 200,
      false, false, false, false, 0, 200),
     ('CORE', 'testnet', 'evm', 9032, 60, 'CORE',
      'https://rpc.test2.btcs.network', 'https://scan.test2.btcs.network/tx/',
@@ -804,18 +789,6 @@ VALUES
     ('PULSECHAIN', 'mainnet', 'prod', 'official-pulsechain-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://rpc.pulsechain.com', 'NONE', NULL, 10, 1000, false,
      'Production PulseChain public JSON-RPC can be unstable. Enable only after private RPC, funding and monitoring are ready.',
-     now(), now(), NULL),
-    ('ZETACHAIN', 'testnet', 'dev', 'blockpi-zetachain-athens', 'rpc', 'HTTP_JSON_RPC',
-     'https://zetachain-athens-evm.blockpi.network/v1/rpc/public', 'NONE', NULL, 10, 1000, false,
-     'ZetaChain Athens EVM JSON-RPC endpoint. Stablecoin ZRC-20 assets are paused on Athens; local tests use Hardhat.',
-     now(), now(), NULL),
-    ('ZETACHAIN', 'testnet', 'test2', 'blockpi-zetachain-athens', 'rpc', 'HTTP_JSON_RPC',
-     'https://zetachain-athens-evm.blockpi.network/v1/rpc/public', 'NONE', NULL, 10, 1000, false,
-     'test2 ZetaChain Athens EVM JSON-RPC endpoint. Enable only for explicit native ZETA live tests.',
-     now(), now(), NULL),
-    ('ZETACHAIN', 'mainnet', 'prod', 'blockpi-zetachain-mainnet', 'rpc', 'HTTP_JSON_RPC',
-     'https://zetachain-evm.blockpi.network/v1/rpc/public', 'NONE', NULL, 10, 1000, false,
-     'Production ZetaChain public EVM JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
      now(), now(), NULL),
     ('CORE', 'testnet', 'dev', 'official-core-testnet2', 'rpc', 'HTTP_JSON_RPC',
      'https://rpc.test2.btcs.network', 'NONE', NULL, 10, 500, false,
