@@ -5,20 +5,24 @@
   "type": "module",
   "description": "A login-enabled exchange-style tenant application for end-to-end Surprising Wallet validation.",
   "scripts": {
-    "start": "node src/server.js",
     "test": "npm run test:node",
-    "test:node": "node --test",
+    "test:node": "node --test test/*.test.js",
     "test:stress": "node scripts/stress-flow.js",
     "test:real-withdrawal": "node scripts/real-withdrawal-stress.js",
     "test:continuous-recharge": "node scripts/continuous-recharge.js",
     "provision:test-users": "node scripts/provision-test-users.js",
     "bootstrap:tenant": "node scripts/bootstrap-tenant.js",
-    "verify:running": "node scripts/verify-running.js"
+    "verify:running": "node scripts/verify-running.js",
+    "build": "cf build",
+    "deploy": "cf deploy",
+    "test:remote": "node scripts/test-remote.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
-  "optionalDependencies": {
-    "sqlite3": "^5.1.7"
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "2.0.0-beta.sha-ad79608dd",
+    "cf": "1.0.0-beta.5",
+    "vite": "8.3.1"
   }
 }

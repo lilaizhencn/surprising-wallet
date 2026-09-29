@@ -147,3 +147,10 @@ wallet-api/job/
 - `ChainFeeRateRepository` maps only to `chain_fee_rate`; network fee quotes are shared network metadata.
 - Queue handlers live in Services. Jobs only schedule. Claim receipts are fenced by `read_ct`; processing, next-stage enqueue and archive share a transaction.
 - Signing services use separate restricted database roles for queue access. Business queue headers carry tenant ownership; replay records actor and reason.
+
+## Cloudflare tenant-demo
+
+- `resources/tenant-demo` 是用户授权部署到 Cloudflare 的独立租户演示应用；其 SQLite-backed Durable Object 是租户自身账本，不是钱包 PostgreSQL 数据库。
+- Demo 的存储验收使用隔离的 Cloudflare 测试 Worker / 对象；不启动本机 SQLite、Docker 或独立数据库进程。钱包 Java 数据库测试继续遵循本机 PostgreSQL 18 约束。
+- Demo 不直接访问钱包数据库；钱包 PostgreSQL init-sql 不包含 Demo 私有表。Demo 表定义以 `src/store.js` 为准。
+- 自动发布限于 master 的 Demo 目录与对应工作流变更；测试失败不得部署正式 Worker。

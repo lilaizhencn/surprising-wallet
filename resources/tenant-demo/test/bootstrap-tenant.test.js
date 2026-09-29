@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { bootstrapTenant } from "../scripts/bootstrap-tenant.js";
 import http from "node:http";
 import { once } from "node:events";
 import { test } from "node:test";
@@ -21,29 +21,10 @@ async function listen(handler) {
   return server;
 }
 
-function run(command, args, env) {
-  return new Promise(resolve => {
-    const child = spawn(command, args, { env, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", chunk => stdout += chunk);
-    child.stderr.on("data", chunk => stderr += chunk);
-    child.on("close", code => resolve({ code, stdout, stderr }));
-  });
-}
-
 test("bootstraps a tenant without printing generated API or webhook secrets", async () => {
   const demoConfiguration = [];
-  const demo = await listen(async (request, response) => {
-    if (request.method === "GET" && request.url === "/api/status") {
-      return json(response, { webhookUrl: "http://127.0.0.1:9999/webhooks/custody" });
-    }
-    if (request.method === "PUT" && request.url === "/api/config") {
-      let raw = "";
-      for await (const chunk of request) raw += chunk;
-      demoConfiguration.push(JSON.parse(raw));
-      return json(response, { configured: true });
-    }
+  const demo = await listen((request, response) => {
+    demoConfiguration.push(request.url);
     response.writeHead(404).end();
   });
   const wallet = await listen((request, response) => {
@@ -69,22 +50,20 @@ test("bootstraps a tenant without printing generated API or webhook secrets", as
   try {
     const walletAddress = wallet.address();
     const demoAddress = demo.address();
-    const result = await run(process.execPath, ["scripts/bootstrap-tenant.js"], {
-      ...process.env,
-      WALLET_BASE_URL: `http://127.0.0.1:${walletAddress.port}`,
-      DEMO_BASE_URL: `http://127.0.0.1:${demoAddress.port}`,
-      PLATFORM_ADMIN_EMAIL: "platform@example.com",
-      PLATFORM_ADMIN_PASSWORD: "platform-password",
-      TENANT_ADMIN_PASSWORD: "tenant-password",
-      TEST_RUN_ID: "unit-test",
-      TEST_CHAIN: "APTOS"
-    });
-    assert.equal(result.code, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).ok, true);
-    assert.equal(result.stdout.includes("sws_generated_secret"), false);
-    assert.equal(result.stdout.includes("whsec_generated_secret"), false);
-    assert.equal(demoConfiguration[0].walletApiSecret, "sws_generated_secret");
-    assert.equal(demoConfiguration[1].webhookSecret, "whsec_generated_secret");
+    let secrets;
+    const result = await bootstrapTenant({
+      walletBaseUrl: `http://127.0.0.1:${walletAddress.port}`,
+      demoBaseUrl: `http://127.0.0.1:${demoAddress.port}`,
+      platformEmail: "platform@example.com", platformPassword: "platform-password",
+      tenantPassword: "tenant-password", tenantEmail: "tenant@example.com",
+      tenantSlug: "unit-test", chain: "APTOS", runId: "unit-test"
+    }, async values => { secrets = values; });
+    assert.equal(result.ok, true);
+    assert.equal(JSON.stringify(result).includes("sws_generated_secret"), false);
+    assert.equal(JSON.stringify(result).includes("whsec_generated_secret"), false);
+    assert.equal(secrets.WALLET_API_SECRET, "sws_generated_secret");
+    assert.equal(secrets.WEBHOOK_SECRET, "whsec_generated_secret");
+    assert.equal(demoConfiguration.length, 0, "secrets must not be sent to demo HTTP API");
   } finally {
     wallet.close();
     demo.close();

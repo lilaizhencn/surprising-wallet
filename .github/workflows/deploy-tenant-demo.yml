@@ -1,0 +1,51 @@
+name: Deploy tenant demo
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - resources/tenant-demo/**
+      - .github/workflows/deploy-tenant-demo.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-tenant-demo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: resources/tenant-demo
+    env:
+      CLOUDFLARE_ACCOUNT_ID: 0fc085353257d1c837047e0dd87b1c8b
+      CLOUDFLARE_API_TOKEN: ${{ secrets.TENANT_DEMO_CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: resources/tenant-demo/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - name: Deploy isolated ledger test worker
+        run: npx cf deploy --mode test
+      - name: Verify cloud storage and HTTP behavior
+        env:
+          TENANT_DEMO_TEST_URL: https://tenant-demo-tests.lilaizhencn.workers.dev
+          TENANT_DEMO_TEST_TOKEN: ${{ secrets.TENANT_DEMO_TEST_TOKEN }}
+        run: npm run test:remote
+      - name: Deploy production
+        run: npm run deploy
+      - name: Verify public deployment
+        env:
+          TENANT_DEMO_SMOKE_USER: ${{ secrets.TENANT_DEMO_SMOKE_USER }}
+        run: |
+          test -n "$TENANT_DEMO_SMOKE_USER"
+          node scripts/check-deployment.js https://tenant-demo.tokdou.com

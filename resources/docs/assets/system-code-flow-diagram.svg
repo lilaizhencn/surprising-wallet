@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="980" viewBox="0 0 1180 980">
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1110" viewBox="0 0 1180 1110">
   <style>
     .title { font: 22px sans-serif; font-weight: 700; fill: #0f172a; }
     .phase-label { font: 15px sans-serif; font-weight: 700; fill: #1e293b; }
@@ -242,4 +242,8 @@
   <text x="590" y="910" text-anchor="middle" class="small" fill="#94a3b8">签名隔离：sig1 只持有 Root #1 私钥 · sig2 只持有 Root #2 私钥 · 恢复私钥离线保管 · 任两方即可签名</text>
   <text x="590" y="930" text-anchor="middle" class="small" fill="#94a3b8">数据库实时开关 · Scanner 按链出块速度节流 · 从 DB checkpoint 增量扫块</text>
   <text x="590" y="950" text-anchor="middle" class="small" fill="#94a3b8">Starknet：counterfactual 账户部署 · STRK Gas · Transfer 事件扫描 · execute_v3 归集/提现</text>
+<rect x="30" y="985" width="1120" height="108" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+<text x="50" y="1012" style="font:14px sans-serif;fill:#1e293b">租户 Demo：浏览器 → Worker → Durable Object 事务冻结 → HTTPS 钱包 API</text>
+<text x="50" y="1040" style="font:14px sans-serif;fill:#1e293b">钱包 HMAC Webhook → 同一对象 → 事件幂等 → 余额 + 流水原子提交</text>
+<text x="50" y="1068" style="font:14px sans-serif;fill:#1e293b">超时 / 5xx 保持冻结等待回调；测试 Worker 与正式对象隔离</text>
 </svg>

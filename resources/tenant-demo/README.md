@@ -1,134 +1,64 @@
 # Surprising Wallet Tenant Demo
 
-这是一个独立的模拟交易所租户应用，不引用钱包服务内部 Java 类，只通过公开 Custody API 和 Webhook 验证真实租户流程。
+独立模拟交易所租户应用：页面由 Cloudflare Static Assets 托管，API / Webhook 由 Worker 接收，用户、会话、余额和流水保存在 SQLite-backed Durable Object。钱包后端继续运行于阿里云，Demo 仅调用公开 Custody API，不访问钱包数据库。
 
-当前流程包括：
+## 部署
 
-- 用户注册、登录、会话和退出登录；
-- 用户按链申请充值地址，支持地址版本轮换；
-- 充值 Webhook HMAC 校验、重放幂等和用户账本入账；
-- 提现前冻结余额，等待钱包回调后确认扣款或失败解冻；
-- 多个提现订单共享一个 EIP-7702 批量交易 txid 时分别结算；
-- 用户只能查看自己的地址、余额、流水和提现记录。
-
-## 本地启动
-
-要求 Node.js 20 或更高版本。Node.js 22 使用内置 `node:sqlite`；Node.js 20 使用可选的 `sqlite3` 驱动。数据默认保存于 `data/tenant-demo.sqlite3`，不会连接钱包服务的业务数据库。
+需要 Node.js 22+、Cloudflare 账号及 `cf auth login` 授权。
 
 ```bash
 cd resources/tenant-demo
-npm install
+npm ci
 npm test
-npm start
+npm run build
+npm run deploy
 ```
 
-默认监听 `127.0.0.1:3001`。可以通过 `TENANT_DEMO_PORT` 和 `TENANT_DEMO_SQLITE_PATH` 调整端口及 SQLite 文件位置。
+使用固定版本的 `cf` 和 Vite 插件；配置入口为 `cloudflare.config.ts`。正式域名是 `https://tenant-demo.tokdou.com`，钱包地址为 `https://custody-api.tokdou.com`。一个部署对应一个钱包租户，对象名称固定，不能由客户端指定。
 
-## 接入钱包 API
+部署前必须设置 Worker Secrets：`WALLET_KEY_ID`、`WALLET_API_SECRET`、`WEBHOOK_SECRET`、`TENANT_DEMO_SETUP_TOKEN`。可以使用 `cf deploy --secrets-file <私有 JSON 文件>` 原子发布代码与密钥；该文件不得放入仓库。后续部署保留现有 Secrets。
 
-生产或远程部署时设置 `TENANT_DEMO_SETUP_TOKEN`，然后用部署密钥写入钱包 API 配置：
+`npm run bootstrap:tenant` 可在环境变量中提供 `WALLET_BASE_URL`、`DEMO_BASE_URL`、`PLATFORM_ADMIN_EMAIL`、`PLATFORM_ADMIN_PASSWORD`、`TENANT_SLUG`、`TENANT_ADMIN_EMAIL`、`TENANT_ADMIN_PASSWORD`、`TEST_CHAIN` 后创建新钱包租户，创建 API Key / Webhook，上传 Worker Secrets 并部署，随后验证并启用 Webhook。平台凭据只在本机引导过程使用，不上传 Cloudflare。不再提供 HTTP 写密钥接口。
+
+本次部署使用全新演示数据，不迁移旧服务器 SQLite。钱包租户为 `cloudflare-tenant-demo`，开通平台现有的 APTOS testnet；本次没有转入 Gas 或发起链上充值提现。后续发布不会清空对象存储；不要变更对象类、命名空间或固定对象名称来发布普通代码变更。
+
+## 自动部署
+
+`.github/workflows/deploy-tenant-demo.yml` 在推送 `master` 且以下路径有变更时执行：
+
+- `resources/tenant-demo/**`
+- `.github/workflows/deploy-tenant-demo.yml`
+
+本地保存文件不会自动发布，必须 commit / push。流程执行 `npm ci`、无数据库单元测试、独立测试 Worker 部署、云端账务与 HTTP 测试，然后发布正式 Worker 并检查页面、健康、配置、登录及真实钱包签名 API。同组部署串行执行，避免覆盖。后端钱包工作流不会因 Demo 目录改动触发。
+
+GitHub Secrets：`TENANT_DEMO_CLOUDFLARE_API_TOKEN`（专用部署凭据）、`TENANT_DEMO_TEST_TOKEN`（测试 Worker 访问令牌）、`TENANT_DEMO_SMOKE_USER`（专用无资金检查账号的 JSON：email / password）。部署凭据仅授权目标账号的 Worker 操作及目标 zone 的路由操作；不保存本机 OAuth 会话。业务密钥保留在 Cloudflare Worker Secrets。
+
+## 验证
 
 ```bash
-curl -X PUT http://127.0.0.1:3001/api/config \
-  -H 'Content-Type: application/json' \
-  -H 'X-Tenant-Demo-Setup-Token: <setup-token>' \
-  -d '{
-    "walletBaseUrl":"http://127.0.0.1:8002",
-    "walletKeyId":"<tenant-api-key>",
-    "walletApiSecret":"<tenant-api-secret>",
-    "webhookSecret":"<webhook-signing-secret>"
-  }'
+npm test
+npx cf deploy --mode test
+TENANT_DEMO_TEST_URL=https://tenant-demo-tests.lilaizhencn.workers.dev \
+TENANT_DEMO_TEST_TOKEN='<测试 Worker 令牌>' npm run test:remote
+node scripts/check-deployment.js https://tenant-demo.tokdou.com
 ```
 
-配置完成后，钱包 Webhook 地址必须指向：
+账务测试在 Cloudflare 独立 `tenant-demo-tests` Worker / TestRunner 命名空间执行，每个用例使用新对象并在 finally 清空其测试存储。不启动本机 SQLite、Docker、PostgreSQL 或链进程。测试使用合成回调及钱包 HTTP stub，不动真实链上资金。正式 Worker 不包含测试入口和清库功能。
 
-```text
-https://<tenant-domain>/webhooks/custody
-```
+## 业务与安全
 
-API Secret、Webhook Secret 和 setup token 只放在服务器环境文件或密钥管理系统中，不写入 Git。
+- 注册、登录、退出和 HttpOnly / Secure / SameSite 会话；密码使用 scrypt，会话令牌以 SHA-256 摘要存储。
+- 按链申请、轮换充值地址；仅查看自己的余额、流水、地址和提现。
+- Webhook 使用 HMAC、时间窗口及事件幂等；余额与流水通过 Durable Object storage.transaction 原子提交。
+- 提现先冻结，钱包明确拒绝才释放；超时、5xx 或不明确结果进入 PENDING_REVIEW，保留冻结等待回调或人工核对。
+- 对象内 API / 回调请求串行执行；出站请求 15 秒超时，禁止携带认证跟随重定向。
+- 登录失败计数保存在对象存储中；跨源写请求被拒绝。API 管理快照需要 setup token。
+- 金额使用十进制定点字符串；日志不打印凭据、请求体和钱包敏感响应。
 
-## 验证命令
+链扫描、签名、广播和归集仍属于 wallet-api，Cloudflare 不保管链上签名私钥。
 
-验证正在运行的 Demo 和钱包公开 API：
+## 回滚与数据库边界
 
-```bash
-DEMO_BASE_URL=http://127.0.0.1:3001 \
-TEST_CHAIN=ETH \
-npm run verify:running
-```
+普通代码发布失败时保留前一版本；发布后发现问题，使用 Cloudflare 控制台回滚到上一 Worker 版本。代码回滚不回滚余额或流水，不能删除或重建正式 Durable Object。数据恢复应使用对象存储恢复能力，并先核对期间钱包回调。
 
-创建固定账号及测试账号。固定账号可通过 `TEST_FIXED_EMAIL`、`TEST_FIXED_PASSWORD` 指定；脚本不会打印密码：
-
-```bash
-TEST_FIXED_EMAIL='602884291@qq.com' \
-TEST_FIXED_PASSWORD='<fixed-password>' \
-TEST_USER_PASSWORD='<test-password>' \
-TEST_USER_COUNT=40 \
-TEST_CHAIN=ETH \
-npm run provision:test-users
-```
-
-仅验证租户的并发账务、重复充值回调和共享 txid 提现回调：
-
-```bash
-DEMO_BASE_URL=http://127.0.0.1:3001 \
-STRESS_CHAIN=ETH STRESS_ASSET=ETH STRESS_USERS=40 \
-STRESS_WEBHOOK_SECRET='<webhook-secret>' \
-npm run test:stress
-```
-
-该脚本使用签名的模拟回调验证租户账务边界；真实链上充值、钱包签名、广播和归集必须再通过已部署的钱包服务及开发链验收。
-
-使用已部署的租户 API 对多个测试账号发起真实钱包提现，等待钱包回调并校验每个账号的提现状态、锁定余额和账本：
-
-```bash
-TEST_USER_CREDENTIALS='user-1@example.test=<test-password>,user-2@example.test=<test-password>' \
-STRESS_REAL_USERS=20 STRESS_REAL_AMOUNT=0.1 \
-npm run test:real-withdrawal
-```
-
-脚本会排除固定浏览账号；测试账号必须已有足够的 ETH 余额。
-
-持续为一组账号轮换充值地址，使钱包开发水龙头可以发现新地址。不同账号密码可用 `email=password` 形式传入：
-
-```bash
-TEST_USER_CREDENTIALS='602884291@qq.com=<fixed-password>,user-1@example.test=<test-password>' \
-CONTINUOUS_CHAIN=ETH CONTINUOUS_MIN_DELAY_MS=15000 CONTINUOUS_MAX_DELAY_MS=90000 \
-npm run test:continuous-recharge
-```
-
-设置 `CONTINUOUS_MAX_CYCLES` 可让测试在有限轮次后退出；不设置或设为 `0` 时持续运行。
-
-## Nginx 和 HTTPS
-
-`deploy/nginx-tenant-demo-http.conf` 用于证书申请前的 HTTP 源站，`deploy/nginx-tenant-demo.conf` 用于证书签发后的 80→443 跳转及 443→3001 转发。证书可以使用 Certbot 的 webroot 模式申请：
-
-```bash
-certbot certonly --webroot -w /var/www/letsencrypt \
-  -d tenant-demo.tokdou.com --non-interactive \
-  --agree-tos --register-unsafely-without-email
-```
-
-## API 流程
-
-1. `POST /api/auth/register` 或 `POST /api/auth/login` 获取 HttpOnly 会话 Cookie；
-2. `GET /api/chains` 查看租户已开通链；
-3. `POST /api/me/addresses` 调用钱包地址 API；
-4. 钱包向 `/webhooks/custody` 发送 `DEPOSIT.CONFIRMED`，Demo 给对应 `subject` 入账；
-5. `POST /api/me/withdrawals` 携带 `Idempotency-Key` 和租户业务订单号，冻结余额并调用钱包提现 API；重复请求返回同一笔提现；
-6. 钱包发送 `WITHDRAWAL.BROADCAST`、`WITHDRAWAL.CONFIRMED` 或 `WITHDRAWAL.FAILED`，Demo 更新提现状态及账本。
-
-页面交互约束：充值必须先选择币种和对应链，地址只在链选择完成后展示，并提示最小充值数量；提现由服务端自动选择用户该链最新有效地址作为资产来源，目标地址可从同租户其他用户地址中选择，提交前需要二次确认。地址历史通过 `GET /api/me/address-history` 分页查询，平台测试地址通过 `GET /api/me/platform-addresses` 查询。
-
-账本和提现列表支持服务端分页筛选：`GET /api/me/ledger` 支持 `entryType`、`txId`、`address`、`businessOrderNo`、`page`、`pageSize`；`GET /api/me/withdrawals` 支持 `businessOrderNo`、`address`、`txId`、`status`、`page`、`pageSize`。单笔详情分别使用 `GET /api/me/ledger/{id}` 和 `GET /api/me/withdrawals/{id}`，提现详情会返回钱包回调时间线。钱包 API 明确拒绝时才释放冻结余额；网络超时、5xx 或结果不明确时进入 `PENDING_REVIEW` 并保留冻结，等待回调或人工核对。
-
-钱包内部的充值扫描、签名、广播和归集仍属于 wallet-api/wallet-service；tenant-demo 不直接访问钱包数据库，也不模拟钱包内部归集状态。
-
-## 安全边界
-
-- SQLite 开启 WAL、外键和事务串行化，金额使用十进制定点字符串，不使用浮点数；
-- 充值按 `chain:txHash:logIndex` 幂等，提现按订单及事件幂等；
-- 登录失败按来源地址限速；会话仅保存哈希；
-- `/api/config` 和 `/api/admin/snapshot` 必须提供 setup token；
-- 不提交私钥、助记词、真实 token、RPC 密钥、生产配置或 SQLite 数据文件。
+Demo 私有表定义在 `src/store.js`；钱包 PostgreSQL 表、状态和种子配置未改变，因此本次不修改 `surprising-wallet-init-pgsql.sql`。架构及核心流程图文已同步 Cloudflare 边界。

@@ -209,3 +209,7 @@ Starknet：
 每轮新签名请求（含 RBF）带唯一 signingRequestId，广播前与数据库当前请求校验；旧请求的死信回放不得覆盖新交易。
 
 UTXO 充值扫描的批量 saveTransaction 入口也开启事务，确保批内入账与 PGMQ 充值事件一起提交或回滚。
+
+## Cloudflare Demo 入账与提现
+
+浏览器 → Worker → 固定租户 Durable Object → HTTPS Custody API。提现先在对象存储事务中冻结余额，再调用钱包；超时或 5xx 保持冻结等待回调。钱包 → HMAC Webhook → 相同对象 → 事件幂等校验 → 余额与流水事务提交。对象内请求串行执行，数据库事务不包含远程 HTTP。测试使用独立云端对象及合成回调，不发起真实链上交易。

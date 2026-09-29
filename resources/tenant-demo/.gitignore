@@ -1,7 +1,11 @@
-data/*.db
-data/*.db-*
-data/*.sqlite3
-data/*.sqlite3-*
+.cloudflare/
+.wrangler/
+dist/
+.dev.vars*
+*.sqlite3*
+test-results/
+data/
 node_modules/
 .env
+.env.*
 reports/runs/*.json

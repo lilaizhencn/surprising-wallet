@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="800" viewBox="0 0 1100 800">
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="930" viewBox="0 0 1100 930">
   <style>
     .svc   { fill: #eff6ff; stroke: #2563eb; stroke-width: 2; rx: 10; }
     .lib   { fill: #f0fdf4; stroke: #16a34a; stroke-width: 2; rx: 10; }
@@ -207,4 +207,8 @@
   <rect x="30" y="674" width="1040" height="64" fill="#f8fafc" stroke="#94a3b8" rx="8"/>
   <text x="550" y="698" text-anchor="middle" class="desc">运行监控：systemd 每分钟 → Python 只读探针（资源 / 服务 / PostgreSQL / PGMQ / 日志 / HTTPS）→ Telegram</text>
   <text x="550" y="720" text-anchor="middle" class="desc">全部监控运行于钱包主机，直接通知 Telegram；故障与恢复通知 / 每日摘要；日志按时间与容量轮转</text>
+<rect x="30" y="805" width="1040" height="108" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+<text x="50" y="832" style="font:14px sans-serif;fill:#1e293b">Cloudflare：Static Assets + Worker → 单租户 Durable Object / SQLite</text>
+<text x="50" y="860" style="font:14px sans-serif;fill:#1e293b">Worker ⇄ HTTPS Custody API / HMAC Webhook ⇄ Alibaba Cloud wallet-api</text>
+<text x="50" y="888" style="font:14px sans-serif;fill:#1e293b">GitHub master / resources/tenant-demo/** → 验证测试 Worker → cf deploy</text>
 </svg>

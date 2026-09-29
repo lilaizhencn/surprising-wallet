@@ -42,7 +42,8 @@ export class WalletClient {
     this.baseUrl = String(baseUrl ?? "").replace(/\/+$/, "");
     this.keyId = String(keyId ?? "").trim();
     this.secret = String(secret ?? "").trim();
-    this.fetchImpl = fetchImpl;
+    // Workers' native fetch must not receive WalletClient as its `this` value.
+    this.fetchImpl = (...args) => fetchImpl(...args);
     if (!this.baseUrl || !this.keyId || !this.secret) {
       throw new Error("wallet base URL, API key ID and API secret are required");
     }
@@ -63,6 +64,8 @@ export class WalletClient {
     if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
     const response = await this.fetchImpl(url, {
       method,
+      redirect: "manual",
+      signal: AbortSignal.timeout(15000),
       headers,
       body: body === undefined ? undefined : payload
     });

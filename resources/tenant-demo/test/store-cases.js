@@ -1,17 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
-import { DemoStore } from "../src/store.js";
 
 function envelope(id, type, data) {
   return { id, type, createdAt: new Date().toISOString(), data };
 }
 
-async function testStore() {
-  const store = await DemoStore.open({ filename: ":memory:" });
-  await store.resetForTest();
-  return store;
-}
-
+export function registerStoreTests(test, testStore) {
 test("credits deposits idempotently and finalizes a confirmed withdrawal", async () => {
   const store = await testStore();
   try {
@@ -81,7 +74,7 @@ test("credits deposits idempotently and finalizes a confirmed withdrawal", async
     assert.equal(ledger.find(row => row.entryType === "WITHDRAWAL").txHash, "tx-withdraw");
     assert.equal(ledger.find(row => row.entryType === "WITHDRAWAL").amount, "0.40001");
   } finally {
-    await store.close();
+    // The test runner owns and clears its isolated Durable Object storage.
   }
 });
 
@@ -123,7 +116,7 @@ test("releases reserved user funds when the wallet API request fails", async () 
     assert.equal((await store.withdrawals())[0].status, "REQUEST_FAILED");
     assert.equal((await store.ledger())[0].entryType, "WITHDRAWAL_RELEASE");
   } finally {
-    await store.close();
+    // The test runner owns and clears its isolated Durable Object storage.
   }
 });
 
@@ -153,7 +146,7 @@ test("serializes concurrent deposits and applies each event exactly once", async
     assert.equal((await store.ledger()).length, 40);
     assert.equal((await store.webhookEvents()).filter(event => event.processed).length, 40);
   } finally {
-    await store.close();
+    // The test runner owns and clears its isolated Durable Object storage.
   }
 });
 
@@ -198,7 +191,7 @@ test("finalizes multiple EIP-7702-style withdrawals sharing one transaction hash
     assert.equal((await store.withdrawals()).filter(row => row.status === "CONFIRMED").length, 2);
     assert.equal((await store.ledger()).length, 3);
   } finally {
-    await store.close();
+    // The test runner owns and clears its isolated Durable Object storage.
   }
 });
 
@@ -223,7 +216,7 @@ test("pages address history and exposes other users' addresses for withdrawal te
     assert.equal(others.length, 1);
     assert.equal(others[0].userId, second.id);
   } finally {
-    await store.close();
+    // The test runner owns and clears its isolated Durable Object storage.
   }
 });
 
@@ -268,7 +261,7 @@ test("keeps terminal withdrawal state stable and rejects mismatched callback dat
     const balance = (await store.balances(user.id))[0];
     assert.deepEqual({ available: balance.available, locked: balance.locked }, { available: "2", locked: "0" });
   } finally {
-    await store.close();
+    // The test runner owns and clears its isolated Durable Object storage.
   }
 });
 
@@ -311,7 +304,7 @@ test("persists tenant order idempotently, accounts callback fee changes, and exp
     await store.releaseWithdrawal(reserved.id, "late duplicate release");
     assert.equal((await store.ledger(user.id)).filter(row => row.entryType === "WITHDRAWAL_RELEASE").length, 0);
   } finally {
-    await store.close();
+    // The test runner owns and clears its isolated Durable Object storage.
   }
 });
 
@@ -338,6 +331,8 @@ test("registers users, hashes passwords, and invalidates sessions on logout", as
       /UNIQUE/
     );
   } finally {
-    await store.close();
+    // The test runner owns and clears its isolated Durable Object storage.
   }
 });
+
+}

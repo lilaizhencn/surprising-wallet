@@ -190,3 +190,7 @@ PGMQ 扩展管理 `pgmq.q_wallet_*`、对应归档表和死信队列。`common.q
 已移除独立失败重试和超时重投签名 Job，PGMQ 未确认消息在可见性超时后恢复。
 队列归档用于审计；运维使用 `wallet_replay_dead(queue, id, reason)` 重放死信，并记录数据库操作者和原因。
 PGMQ 的消息行锁与 read_ct 校验保证领取和确认安全，链上 RPC 仍须依赖交易 ID 幂等及未知结果对账。
+
+## Cloudflare 租户 Demo
+
+`resources/tenant-demo` 是独立租户应用，部署为 Cloudflare Worker + Static Assets + SQLite-backed Durable Object。每个部署固定对应一个钱包租户，浏览器不能选择租户对象。用户、会话、余额和流水保存在该对象内；仅通过 HTTPS Custody API / HMAC Webhook 与阿里云钱包协作，不访问钱包数据库。API 密钥、Webhook 密钥及管理令牌使用 Worker Secrets。master 分支的 Demo 目录变更触发 GitHub Actions，先验证独立测试 Worker，再部署正式 Worker；不会触发钱包后端发布。

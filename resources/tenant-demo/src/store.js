@@ -1,7 +1,5 @@
-import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
-import { mkdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { DurableDatabase } from "./durable-database.js";
 import {
   addDecimal,
   compareDecimal,
@@ -10,96 +8,7 @@ import {
   subtractDecimal
 } from "./decimal.js";
 
-let BuiltinDatabaseSync;
-try {
-  ({ DatabaseSync: BuiltinDatabaseSync } = await import("node:sqlite"));
-} catch {
-  BuiltinDatabaseSync = undefined;
-}
-
-const moduleDir = dirname(fileURLToPath(import.meta.url));
-const projectDir = dirname(moduleDir);
-const defaultDatabaseFile = join(projectDir, "data", "tenant-demo.sqlite3");
 const now = () => new Date().toISOString();
-
-class SyncDatabase {
-  constructor(filename) {
-    this.database = new BuiltinDatabaseSync(filename);
-  }
-
-  run(sql, parameters = []) {
-    const result = this.database.prepare(sql).run(...parameters);
-    return Promise.resolve({ changes: result.changes, lastID: result.lastInsertRowid });
-  }
-
-  get(sql, parameters = []) {
-    return Promise.resolve(this.database.prepare(sql).get(...parameters));
-  }
-
-  all(sql, parameters = []) {
-    return Promise.resolve(this.database.prepare(sql).all(...parameters));
-  }
-
-  exec(sql) {
-    this.database.exec(sql);
-    return Promise.resolve();
-  }
-
-  close() {
-    this.database.close();
-  }
-}
-
-class CallbackDatabase {
-  constructor(database) {
-    this.database = database;
-  }
-
-  run(sql, parameters = []) {
-    return new Promise((resolve, reject) => {
-      this.database.run(sql, parameters, function callback(error) {
-        if (error) return reject(error);
-        return resolve({ changes: this.changes, lastID: this.lastID });
-      });
-    });
-  }
-
-  get(sql, parameters = []) {
-    return new Promise((resolve, reject) => {
-      this.database.get(sql, parameters, (error, row) => error ? reject(error) : resolve(row));
-    });
-  }
-
-  all(sql, parameters = []) {
-    return new Promise((resolve, reject) => {
-      this.database.all(sql, parameters, (error, rows) => error ? reject(error) : resolve(rows));
-    });
-  }
-
-  exec(sql) {
-    return new Promise((resolve, reject) => {
-      this.database.exec(sql, error => error ? reject(error) : resolve());
-    });
-  }
-
-  close() {
-    return new Promise((resolve, reject) => {
-      this.database.close(error => error ? reject(error) : resolve());
-    });
-  }
-}
-
-async function openDatabase(filename) {
-  if (BuiltinDatabaseSync) return new SyncDatabase(filename);
-  const module = await import("sqlite3");
-  const sqlite3 = module.default ?? module;
-  const driver = typeof sqlite3.verbose === "function" ? sqlite3.verbose() : sqlite3;
-  const database = await new Promise((resolve, reject) => {
-    const connection = new driver.Database(filename, error => error ? reject(error) : resolve(connection));
-  });
-  database.configure("busyTimeout", 5000);
-  return new CallbackDatabase(database);
-}
 
 function run(database, sql, parameters = []) {
   return database.run(sql, parameters);
@@ -118,7 +27,7 @@ function exec(database, sql) {
 }
 
 function hashSecret(value) {
-  return scryptSync(value, "tenant-demo-session-salt", 32).toString("hex");
+  return createHash("sha256").update(value).digest("hex");
 }
 
 export function hashPassword(password) {
@@ -200,35 +109,18 @@ function userView(row) {
 }
 
 export class DemoStore {
-  static async open(options = {}) {
-    const filename = options.filename
-      ?? process.env.TENANT_DEMO_SQLITE_PATH
-      ?? defaultDatabaseFile;
-    if (filename !== ":memory:") await mkdir(dirname(filename), { recursive: true });
-    const database = await openDatabase(filename);
-    const store = new DemoStore(database, filename);
-    try {
-      await exec(database, "PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
-      await store.#initialize();
-      return store;
-    } catch (error) {
-      await store.close();
-      throw error;
-    }
+  static async open(storage) {
+    const store = new DemoStore(new DurableDatabase(storage));
+    await store.#initialize();
+    return store;
   }
 
-  constructor(database, filename) {
+  constructor(database) {
     this.db = database;
-    this.filename = filename;
-    this.transactionQueue = Promise.resolve();
   }
 
   async #initialize() {
     await exec(this.db, `
-      CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      );
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         email TEXT NOT NULL UNIQUE,
@@ -317,76 +209,10 @@ export class DemoStore {
         processed_at TEXT
       );
     `);
-    const withdrawalColumns = await all(this.db, "PRAGMA table_info(withdrawals)");
-    if (!withdrawalColumns.some(column => column.name === "network")) {
-      await exec(this.db, "ALTER TABLE withdrawals ADD COLUMN network TEXT");
-    }
-    if (!withdrawalColumns.some(column => column.name === "order_no")) {
-      await exec(this.db, "ALTER TABLE withdrawals ADD COLUMN order_no TEXT");
-    }
-    await run(this.db, `
-      UPDATE withdrawals
-      SET network = (
-        SELECT a.network FROM addresses a WHERE a.id = withdrawals.custody_address_id
-      )
-      WHERE network IS NULL
-    `);
-  }
-
-  async resetForTest() {
-    if (this.filename !== ":memory:" && !this.filename.includes("test")) {
-      throw new Error(`refusing to reset non-test database: ${this.filename}`);
-    }
-    await this.#transaction(async database => {
-      await exec(database, `
-        DELETE FROM webhook_events;
-        DELETE FROM ledger_entries;
-        DELETE FROM withdrawals;
-        DELETE FROM balances;
-        DELETE FROM addresses;
-        DELETE FROM sessions;
-        DELETE FROM users;
-        DELETE FROM settings;
-      `);
-    });
-  }
-
-  async close() {
-    this.db.close();
   }
 
   async #transaction(work) {
-    const execute = this.transactionQueue.then(async () => {
-      await run(this.db, "BEGIN IMMEDIATE");
-      try {
-        const result = await work(this.db);
-        await run(this.db, "COMMIT");
-        return result;
-      } catch (error) {
-        await run(this.db, "ROLLBACK").catch(() => {});
-        throw error;
-      }
-    });
-    this.transactionQueue = execute.catch(() => {});
-    return execute;
-  }
-
-  async configuration() {
-    const rows = await all(this.db, "SELECT key, value FROM settings");
-    return Object.fromEntries(rows.map(row => [row.key, row.value]));
-  }
-
-  async saveConfiguration(values) {
-    await this.#transaction(async database => {
-      for (const [key, value] of Object.entries(values)) {
-        if (value === undefined || value === null) continue;
-        await run(database, `
-          INSERT INTO settings(key, value) VALUES (?, ?)
-          ON CONFLICT(key) DO UPDATE SET value = excluded.value
-        `, [key, String(value).trim()]);
-      }
-    });
-    return this.configuration();
+    return this.db.transaction(work);
   }
 
   async registerUser({ email, password, displayName }) {
@@ -641,7 +467,7 @@ export class DemoStore {
              l.entry_type AS entryType, l.direction, l.amount,
              l.reference_id AS referenceId, l.raw_json AS rawJson, l.created_at AS createdAt
       FROM ledger_entries l JOIN users u ON u.id = l.user_id
-      ${predicate} ORDER BY l.created_at DESC
+      ${predicate} ORDER BY l.created_at DESC, l.rowid DESC
     `, userId ? [userId] : []);
     return rows.map(row => {
       let data = {};
@@ -857,7 +683,7 @@ export class DemoStore {
              w.tx_hash AS txHash, w.error_message AS errorMessage,
              w.created_at AS createdAt, w.updated_at AS updatedAt
       FROM withdrawals w JOIN users u ON u.id = w.user_id
-      ${predicate} ORDER BY w.created_at DESC
+      ${predicate} ORDER BY w.created_at DESC, w.rowid DESC
     `, userId ? [userId] : []);
   }
 
@@ -1082,7 +908,7 @@ export class DemoStore {
   }
 
   async #lockBalance() {
-    // SQLite 的 BEGIN IMMEDIATE 已串行化写事务，不需要额外的 advisory lock。
+    // Durable Object storage.transaction 保证余额与流水原子提交。
   }
 
   async #balance(queryable, userId, chain, asset) {
