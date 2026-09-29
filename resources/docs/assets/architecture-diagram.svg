@@ -206,5 +206,5 @@
   <text x="30" y="770" class="desc">发布：GitHub Actions / JDK 27 → SSH 摘要校验 → Alibaba Cloud 单 JAR all · Nginx → loopback API / PostgreSQL</text>
   <rect x="30" y="674" width="1040" height="64" fill="#f8fafc" stroke="#94a3b8" rx="8"/>
   <text x="550" y="698" text-anchor="middle" class="desc">运行监控：systemd 每分钟 → Python 只读探针（资源 / 服务 / PostgreSQL / PGMQ / 日志 / HTTPS）→ Telegram</text>
-  <text x="550" y="720" text-anchor="middle" class="desc">独立主机 → 公网 HTTPS；故障与恢复通知 / 每日摘要；日志按时间与容量轮转</text>
+  <text x="550" y="720" text-anchor="middle" class="desc">全部监控运行于钱包主机，直接通知 Telegram；故障与恢复通知 / 每日摘要；日志按时间与容量轮转</text>
 </svg>
