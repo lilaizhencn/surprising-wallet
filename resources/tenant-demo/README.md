@@ -59,6 +59,6 @@ node scripts/check-deployment.js https://tenant-demo.tokdou.com
 
 ## 回滚与数据库边界
 
-普通代码发布失败时保留前一版本；发布后发现问题，使用 Cloudflare 控制台回滚到上一 Worker 版本。代码回滚不回滚余额或流水，不能删除或重建正式 Durable Object。数据恢复应使用对象存储恢复能力，并先核对期间钱包回调。
+CI 的单元测试或云端账务测试失败会阻止正式发布。发布阶段或发布后检查失败时，先核对实际 Worker 版本和路由状态：CLI 可能已经应用部分配置，不保证自动恢复。需要回滚时，使用 Cloudflare 控制台回滚到上一 Worker 版本。代码回滚不回滚余额或流水，不能删除或重建正式 Durable Object。数据恢复应使用对象存储恢复能力，并先核对期间钱包回调。
 
 Demo 私有表定义在 `src/store.js`；钱包 PostgreSQL 表、状态和种子配置未改变，因此本次不修改 `surprising-wallet-init-pgsql.sql`。架构及核心流程图文已同步 Cloudflare 边界。
