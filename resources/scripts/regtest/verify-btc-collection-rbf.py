@@ -13,6 +13,9 @@ from pathlib import Path
 import shlex
 import subprocess
 import time
+import tempfile
+
+SSH_CONTROL = tempfile.TemporaryDirectory(prefix="surprising-btc-rbf-ssh-", dir="/tmp")
 
 
 def require(condition, message):
@@ -20,11 +23,21 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
-def run(host, command):
-    result = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, command],
-                            capture_output=True, text=True, timeout=45)
-    require(result.returncode == 0, f"SSH operation failed on {host}: {result.stderr[-1000:]}")
-    return result.stdout.strip()
+def run(host, command, attempts=1):
+    for attempt in range(attempts):
+        try:
+            result = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+                                     "-o", "ControlMaster=auto", "-o", "ControlPersist=60",
+                                     "-o", "ControlPath=" + SSH_CONTROL.name + "/%C", host, command],
+                                    capture_output=True, text=True, timeout=45)
+            if result.returncode == 0:
+                return result.stdout.strip()
+            error = result.stderr[-1000:]
+        except subprocess.TimeoutExpired:
+            error = "SSH command timed out"
+        if attempt + 1 < attempts:
+            time.sleep(2)
+    raise RuntimeError(f"SSH operation failed on {host}: {error}")
 
 
 def decode(value):
@@ -33,7 +46,8 @@ def decode(value):
 
 def sql(host, database, query):
     command = "sudo -u postgres psql -h /run/postgresql -v ON_ERROR_STOP=1 -At -d " + shlex.quote(database)
-    return run(host, command + " -c " + shlex.quote(query))
+    # Queue sends are deliberately fenced duplicates; other SQL here is read-only.
+    return run(host, command + " -c " + shlex.quote(query), attempts=3)
 
 
 def rows(host, database, query):
@@ -48,16 +62,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", action="store_true", required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
+    parser.add_argument("--resume", action="store_true", help="resume a reconciled funding-stage checkpoint")
     parser.add_argument("--wallet-ssh", default="aliyun-wallet")
     parser.add_argument("--node-ssh", default="root@47.76.68.12")
     parser.add_argument("--exchange-ssh", default="surprising-ex")
     parser.add_argument("--exchange-port", type=int, default=9194)
     parser.add_argument("--accounts", default="321:37,323:38,325:39", help="walletAccount:exchangeUser pairs")
     args = parser.parse_args()
-    require(not args.checkpoint.exists(), "checkpoint already exists; inspect it before starting another funded run")
+    require(args.checkpoint.exists() == args.resume,
+            "existing checkpoints require explicit --resume; new runs require a new checkpoint")
     pairs = [tuple(map(int, pair.split(":"))) for pair in args.accounts.split(",")]
     require(len(pairs) == 3 and len({a for a, _ in pairs}) == 3, "exactly three distinct test accounts required")
-    state = {"startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "accounts": pairs, "deposits": []}
+    state = decode(args.checkpoint.read_text()) if args.resume else {"startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "accounts": pairs, "deposits": []}
     def save(stage):
         state["stage"] = stage
         args.checkpoint.write_text(json.dumps(state, indent=2, default=str) + "\n")
@@ -65,14 +81,16 @@ def main():
     def wallet(query):
         return rows(args.wallet_ssh, "surprising_wallet", query)
     def rpc(method, *parameters):
-        return decode(run(args.node_ssh,
+        output = run(args.node_ssh,
             "bitcoin-cli -regtest -conf=/etc/bitcoin/regtest.conf -datadir=/var/lib/bitcoin-regtest "
-            "-rpcwallet=regtest-funder " + " ".join(shlex.quote(str(v)) for v in (method, *parameters))))
+            "-rpcwallet=regtest-funder " + " ".join(shlex.quote(str(v)) for v in (method, *parameters)),
+            attempts=3 if method.startswith("get") else 1)
+        return output if method in ("sendtoaddress", "getnewaddress", "getblockhash") else decode(output)
     def balances():
         result = {}
         for _, user in pairs:
             url = f"http://127.0.0.1:{args.exchange_port}/api/v1/accounts/balance?userId={user}&asset=BTC"
-            value = decode(run(args.exchange_ssh, "curl -fsS " + shlex.quote(url)))
+            value = decode(run(args.exchange_ssh, "curl -fsS " + shlex.quote(url), attempts=3))
             result[str(user)] = {key: value[key] for key in ("availableUnits", "lockedUnits", "equityUnits")}
         return result
     def ledgers():
@@ -96,7 +114,13 @@ def main():
         raise RuntimeError("timed out: " + label)
 
     require(rpc("getblockchaininfo")["chain"] == "regtest", "refuse to fund a non-regtest chain")
-    require(not rpc("getrawmempool"), "start requires an empty regtest mempool")
+    if args.resume:
+        require(not state.get("originalCollections"), "only funding-stage checkpoints may be resumed automatically")
+        require(state["accounts"] == [list(pair) for pair in pairs], "resume account mapping mismatch")
+        require(set(rpc("getrawmempool")) == {d["txId"] for d in state["deposits"]},
+                "resume requires reconciliation of every pending transaction")
+    else:
+        require(not rpc("getrawmempool"), "start requires an empty regtest mempool")
     profiles = wallet("select network from chain_profile where chain='BTC' and enabled=true")
     require(profiles and all(p["network"] == "regtest" for p in profiles), "wallet BTC must use regtest")
     accounts = ",".join(literal(a) for a, _ in pairs)
@@ -104,16 +128,21 @@ def main():
                      f"and wallet_role='DEPOSIT' and enabled=true and account_id in ({accounts}) order by account_id")
     require(len(sources) == 3, "missing unique test deposit addresses")
     require(len({s['tenant_id'] for s in sources}) == 1, "test accounts must belong to the same tenant")
-    state["sources"] = sources
-    state["beforeExchange"] = balances()
-    state["beforeLedger"] = ledgers()
-    state["beforeWebhooks"] = webhooks()
-    state["beforeChainTotal"] = total()
-    state["beforeCollectionId"] = wallet("select coalesce(max(id),0) as id from collection_record")[0]["id"]
-    state["beforeHeight"] = rpc("getblockcount")
-    save("baseline captured")
+    if args.resume:
+        require(sources == state["sources"], "resume deposit address mapping changed")
+    else:
+        state["sources"] = sources
+        state["beforeExchange"] = balances()
+        state["beforeLedger"] = ledgers()
+        state["beforeWebhooks"] = webhooks()
+        state["beforeChainTotal"] = total()
+        state["beforeCollectionId"] = wallet("select coalesce(max(id),0) as id from collection_record")[0]["id"]
+        state["beforeHeight"] = rpc("getblockcount")
+        save("baseline captured")
     for source in sources:
-        for _ in range(2):
+        sent = sum(d["address"] == source["address"] for d in state["deposits"])
+        require(sent <= 2, "more than two deposits recorded for one source")
+        for _ in range(2 - sent):
             txid = rpc("sendtoaddress", source["address"], "0.00050000")
             state["deposits"].append({"txId": txid, "address": source["address"], "account": source["account_id"]})
             save("deposits submitted " + str(len(state["deposits"])))
