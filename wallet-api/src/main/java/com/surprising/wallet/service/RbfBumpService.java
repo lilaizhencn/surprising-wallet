@@ -97,7 +97,7 @@ public class RbfBumpService {
         if (signature.path("rbfHistory").size() >= 5)
             throw new IllegalArgumentException("RBF attempt limit exceeded");
         long oldFeeRate = signature.path("feeRate").asLong();
-        String configured = feeRates.get("BTC");
+        String configured = feeRates.get(currency.getName());
         long newFeeRate = Math.max(configured == null ? 0 : Long.parseLong(configured),
                 Math.max(Math.multiplyExact(oldFeeRate, DEFAULT_FEE_BUMP_FACTOR), Math.addExact(oldFeeRate, 5)));
         if (oldFeeRate <= 0 || newFeeRate > 1000)

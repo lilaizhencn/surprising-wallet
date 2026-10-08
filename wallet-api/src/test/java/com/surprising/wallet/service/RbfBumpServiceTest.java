@@ -36,12 +36,12 @@ class RbfBumpServiceTest {
         when(repository.isUtxoLockedBy("BTC", input, 0, "42")).thenReturn(true);
         when(repository.updateBitcoinLikeSigningTransaction(btc, tx)).thenReturn(1);
         when(switches.isTaskEnabled("BTC", WalletRuntimeConfigService.TASK_WITHDRAW)).thenReturn(true);
-        when(rates.get("BTC")).thenReturn("10");
+        when(rates.get("btc")).thenReturn("35");
         var service = new RbfBumpService(repository, runtime, switches, mock(QueueWorker.class), rates, json);
         var result = JacksonJson.readValue(json, service.bumpFee(42, tenant, hash), WithdrawTransaction.class);
         var updated = JacksonJson.readObject(json, result.getSignature());
         assertEquals(JacksonJson.readObject(json, JacksonJson.writeValue(json, signature)).path("withdraw"), updated.path("withdraw"));
-        assertEquals(20, updated.path("feeRate").asLong()); assertEquals(1, updated.path("rbfHistory").size());
+        assertEquals(35, updated.path("feeRate").asLong()); assertEquals(1, updated.path("rbfHistory").size());
         assertFalse(updated.has("rawTransaction")); assertFalse(updated.has("firstSignTx"));
         assertNotEquals(signature.path("signingRequestId"), updated.path("signingRequestId"));
         verify(repository, never()).releaseUtxos(anyString(), anyString());

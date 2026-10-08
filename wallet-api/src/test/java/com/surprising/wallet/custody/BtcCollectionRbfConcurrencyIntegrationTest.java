@@ -60,7 +60,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         when(runtime.chainName(any(AssetRuntimeMetadata.class))).thenReturn("BTC");
         when(runtime.broadcastSignedTransaction(any(), any())).thenReturn(REPLACEMENT);
         when(switches.isTaskEnabled(eq("BTC"), anyString())).thenReturn(true);
-        when(rates.get("BTC")).thenReturn("10");
+        when(rates.get("btc")).thenReturn("10");
         queue = new PgmqClient(jdbc);
         var manager = new DataSourceTransactionManager(ds);
         context = new AnnotationConfigApplicationContext();
@@ -210,7 +210,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         ((ObjectNode) signature.path("utxos").get(0)).put("balance", new BigDecimal("0.001"));
         tx.setBalance(new BigDecimal("0.001")); tx.setSignature(JacksonJson.writeValue(json, signature));
         repository.updateBitcoinLikeSigningTransaction(BTC, tx);
-        when(rates.get("BTC")).thenReturn("70"); // 11130 sat > 10% of this input, below absolute limit
+        when(rates.get("btc")).thenReturn("70"); // 11130 sat > 10% of this input, below absolute limit
         assertThrows(IllegalArgumentException.class, () -> rbf.bumpFee(id, TENANT, ORIGINAL));
         assertEquals(ORIGINAL, current().getTxId()); assertAmounts("0.00998410", "0.00001590"); assertLedger();
     }
@@ -232,11 +232,11 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
     @Test void tenantInputLockAndFeeLimitsRollbackWithoutMutation() {
         assertThrows(IllegalArgumentException.class, () -> rbf.bumpFee(id, UUID.randomUUID(), ORIGINAL));
         assertThrows(IllegalArgumentException.class, () -> rbf.bumpFee(id, TENANT, ""));
-        when(rates.get("BTC")).thenReturn("1001");
+        when(rates.get("btc")).thenReturn("1001");
         assertThrows(IllegalArgumentException.class, () -> rbf.bumpFee(id, TENANT, ORIGINAL));
-        when(rates.get("BTC")).thenReturn("1000");
+        when(rates.get("btc")).thenReturn("1000");
         assertThrows(IllegalArgumentException.class, () -> rbf.bumpFee(id, TENANT, ORIGINAL));
-        when(rates.get("BTC")).thenReturn("10");
+        when(rates.get("btc")).thenReturn("10");
         jdbc.update("update utxo_record set lock_ref = 'other' where tx_hash = ?", INPUT);
         assertThrows(IllegalStateException.class, () -> rbf.bumpFee(id, TENANT, ORIGINAL));
         assertEquals(ORIGINAL, current().getTxId()); assertFalse(sig().has("rbfHistory")); assertLedger();
