@@ -64,6 +64,55 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Address' }
         default: { $ref: '#/components/responses/Error' }
+  /custody/api/v1/address-balances:
+    get:
+      tags: [Public API]
+      summary: List funded tenant addresses for a withdrawal
+      description: |
+        Returns active addresses for the authenticated tenant and subject that
+        have at least `requiredAmount` available for the requested chain and
+        asset. Results are ordered by address version, newest first. Callers
+        must still submit a withdrawal using one of the returned custody
+        address IDs; balances are a read-only snapshot and can change before
+        the withdrawal is reserved.
+      security: [{ custodyKey: [], custodyTimestamp: [], custodyNonce: [], custodySignature: [] }]
+      parameters:
+        - name: chain
+          in: query
+          required: true
+          schema: { type: string, maxLength: 32 }
+        - name: assetSymbol
+          in: query
+          required: true
+          schema: { type: string, maxLength: 32 }
+        - name: subject
+          in: query
+          required: true
+          schema: { type: string, maxLength: 160 }
+        - name: requiredAmount
+          in: query
+          required: true
+          schema: { type: string, pattern: '^[0-9]+(\.[0-9]+)?$' }
+      responses:
+        '200':
+          description: Active addresses whose available asset balance covers the requested amount
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [custodyAddressId, chain, network, address, subject, addressVersion, assetSymbol, availableBalance]
+                  properties:
+                    custodyAddressId: { type: string, format: uuid }
+                    chain: { type: string }
+                    network: { type: string }
+                    address: { type: string }
+                    subject: { type: string }
+                    addressVersion: { type: integer, format: int64 }
+                    assetSymbol: { type: string }
+                    availableBalance: { type: number }
+        default: { $ref: '#/components/responses/Error' }
   /custody/api/v1/assets:
     get:
       tags: [Public API]

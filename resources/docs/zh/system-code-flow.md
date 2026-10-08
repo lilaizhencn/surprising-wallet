@@ -163,6 +163,8 @@ token 归集使用 token 专属策略，同时使用链服务中的原生 gas �
 
 EIP-7702 的外层交易由 relayer 支付当前链的原生 Gas，授权账户本身可以归集全部原生余额。签名交易写入加密 outbox 之前，系统同时完成租户 Gas 账户预留和 relayer 链上余额校验；任一不足都回滚未广播批次。type-4 只用于包含新 authorization 的批次，已委托账户继续使用 type-2 外层交易。确认阶段和普通 EVM 交易复用同一 `fee_model`，分别记录执行费、L1/DA 费、Operator Fee 与总费用。
 
+BTC 归集由 `BtcUtxoBatchJob` 调用 `UtxoBatchService`：仅选择同一租户、同一充值地址下已入账且达到确认数的 `AVAILABLE` UTXO，按网络费率计算扣费后的输出，写入 `collection_record`、`chain_signing_transaction` 和签名 outbox，并在同一事务内锁定输入。签名仍走 sig1/sig2。广播和链上确认只推进归集记录及 UTXO 状态，不创建提现订单、不扣减用户账本，也不发送提现 Webhook；热钱包输出由充值扫描识别为内部地址，不重复入账。BTC 提现和归集分别由独立开关控制，归集的广播结果未知时保留 UTXO 锁并等待人工链上核查。
+
 ## 扫描调度与开关判定
 
 1. `wallet-api` 的扫描 Job 仅负责固定频率触发，不直接承载扫链业务。
@@ -176,8 +178,8 @@ EIP-7702 的外层交易由 relayer 支付当前链的原生 Gas，授权账户�
 Bitcoin-like 链：
 
 - 使用 `AVAILABLE`、`LOCKED`、`SPENT` 状态的 UTXO 记录。
-- 本地 regtest 覆盖 BTC/LTC/DOGE/BCH。
-- 广播/并发测试由 `scripts/regtest/all-chain-regtest.sh test-utxo` 驱动。
+- BTC 归集与提现复用 UTXO 签名管道；LTC、DOGE、BCH 目前只接入提现批处理。
+- 本地 regtest 的 BTC/LTC/DOGE/BCH 充值、提现和广播并发测试由 `scripts/regtest/all-chain-regtest.sh test-utxo` 驱动；该脚本目前没有归集断言。
 
 EVM 链：
 

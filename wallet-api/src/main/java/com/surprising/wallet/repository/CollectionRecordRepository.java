@@ -141,7 +141,8 @@ public class CollectionRecordRepository {
         return jdbc.queryForList("""
                 select tenant_id, asset_symbol, lower(from_address) as from_address,
                        coalesce(sum(amount) filter (where status <> 'FAILED'), 0) as amount,
-                       coalesce(bool_or(status in ('CREATED', 'RETRYING', 'SIGNING', 'SENT')), false) as pending
+                       coalesce(bool_or(status in ('CREATED', 'RETRYING', 'SIGNING', 'SENT',
+                           'CONFIRMING', 'BROADCAST_UNKNOWN')), false) as pending
                   from collection_record
                  where chain = ? and tenant_id is not null
                  group by tenant_id, asset_symbol, lower(from_address)

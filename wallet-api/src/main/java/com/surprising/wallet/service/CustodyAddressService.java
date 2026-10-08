@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -238,6 +239,30 @@ public class CustodyAddressService {
                 pageSize, pageOffset);
     }
 
+    /** Resolve addresses owned by this tenant and subject that can cover a withdrawal amount. */
+    public List<Map<String, Object>> fundedAddresses(CustodyPrincipal principal, String chain,
+                                                      String assetSymbol, String subject,
+                                                      String requiredAmount) {
+        requireScope(principal, "addresses:read");
+        String normalizedChain = requiredUpper(chain, "chain", 32);
+        String normalizedAsset = requiredUpper(assetSymbol, "assetSymbol", 32);
+        String normalizedSubject = requireSubject(subject, false);
+        BigDecimal amount;
+        try {
+            if (requiredAmount == null || requiredAmount.isBlank()) {
+                throw new NumberFormatException("blank");
+            }
+            amount = new BigDecimal(requiredAmount.trim());
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException("requiredAmount must be a positive decimal", ex);
+        }
+        if (amount.signum() <= 0) {
+            throw new IllegalArgumentException("requiredAmount must be a positive decimal");
+        }
+        return custodyRepository.listFundedAddresses(principal.tenantId(), normalizedChain,
+                normalizedAsset, normalizedSubject, amount);
+    }
+
     /**
      * 设置或更新 {@code update} 对应的状态，并保持相关业务字段一致。
      */
@@ -416,6 +441,14 @@ public class CustodyAddressService {
     private static String upperOrNull(String value) {
         String normalized = value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
         return normalized.isBlank() ? null : normalized;
+    }
+
+    private static String requiredUpper(String value, String field, int maxLength) {
+        String normalized = upperOrNull(value);
+        if (normalized == null || normalized.length() > maxLength) {
+            throw new IllegalArgumentException(field + " is required and must be at most " + maxLength + " characters");
+        }
+        return normalized;
     }
     /**
      * 校验 {@code requireScope} 对应的前置条件，不满足时抛出明确异常。

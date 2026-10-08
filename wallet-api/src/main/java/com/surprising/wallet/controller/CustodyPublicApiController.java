@@ -78,6 +78,18 @@ public class CustodyPublicApiController {
                 chain, "", status, search, limit, offset);
     }
 
+    /** Resolve ACTIVE subject addresses whose tenant ledger can cover a requested asset amount. */
+    @GetMapping("/address-balances")
+    public List<Map<String, Object>> addressBalances(
+            @RequestParam String chain,
+            @RequestParam String assetSymbol,
+            @RequestParam String subject,
+            @RequestParam String requiredAmount,
+            HttpServletRequest request) {
+        return addresses.fundedAddresses(CustodyRequestSupport.requirePrincipal(request),
+                chain, assetSymbol, subject, requiredAmount);
+    }
+
     /**
      * 查询当前租户资产列表（可见资产、可用余额、配置状态）。
      */

@@ -47,6 +47,10 @@ Content-Type: application/json
 Console 可以不经过租户 API 手动创建地址，也可以修改地址的标签、元数据和启用状态。停用地址
 仍然继续监控，并继续计入租户资产总览，保证迟到充值和已有资金不会消失。
 
+发起提现前，调用方可通过 `GET /custody/api/v1/address-balances`，按链、币种、`subject`
+和提现金额查询当前余额足够的活跃地址。接口按地址版本从新到旧返回租户内地址及其可用余额，
+调用方再把返回的 `custodyAddressId` 交给提现接口。余额查询只是只读快照，提交提现时仍会重新校验并预留余额。
+
 ### 租户地址派生
 
 每个租户在创建时从 `custody_derivation_namespace_seq` 获得唯一的

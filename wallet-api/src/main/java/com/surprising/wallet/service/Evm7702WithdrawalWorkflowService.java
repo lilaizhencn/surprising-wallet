@@ -390,12 +390,14 @@ public class Evm7702WithdrawalWorkflowService {
         boolean includeAuthorization;
         BigInteger operationNonce;
         List<AuthorizationTuple> authorizations;
-        if (code == null || "0x".equalsIgnoreCase(code) || "0x0".equalsIgnoreCase(code)) {
+        PayoutAuthorizationMode authorizationMode = payoutAuthorizationMode(
+                code, config.delegateAddress(), config.payoutDelegateAddress());
+        if (authorizationMode == PayoutAuthorizationMode.AUTHORIZE_PAYOUT) {
             includeAuthorization = true;
             operationNonce = BigInteger.ZERO;
             authorizations = List.of(authorizationService.authorize(
                     config.chainId(), config.payoutDelegateAddress(), authorityNonce, authority));
-        } else if (code.equalsIgnoreCase(delegationCode(config.payoutDelegateAddress()))) {
+        } else if (authorizationMode == PayoutAuthorizationMode.ALREADY_PAYOUT_DELEGATED) {
             includeAuthorization = false;
             operationNonce = operationNonce(web3j, batch.hotWallet());
             authorizations = List.of();
@@ -684,6 +686,26 @@ public class Evm7702WithdrawalWorkflowService {
      */
     private static String delegationCode(String delegate) {
         return "0xef0100" + Numeric.cleanHexPrefix(delegate).toLowerCase();
+    }
+
+    enum PayoutAuthorizationMode {
+        AUTHORIZE_PAYOUT,
+        ALREADY_PAYOUT_DELEGATED,
+        REJECT
+    }
+
+    static PayoutAuthorizationMode payoutAuthorizationMode(
+            String code, String collectionDelegate, String payoutDelegate) {
+        if (code == null || "0x".equalsIgnoreCase(code) || "0x0".equalsIgnoreCase(code)) {
+            return PayoutAuthorizationMode.AUTHORIZE_PAYOUT;
+        }
+        if (code.equalsIgnoreCase(delegationCode(payoutDelegate))) {
+            return PayoutAuthorizationMode.ALREADY_PAYOUT_DELEGATED;
+        }
+        if (code.equalsIgnoreCase(delegationCode(collectionDelegate))) {
+            return PayoutAuthorizationMode.AUTHORIZE_PAYOUT;
+        }
+        return PayoutAuthorizationMode.REJECT;
     }
     /**
      * 执行 {@code batchId} 对应的辅助逻辑，完成数据处理并维护状态边界。

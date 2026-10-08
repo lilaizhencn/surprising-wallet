@@ -85,6 +85,8 @@ public class RbfBumpService {
         ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
         if (!tenantId.toString().equals(signature.path("tenantId").asText()))
             throw new IllegalArgumentException("RBF tenant mismatch");
+        if ("COLLECTION".equals(signature.path("operationType").asText()))
+            throw new IllegalArgumentException("BTC collection RBF requires a new fee-adjusted output");
         String firstSignTransaction = JacksonJson.text(signature, "firstSignTx");
         if (firstSignTransaction == null || firstSignTransaction.isEmpty()) {
             log.error("RBF: 交易尚未完成首次签名 id={}", transactionId);

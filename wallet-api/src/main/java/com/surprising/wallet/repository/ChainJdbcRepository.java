@@ -730,8 +730,8 @@ public class ChainJdbcRepository {
     /**
      * 判断 {@code isInternalCollectionTransfer} 对应的条件是否成立，并返回明确的布尔结果。
      */
-    private boolean isInternalCollectionTransfer(UUID tenantId, String chain,
-                                                 String txHash, String toAddress) {
+    public boolean isInternalCollectionTransfer(UUID tenantId, String chain,
+                                                String txHash, String toAddress) {
         return collectionRecordRepository.existsInternalTransfer(tenantId, chain, txHash, toAddress);
     }
     /**
@@ -826,6 +826,20 @@ public class ChainJdbcRepository {
         return utxoRepository.listSpendable(
                 chain, assetSymbol, requiredConfirmations, limit, offset,
                 requireRuntimeCurrencyId(chain), chainAddressRepository.listEnabledAddresses(tenantId, chain));
+    }
+
+    /** Read confirmed, credited outputs from a deposit address owned by the tenant. */
+    public List<UtxoTransaction> listCreditedSpendableUtxosAtAddress(
+            UUID tenantId, String chain, String assetSymbol, String address,
+            long requiredConfirmations, int limit) {
+        ChainAddressRecord owner = chainAddressRepository.findEnabledByTenantAndAddress(
+                tenantId, chain, assetSymbol, address).orElseThrow(() ->
+                new IllegalArgumentException("collection source address does not belong to tenant"));
+        if (!"DEPOSIT".equals(owner.getWalletRole())) {
+            throw new IllegalArgumentException("collection source must be a deposit address");
+        }
+        return utxoRepository.listCreditedSpendableAtAddress(chain, assetSymbol, address,
+                requiredConfirmations, limit, requireRuntimeCurrencyId(chain));
     }
 
     /**

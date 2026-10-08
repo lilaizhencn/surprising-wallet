@@ -667,6 +667,11 @@ class BitcoinLikeChainRuntime {
      */
     private void markConfirming(ChainType chainType, ObjectNode signature, String txId) {
         String chain = chainType.name();
+        if ("COLLECTION".equals(signature.path("operationType").asText())) {
+            chainRepository.updateCollectionStatus(java.util.UUID.fromString(signature.path("tenantId").asText()),
+                    chain, signature.path("collectionNo").asText(), "CONFIRMING", txId, null, null);
+            return;
+        }
         List<WithdrawRecord> records = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
         records.forEach(record -> {
             java.util.UUID tenantId = chainRepository.requireWithdrawalTenant(

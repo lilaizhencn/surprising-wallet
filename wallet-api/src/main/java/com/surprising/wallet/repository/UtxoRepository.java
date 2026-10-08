@@ -181,6 +181,24 @@ public class UtxoRepository {
                         addresses, limit, offset));
     }
 
+    /** Return credited outputs eligible for deposit-address sweeping. */
+    public List<UtxoTransaction> listCreditedSpendableAtAddress(
+            String chain, String assetSymbol, String address, long requiredConfirmations,
+            int limit, int runtimeCurrencyId) {
+        return jdbc.query("""
+                select id, tx_hash, vout, address, amount, block_height, block_hash,
+                       confirmations, credited, created_at, updated_at,
+                       ? as runtime_currency_id
+                  from utxo_record
+                 where chain = ? and asset_symbol = ? and lower(address) = lower(?)
+                   and state = 'AVAILABLE' and credited = true and confirmations >= ?
+                 order by id
+                 limit ?
+                 for update skip locked
+                """, (rs, rowNum) -> map(rs, chain, runtimeCurrencyId), runtimeCurrencyId,
+                chain, assetSymbol, address, requiredConfirmations, limit);
+    }
+
     /**
      * 获取或查询 {@code listAvailableBelowConfirmations} 对应的数据，供调用方读取当前状态。
      */

@@ -35,6 +35,7 @@ import com.surprising.wallet.exception.CustodyForbiddenException;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
 import com.surprising.wallet.service.CustodyTenantChainService;
 
@@ -163,6 +164,7 @@ class CustodyOperationsIntegrationTest {
                     tenantId, endpointId, "FAILED", 20, 0);
             assertEquals(1, failed.size());
             assertEquals("FAILED", failed.getFirst().get("status"));
+            assertEquals(4, repository.listWebhookDeliveries(tenantId, null, null, 20, 0).size());
 
             assertEquals(2, repository.retryFailedWebhookDeliveries(tenantId, endpointId));
             assertEquals(2, jdbc.queryForObject("""
@@ -468,6 +470,57 @@ class CustodyOperationsIntegrationTest {
                     select account_id from custody_ledger_entry
                      where tenant_id = ? and entry_type = 'NETWORK_FEE'
                     """, String.class, tenantId));
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
+    void failedWithdrawalProjectionDoesNotReleaseCustomerBalanceTwice() {
+        transactions.executeWithoutResult(status -> {
+            CustodyRepository repository = new CustodyRepository(jdbc);
+            UUID tenantId = createTenant();
+            TestAddress address = insertTestAddress(
+                    tenantId, "ETH", "ETH", "failed-withdrawal-customer", "0x"
+                            + (UUID.randomUUID().toString() + UUID.randomUUID().toString())
+                                    .replace("-", "").substring(0, 40));
+            String orderNo = "CW-FAILED-" + UUID.randomUUID().toString().substring(0, 8);
+            jdbc.update("""
+                    insert into ledger_balance(
+                        tenant_id, chain, asset_symbol, account_id,
+                        available_balance, locked_balance, total_balance)
+                    values (?, 'ETH', 'USDT', ?, 0.25, 0, 0.25)
+                    """, tenantId, address.address());
+            jdbc.update("""
+                    insert into withdrawal_order(
+                        tenant_id, order_no, user_id, chain, asset_symbol, from_address,
+                        debit_account_id, to_address, amount, fee, status, error_message)
+                    values (?, ?, ?, 'ETH', 'USDT', ?, ?, ?, 0.25, 0,
+                            'FAILED', 'test failure after chain workflow released the lock')
+                    """, tenantId, orderNo, address.userId(), address.address(),
+                    address.address(), "0x" + (UUID.randomUUID().toString() + UUID.randomUUID().toString())
+                            .replace("-", "").substring(0, 40));
+            UUID withdrawalId = UUID.randomUUID();
+            repository.insertCustodyWithdrawal(withdrawalId, tenantId, address.id(), orderNo,
+                    "failed-withdrawal-ref", null, "ETH", "USDT", "0x" + UUID.randomUUID()
+                            .toString().replace("-", "") + "12345678",
+                    new BigDecimal("0.25"), BigDecimal.ZERO, "SIGNING", "API_KEY", "qa");
+
+            var change = repository.findWithdrawalStatusChanges(10).stream()
+                    .filter(item -> item.id().equals(withdrawalId))
+                    .findFirst().orElseThrow();
+            assertTrue(repository.applyWithdrawalStatusChange(
+                    change, UUID.randomUUID(), "WITHDRAWAL.FAILED", "{}"));
+
+            assertEquals("FAILED", jdbc.queryForObject(
+                    "select status from custody_withdrawal where id = ?", String.class, withdrawalId));
+            assertEquals(0, new BigDecimal("0.25").compareTo(jdbc.queryForObject("""
+                    select available_balance from ledger_balance
+                     where tenant_id = ? and chain = 'ETH' and asset_symbol = 'USDT' and account_id = ?
+                    """, BigDecimal.class, tenantId, address.address())));
+            assertEquals(0, BigDecimal.ZERO.compareTo(jdbc.queryForObject("""
+                    select locked_balance from ledger_balance
+                     where tenant_id = ? and chain = 'ETH' and asset_symbol = 'USDT' and account_id = ?
+                    """, BigDecimal.class, tenantId, address.address())));
             status.setRollbackOnly();
         });
     }
@@ -792,6 +845,58 @@ class CustodyOperationsIntegrationTest {
             var addressPage = service.page(principal, "", "", "", "", 50, 0);
             assertEquals(4L, addressPage.total());
             assertEquals(4, addressPage.items().size());
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
+    void fundedWithdrawalAddressLookupChoosesOlderAddressWithAssetBalance() {
+        transactions.executeWithoutResult(status -> {
+            CustodyRepository custody = new CustodyRepository(jdbc);
+            CustodyTenantChainRepository tenantChains = new CustodyTenantChainRepository(jdbc);
+            UUID tenantId = createTenant();
+            UUID administratorId = UUID.randomUUID();
+            String slug = jdbc.queryForObject(
+                    "select slug from custody_tenant where id = ?", String.class, tenantId);
+            jdbc.update("""
+                    insert into custody_tenant_user(
+                        id, tenant_id, email, display_name, password_hash, role, status)
+                    values (?, ?, ?, 'Balance administrator', 'test-only-hash', 'TENANT_ADMIN', 'ACTIVE')
+                    """, administratorId, tenantId, slug + "@example.test");
+            tenantChains.setStatus(tenantId, "ETH", "ACTIVE", administratorId);
+            CustodyAddressService service = new CustodyAddressService(
+                    custody, new ChainJdbcRepository(jdbc), new StableEvmRuntime(jdbc),
+                    new CustodyTenantChainService(tenantChains, custody,
+                            new BlockchainAdapterRegistry(List.of())),
+                    new CustodyJacksonConfiguration().custodyObjectMapper());
+            CustodyPrincipal principal = new CustodyPrincipal(
+                    CustodyPrincipal.ActorType.TENANT_USER, administratorId, tenantId, slug,
+                    "TENANT_ADMIN", Set.of("addresses:read", "addresses:write"));
+            var v1 = service.create(principal,
+                    new CustodyAddressService.CreateAddressCommand("ETH", "user_10086", 1L, null, null),
+                    "API", "127.0.0.1");
+            var v2 = service.create(principal,
+                    new CustodyAddressService.CreateAddressCommand("ETH", "user_10086", 2L, null, null),
+                    "API", "127.0.0.1");
+            String v1Account = jdbc.queryForObject("""
+                    select cha.account_id from chain_address cha
+                    join custody_address ca on ca.chain_address_id = cha.id
+                    where ca.tenant_id = ? and ca.id = ?
+                    """, String.class, tenantId, v1.id());
+            new LedgerBalanceRepository(jdbc).increment(
+                    tenantId, "ETH", "ETH", v1Account, new BigDecimal("0.005"));
+
+            List<Map<String, Object>> funded = service.fundedAddresses(
+                    principal, "ETH", "ETH", "user_10086", "0.0005");
+
+            assertEquals(1, funded.size());
+            assertEquals(v1.id(), funded.getFirst().get("custodyAddressId"));
+            assertNotEquals(v2.id(), funded.getFirst().get("custodyAddressId"));
+            CustodyPrincipal noAddressRead = new CustodyPrincipal(
+                    CustodyPrincipal.ActorType.TENANT_USER, administratorId, tenantId, slug,
+                    "TENANT_ADMIN", Set.of("addresses:write"));
+            assertThrows(CustodyForbiddenException.class, () -> service.fundedAddresses(
+                    noAddressRead, "ETH", "ETH", "user_10086", "0.0005"));
             status.setRollbackOnly();
         });
     }

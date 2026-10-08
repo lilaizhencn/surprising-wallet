@@ -437,6 +437,46 @@ public class CustodyRepository {
                 .map(CustodyRepository::mapAddress).toList();
     }
 
+    /** 查询指定租户用户在指定链和资产上余额足够的托管地址。 */
+    public List<Map<String, Object>> listFundedAddresses(UUID tenantId, String chain, String assetSymbol,
+                                                          String subject, BigDecimal requiredAmount) {
+        List<Map<String, Object>> funded = new java.util.ArrayList<>();
+        int offset = 0;
+        while (true) {
+            List<Map<String, Object>> page = custodyAddresses.list(tenantId, chain, null, "ACTIVE", 500, offset);
+            for (Map<String, Object> address : page) {
+                if (!subject.equals(address.get("subject"))) {
+                    continue;
+                }
+                long chainAddressId = ((Number) address.get("chain_address_id")).longValue();
+                chainAddresses.findByTenantAndId(tenantId, chainAddressId).ifPresent(chainAddress -> {
+                    String accountId = (String) chainAddress.get("account_id");
+                    ledgerBalances.find(tenantId, chain, assetSymbol, accountId).ifPresent(balance -> {
+                        if (balance.getAvailableBalance().compareTo(requiredAmount) >= 0) {
+                            Map<String, Object> item = new java.util.LinkedHashMap<>();
+                            item.put("custodyAddressId", address.get("id"));
+                            item.put("chain", address.get("chain"));
+                            item.put("network", address.get("network"));
+                            item.put("address", address.get("address"));
+                            item.put("subject", address.get("subject"));
+                            item.put("addressVersion", address.get("address_version"));
+                            item.put("assetSymbol", assetSymbol);
+                            item.put("availableBalance", balance.getAvailableBalance());
+                            funded.add(item);
+                        }
+                    });
+                });
+            }
+            if (page.size() < 500) {
+                break;
+            }
+            offset += page.size();
+        }
+        funded.sort(java.util.Comparator.comparingLong(
+                (Map<String, Object> item) -> ((Number) item.get("addressVersion")).longValue()).reversed());
+        return funded;
+    }
+
     /** 统计托管地址。 */
     public long countAddresses(UUID tenantId, String chain, String source, String status) {
         return custodyAddresses.count(tenantId, blank(chain), blank(source), blank(status));
@@ -850,7 +890,7 @@ public class CustodyRepository {
     /** 查询 Webhook 投递记录。 */
     public List<Map<String, Object>> listWebhookDeliveries(UUID tenantId, UUID endpointId, String status,
                                                            int limit, int offset) {
-        return webhookDeliveries.list(tenantId, endpointId, blank(status), limit, offset);
+        return webhookDeliveries.list(tenantId, endpointId, status, limit, offset);
     }
 
     /** 领取 Webhook 投递任务并组合事件和端点数据。 */
@@ -1009,22 +1049,24 @@ public class CustodyRepository {
             custodyWithdrawals.updateStatus(change.tenantId(), change.id(), change.nextStatus());
         }
         if ("CONFIRMED".equals(change.nextStatus())) {
-            ledgerEntries.insertIfAbsent(UUID.randomUUID(), change.tenantId(), change.custodyAddressId(),
-                    change.chain(), change.assetSymbol(), change.debitAccountId(), "WITHDRAWAL", "DEBIT",
-                    change.amount().add(change.fee()), "WITHDRAWAL", change.orderNo());
+            // The chain workflow settles the frozen customer balance when it marks the
+            // withdrawal CONFIRMED. This reconciliation is only a custody projection;
+            // applying the principal debit here would settle the same lock twice.
             findGasUsage(change.id()).ifPresent(usage -> {
                 GasPricingMetadata metadata = gasPricingMetadata(change.chain(), change.assetSymbol());
                 NetworkFee networkFee = confirmedNetworkFee(change.chain(), change.orderNo(), change.txHash(),
                                 metadata.decimals())
                         .orElse(new NetworkFee(usage.reservedAmount(), "CONFIGURED_RESERVE"));
+                GasAccountRecord gasAccount = requireGasAccount(change.tenantId(), usage.gasAccountId());
+                ledgerEntries.insertIfAbsent(UUID.randomUUID(), change.tenantId(), change.custodyAddressId(),
+                        change.chain(), change.assetSymbol(), gasAccount.accountId(), "NETWORK_FEE", "DEBIT",
+                        networkFee.amount(), "WITHDRAWAL", change.orderNo());
                 settleGasUsage(change.id(), networkFee.amount(), networkFee.pricingSource(), change.txHash());
             });
         } else if (Set.of("FAILED", "REJECTED", "CANCELLED").contains(change.nextStatus())) {
-            if (!ledgerBalances.release(change.chain(), change.assetSymbol(), change.debitAccountId(),
-                    change.amount().add(change.fee()), change.tenantId())) {
-                throw new IllegalStateException("unable to release locked withdrawal balance for "
-                        + change.orderNo());
-            }
+            // Failure handlers release the customer lock as part of the chain state
+            // transition. Releasing it again here can strand status reconciliation and
+            // repeatedly fail after the balance has already been returned.
             findGasUsage(change.id()).ifPresent(usage -> releaseGasUsage(change.id(),
                     "withdrawal ended as " + change.nextStatus()));
         }

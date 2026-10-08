@@ -1,6 +1,7 @@
 package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.json.JacksonJson;
@@ -40,6 +41,8 @@ import java.util.*;
 public class UtxoBatchService {
     /** 每批次最多处理 10 笔订单。 */
     private static final int COUNT = 10;
+    private static final int COLLECTION_LIMIT = 20;
+    private static final int COLLECTION_INPUT_LIMIT = 50;
     /** 链元数据服务。 */
     private final BlockchainRuntimeService blockchainRuntimeService;
     /** 统一数据库访问，包含订单、UTXO、签名交易等表。 */
@@ -76,15 +79,18 @@ public class UtxoBatchService {
      */
     @Transactional(rollbackFor = Throwable.class)
     public void execute(String chain) {
-        if (!runtimeConfigService.isTaskEnabled(chain, WalletRuntimeConfigService.TASK_WITHDRAW)) {
-            log.debug("UTXO批处理跳过 币种:{} DB withdraw switch disabled", chain);
+        boolean withdrawEnabled = runtimeConfigService.isTaskEnabled(
+                chain, WalletRuntimeConfigService.TASK_WITHDRAW);
+        boolean collectionEnabled = "BTC".equalsIgnoreCase(chain)
+                && runtimeConfigService.isTaskEnabled(chain, WalletRuntimeConfigService.TASK_COLLECTION);
+        if (!withdrawEnabled && !collectionEnabled) {
             return;
         }
         AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata(chain);
         log.info("UTXO批处理（提现+归集）开始 币种:{}", currency.getName());
 
         try {
-            while (true) {
+            while (withdrawEnabled) {
                 List<WithdrawalOrderRecord> queuedOrders =
                         chainJdbcRepository.listWithdrawalsForSigning(chain, chain, COUNT);
                 if (queuedOrders == null || queuedOrders.isEmpty()) {
@@ -103,25 +109,15 @@ public class UtxoBatchService {
                     log.error("UTXO批处理异常 交易创建失败 币种:{}", currency.getName());
                     break;
                 }
-                // 将签名交易对象序列化后推送到签名服务队列
-                String val = JacksonJson.writeValue(objectMapper, transaction);
-
-                String topic = SINGLE_SIG_CURRENCY.contains(currency)
-                        ? WalletOutboxDispatchService.SIGNING_SECOND_TOPIC
-                        : WalletOutboxDispatchService.SIGNING_FIRST_TOPIC;
-                int persisted = outbox.insert(
-                        UUID.randomUUID(), tenantId, topic, "CHAIN_SIGNING_TRANSACTION",
-                        transaction.getId().toString(), transaction.getId().toString(), val);
-                if (persisted == 1) {
-                    log.info("签名任务写入 Outbox topic={} id={}", topic, transaction.getId());
-                } else {
-                    log.info("签名任务已存在于 Outbox，保持幂等 topic={} id={}", topic, transaction.getId());
-                }
+                enqueueSigning(tenantId, currency, transaction);
 
                 // 说明数据库中没有等待签名的交易了，不需要继续循环
                 if (queuedOrders.size() < COUNT) {
                     break;
                 }
+            }
+            if (collectionEnabled) {
+                collectBtc(currency);
             }
         } catch (Throwable e) {
             log.error("UTXO批处理扫描数据,构建交易,发送到pgmq队列出现异常 币种id:{}", currency.getName(), e);
@@ -129,6 +125,95 @@ public class UtxoBatchService {
         }
 
         log.info("UTXO批处理结束 币种:{}", currency.getName());
+    }
+
+    /** Sweep confirmed deposit outputs to the tenant's internal collection address. */
+    private void collectBtc(AssetRuntimeMetadata currency) {
+        String chain = currency.chain().toUpperCase(Locale.ROOT);
+        String configured = feeRates.get(chain);
+        int feeRate = configured == null || Integer.parseInt(configured) <= 0
+                ? defaultFeeRate(chain) : Integer.parseInt(configured);
+        long confirmations = blockchainRuntimeService.depositConfirmationThreshold(currency);
+        long dust = blockchainRuntimeService.dustThresholdAtomic(currency);
+        List<CollectionCandidateRecord> candidates = chainJdbcRepository.listCollectableLedgerBalances(
+                chain, BigDecimal.ZERO, COLLECTION_LIMIT);
+        for (CollectionCandidateRecord candidate : candidates) {
+            UUID tenantId = candidate.getTenantId();
+            String source = candidate.getAddress();
+            String target = chainJdbcRepository.findActiveTenantCollectionAddress(tenantId, chain)
+                    .orElseThrow(() -> new IllegalStateException("BTC collection address is missing"));
+            if (source.equalsIgnoreCase(target)) {
+                continue;
+            }
+            List<UtxoTransaction> utxos = chainJdbcRepository.listCreditedSpendableUtxosAtAddress(
+                    tenantId, chain, chain, source, confirmations, COLLECTION_INPUT_LIMIT);
+            if (utxos.isEmpty()) {
+                continue;
+            }
+            BigDecimal input = utxos.stream().map(UtxoTransaction::getBalance)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            long feeAtomic = estimateNetworkFeeAtomic(chain, utxos.size(), 1, feeRate);
+            BigDecimal fee = BigDecimal.valueOf(feeAtomic).divide(currency.getDecimal());
+            BigDecimal amount = input.subtract(fee);
+            if (amount.signum() <= 0 || amount.multiply(currency.getDecimal()).longValueExact() < dust) {
+                continue;
+            }
+            String collectionNo = "COLL-BTC-" + UUID.randomUUID();
+            if (chainJdbcRepository.createCollectionRecord(tenantId, candidate.getCustodyAddressId(),
+                    collectionNo, chain, chain, source, target, amount, fee, null) != 1) {
+                continue;
+            }
+            WithdrawRecord output = WithdrawRecord.builder()
+                    .withdrawId(collectionNo).userId(candidate.getUserId())
+                    .currency(currency.getIndex()).address(target).balance(amount)
+                    .fee(BigDecimal.ZERO).status((byte) Constants.WAITING)
+                    .createDate(Date.from(Instant.now())).updateDate(Date.from(Instant.now())).build();
+            List<Address> addresses = utxos.stream().map(utxo -> chainJdbcRepository
+                    .findChainAddressByAddress(tenantId, chain, utxo.getAddress())
+                    .map(address -> toAddress(address, currency))
+                    .orElseThrow(() -> new IllegalStateException("BTC collection input address is missing")))
+                    .toList();
+            ObjectNode signature = objectMapper.createObjectNode();
+            signature.put("tenantId", tenantId.toString());
+            signature.put("signingRequestId", UUID.randomUUID().toString());
+            signature.put("operationType", "COLLECTION");
+            signature.put("collectionNo", collectionNo);
+            signature.set("utxos", objectMapper.valueToTree(utxos));
+            signature.set("addresses", objectMapper.valueToTree(addresses));
+            signature.set("withdraw", objectMapper.valueToTree(List.of(output)));
+            signature.put("changeAddress", target);
+            signature.put("feeRate", feeRate);
+            signature.put("totalAmount", input.toPlainString());
+            if (dust > 0) {
+                signature.put("dustThreshold", dust);
+            }
+            WithdrawTransaction transaction = WithdrawTransaction.builder()
+                    .balance(input).currency(currency.getIndex()).status(Constants.SIGNING)
+                    .txId("signing").signature(JacksonJson.writeValue(objectMapper, signature)).build();
+            currency.applyTo(transaction);
+            transaction = chainJdbcRepository.createBitcoinLikeSigningTransaction(
+                    currency, "COLLECTION", collectionNo, transaction);
+            for (UtxoTransaction utxo : utxos) {
+                if (chainJdbcRepository.lockUtxo(tenantId, chain, utxo.getTxId(), utxo.getSeq(),
+                        transaction.getId().toString()) != 1) {
+                    throw new IllegalStateException("BTC collection UTXO lock failed");
+                }
+            }
+            if (chainJdbcRepository.claimCollectionSigning(tenantId, chain, collectionNo, null) != 1) {
+                throw new IllegalStateException("BTC collection claim failed");
+            }
+            enqueueSigning(tenantId, currency, transaction);
+        }
+    }
+
+    private void enqueueSigning(UUID tenantId, AssetRuntimeMetadata currency, WithdrawTransaction transaction) {
+        String topic = SINGLE_SIG_CURRENCY.contains(currency)
+                ? WalletOutboxDispatchService.SIGNING_SECOND_TOPIC
+                : WalletOutboxDispatchService.SIGNING_FIRST_TOPIC;
+        int persisted = outbox.insert(UUID.randomUUID(), tenantId, topic, "CHAIN_SIGNING_TRANSACTION",
+                transaction.getId().toString(), transaction.getId().toString(),
+                JacksonJson.writeValue(objectMapper, transaction));
+        log.info("UTXO signing task persisted={} topic={} id={}", persisted, topic, transaction.getId());
     }
 
     /**

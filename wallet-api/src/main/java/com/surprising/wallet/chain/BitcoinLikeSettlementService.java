@@ -53,6 +53,16 @@ public class BitcoinLikeSettlementService {
         transaction.setUpdateDate(Date.from(Instant.now()));
         chainRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
 
+        if ("COLLECTION".equals(signature.path("operationType").asText())) {
+            java.util.UUID tenantId = java.util.UUID.fromString(signature.path("tenantId").asText());
+            String collectionNo = signature.path("collectionNo").asText();
+            if (chainRepository.markCollectionConfirmed(tenantId, chain, collectionNo, txId) != 1) {
+                throw new IllegalStateException("BTC collection record missing during settlement");
+            }
+            chainRepository.markUtxosSpent(chain, transaction.getId().toString(), txId);
+            return;
+        }
+
         List<WithdrawRecord> records = signature.get("withdraw") == null
                 ? List.of()
                 : JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
