@@ -92,10 +92,13 @@ class BtcUtxoCollectionFlowTest {
     void confirmedCollectionMarksUtxosSpentWithoutDebitingUserLedger() {
         var repository = mock(ChainJdbcRepository.class);
         when(repository.markCollectionConfirmed(eq(TENANT), eq("BTC"), eq("COLL-1"), eq("txid"))).thenReturn(1);
-        var transaction = WithdrawTransaction.builder().id(42).status((short) 2)
+        var transaction = WithdrawTransaction.builder().id(42).txId("txid").status((short) 2)
                 .signature("{\"operationType\":\"COLLECTION\",\"tenantId\":\"" + TENANT
-                        + "\",\"collectionNo\":\"COLL-1\",\"withdraw\":[]}").build();
+                        + "\",\"collectionNo\":\"COLL-1\",\"fee\":100,\"utxos\":[{}],\"withdraw\":[{\"balance\":0.001}]}").build();
 
+        when(repository.lockBitcoinLikeSigningTransaction(BTC, 42)).thenReturn(Optional.of(transaction));
+        when(repository.updateCollectionAmounts(eq(TENANT), eq("BTC"), eq("COLL-1"), any(), any())).thenReturn(1);
+        when(repository.markUtxosSpent("BTC", "42", "txid")).thenReturn(1);
         new BitcoinLikeSettlementService(repository, new ObjectMapper())
                 .settleConfirmed(transaction, "txid", BTC);
 
@@ -123,7 +126,7 @@ class BtcUtxoCollectionFlowTest {
                         + "\",\"signingRequestId\":\"00000000-0000-0000-0000-000000000042\""
                         + ",\"collectionNo\":\"COLL-1\",\"valid\":true,\"withdraw\":[]}").build();
         BTC.applyTo(signed);
-        when(repository.findBitcoinLikeSigningTransactionById(any(), eq(42))).thenReturn(Optional.of(signed));
+        when(repository.lockBitcoinLikeSigningTransaction(any(), eq(42))).thenReturn(Optional.of(signed));
         var service = new TransactionService(mock(AddressService.class), runtime, repository,
                 mock(WalletRuntimeConfigService.class), queue, new ObjectMapper(), leases);
 

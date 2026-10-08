@@ -54,7 +54,8 @@ public class ChainSigningTransactionRepository {
     public List<WithdrawTransaction> listSent(String chain, short sentStatus) {
         return jdbc.query("""
                 select id, tx_id, balance, signature, currency, status, create_date, update_date
-                  from chain_signing_transaction where chain = ? and status = ? order by id
+                  from chain_signing_transaction where chain = ? and (status = ? or (status in (0, 1)
+                    and jsonb_array_length(coalesce(signature::jsonb->'rbfHistory', '[]'::jsonb)) > 0)) order by id
                 """, (rs, rowNum) -> map(rs), chain, sentStatus);
     }
 
@@ -75,12 +76,34 @@ public class ChainSigningTransactionRepository {
                 """, (rs, rowNum) -> map(rs), chain, id).stream().findFirst();
     }
 
+    /** Serialize RBF, broadcast and settlement on the same business transaction row. */
+    public Optional<WithdrawTransaction> lockById(String chain, int id) {
+        return jdbc.query("""
+                select id, tx_id, balance, signature, currency, status, create_date, update_date
+                  from chain_signing_transaction where chain = ? and id = ? for update
+                """, (rs, rowNum) -> map(rs), chain, id).stream().findFirst();
+    }
+
     /** 按交易 ID 查询最近的签名交易。 */
     public Optional<WithdrawTransaction> findByTxId(String chain, String txId) {
         return jdbc.query("""
                 select id, tx_id, balance, signature, currency, status, create_date, update_date
-                  from chain_signing_transaction where chain = ? and tx_id = ? order by id desc limit 1
-                """, (rs, rowNum) -> map(rs), chain, txId).stream().findFirst();
+                  from chain_signing_transaction where chain = ? and (tx_id = ? or jsonb_path_exists(signature::jsonb,
+                    '$.rbfHistory[*] ? (@.txId == $hash)', jsonb_build_object('hash', ?::text)))
+                 order by id desc limit 1
+                """, (rs, rowNum) -> map(rs), chain, txId, txId).stream().findFirst();
+    }
+
+    /** Locate internal collection business identity for current and replaced hashes. */
+    public Optional<String> findCollectionBusinessNo(String chain, java.util.UUID tenantId, String txId) {
+        return jdbc.queryForList("""
+                select business_no from chain_signing_transaction
+                 where chain = ? and business_type = 'COLLECTION'
+                   and signature::jsonb->>'tenantId' = ?
+                   and (tx_id = ? or jsonb_path_exists(signature::jsonb,
+                     '$.rbfHistory[*] ? (@.txId == $hash)', jsonb_build_object('hash', ?::text)))
+                 limit 1
+                """, String.class, chain, tenantId.toString(), txId, txId).stream().findFirst();
     }
 
     /** 查询超时的签名交易。 */
@@ -120,7 +143,7 @@ public class ChainSigningTransactionRepository {
         return jdbc.update("""
                 update chain_signing_transaction set tx_id = ?, balance = ?, signature = ?, currency = ?,
                     status = ?, error_message = null, broadcast_owner = null, broadcast_lease_until = null,
-                    update_date = ? where chain = ? and id = ?
+                    update_date = ? where chain = ? and id = ? and status not in (-1, 3)
                 """, transaction.getTxId(), transaction.getBalance(), transaction.getSignature(),
                 transaction.getCurrency(), transaction.getStatus(), Timestamp.from(Instant.now()), chain, id);
     }

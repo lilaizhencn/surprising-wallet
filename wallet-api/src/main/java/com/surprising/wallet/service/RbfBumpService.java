@@ -19,6 +19,10 @@ import tools.jackson.databind.node.ObjectNode;
 
 import java.util.List;
 import java.util.Locale;
+import java.math.BigDecimal;
+import com.surprising.wallet.chain.BitcoinLikeRbfHistory;
+import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * RBF 手续费替换服务，负责重建并重新投递 BTC 签名交易。
@@ -57,79 +61,97 @@ public class RbfBumpService {
         this.objectMapper = objectMapper;
     }
 
-    /** 消费 RBF 队列并重新投递手续费更高的签名交易。 */
+    /** Queue acknowledgement and next signing enqueue commit with the fee replacement. */
     public void process() {
-        if (!runtimeConfigService.isTaskEnabled("BTC", WalletRuntimeConfigService.TASK_WITHDRAW)) {
-            log.warn("RBF bump skipped: BTC withdraw switch disabled");
-            return;
-        }
         worker.drain(WalletQueue.RBF, 100, message -> {
             var request = JacksonJson.readObject(objectMapper, message.body());
-            return new QueueWorker.Next(WalletQueue.SIGN_FIRST,
-                    bumpFee(request.get("transactionId").asInt(), QueueTenant.require(objectMapper, message)));
+            String body = bumpFee(request.path("transactionId").asInt(),
+                    QueueTenant.require(objectMapper, message), request.path("expectedTxId").asText());
+            return body == null ? null : new QueueWorker.Next(WalletQueue.SIGN_FIRST, body);
         });
     }
 
-    /** 按签名交易 ID 提高费率、恢复状态并重新投递首签队列。 */
-    private String bumpFee(int transactionId, UUID tenantId) {
+    /** expectedTxId fences duplicates even when a replacement has already been broadcast. */
+    @Transactional(rollbackFor = Throwable.class)
+    public String bumpFee(int transactionId, UUID tenantId, String expectedTxId) {
+        if (expectedTxId == null || !expectedTxId.matches("[0-9a-fA-F]{64}"))
+            throw new IllegalArgumentException("RBF expectedTxId is required");
         AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata("BTC");
-        String chain = currency.getName().toUpperCase(Locale.ROOT);
-        java.util.Optional<WithdrawTransaction> transactionOptional =
-                repository.findBitcoinLikeSigningTransactionById(currency, transactionId);
-        if (transactionOptional.isEmpty()) {
-            log.error("RBF: 交易不存在 id={}", transactionId);
-            throw new IllegalArgumentException("transaction missing");
-        }
-        WithdrawTransaction transaction = transactionOptional.get();
-
+        String chain = currency.chain().toUpperCase(Locale.ROOT);
+        WithdrawTransaction transaction = repository.lockBitcoinLikeSigningTransaction(currency, transactionId)
+                .orElseThrow(() -> new IllegalArgumentException("transaction missing"));
         ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
         if (!tenantId.toString().equals(signature.path("tenantId").asText()))
             throw new IllegalArgumentException("RBF tenant mismatch");
-        if ("COLLECTION".equals(signature.path("operationType").asText()))
-            throw new IllegalArgumentException("BTC collection RBF requires a new fee-adjusted output");
-        String firstSignTransaction = JacksonJson.text(signature, "firstSignTx");
-        if (firstSignTransaction == null || firstSignTransaction.isEmpty()) {
-            log.error("RBF: 交易尚未完成首次签名 id={}", transactionId);
-            throw new IllegalStateException("first signature missing");
+        if (transaction.getStatus() != Constants.SENT || !expectedTxId.equals(transaction.getTxId())) {
+            log.info("RBF duplicate/stale/terminal request skipped id={}", transactionId);
+            return null;
         }
-
-        log.info("RBF bump 开始: txId={}, 原txid={}, 原fee={}",
-                transactionId, transaction.getTxId(), JacksonJson.longValue(signature, "fee"));
-
-        List<UtxoTransaction> utxos = JacksonJson.toList(
-                objectMapper, signature.get("utxos"), UtxoTransaction.class);
+        boolean collection = "COLLECTION".equals(signature.path("operationType").asText());
+        if (!runtimeConfigService.isTaskEnabled("BTC", collection
+                ? WalletRuntimeConfigService.TASK_COLLECTION : WalletRuntimeConfigService.TASK_WITHDRAW))
+            throw new IllegalStateException("RBF task disabled");
+        // sig2 removes firstSignTx after final signing. The broadcast raw transaction is authoritative.
+        if (signature.path("rawTransaction").asText().isBlank())
+            throw new IllegalStateException("broadcast signature missing");
+        if (signature.path("rbfHistory").size() >= 5)
+            throw new IllegalArgumentException("RBF attempt limit exceeded");
+        long oldFeeRate = signature.path("feeRate").asLong();
+        String configured = feeRates.get("BTC");
+        long newFeeRate = Math.max(configured == null ? 0 : Long.parseLong(configured),
+                Math.max(Math.multiplyExact(oldFeeRate, DEFAULT_FEE_BUMP_FACTOR), Math.addExact(oldFeeRate, 5)));
+        if (oldFeeRate <= 0 || newFeeRate > 1000)
+            throw new IllegalArgumentException("RBF fee rate limit exceeded");
+        List<UtxoTransaction> utxos = JacksonJson.toList(objectMapper, signature.get("utxos"), UtxoTransaction.class);
+        List<WithdrawRecord> records = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
+        if (utxos.isEmpty() || records.isEmpty()) throw new IllegalArgumentException("RBF inputs/outputs missing");
+        long input = utxos.stream().map(UtxoTransaction::getBalance).reduce(BigDecimal.ZERO, BigDecimal::add)
+                .multiply(currency.getDecimal()).longValueExact();
+        if (transaction.getBalance().multiply(currency.getDecimal()).longValueExact() != input)
+            throw new IllegalArgumentException("RBF input amount mismatch");
+        long newFee = Math.multiplyExact(P2wshFeeCalculator.estimateVBytes(utxos.size(),
+                collection ? 1 : records.size() + 1), newFeeRate);
+        if (newFee > 100_000 || newFee > input / 10 || newFee <= signature.path("fee").asLong())
+            throw new IllegalArgumentException("RBF absolute/relative fee limit exceeded");
         for (UtxoTransaction utxo : utxos) {
-            repository.lockUtxo(tenantId, chain, utxo.getTxId(), utxo.getSeq(), String.valueOf(transactionId));
+            if (!repository.isUtxoLockedBy(chain, utxo.getTxId(), utxo.getSeq(), String.valueOf(transactionId)))
+                throw new IllegalStateException("RBF original input lock missing");
         }
-        log.info("RBF: {} 个UTXO 使用统一表保持锁定", utxos.size());
-
-        List<WithdrawRecord> records = JacksonJson.toList(
-                objectMapper, signature.get("withdraw"), WithdrawRecord.class);
-        for (WithdrawRecord record : records) {
-            repository.updateWithdrawalStatus(
-                    tenantId, chain, record.getWithdrawId(), "SIGNING", null, null, null);
+        BitcoinLikeRbfHistory.archive(signature, transaction.getTxId());
+        if (collection) {
+            if (records.size() != 1 || !records.getFirst().getAddress().equals(signature.path("changeAddress").asText()))
+                throw new IllegalArgumentException("RBF collection output mismatch");
+            long output = input - newFee;
+            long dust = Math.max(546, signature.path("dustThreshold").asLong());
+            if (output < dust) throw new IllegalArgumentException("RBF collection output dust");
+            BigDecimal amount = BigDecimal.valueOf(output).divide(currency.getDecimal());
+            records.getFirst().setBalance(amount);
+            signature.set("withdraw", objectMapper.valueToTree(records));
+            if (repository.updateCollectionAmounts(tenantId, chain, signature.path("collectionNo").asText(),
+                    amount, BigDecimal.valueOf(newFee).divide(currency.getDecimal())) != 1)
+                throw new IllegalStateException("RBF collection is terminal or missing");
+            if (repository.updateCollectionStatus(tenantId, chain, signature.path("collectionNo").asText(),
+                    "SIGNING", null, null, null) != 1)
+                throw new IllegalStateException("RBF collection claim failed");
+        } else {
+            long sent = records.stream().map(WithdrawRecord::getBalance).reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .multiply(currency.getDecimal()).longValueExact();
+            if (input - sent - newFee < 546) throw new IllegalArgumentException("RBF insufficient change");
+            for (WithdrawRecord record : records)
+                repository.updateWithdrawalStatus(tenantId, chain, record.getWithdrawId(), "SIGNING", null, null, null);
         }
-        log.info("RBF: {} 条提现订单保持签名中", records.size());
-
-        long oldFeeRate = JacksonJson.longValue(signature, "feeRate");
-        String configuredFeeRateValue =
-                feeRates.get(currency.getName());
-        Integer configuredFeeRate = configuredFeeRateValue == null
-                ? null : Integer.valueOf(configuredFeeRateValue);
-        long newFeeRate = configuredFeeRate == null ? 0L : configuredFeeRate;
-        if (newFeeRate <= oldFeeRate) {
-            newFeeRate = Math.max((long) (oldFeeRate * DEFAULT_FEE_BUMP_FACTOR), oldFeeRate + 5);
-            log.warn("RBF: 费率过低，自动提高 {} sat/vB (原 {})", newFeeRate, oldFeeRate);
-        }
-
+        for (String field : List.of("firstSignTx", "rawTransaction", "txId", "valid", "error",
+                "witnessScripts", "utxoValues", "weight", "vBytes")) signature.remove(field);
         signature.put("feeRate", newFeeRate);
+        signature.put("fee", newFee);
         signature.put("signingRequestId", UUID.randomUUID().toString());
         transaction.setSignature(JacksonJson.writeValue(objectMapper, signature));
-        transaction.setStatus(Constants.WAITING);
+        transaction.setStatus(Constants.SIGNING);
         transaction.setTxId("rbf-" + transactionId);
         currency.applyTo(transaction);
-        repository.updateBitcoinLikeSigningTransaction(currency, transaction);
-
+        if (repository.updateBitcoinLikeSigningTransaction(currency, transaction) != 1)
+            throw new IllegalStateException("RBF signing update failed");
+        log.info("RBF queued id={} previousTxId={} feeRate={}", transactionId, expectedTxId, newFeeRate);
         return JacksonJson.writeValue(objectMapper, transaction);
     }
 }

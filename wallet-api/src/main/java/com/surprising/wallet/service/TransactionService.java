@@ -10,6 +10,7 @@ import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
+import com.surprising.wallet.chain.BitcoinLikeRbfHistory;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
 import com.surprising.wallet.common.queue.PgmqClient;
@@ -205,12 +206,18 @@ public class TransactionService {
         AssetRuntimeMetadata currency = transactionAsset(transaction);
 
         var persisted = isUnifiedBitcoinLike(currency)
-                ? chainJdbcRepository.findBitcoinLikeSigningTransactionById(currency, transaction.getId())
+                ? chainJdbcRepository.lockBitcoinLikeSigningTransaction(currency, transaction.getId())
                 : java.util.Optional.<WithdrawTransaction>empty();
         if (persisted.isEmpty()) throw new IllegalStateException("signing transaction missing");
         ObjectNode original = JacksonJson.readObject(objectMapper, persisted.get().getSignature());
         if (!original.path("tenantId").asText().equals(signature.path("tenantId").asText()))
             throw new IllegalArgumentException("signing transaction tenant mismatch");
+        if (persisted.get().getStatus() == Constants.CONFIRM || persisted.get().getStatus() == Constants.DELETE)
+            return true; // obsolete queued signatures cannot reopen a terminal operation
+        for (String field : List.of("utxos", "withdraw", "feeRate", "changeAddress")) {
+            if (!original.path(field).equals(signature.path(field)))
+                throw new IllegalArgumentException("signed transaction intent mismatch: " + field);
+        }
         UUID requestId = UUID.fromString(signature.path("signingRequestId").asText());
         if (!requestId.toString().equals(original.path("signingRequestId").asText()))
             throw new IllegalArgumentException("stale signing request");
@@ -231,6 +238,11 @@ public class TransactionService {
                     currency.getName(), transaction.getId(), persisted.get().getTxId());
             return true;
         }
+        // Audit history is database-owned; a signer result cannot erase a live previous attempt.
+        if (BitcoinLikeRbfHistory.hasHistory(original))
+            signature.set("rbfHistory", original.get("rbfHistory").deepCopy());
+        else signature.remove("rbfHistory");
+        transaction.setSignature(JacksonJson.writeValue(objectMapper, signature));
         //签名是否成功
         if (!signature.has("valid") || !JacksonJson.booleanValue(signature, "valid")) {
             log.error("广播签名后的交易 签名失败 币种id:{} 交易id:{}", transaction.getCurrency(), transaction.getId());
@@ -245,6 +257,15 @@ public class TransactionService {
                 currency, transaction.getId(), broadcastOwner)) {
             log.info("广播任务已被其他工作者领取，跳过交易 id={}", transaction.getId());
             return true;
+        }
+        // Persist the signed attempt even when RPC reports an unknown broadcast result.
+        // The shared row lock remains held across RPC and state changes.
+        if (BitcoinLikeRbfHistory.hasHistory(original)) {
+            signature.set("rbfHistory", original.get("rbfHistory").deepCopy());
+            transaction.setSignature(JacksonJson.writeValue(objectMapper, signature));
+            transaction.setTxId(signature.path("txId").asText());
+            transaction.setStatus(Constants.SIGNING);
+            chainJdbcRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
         }
         String txId = blockchainRuntimeService.broadcastSignedTransaction(currency, transaction);
 
@@ -320,6 +341,14 @@ public class TransactionService {
         ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
         String lockRef = transaction.getId().toString();
         String chain = chainName(currency);
+        if (BitcoinLikeRbfHistory.hasHistory(signature)) {
+            // A previous attempt can still spend these inputs. A signing failure is not a chain failure.
+            chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
+            if (isBitcoinLikeCollection(signature))
+                chainJdbcRepository.updateCollectionStatus(UUID.fromString(signature.path("tenantId").asText()),
+                        chain, signature.path("collectionNo").asText(), "BROADCAST_UNKNOWN", null, error, null);
+            return;
+        }
         chainJdbcRepository.releaseUtxos(chain, lockRef);
         transaction.setStatus(Constants.DELETE);
         transaction.setUpdateDate(Date.from(Instant.now()));

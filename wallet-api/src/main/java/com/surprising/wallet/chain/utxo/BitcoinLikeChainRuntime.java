@@ -25,6 +25,7 @@ import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParamete
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinNetworkParameters;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinNetworkParameters;
 import com.surprising.wallet.chain.BitcoinLikeSettlementService;
+import com.surprising.wallet.chain.BitcoinLikeRbfHistory;
 import com.surprising.wallet.chain.ltc.LitecoinEsploraCommand;
 import com.surprising.wallet.chain.rpc.BchCommand;
 import com.surprising.wallet.chain.rpc.BtcCommand;
@@ -616,7 +617,7 @@ class BitcoinLikeChainRuntime {
         ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
         int confirmations = confirmations(chainType, txId);
         if (confirmations < withdrawConfirmationThreshold(chainType)) {
-            markConfirming(chainType, signature, txId);
+            if (confirmations > 0) settlementService.markConfirming(transaction.getId(), txId, asset);
             return;
         }
         settlementService.settleConfirmed(transaction, txId, asset);
@@ -651,34 +652,19 @@ class BitcoinLikeChainRuntime {
     private void updatePendingWithdrawConfirmations(ChainType chainType, AssetRuntimeMetadata asset) {
         List<WithdrawTransaction> pending = chainRepository.findSentBitcoinLikeSigningTransactions(asset);
         for (WithdrawTransaction transaction : pending) {
-            if (!StringUtils.hasText(transaction.getTxId())) {
-                continue;
-            }
-            int confirmations = confirmations(chainType, transaction.getTxId());
-            if (confirmations >= withdrawConfirmationThreshold(chainType)) {
-                updateWithdrawTransaction(chainType, transaction.getTxId(), asset);
-            } else if (confirmations > 0) {
-                markConfirming(chainType, JacksonJson.readObject(objectMapper, transaction.getSignature()), transaction.getTxId());
+            ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
+            List<String> ids = BitcoinLikeRbfHistory.transactionIds(signature, transaction.getTxId());
+            for (String txId : ids) {
+                int confirmations = confirmations(chainType, txId);
+                if (confirmations >= withdrawConfirmationThreshold(chainType)) {
+                    settlementService.settleConfirmed(transaction, txId, asset);
+                    break;
+                } else if (confirmations > 0) {
+                    settlementService.markConfirming(transaction.getId(), txId, asset);
+                    break;
+                }
             }
         }
-    }
-    /**
-     * 写入或更新 {@code markConfirming} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
-    private void markConfirming(ChainType chainType, ObjectNode signature, String txId) {
-        String chain = chainType.name();
-        if ("COLLECTION".equals(signature.path("operationType").asText())) {
-            chainRepository.updateCollectionStatus(java.util.UUID.fromString(signature.path("tenantId").asText()),
-                    chain, signature.path("collectionNo").asText(), "CONFIRMING", txId, null, null);
-            return;
-        }
-        List<WithdrawRecord> records = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
-        records.forEach(record -> {
-            java.util.UUID tenantId = chainRepository.requireWithdrawalTenant(
-                    chain, record.getWithdrawId());
-            chainRepository.updateWithdrawalStatus(
-                    tenantId, chain, record.getWithdrawId(), "CONFIRMING", null, txId, null);
-        });
     }
     /**
      * 执行 {@code enrichUtxoMetadata} 对应的辅助逻辑，完成数据处理并维护状态边界。

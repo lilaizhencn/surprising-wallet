@@ -47,8 +47,18 @@ public class BitcoinLikeSettlementService {
             throw new IllegalArgumentException("unsupported unified UTXO currency " + currency);
         }
         String chain = currency.chain();
+        transaction = chainRepository.lockBitcoinLikeSigningTransaction(currency, transaction.getId())
+                .orElseThrow(() -> new IllegalStateException("settlement transaction missing"));
+        if (transaction.getStatus() == Constants.CONFIRM || transaction.getStatus() == Constants.DELETE) return;
         ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
-
+        if (!txId.equals(transaction.getTxId()) && !BitcoinLikeRbfHistory.hasHistory(signature))
+            throw new IllegalArgumentException("settlement transaction hash mismatch");
+        if (!txId.equals(transaction.getTxId()) && transaction.getTxId() != null
+                && transaction.getTxId().matches("[0-9a-fA-F]{64}"))
+            BitcoinLikeRbfHistory.archive(signature, transaction.getTxId());
+        signature = BitcoinLikeRbfHistory.confirmedSignature(signature, transaction.getTxId(), txId);
+        transaction.setSignature(JacksonJson.writeValue(objectMapper, signature));
+        transaction.setTxId(txId);
         transaction.setStatus(Constants.CONFIRM);
         transaction.setUpdateDate(Date.from(Instant.now()));
         chainRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
@@ -56,10 +66,15 @@ public class BitcoinLikeSettlementService {
         if ("COLLECTION".equals(signature.path("operationType").asText())) {
             java.util.UUID tenantId = java.util.UUID.fromString(signature.path("tenantId").asText());
             String collectionNo = signature.path("collectionNo").asText();
+            List<WithdrawRecord> outputs = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
+            if (outputs.size() != 1) throw new IllegalStateException("collection settlement output missing");
+            if (chainRepository.updateCollectionAmounts(tenantId, chain, collectionNo, outputs.getFirst().getBalance(),
+                    BigDecimal.valueOf(signature.path("fee").asLong()).divide(currency.getDecimal())) != 1)
+                throw new IllegalStateException("collection settlement amounts missing");
             if (chainRepository.markCollectionConfirmed(tenantId, chain, collectionNo, txId) != 1) {
                 throw new IllegalStateException("BTC collection record missing during settlement");
             }
-            chainRepository.markUtxosSpent(chain, transaction.getId().toString(), txId);
+            markInputsSpent(transaction, txId, currency, signature);
             return;
         }
 
@@ -82,6 +97,31 @@ public class BitcoinLikeSettlementService {
             record.setStatus((byte) Constants.CONFIRM);
             record.setUpdateDate(Date.from(Instant.now()));
         }
-        chainRepository.markUtxosSpent(chain, transaction.getId().toString(), txId);
+        markInputsSpent(transaction, txId, currency, signature);
     }
+    private void markInputsSpent(WithdrawTransaction transaction, String txId,
+                                 AssetRuntimeMetadata currency, ObjectNode signature) {
+        int inputs = signature.path("utxos").size();
+        if (inputs == 0 || chainRepository.markUtxosSpent(currency.chain(), transaction.getId().toString(), txId) != inputs)
+            throw new IllegalStateException("confirmed transaction input lock mismatch");
+    }
+
+    /** Partial confirmations use the same lock and cannot reopen a confirmed operation. */
+    @Transactional(rollbackFor = Throwable.class)
+    public void markConfirming(int transactionId, String txId, AssetRuntimeMetadata currency) {
+        var transaction = chainRepository.lockBitcoinLikeSigningTransaction(currency, transactionId).orElseThrow();
+        if (transaction.getStatus() == Constants.CONFIRM || transaction.getStatus() == Constants.DELETE) return;
+        ObjectNode signature = BitcoinLikeRbfHistory.confirmedSignature(
+                JacksonJson.readObject(objectMapper, transaction.getSignature()), transaction.getTxId(), txId);
+        java.util.UUID tenant = java.util.UUID.fromString(signature.path("tenantId").asText());
+        if ("COLLECTION".equals(signature.path("operationType").asText())) {
+            chainRepository.updateCollectionStatus(tenant, currency.chain(), signature.path("collectionNo").asText(),
+                    "CONFIRMING", txId, null, null);
+        } else {
+            for (WithdrawRecord record : JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class))
+                chainRepository.updateWithdrawalStatus(tenant, currency.chain(), record.getWithdrawId(),
+                        "CONFIRMING", null, txId, null);
+        }
+    }
+
 }

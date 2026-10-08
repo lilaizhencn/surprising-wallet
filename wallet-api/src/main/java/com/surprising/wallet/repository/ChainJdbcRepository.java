@@ -732,7 +732,11 @@ public class ChainJdbcRepository {
      */
     public boolean isInternalCollectionTransfer(UUID tenantId, String chain,
                                                 String txHash, String toAddress) {
-        return collectionRecordRepository.existsInternalTransfer(tenantId, chain, txHash, toAddress);
+        if (collectionRecordRepository.existsInternalTransfer(tenantId, chain, txHash, toAddress)) return true;
+        // A replaced hash remains internal even when the active collector has since rotated.
+        return chainSigningTransactionRepository.findCollectionBusinessNo(chain, tenantId, txHash)
+                .filter(no -> collectionRecordRepository.matchesInternalDestination(tenantId, chain, no, toAddress))
+                .isPresent();
     }
     /**
      * 校验 {@code requireDepositTenant} 对应的前置条件，不满足时抛出明确异常。
@@ -1317,6 +1321,21 @@ public class ChainJdbcRepository {
             AssetRuntimeMetadata currency, int transactionId) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         return chainSigningTransactionRepository.findById(chain, transactionId);
+    }
+
+    /** Row lock shared by fee replacement, broadcast and confirmation settlement. */
+    public Optional<WithdrawTransaction> lockBitcoinLikeSigningTransaction(
+            AssetRuntimeMetadata currency, int transactionId) {
+        return chainSigningTransactionRepository.lockById(currency.chain(), transactionId);
+    }
+
+    public boolean isUtxoLockedBy(String chain, String txHash, int vout, String lockRef) {
+        return utxoRepository.isLockedBy(chain, txHash, vout, lockRef);
+    }
+
+    public int updateCollectionAmounts(UUID tenantId, String chain, String collectionNo,
+                                       BigDecimal amount, BigDecimal fee) {
+        return collectionRecordRepository.updateAmounts(tenantId, chain, collectionNo, amount, fee);
     }
 
     /**

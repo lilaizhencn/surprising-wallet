@@ -82,6 +82,14 @@ public class UtxoRepository {
                 chain, txHash, vout, lockRef);
     }
 
+    /** RBF must retain its original lock; never reacquire an available or spent input. */
+    public boolean isLockedBy(String chain, String txHash, int vout, String lockRef) {
+        return !jdbc.queryForList("""
+                select id from utxo_record where chain = ? and tx_hash = ? and vout = ?
+                  and state = 'LOCKED' and lock_ref = ? for update
+                """, chain, txHash, vout, lockRef).isEmpty();
+    }
+
     /** 查询 UTXO 的地址，供 Service 层完成租户归属校验。 */
     public Optional<String> findAddress(String chain, String txHash, int vout) {
         return jdbc.queryForList("""

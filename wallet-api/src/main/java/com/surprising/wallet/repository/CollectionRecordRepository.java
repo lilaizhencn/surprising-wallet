@@ -50,6 +50,13 @@ public class CollectionRecordRepository {
                 """, tenantId, chain, txHash, toAddress).isEmpty();
     }
 
+    public boolean matchesInternalDestination(UUID tenantId, String chain, String collectionNo, String address) {
+        return !jdbc.queryForList("""
+                select id from collection_record where tenant_id = ? and chain = ? and collection_no = ?
+                  and lower(to_address) = lower(?) limit 1
+                """, tenantId, chain, collectionNo, address).isEmpty();
+    }
+
     /** 创建租户归集记录。 */
     public int create(UUID tenantId, UUID custodyAddressId, String collectionNo, String chain, String assetSymbol,
                       String fromAddress, String toAddress, BigDecimal amount, BigDecimal fee, String rawPayload) {
@@ -82,8 +89,19 @@ public class CollectionRecordRepository {
                 update collection_record set status = ?, tx_hash = coalesce(?, tx_hash), error_message = ?,
                     raw_payload = coalesce(?, raw_payload), updated_at = ?
                  where tenant_id = ? and chain = ? and collection_no = ?
+                   and status not in ('CONFIRMED', 'FAILED')
                 """, status, txHash, errorMessage, rawPayload, Timestamp.from(Instant.now()),
                 tenantId, chain, collectionNo);
+    }
+
+    /** Persist the selected attempt's amounts without reopening a terminal collection. */
+    public int updateAmounts(UUID tenantId, String chain, String collectionNo,
+                             BigDecimal amount, BigDecimal fee) {
+        return jdbc.update("""
+                update collection_record set amount = ?, fee = ?, updated_at = now()
+                 where tenant_id = ? and chain = ? and collection_no = ?
+                   and status not in ('CONFIRMED', 'FAILED')
+                """, amount, fee, tenantId, chain, collectionNo);
     }
 
     /** 领取归集签名状态。 */

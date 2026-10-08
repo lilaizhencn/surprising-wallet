@@ -33,23 +33,23 @@ class TransactionQueueSafetyTest {
                 .signature("{\"tenantId\":\"" + tenantId + "\",\"signingRequestId\":\"" + requestId + "\",\"valid\":false}").build();
     }
     @Test void duplicateFailedSignatureCannotUndoAnAlreadySentTransaction() {
-        when(repository.findBitcoinLikeSigningTransactionById(currency, 1)).thenReturn(Optional.of(tx(tenant, request, Constants.SENT)));
+        when(repository.lockBitcoinLikeSigningTransaction(currency, 1)).thenReturn(Optional.of(tx(tenant, request, Constants.SENT)));
         assertTrue(service.sendWithdrawTransaction(tx(tenant, request, Constants.SIGNING)));
-        verify(repository).findBitcoinLikeSigningTransactionById(currency, 1);
+        verify(repository).lockBitcoinLikeSigningTransaction(currency, 1);
         verifyNoMoreInteractions(repository);
         verifyNoInteractions(queue);
     }
     @Test void replayFromAnOlderSigningRequestCannotModifyCurrentTransaction() {
-        when(repository.findBitcoinLikeSigningTransactionById(currency, 1)).thenReturn(Optional.of(tx(tenant, request, Constants.SIGNING)));
+        when(repository.lockBitcoinLikeSigningTransaction(currency, 1)).thenReturn(Optional.of(tx(tenant, request, Constants.SIGNING)));
         assertThrows(IllegalArgumentException.class, () -> service.sendWithdrawTransaction(tx(tenant, UUID.randomUUID(), Constants.SIGNING)));
-        verify(repository).findBitcoinLikeSigningTransactionById(currency, 1);
+        verify(repository).lockBitcoinLikeSigningTransaction(currency, 1);
         verifyNoMoreInteractions(repository);
         verifyNoInteractions(queue);
     }
     @Test void wrongTenantCannotModifyPersistedSigningTransaction() {
-        when(repository.findBitcoinLikeSigningTransactionById(currency, 1)).thenReturn(Optional.of(tx(tenant, request, Constants.SIGNING)));
+        when(repository.lockBitcoinLikeSigningTransaction(currency, 1)).thenReturn(Optional.of(tx(tenant, request, Constants.SIGNING)));
         assertThrows(IllegalArgumentException.class, () -> service.sendWithdrawTransaction(tx(UUID.randomUUID(), request, Constants.SIGNING)));
-        verify(repository).findBitcoinLikeSigningTransactionById(currency, 1);
+        verify(repository).lockBitcoinLikeSigningTransaction(currency, 1);
         verifyNoMoreInteractions(repository);
     }
 }

@@ -1,6 +1,7 @@
 package com.surprising.wallet.common.json;
 
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -29,7 +30,8 @@ public final class JacksonJson {
      * @return 对象节点
      */
     public static ObjectNode readObject(ObjectMapper objectMapper, String json) {
-        JsonNode node = objectMapper.readTree(json);
+        // Signing metadata contains exact decimal amounts; never round through a binary float.
+        JsonNode node = objectMapper.reader().with(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).readTree(json);
         return node == null ? null : node.asObject();
     }
 

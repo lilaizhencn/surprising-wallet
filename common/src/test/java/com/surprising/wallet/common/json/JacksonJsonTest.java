@@ -81,4 +81,18 @@ class JacksonJsonTest {
         assertNull(JacksonJson.text(signature, "missing"));
         assertNull(JacksonJson.toList(objectMapper, signature.get("withdraw"), String.class));
     }
+    @Test
+    void signatureAndRbfHistoryPreserveEverySatoshiAndHighPrecisionTokenAmount() {
+        String amount = "20999999.99999999";
+        String token = "123456789012345678.123456789012345678";
+        var original = JacksonJson.readObject(objectMapper,
+                "{\"utxos\":[{\"balance\":" + amount + "}],\"rbfHistory\":[{\"amount\":" + token + "}]}");
+        var reparsed = JacksonJson.readObject(objectMapper, JacksonJson.writeValue(objectMapper, original));
+        assertEquals(2099999999999999L,
+                reparsed.path("utxos").get(0).path("balance").decimalValue()
+                        .multiply(new BigDecimal("100000000")).longValueExact());
+        assertEquals(0, new BigDecimal(token).compareTo(reparsed.path("rbfHistory").get(0).path("amount").decimalValue()));
+        assertTrue(reparsed.path("utxos").get(0).path("balance").isBigDecimal());
+    }
+
 }

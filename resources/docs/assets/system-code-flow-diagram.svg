@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1110" viewBox="0 0 1180 1110">
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1255" viewBox="0 0 1180 1255">
   <style>
     .title { font: 22px sans-serif; font-weight: 700; fill: #0f172a; }
     .phase-label { font: 15px sans-serif; font-weight: 700; fill: #1e293b; }
@@ -246,4 +246,18 @@
 <text x="50" y="1012" style="font:14px sans-serif;fill:#1e293b">租户 Demo：浏览器 → Worker → Durable Object 事务冻结 → HTTPS 钱包 API</text>
 <text x="50" y="1040" style="font:14px sans-serif;fill:#1e293b">钱包 HMAC Webhook → 同一对象 → 事件幂等 → 余额 + 流水原子提交</text>
 <text x="50" y="1068" style="font:14px sans-serif;fill:#1e293b">超时 / 5xx 保持冻结等待回调；测试 Worker 与正式对象隔离</text>
+  <rect x="20" y="1115" width="1140" height="125" class="phase-bg"/>
+  <text x="40" y="1137" class="phase-label">BTC 提现 / 归集 RBF：expectedTxId 幂等 + 同一签名行事务锁</text>
+  <rect x="40" y="1150" width="285" height="65" class="collect"/>
+  <text x="52" y="1172" class="bold">RbfBumpService → sig1 → sig2</text>
+  <text x="52" y="1192" class="small">保留 UTXO 锁；归集输出 = 输入 − 新手续费</text>
+  <line x1="325" y1="1182" x2="365" y2="1182" class="arrow"/>
+  <rect x="365" y="1150" width="355" height="65" class="db"/>
+  <text x="377" y="1172" class="bold">chain_signing_transaction.signature.rbfHistory</text>
+  <text x="377" y="1192" class="small">保留所有已广播尝试；失败 / UNKNOWN 不释放锁</text>
+  <line x1="720" y1="1182" x2="760" y2="1182" class="arrow"/>
+  <rect x="760" y="1150" width="350" height="65" class="dep"/>
+  <text x="772" y="1172" class="bold">原交易 / 替换交易确认 → 仅结算一次</text>
+  <text x="772" y="1192" class="small">实际金额 + 费用；归集不改变用户余额 / Webhook</text>
+  <text x="40" y="1230" class="small">最多 5 次；≤1000 sat/vB；费用 ≤100000 sat 且 ≤输入10%；终态不可重开</text>
 </svg>

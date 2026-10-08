@@ -163,7 +163,7 @@ token 归集使用 token 专属策略，同时使用链服务中的原生 gas �
 
 EIP-7702 的外层交易由 relayer 支付当前链的原生 Gas，授权账户本身可以归集全部原生余额。签名交易写入加密 outbox 之前，系统同时完成租户 Gas 账户预留和 relayer 链上余额校验；任一不足都回滚未广播批次。type-4 只用于包含新 authorization 的批次，已委托账户继续使用 type-2 外层交易。确认阶段和普通 EVM 交易复用同一 `fee_model`，分别记录执行费、L1/DA 费、Operator Fee 与总费用。
 
-BTC 归集由 `BtcUtxoBatchJob` 调用 `UtxoBatchService`：仅选择同一租户、同一充值地址下已入账且达到确认数的 `AVAILABLE` UTXO，按网络费率计算扣费后的输出，写入 `collection_record`、`chain_signing_transaction` 和签名 outbox，并在同一事务内锁定输入。签名仍走 sig1/sig2。广播和链上确认只推进归集记录及 UTXO 状态，不创建提现订单、不扣减用户账本，也不发送提现 Webhook；热钱包输出由充值扫描识别为内部地址，不重复入账。BTC 提现和归集分别由独立开关控制，归集的广播结果未知时保留 UTXO 锁并等待人工链上核查。
+BTC 归集由 `BtcUtxoBatchJob` 调用 `UtxoBatchService`：仅选择同一租户、同一充值地址下已入账且达到确认数的 `AVAILABLE` UTXO，按网络费率计算扣费后的输出，写入 `collection_record`、`chain_signing_transaction` 和签名 outbox，并在同一事务内锁定输入。签名仍走 sig1/sig2。广播和链上确认只推进归集记录及 UTXO 状态，不创建提现订单、不扣减用户账本，也不发送提现 Webhook；热钱包输出由充值扫描识别为内部地址，不重复入账。BTC 提现和归集分别由独立开关控制，归集的广播结果未知时保留 UTXO 锁并继续扫描所有已知交易尝试。
 
 ## 扫描调度与开关判定
 
@@ -215,3 +215,34 @@ UTXO 充值扫描的批量 saveTransaction 入口也开启事务，确保批内�
 ## Cloudflare Demo 入账与提现
 
 浏览器 → Worker → 固定租户 Durable Object → HTTPS Custody API。提现先在对象存储事务中冻结余额，再调用钱包；超时或 5xx 保持冻结等待回调。钱包 → HMAC Webhook → 相同对象 → 事件幂等校验 → 余额与流水事务提交。对象内请求串行执行，数据库事务不包含远程 HTTP。测试使用独立云端对象及合成回调，不发起真实链上交易。
+
+
+### BTC 归集 / 提现 RBF
+
+`RbfBumpJob → RbfBumpService → wallet_sign_first → sig1 → sig2 → TransactionService`。
+人工提交的租户队列请求必须同时包含 `transactionId` 和当前已广播的 `expectedTxId`；同一哈希的重复请求幂等跳过。
+加速、广播和确认均在事务内锁定同一 `chain_signing_transaction` 行；队列处理、下一阶段消息与确认归档原子提交。
+RBF 不释放或重新获取 UTXO，必须确认原输入仍由该交易锁定，重新生成 signingRequestId，旧签名结果不能覆盖新请求。
+归集复用全部输入及唯一目标地址，以输入总额减去新手续费重算输出；用户账本、提现订单和 Webhook 不产生归集事件。
+公开交易尝试（哈希、原始交易、输出、费率、费用）保存在 signature.rbfHistory，不引入新表或字段。
+扫描包括已发送交易及替换签名/广播未知期间的历史哈希；原交易先确认或替换交易先确认均按实际获确认的金额结算。
+内部转账识别同时查询当前及历史归集哈希，即使归集目标地址已经轮换也不重复充值入账。
+确认事务重新锁定并读取最新行，终态幂等返回；部分确认不得覆盖终态。替换签名失败保留输入锁和历史扫描。
+保护上限：最多 5 次替换，费率不超过 1000 sat/vB，总费用不超过 100000 sat 且不超过输入 10%，归集输出不低于 546 sat 或配置的更高 dustThreshold。
+提现加速必须保留足够非尘埃找零；超限请求回滚并按队列策略重试/转死信，不改变金额或锁。
+
+队列触发示例（只针对开发测试已广播的交易；租户头必须与交易一致）：
+
+```sql
+SELECT pgmq.send('wallet_rbf',
+  '{"transactionId":123,"expectedTxId":"替换此处为当前64位交易哈希"}'::jsonb,
+  '{"tenant_id":"替换此处为租户UUID"}'::jsonb);
+```
+
+数据库基线判断：仅使用现有 signature JSON、状态、金额与费用列，不新增数据库结构或配置种子。
+
+签名 JSON 及 RBF 历史中的小数金额直接解析为 BigDecimal，避免树解析往返时丢失最小单位。
+验收入口：`resources/scripts/regtest/verify-btc-collection-rbf.py --run --checkpoint /tmp/btc-rbf-evidence.json`。
+该脚本仅连接现有 regtest 节点和现有 Wallet/Exchange 服务，向三个明确指定的测试账户各充值两笔，
+提交 24 次重复加速请求，核对节点替换、六次确认、用户/平台账本、归集输出、矿工费及 Webhook，最后回放已确认请求。
+真实 PostgreSQL 并发/故障测试：`CUSTODY_DB_TESTS=BtcCollectionRbfConcurrencyIntegrationTest bash resources/scripts/regtest/run-custody-db-tests.sh`。
