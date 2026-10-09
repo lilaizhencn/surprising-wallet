@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Activate a CI-built, checksum-verified release; never initialize or reset a database.
+# Activate a locally built release; never initialize or reset a database.
 [[ ${EUID} -eq 0 && $# -eq 2 && $1 =~ ^[0-9a-f]{40}$ ]] || exit 1
 DEPLOY_SHA=$1
 STAGING=$2

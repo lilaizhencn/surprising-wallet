@@ -1,0 +1,12 @@
+[Unit]
+Description=Pull, build and deploy updated wallet source
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/surprising-wallet-auto-update
+TimeoutStartSec=45min
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

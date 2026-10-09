@@ -1,0 +1,10 @@
+[Unit]
+Description=Check wallet master for updates every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+Unit=surprising-wallet-auto-update.service
+
+[Install]
+WantedBy=timers.target

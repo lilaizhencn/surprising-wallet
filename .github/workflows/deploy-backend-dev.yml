@@ -1,5 +1,5 @@
-name: Deploy backend dev
-# Build and test on GitHub; upload one JAR to the Alibaba Cloud all-mode service.
+name: Build backend dev
+# CI validates source; the server pulls master and builds/deploys on its own timer.
 
 on:
   push:
@@ -17,8 +17,8 @@ on:
       - resources/infra/systemd/surprising-wallet-sig1.service
       - resources/infra/systemd/surprising-wallet-sig2.service
       - pom.xml
-      - scripts/deploy/backend-deploy.sh
-      - scripts/deploy/backend-deploy-trigger.sh
+      - scripts/deploy/**
+      - resources/infra/systemd/surprising-wallet-auto-update.*
       - scripts/ops/**
       - resources/infra/monitor/**
   workflow_dispatch:
@@ -27,11 +27,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-backend-dev
+  group: build-backend-dev
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -48,30 +48,7 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts/ops/tests -v
           bash -n scripts/ops/install-monitor.sh
-      - name: Assemble release
+      - name: Validate deployment scripts
         run: |
-          mkdir release
-          cp wallet-api/target/wallet-api-1.0.0-SNAPSHOT.jar release/wallet-server.jar
-          cp resources/infra/systemd/surprising-wallet-all.service release/
-          cp scripts/deploy/backend-deploy.sh scripts/deploy/backend-deploy-trigger.sh release/
-          tar -C release -czf wallet-release.tar.gz wallet-server.jar surprising-wallet-all.service backend-deploy.sh backend-deploy-trigger.sh
-      - name: Configure SSH
-        env:
-          DEPLOY_KEY: ${{ secrets.BACKEND_DEPLOY_SSH_KEY }}
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.BACKEND_DEPLOY_KNOWN_HOSTS }}
-        run: |
-          install -d -m 0700 "$HOME/.ssh"
-          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/backend_deploy"
-          chmod 0600 "$HOME/.ssh/backend_deploy"
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 0600 "$HOME/.ssh/known_hosts"
-      - name: Upload and activate on Alibaba Cloud
-        env:
-          DEPLOY_HOST: ${{ secrets.BACKEND_DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.BACKEND_DEPLOY_USER }}
-        run: |
-          archive_sha=$(sha256sum wallet-release.tar.gz | cut -d ' ' -f 1)
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
-            -i "$HOME/.ssh/backend_deploy" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "deploy $GITHUB_SHA $archive_sha" < wallet-release.tar.gz | tee deployment.log
-          grep -Fxq 'backend deployment verified' deployment.log
+          bash -n scripts/deploy/backend-auto-update.sh
+          bash -n scripts/deploy/backend-deploy.sh

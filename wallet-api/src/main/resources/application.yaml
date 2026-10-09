@@ -51,7 +51,7 @@ spring:
   web:
     error:
       whitelabel:
-        # 关闭 Spring 默认错误页面，由项目异常处理器输出统一响应。
+        # 关闭默认 HTML 错误页；CustodyErrorController 为 Servlet 错误分派输出安全 JSON。
         enabled: false
 
 # ============================================================

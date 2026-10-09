@@ -182,11 +182,23 @@ The service units run as the unprivileged `wallet` user. The API health endpoint
 
 ### Automated backend deployment
 
-`.github/workflows/deploy-backend-dev.yml` builds with JDK 27 and Lombok 1.18.48 on GitHub Actions, runs unit tests, and uploads one checksummed release archive to the Alibaba Cloud host over SSH. The server runs only `surprising-wallet-all.service`; it does not need Maven or a Git checkout. PostgreSQL and HTTP bind to loopback; Nginx provides the public entry point. Database integration tests use the developer machine's existing PostgreSQL 18 before release.
+The server runs `scripts/deploy/backend-auto-update.sh` every five minutes via `surprising-wallet-auto-update.timer`. It runs `git pull --ff-only origin master` in `/opt/surprising-wallet-source` and compares HEAD with the deployed release. Only a new, undeployed commit triggers a JDK 27/Maven build and unit tests (database/chain integration tests are excluded). The isolated `wallet-build` account owns the checkout and Maven cache; it has no SSH access or wallet secrets. Failed builds leave the running service untouched and retry on the next check. The GitHub workflow validates builds without logging into the host; no GitHub deployment SSH key or repository secret is needed for this public repository.
 
-Configure `BACKEND_DEPLOY_HOST`, `BACKEND_DEPLOY_USER`, `BACKEND_DEPLOY_SSH_KEY`, and `BACKEND_DEPLOY_KNOWN_HOSTS` in repository secrets. Pin the host key. Install `scripts/deploy/backend-deploy-trigger.sh` as `/usr/local/sbin/surprising-wallet-backend-deploy` and authorize the dedicated key with `restrict,command="/usr/local/sbin/surprising-wallet-backend-deploy"`.
+Install JDK 27, Maven and Git, then run as root:
 
-The receiver checks the archive digest and file list, serializes deployments, checks database prerequisites, stages an immutable release, updates the unit, and verifies health. A failed activation restores the previous JAR and unit when available. Environment files and databases are never replaced by automatic deployment; configuration changes require their own backups. The all-mode unit caps the heap at 640 MiB; size connection pools and enabled chain workloads to fit the host.
+```bash
+useradd --system --create-home --home-dir /var/lib/wallet-build --shell /sbin/nologin wallet-build
+install -d -o wallet-build -g wallet-build -m 0755 /opt/surprising-wallet-source
+runuser -u wallet-build -- git clone --single-branch --branch master https://github.com/lilaizhencn/surprising-wallet.git /opt/surprising-wallet-source
+install -m 0750 /opt/surprising-wallet-source/scripts/deploy/backend-auto-update.sh /usr/local/sbin/surprising-wallet-auto-update
+install -m 0644 /opt/surprising-wallet-source/resources/infra/systemd/surprising-wallet-auto-update.{service,timer} /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now surprising-wallet-auto-update.timer
+```
+
+`journalctl -u surprising-wallet-auto-update.service` shows pull/build/deployment results. Run `systemctl start surprising-wallet-auto-update.service` to check immediately. The deployment lock prevents overlapping runs; local tracked source changes or a diverged branch stop deployment. The updater limits Maven/compiler/test heaps to fit the small host. PostgreSQL and HTTP bind to loopback; Nginx provides the public entry point.
+
+The existing activation script checks database prerequisites, stages an immutable release, updates the unit, and verifies health. A failed activation restores the previous JAR and unit when available. Environment files and databases are never replaced by automatic deployment; configuration changes require their own backups. The all-mode unit caps the heap at 640 MiB. To pause automatic updates, run `systemctl stop surprising-wallet-auto-update.timer`. To restore a previous release, stop the timer, repoint `/opt/surprising-wallet-backend/current` to its saved release directory, and restart `surprising-wallet-all.service`. Only the owner's Mac public key is authorized for root SSH; password and keyboard-interactive authentication are disabled.
 
 The canonical initialization SQL is applied only once to a new, explicitly provisioned database. Never run it during automatic deployment. Supply `SW_CUSTODY_SECRET_MASTER_KEY` and the mode-specific key variables; development faucet jobs are disabled by default. ZKSYNC profiles and USDC are retained but disabled together until explicitly configured.
 
