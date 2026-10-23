@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.evm;
 
+import com.surprising.wallet.chain.evm.EvmTransactionReceipt.RpcResponse;
 import com.surprising.wallet.chain.model.EvmTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -29,12 +30,10 @@ import org.web3j.crypto.TransactionEncoder;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.Request;
-import org.web3j.protocol.core.Response;
 import org.web3j.protocol.core.methods.request.Transaction;
 import org.web3j.protocol.core.methods.response.EthBlock;
 import org.web3j.protocol.core.methods.response.EthEstimateGas;
 import org.web3j.protocol.core.methods.response.EthSendTransaction;
-import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.utils.Numeric;
 
@@ -73,7 +72,6 @@ public class EvmAccountTransactionService {
     private final EvmTransactionRepository evmTransactionRepository;
     private final ChainProfileRepository chainProfileRepository;
     private final ChainAssetRepository chainAssetRepository;
-
 
     /**
      * 保存 {@code rpcNodeService}，用于访问当前业务所依赖的仓储、客户端或服务。
@@ -249,8 +247,8 @@ public class EvmAccountTransactionService {
     private Optional<EvmTransactionReceipt> confirmedReceipt(String chain, String txHash) {
         AccountChainProfile profile = profile(chain);
         return withWeb3(profile, (web3j, http) -> {
-            ReceiptResponse response = new Request<>(
-                    "eth_getTransactionReceipt", List.of(txHash), http, ReceiptResponse.class).send();
+            RpcResponse response = new Request<>(
+                    "eth_getTransactionReceipt", List.of(txHash), http, RpcResponse.class).send();
             if (response.hasError()) {
                 throw new IllegalStateException("eth_getTransactionReceipt failed: "
                         + response.getError().getMessage());
@@ -516,87 +514,4 @@ public class EvmAccountTransactionService {
         T apply(Web3j web3j, HttpService http) throws Exception;
     }
 
-    /**
-     * 封装钱包业务数据和字段约束，作为模块之间传递的明确模型。
-     */
-    public static class ReceiptResponse extends Response<EvmTransactionReceipt> {
-    }
-
-    /**
-     * 负责 EVM 链交易、费用、扫描或 EIP-7702 相关处理。
-     */
-    public static class EvmTransactionReceipt extends TransactionReceipt {
-        /**
-         * 保存 {@code l1Fee}，用于保存金额、费用或链上执行状态。
-         */
-        private String l1Fee;
-        /**
-         * 保存 {@code gasUsedForL1}，用于保存金额、费用或链上执行状态。
-         */
-        private String gasUsedForL1;
-        /**
-         * 保存 {@code operatorFeeScalar}，用于保存金额、费用或链上执行状态。
-         */
-        private String operatorFeeScalar;
-        /**
-         * 保存 {@code operatorFeeConstant}，用于保存金额、费用或链上执行状态。
-         */
-        private String operatorFeeConstant;
-
-        /**
-         * 获取或查询 {@code getL1Fee} 对应的数据，供调用方读取当前状态。
-         */
-        public String getL1Fee() {
-            return l1Fee;
-        }
-
-        /**
-         * 设置或更新 {@code setL1Fee} 对应的状态，并保持相关业务字段一致。
-         */
-        public void setL1Fee(String l1Fee) {
-            this.l1Fee = l1Fee;
-        }
-
-        /**
-         * 获取或查询 {@code getGasUsedForL1} 对应的数据，供调用方读取当前状态。
-         */
-        public String getGasUsedForL1() {
-            return gasUsedForL1;
-        }
-
-        /**
-         * 设置或更新 {@code setGasUsedForL1} 对应的状态，并保持相关业务字段一致。
-         */
-        public void setGasUsedForL1(String gasUsedForL1) {
-            this.gasUsedForL1 = gasUsedForL1;
-        }
-
-        /**
-         * 获取或查询 {@code getOperatorFeeScalar} 对应的数据，供调用方读取当前状态。
-         */
-        public String getOperatorFeeScalar() {
-            return operatorFeeScalar;
-        }
-
-        /**
-         * 设置或更新 {@code setOperatorFeeScalar} 对应的状态，并保持相关业务字段一致。
-         */
-        public void setOperatorFeeScalar(String operatorFeeScalar) {
-            this.operatorFeeScalar = operatorFeeScalar;
-        }
-
-        /**
-         * 获取或查询 {@code getOperatorFeeConstant} 对应的数据，供调用方读取当前状态。
-         */
-        public String getOperatorFeeConstant() {
-            return operatorFeeConstant;
-        }
-
-        /**
-         * 设置或更新 {@code setOperatorFeeConstant} 对应的状态，并保持相关业务字段一致。
-         */
-        public void setOperatorFeeConstant(String operatorFeeConstant) {
-            this.operatorFeeConstant = operatorFeeConstant;
-        }
-    }
 }

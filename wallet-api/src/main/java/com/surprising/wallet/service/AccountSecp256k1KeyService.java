@@ -6,9 +6,11 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import org.bitcoinj.crypto.ECKey;
 import org.springframework.stereotype.Service;
+import org.web3j.crypto.Credentials;
+import org.web3j.utils.Numeric;
 
 /**
- * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
+ * 账户链 secp256k1 密钥派生与 EVM 签名凭证构造。
  */
 @Service
 public class AccountSecp256k1KeyService {
@@ -38,4 +40,8 @@ public class AccountSecp256k1KeyService {
         return ecKey;
     }
 
+    public Credentials credentials(AccountChainProfile profile, ChainAddressRecord address) {
+        ECKey key = key(profile, address);
+        return Credentials.create(Numeric.toHexStringNoPrefixZeroPadded(key.getPrivKey(), 64));
+    }
 }

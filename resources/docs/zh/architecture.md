@@ -236,3 +236,6 @@ PGMQ 的消息行锁与 read_ct 校验保证领取和确认安全，链上 RPC �
 `resources/tenant-demo` 是独立租户应用，部署为 Cloudflare Worker + Static Assets + SQLite-backed Durable Object。每个部署固定对应一个钱包租户，浏览器不能选择租户对象。用户、会话、余额和流水保存在该对象内；仅通过 HTTPS Custody API / HMAC Webhook 与阿里云钱包协作，不访问钱包数据库。API 密钥、Webhook 密钥及管理令牌使用 Worker Secrets。master 分支的 Demo 目录变更触发 GitHub Actions，先验证独立测试 Worker，再部署正式 Worker；不会触发钱包后端发布。
 
 LTC regtest 地址与网络标识依据 [Litecoin Core v0.21.4 CRegTestParams](https://github.com/litecoin-project/litecoin/blob/v0.21.4/src/chainparams.cpp#L251)。SDK 只用于钱包地址与交易，不执行 Litecoin SPV 验证。
+
+
+EIP-7702 归集与提现工作流共用 `Evm7702RpcClient`，由其选择当前链网络的 RPC 节点、构造 Gas 估算信封并读取合约、代码哈希和回执。普通 EVM 与两个批量工作流共用 `EvmTransactionReceipt` 的标准字段、L1 费用及 operator 费用字段；密钥转为 EVM 凭证由现有 `AccountSecp256k1KeyService` 负责。工作流直接调用链客户端和资产服务，取消同名私有转发方法，批次领取、广播恢复和账务事务边界沿用各自用例。

@@ -1,6 +1,10 @@
 package com.surprising.wallet.account;
 
 import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
+import com.surprising.wallet.chain.evm.EvmTransactionReceipt.RpcResponse;
+import com.surprising.wallet.chain.evm.EvmTransactionReceipt;
+import java.math.BigInteger;
+import java.util.List;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.web3j.abi.FunctionEncoder;
@@ -20,16 +24,10 @@ import org.web3j.protocol.core.methods.response.EthCall;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.utils.Numeric;
 
-import java.math.BigInteger;
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.service.Evm7702CollectionWorkflowService;
-import com.surprising.wallet.service.Evm7702WithdrawalWorkflowService.EvmReceiptResponse;
-import com.surprising.wallet.service.Evm7702WithdrawalWorkflowService.EvmTransactionReceipt;
 
 /**
  * 验证 {@code Evm7702OpStackFeeIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
@@ -55,7 +53,7 @@ class Evm7702OpStackFeeIntegrationTest {
         try {
             assertEquals(expectedChainId, web3j.ethChainId().send().getChainId());
             BigInteger height = web3j.ethBlockNumber().send().getBlockNumber();
-            Evm7702CollectionWorkflowService.EvmTransactionReceipt receipt = null;
+            EvmTransactionReceipt receipt = null;
             for (int offset = 0; offset < 20 && receipt == null; offset++) {
                 EthBlock block = web3j.ethGetBlockByNumber(DefaultBlockParameter.valueOf(
                         height.subtract(BigInteger.valueOf(offset))), true).send();
@@ -64,9 +62,9 @@ class Evm7702OpStackFeeIntegrationTest {
                     org.web3j.protocol.core.methods.response.Transaction transaction =
                             (org.web3j.protocol.core.methods.response.Transaction) result.get();
                     if ("0x7e".equalsIgnoreCase(transaction.getType())) continue;
-                    Evm7702CollectionWorkflowService.EvmReceiptResponse response = new Request<>(
+                    RpcResponse response = new Request<>(
                             "eth_getTransactionReceipt", List.of(transaction.getHash()),
-                            http, Evm7702CollectionWorkflowService.EvmReceiptResponse.class).send();
+                            http, RpcResponse.class).send();
                     assertFalse(response.hasError(),
                             response.hasError() ? response.getError().getMessage() : "");
                     receipt = response.getResult();

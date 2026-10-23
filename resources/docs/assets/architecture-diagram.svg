@@ -38,7 +38,7 @@
   <text x="362" y="219" text-anchor="middle" class="label">wallet-api · Spring MVC 单体应用</text>
   <text x="362" y="241" text-anchor="middle" class="desc">Web：controller/** · job/** · config/** · exception/** · filter/** · model/**</text>
   <text x="362" y="259" text-anchor="middle" class="desc">Application：单表仓储直达 · 归集计划 / UTXO 选择 / 提现领取 / 批次归属</text>
-  <text x="362" y="277" text-anchor="middle" class="desc">Domain/Infrastructure：chain/** · repository/** · gateway/** · coordinator/**</text>
+  <text x="362" y="277" text-anchor="middle" class="desc">Domain/Infrastructure：链客户端（7702 共用 RPC / 费用回执）· 单表仓储 · 协调器</text>
   <text x="362" y="295" text-anchor="middle" class="desc">查询：地址 / Gas 直接单表筛选分页 · 充提当前页批量组合</text>
 
   <rect x="720" y="194" width="340" height="100" class="svc"/>

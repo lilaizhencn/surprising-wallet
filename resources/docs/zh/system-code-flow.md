@@ -272,3 +272,6 @@ UTXO 签名阶段明确传递 UtxoSigningTask → UtxoPartialSigningTask → Utx
 本机 PostgreSQL 18 贯通回归：`CUSTODY_DB_TESTS=UtxoSigningPipelineIntegrationTest bash resources/scripts/regtest/run-custody-db-tests.sh`。使用独立测试密钥执行四条链的真实双签与 PGMQ 阶段，只模拟链 RPC；覆盖重复消费、初次 UNKNOWN、签名失败释放、提现旧尝试确认及生成列身份约束。另由 `UtxoSigningCryptoTest` 覆盖每条链的 mainnet/testnet/regtest 签名和金额守恒。
 
 归集与提现领取：归集规划用例组合充值、归集、地址和资产单表结果 → 批处理在同一事务中校验租户 UTXO 归属并选择/锁定 → 订单、签名请求和队列共同提交。提现进入签名前由领取用例检查租户重组赤字并条件领取；批次接管状态通过租户与 UUID 批次查询，单笔确认不重复推进。账户序号预留直接执行原子单表 UPSERT，并保留外层事务回滚语义。
+
+
+EIP-7702 链上读取：归集/提现工作流 → `Evm7702RpcClient` → 当前链网络 RPC。Gas 估算共用 type-2/type-4 信封与完整授权数值编码；余额和操作 nonce 按 uint256 解码。普通 EVM 与 EIP-7702 回执共用 `EvmTransactionReceipt`，费用字段继续交给 `EvmFeeSupport`，随后由现有协调器完成账务结算。签名凭证直接由密钥服务生成，账户链工作流直接调用资产服务和充值工作流，移除私有转发别名。
