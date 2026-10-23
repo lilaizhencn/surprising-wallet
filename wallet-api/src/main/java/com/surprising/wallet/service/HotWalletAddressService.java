@@ -18,15 +18,11 @@ import com.surprising.wallet.config.PubKeyConfig;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashAddressCodec;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParameters;
-import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinNetworkParameters;
-import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinNetworkParameters;
+import com.surprising.wallet.sdk.bitcoinj.core.BitcoinLikeNetwork;
 import lombok.RequiredArgsConstructor;
 import org.bitcoinj.base.LegacyAddress;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.crypto.ECKey;
-import org.bitcoinj.params.MainNetParams;
-import org.bitcoinj.params.RegTestParams;
-import org.bitcoinj.params.TestNet3Params;
 import org.p2p.solanaj.core.PublicKey;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -203,7 +199,8 @@ class HotWalletAddressService {
      */
     private ChainAddressRecord deriveBitcoinLike(AccountChainProfile profile, long userId, int biz,
                                                  long addressIndex, String walletRole) {
-        NetworkParameters params = bitcoinLikeNetworkParameters(profile);
+        NetworkParameters params = BitcoinLikeNetwork.parse(profile.getNetwork())
+                .parameters(profile.getChain().toUpperCase(Locale.ROOT));
         int index = Math.toIntExact(addressIndex);
         int user = Math.toIntExact(userId);
         PubKeyConfig.AddressMetadata metadata;
@@ -212,61 +209,19 @@ class HotWalletAddressService {
         if ("doge".equals(chain) || "bch".equals(chain)) {
             metadata = pubKeyConfig.genLegacyThreeTwoAddressMetadata(
                     params, profile.getBip44CoinType(), user, biz, index);
-            address = metadata.getAddress();
+            address = metadata.address();
             if ("bch".equals(chain)) {
                 BitcoinCashNetworkParameters bchParams = (BitcoinCashNetworkParameters) params;
                 address = BitcoinCashAddressCodec.fromLegacy(
-                        LegacyAddress.fromBase58(bchParams, metadata.getAddress()), bchParams.cashPrefix());
+                        LegacyAddress.fromBase58(bchParams, metadata.address()), bchParams.cashPrefix());
             }
         } else {
             metadata = pubKeyConfig.genThreeTwoAddressMetadata(
                     params, profile.getBip44CoinType(), user, biz, index);
-            address = metadata.getAddress();
+            address = metadata.address();
         }
-        return baseRecord(profile, userId, biz, addressIndex, address, null, metadata.getPath(), walletRole);
+        return baseRecord(profile, userId, biz, addressIndex, address, null, metadata.path(), walletRole);
     }
-    /**
-     * 执行 {@code bitcoinLikeNetworkParameters} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private NetworkParameters bitcoinLikeNetworkParameters(AccountChainProfile profile) {
-        String chain = normalize(profile.getChain());
-        String network = normalize(profile.getNetwork());
-        return switch (chain) {
-            case "btc" -> {
-                if (isMainnet(network)) {
-                    yield MainNetParams.get();
-                }
-                yield "regtest".equals(network) ? RegTestParams.get() : TestNet3Params.get();
-            }
-            case "ltc" -> {
-                if ("regtest".equals(network)) {
-                    throw new IllegalStateException("LTC regtest network parameters are not implemented");
-                }
-                yield isMainnet(network) ? LitecoinNetworkParameters.mainnet() : LitecoinNetworkParameters.testnet();
-            }
-            case "doge" -> {
-                if (isMainnet(network)) {
-                    yield DogecoinNetworkParameters.mainnet();
-                }
-                yield "regtest".equals(network)
-                        ? DogecoinNetworkParameters.regtest()
-                        : DogecoinNetworkParameters.testnet();
-            }
-            case "bch" -> {
-                if (isMainnet(network)) {
-                    yield BitcoinCashNetworkParameters.mainnet();
-                }
-                yield "regtest".equals(network)
-                        ? BitcoinCashNetworkParameters.regtest()
-                        : BitcoinCashNetworkParameters.testnet();
-            }
-            default -> throw new IllegalStateException("unsupported bitcoin-like chain for public key validation: "
-                    + profile.getChain());
-        };
-    }
-    /**
-     * 判断 {@code isMainnet} 对应的条件是否成立，并返回明确的布尔结果。
-     */
     private boolean isMainnet(String network) {
         return "main".equals(network) || "mainnet".equals(network);
     }

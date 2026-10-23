@@ -433,25 +433,25 @@ class BitcoinLikeChainRuntime {
         if (chainType == ChainType.DOGE || chainType == ChainType.BCH) {
             metadata = pubKeyConfig.genLegacyThreeTwoAddressMetadata(
                     networkParameters(chainType), asset.getBip44CoinType(), Math.toIntExact(userId), biz, index);
-            address = metadata.getAddress();
+            address = metadata.address();
             if (chainType == ChainType.BCH) {
                 BitcoinCashNetworkParameters params = (BitcoinCashNetworkParameters) networkParameters(chainType);
                 address = BitcoinCashAddressCodec.fromLegacy(
-                        LegacyAddress.fromBase58(params, metadata.getAddress()), params.cashPrefix());
+                        LegacyAddress.fromBase58(params, metadata.address()), params.cashPrefix());
             }
         } else {
             metadata = pubKeyConfig.genThreeTwoAddressMetadata(
                     networkParameters(chainType), asset.getBip44CoinType(), Math.toIntExact(userId), biz, index);
-            address = metadata.getAddress();
+            address = metadata.address();
         }
         return Address.builder()
                 .address(address)
                 .network(networkParameters(chainType).getPaymentProtocolId())
                 .scriptType(chainType == ChainType.DOGE || chainType == ChainType.BCH ? "P2SH" : "P2WSH")
-                .redeemScript(metadata.getRedeemScript())
-                .witnessScript(chainType == ChainType.DOGE || chainType == ChainType.BCH ? "" : metadata.getWitnessScript())
-                .derivationPath(metadata.getPath())
-                .publicKeys(metadata.getPublicKeys())
+                .redeemScript(metadata.redeemScript())
+                .witnessScript(chainType == ChainType.DOGE || chainType == ChainType.BCH ? "" : metadata.witnessScript())
+                .derivationPath(metadata.path())
+                .publicKeys(metadata.publicKeys())
                 .biz(biz)
                 .currency(asset.getName())
                 .userId(userId)

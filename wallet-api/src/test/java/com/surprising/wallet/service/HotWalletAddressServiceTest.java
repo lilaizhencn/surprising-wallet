@@ -7,16 +7,27 @@ import com.surprising.wallet.chain.solana.SolanaKeyService;
 import com.surprising.wallet.chain.sui.SuiKeyService;
 import com.surprising.wallet.chain.ton.TonKeyService;
 import com.surprising.wallet.config.PubKeyConfig;
+import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.common.signing.UtxoSigningRequest;
+import com.surprising.wallet.sdk.bitcoinj.core.BitcoinLikeNetwork;
+import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashAddressCodec;
+import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParameters;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
+import org.bitcoinj.base.LegacyAddress;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * 验证 {@code HotWalletAddressServiceTest} 覆盖的业务流程、边界条件和异常行为。
@@ -38,8 +49,9 @@ class HotWalletAddressServiceTest {
      */
     @Test
     void hyperCoreUsesSecp256k1AccountDerivation() {
-        Bip32Node node = Bip32Node.decode(XPUB_2);
-        PubKeyConfig pubKeyConfig = new PubKeyConfig(node, node, node);
+        var material = org.mockito.Mockito.mock(com.surprising.wallet.common.key.WalletKeyMaterialProvider.class);
+        org.mockito.Mockito.when(material.sig2PublicRoot()).thenReturn(Bip32Node.decode(XPUB_2));
+        PubKeyConfig pubKeyConfig = new PubKeyConfig(material);
         HotWalletAddressService service = new HotWalletAddressService(
                 null, pubKeyConfig, null, null, null, null, null, null, null, null, null);
         AccountChainProfile profile = AccountChainProfile.builder()
@@ -64,8 +76,9 @@ class HotWalletAddressServiceTest {
      */
     @Test
     void evmChainsShareAddressAtTheSameTenantCoordinates() {
-        Bip32Node node = Bip32Node.decode(XPUB_2);
-        PubKeyConfig pubKeyConfig = new PubKeyConfig(node, node, node);
+        var material = org.mockito.Mockito.mock(com.surprising.wallet.common.key.WalletKeyMaterialProvider.class);
+        org.mockito.Mockito.when(material.sig2PublicRoot()).thenReturn(Bip32Node.decode(XPUB_2));
+        PubKeyConfig pubKeyConfig = new PubKeyConfig(material);
         HotWalletAddressService service = new HotWalletAddressService(
                 null, pubKeyConfig, null, null, null, null, null, null, null, null, null);
         AccountChainProfile ethereum = profile("ETH", "evm", "ETH", 60);
@@ -81,6 +94,70 @@ class HotWalletAddressServiceTest {
         assertEquals(ethAddress.getAddress(), bnbAddress.getAddress());
         assertEquals("0x2194d0e84405809794c6ef9e433acc3f781a4c7e", ethAddress.getAddress());
     }
+
+    @ParameterizedTest
+    @CsvSource({"BTC,MAINNET", "BTC,TESTNET", "BTC,REGTEST", "LTC,MAINNET", "LTC,TESTNET", "LTC,REGTEST",
+            "BCH,MAINNET", "BCH,TESTNET", "BCH,REGTEST", "DOGE,MAINNET", "DOGE,TESTNET", "DOGE,REGTEST"})
+    void apiAndSignerDeriveTheSameMultisigScriptOnEverySupportedNetwork(String chain, BitcoinLikeNetwork network) {
+        String firstPublic = Bip32Node.getMasterKey(seedBytes(0x11)).pubSerialize(0, false);
+        String secondPublic = Bip32Node.getMasterKey(seedBytes(0x22)).pubSerialize(0, false);
+        String recoveryPublic = Bip32Node.getMasterKey(seedBytes(0x33)).pubSerialize(0, false);
+        var apiKeys = WalletKeyMaterialProvider.forApi(seed(0x22), seed(0x44), firstPublic, recoveryPublic);
+        var publicKeys = new PubKeyConfig(apiKeys);
+        var signer = new com.surprising.wallet.sig.first.config.PubKeyConfig(
+                WalletKeyMaterialProvider.forSig1(seed(0x11), secondPublic, recoveryPublic));
+        int coinType = switch (chain) { case "BTC" -> 0; case "LTC" -> 2; case "BCH" -> 145; default -> 3; };
+        var params = network.parameters(chain);
+        boolean legacy = chain.equals("BCH") || chain.equals("DOGE");
+        var metadata = legacy ? publicKeys.genLegacyThreeTwoAddressMetadata(params, coinType, 7, 3, 2)
+                : publicKeys.genThreeTwoAddressMetadata(params, coinType, 7, 3, 2);
+        var key = new UtxoSigningRequest.Key(7, 3, 2, metadata.redeemScript());
+        var asset = new UtxoSigningRequest.Asset(chain, network, 1, 8, coinType);
+        assertEquals(legacy ? signer.genRedeemScript(key, asset) : signer.genWitnessScript(key, asset),
+                legacy ? metadata.redeemScript() : metadata.witnessScript());
+        assertEquals(3, Arrays.stream(metadata.publicKeys().split(",")).distinct().count());
+        assertEquals("m/44/" + coinType + "/3/7/2", metadata.path());
+
+        var profile = profile(chain, "bitcoin-like", chain, coinType);
+        profile.setNetwork(network.name().toLowerCase(java.util.Locale.ROOT));
+        var hotWallet = bitcoinLikeService(publicKeys).deriveAddress(profile, 7, 3, 2, "DEPOSIT");
+        String expected = chain.equals("BCH")
+                ? BitcoinCashAddressCodec.fromLegacy(LegacyAddress.fromBase58(params, metadata.address()),
+                        ((BitcoinCashNetworkParameters) params).cashPrefix()) : metadata.address();
+        assertEquals(expected, hotWallet.getAddress());
+        assertEquals(metadata.path(), hotWallet.getDerivationPath());
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"BTC", "LTC", "BCH", "DOGE"})
+    void unknownNetworksCannotSilentlyDeriveATestnetAddress(String chain) {
+        var profile = profile(chain, "bitcoin-like", chain, 0);
+        profile.setNetwork("unconfigured");
+        var material = WalletKeyMaterialProvider.forApi(seed(0x22), seed(0x44),
+                Bip32Node.getMasterKey(seedBytes(0x11)).pubSerialize(0, false),
+                Bip32Node.getMasterKey(seedBytes(0x33)).pubSerialize(0, false));
+        assertThrows(IllegalArgumentException.class,
+                () -> bitcoinLikeService(new PubKeyConfig(material)).deriveAddress(profile, 7, 3, 2, "DEPOSIT"));
+    }
+
+    private static HotWalletAddressService bitcoinLikeService(PubKeyConfig keys) {
+        return new HotWalletAddressService(
+                org.mockito.Mockito.mock(com.surprising.wallet.repository.ChainJdbcRepository.class), keys,
+                org.mockito.Mockito.mock(SolanaKeyService.class), org.mockito.Mockito.mock(SuiKeyService.class),
+                org.mockito.Mockito.mock(AptosKeyService.class), org.mockito.Mockito.mock(TonKeyService.class),
+                org.mockito.Mockito.mock(com.surprising.wallet.chain.xrp.XrpKeyService.class),
+                org.mockito.Mockito.mock(com.surprising.wallet.chain.cardano.CardanoKeyService.class),
+                org.mockito.Mockito.mock(com.surprising.wallet.chain.near.NearKeyService.class),
+                org.mockito.Mockito.mock(com.surprising.wallet.chain.polkadot.PolkadotKeyService.class),
+                org.mockito.Mockito.mock(com.surprising.wallet.chain.monero.MoneroAddressService.class));
+    }
+
+    private static byte[] seedBytes(int marker) {
+        byte[] bytes = new byte[32];
+        Arrays.fill(bytes, (byte) marker);
+        return bytes;
+    }
+
+    private static String seed(int marker) { return Base64.getEncoder().encodeToString(seedBytes(marker)); }
 
     /**
      * 验证 {@code tenantEd25519AddressesIncludeNamespaceAndSubject} 对应的测试场景，明确输入、预期结果和异常边界。

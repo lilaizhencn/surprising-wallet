@@ -240,7 +240,7 @@
   <text x="1035" y="858" text-anchor="middle" class="small">Console · React · 平台 / 租户</text>
 
   <!-- ====== LEGEND ====== -->
-  <text x="590" y="910" text-anchor="middle" class="small" fill="#94a3b8">签名隔离：sig1 只持有 Root #1 私钥 · sig2 只持有 Root #2 私钥 · 恢复私钥离线保管 · 任两方即可签名</text>
+  <text x="590" y="910" text-anchor="middle" class="small" fill="#94a3b8">2-of-3：sig1 / sig2 分持私钥 · 恢复私钥离线；API 使用角色公钥 / 显式网络派生地址</text>
   <text x="590" y="930" text-anchor="middle" class="small" fill="#94a3b8">查询：充提 / 地址 / Gas → 单表筛选 / 计数 / 分页；地址排除 Gas；关联数据批量组合</text>
   <text x="590" y="952" text-anchor="middle" class="small">账户链：构造器必需运行开关 → 新扫描 / 提现 / 归集校验 → RPC；已广播确认继续</text>
   <text x="590" y="974" text-anchor="middle" class="small">Token：启用 profile 的网络 → 单表精确查询 → 类型记录；标准 / 充提门槛只存一份</text>
