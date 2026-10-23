@@ -32,7 +32,6 @@ DROP TABLE IF EXISTS public.evm_collection_batch;
 DROP TABLE IF EXISTS public.evm_7702_account;
 DROP TABLE IF EXISTS public.evm_7702_config;
 DROP TABLE IF EXISTS public.chain_fee_rate;
-DROP TABLE IF EXISTS public.wallet_outbox;
 DROP TABLE IF EXISTS public.wallet_task_lease;
 ALTER TABLE IF EXISTS ONLY public.collection_record DROP CONSTRAINT IF EXISTS collection_record_custody_fk;
 ALTER TABLE IF EXISTS ONLY public.collection_record DROP CONSTRAINT IF EXISTS collection_record_tenant_fk;
@@ -774,6 +773,7 @@ CREATE TABLE public.chain_signing_transaction (
     tx_id character varying(128) DEFAULT ''::character varying NOT NULL,
     balance numeric(78,18) DEFAULT 0 NOT NULL,
     signature text,
+    enqueued_signing_request_id uuid,
     currency integer NOT NULL,
     status smallint NOT NULL,
     error_message text,
@@ -6891,7 +6891,7 @@ VALUES (
     'ACTIVE')
 ON CONFLICT (id) DO NOTHING;
 
--- 钱包定时任务数据库租约和可靠 Outbox 基线。
+-- 钱包定时任务数据库租约基线。
 CREATE TABLE public.wallet_task_lease (
     task_name character varying(256) NOT NULL,
     owner_id character varying(256) NOT NULL,
@@ -6899,30 +6899,6 @@ CREATE TABLE public.wallet_task_lease (
     heartbeat_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
     CONSTRAINT wallet_task_lease_pkey PRIMARY KEY (task_name)
-);
-
-CREATE TABLE public.wallet_outbox (
-    id uuid NOT NULL,
-    tenant_id uuid,
-    topic character varying(64) NOT NULL,
-    aggregate_type character varying(64) NOT NULL,
-    aggregate_id character varying(192) NOT NULL,
-    dedupe_key character varying(256) NOT NULL,
-    payload jsonb NOT NULL,
-    status character varying(24) NOT NULL DEFAULT 'PENDING',
-    attempt_count integer NOT NULL DEFAULT 0,
-    next_attempt_at timestamp with time zone NOT NULL DEFAULT now(),
-    locked_by character varying(256),
-    locked_at timestamp with time zone,
-    last_error text,
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now(),
-    dispatched_at timestamp with time zone,
-    CONSTRAINT wallet_outbox_pkey PRIMARY KEY (id),
-    CONSTRAINT wallet_outbox_status_check CHECK (status IN ('PENDING', 'DISPATCHING', 'DISPATCHED', 'FAILED', 'DEAD')),
-    CONSTRAINT wallet_outbox_attempt_check CHECK (attempt_count >= 0),
-    CONSTRAINT wallet_outbox_dedupe_key_check CHECK (length(trim(dedupe_key)) > 0),
-    CONSTRAINT wallet_outbox_topic_dedupe_key UNIQUE (topic, dedupe_key)
 );
 
 ALTER TABLE public.withdrawal_order
@@ -6936,13 +6912,6 @@ ALTER TABLE public.withdrawal_order
 ALTER TABLE public.chain_signing_transaction
     ADD COLUMN broadcast_owner character varying(256),
     ADD COLUMN broadcast_lease_until timestamp with time zone;
-
-CREATE INDEX wallet_outbox_due_idx
-    ON public.wallet_outbox(status, next_attempt_at, created_at)
-    WHERE status IN ('PENDING', 'FAILED', 'DISPATCHING');
-
-CREATE INDEX wallet_outbox_tenant_time_idx
-    ON public.wallet_outbox(tenant_id, created_at DESC);
 
 CREATE INDEX withdrawal_order_fair_queue_idx
     ON public.withdrawal_order(chain, asset_symbol, status, tenant_id, id)

@@ -18,7 +18,6 @@ import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinFeePolicy;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinFeePolicy;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
-import com.surprising.wallet.repository.WalletOutboxRepository;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.stereotype.Service;
@@ -52,13 +51,10 @@ public class UtxoBatchService {
     private final WalletRuntimeConfigService runtimeConfigService;
     /** PostgreSQL 网络费率报价。 */
     private final ChainFeeRateRepository feeRates;
-    /** 签名 Outbox 仓储，保证数据库提交后任务不会丢失。 */
-    private final WalletOutboxRepository outbox;
+    private final UtxoSigningSubmissionService signingSubmissions;
     /** Jackson 3 对象映射器，用于构建和序列化签名队列 JSON。 */
     private final ObjectMapper objectMapper;
 
-    /** 单签链标记集合，目前默认空。 */
-    private static final Set<AssetRuntimeMetadata> SINGLE_SIG_CURRENCY = Collections.emptySet();
     /** 构造 UTXO 批处理服务。 */
     public UtxoBatchService(
             BlockchainRuntimeService blockchainRuntimeService,
@@ -66,13 +62,13 @@ public class UtxoBatchService {
             WalletRuntimeConfigService runtimeConfigService,
             ChainFeeRateRepository feeRates,
             ObjectMapper objectMapper,
-            WalletOutboxRepository outbox) {
+            UtxoSigningSubmissionService signingSubmissions) {
         this.blockchainRuntimeService = blockchainRuntimeService;
         this.chainJdbcRepository = chainJdbcRepository;
         this.runtimeConfigService = runtimeConfigService;
         this.feeRates = feeRates;
         this.objectMapper = objectMapper;
-        this.outbox = outbox;
+        this.signingSubmissions = signingSubmissions;
     }
 
     /**
@@ -208,13 +204,9 @@ public class UtxoBatchService {
     }
 
     private void enqueueSigning(UUID tenantId, AssetRuntimeMetadata currency, WithdrawTransaction transaction) {
-        String topic = SINGLE_SIG_CURRENCY.contains(currency)
-                ? WalletOutboxDispatchService.SIGNING_SECOND_TOPIC
-                : WalletOutboxDispatchService.SIGNING_FIRST_TOPIC;
-        int persisted = outbox.insert(UUID.randomUUID(), tenantId, topic, "CHAIN_SIGNING_TRANSACTION",
-                transaction.getId().toString(), transaction.getId().toString(),
-                JacksonJson.writeValue(objectMapper, transaction));
-        log.info("UTXO signing task persisted={} topic={} id={}", persisted, topic, transaction.getId());
+        UUID requestId = UUID.fromString(JacksonJson.readObject(objectMapper, transaction.getSignature())
+                .path("signingRequestId").asText());
+        signingSubmissions.enqueue(tenantId, currency, transaction.getId(), requestId);
     }
 
     /**

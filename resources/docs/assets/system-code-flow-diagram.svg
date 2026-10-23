@@ -218,7 +218,7 @@
 
   <rect x="705" y="766" width="430" height="20" class="db"/>
   <text x="920" y="780" text-anchor="middle" class="small">EIP-7702 批量提现（能力位接管）：执行费 + L1/DA + Operator Fee · relayer 余额保护</text>
-  <text x="590" y="805" text-anchor="middle" class="small">Outbox 与入队同事务 · 消费/阶段推进/归档同事务 · 失败退避 → 死信 → 审计回放</text>
+  <text x="590" y="805" text-anchor="middle" class="small">订单/UTXO/入队凭据/PGMQ 同事务 · 消费/阶段推进/归档同事务 · 失败退避 → 死信 → 审计回放</text>
 
   <!-- ====== BOTTOM INFRA ====== -->
   <rect x="20" y="830" width="1140" height="46" class="phase-bg"/>

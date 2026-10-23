@@ -174,7 +174,7 @@
 
   <rect x="30"  y="558" width="230" height="58" class="infra"/>
   <text x="145" y="580" text-anchor="middle" class="label">PostgreSQL</text>
-  <text x="145" y="600" text-anchor="middle" class="desc">多租户账本 · 数据库租约 · Outbox · 审计</text>
+  <text x="145" y="600" text-anchor="middle" class="desc">多租户账本 · 数据库租约 · 入队凭据 · 审计</text>
 
   <rect x="280" y="558" width="170" height="58" class="infra"/>
   <text x="365" y="580" text-anchor="middle" class="label">PGMQ（PG 扩展）</text>

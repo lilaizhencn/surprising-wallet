@@ -147,6 +147,7 @@ wallet-api/job/
 - PostgreSQL 18 + PGMQ 1.11.1 is the sole general middleware dependency.
 - `common.queue.PgmqClient` is an extension adapter for PGMQ-owned queue/archive tables, not a business Repository. It must never query wallet business tables.
 - `ChainFeeRateRepository` maps only to `chain_fee_rate`; network fee quotes are shared network metadata.
+- Initial UTXO signing enqueue, its durable request receipt on `chain_signing_transaction`, order state and UTXO locks share one transaction; no separate wallet Outbox table or dispatcher. The receipt survives queue/archive cleanup.
 - Queue handlers live in Services. Jobs only schedule. Claim receipts are fenced by `read_ct`; processing, next-stage enqueue and archive share a transaction.
 - Signing services use separate restricted database roles for queue access. Business queue headers carry tenant ownership; replay records actor and reason.
 

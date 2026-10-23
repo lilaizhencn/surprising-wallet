@@ -60,15 +60,15 @@ timestamp + "." + eventId + "." + eventType + "." + rawBody
   -> wallet_task_lease：按任务名获取数据库租约并心跳续租
   -> tenant-fair claim：按租户公平领取待处理订单
   -> UTXO 待签名选择：先确定最早待处理租户，每个签名批次只包含一个 tenant_id
-  -> 业务事务：锁定余额/UTXO、写 chain_signing_transaction、写 wallet_outbox
-  -> Outbox 派发事务：PGMQ 入队 + Outbox 标记成功
+  -> 同一业务事务：锁定余额/UTXO、写 chain_signing_transaction
+  -> UtxoSigningSubmissionService：锁定并校验持久化请求、写入去重凭据 + PGMQ SIGN_FIRST 入队
   -> PGMQ sig1 → sig2 → 广播队列；处理事务行锁 + 广播业务租约
   -> SENT/CONFIRMED：结算账本与 Gas
   -> FAILED/REJECTED/CANCELLED：释放锁定本金、手续费与 Gas
   -> BROADCAST_UNKNOWN：禁止盲目重建，等待链上对账与人工审计
 ```
 
-数据库是订单、租约、Outbox、账本、队列和审计的事实来源。Outbox 派发与 PGMQ 入队同事务；签名阶段推进与当前消息归档同事务。消费者崩溃后未确认消息超时可再次领取；失败最多 20 次后进入死信队列，可带原因回放。签名服务按消息行锁消费，read_ct 校验阻止旧消费者确认新领取的消息。广播保留交易 ID 幂等与未知结果对账。
+数据库是订单、租约、账本、队列和审计的事实来源。初次签名直接入队，与订单、UTXO 锁、签名记录及请求去重凭据同事务；租户或请求版本不匹配时拒绝入队，队列不可用时整批回滚。去重凭据保留在签名交易上，不依赖队列归档的保存期限。签名阶段推进与当前消息归档同事务。消费者崩溃后未确认消息超时可再次领取；失败最多 20 次后进入死信队列，可带原因回放。签名服务按消息行锁消费，read_ct 校验阻止旧消费者确认新领取的消息。广播保留交易 ID 幂等与未知结果对账。
 
 ## 资产解析
 

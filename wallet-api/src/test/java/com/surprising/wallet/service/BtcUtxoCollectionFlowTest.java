@@ -12,7 +12,6 @@ import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.queue.PgmqClient;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.repository.ChainJdbcRepository;
-import com.surprising.wallet.repository.WalletOutboxRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.ObjectMapper;
@@ -40,7 +39,7 @@ class BtcUtxoCollectionFlowTest {
         var repository = mock(ChainJdbcRepository.class);
         var switches = mock(WalletRuntimeConfigService.class);
         var feeRates = mock(ChainFeeRateRepository.class);
-        var outbox = mock(WalletOutboxRepository.class);
+        var submissions = mock(UtxoSigningSubmissionService.class);
         when(switches.isTaskEnabled("BTC", WalletRuntimeConfigService.TASK_WITHDRAW)).thenReturn(false);
         when(switches.isTaskEnabled("BTC", WalletRuntimeConfigService.TASK_COLLECTION)).thenReturn(true);
         when(runtime.assetMetadata("BTC")).thenReturn(BTC);
@@ -73,7 +72,7 @@ class BtcUtxoCollectionFlowTest {
         when(repository.lockUtxo(eq(TENANT), eq("BTC"), anyString(), anyInt(), eq("42"))).thenReturn(1);
         when(repository.claimCollectionSigning(eq(TENANT), eq("BTC"), anyString(), isNull())).thenReturn(1);
 
-        new UtxoBatchService(runtime, repository, switches, feeRates, new ObjectMapper(), outbox)
+        new UtxoBatchService(runtime, repository, switches, feeRates, new ObjectMapper(), submissions)
                 .execute("BTC");
 
         ArgumentCaptor<BigDecimal> amount = ArgumentCaptor.forClass(BigDecimal.class);
@@ -82,8 +81,7 @@ class BtcUtxoCollectionFlowTest {
                 eq("BTC"), eq("BTC"), eq(SOURCE), eq(COLLECTOR), amount.capture(), fee.capture(), isNull());
         assertEquals(0, amount.getValue().add(fee.getValue()).compareTo(new BigDecimal("0.00100000")));
         verify(repository, times(2)).lockUtxo(eq(TENANT), eq("BTC"), anyString(), anyInt(), eq("42"));
-        verify(outbox).insert(any(), eq(TENANT), anyString(), eq("CHAIN_SIGNING_TRANSACTION"),
-                eq("42"), eq("42"), anyString());
+        verify(submissions).enqueue(eq(TENANT), eq(BTC), eq(42), any(UUID.class));
         verify(repository, never()).createTenantWithdrawalOrder(any(), anyString(), anyLong(),
                 anyString(), anyString(), any(), any(), anyString(), any(), any());
         verify(repository, never()).freezeLedgerBalance(any(), anyString(), anyString(), anyString(), any());

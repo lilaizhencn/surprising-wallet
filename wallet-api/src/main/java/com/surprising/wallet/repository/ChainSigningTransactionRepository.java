@@ -10,6 +10,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /** chain_signing_transaction 单表仓储。 */
 @Repository
@@ -83,6 +84,25 @@ public class ChainSigningTransactionRepository {
                   from chain_signing_transaction where chain = ? and id = ? for update
                 """, (rs, rowNum) -> map(rs), chain, id).stream().findFirst();
     }
+
+    /** Lock the persisted payload and its durable initial-queue receipt together. */
+    public Optional<Submission> lockSubmission(String chain, int id) {
+        return jdbc.query("""
+                select id, tx_id, balance, signature, currency, status, create_date, update_date,
+                       enqueued_signing_request_id
+                  from chain_signing_transaction where chain = ? and id = ? for update
+                """, (rs, rowNum) -> new Submission(map(rs),
+                rs.getObject("enqueued_signing_request_id", UUID.class)), chain, id).stream().findFirst();
+    }
+
+    public int recordEnqueued(String chain, int id, UUID requestId) {
+        return jdbc.update("""
+                update chain_signing_transaction set enqueued_signing_request_id = ?
+                 where chain = ? and id = ?
+                """, requestId, chain, id);
+    }
+
+    public record Submission(WithdrawTransaction transaction, UUID enqueuedRequestId) { }
 
     /** 按交易 ID 查询最近的签名交易。 */
     public Optional<WithdrawTransaction> findByTxId(String chain, String txId) {

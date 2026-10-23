@@ -22,8 +22,11 @@ set +a
 PGUSER=${SW_DB_USERNAME:?} PGPASSWORD=${SW_DB_PASSWORD:?} \
   psql "${SW_DB_URL#jdbc:}" --set=ON_ERROR_STOP=1 --no-psqlrc >/dev/null <<'SQL'
 DO $$ BEGIN
-  IF to_regclass('public.wallet_task_lease') IS NULL OR to_regclass('public.wallet_outbox') IS NULL
+  IF to_regclass('public.wallet_task_lease') IS NULL
      OR to_regclass('public.chain_fee_rate') IS NULL
+     OR NOT EXISTS (SELECT 1 FROM information_schema.columns
+                    WHERE table_schema='public' AND table_name='chain_signing_transaction'
+                      AND column_name='enqueued_signing_request_id' AND data_type='uuid')
      OR NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname='pgmq' AND extversion='1.11.1') THEN
     RAISE EXCEPTION 'wallet database prerequisites are missing';
   END IF;
