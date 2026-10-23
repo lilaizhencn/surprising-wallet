@@ -160,6 +160,8 @@ class EvmForkFullChainIntegrationTest {
                     .send().getTransactionCount();
             assertEquals(BigInteger.valueOf(2L + tokens.size() * 2L), pendingNonce,
                     "native withdrawal/collection plus two transfers per configured token");
+            assertEquals(jdbcTemplate.queryForObject("select count(*) from deposit_record where tenant_id = ? and chain = ? and credited", Long.class, TEST_TENANT_ID, chain.name()),
+                    jdbcTemplate.queryForObject("select count(*) from custody_deposit where tenant_id = ? and chain = ?", Long.class, TEST_TENANT_ID, chain.name()));
         } finally {
             web3j.shutdown();
         }
@@ -199,6 +201,8 @@ class EvmForkFullChainIntegrationTest {
                             updated_at = now()
                         """, TEST_TENANT_ID, chain.name(), nativeSymbol, account, derivationIndex(chain), account, account,
                 derivationPath);
+        com.surprising.wallet.testutil.DepositTestSupport.attachCustodyAddress(
+                jdbcTemplate, TEST_TENANT_ID, chain.name(), nativeSymbol, account);
     }
 
     /**

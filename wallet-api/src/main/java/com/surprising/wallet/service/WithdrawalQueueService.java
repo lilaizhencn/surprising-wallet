@@ -14,14 +14,14 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class WithdrawalQueueService {
     private final QueueWorker worker;
-    private final TransactionService transactions;
+    private final QueuedUtxoWithdrawalService transactions;
     private final UtxoBroadcastService broadcasts;
     private final ObjectMapper objectMapper;
     private final WalletRuntimeConfigService runtimeConfig;
     public void withdraw() {
         if (!runtimeConfig.isGlobalTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW)) return;
         worker.drain(WalletQueue.WITHDRAW, 100, message -> {
-            if (!transactions.withdraw(JacksonJson.readValue(objectMapper, message.body(), WithdrawRecord.class), QueueTenant.require(objectMapper, message)))
+            if (!transactions.accept(JacksonJson.readValue(objectMapper, message.body(), WithdrawRecord.class), QueueTenant.require(objectMapper, message)))
                 throw new IllegalStateException("withdrawal not completed");
             return null;
         });

@@ -73,6 +73,8 @@ bootstrap 包按模式显式扫描组件；签名实现由 FirstSignerRegistry /
 
 API 的 `PubKeyConfig` 只通过正常构造器接收角色密钥提供者，不包含测试根公钥、测试构造器或默认测试网络。Bitcoin-like 地址输出为不可变的 `AddressMetadata`；派生使用显式网络和既有非硬化路径 `m/44/coinType/biz/userId/index`，2-of-3 脚本与签名端保持一致。热钱包与充值地址使用 SDK 的同一网络定义，未知网络直接拒绝。
 
+`BitcoinLikeChainRuntime` 读取区块和交易事实，不再回调 `TransactionService` 或持有账务结算依赖。`BitcoinLikeDepositScanService` 按数据库游标取得完整 `UtxoBlock`，交给 `UtxoDepositService` 原子完成 canonical 区块、UTXO、充值、租户投影、PGMQ 通知与游标更新；任一 RPC 交易读取失败时不推进区块。交易哈希和 int 输出序号独立传递，不经过旧 DTO 或字符串解析。`UtxoConfirmationJob` 使用提现调度池，调用 `BitcoinLikeConfirmationService` 观察在途充值与提现；新扫描开关关闭仍继续确认。补确认与重组统一按 canonical 区块、UTXO、充值/账本的顺序加锁。内部提现队列由 `QueuedUtxoWithdrawalService` 直接编排订单与冻结，原混合事务服务和无效果的余额汇总转发均已删除。
+
 
 充值和重组的事务由 `DepositService` 编排，现有 ChainJdbcRepository 充值入口显式委托该用例。确认入账时，DepositRecordRepository 的受租户约束状态更新直接返回记录 ID 与入账代次；随后更新账本并调用必需的 CustodyDepositProjectionService，投影、流水、赤字抵扣、事件和 API 来源 Webhook 与余额一起提交或回滚。投影服务要求已有事务，不再使用 Observer 接口、ObjectProvider 或空列表构造路径。SQL 只位于对应单表仓储；地址归属通过同租户派生坐标与地址版本在应用层组合，优先匹配精确地址。
 
@@ -141,6 +143,7 @@ Bitcoin-like RPC DTO 与 Ed25519 链枚举、派生结果和 SLIP-0010 密钥提
 - 扫描周期由 `WalletRuntimeConfigService` 集中维护，快速链为 2-5 秒，ETH 为 12 秒，ADA 为 20 秒，DOGE/LTC/BTC/BCH 为 15/30/60/60 秒，未知新链默认 10 秒。
 - 每次实际执行都实时读取 PostgreSQL 中的 `global.all.enabled`、全局任务开关和 `chain_profile` 链级任务开关，后台修改无需重启。
 - 开关关闭时阻止新的扫描、提现构建、归集和转账动作；已广播交易的确认、对账与回调继续运行，避免资金状态永久停留在中间态。
+- 已观察充值通过独立确认用例继续入账；必需的托管投影不再次检查新扫描开关或租户链开通状态。找不到同租户托管地址时抛错，充值记录、余额、投影和事件全部回滚。
 - XMR 使用独立串行全流程任务，不再由通用 Account-Chain 扫描任务重复执行。
 
 ## 链族

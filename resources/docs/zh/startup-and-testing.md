@@ -378,6 +378,8 @@ GRANT USAGE, SELECT ON SEQUENCE pgmq.q_wallet_sign_done_msg_id_seq,
 队列 JSON headers 必须携带 `tenant_id`。外部业务消费充值/提现事件时，也必须按租户限定查询条件和数据库权限；
 不要向租户应用开放平台队列账号。签名请求和结果使用有类型的协议携带 tenantId 与 requestId；消费者校验租户 header，API 广播端同时校验数据库请求 UUID。签名服务不接收或修改数据库状态及 RBF 历史。
 
+`wallet_deposit_event` 使用 `UtxoDepositNotification(tenantId, chain, network, assetSymbol, output)`；output 包含独立的 `txHash`、int `vout`、地址、金额、区块高度/哈希和确认数。它是可重复的链上观察通知；实际入账以托管事件和账本为准，不使用旧 currency 编号或拼接 outpoint 的 DTO。
+
 消费先以 300 秒可见性超时领取，再开启处理事务并锁定该消息，事务提交时同时归档消息与投递下一阶段。
 处理中的行锁会阻止其他消费者重复领取；崩溃会释放锁并回滚，消息超时后恢复。领取后尚未开始处理就已超时的旧消费者不能确认消息。
 RPC 不属于数据库事务，交易广播仍用交易 ID 幂等和 BROADCAST_UNKNOWN 对账。不要因数据库回滚重新构造另一笔提现交易。

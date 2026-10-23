@@ -1,168 +1,70 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
-import com.surprising.wallet.common.dto.TransactionDTO;
-import com.surprising.wallet.chain.model.BestBlockHeight;
-import com.surprising.wallet.chain.BlockchainRuntimeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.extern.slf4j.Slf4j;
+import com.surprising.wallet.chain.utxo.BitcoinLikeChainRuntime;
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.ChainType;
+import com.surprising.wallet.repository.*;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.ObjectUtils;
 
-import java.time.Instant;
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
-
-/**
- * UTXO 链区块扫描器。
- * <p>
- * 按区块逐块扫描链上交易，将充值交易写入数据库并推进扫描高度。
- * 由 {@code UtxoDepositScanJob} 调度，每次传入一条链标识（BTC/BCH/LTC/DOGE）。
- *
- * @author atomex
- */
-@Slf4j
+/** 读取 RPC 事实，显式调用充值事务；不持有可变扫描上下文。 */
 @Service
+@RequiredArgsConstructor
 public class BitcoinLikeDepositScanService {
-    /** 交易服务，负责入库交易记录。 */
-    private final TransactionService txService;
-    /** 数据仓储服务。 */
-    private final ChainJdbcRepository chainJdbcRepository;
-    /** 链运行时服务，查询链上区块与状态。 */
-    private final BlockchainRuntimeService blockchainRuntimeService;
-    /** 运行开关/扫描参数配置服务。 */
-    private final WalletRuntimeConfigService runtimeConfigService;
+    private static final int FINALITY_AUDIT_DEPTH = 256;
+    private final BitcoinLikeChainRuntime runtime;
+    private final ChainProfileRepository profiles;
+    private final ChainScanHeightRepository heights;
+    private final ChainScanBlockRepository blocks;
+    private final UtxoRepository utxos;
+    private final UtxoDepositService posting;
+    private final WalletRuntimeConfigService runtimeConfig;
 
-    /** 构造 UTXO 链区块扫描服务。 */
-    public BitcoinLikeDepositScanService(
-            TransactionService txService,
-            ChainJdbcRepository chainJdbcRepository,
-            BlockchainRuntimeService blockchainRuntimeService,
-            WalletRuntimeConfigService runtimeConfigService) {
-        this.txService = txService;
-        this.chainJdbcRepository = chainJdbcRepository;
-        this.blockchainRuntimeService = blockchainRuntimeService;
-        this.runtimeConfigService = runtimeConfigService;
-    }
-
-    /**
-     * 按指定链扫描区块：处理区块内相关交易并推进数据库扫描高度。
-     */
     public void scan(String chain) {
-        if (!runtimeConfigService.isTaskEnabled(chain, WalletRuntimeConfigService.TASK_SCAN)) {
-            log.debug("{} scan skipped: DB scan switch disabled", chain);
+        if (!runtimeConfig.isTaskEnabled(chain, WalletRuntimeConfigService.TASK_SCAN)) return;
+        var profile = profiles.findAccountByChain(chain).orElseThrow();
+        var type = ChainType.valueOf(profile.getChain());
+        long best = runtime.bestHeight(type);
+        String scanner = UtxoDepositService.scannerName(profile);
+        long configuredStart = runtimeConfig.scanStartHeight(chain);
+        long stored = heights.findSafeHeight(chain, scanner)
+                .orElse(configuredStart > 0 ? configuredStart - 1 : 0L);
+        if (stored <= 0 && configuredStart <= 0) {
+            heights.upsert(chain, scanner, best, best);
             return;
         }
-        AssetRuntimeMetadata currency = blockchainRuntimeService.assetMetadata(chain);
-        log.info("扫描 {} 交易 开始", currency.getName());
-        Long bestHeight = null;
-        try {
-            blockchainRuntimeService.updateTransactionConfirmations(currency);
-            bestHeight = blockchainRuntimeService.bestHeight(currency);
-            BestBlockHeight storedHeight = getDbBestBlockHeight(currency);
-
-            if (ObjectUtils.isEmpty(storedHeight)) {
-                storedHeight = new BestBlockHeight();
-                boolean insertFlag = initCurrencyBestHeight(storedHeight, bestHeight, currency);
-                if (!insertFlag) {
-                    return;
-                }
-            }
-            long configuredStartHeight = runtimeConfigService.scanStartHeight(currency);
-            if (storedHeight.getHeight() <= 0 && configuredStartHeight <= 0) {
-                log.info("{} scan start-height is 0, initializing DB height to current best height {}",
-                        currency.getName(), bestHeight);
-                updateStoreHeight(bestHeight, storedHeight, currency);
-                return;
-            }
-
-            if (storedHeight.getHeight() > bestHeight) {
-                log.warn("{} 数据库高度 {} 高于链上高度 {},跳过本次扫描",
-                        currency.getName(), storedHeight.getHeight(), bestHeight);
-                return;
-            }
-            if (storedHeight.getHeight().equals(bestHeight)) {
-                log.info("{} 已同步到链上最新高度 {}", currency.getName(), bestHeight);
-                return;
-            }
-
-            long scanBegin = Math.max(0L, storedHeight.getHeight() + 1L);
-            long scanEnd = bestHeight;
-            long maxBlocksPerRun = runtimeConfigService.scanMaxBlocksPerRun(currency);
-            if (maxBlocksPerRun > 0) {
-                scanEnd = Math.min(scanEnd, scanBegin + maxBlocksPerRun - 1L);
-            }
-            long lastScannedHeight = storedHeight.getHeight();
-            for (long begin = scanBegin; begin <= scanEnd; begin++) {
-                List<TransactionDTO> transactions =
-                        blockchainRuntimeService.findRelatedTransactions(currency, begin);
-                if (transactions == null) {
-                    break;
-                }
-                lastScannedHeight = begin;
-                if (transactions.size() == 0) {
-                    continue;
-                }
-                txService.saveTransaction(transactions);
-            }
-
-            updateStoreHeight(lastScannedHeight, storedHeight, currency);
-            bestHeight = lastScannedHeight;
-            blockchainRuntimeService.updateTotalBalance(currency);
-
-        } catch (Throwable e) {
-            log.info("扫描 {} 交易高度异常 当前高度:{} error", currency.getName(), bestHeight, e);
+        long begin = Math.max(0, stored + 1);
+        long maximum = runtimeConfig.scanMaxBlocksPerRun(chain);
+        long end = maximum > 0 ? Math.min(best, begin + maximum - 1) : best;
+        for (long height = begin; height <= end; height++) {
+            if (!runtimeConfig.isTaskEnabled(chain, WalletRuntimeConfigService.TASK_SCAN)) return;
+            var block = runtime.observeBlock(type, height);
+            if (block.isEmpty()) return;
+            posting.scanBlock(profile, block.orElseThrow());
         }
-        log.info("扫描 {} 交易高度结束 当前高度:{}", currency.getName(), bestHeight);
     }
 
-    /**
-     * 将扫描高度持久化到数据库。
-     */
-    private void updateStoreHeight(
-            Long bestHeight, BestBlockHeight storedHeight, AssetRuntimeMetadata currency) {
-        storedHeight.setHeight(bestHeight);
-        storedHeight.setUpdateDate(Date.from(Instant.now()));
-        String chain = blockchainRuntimeService.chainName(currency);
-        long safeHeight = Math.max(0L, bestHeight);
-        chainJdbcRepository.updateScanHeight(
-                chain, blockchainRuntimeService.scannerName(currency), bestHeight, safeHeight);
-    }
-
-    /**
-     * 查询数据库里的扫描快照（若不存在返回 null）。
-     */
-    private BestBlockHeight getDbBestBlockHeight(AssetRuntimeMetadata currency) {
-        String chain = blockchainRuntimeService.chainName(currency);
-        Optional<Long> scanHeight =
-                chainJdbcRepository.findScanSafeHeight(chain, blockchainRuntimeService.scannerName(currency));
-        if (scanHeight.isPresent()) {
-            BestBlockHeight checkpoint = new BestBlockHeight();
-            checkpoint.setCurrency(currency.getIndex());
-            checkpoint.setHeight(scanHeight.get());
-            checkpoint.setUpdateDate(Date.from(Instant.now()));
-            return checkpoint;
+    /** 已观察充值的重组核对和补确认，不受新扫描开关影响。 */
+    public void refresh(AccountChainProfile profile) {
+        String chain = profile.getChain();
+        var type = ChainType.valueOf(chain);
+        long minimum = Math.max(0, runtime.bestHeight(type) - FINALITY_AUDIT_DEPTH + 1);
+        for (var observed : blocks.listObserved(chain, UtxoDepositService.CANONICAL_SCANNER, minimum)) {
+            if (observed.hash().equalsIgnoreCase(runtime.blockHash(type, observed.height()))) continue;
+            var block = runtime.observeBlock(type, observed.height())
+                    .orElseThrow(() -> new IllegalStateException("canonical UTXO block missing at " + observed.height()));
+            posting.reconcileBlock(profile, block);
         }
-        return null;
-    }
-
-    /**
-     * 首次初始化扫描高度，优先使用配置起始高度。
-     */
-    private boolean initCurrencyBestHeight(
-            BestBlockHeight storedHeight, Long bestHeight, AssetRuntimeMetadata currency) {
-        long initialHeight = bestHeight;
-        long configuredStartHeight = runtimeConfigService.scanStartHeight(currency);
-        if (configuredStartHeight > 0) {
-            initialHeight = Math.min(configuredStartHeight, bestHeight);
+        long afterId = 0;
+        int limit = 500;
+        var confirmations = new java.util.HashMap<String, Integer>();
+        while (true) {
+            var pending = utxos.listPendingConfirmations(chain, profile.getNativeSymbol(),
+                    profile.getDepositConfirmations(), afterId, limit);
+            for (var row : pending) posting.refresh(profile, row, confirmations.computeIfAbsent(
+                    row.output().txHash(), txHash -> runtime.confirmations(type, txHash)));
+            if (pending.size() < limit) return;
+            afterId = pending.getLast().id();
         }
-        storedHeight.setHeight(initialHeight);
-        storedHeight.setCurrency(currency.getIndex());
-        chainJdbcRepository.updateScanHeight(
-                blockchainRuntimeService.chainName(currency),
-                blockchainRuntimeService.scannerName(currency),
-                initialHeight, initialHeight);
-        return true;
     }
 }

@@ -7,13 +7,8 @@ import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
-import com.surprising.wallet.common.dto.TransactionDTO;
-import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;
-import com.surprising.wallet.common.pojo.UtxoTransaction;
-import com.surprising.wallet.common.pojo.WithdrawRecord;
 import com.surprising.wallet.common.signing.UtxoSignedTransaction;
-import com.surprising.wallet.repository.ChainSigningTransactionRepository;
 import com.surprising.wallet.sdk.bitcoinj.core.BitcoinLikeNetwork;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeBlock;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeRawTransaction;
@@ -23,89 +18,39 @@ import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashAddressCodec;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashFeePolicy;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParameters;
-import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinNetworkParameters;
-import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinNetworkParameters;
-import com.surprising.wallet.chain.BitcoinLikeSettlementService;
 import com.surprising.wallet.chain.ltc.LitecoinEsploraCommand;
 import com.surprising.wallet.chain.rpc.BchCommand;
 import com.surprising.wallet.chain.rpc.BtcCommand;
 import com.surprising.wallet.chain.rpc.BtcLikeCommand;
 import com.surprising.wallet.chain.rpc.DogeCommand;
 import com.surprising.wallet.config.PubKeyConfig;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.common.chain.UtxoOutput;
+import com.surprising.wallet.chain.model.UtxoBlock;
 import com.surprising.wallet.repository.ChainJdbcRepository;
-import com.surprising.wallet.service.AddressService;
-import com.surprising.wallet.service.TransactionService;
 import org.bitcoinj.base.LegacyAddress;
 import org.bitcoinj.base.exceptions.AddressFormatException;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;
-import org.bitcoinj.params.MainNetParams;
-import org.bitcoinj.params.RegTestParams;
-import org.bitcoinj.params.TestNet3Params;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Date;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
-import static com.surprising.wallet.common.utils.Constants.UNSPENT_TX_ID;
 
-/**
- * Bitcoin 类（UTXO 模型）链的通用运行时服务。
- *
- * <p>该类封装了 BTC、LTC、DOGE、BCH 四条 UTXO 链的共用逻辑，包括：
- * <ul>
- *   <li>存款地址生成（BIP44 派生、多签脚本类型区分 P2WSH/P2SH）</li>
- *   <li>地址格式校验（BCH 支持 CashAddr 和 Legacy 双向转换）</li>
- *   <li>区块交易扫描与 UTXO 持久化</li>
- *   <li>交易确认数刷新（充值确认、提现确认）</li>
- *   <li>余额汇总与签名交易广播</li>
- *   <li>防重组审计（通过 {@link #FINALITY_AUDIT_DEPTH} 深度回溯检查）</li>
- * </ul>
- *
- * <p>不同链通过 {@link #command(ChainType)} 获取对应的 RPC 命令执行器
- * （{@link com.surprising.wallet.chain.rpc.BtcCommand}、
- *  {@link com.surprising.wallet.chain.rpc.BchCommand}、
- *  {@link com.surprising.wallet.chain.rpc.DogeCommand}、
- *  {@link com.surprising.wallet.chain.ltc.LitecoinEsploraCommand}），
- * 通过 {@link #networkParameters(ChainType)} 获取对应的网络参数。
- *
- * <p>由 BlockchainRuntimeService 直接分发 BTC、BCH、LTC、DOGE 操作。
- */
+/** Bitcoin-like 地址派生、地址校验、完整区块/交易观察和签名广播；账务由应用用例编排。 */
 @Service
 public
 class BitcoinLikeChainRuntime {
 
-    /** 防重组审计深度：回溯最近 256 个区块检查是否发生链重组 */
-    private static final int FINALITY_AUDIT_DEPTH = 256;
-
-    /** 链配置数据库访问 */
     private final ChainJdbcRepository chainRepository;
-    private final ChainSigningTransactionRepository signingTransactions;
-
-    /** 多签公钥配置 */
+    private final ChainAddressRepository addresses;
     private final PubKeyConfig pubKeyConfig;
-
-    /** 地址服务 */
-    private final AddressService addressService;
-
-    /** 交易服务提供者（延迟注入避免循环依赖） */
-    private final ObjectProvider<TransactionService> transactionServiceProvider;
-
-    /** UTXO 链结算服务 */
-    private final BitcoinLikeSettlementService settlementService;
 
     /** BTC JSON-RPC 命令执行器 */
     private final BtcCommand btcCommand;
@@ -119,43 +64,17 @@ class BitcoinLikeChainRuntime {
     /** BCH JSON-RPC 命令执行器 */
     private final BchCommand bchCommand;
 
-    /** Jackson 3 对象映射器，用于读取提现签名元数据。 */
-    private final ObjectMapper objectMapper;
-
-    /**
-     * @param chainRepository             链配置数据库访问
-     * @param pubKeyConfig                多签公钥配置
-     * @param addressService              地址服务
-     * @param transactionServiceProvider  交易服务提供者
-     * @param settlementService           UTXO 链结算服务
-     * @param btcCommand                  BTC RPC 命令
-     * @param ltcCommand                  LTC RPC 命令
-     * @param dogeCommand                 DOGE RPC 命令
-     * @param bchCommand                  BCH RPC 命令
-     */
-    public BitcoinLikeChainRuntime(
-            ChainJdbcRepository chainRepository,
-            PubKeyConfig pubKeyConfig,
-            AddressService addressService,
-            ObjectProvider<TransactionService> transactionServiceProvider,
-            BitcoinLikeSettlementService settlementService,
-            BtcCommand btcCommand,
-            LitecoinEsploraCommand ltcCommand,
-            DogeCommand dogeCommand,
-            BchCommand bchCommand,
-            ObjectMapper objectMapper,
-            ChainSigningTransactionRepository signingTransactions) {
-        this.chainRepository = chainRepository;
-        this.pubKeyConfig = pubKeyConfig;
-        this.addressService = addressService;
-        this.transactionServiceProvider = transactionServiceProvider;
-        this.settlementService = settlementService;
-        this.btcCommand = btcCommand;
-        this.ltcCommand = ltcCommand;
-        this.dogeCommand = dogeCommand;
-        this.bchCommand = bchCommand;
-        this.objectMapper = objectMapper;
-        this.signingTransactions = signingTransactions;
+    public BitcoinLikeChainRuntime(ChainJdbcRepository chainRepository, PubKeyConfig pubKeyConfig,
+                                   BtcCommand btcCommand, LitecoinEsploraCommand ltcCommand,
+                                   DogeCommand dogeCommand, BchCommand bchCommand,
+                                   ChainAddressRepository addresses) {
+        this.chainRepository = java.util.Objects.requireNonNull(chainRepository);
+        this.pubKeyConfig = java.util.Objects.requireNonNull(pubKeyConfig);
+        this.btcCommand = java.util.Objects.requireNonNull(btcCommand);
+        this.ltcCommand = java.util.Objects.requireNonNull(ltcCommand);
+        this.dogeCommand = java.util.Objects.requireNonNull(dogeCommand);
+        this.bchCommand = java.util.Objects.requireNonNull(bchCommand);
+        this.addresses = java.util.Objects.requireNonNull(addresses);
     }
 
     /**
@@ -274,93 +193,34 @@ class BitcoinLikeChainRuntime {
     public long bestHeight(ChainType chainType) {
         return command(chainType).getBlockCount();
     }
-    /**
-     * 扫描指定高度的区块，查找与平台地址相关的交易。
-     *
-     * <p>对区块内的每笔交易并行提取 UTXO，过滤出属于平台地址的输出，
-     * 持久化后返回交易 DTO 列表。同时将区块记录为规范链区块用于重组检测。
-     *
-     * @param chainType 链类型
-     * @param height    区块高度
-     * @return 相关交易列表，如果没有相关输出则返回空列表
-     */
-    public List<TransactionDTO> findRelatedTransactions(ChainType chainType, long height) {
-        AssetRuntimeMetadata asset = assetMetadata(chainType);
+
+    public String blockHash(ChainType chainType, long height) {
+        return command(chainType).getBlockHash(height);
+    }
+    /** 读取完整区块后才返回事实；任何交易读取失败都不能当作空区块推进。 */
+    public java.util.Optional<UtxoBlock> observeBlock(ChainType chainType, long height) {
         String hash = command(chainType).getBlockHash(height);
         BtcLikeBlock block = command(chainType).getBlock(hash);
-        if (block == null) {
-            return null;
-        }
-        chainRepository.observeCanonicalBlock(chainType.name(), "utxo-canonical", height,
-                hash, block.getPreviousblockhash());
-        long bestHeight = bestHeight(chainType);
-        List<UtxoTransaction> results = block.getTx().parallelStream()
-                .map(txid -> {
-                    try {
-                        updateWithdrawTransaction(chainType, txid, asset);
-                        return getUtxos(chainType, txid, height, bestHeight, asset);
-                    } catch (Throwable e) {
-                        return List.<UtxoTransaction>of();
-                    }
-                })
-                .filter(utxos -> utxos != null && !utxos.isEmpty())
-                .collect(LinkedList::new, LinkedList::addAll, LinkedList::addAll);
-        results.forEach(utxo -> utxo.setBlockHash(hash));
-        if (results.isEmpty()) {
-            return List.of();
-        }
-        persistScannedUtxos(chainType, results);
-        return results.parallelStream().map(this::convertUtxoToDto).collect(Collectors.toList());
-    }
-    /**
-     * 刷新所有待确认交易的确认数。
-     *
-     * <p>执行三个步骤：
-     * <ol>
-     *   <li>核对已入账的充值交易（防重组）</li>
-     *   <li>刷新 UTXO 确认数（充值）</li>
-     *   <li>刷新待确认提现交易的确认数</li>
-     * </ol>
-     *
-     * @param chainType 链类型
-     */
-    public void updateTransactionConfirmations(ChainType chainType) {
-        AssetRuntimeMetadata asset = assetMetadata(chainType);
-        reconcileCreditedDeposits(chainType);
-        updateUnifiedUtxoConfirmations(chainType, asset);
-        updatePendingWithdrawConfirmations(chainType, asset);
-    }
-    /**
-     * 处理 {@code reconcileCreditedDeposits} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    private void reconcileCreditedDeposits(ChainType chainType) {
-        long latest = bestHeight(chainType);
-        long minimumHeight = Math.max(0L, latest - FINALITY_AUDIT_DEPTH + 1L);
-        for (Long height : chainRepository.listCanonicalDepositBlockHeights(
-                chainType.name(), minimumHeight)) {
-            String hash = command(chainType).getBlockHash(height);
-            BtcLikeBlock block = command(chainType).getBlock(hash);
-            if (block == null) {
-                throw new IllegalStateException("canonical UTXO block not found at height " + height);
-            }
-            var observation = chainRepository.observeCanonicalBlock(
-                    chainType.name(), "utxo-canonical", height,
-                    hash, block.getPreviousblockhash());
-            if (observation.reorg()) {
-                // The main cursor has already passed this height; ingest the replacement block now.
-                findRelatedTransactions(chainType, height);
+        if (block == null) return java.util.Optional.empty();
+        long best = bestHeight(chainType);
+        var tracked = new java.util.HashSet<>(addresses.listEnabledAddresses(chainType.name()));
+        var params = networkParameters(chainType);
+        var outputs = new java.util.ArrayList<UtxoOutput>();
+        for (String txId : block.getTx()) {
+            var transaction = getRawTransaction(chainType, txId);
+            if (transaction == null || transaction.getVout() == null)
+                throw new IllegalStateException("UTXO transaction unavailable: " + txId);
+            for (TxOutput output : transaction.getVout()) {
+                String address = normalizeScannedAddress(chainType,
+                        extractOutputAddress(chainType, output.getScriptPubKey()), params);
+                if (address == null || !tracked.contains(address)) continue;
+                outputs.add(new UtxoOutput(txId, output.getN(), address, output.getValue(), height, hash,
+                        Math.toIntExact(Math.max(0, best - height + 1))));
             }
         }
+        return java.util.Optional.of(new UtxoBlock(height, hash, block.getPreviousblockhash(), outputs));
     }
-    /**
-     * 刷新该链所有地址的总余额。
-     *
-     * @param chainType 链类型
-     */
-    public void updateTotalBalance(ChainType chainType) {
-        String chain = chainType.name();
-        chainRepository.sumAvailableUtxoAmount(chain, chain);
-    }
+
     /**
      * 广播已签名的提现交易到链上。
      *
@@ -483,53 +343,6 @@ class BitcoinLikeChainRuntime {
     }
 
     /**
-     * 获取或查询 {@code getUtxos} 对应的数据，供调用方读取当前状态。
-     */
-    private List<UtxoTransaction> getUtxos(
-            ChainType chainType, String txid, long height, long bestHeight, AssetRuntimeMetadata asset) {
-        BtcLikeRawTransaction rawTransaction = getRawTransaction(chainType, txid);
-        if (rawTransaction == null || rawTransaction.getVout() == null || rawTransaction.getVout().isEmpty()) {
-            return List.of();
-        }
-        return rawTransaction.getVout().parallelStream()
-                .map(output -> toUtxo(chainType, output, txid, height, bestHeight, asset))
-                .filter(utxo -> !ObjectUtils.isEmpty(utxo))
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 编码 {@code toUtxo} 对应的数据，生成链上或接口所需的表示。
-     */
-    private UtxoTransaction toUtxo(
-            ChainType chainType, TxOutput output, String txid, long height, long bestHeight, AssetRuntimeMetadata asset) {
-        ScriptPubKey pubKey = output.getScriptPubKey();
-        String addressText = normalizeScannedAddress(chainType, extractOutputAddress(chainType, pubKey));
-        if (!StringUtils.hasText(addressText)) {
-            return null;
-        }
-        Address address = addressService.getAddress(addressText, asset);
-        if (ObjectUtils.isEmpty(address)) {
-            return null;
-        }
-        long confirmations = bestHeight >= height ? bestHeight - height + 1L : 0L;
-        return UtxoTransaction.builder()
-                .balance(output.getValue())
-                .address(addressText)
-                .biz(address.getBiz())
-                .currency(asset.getIndex())
-                .spent((byte) 0)
-                .spentTxId(UNSPENT_TX_ID)
-                .seq(Integer.valueOf(output.getN()).shortValue())
-                .txId(txid)
-                .blockHeight(height)
-                .confirmNum(confirmations)
-                .status((byte) Constants.WAITING)
-                .credited(false)
-                .createDate(Date.from(Instant.now()))
-                .updateDate(Date.from(Instant.now()))
-                .build();
-    }
-    /**
      * 执行 {@code extractOutputAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private String extractOutputAddress(ChainType chainType, ScriptPubKey pubKey) {
@@ -550,11 +363,11 @@ class BitcoinLikeChainRuntime {
     /**
      * 转换或计算 {@code normalizeScannedAddress} 对应的值，统一金额、格式和边界规则。
      */
-    private String normalizeScannedAddress(ChainType chainType, String address) {
+    private String normalizeScannedAddress(ChainType chainType, String address, NetworkParameters params) {
         if (chainType != ChainType.BCH) {
             return address;
         }
-        return normalizeBchAddress(address, networkParameters(chainType));
+        return normalizeBchAddress(address, params);
     }
     /**
      * 转换或计算 {@code normalizeBchAddress} 对应的值，统一金额、格式和边界规则。
@@ -597,112 +410,9 @@ class BitcoinLikeChainRuntime {
     /**
      * 处理 {@code confirmations} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
      */
-    private Integer confirmations(ChainType chainType, String txId) {
+    public int confirmations(ChainType chainType, String txId) {
         BtcLikeRawTransaction transaction = getRawTransaction(chainType, txId);
-        return transaction == null ? 0 : transaction.getConfirmations();
-    }
-    /**
-     * 设置或更新 {@code updateWithdrawTransaction} 对应的状态，并保持相关业务字段一致。
-     */
-    private void updateWithdrawTransaction(ChainType chainType, String txId, AssetRuntimeMetadata asset) {
-        var existing = signingTransactions.findByTxId(chainType.name(), txId);
-        if (existing.isEmpty() || existing.get().terminal()) return;
-        var transaction = existing.get();
-        int confirmations = confirmations(chainType, txId);
-        if (confirmations < withdrawConfirmationThreshold(chainType)) {
-            if (confirmations > 0) settlementService.markConfirming(chainType.name(), transaction.id(), txId);
-            return;
-        }
-        settlementService.settleConfirmed(chainType.name(), transaction.id(), txId);
-    }
-    /**
-     * 设置或更新 {@code updateUnifiedUtxoConfirmations} 对应的状态，并保持相关业务字段一致。
-     */
-    private void updateUnifiedUtxoConfirmations(ChainType chainType, AssetRuntimeMetadata asset) {
-        int pageSize = 500;
-        long afterId = 0L;
-        String chain = chainType.name();
-        while (true) {
-            List<UtxoTransaction> utxos = chainRepository.listAvailableUtxosBelowConfirmations(
-                    chain, chain, asset.getConfirmNum(), afterId, pageSize);
-            for (UtxoTransaction utxo : utxos) {
-                int confirmations = Math.max(confirmations(chainType, utxo.getTxId()), 0);
-                utxo.setConfirmNum((long) confirmations);
-                chainRepository.updateUtxoConfirmations(chain, utxo.getTxId(), utxo.getSeq(), confirmations);
-                if (enrichUtxoMetadata(utxo, asset)) {
-                    transactionServiceProvider.getObject().saveTransaction(convertUtxoToDto(utxo));
-                }
-            }
-            if (utxos.size() < pageSize) {
-                break;
-            }
-            afterId = utxos.getLast().getId();
-        }
-    }
-    /**
-     * 设置或更新 {@code updatePendingWithdrawConfirmations} 对应的状态，并保持相关业务字段一致。
-     */
-    private void updatePendingWithdrawConfirmations(ChainType chainType, AssetRuntimeMetadata asset) {
-        var pending = signingTransactions.listPendingConfirmation(chainType.name());
-        for (var transaction : pending) {
-            var ids = transaction.transactionIds();
-            for (String txId : ids) {
-                int confirmations = confirmations(chainType, txId);
-                if (confirmations >= withdrawConfirmationThreshold(chainType)) {
-                    settlementService.settleConfirmed(chainType.name(), transaction.id(), txId);
-                    break;
-                } else if (confirmations > 0) {
-                    settlementService.markConfirming(chainType.name(), transaction.id(), txId);
-                    break;
-                }
-            }
-        }
-    }
-    /**
-     * 执行 {@code enrichUtxoMetadata} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private boolean enrichUtxoMetadata(UtxoTransaction utxo, AssetRuntimeMetadata asset) {
-        Address address = addressService.getAddress(utxo.getAddress(), asset);
-        if (address == null) {
-            return false;
-        }
-        utxo.setBiz(address.getBiz());
-        utxo.setCurrency(asset.getIndex());
-        return true;
-    }
-    /**
-     * 记录或保存 {@code persistScannedUtxos} 对应的数据，并遵守幂等和事务约束。
-     */
-    private void persistScannedUtxos(ChainType chainType, List<UtxoTransaction> utxos) {
-        String chain = chainType.name();
-        for (UtxoTransaction utxo : utxos) {
-            chainRepository.upsertUtxo(
-                    chain,
-                    chain,
-                    utxo.getTxId(),
-                    utxo.getSeq(),
-                    utxo.getAddress(),
-                    utxo.getBalance(),
-                    utxo.getBlockHeight(),
-                    utxo.getBlockHash(),
-                    utxo.getConfirmNum().intValue(),
-                    Boolean.TRUE.equals(utxo.getCredited()));
-        }
-    }
-    /**
-     * 解析或转换 {@code convertUtxoToDto} 对应的数据，并校验其格式和边界。
-     */
-    private TransactionDTO convertUtxoToDto(UtxoTransaction utxo) {
-        return TransactionDTO.builder()
-                .address(utxo.getAddress())
-                .balance(utxo.getBalance())
-                .blockHeight(utxo.getBlockHeight())
-                .blockHash(utxo.getBlockHash())
-                .confirmNum(utxo.getConfirmNum())
-                .txId(utxo.getTxId() + "-" + utxo.getSeq())
-                .currency(utxo.getCurrency())
-                .biz(utxo.getBiz())
-                .build();
+        return transaction == null ? 0 : Math.max(0, transaction.getConfirmations());
     }
     /**
      * 执行 {@code transactionExists} 对应的辅助逻辑，完成数据处理并维护状态边界。

@@ -64,7 +64,10 @@ class BlockchainRuntimeServiceTest {
         when(profiles.findAccountByChain("BTC")).thenReturn(Optional.of(profile));
         when(repository.findProfileByChain("BTC")).thenReturn(Optional.of(profile));
         BitcoinLikeChainRuntime runtime = new BitcoinLikeChainRuntime(
-                repository, null, null, null, null, null, null, null, null, null, null);
+                repository, mock(com.surprising.wallet.config.PubKeyConfig.class),
+                mock(com.surprising.wallet.chain.rpc.BtcCommand.class), mock(com.surprising.wallet.chain.ltc.LitecoinEsploraCommand.class),
+                mock(com.surprising.wallet.chain.rpc.DogeCommand.class), mock(com.surprising.wallet.chain.rpc.BchCommand.class),
+                mock(com.surprising.wallet.repository.ChainAddressRepository.class));
         BlockchainRuntimeService configured = new BlockchainRuntimeService(profiles, assets, addresses, runtime);
 
         assertTrue(configured.checkAddress("BTC", " mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn "));

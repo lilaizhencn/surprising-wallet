@@ -142,7 +142,7 @@ class HyperCoreLocalFullFlowIntegrationTest {
 
             assertConcurrentNonceReservations(tenantId, dataSource, jdbc, chainRepository,
                     hyperCoreRepository, transactions, api, keys, profile, hype);
-            assertConcurrentFirstSnapshotCreditsOnce(tenantId, dataSource, chainRepository,
+            assertConcurrentFirstSnapshotCreditsOnce(tenantId, dataSource, jdbc, chainRepository,
                     hyperCoreRepository, keys, profile);
 
             assertEquals(0, jdbc.queryForObject("select count(*) from ledger_balance "
@@ -249,11 +249,12 @@ class HyperCoreLocalFullFlowIntegrationTest {
      * 验证 {@code assertConcurrentFirstSnapshotCreditsOnce} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private static void assertConcurrentFirstSnapshotCreditsOnce(
-            UUID tenantId, DriverManagerDataSource dataSource, ChainJdbcRepository chainRepository,
+            UUID tenantId, DriverManagerDataSource dataSource, JdbcTemplate jdbc, ChainJdbcRepository chainRepository,
             HyperCoreRepository hyperCoreRepository, AccountSecp256k1KeyService keys,
             AccountChainProfile profile) throws Exception {
         ChainAddressRecord address = address(keys, profile, tenantId, HYPE, 300_001L, "DEPOSIT");
         chainRepository.upsertChainAddress(address);
+        attachCustodyAddress(jdbc, tenantId, address);
         TransactionTemplate transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         ExecutorService workers = Executors.newFixedThreadPool(8);
         try {
@@ -321,9 +322,9 @@ class HyperCoreLocalFullFlowIntegrationTest {
                                              ChainAddressRecord address) {
         Long chainAddressId = jdbc.queryForObject("""
                 select id from chain_address
-                 where tenant_id=? and chain='HYPERCORE' and asset_symbol='USDC'
+                 where tenant_id=? and chain='HYPERCORE' and asset_symbol=?
                    and account_id=? and wallet_role='DEPOSIT'
-                """, Long.class, tenantId, address.getAccountId());
+                """, Long.class, tenantId, address.getAssetSymbol(), address.getAccountId());
         UUID id = UUID.nameUUIDFromBytes(
                 ("hypercore-custody-" + address.getAddress()).getBytes(StandardCharsets.UTF_8));
         jdbc.update("""
@@ -331,10 +332,11 @@ class HyperCoreLocalFullFlowIntegrationTest {
                     id, tenant_id, chain_address_id, chain, network, address,
                     subject, address_version, source, status,
                     derivation_subject, derivation_child)
-                values (?, ?, ?, 'HYPERCORE', 'testnet', ?, 'hypercore-user', 0,
-                        'API', 'ACTIVE', 100001, 0)
+                values (?, ?, ?, 'HYPERCORE', 'testnet', ?, ?, 0,
+                        'API', 'ACTIVE', ?, 0)
                 on conflict (chain_address_id) do nothing
-                """, id, tenantId, chainAddressId, address.getAddress());
+                """, id, tenantId, chainAddressId, address.getAddress(),
+                "hypercore-user-" + address.getUserId(), Math.toIntExact(address.getUserId()));
         return id;
     }
 

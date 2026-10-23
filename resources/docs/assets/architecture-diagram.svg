@@ -37,7 +37,7 @@
   <rect x="30"  y="194" width="665" height="118" class="svc"/>
   <text x="362" y="219" text-anchor="middle" class="label">wallet-api · Spring MVC 单体应用</text>
   <text x="362" y="241" text-anchor="middle" class="desc">Web：controller/** · job/** · config/** · exception/** · filter/** · model/**</text>
-  <text x="362" y="259" text-anchor="middle" class="desc">Application：必需运行开关 / 角色公钥 · 显式充值 / 结算 / 事件</text>
+  <text x="362" y="259" text-anchor="middle" class="desc">Application：完整区块 / 游标同事务 · 独立确认 / 必需投影</text>
   <text x="362" y="277" text-anchor="middle" class="desc">Domain/Infrastructure：chain/** · repository/** · gateway/** · coordinator/**</text>
   <text x="362" y="295" text-anchor="middle" class="desc">查询：地址 / Gas 直接单表筛选分页 · 充提当前页批量组合</text>
 

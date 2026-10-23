@@ -42,4 +42,14 @@ public class ChainScanBlockRepository {
                  where chain = ? and scanner_name = ? and block_height = ?
                 """, blockHash, parentHash, Timestamp.from(Instant.now()), chain, scannerName, blockHeight);
     }
+
+    public List<CanonicalBlock> listObserved(String chain, String scannerName, long minimumHeight) {
+        return jdbc.query("""
+                select block_height, block_hash from chain_scan_block
+                 where chain = ? and scanner_name = ? and block_height >= ? order by block_height
+                """, (rs, rowNum) -> new CanonicalBlock(rs.getLong("block_height"), rs.getString("block_hash")),
+                chain, scannerName, minimumHeight);
+    }
+
+    public record CanonicalBlock(long height, String hash) { }
 }

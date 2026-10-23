@@ -114,7 +114,7 @@ class UtxoSigningPipelineIntegrationTest {
         context.registerBean(WalletRuntimeConfigService.class, () -> switches);
         context.registerBean(ChainFeeRateRepository.class, () -> rates);
         context.registerBean(WalletTaskLeaseService.class, () -> leases);
-        context.registerBean(TransactionService.class, () -> mock(TransactionService.class));
+        context.registerBean(QueuedUtxoWithdrawalService.class, () -> mock(QueuedUtxoWithdrawalService.class));
         context.registerBean(WithdrawalSettlementService.class);
         context.registerBean(BitcoinLikeSettlementService.class);
         context.registerBean(UtxoBroadcastService.class);

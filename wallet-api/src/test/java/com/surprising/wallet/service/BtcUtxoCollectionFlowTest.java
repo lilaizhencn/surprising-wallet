@@ -6,7 +6,6 @@ import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
-import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.chain.model.UtxoSigningTransaction;
 import com.surprising.wallet.common.signing.UtxoSigningRequest;
@@ -59,9 +58,9 @@ class BtcUtxoCollectionFlowTest {
                         .custodyAddressId(CUSTODY_ADDRESS).chain("BTC").assetSymbol("BTC")
                         .address(SOURCE).userId(37L).amount(new BigDecimal("0.00100000")).build()));
         when(repository.findActiveTenantCollectionAddress(TENANT, "BTC")).thenReturn(Optional.of(COLLECTOR));
-        var first = UtxoTransaction.builder().txId("a".repeat(64)).seq((short) 0)
+        var first = UtxoTransaction.builder().txId("a".repeat(64)).seq(0)
                 .address(SOURCE).balance(new BigDecimal("0.00050000")).credited(true).build();
-        var second = UtxoTransaction.builder().txId("b".repeat(64)).seq((short) 1)
+        var second = UtxoTransaction.builder().txId("b".repeat(64)).seq(1)
                 .address(SOURCE).balance(new BigDecimal("0.00050000")).credited(true).build();
         when(repository.listCreditedSpendableUtxosAtAddress(eq(TENANT), eq("BTC"), eq("BTC"),
                 eq(SOURCE), eq(1L), anyInt())).thenReturn(List.of(first, second));
@@ -133,29 +132,4 @@ class BtcUtxoCollectionFlowTest {
         verifyNoInteractions(queue, orders);
     }
 
-    @Test
-    void internalCollectionOutputIsNotCreditedOrPublishedAsDeposit() {
-        var repository = mock(ChainJdbcRepository.class);
-        var runtime = mock(BlockchainRuntimeService.class);
-        var queue = mock(PgmqClient.class);
-        var leases = mock(WalletTaskLeaseService.class);
-        when(leases.ownerId()).thenReturn("test");
-        when(runtime.assetMetadata(1)).thenReturn(BTC);
-        when(runtime.isBitcoinLikeRuntime(BTC)).thenReturn(true);
-        when(runtime.chainName(BTC)).thenReturn("BTC");
-        when(repository.findChainAddressByAddress("BTC", COLLECTOR)).thenReturn(Optional.of(
-                ChainAddressRecord.builder().tenantId(TENANT).chain("BTC")
-                        .address(COLLECTOR).userId(198L).build()));
-        when(repository.findActiveTenantCollectionAddress(TENANT, "BTC"))
-                .thenReturn(Optional.of(COLLECTOR));
-        var dto = TransactionDTO.builder().txId("txid-0").currency(1).address(COLLECTOR)
-                .balance(new BigDecimal("0.00099")).confirmNum(1L).biz(1).build();
-        var service = new TransactionService(mock(AddressService.class), runtime, repository,
-                mock(WalletRuntimeConfigService.class), queue, new ObjectMapper());
-
-        service.saveTransaction(dto);
-
-        verify(repository, never()).recordAndCreditDeposit(any(), anyLong(), anyInt(), anyString());
-        verifyNoInteractions(queue);
-    }
 }

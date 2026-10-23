@@ -12,6 +12,21 @@ import tools.jackson.databind.ObjectMapper;
 public final class DepositTestSupport {
     private DepositTestSupport() { }
 
+    /** 为直接创建链地址的链路测试建立真实托管归属；生产入口由地址创建用例完成。 */
+    public static void attachCustodyAddress(JdbcTemplate jdbc, java.util.UUID tenant, String chain,
+                                            String nativeSymbol, String address) {
+        var owner = new ChainAddressRepository(jdbc)
+                .findEnabledByTenantAndAddress(tenant, chain, nativeSymbol, address).orElseThrow();
+        var profile = new ChainProfileRepository(jdbc).findAccountByChain(chain).orElseThrow();
+        jdbc.update("""
+                insert into custody_address(id, tenant_id, chain_address_id, chain, network, address,
+                    subject, source, status, derivation_subject, derivation_child)
+                values (?, ?, ?, ?, ?, ?, ?, 'API', 'ACTIVE', ?, ?)
+                on conflict (chain_address_id) do nothing
+                """, java.util.UUID.randomUUID(), tenant, owner.getId(), chain, profile.getNetwork(), owner.getAddress(),
+                "integration-" + owner.getId(), Math.toIntExact(owner.getUserId()), owner.getAddressIndex());
+    }
+
     public static org.springframework.context.annotation.AnnotationConfigApplicationContext context(
             JdbcTemplate jdbc, CustodyEventService events, ObjectMapper mapper) {
         var context = new org.springframework.context.annotation.AnnotationConfigApplicationContext();
@@ -53,7 +68,7 @@ public final class DepositTestSupport {
     public static CustodyDepositProjectionService projection(
             JdbcTemplate jdbc, CustodyEventService events, ObjectMapper mapper) {
         return new CustodyDepositProjectionService(new ChainAddressRepository(jdbc), new CustodyAddressRepository(jdbc),
-                new CustodyGasAccountRepository(jdbc), new CustodyTenantChainRepository(jdbc),
+                new CustodyGasAccountRepository(jdbc),
                 new CustodyDepositRepository(jdbc), new CustodyLedgerEntryRepository(jdbc),
                 new CustodyReorgDeficitRepository(jdbc), new LedgerBalanceRepository(jdbc),
                 events, new CustodyAuditRepository(jdbc), mapper);

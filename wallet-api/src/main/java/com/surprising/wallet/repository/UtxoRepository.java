@@ -1,6 +1,7 @@
 package com.surprising.wallet.repository;
 
 import com.surprising.wallet.common.pojo.UtxoTransaction;
+import com.surprising.wallet.common.chain.UtxoOutput;
 import com.surprising.wallet.common.utils.Constants;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -268,7 +269,7 @@ public class UtxoRepository {
         return UtxoTransaction.builder()
                 .id(rs.getLong("id"))
                 .txId(rs.getString("tx_hash"))
-                .seq((short) rs.getInt("vout"))
+                .seq(rs.getInt("vout"))
                 .address(rs.getString("address"))
                 .balance(rs.getBigDecimal("amount"))
                 .blockHeight(rs.getLong("block_height"))
@@ -300,4 +301,30 @@ public class UtxoRepository {
         arguments.add(offset);
         return arguments.toArray();
     }
+
+    public List<PendingOutput> listPendingConfirmations(String chain, String symbol, int required,
+                                                       long afterId, int limit) {
+        return jdbc.query("""
+                select id, tx_hash, vout, address, amount, block_height, block_hash, confirmations
+                  from utxo_record where chain = ? and asset_symbol = ? and state = 'AVAILABLE'
+                   and credited = false and confirmations < ? and id > ? order by id limit ?
+                """, (rs, rowNum) -> new PendingOutput(rs.getLong("id"), observation(rs)),
+                chain, symbol, required, afterId, limit);
+    }
+
+    public Optional<UtxoOutput> lockPending(String chain, String txHash, int vout) {
+        return jdbc.query("""
+                select tx_hash, vout, address, amount, block_height, block_hash, confirmations
+                  from utxo_record where chain = ? and tx_hash = ? and vout = ?
+                   and state = 'AVAILABLE' and credited = false for update
+                """, (rs, rowNum) -> observation(rs), chain, txHash, vout).stream().findFirst();
+    }
+
+    private static UtxoOutput observation(ResultSet rs) throws SQLException {
+        return new UtxoOutput(rs.getString("tx_hash"), rs.getInt("vout"), rs.getString("address"),
+                rs.getBigDecimal("amount"), rs.getLong("block_height"), rs.getString("block_hash"),
+                rs.getInt("confirmations"));
+    }
+
+    public record PendingOutput(long id, UtxoOutput output) { }
 }

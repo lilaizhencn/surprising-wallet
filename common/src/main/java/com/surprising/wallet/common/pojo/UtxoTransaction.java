@@ -50,7 +50,7 @@ public class UtxoTransaction implements Serializable {
     /**
      * output序号
      */
-    private Short seq;
+    private Integer seq;
     /**
      * 是否被花费
      */

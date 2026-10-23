@@ -5,7 +5,6 @@ import com.surprising.wallet.chain.utxo.BitcoinLikeChainRuntime;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.signing.UtxoSignedTransaction;
 import com.surprising.wallet.repository.ChainProfileRepository;
@@ -66,18 +65,6 @@ public class BlockchainRuntimeService {
 
     public long bestHeight(AssetRuntimeMetadata asset) {
         return bitcoinLikeRuntime.bestHeight(requireBitcoinLike(asset));
-    }
-
-    public List<TransactionDTO> findRelatedTransactions(AssetRuntimeMetadata asset, long height) {
-        return bitcoinLikeRuntime.findRelatedTransactions(requireBitcoinLike(asset), height);
-    }
-
-    public void updateTransactionConfirmations(AssetRuntimeMetadata asset) {
-        bitcoinLikeRuntime.updateTransactionConfirmations(requireBitcoinLike(asset));
-    }
-
-    public void updateTotalBalance(AssetRuntimeMetadata asset) {
-        bitcoinLikeRuntime.updateTotalBalance(requireBitcoinLike(asset));
     }
 
     public String broadcastSignedTransaction(AssetRuntimeMetadata asset, UtxoSignedTransaction transaction) {

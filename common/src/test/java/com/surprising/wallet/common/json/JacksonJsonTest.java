@@ -30,7 +30,7 @@ class JacksonJsonTest {
     void convertsDomainArraysWithoutChangingValues() {
         UtxoTransaction utxo = UtxoTransaction.builder()
                 .txId("tx-1")
-                .seq((short) 2)
+                .seq(2)
                 .balance(new BigDecimal("1.23000000"))
                 .build();
         Address address = Address.builder()

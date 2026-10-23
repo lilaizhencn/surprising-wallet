@@ -25,7 +25,6 @@ public class CustodyDepositProjectionService {
     private final ChainAddressRepository chainAddresses;
     private final CustodyAddressRepository custodyAddresses;
     private final CustodyGasAccountRepository gasAccounts;
-    private final CustodyTenantChainRepository tenantChains;
     private final CustodyDepositRepository deposits;
     private final CustodyLedgerEntryRepository entries;
     private final CustodyReorgDeficitRepository deficits;
@@ -44,9 +43,8 @@ public class CustodyDepositProjectionService {
                     address.getAddressIndex(), address.getWalletRole());
             if (coordinates.add(derivation)) relatedIds.addAll(chainAddresses.listRelatedAddressIds(address));
         }
-        var match = custodyAddresses.findDepositOwner(tenantId, chain, java.util.List.copyOf(relatedIds), event.toAddress());
-        if (match.isEmpty() || !tenantChains.depositEnabled(tenantId, chain, event.assetSymbol())) return;
-        var owner = match.orElseThrow();
+        var owner = custodyAddresses.findDepositOwner(tenantId, chain, java.util.List.copyOf(relatedIds), event.toAddress())
+                .orElseThrow(() -> new IllegalStateException("deposit custody owner is missing"));
         String purpose = gasAccounts.existsForAddress(tenantId, owner.id()) ? "GAS_FUNDING" : "CUSTOMER";
         UUID custodyDepositId = deposits.credit(tenantId, owner.id(), credit.id(), chain,
                 event.assetSymbol(), event.txId(), logIndex, event.amount());

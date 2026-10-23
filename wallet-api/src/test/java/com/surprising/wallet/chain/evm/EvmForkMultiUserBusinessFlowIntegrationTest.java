@@ -167,6 +167,8 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
             assertEquals(withdrawalToken == null ? BigInteger.ZERO : BigInteger.ONE,
                     pendingNonce(web3j, actors.userD().credentials()), "user D token withdrawal nonce");
             assertEquals(0, countNonConfirmedOrders(jdbcTemplate, chain), "all stability orders must be terminal CONFIRMED");
+            assertEquals(jdbcTemplate.queryForObject("select count(*) from deposit_record where tenant_id = ? and chain = ? and credited", Long.class, TEST_TENANT_ID, chain.name()),
+                    jdbcTemplate.queryForObject("select count(*) from custody_deposit where tenant_id = ? and chain = ?", Long.class, TEST_TENANT_ID, chain.name()));
         } finally {
             web3j.shutdown();
         }
@@ -362,6 +364,8 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
                             """,
                     TEST_TENANT_ID, chain.name(), nativeSymbol, account, actor.userId(), actor.derivationIndex(),
                     account, account, actor.path(), actor.role());
+            com.surprising.wallet.testutil.DepositTestSupport.attachCustodyAddress(
+                    jdbcTemplate, TEST_TENANT_ID, chain.name(), nativeSymbol, account);
         }
     }
 
