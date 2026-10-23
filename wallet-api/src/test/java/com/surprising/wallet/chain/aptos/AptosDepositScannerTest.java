@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -132,7 +133,9 @@ class AptosDepositScannerTest {
          * 验证 {@code ExistingStoreRpc} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private ExistingStoreRpc(JsonNode transaction) {
-            super(new ObjectMapper(), "http://aptos.invalid/v1", "");
+            super(new ObjectMapper(),
+                    profiles("APTOS"),
+                    nodes("APTOS", java.util.Map.of("rpc", node("APTOS", "http://aptos.invalid/v1"), "faucet", node("APTOS", ""))));
             transactions = new ObjectMapper().createArrayNode().add(transaction);
         }
 

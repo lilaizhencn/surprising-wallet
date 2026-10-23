@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.common.chain.ChainRpcNode;
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.repository.ChainJdbcRepository;
@@ -128,7 +130,14 @@ class TonMessageEncodingTest {
          * 验证 {@code FakeTonCenterClient} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         FakeTonCenterClient() {
-            super(new ObjectMapper(), "http://127.0.0.1", "");
+            super(new ObjectMapper(),
+                    profiles("TON"),
+                    nodes(ChainRpcNode.builder().chain("TON")
+                            .network("test")
+                            .rpcUrl("http://127.0.0.1")
+                            .authType("api_key")
+                            .authHeaderName("X-API-Key")
+                            .apiKey("").build()));
         }
 
         /**
@@ -195,7 +204,14 @@ class TonMessageEncodingTest {
          * 验证 {@code DuplicateTonCenterClient} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private DuplicateTonCenterClient() {
-            super(new ObjectMapper(), "http://127.0.0.1", "");
+            super(new ObjectMapper(),
+                    profiles("TON"),
+                    nodes(ChainRpcNode.builder().chain("TON")
+                            .network("test")
+                            .rpcUrl("http://127.0.0.1")
+                            .authType("api_key")
+                            .authHeaderName("X-API-Key")
+                            .apiKey("").build()));
         }
 
         /**

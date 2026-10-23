@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.near;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,7 @@ class NearTestnetConnectivityIntegrationTest {
         String rpcUrl = System.getProperty("near.testnet.rpc",
                 "https://rpc.testnet.near.org");
 
-        long height = new NearRpcClient(new ObjectMapper(), rpcUrl).latestFinalBlockHeight();
+        long height = new NearRpcClient(new ObjectMapper(), profiles("NEAR"), nodes("NEAR", rpcUrl)).latestFinalBlockHeight();
 
         assertTrue(height > 0, "NEAR testnet final block height should be positive");
     }

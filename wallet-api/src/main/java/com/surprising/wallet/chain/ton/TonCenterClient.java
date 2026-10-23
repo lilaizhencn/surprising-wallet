@@ -6,8 +6,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -42,8 +41,7 @@ import java.util.Optional;
  * @see TonApiClient
  */
 @Component
-public
-class TonCenterClient {
+public class TonCenterClient {
 
     /** TON 链标识 */
     private static final String CHAIN = "TON";
@@ -55,45 +53,19 @@ class TonCenterClient {
     private final HttpClient httpClient;
 
     /** 链配置数据库访问 */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
 
     /** RPC 节点故障转移服务 */
     private final ChainRpcNodeService rpcNodeService;
 
-    /** 测试用固定 base URL（非空白时优先使用） */
-    private final String fixedBaseUrl;
-
-    /** 测试用固定 API Key（非空白时优先使用） */
-    private final String fixedApiKey;
-
     /** 上次请求时间戳（用于无 API Key 时的速率限制） */
     private long lastRequestMillis;
 
-    /**
-     * 构造 {@code TonCenterClient}，初始化该组件运行所需的状态和依赖。
-     */
-    @Autowired
-    public TonCenterClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
-        this(new ObjectMapper(), repository, rpcNodeService, null, null);
-    }
-
-    /**
-     * 构造 {@code TonCenterClient}，初始化该组件运行所需的状态和依赖。
-     */
-    TonCenterClient(ObjectMapper objectMapper, String baseUrl, String apiKey) {
-        this(objectMapper, null, null, baseUrl, apiKey);
-    }
-
-    /**
-     * 构造 {@code TonCenterClient}，初始化该组件运行所需的状态和依赖。
-     */
-    private TonCenterClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
-                            ChainRpcNodeService rpcNodeService, String baseUrl, String apiKey) {
+    public TonCenterClient(ObjectMapper objectMapper, ChainProfileRepository profiles,
+                            ChainRpcNodeService rpcNodeService) {
         this.objectMapper = objectMapper;
-        this.repository = repository;
+        this.profiles = profiles;
         this.rpcNodeService = rpcNodeService;
-        this.fixedBaseUrl = trim(baseUrl);
-        this.fixedApiKey = apiKey == null ? "" : apiKey;
         this.httpClient = buildHttpClient();
     }
     /**
@@ -204,20 +176,17 @@ class TonCenterClient {
      * 执行 {@code request} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private JsonNode request(String method, String path, String body) {
-        if (fixedBaseUrl != null && !fixedBaseUrl.isBlank()) {
-            return execute(method, URI.create(fixedBaseUrl + path), body, null, fixedApiKey);
-        }
-        String network = repository.findProfileByChain(CHAIN)
+        String network = profiles.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN))
                 .getNetwork();
         return rpcNodeService.withFailover(CHAIN, network,
-                node -> execute(method, URI.create(trim(node.getRpcUrl()) + path), body, node,
-                        node.getApiKey() == null ? "" : node.getApiKey()));
+                node -> execute(method, URI.create(trim(node.getRpcUrl()) + path), body, node));
     }
     /**
      * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
      */
-    private synchronized JsonNode execute(String method, URI uri, String body, ChainRpcNode node, String apiKey) {
+    private synchronized JsonNode execute(String method, URI uri, String body, ChainRpcNode node) {
+        String apiKey = node.getApiKey() == null ? "" : node.getApiKey();
         int attempts = 3;
         IllegalStateException lastFailure = null;
         for (int attempt = 1; attempt <= attempts; attempt++) {
@@ -236,11 +205,7 @@ class TonCenterClient {
                 if (body != null) {
                     builder.header("content-type", "application/json");
                 }
-                if (node != null) {
-                    rpcNodeService.applyAuthHeaders(builder, node);
-                } else if (!apiKey.isBlank()) {
-                    builder.header("X-API-Key", apiKey);
-                }
+                rpcNodeService.applyAuthHeaders(builder, node);
                 HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
                 lastRequestMillis = System.currentTimeMillis();
                 if (response.statusCode() / 100 != 2) {

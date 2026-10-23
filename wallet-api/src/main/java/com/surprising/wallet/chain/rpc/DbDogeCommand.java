@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain.rpc;
 
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import org.springframework.stereotype.Component;
 
 /**
@@ -10,11 +10,11 @@ import org.springframework.stereotype.Component;
  * <p>继承 {@link DbBtcLikeJsonRpcCommand} 的通用 JSON-RPC 逻辑，实现 {@link DogeCommand} 接口。
  */
 @Component
-public
-class DbDogeCommand extends DbBtcLikeJsonRpcCommand implements DogeCommand {
+public class DbDogeCommand extends DbBtcLikeJsonRpcCommand implements DogeCommand {
     /**
      * 构造 {@code DbDogeCommand}，初始化该组件运行所需的状态和依赖。
      */
-    public DbDogeCommand(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {        super("DOGE", repository, rpcNodeService);
+    public DbDogeCommand(ChainProfileRepository profiles, ChainRpcNodeService rpcNodeService) {
+        super("DOGE", profiles, rpcNodeService);
     }
 }

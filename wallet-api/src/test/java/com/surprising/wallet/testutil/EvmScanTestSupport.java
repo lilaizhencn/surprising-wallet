@@ -1,14 +1,12 @@
 package com.surprising.wallet.testutil;
 
 import com.surprising.wallet.chain.evm.*;
-import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.repository.*;
-import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** Configures the fixture database; only the RPC discovery boundary is fixed to the local node. */
+/** Configures the fixture database; routes the configured local node through the real RPC service. */
 public final class EvmScanTestSupport {
     private EvmScanTestSupport() { }
 
@@ -29,13 +27,7 @@ public final class EvmScanTestSupport {
         jdbc.update("update chain_profile set deposit_confirmations = ? where chain = ? and enabled = true",
                 confirmations, chain.name());
         var profiles = new ChainProfileRepository(jdbc);
-        var rpc = new ChainRpcNodeService(new ChainRpcNodeRepository(jdbc)) {
-            @Override
-            public <T> T withFailover(String requestedChain, String network,
-                                      java.util.function.Function<ChainRpcNode, T> request) {
-                return request.apply(ChainRpcNode.builder().chain(requestedChain).network(network).rpcUrl(rpcUrl).build());
-            }
-        };
+        var rpc = RpcTestSupport.nodes(chain.name(), rpcUrl);
         return new EvmDepositScanner(profiles, new ChainAddressRepository(jdbc), new TokenConfigRepository(jdbc),
                 new DepositRecordRepository(jdbc), new EvmTransactionRepository(jdbc),
                 new EvmTokenTransferRepository(jdbc), new ChainScanHeightRepository(jdbc),

@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
@@ -67,8 +68,8 @@ class AptosLiveNativeFlowIntegrationTest {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         AptosRpcClient rpc = new AptosRpcClient(new ObjectMapper(),
-                env("APTOS_RPC_URL", "https://fullnode.devnet.aptoslabs.com/v1"),
-                env("APTOS_FAUCET_URL", "https://faucet.devnet.aptoslabs.com"));
+                profiles("APTOS"),
+                nodes("APTOS", java.util.Map.of("rpc", node("APTOS", env("APTOS_RPC_URL", "https://fullnode.devnet.aptoslabs.com/v1")), "faucet", node("APTOS", env("APTOS_FAUCET_URL", "https://faucet.devnet.aptoslabs.com")))));
         AptosKeyService keys = new AptosKeyService(masterSeed);
         AptosAddressService addresses = new AptosAddressService(keys, repository);
         AptosTransactionSigner signer = new AptosTransactionSigner(keys);

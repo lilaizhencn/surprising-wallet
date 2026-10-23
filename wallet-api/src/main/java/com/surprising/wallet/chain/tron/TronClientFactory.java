@@ -3,7 +3,7 @@ package com.surprising.wallet.chain.tron;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -26,7 +26,7 @@ public class TronClientFactory {
     private static final String CHAIN = "TRON";
 
     /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
 
     /** RPC 节点故障转移服务 */
     private final ChainRpcNodeService rpcNodeService;
@@ -34,7 +34,7 @@ public class TronClientFactory {
      * 构建或生成 {@code create} 对应的结果，并执行输入和状态校验。
      */
     public TronTridentClient create() {
-        AccountChainProfile profile = repository.findProfileByChain(CHAIN)
+        AccountChainProfile profile = profiles.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for TRON"));
         ChainRpcNode fullNode = first(rpcNodeService.enabledNodes(CHAIN, profile.getNetwork(), "rpc"),
                 "missing enabled TRON full node");

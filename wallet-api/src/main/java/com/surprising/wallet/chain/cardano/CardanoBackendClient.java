@@ -8,7 +8,7 @@ import com.bloxbean.cardano.client.backend.blockfrost.service.BFBackendService;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -24,14 +24,13 @@ import java.util.Locale;
  */
 @Component
 @RequiredArgsConstructor
-public
-class CardanoBackendClient {
+public class CardanoBackendClient {
 
     /** 链标识常量 */
     static final String CHAIN = "ADA";
 
     /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
 
     /** RPC 节点故障转移服务 */
     private final ChainRpcNodeService rpcNodeService;
@@ -39,7 +38,7 @@ class CardanoBackendClient {
      * 执行 {@code withBackend} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     public <T> T withBackend(BackendRequest<T> request) {
-        AccountChainProfile profile = repository.findProfileByChain(CHAIN)
+        AccountChainProfile profile = profiles.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for ADA"));
         return rpcNodeService.withFailover(CHAIN, profile.getNetwork(), node -> {
             BackendService backend = backend(node, profile.getNetwork());

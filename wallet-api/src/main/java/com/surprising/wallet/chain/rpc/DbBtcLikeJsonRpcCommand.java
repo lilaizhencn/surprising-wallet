@@ -4,7 +4,7 @@ import com.googlecode.jsonrpc4j.JsonRpcHttpClient;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeBlock;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeRawTransaction;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 
 import java.net.URL;
 import java.util.HashMap;
@@ -25,20 +25,20 @@ abstract class DbBtcLikeJsonRpcCommand implements BtcLikeCommand {
     /** 链名称，用于 RPC 节点路由 */
     private final String chain;
     /** 链数据仓储 */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
     /** RPC 节点管理服务 */
     private final ChainRpcNodeService rpcNodeService;
 
     /**
      * @param chain          链名称（如 BTC、BCH、DOGE）
-     * @param repository     链数据仓储
+     * @param profiles     链数据仓储
      * @param rpcNodeService RPC 节点服务
      */
     protected DbBtcLikeJsonRpcCommand(String chain,
-                                      ChainJdbcRepository repository,
+                                      ChainProfileRepository profiles,
                                       ChainRpcNodeService rpcNodeService) {
         this.chain = chain;
-        this.repository = repository;
+        this.profiles = profiles;
         this.rpcNodeService = rpcNodeService;
     }
 
@@ -117,7 +117,7 @@ abstract class DbBtcLikeJsonRpcCommand implements BtcLikeCommand {
      * 执行 {@code call} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private <T> T call(String method, Class<T> responseType, Object... params) {
-        String network = repository.findProfileByChain(chain)
+        String network = profiles.findAccountByChain(chain)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chain))
                 .getNetwork();
         return rpcNodeService.withFailover(chain, network, node -> {

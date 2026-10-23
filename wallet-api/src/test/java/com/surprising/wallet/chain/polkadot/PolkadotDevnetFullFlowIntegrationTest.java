@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.polkadot;
 
+import com.surprising.wallet.repository.ChainRpcNodeRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
@@ -62,10 +64,8 @@ class PolkadotDevnetFullFlowIntegrationTest {
         UUID tenantId = PolkadotTenantIntegrationFixture.ensureTenant(jdbc);
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         PolkadotKeyService keys = new PolkadotKeyService(keyMaterial);
-        ChainRpcNodeService rpcNodes = new ChainRpcNodeService(new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc));
-        setField(rpcNodes, "environmentName", "dev");
-        setField(rpcNodes, "maxConcurrentRequestsPerProvider", 8);
-        PolkadotRuntimeClient runtime = new PolkadotRuntimeClient(repository, rpcNodes);
+        ChainRpcNodeService rpcNodes = new ChainRpcNodeService(new ChainRpcNodeRepository(jdbc), "dev", 8);
+        PolkadotRuntimeClient runtime = new PolkadotRuntimeClient(new ChainProfileRepository(jdbc), rpcNodes);
         HotWalletAddressService hotWalletService = new HotWalletAddressService(repository,
                 null, null, null, null, null, null, null, null, keys, null);
         PolkadotTransactionService transactions = new PolkadotTransactionService(

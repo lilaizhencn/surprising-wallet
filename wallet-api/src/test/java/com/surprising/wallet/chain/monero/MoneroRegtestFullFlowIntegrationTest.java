@@ -1,5 +1,9 @@
 package com.surprising.wallet.chain.monero;
 
+import tools.jackson.databind.ObjectMapper;
+
+import com.surprising.wallet.repository.ChainRpcNodeRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
@@ -88,11 +92,9 @@ class MoneroRegtestFullFlowIntegrationTest {
                                 """, TEST_TENANT_ID);
                 ensureMoneroConfig(jdbc, environment, network);
 
-                ChainRpcNodeService rpcNodeService = new ChainRpcNodeService(new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc));
-                setField(rpcNodeService, "environmentName", environment);
-                setField(rpcNodeService, "maxConcurrentRequestsPerProvider", 1);
+                ChainRpcNodeService rpcNodeService = new ChainRpcNodeService(new ChainRpcNodeRepository(jdbc), environment, 1);
 
-                MoneroWalletRpcClient walletRpc = new MoneroWalletRpcClient(repository, rpcNodeService);
+                MoneroWalletRpcClient walletRpc = new MoneroWalletRpcClient(new ObjectMapper(), new ChainProfileRepository(jdbc), rpcNodeService);
                 MoneroDepositScanner scanner = new MoneroDepositScanner(walletRpc, repository);
                 MoneroTransactionService transactionService = new MoneroTransactionService(walletRpc, repository);
                 AccountChainProfile profile = profile(network);

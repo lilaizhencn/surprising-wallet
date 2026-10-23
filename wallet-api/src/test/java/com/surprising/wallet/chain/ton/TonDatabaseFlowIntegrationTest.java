@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.common.chain.ChainRpcNode;
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -186,7 +188,14 @@ class TonDatabaseFlowIntegrationTest {
          * 验证 {@code FakeTonApiClient} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private FakeTonApiClient(TonKeyService keys) {
-            super(new ObjectMapper(), "http://ton-api.invalid", "");
+            super(new ObjectMapper(),
+                    profiles("TON"),
+                    nodes(ChainRpcNode.builder().chain("TON")
+                            .network("test")
+                            .rpcUrl("http://ton-api.invalid")
+                            .authType("bearer")
+                            .authHeaderName("Authorization")
+                            .apiKey("").build()));
             this.keys = keys;
         }
 
@@ -220,7 +229,14 @@ class TonDatabaseFlowIntegrationTest {
          * 验证 {@code FakeTonCenterClient} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private FakeTonCenterClient() {
-            super(new ObjectMapper(), "http://ton-center.invalid", "");
+            super(new ObjectMapper(),
+                    profiles("TON"),
+                    nodes(ChainRpcNode.builder().chain("TON")
+                            .network("test")
+                            .rpcUrl("http://ton-center.invalid")
+                            .authType("api_key")
+                            .authHeaderName("X-API-Key")
+                            .apiKey("").build()));
         }
 
         /**

@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.near;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -77,8 +78,7 @@ class NearSandboxFullFlowIntegrationTest {
         UUID tenantId = NearTenantIntegrationFixture.ensureTenant(jdbc);
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         NearKeyService keys = new NearKeyService(keyMaterial);
-        NearRpcClient rpc = new NearRpcClient(JSON,
-                System.getProperty("near.sandbox.rpc", "http://127.0.0.1:3032"));
+        NearRpcClient rpc = new NearRpcClient(JSON, profiles("NEAR"), nodes("NEAR", System.getProperty("near.sandbox.rpc", "http://127.0.0.1:3032")));
         NearTransactionService transactions = new NearTransactionService(
                 rpc, new NearTransactionSigner(keys), keys, repository);
         NearDepositScanner scanner = new NearDepositScanner(rpc, repository);

@@ -9,7 +9,7 @@ import com.surprising.wallet.sdk.bitcoinj.rpc.model.TxOutput;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.chain.rpc.BtcLikeCommand;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import com.googlecode.jsonrpc4j.JsonRpcHttpClient;
 import org.springframework.stereotype.Component;
 
@@ -44,9 +44,9 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
      */
     private final ObjectMapper objectMapper;
     /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     * 保存 {@code profiles}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
     /**
      * 保存 {@code rpcNodeService}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
@@ -59,11 +59,11 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
     /**
      * 构造 {@code LitecoinEsploraCommand}，初始化该组件运行所需的状态和依赖。
      */
-    public LitecoinEsploraCommand(ChainJdbcRepository repository,
+    public LitecoinEsploraCommand(ObjectMapper objectMapper, ChainProfileRepository profiles,
                                   ChainRpcNodeService rpcNodeService) {
-        this.repository = repository;
+        this.profiles = profiles;
         this.rpcNodeService = rpcNodeService;
-        this.objectMapper = new ObjectMapper();
+        this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(20))
                 .build();
@@ -247,7 +247,7 @@ public class LitecoinEsploraCommand implements BtcLikeCommand {
      * 执行 {@code withNode} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private <T> T withNode(Function<ChainRpcNode, T> request) {
-        String network = repository.findProfileByChain("LTC")
+        String network = profiles.findAccountByChain("LTC")
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for LTC"))
                 .getNetwork();
         return rpcNodeService.withFailover("LTC", network, request);

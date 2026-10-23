@@ -8,7 +8,7 @@ import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -36,8 +36,7 @@ import java.util.Map;
  */
 @Component
 @RequiredArgsConstructor
-public
-class PolkadotRuntimeClient {
+public class PolkadotRuntimeClient {
 
     /** 链标识 */
     static final String CHAIN = "DOT";
@@ -52,7 +51,7 @@ class PolkadotRuntimeClient {
     private static final String PURPOSE_RUNTIME = "runtime";
 
     /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
 
     /** RPC 节点故障转移服务 */
     private final ChainRpcNodeService rpcNodeService;
@@ -388,7 +387,7 @@ class PolkadotRuntimeClient {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile() {
-        return repository.findProfileByChain(CHAIN)
+        return profiles.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
     /**

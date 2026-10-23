@@ -85,6 +85,8 @@ request chain/symbol/contract
 
 业务路由使用 `chain + asset` lookup。租户链列表和开链直接使用已启用的数据库配置，不再要求额外的 Adapter 注册。提现创建使用与地址运行时相同的校验入口，验证完成后才创建订单和冻结余额；UTXO 地址校验使用当前链的已配置网络。
 
+RPC 客户端直接读取 `ChainProfileRepository` 的网络配置，再调用 `ChainRpcNodeService` 选择目的节点、应用认证并处理故障切换和限流。Aptos faucet、TON indexer、HyperCore info/exchange 等用途仍分别路由；本地端点与运行环境使用相同调用路径。
+
 ## 充值流程
 
 充值与重组使用显式业务调用：DepositService → CustodyDepositProjectionService。EVM 扫描器直接调用 DepositService，且每次入账前必须经过真实全局和链扫描开关校验；测试与生产使用同一条入口。入账代次来自受租户约束的状态更新返回值，投影不再重复查询和重新分配租户。投影以 MANDATORY 传播加入当前事务；投影、流水、赤字恢复或事件持久化失败时，充值记录与余额同步回滚。单表仓储提供地址、投影、赤字和流水数据，跨表组合在应用层完成。

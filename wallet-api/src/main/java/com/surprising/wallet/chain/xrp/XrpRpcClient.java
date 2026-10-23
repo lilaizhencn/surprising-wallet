@@ -7,8 +7,7 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -25,7 +24,7 @@ import java.util.Optional;
  *
  * <p>封装了 XRPL 的常用 API（server_info、account_info、account_tx、submit 等），
  * 支持节点故障转移（{@link ChainRpcNodeService#withFailover}）。
- * 生产环境通过 {@link ChainJdbcRepository} 获取节点配置，
+ * 生产环境通过 {@link ChainProfileRepository} 获取节点配置，
  * 测试环境可通过构造函数直接指定固定 RPC URL。
  *
  * <p>关键数据类型：
@@ -35,8 +34,7 @@ import java.util.Optional;
  * </ul>
  */
 @Component
-public
-class XrpRpcClient {
+public class XrpRpcClient {
 
     /** XRP 链标识 */
     private static final String CHAIN = "XRP";
@@ -48,38 +46,16 @@ class XrpRpcClient {
     private final HttpClient httpClient;
 
     /** 链配置数据库访问 */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
 
     /** RPC 节点故障转移服务 */
     private final ChainRpcNodeService rpcNodeService;
 
-    /** 测试用固定 RPC URL（非空时优先使用） */
-    private final String fixedRpcUrl;
-
-    /**
-     * 构造 {@code XrpRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    @Autowired
-    public XrpRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
-        this(new ObjectMapper(), repository, rpcNodeService, null);
-    }
-
-    /**
-     * 构造 {@code XrpRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    XrpRpcClient(ObjectMapper objectMapper, String fixedRpcUrl) {
-        this(objectMapper, null, null, fixedRpcUrl);
-    }
-
-    /**
-     * 构造 {@code XrpRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    private XrpRpcClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
-                         ChainRpcNodeService rpcNodeService, String fixedRpcUrl) {
+    public XrpRpcClient(ObjectMapper objectMapper, ChainProfileRepository profiles,
+                            ChainRpcNodeService rpcNodeService) {
         this.objectMapper = objectMapper;
-        this.repository = repository;
+        this.profiles = profiles;
         this.rpcNodeService = rpcNodeService;
-        this.fixedRpcUrl = fixedRpcUrl == null ? "" : fixedRpcUrl.trim();
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .version(HttpClient.Version.HTTP_1_1)
@@ -276,10 +252,7 @@ class XrpRpcClient {
         body.set("params", params);
         try {
             String requestBody = objectMapper.writeValueAsString(body);
-            if (!fixedRpcUrl.isBlank()) {
-                return execute(method, requestBody, fixedRpcUrl, null);
-            }
-            String network = repository.findProfileByChain(CHAIN)
+            String network = profiles.findAccountByChain(CHAIN)
                     .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN))
                     .getNetwork();
             return rpcNodeService.withFailover(CHAIN, network,
@@ -298,9 +271,7 @@ class XrpRpcClient {
                     .timeout(Duration.ofSeconds(30))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody));
-            if (node != null) {
-                rpcNodeService.applyAuthHeaders(builder, node);
-            }
+            rpcNodeService.applyAuthHeaders(builder, node);
             HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new IllegalStateException("XRPL RPC HTTP " + response.statusCode()

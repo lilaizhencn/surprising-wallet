@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.cardano;
 
+import com.surprising.wallet.repository.ChainRpcNodeRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import com.bloxbean.cardano.client.api.common.OrderEnum;
 import com.bloxbean.cardano.client.api.model.Amount;
 import com.bloxbean.cardano.client.crypto.SecretKey;
@@ -75,10 +77,8 @@ class CardanoDevnetFullFlowIntegrationTest {
         UUID tenantId = CardanoTenantIntegrationFixture.ensureTenant(jdbc);
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         CardanoKeyService keys = new CardanoKeyService(keyMaterial);
-        ChainRpcNodeService rpcNodes = new ChainRpcNodeService(new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc));
-        setField(rpcNodes, "environmentName", "dev");
-        setField(rpcNodes, "maxConcurrentRequestsPerProvider", 4);
-        CardanoBackendClient backend = new CardanoBackendClient(repository, rpcNodes);
+        ChainRpcNodeService rpcNodes = new ChainRpcNodeService(new ChainRpcNodeRepository(jdbc), "dev", 4);
+        CardanoBackendClient backend = new CardanoBackendClient(new ChainProfileRepository(jdbc), rpcNodes);
         CardanoTransactionService transactions = new CardanoTransactionService(backend, keys, repository);
         CardanoDepositScanner scanner = new CardanoDepositScanner(backend, repository);
 

@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.xrp;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.google.common.primitives.UnsignedInteger;
@@ -91,7 +92,7 @@ class XrpTestnetFullFlowIntegrationTest {
         XrpKeyService keys = new XrpKeyService(new PubKeyConfig(keyMaterial),
                 new AccountSecp256k1KeyService(keyMaterial));
         XrpAddressService addresses = new XrpAddressService(keys, repository);
-        XrpRpcClient rpc = new XrpRpcClient(new ObjectMapper(), RPC_URL);
+        XrpRpcClient rpc = new XrpRpcClient(new ObjectMapper(), profiles("XRP"), nodes("XRP", RPC_URL));
         XrpTransactionService transactions = new XrpTransactionService(rpc, keys, repository);
         XrpDepositScanner scanner = new XrpDepositScanner(rpc, repository);
         FaucetClient faucet = FaucetClient.construct(HttpUrl.get(FAUCET_URL));

@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.solana;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -109,7 +110,7 @@ class CodexLiveUserFundingTest {
                 Long.getLong("codex.base.deposit-block", 43362796L), report);
 
         String seed = env("SW_ED25519_SEED", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
-        SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(), rpcUrl(jdbc, "SOLANA", "devnet"));
+        SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(), profiles("SOLANA"), nodes("SOLANA", rpcUrl(jdbc, "SOLANA", "devnet")));
         SolanaAddressService addresses = new SolanaAddressService(new SolanaKeyService(seed), repository);
         SolanaDepositScanner solanaScanner = new SolanaDepositScanner(rpc, repository);
         setPrivateField(solanaScanner, "addressService", addresses);
@@ -196,7 +197,7 @@ class CodexLiveUserFundingTest {
             throws Exception {
         String seed = env("SW_ED25519_SEED", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
         String rpcUrl = rpcUrl(jdbc, "SOLANA", "devnet");
-        SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(), rpcUrl);
+        SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(), profiles("SOLANA"), nodes("SOLANA", rpcUrl));
         SolanaKeyService keys = new SolanaKeyService(seed);
         SolanaAddressService addresses = new SolanaAddressService(keys, repository);
         SolanaTransactionService transactions = new SolanaTransactionService(rpc, keys, addresses, repository);

@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.hypercore;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
@@ -83,7 +84,7 @@ class HyperCoreLocalFullFlowIntegrationTest {
                 new AccountSecp256k1KeyService(WalletKeyTestFixture.provider());
 
         try (FakeHyperCoreApi api = new FakeHyperCoreApi()) {
-            HyperCoreApiClient client = new HyperCoreApiClient(JSON, api.baseUrl());
+            HyperCoreApiClient client = new HyperCoreApiClient(JSON, profiles("HYPERCORE"), nodes("HYPERCORE", api.baseUrl()));
             HyperCoreDepositScanner scanner = new HyperCoreDepositScanner(
                     client, hyperCoreRepository, chainRepository);
             HyperCoreTransactionService transactions = new HyperCoreTransactionService(

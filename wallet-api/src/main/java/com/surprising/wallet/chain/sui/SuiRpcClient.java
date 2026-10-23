@@ -8,7 +8,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.FieldMask;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import io.grpc.Channel;
 import io.grpc.ClientInterceptors;
 import io.grpc.ManagedChannel;
@@ -17,7 +17,6 @@ import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.MetadataUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import sui.rpc.v2.BalanceChangeOuterClass;
 import sui.rpc.v2.BcsOuterClass;
@@ -54,8 +53,7 @@ import java.util.function.Function;
  * @see SuiTransactionService
  */
 @Component
-public
-class SuiRpcClient {
+public class SuiRpcClient {
 
     /** 链标识常量 */
     private static final String CHAIN = "SUI";
@@ -98,38 +96,16 @@ class SuiRpcClient {
     private final ObjectMapper objectMapper;
 
     /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
 
     /** RPC 节点故障转移服务 */
     private final ChainRpcNodeService rpcNodeService;
 
-    /** 固定的 gRPC 端点（用于测试），为空则从数据库动态获取 */
-    private final String fixedGrpcEndpoint;
-
-    /**
-     * 构造 {@code SuiRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    @Autowired
-    public SuiRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
-        this(new ObjectMapper(), repository, rpcNodeService, null);
-    }
-
-    /**
-     * 构造 {@code SuiRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    SuiRpcClient(ObjectMapper objectMapper, String grpcEndpoint) {
-        this(objectMapper, null, null, grpcEndpoint);
-    }
-
-    /**
-     * 构造 {@code SuiRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    private SuiRpcClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
-                         ChainRpcNodeService rpcNodeService, String fixedGrpcEndpoint) {
+    public SuiRpcClient(ObjectMapper objectMapper, ChainProfileRepository profiles,
+                            ChainRpcNodeService rpcNodeService) {
         this.objectMapper = objectMapper;
-        this.repository = repository;
+        this.profiles = profiles;
         this.rpcNodeService = rpcNodeService;
-        this.fixedGrpcEndpoint = fixedGrpcEndpoint;
     }
     /**
      * 执行 {@code latestCheckpoint} 对应的辅助逻辑，完成数据处理并维护状态边界。
@@ -324,10 +300,7 @@ class SuiRpcClient {
      * 执行 {@code call} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private <T> T call(Function<GrpcContext, T> request) {
-        if (fixedGrpcEndpoint != null && !fixedGrpcEndpoint.isBlank()) {
-            return callNode(fixedGrpcEndpoint, Map.of(), request);
-        }
-        String network = repository.findProfileByChain(CHAIN)
+        String network = profiles.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN))
                 .getNetwork();
         return rpcNodeService.withFailover(CHAIN, network,

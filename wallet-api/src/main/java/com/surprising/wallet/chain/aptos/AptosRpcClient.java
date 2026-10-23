@@ -6,8 +6,7 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -49,49 +48,16 @@ public class AptosRpcClient {
     private final HttpClient httpClient;
 
     /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
 
     /** RPC 节点故障转移服务 */
     private final ChainRpcNodeService rpcNodeService;
 
-    /** 固定的 RPC URL（用于测试），为空则从数据库动态获取节点 */
-    private final String fixedRpcUrl;
-
-    /** 固定的水龙头 URL（用于测试），为空则从数据库动态获取节点 */
-    private final String fixedFaucetUrl;
-
-    /**
-     * 生产环境构造器。
-     *
-     * @param repository     {@link ChainJdbcRepository}
-     * @param rpcNodeService {@link ChainRpcNodeService}
-     */
-    @Autowired
-    public AptosRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
-        this(new ObjectMapper(), repository, rpcNodeService, null, null);
-    }
-
-    /**
-     * 测试用构造器，使用固定的 RPC 和水龙头 URL。
-     *
-     * @param objectMapper JSON 工具
-     * @param rpcUrl       固定 RPC URL
-     * @param faucetUrl    固定水龙头 URL
-     */
-    AptosRpcClient(ObjectMapper objectMapper, String rpcUrl, String faucetUrl) {
-        this(objectMapper, null, null, rpcUrl, faucetUrl);
-    }
-
-    /**
-     * 构造 {@code AptosRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    private AptosRpcClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
-                           ChainRpcNodeService rpcNodeService, String fixedRpcUrl, String fixedFaucetUrl) {
+    public AptosRpcClient(ObjectMapper objectMapper, ChainProfileRepository profiles,
+                            ChainRpcNodeService rpcNodeService) {
         this.objectMapper = objectMapper;
-        this.repository = repository;
+        this.profiles = profiles;
         this.rpcNodeService = rpcNodeService;
-        this.fixedRpcUrl = trim(fixedRpcUrl);
-        this.fixedFaucetUrl = trim(fixedFaucetUrl);
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .version(HttpClient.Version.HTTP_1_1)
@@ -295,9 +261,6 @@ public class AptosRpcClient {
      */
     public JsonNode fundDevnetAccount(String address, long amountOctas) {
         String path = "/mint?amount=" + amountOctas + "&address=" + AptosHex.normalizeAddress(address);
-        if (fixedFaucetUrl != null && !fixedFaucetUrl.isBlank()) {
-            return request("POST", fixedFaucetUrl + path, null, false, null);
-        }
         String network = network();
         return rpcNodeService.withFailover(CHAIN, network, "faucet",
                 node -> request("POST", trim(node.getRpcUrl()) + path, null, false, node));
@@ -347,9 +310,6 @@ public class AptosRpcClient {
      * @return 响应 JSON
      */
     private JsonNode rpcRequest(String method, String path, JsonNode body, boolean nullOnNotFound) {
-        if (fixedRpcUrl != null && !fixedRpcUrl.isBlank()) {
-            return request(method, fixedRpcUrl + path, body, nullOnNotFound, null);
-        }
         String network = network();
         return rpcNodeService.withFailover(CHAIN, network,
                 node -> request(method, trim(node.getRpcUrl()) + path, body, nullOnNotFound, node));
@@ -359,7 +319,7 @@ public class AptosRpcClient {
      * 获取当前链配置的网络名称。
      */
     private String network() {
-        return repository.findProfileByChain(CHAIN)
+        return profiles.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN))
                 .getNetwork();
     }
@@ -389,9 +349,7 @@ public class AptosRpcClient {
                         .timeout(Duration.ofSeconds(30))
                         .header("accept", "application/json")
                         .header("user-agent", "surprising-wallet/1.0");
-                if (node != null) {
-                    rpcNodeService.applyAuthHeaders(builder, node);
-                }
+                rpcNodeService.applyAuthHeaders(builder, node);
                 if (requestBody == null) {
                     builder.method(method, HttpRequest.BodyPublishers.noBody());
                 } else {

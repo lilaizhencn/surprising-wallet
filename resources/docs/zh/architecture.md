@@ -96,6 +96,7 @@ Servlet 请求包装器不得放入 `config/`，充值扫描使用的检查点�
 Service 和 Job 统一使用构造器注入；可选基础设施依赖以 `Optional<T>` 表达。
 `common.queue` 提供无 Web 依赖的 PGMQ JDBC 适配器和消费事务执行器，唯一启动入口显式导入配置。
 业务 Service 通过适配器使用队列，不直接编写 SQL；`ChainFeeRateRepository` 只访问 `chain_fee_rate`。
+RPC 客户端直接注入 `ChainProfileRepository` 与 `ChainRpcNodeService`，不再经过 `ChainJdbcRepository` 转发链配置。节点选择、故障切换、认证和 provider 限流只有一条路径；本地测试通过配置仓储提供节点，生产代码不保留固定测试端点或空依赖构造分支。`ChainRpcNodeService` 的环境名和并发上限由唯一构造器注入。
 
 各模块分别声明自身实际使用的 starter，避免依赖传递造成的隐式可用。
 

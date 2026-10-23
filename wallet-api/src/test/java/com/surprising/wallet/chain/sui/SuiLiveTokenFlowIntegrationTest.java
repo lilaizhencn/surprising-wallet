@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.sui;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -89,7 +90,8 @@ class SuiLiveTokenFlowIntegrationTest {
 
         ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         SuiRpcClient rpc = new SuiRpcClient(new ObjectMapper(),
-                env("SUI_GRPC_ENDPOINT", "fullnode.testnet.sui.io:443"));
+                profiles("SUI"),
+                nodes("SUI", env("SUI_GRPC_ENDPOINT", "fullnode.testnet.sui.io:443")));
         SuiKeyService keys = new SuiKeyService(masterSeed);
         SuiAddressService addresses = new SuiAddressService(keys, repository);
         SuiTransactionService transactions = new SuiTransactionService(

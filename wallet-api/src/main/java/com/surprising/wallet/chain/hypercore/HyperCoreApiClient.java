@@ -6,8 +6,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -26,8 +25,7 @@ import java.time.Duration;
  * <p>所有请求均为 POST JSON 格式，支持多节点故障转移。</p>
  */
 @Component
-public
-class HyperCoreApiClient {
+public class HyperCoreApiClient {
 
     /** 链标识常量 */
     static final String CHAIN = "HYPERCORE";
@@ -40,42 +38,19 @@ class HyperCoreApiClient {
      */
     private final HttpClient httpClient;
     /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     * 保存 {@code profiles}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
     /**
      * 保存 {@code rpcNodeService}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
     private final ChainRpcNodeService rpcNodeService;
-    /**
-     * 保存 {@code fixedBaseUrl}，用于承载当前对象的运行配置或业务数据。
-     */
-    private final String fixedBaseUrl;
 
-    /**
-     * 构造 {@code HyperCoreApiClient}，初始化该组件运行所需的状态和依赖。
-     */
-    @Autowired
-    public HyperCoreApiClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
-        this(new ObjectMapper(), repository, rpcNodeService, null);
-    }
-
-    /**
-     * 构造 {@code HyperCoreApiClient}，初始化该组件运行所需的状态和依赖。
-     */
-    HyperCoreApiClient(ObjectMapper objectMapper, String fixedBaseUrl) {
-        this(objectMapper, null, null, fixedBaseUrl);
-    }
-
-    /**
-     * 构造 {@code HyperCoreApiClient}，初始化该组件运行所需的状态和依赖。
-     */
-    private HyperCoreApiClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
-                               ChainRpcNodeService rpcNodeService, String fixedBaseUrl) {
+    public HyperCoreApiClient(ObjectMapper objectMapper, ChainProfileRepository profiles,
+                            ChainRpcNodeService rpcNodeService) {
         this.objectMapper = objectMapper;
-        this.repository = repository;
+        this.profiles = profiles;
         this.rpcNodeService = rpcNodeService;
-        this.fixedBaseUrl = fixedBaseUrl;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .version(HttpClient.Version.HTTP_1_1)
@@ -99,10 +74,7 @@ class HyperCoreApiClient {
     private JsonNode post(String purpose, String path, ObjectNode body) {
         try {
             String requestBody = objectMapper.writeValueAsString(body);
-            if (fixedBaseUrl != null && !fixedBaseUrl.isBlank()) {
-                return execute(path, requestBody, fixedBaseUrl, null);
-            }
-            String network = repository.findProfileByChain(CHAIN)
+            String network = profiles.findAccountByChain(CHAIN)
                     .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN))
                     .getNetwork();
             return rpcNodeService.withFailover(CHAIN, network, purpose,
@@ -124,9 +96,7 @@ class HyperCoreApiClient {
                         .header("accept", "application/json")
                         .header("user-agent", "surprising-wallet/1.0")
                         .POST(HttpRequest.BodyPublishers.ofString(requestBody));
-                if (node != null) {
-                    rpcNodeService.applyAuthHeaders(builder, node);
-                }
+                rpcNodeService.applyAuthHeaders(builder, node);
                 HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
                 if ((response.statusCode() == 429 || response.statusCode() / 100 == 5) && attempt < 4) {
                     Thread.sleep(attempt * 1_000L);

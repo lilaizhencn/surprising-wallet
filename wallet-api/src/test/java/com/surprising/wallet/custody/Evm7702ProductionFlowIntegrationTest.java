@@ -1,5 +1,6 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.repository.ChainRpcNodeRepository;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.chain.ChainAddressRuntime;
 import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
@@ -210,9 +211,7 @@ class Evm7702ProductionFlowIntegrationTest {
         depositScanner = com.surprising.wallet.testutil.EvmScanTestSupport.scanner(
                 jdbc, ChainType.valueOf(chain), RPC, 1, httpServices);
 
-        ChainRpcNodeService rpcNodes = new ChainRpcNodeService(new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc));
-        setField(rpcNodes, "environmentName", "eip7702-test");
-        setField(rpcNodes, "maxConcurrentRequestsPerProvider", 1);
+        ChainRpcNodeService rpcNodes = new ChainRpcNodeService(new ChainRpcNodeRepository(jdbc), "eip7702-test", 1);
         CustodySecurityProperties security = new CustodySecurityProperties();
         security.setSecretMasterKey("11".repeat(32));
         CustodyCryptoService crypto = new CustodyCryptoService(security);

@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.aptos;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -69,7 +70,8 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         AptosRpcClient rpc = new AptosRpcClient(new ObjectMapper(),
-                env("APTOS_RPC_URL", "https://fullnode.testnet.aptoslabs.com/v1"), "");
+                profiles("APTOS"),
+                nodes("APTOS", java.util.Map.of("rpc", node("APTOS", env("APTOS_RPC_URL", "https://fullnode.testnet.aptoslabs.com/v1")), "faucet", node("APTOS", ""))));
         AptosKeyService keys = new AptosKeyService(WalletKeyTestFixture.provider());
         AptosAddressService addresses = new AptosAddressService(keys, repository);
         AptosTransactionService transactions = new AptosTransactionService(

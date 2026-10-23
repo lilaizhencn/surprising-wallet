@@ -2,7 +2,6 @@ package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.repository.ChainRpcNodeRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -37,7 +36,6 @@ import java.util.function.Function;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ChainRpcNodeService {
     /**
      * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
@@ -51,12 +49,18 @@ public class ChainRpcNodeService {
     private final Map<String, Semaphore> providerLimiters = new ConcurrentHashMap<>();
 
     /** 当前部署环境名称 */
-    @Value("${sw.app.env.name:dev}")
-    private String environmentName;
+    private final String environmentName;
 
     /** 每个 provider 最大并发请求数 */
-    @Value("${sw.rpc.provider.max-concurrent-requests:1}")
-    private int maxConcurrentRequestsPerProvider;
+    private final int maxConcurrentRequestsPerProvider;
+
+    public ChainRpcNodeService(ChainRpcNodeRepository repository,
+                               @Value("${sw.app.env.name:dev}") String environmentName,
+                               @Value("${sw.rpc.provider.max-concurrent-requests:1}") int maxConcurrentRequestsPerProvider) {
+        this.repository = repository;
+        this.environmentName = environmentName;
+        this.maxConcurrentRequestsPerProvider = maxConcurrentRequestsPerProvider;
+    }
 
     /**
      * 获取指定链/网络的所有已启用 RPC 节点（通用用途）。

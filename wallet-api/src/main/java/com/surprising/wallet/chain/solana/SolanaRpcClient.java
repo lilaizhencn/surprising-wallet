@@ -7,8 +7,7 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -37,8 +36,7 @@ import javax.net.ssl.SSLContext;
  * 交易广播使用 base64 编码。
  */
 @Component
-public
-class SolanaRpcClient {
+public class SolanaRpcClient {
 
     /** Solana 链标识 */
     private static final String CHAIN = "SOLANA";
@@ -53,38 +51,16 @@ class SolanaRpcClient {
     private final AtomicLong requestId = new AtomicLong();
 
     /** 链配置数据库访问 */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
 
     /** RPC 节点故障转移服务 */
     private final ChainRpcNodeService rpcNodeService;
 
-    /** 测试用固定 RPC URL（非 null 时优先使用） */
-    private final String fixedRpcUrl;
-
-    /**
-     * 构造 {@code SolanaRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    @Autowired
-    public SolanaRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
-        this(new ObjectMapper(), repository, rpcNodeService, null);
-    }
-
-    /**
-     * 构造 {@code SolanaRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    SolanaRpcClient(ObjectMapper objectMapper, String rpcUrl) {
-        this(objectMapper, null, null, rpcUrl);
-    }
-
-    /**
-     * 构造 {@code SolanaRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    private SolanaRpcClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
-                            ChainRpcNodeService rpcNodeService, String fixedRpcUrl) {
+    public SolanaRpcClient(ObjectMapper objectMapper, ChainProfileRepository profiles,
+                            ChainRpcNodeService rpcNodeService) {
         this.objectMapper = objectMapper;
-        this.repository = repository;
+        this.profiles = profiles;
         this.rpcNodeService = rpcNodeService;
-        this.fixedRpcUrl = fixedRpcUrl;
         this.httpClient = buildHttpClient();
     }
     /**
@@ -243,10 +219,7 @@ class SolanaRpcClient {
         payload.set("params", objectMapper.valueToTree(params));
         try {
             String requestBody = objectMapper.writeValueAsString(payload);
-            if (fixedRpcUrl != null) {
-                return execute(method, requestBody, fixedRpcUrl, null);
-            }
-            String network = repository.findProfileByChain(CHAIN)
+            String network = profiles.findAccountByChain(CHAIN)
                     .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN))
                     .getNetwork();
             return rpcNodeService.withFailover(CHAIN, network,
@@ -267,9 +240,7 @@ class SolanaRpcClient {
                             .header("content-type", "application/json")
                             .header("user-agent", "surprising-wallet/1.0")
                             .POST(HttpRequest.BodyPublishers.ofString(requestBody));
-                    if (node != null) {
-                        rpcNodeService.applyAuthHeaders(builder, node);
-                    }
+                    rpcNodeService.applyAuthHeaders(builder, node);
                     HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
                     if (response.statusCode() == 429 && attempt < 6) {
                         Thread.sleep(attempt * 1_000L);

@@ -163,14 +163,7 @@ class EvmForkTransactionServiceIntegrationTest {
                 .priority(1)
                 .enabled(true)
                 .build();
-        return new ChainRpcNodeService(null) {
-            /** 固定返回当前逐链测试使用的本地节点。 */
-            @Override
-            public <T> T withFailover(String chain, String network,
-                                      java.util.function.Function<ChainRpcNode, T> request) {
-                return request.apply(node);
-            }
-        };
+        return com.surprising.wallet.testutil.RpcTestSupport.nodes(node);
     }
 
     /**

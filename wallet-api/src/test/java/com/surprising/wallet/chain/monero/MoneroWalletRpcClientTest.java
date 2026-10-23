@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.monero;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -116,7 +117,7 @@ class MoneroWalletRpcClientTest {
         });
         server.start();
         int port = server.getAddress().getPort();
-        return new MoneroWalletRpcClient(MAPPER, "http://127.0.0.1:" + port);
+        return new MoneroWalletRpcClient(MAPPER, profiles("XMR"), nodes("XMR", "http://127.0.0.1:" + port));
     }
 
     /**

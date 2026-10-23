@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.sui;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,7 @@ class SuiGrpcReadIntegrationTest {
                 "set -Dsui.grpc.live.enabled=true to validate the Sui gRPC endpoint");
         String endpoint = System.getenv().getOrDefault(
                 "SUI_GRPC_ENDPOINT", "fullnode.testnet.sui.io:443");
-        SuiRpcClient rpc = new SuiRpcClient(new ObjectMapper(), endpoint);
+        SuiRpcClient rpc = new SuiRpcClient(new ObjectMapper(), profiles("SUI"), nodes("SUI", endpoint));
 
         assertTrue(rpc.latestCheckpoint() > 0L);
         assertTrue(rpc.referenceGasPrice() > 0L);

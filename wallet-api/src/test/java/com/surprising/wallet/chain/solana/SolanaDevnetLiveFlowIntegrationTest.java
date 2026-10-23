@@ -1,5 +1,6 @@
 package com.surprising.wallet.chain.solana;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
@@ -50,7 +51,8 @@ class SolanaDevnetLiveFlowIntegrationTest {
         UUID tenantId = SolanaTenantIntegrationFixture.ensureTenant(jdbc);
         ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(),
-                env("SOLANA_RPC_URL", "https://api.devnet.solana.com"));
+                profiles("SOLANA"),
+                nodes("SOLANA", env("SOLANA_RPC_URL", "https://api.devnet.solana.com")));
         SolanaKeyService keys = new SolanaKeyService(masterSeed);
         SolanaAddressService addresses = new SolanaAddressService(keys, repository);
         SolanaTransactionService transactions = new SolanaTransactionService(rpc, keys, addresses, repository);

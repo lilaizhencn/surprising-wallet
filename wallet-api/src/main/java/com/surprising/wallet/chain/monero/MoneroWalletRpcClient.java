@@ -8,8 +8,7 @@ import tools.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -42,8 +41,7 @@ import java.util.HexFormat;
  * <p>精度：1 XMR = 10^12 原子单位。</p>
  */
 @Component
-public
-class MoneroWalletRpcClient {
+public class MoneroWalletRpcClient {
 
     /** 链标识 */
     static final String CHAIN = "XMR";
@@ -68,42 +66,19 @@ class MoneroWalletRpcClient {
      */
     private final HttpClient httpClient;
     /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
+     * 保存 {@code profiles}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
     /**
      * 保存 {@code rpcNodeService}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
     private final ChainRpcNodeService rpcNodeService;
-    /**
-     * 保存 {@code fixedRpcUrl}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final String fixedRpcUrl;
 
-    /**
-     * 构造 {@code MoneroWalletRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    @Autowired
-    public MoneroWalletRpcClient(ChainJdbcRepository repository, ChainRpcNodeService rpcNodeService) {
-        this(new ObjectMapper(), repository, rpcNodeService, null);
-    }
-
-    /**
-     * 构造 {@code MoneroWalletRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    MoneroWalletRpcClient(ObjectMapper objectMapper, String fixedRpcUrl) {
-        this(objectMapper, null, null, fixedRpcUrl);
-    }
-
-    /**
-     * 构造 {@code MoneroWalletRpcClient}，初始化该组件运行所需的状态和依赖。
-     */
-    private MoneroWalletRpcClient(ObjectMapper objectMapper, ChainJdbcRepository repository,
-                                  ChainRpcNodeService rpcNodeService, String fixedRpcUrl) {
+    public MoneroWalletRpcClient(ObjectMapper objectMapper, ChainProfileRepository profiles,
+                            ChainRpcNodeService rpcNodeService) {
         this.objectMapper = objectMapper;
-        this.repository = repository;
+        this.profiles = profiles;
         this.rpcNodeService = rpcNodeService;
-        this.fixedRpcUrl = fixedRpcUrl == null ? "" : fixedRpcUrl.trim();
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .version(HttpClient.Version.HTTP_1_1)
@@ -339,10 +314,7 @@ class MoneroWalletRpcClient {
         body.set("params", params == null ? objectMapper.createObjectNode() : params);
         try {
             String requestBody = objectMapper.writeValueAsString(body);
-            if (!fixedRpcUrl.isBlank()) {
-                return execute(method, requestBody, fixedRpcUrl, null);
-            }
-            AccountChainProfile profile = repository.findProfileByChain(CHAIN)
+            AccountChainProfile profile = profiles.findAccountByChain(CHAIN)
                     .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
             return callSerialized(method, requestBody, profile.getNetwork(), "rpc");
         } catch (JacksonException e) {
@@ -385,11 +357,11 @@ class MoneroWalletRpcClient {
                         .header("accept", "application/json")
                         .header("user-agent", "surprising-wallet/1.0")
                         .POST(HttpRequest.BodyPublishers.ofString(requestBody));
-                if (node != null && !isDigestAuth(node)) {
+                if (!isDigestAuth(node)) {
                     rpcNodeService.applyAuthHeaders(builder, node);
                 }
                 HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() == 401 && node != null && hasPasswordAuth(node)) {
+                if (response.statusCode() == 401 && hasPasswordAuth(node)) {
                     response = retryWithDigestAuth(endpoint, requestBody, node, response);
                 }
                 if ((response.statusCode() == 429 || response.statusCode() / 100 == 5) && attempt < 4) {

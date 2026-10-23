@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.common.chain.ChainRpcNode;
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Assumptions;
@@ -46,7 +48,13 @@ class TonLocalFundingIntegrationTest {
                 env("TON_DB_PASSWORD", ""));
         ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(new JdbcTemplate(dataSource));
         TonCenterClient rpc = new TonCenterClient(new ObjectMapper(),
-                env("TON_RPC_URL", "http://127.0.0.1:8081"), "");
+                profiles("TON"),
+                nodes(ChainRpcNode.builder().chain("TON")
+                        .network("test")
+                        .rpcUrl(env("TON_RPC_URL", "http://127.0.0.1:8081"))
+                        .authType("api_key")
+                        .authHeaderName("X-API-Key")
+                        .apiKey("").build()));
         TonKeyService keys = new TonKeyService(masterSeed);
         TonTransactionService transactions = new TonTransactionService(rpc, keys, repository);
 
