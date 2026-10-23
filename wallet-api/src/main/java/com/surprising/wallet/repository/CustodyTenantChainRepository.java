@@ -1,5 +1,7 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.chain.model.TokenConfiguration;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -89,20 +91,19 @@ public class CustodyTenantChainRepository {
         List<Map<String, Object>> assets = chainAssets.listActive().stream()
                 .filter(row -> !bool(row.get("native_asset")))
                 .toList();
-        List<Map<String, Object>> configs = tokenConfigs.listAll();
+        List<TokenConfiguration> configs = tokenConfigs.listAll();
         return profiles.stream()
                 .flatMap(profile -> assets.stream()
                         .filter(asset -> same(profile.get("chain"), asset.get("chain")))
                         .map(asset -> configs.stream()
-                                .filter(token -> same(token.get("chain"), asset.get("chain")))
-                                .filter(token -> same(token.get("symbol"), asset.get("symbol")))
-                                .filter(token -> same(token.get("network"), profile.get("network")))
+                                .filter(token -> same(token.chain(), asset.get("chain")))
+                                .filter(token -> same(token.symbol(), asset.get("symbol")))
+                                .filter(token -> same(token.network(), profile.get("network")))
                                 .findFirst()
                                 .map(token -> new TokenRecord(
                                         text(asset.get("chain")), text(asset.get("symbol")),
-                                        text(token.get("standard")), text(token.get("contract_address")),
-                                        number(token.get("decimals")), bool(token.get("enabled")),
-                                        decimal(token.get("min_deposit")))))
+                                        token.standard(), token.contractAddress(), token.decimals(), token.enabled(),
+                                        decimal(token.minDeposit()))))
                         .flatMap(java.util.Optional::stream))
                 .sorted(java.util.Comparator.comparing(TokenRecord::chain)
                         .thenComparing(TokenRecord::symbol))
@@ -160,10 +161,10 @@ public class CustodyTenantChainRepository {
             return false;
         }
         return bool(asset.get("native_asset")) || tokenConfigs.listAll().stream()
-                .anyMatch(token -> same(token.get("chain"), chain)
-                        && same(token.get("symbol"), symbol)
-                        && same(token.get("network"), profile.get("network"))
-                        && bool(token.get("enabled")));
+                .anyMatch(token -> same(token.chain(), chain)
+                        && same(token.symbol(), symbol)
+                        && same(token.network(), profile.get("network"))
+                        && token.enabled());
     }
 
     /** 比较两个链配置文本。 */

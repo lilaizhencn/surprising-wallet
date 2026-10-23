@@ -7,8 +7,7 @@
 -- Dumped by pg_dump version 18.4 (Homebrew)
 --
 -- Canonical initialization baseline for a new development or test database.
--- Schema, chain/token configuration, safety defaults, and later incremental
--- changes are maintained in this single file.
+-- Schema, chain/token configuration and safety defaults are maintained here.
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -2067,15 +2066,13 @@ CREATE TABLE public.token_config (
     collect_enabled boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    network character varying(32),
-    token_standard character varying(32),
+    network character varying(32) NOT NULL,
     contract_address_base58 character varying(128),
     contract_address_hex character varying(128),
-    min_deposit_amount numeric(78,18),
-    min_withdraw_amount numeric(78,18),
     collect_threshold numeric(78,18),
     gas_strategy character varying(64),
-    confirmation_required integer
+    confirmation_required integer,
+    CONSTRAINT token_config_network_nonblank CHECK (btrim(network) <> '')
 );
 
 
@@ -5128,31 +5125,77 @@ CREATE INDEX custody_reorg_deficit_account_idx
 CREATE INDEX chain_scan_block_recent_idx
     ON public.chain_scan_block USING btree (chain, scanner_name, block_height DESC);
 
+-- Canonical chain assets, with stable IDs and exact atomic-unit thresholds.
+INSERT INTO public.chain_asset (id, chain, symbol, asset_kind, contract_address, decimals, native_asset, active, min_transfer, min_withdraw, created_at, updated_at) VALUES
+    (1, 'BTC', 'BTC', 'NATIVE', NULL, 8, true, true, '0', '0', '2026-06-20T15:10:22.823199+08:00', '2026-06-24T18:07:33.46956+08:00'),
+    (2, 'ETH', 'ETH', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-06-20T15:10:22.823199+08:00', '2026-06-20T15:10:22.823199+08:00'),
+    (3, 'BNB', 'BNB', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-06-20T15:10:22.823199+08:00', '2026-06-20T15:10:22.823199+08:00'),
+    (4, 'POLYGON', 'POL', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-06-20T15:10:22.823199+08:00', '2026-06-20T15:10:22.823199+08:00'),
+    (5, 'ARBITRUM', 'ETH_ARB', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-06-20T15:10:22.823199+08:00', '2026-06-20T15:10:22.823199+08:00'),
+    (6, 'OPTIMISM', 'ETH_OP', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-06-20T15:10:22.823199+08:00', '2026-06-20T15:10:22.823199+08:00'),
+    (7, 'BASE', 'ETH_BASE', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-06-20T15:10:22.823199+08:00', '2026-06-20T15:10:22.823199+08:00'),
+    (8, 'AVAX_C', 'AVAX_C', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-06-20T15:10:22.823199+08:00', '2026-06-20T15:10:22.823199+08:00'),
+    (9, 'TRON', 'TRX', 'NATIVE', NULL, 6, true, true, '0', '0', '2026-06-20T15:10:22.823199+08:00', '2026-06-20T15:10:22.823199+08:00'),
+    (10, 'SOLANA', 'SOL', 'NATIVE', NULL, 9, true, true, '0', '0', '2026-06-20T15:10:22.823199+08:00', '2026-06-23T21:01:38.531755+08:00'),
+    (11, 'TON', 'TON', 'NATIVE', NULL, 9, true, true, '0', '0', '2026-06-20T15:10:22.823199+08:00', '2026-06-23T21:01:38.590086+08:00'),
+    (12, 'LTC', 'LTC', 'NATIVE', NULL, 8, true, true, '0', '0', '2026-06-21T07:45:07.734233+08:00', '2026-06-24T18:07:33.46956+08:00'),
+    (17, 'DOGE', 'DOGE', 'NATIVE', NULL, 8, true, true, '0', '0', '2026-06-21T19:13:13.386542+08:00', '2026-06-24T18:07:33.46956+08:00'),
+    (20, 'BCH', 'BCH', 'NATIVE', NULL, 8, true, true, '0', '0', '2026-06-21T23:17:57.796638+08:00', '2026-06-24T18:07:33.46956+08:00'),
+    (25, 'SOLANA', 'USDT', 'TOKEN', '2VHdVaW1jBGmvU1PdQpvmPnWV5AiAxrmxmUTLvf8951y', 6, false, true, '0', '0', '2026-06-23T15:01:18.906314+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (26, 'SOLANA', 'USDC', 'TOKEN', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', 6, false, true, '0', '0', '2026-06-23T15:01:43.41494+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (34, 'TON', 'USDT', 'JETTON', 'kQCZ5SAA78W_0vA5eSoU23YomxnUwah3KYagqeesNQI5jOXT', 6, false, true, '0', '0', '2026-06-23T21:37:58.688905+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (35, 'TON', 'USDC', 'JETTON', 'kQCzPT6908-8TR862TQo1S43-2kEme8UKRCRSWkaxNLD7H_2', 6, false, true, '0', '0', '2026-06-23T21:38:19.051838+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (44, 'APTOS', 'APT', 'NATIVE', NULL, 8, true, true, '0', '0', '2026-06-23T22:24:58.098309+08:00', '2026-06-23T22:24:58.098309+08:00'),
+    (45, 'SUI', 'SUI', 'NATIVE', NULL, 9, true, true, '0', '0', '2026-06-23T23:21:21.429955+08:00', '2026-06-23T23:21:21.429955+08:00'),
+    (136, 'XRP', 'XRP', 'NATIVE', NULL, 6, true, true, '0', '0', '2026-06-27T12:10:00+08:00', '2026-06-27T12:10:00+08:00'),
+    (138, 'TRON', 'USDT', 'TOKEN', 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (141, 'OPTIMISM', 'USDT', 'TOKEN', '0xcb4CB0127B079d42b81F53e747b763d206D050f9', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (142, 'BASE', 'USDT', 'TOKEN', '0x210BBd033630e5e611B7922D70b0Caabe64636d9', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (143, 'AVAX_C', 'USDT', 'TOKEN', '0x1B43cbC6879C8237469794F9B8Ed290810e502d9', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (144, 'POLYGON', 'USDT', 'TOKEN', '0xb5F6211f94FCC162D5c8cebba4f656c965577392', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (145, 'ETH', 'USDC', 'TOKEN', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (146, 'POLYGON', 'USDC', 'TOKEN', '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (147, 'ARBITRUM', 'USDC', 'TOKEN', '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (148, 'OPTIMISM', 'USDC', 'TOKEN', '0x5fd84259d66Cd46123540766Be93DFE6D43130D7', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (149, 'BASE', 'USDC', 'TOKEN', '0x036CbD53842c5426634e7929541eC2318f3dCF7e', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (150, 'AVAX_C', 'USDC', 'TOKEN', '0x5425890298aed601595a70AB815c96711a31Bc65', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (151, 'BNB', 'USDC', 'TOKEN', '0x31873b5804bABE258d6ea008f55e08DD00b7d51E', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (152, 'APTOS', 'USDC', 'TOKEN', '0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832', 6, false, true, '0', '0', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (153, 'APTOS', 'USDT', 'TOKEN', '0x6b015ce46a5d15c63c659ebf949c99c3d79dab462db4cf8fb8f609e45229e2cf', 6, false, true, '0', '0', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (154, 'SUI', 'USDC', 'TOKEN', '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC', 6, false, true, '0', '0', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (155, 'XRP', 'USDC', 'TOKEN', 'rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt:5553444300000000000000000000000000000000', 6, false, true, '0', '0', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (156, 'XRP', 'USDT', 'TOKEN', 'rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt:5553445400000000000000000000000000000000', 6, false, true, '0', '0', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (157, 'ETH', 'USDT', 'TOKEN', '0x01a6810727db185bbf7f30ec158c3ac8b8112627', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (158, 'ARBITRUM', 'USDT', 'TOKEN', '0xEf54C221Fc94517877F0F40eCd71E0A3866D66C2', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (159, 'BNB', 'USDT', 'TOKEN', '0xE8709025f99dd1B8533FB9b78Ca879Ee4ec7E70a', 6, false, true, '1', '1', '2026-10-24T04:50:35.378848+08:00', '2026-10-24T04:50:35.378848+08:00'),
+    (161, 'HYPEREVM', 'HYPE', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-10-24T04:50:35.383293+08:00', '2026-10-24T04:50:35.383293+08:00'),
+    (162, 'HYPEREVM', 'USDC', 'ERC20', '0x2B3370eE501B4a559b57D449569354196457D8Ab', 6, false, true, '1', '1', '2026-10-24T04:50:35.383293+08:00', '2026-10-24T04:50:35.383293+08:00'),
+    (163, 'LINEA', 'ETH_LINEA', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
+    (164, 'LINEA', 'USDC', 'ERC20', '0xFEce4462D57bD51A6A552365A011b95f0E16d9B7', 6, false, true, '1', '1', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
+    (165, 'LINEA', 'USDT', 'ERC20', '0xA219439258ca9da29E9Cc4cE5596924745e12B93', 6, false, false, '1', '1', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
+    (166, 'SCROLL', 'ETH_SCROLL', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
+    (167, 'SCROLL', 'USDC', 'ERC20', '0x7878290DB8C4f02bd06E0E249617871c19508bE6', 6, false, true, '1', '1', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
+    (168, 'SCROLL', 'USDT', 'ERC20', '0xf55BEC9cafDbE8730f096Aa55dad6D22d44099Df', 6, false, false, '1', '1', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
+    (169, 'UNICHAIN', 'ETH_UNICHAIN', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
+    (170, 'UNICHAIN', 'USDC', 'ERC20', '0x31d0220469e10c4E71834a79b1f276d740d3768F', 6, false, true, '1', '1', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
+    (171, 'X_LAYER', 'OKB', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
+    (172, 'X_LAYER', 'USDC', 'ERC20', '0x74b7F16337b8972027F6196A17a631aC6dE26d22', 6, false, false, '1', '1', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
+    (173, 'X_LAYER', 'USDT', 'ERC20', '0x1E4a5963aBFD975d8c9021ce480b42188849D41d', 6, false, false, '1', '1', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
+    (174, 'ROBINHOOD_CHAIN', 'ETH_ROBINHOOD', 'NATIVE', NULL, 18, true, true, '0', '0', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
+    (175, 'ROBINHOOD_CHAIN', 'USDG', 'ERC20', '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', 6, false, false, '1', '1', '2026-10-24T04:50:35.385562+08:00', '2026-10-24T04:50:35.385562+08:00'),
+    (176, 'HYPERCORE', 'USDC', 'CORE_USDC', NULL, 6, true, true, '1', '1', '2026-10-24T04:50:35.389884+08:00', '2026-10-24T04:50:35.389884+08:00'),
+    (177, 'HYPERCORE', 'HYPE', 'HIP1', '0x7317beb7cceed72ef0b346074cc8e7ab', 8, false, true, '0', '0', '2026-10-24T04:50:35.389884+08:00', '2026-10-24T04:50:35.389884+08:00'),
+    (178, 'ADA', 'ADA', 'NATIVE', NULL, 6, true, false, '0', '0', '2026-10-24T04:50:35.393104+08:00', '2026-10-24T04:50:35.393104+08:00'),
+    (179, 'DOT', 'DOT', 'NATIVE', NULL, 10, true, false, '0', '0', '2026-10-24T04:50:35.393104+08:00', '2026-10-24T04:50:35.393104+08:00'),
+    (180, 'NEAR', 'NEAR', 'NATIVE', NULL, 24, true, false, '0', '0', '2026-10-24T04:50:35.393104+08:00', '2026-10-24T04:50:35.393104+08:00'),
+    (181, 'XMR', 'XMR', 'NATIVE', NULL, 12, true, false, '0', '0', '2026-10-24T04:50:35.393104+08:00', '2026-10-24T04:50:35.393104+08:00'),
+    (182, 'ADA', 'USDC', 'CARDANO_NATIVE_ASSET', 'CHANGE_ME_CARDANO_USDC_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', 6, false, false, '1', '1', '2026-10-24T04:50:35.393587+08:00', '2026-10-24T04:50:35.393587+08:00'),
+    (183, 'ADA', 'USDT', 'CARDANO_NATIVE_ASSET', 'CHANGE_ME_CARDANO_USDT_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', 6, false, false, '1', '1', '2026-10-24T04:50:35.393587+08:00', '2026-10-24T04:50:35.393587+08:00'),
+    (184, 'DOT', 'USDC', 'ASSET_HUB_ASSET', '31337', 6, false, false, '1', '1', '2026-10-24T04:50:35.393587+08:00', '2026-10-24T04:50:35.393587+08:00'),
+    (185, 'DOT', 'USDT', 'ASSET_HUB_ASSET', '1984', 6, false, false, '1', '1', '2026-10-24T04:50:35.393587+08:00', '2026-10-24T04:50:35.393587+08:00'),
+    (186, 'NEAR', 'USDC', 'NEP141', '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af', 6, false, false, '1', '1', '2026-10-24T04:50:35.393587+08:00', '2026-10-24T04:50:35.393587+08:00'),
+    (187, 'NEAR', 'USDT', 'NEP141', 'CHANGE_ME_USDT_CONTRACT.testnet', 6, false, false, '1', '1', '2026-10-24T04:50:35.393587+08:00', '2026-10-24T04:50:35.393587+08:00');
 
--- Data for Name: chain_asset; Type: TABLE DATA; Schema: public; Owner: -
---
-
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (2, 'ETH', 'ETH', 'NATIVE', NULL, 18, true, true, 0, 0, '2026-06-20 15:10:22.823199+08', '2026-06-20 15:10:22.823199+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (3, 'BNB', 'BNB', 'NATIVE', NULL, 18, true, true, 0, 0, '2026-06-20 15:10:22.823199+08', '2026-06-20 15:10:22.823199+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (4, 'POLYGON', 'POL', 'NATIVE', NULL, 18, true, true, 0, 0, '2026-06-20 15:10:22.823199+08', '2026-06-20 15:10:22.823199+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (5, 'ARBITRUM', 'ETH_ARB', 'NATIVE', NULL, 18, true, true, 0, 0, '2026-06-20 15:10:22.823199+08', '2026-06-20 15:10:22.823199+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (6, 'OPTIMISM', 'ETH_OP', 'NATIVE', NULL, 18, true, true, 0, 0, '2026-06-20 15:10:22.823199+08', '2026-06-20 15:10:22.823199+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (7, 'BASE', 'ETH_BASE', 'NATIVE', NULL, 18, true, true, 0, 0, '2026-06-20 15:10:22.823199+08', '2026-06-20 15:10:22.823199+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (8, 'AVAX_C', 'AVAX_C', 'NATIVE', NULL, 18, true, true, 0, 0, '2026-06-20 15:10:22.823199+08', '2026-06-20 15:10:22.823199+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (9, 'TRON', 'TRX', 'NATIVE', NULL, 6, true, true, 0, 0, '2026-06-20 15:10:22.823199+08', '2026-06-20 15:10:22.823199+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (1, 'BTC', 'BTC', 'NATIVE', NULL, 8, true, true, 546, 546, '2026-06-20 15:10:22.823199+08', '2026-06-24 18:07:33.46956+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (12, 'LTC', 'LTC', 'NATIVE', NULL, 8, true, true, 100000, 100000, '2026-06-21 07:45:07.734233+08', '2026-06-24 18:07:33.46956+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (17, 'DOGE', 'DOGE', 'NATIVE', NULL, 8, true, true, 1000000, 1000000, '2026-06-21 19:13:13.386542+08', '2026-06-24 18:07:33.46956+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (20, 'BCH', 'BCH', 'NATIVE', NULL, 8, true, true, 546, 546, '2026-06-21 23:17:57.796638+08', '2026-06-24 18:07:33.46956+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (25, 'SOLANA', 'USDT', 'TOKEN', '2VHdVaW1jBGmvU1PdQpvmPnWV5AiAxrmxmUTLvf8951y', 6, false, true, 1, 1, '2026-06-23 15:01:18.906314+08', '2026-06-23 15:02:47.92829+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (26, 'SOLANA', 'USDC', 'TOKEN', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', 6, false, true, 1, 1, '2026-06-23 15:01:43.41494+08', '2026-06-23 15:03:11.79609+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (10, 'SOLANA', 'SOL', 'NATIVE', NULL, 9, true, true, 1, 1, '2026-06-20 15:10:22.823199+08', '2026-06-23 21:01:38.531755+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (11, 'TON', 'TON', 'NATIVE', NULL, 9, true, true, 1000000, 1000000, '2026-06-20 15:10:22.823199+08', '2026-06-23 21:01:38.590086+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (34, 'TON', 'USDT', 'JETTON', 'kQCZ5SAA78W_0vA5eSoU23YomxnUwah3KYagqeesNQI5jOXT', 6, false, true, 1, 1, '2026-06-23 21:37:58.688905+08', '2026-06-23 21:59:30.209563+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (35, 'TON', 'USDC', 'JETTON', 'kQCzPT6908-8TR862TQo1S43-2kEme8UKRCRSWkaxNLD7H_2', 6, false, true, 1, 1, '2026-06-23 21:38:19.051838+08', '2026-06-23 21:59:40.049688+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (44, 'APTOS', 'APT', 'NATIVE', NULL, 8, true, true, 1, 1, '2026-06-23 22:24:58.098309+08', '2026-06-23 22:24:58.098309+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (45, 'SUI', 'SUI', 'NATIVE', NULL, 9, true, true, 1, 1, '2026-06-23 23:21:21.429955+08', '2026-06-23 23:21:21.429955+08');
-INSERT INTO "public"."chain_asset" ("id", "chain", "symbol", "asset_kind", "contract_address", "decimals", "native_asset", "active", "min_transfer", "min_withdraw", "created_at", "updated_at") VALUES (136, 'XRP', 'XRP', 'NATIVE', NULL, 6, true, true, 0.000001, 0.000001, '2026-06-27 12:10:00+08', '2026-06-27 12:10:00+08');
 
 
 --
@@ -5315,31 +5358,84 @@ INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", 
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (226, 'NEAR', 'testnet', 'test2', 'near-testnet-official', 'rpc', 'HTTP_JSON_RPC', 'https://rpc.testnet.near.org', 'NONE', NULL, NULL, NULL, NULL, 10, 500, true, NULL, 'test2 NEAR official testnet JSON-RPC. Enable the matching profile only when native and NEP-141 test funds are ready.', '2026-06-28 10:45:00+08', '2026-06-28 10:45:00+08', NULL, NULL, NULL);
 INSERT INTO "public"."chain_rpc_node" ("id", "chain", "network", "environment", "node_label", "purpose", "connection_type", "rpc_url", "auth_type", "auth_header_name", "api_key_ref", "username_ref", "password_ref", "priority", "min_request_interval_ms", "enabled", "renewal_due_at", "remark", "created_at", "updated_at", "api_key", "username", "password") VALUES (227, 'NEAR', 'mainnet', 'prod', 'near-mainnet-official', 'rpc', 'HTTP_JSON_RPC', 'https://rpc.mainnet.near.org', 'NONE', NULL, NULL, NULL, NULL, 10, 500, true, NULL, 'NEAR official mainnet JSON-RPC. Enable the matching profile only after production risk review and monitoring are ready.', '2026-06-28 10:45:00+08', '2026-06-28 10:45:00+08', NULL, NULL, NULL);
 
+-- Canonical token configuration: explicit networks and one value for each setting.
+-- Official issuer references retained from the baseline (checked 2026-07-21):
+-- Circle USDC: https://developers.circle.com/stablecoins/usdc-contract-addresses
+-- Tether USDt: https://tether.to/en/supported-protocols/
+-- USDT0 deployments: https://docs.usdt0.to/technical-documentation/deployments
+-- Mainnet token entries remain disabled until the matching chain, audited RPC nodes
+-- and wallet tasks are deliberately enabled.
+INSERT INTO public.token_config (id, chain, network, symbol, standard, contract_address, contract_address_base58, contract_address_hex, decimals, enabled, collect_enabled, min_deposit, min_withdraw, collect_threshold, gas_strategy, confirmation_required, created_at, updated_at) VALUES
+    (1, 'ETH', 'sepolia', 'USDT', 'ERC20', '0x01a6810727db185bbf7f30ec158c3ac8b8112627', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:23:33.141962+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (2, 'ETH', 'sepolia', 'USDC', 'ERC20', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:23:33.151844+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (7, 'BNB', 'testnet', 'USDT', 'ERC20', '0xE8709025f99dd1B8533FB9b78Ca879Ee4ec7E70a', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:34:35.29862+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (8, 'BNB', 'testnet', 'USDC', 'ERC20', '0x31873b5804bABE258d6ea008f55e08DD00b7d51E', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:34:35.301957+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (17, 'POLYGON', 'amoy', 'USDT', 'ERC20', '0xb5F6211f94FCC162D5c8cebba4f656c965577392', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:38:52.367548+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (18, 'POLYGON', 'amoy', 'USDC', 'ERC20', '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:38:52.370655+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (19, 'ARBITRUM', 'sepolia', 'USDT', 'ERC20', '0xEf54C221Fc94517877F0F40eCd71E0A3866D66C2', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:39:07.857094+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (20, 'ARBITRUM', 'sepolia', 'USDC', 'ERC20', '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:39:07.860093+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (21, 'OPTIMISM', 'sepolia', 'USDT', 'ERC20', '0xcb4CB0127B079d42b81F53e747b763d206D050f9', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:39:23.204371+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (22, 'OPTIMISM', 'sepolia', 'USDC', 'ERC20', '0x5fd84259d66Cd46123540766Be93DFE6D43130D7', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:39:23.207534+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (23, 'BASE', 'sepolia', 'USDT', 'ERC20', '0x210BBd033630e5e611B7922D70b0Caabe64636d9', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:39:38.653475+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (24, 'BASE', 'sepolia', 'USDC', 'ERC20', '0x036CbD53842c5426634e7929541eC2318f3dCF7e', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:39:38.656754+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (25, 'AVAX_C', 'fuji', 'USDT', 'ERC20', '0x1B43cbC6879C8237469794F9B8Ed290810e502d9', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:39:54.422415+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (26, 'AVAX_C', 'fuji', 'USDC', 'ERC20', '0x5425890298aed601595a70AB815c96711a31Bc65', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-06-20T18:39:54.425852+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (75, 'TRON', 'nile', 'USDT', 'TRC20', 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', '41eca9bc828a3005b9a3b909f2cc5c2a54794de05f', 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'energy-bandwidth', 1, '2026-06-21T00:25:35.727551+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (78, 'SOLANA', 'devnet', 'USDT', 'SPL', '2VHdVaW1jBGmvU1PdQpvmPnWV5AiAxrmxmUTLvf8951y', '2VHdVaW1jBGmvU1PdQpvmPnWV5AiAxrmxmUTLvf8951y', NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'SOL_FEE_PAYER', 1, '2026-06-23T15:01:18.893717+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (79, 'SOLANA', 'devnet', 'USDC', 'SPL', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'SOL_FEE_PAYER', 1, '2026-06-23T15:01:43.398652+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (82, 'TON', 'testnet', 'USDT', 'JETTON', 'kQCZ5SAA78W_0vA5eSoU23YomxnUwah3KYagqeesNQI5jOXT', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'TON_FORWARD_FEE', 1, '2026-06-23T21:01:38.590818+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (83, 'TON', 'testnet', 'USDC', 'JETTON', 'kQCzPT6908-8TR862TQo1S43-2kEme8UKRCRSWkaxNLD7H_2', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'TON_FORWARD_FEE', 1, '2026-06-23T21:01:38.590818+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (98, 'SUI', 'testnet', 'TESTCOIN', 'COIN', '0x2::sui::SUI', NULL, NULL, 9, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'SUI_GAS_OBJECT', 1, '2026-06-23T23:21:21.43093+08:00', '2026-06-23T23:21:21.43093+08:00'),
+    (114, 'APTOS', 'testnet', 'USDC', 'APTOS_FA', '0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'APT_GAS', 1, '2026-10-24T04:42:57.407759+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (115, 'APTOS', 'testnet', 'USDT', 'APTOS_FA', '0x6b015ce46a5d15c63c659ebf949c99c3d79dab462db4cf8fb8f609e45229e2cf', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'APT_GAS', 1, '2026-10-24T04:42:57.407759+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (116, 'SUI', 'testnet', 'USDC', 'COIN', '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'SUI_GAS_OBJECT', 1, '2026-10-24T04:42:57.407759+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (118, 'XRP', 'testnet', 'USDC', 'ISSUED_CURRENCY', 'rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt:5553444300000000000000000000000000000000', NULL, '5553444300000000000000000000000000000000', 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'XRP_TRUSTLINE', 1, '2026-10-24T04:42:57.407759+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (119, 'XRP', 'testnet', 'USDT', 'ISSUED_CURRENCY', 'rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt:5553445400000000000000000000000000000000', NULL, '5553445400000000000000000000000000000000', 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'XRP_TRUSTLINE', 1, '2026-10-24T04:42:57.407759+08:00', '2026-10-24T04:42:57.407759+08:00'),
+    (130, 'HYPEREVM', 'testnet', 'USDC', 'ERC20', '0x2B3370eE501B4a559b57D449569354196457D8Ab', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-10-24T04:42:57.416116+08:00', '2026-10-24T04:42:57.416116+08:00'),
+    (131, 'LINEA', 'sepolia', 'USDC', 'ERC20', '0xFEce4462D57bD51A6A552365A011b95f0E16d9B7', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-10-24T04:42:57.419002+08:00', '2026-10-24T04:42:57.419002+08:00'),
+    (132, 'LINEA', 'mainnet', 'USDT', 'ERC20', '0xA219439258ca9da29E9Cc4cE5596924745e12B93', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-10-24T04:42:57.419002+08:00', '2026-10-24T04:42:57.4354+08:00'),
+    (133, 'SCROLL', 'sepolia', 'USDC', 'ERC20', '0x7878290DB8C4f02bd06E0E249617871c19508bE6', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-10-24T04:42:57.419002+08:00', '2026-10-24T04:42:57.419002+08:00'),
+    (134, 'SCROLL', 'mainnet', 'USDT', 'ERC20', '0xf55BEC9cafDbE8730f096Aa55dad6D22d44099Df', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-10-24T04:42:57.419002+08:00', '2026-10-24T04:42:57.4354+08:00'),
+    (135, 'UNICHAIN', 'sepolia', 'USDC', 'ERC20', '0x31d0220469e10c4E71834a79b1f276d740d3768F', NULL, NULL, 6, true, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-10-24T04:42:57.419002+08:00', '2026-10-24T04:42:57.419002+08:00'),
+    (136, 'X_LAYER', 'mainnet', 'USDC', 'ERC20', '0x74b7F16337b8972027F6196A17a631aC6dE26d22', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-10-24T04:42:57.419002+08:00', '2026-10-24T04:42:57.4354+08:00'),
+    (137, 'X_LAYER', 'mainnet', 'USDT', 'ERC20', '0x1E4a5963aBFD975d8c9021ce480b42188849D41d', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-10-24T04:42:57.419002+08:00', '2026-10-24T04:42:57.4354+08:00'),
+    (138, 'ROBINHOOD_CHAIN', 'mainnet', 'USDG', 'ERC20', '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', NULL, NULL, 6, false, true, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 1, '2026-10-24T04:42:57.419002+08:00', '2026-10-24T04:42:57.419002+08:00'),
+    (139, 'HYPERCORE', 'testnet', 'HYPE', 'HIP1', '0x7317beb7cceed72ef0b346074cc8e7ab', NULL, NULL, 8, true, true, '0.000001000000000000', '0.000001000000000000', '0.000001000000000000', 'hypercore-no-gas', 1, '2026-10-24T04:42:57.422829+08:00', '2026-10-24T04:42:57.422829+08:00'),
+    (140, 'ADA', 'preprod', 'USDC', 'CARDANO_NATIVE_ASSET', 'CHANGE_ME_CARDANO_USDC_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'CARDANO_MIN_ADA', 15, '2026-10-24T04:42:57.426805+08:00', '2026-10-24T04:42:57.426805+08:00'),
+    (141, 'ADA', 'preprod', 'USDT', 'CARDANO_NATIVE_ASSET', 'CHANGE_ME_CARDANO_USDT_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'CARDANO_MIN_ADA', 15, '2026-10-24T04:42:57.426805+08:00', '2026-10-24T04:42:57.426805+08:00'),
+    (142, 'DOT', 'westend', 'USDC', 'ASSET_HUB_ASSET', '31337', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'ASSET_HUB_NATIVE_GAS', 12, '2026-10-24T04:42:57.426805+08:00', '2026-10-24T04:42:57.426805+08:00'),
+    (143, 'DOT', 'westend', 'USDT', 'ASSET_HUB_ASSET', '1984', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'ASSET_HUB_NATIVE_GAS', 12, '2026-10-24T04:42:57.426805+08:00', '2026-10-24T04:42:57.426805+08:00'),
+    (144, 'NEAR', 'testnet', 'USDC', 'NEP141', '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'NEAR_STORAGE_DEPOSIT', 1, '2026-10-24T04:42:57.426805+08:00', '2026-10-24T04:42:57.426805+08:00'),
+    (145, 'NEAR', 'testnet', 'USDT', 'NEP141', 'CHANGE_ME_USDT_CONTRACT.testnet', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'NEAR_STORAGE_DEPOSIT', 1, '2026-10-24T04:42:57.426805+08:00', '2026-10-24T04:42:57.426805+08:00'),
+    (146, 'APTOS', 'mainnet', 'USDC', 'APTOS_FA', '0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'APT_GAS', 1, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (147, 'APTOS', 'mainnet', 'USDT', 'APTOS_FA', '0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'APT_GAS', 1, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (148, 'ARBITRUM', 'mainnet', 'USDC', 'ERC20', '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 40, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (149, 'ARBITRUM', 'mainnet', 'USDT', 'ERC20', '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 40, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (150, 'AVAX_C', 'mainnet', 'USDC', 'ERC20', '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 20, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (151, 'AVAX_C', 'mainnet', 'USDT', 'ERC20', '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 20, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (152, 'BASE', 'mainnet', 'USDC', 'ERC20', '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 40, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (153, 'DOT', 'mainnet', 'USDC', 'ASSET_HUB_ASSET', '1337', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'ASSET_HUB_NATIVE_GAS', 12, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (154, 'DOT', 'mainnet', 'USDT', 'ASSET_HUB_ASSET', '1984', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'ASSET_HUB_NATIVE_GAS', 12, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (155, 'ETH', 'mainnet', 'USDC', 'ERC20', '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 24, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (156, 'ETH', 'mainnet', 'USDT', 'ERC20', '0xdAC17F958D2ee523a2206206994597C13D831ec7', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 24, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (157, 'HYPEREVM', 'mainnet', 'USDC', 'ERC20', '0xb88339CB7199b77E23DB6E890353E22632Ba630f', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 6, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (158, 'HYPEREVM', 'mainnet', 'USDT', 'ERC20', '0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 6, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (159, 'LINEA', 'mainnet', 'USDC', 'ERC20', '0x176211869cA2b568f2A7D4EE941E073a821EE1ff', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 40, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (160, 'NEAR', 'mainnet', 'USDC', 'NEP141', '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'NEAR_STORAGE_DEPOSIT', 1, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (161, 'NEAR', 'mainnet', 'USDT', 'NEP141', 'usdt.tether-token.near', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'NEAR_STORAGE_DEPOSIT', 1, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (162, 'OPTIMISM', 'mainnet', 'USDC', 'ERC20', '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 40, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (163, 'OPTIMISM', 'mainnet', 'USDT', 'ERC20', '0x01bFF41798a0BcF287b996046Ca68b395DbC1071', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 40, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (164, 'POLYGON', 'mainnet', 'USDC', 'ERC20', '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 128, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (165, 'POLYGON', 'mainnet', 'USDT', 'ERC20', '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 128, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (166, 'SOLANA', 'mainnet', 'USDC', 'SPL', 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'SOL_FEE_PAYER', 32, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (167, 'SOLANA', 'mainnet', 'USDT', 'SPL', 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'SOL_FEE_PAYER', 32, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (168, 'SUI', 'mainnet', 'USDC', 'COIN', '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'SUI_GAS_OBJECT', 1, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (169, 'TON', 'mainnet', 'USDT', 'JETTON', 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'TON_FORWARD_FEE', 1, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (170, 'TRON', 'mainnet', 'USDT', 'TRC20', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', '41a614f803b6fd780986a42c78ec9c7f77e6ded13c', 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'energy-bandwidth', 20, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (171, 'UNICHAIN', 'mainnet', 'USDC', 'ERC20', '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 40, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (172, 'UNICHAIN', 'mainnet', 'USDT', 'ERC20', '0x9151434b16b9763660705744891fA906F660EcC5', NULL, NULL, 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'native-gas', 40, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00'),
+    (173, 'XRP', 'mainnet', 'USDC', 'ISSUED_CURRENCY', 'rGm7WCVp9gb4jZHWTEtGUr4dd74z2XuWhE:5553444300000000000000000000000000000000', NULL, '5553444300000000000000000000000000000000', 6, false, false, '1.000000000000000000', '1.000000000000000000', '1.000000000000000000', 'XRP_TRUSTLINE', 3, '2026-10-24T04:42:57.433455+08:00', '2026-10-24T04:42:57.433455+08:00');
 
---
--- Data for Name: token_config; Type: TABLE DATA; Schema: public; Owner: -
---
-
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (82, 'TON', 'USDT', 'JETTON', 'kQCZ5SAA78W_0vA5eSoU23YomxnUwah3KYagqeesNQI5jOXT', 6, true, 1.000000000000000000, 1.000000000000000000, true, '2026-06-23 21:01:38.590818+08', '2026-06-23 21:59:30.200728+08', 'testnet', 'JETTON', NULL, NULL, 1.000000000000000000, 1.000000000000000000, 1.000000000000000000, 'TON_FORWARD_FEE', 1);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (83, 'TON', 'USDC', 'JETTON', 'kQCzPT6908-8TR862TQo1S43-2kEme8UKRCRSWkaxNLD7H_2', 6, true, 1.000000000000000000, 1.000000000000000000, true, '2026-06-23 21:01:38.590818+08', '2026-06-23 21:59:40.024105+08', 'testnet', 'JETTON', NULL, NULL, 1.000000000000000000, 1.000000000000000000, 1.000000000000000000, 'TON_FORWARD_FEE', 1);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (7, 'BNB', 'USDT', 'ERC20', '0x8cE7De403F365090C68922610DC6B032F0c95485', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:34:35.29862+08', '2026-06-20 20:57:26.159843+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (8, 'BNB', 'USDC', 'ERC20', '0x7b331c59e5f9139923a06EA0B06CEa36cE9CF5d7', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:34:35.301957+08', '2026-06-20 20:57:26.163088+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (19, 'ARBITRUM', 'USDT', 'ERC20', '0x3A14799B74b73a63b5ca29023946E0EB3A7E6085', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:07.857094+08', '2026-06-20 20:59:57.252065+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (20, 'ARBITRUM', 'USDC', 'ERC20', '0x729788b708E76b54C3AE6F230Df7FDB8D8a16394', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:07.860093+08', '2026-06-20 20:59:57.255482+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (21, 'OPTIMISM', 'USDT', 'ERC20', '0xcb4CB0127B079d42b81F53e747b763d206D050f9', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:23.204371+08', '2026-06-20 21:01:27.95842+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (22, 'OPTIMISM', 'USDC', 'ERC20', '0x66C9A0b2971316079d31dda472f4eB5bF900C53b', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:23.207534+08', '2026-06-20 21:01:27.961714+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (23, 'BASE', 'USDT', 'ERC20', '0x210BBd033630e5e611B7922D70b0Caabe64636d9', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:38.653475+08', '2026-06-20 21:02:57.968281+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (24, 'BASE', 'USDC', 'ERC20', '0x036cbd53842c5426634e7929541ec2318f3dcf7e', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:38.656754+08', '2026-06-20 21:02:57.971571+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (25, 'AVAX_C', 'USDT', 'ERC20', '0x1B43cbC6879C8237469794F9B8Ed290810e502d9', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:54.422415+08', '2026-06-20 21:04:18.705305+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (26, 'AVAX_C', 'USDC', 'ERC20', '0xe757C06f170C8EE956E7d80793087c971Ab5D7b5', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:39:54.425852+08', '2026-06-20 21:04:18.708504+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (98, 'SUI', 'TESTCOIN', 'SUI_COIN', '0x2::sui::SUI', 9, false, 1.000000000000000000, 1.000000000000000000, false, '2026-06-23 23:21:21.43093+08', '2026-06-23 23:21:21.43093+08', 'testnet', 'COIN', NULL, NULL, 1.000000000000000000, 1.000000000000000000, 1.000000000000000000, 'SUI_GAS_OBJECT', 1);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (17, 'POLYGON', 'USDT', 'ERC20', '0xb5F6211f94FCC162D5c8cebba4f656c965577392', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:38:52.367548+08', '2026-06-20 23:13:41.261145+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (18, 'POLYGON', 'USDC', 'ERC20', '0x729B992ba1ccea88BE66985DCa5Ff28Ebba12046', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:38:52.370655+08', '2026-06-20 23:13:41.26619+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (1, 'ETH', 'USDT', 'ERC20', '0x278E80923f1a7194c0777500d794c489990259FA', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:23:33.141962+08', '2026-06-24 17:27:12.470424+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (75, 'TRON', 'USDT', 'TRC20', 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', 6, true, 0.000001000000000000, 0.000001000000000000, true, '2026-06-21 00:25:35.727551+08', '2026-06-21 00:28:58.580102+08', 'NILE', 'TRC20', 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', '41eca9bc828a3005b9a3b909f2cc5c2a54794de05f', 0.000001000000000000, 0.000001000000000000, 1.000000000000000000, 'energy-bandwidth', 1);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (78, 'SOLANA', 'USDT', 'SPL', '2VHdVaW1jBGmvU1PdQpvmPnWV5AiAxrmxmUTLvf8951y', 6, true, 1.000000000000000000, 1.000000000000000000, true, '2026-06-23 15:01:18.893717+08', '2026-06-23 15:02:47.901793+08', 'devnet', 'SPL', '2VHdVaW1jBGmvU1PdQpvmPnWV5AiAxrmxmUTLvf8951y', NULL, 1.000000000000000000, 1.000000000000000000, 1.000000000000000000, 'SOL_FEE_PAYER', 1);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (79, 'SOLANA', 'USDC', 'SPL', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', 6, true, 1.000000000000000000, 1.000000000000000000, true, '2026-06-23 15:01:43.398652+08', '2026-06-23 15:03:11.78696+08', 'devnet', 'SPL', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', NULL, 1.000000000000000000, 1.000000000000000000, 1.000000000000000000, 'SOL_FEE_PAYER', 1);
-INSERT INTO "public"."token_config" ("id", "chain", "symbol", "standard", "contract_address", "decimals", "enabled", "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at", "network", "token_standard", "contract_address_base58", "contract_address_hex", "min_deposit_amount", "min_withdraw_amount", "collect_threshold", "gas_strategy", "confirmation_required") VALUES (2, 'ETH', 'USDC', 'ERC20', '0x9478eC397A2F4Be6A84916dD8a353c91b78c6238', 6, true, 0.000000000000000000, 0.000000000000000000, true, '2026-06-20 18:23:33.151844+08', '2026-06-24 17:27:12.473627+08', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
 
 
@@ -5362,7 +5458,7 @@ INSERT INTO "public"."wallet_system_config" ("config_key", "config_value", "valu
 -- Name: chain_asset_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('"public"."chain_asset_id_seq"', 136, true);
+SELECT pg_catalog.setval('"public"."chain_asset_id_seq"', 187, true);
 
 
 --
@@ -5397,179 +5493,7 @@ SELECT pg_catalog.setval('"public"."near_transaction_id_seq"', 1, false);
 -- Name: token_config_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('"public"."token_config_id_seq"', 105, true);
-
-
---
--- Normalize testnet token contracts and expose enabled wallet-app token assets.
---
-
-UPDATE "public"."token_config" token
-   SET "network" = profile."network",
-       "updated_at" = now()
-  FROM "public"."chain_profile" profile
- WHERE upper(profile."chain") = upper(token."chain")
-   AND profile."enabled" = true
-   AND coalesce(trim(token."network"), '') = '';
-
-WITH token_data(chain, symbol, standard, network, token_standard, contract_address, decimals,
-                contract_address_base58, contract_address_hex, gas_strategy) AS (
-    VALUES
-        ('ETH', 'USDC', 'ERC20', 'sepolia', 'ERC20', '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', 6, NULL, NULL, 'native-gas'),
-        ('POLYGON', 'USDC', 'ERC20', 'amoy', 'ERC20', '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582', 6, NULL, NULL, 'native-gas'),
-        ('ARBITRUM', 'USDC', 'ERC20', 'sepolia', 'ERC20', '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', 6, NULL, NULL, 'native-gas'),
-        ('OPTIMISM', 'USDC', 'ERC20', 'sepolia', 'ERC20', '0x5fd84259d66Cd46123540766Be93DFE6D43130D7', 6, NULL, NULL, 'native-gas'),
-        ('BASE', 'USDC', 'ERC20', 'sepolia', 'ERC20', '0x036CbD53842c5426634e7929541eC2318f3dCF7e', 6, NULL, NULL, 'native-gas'),
-        ('AVAX_C', 'USDC', 'ERC20', 'fuji', 'ERC20', '0x5425890298aed601595a70AB815c96711a31Bc65', 6, NULL, NULL, 'native-gas'),
-        ('BNB', 'USDC', 'ERC20', 'testnet', 'ERC20', '0x31873b5804bABE258d6ea008f55e08DD00b7d51E', 6, NULL, NULL, 'native-gas'),
-        ('SOLANA', 'USDC', 'SPL', 'devnet', 'SPL', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', 6, '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', NULL, 'SOL_FEE_PAYER'),
-        -- Circle's official Aptos Testnet USDC FA metadata.
-        ('APTOS', 'USDC', 'APTOS_FA', 'testnet', 'APTOS_FA', '0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832', 6, NULL, NULL, 'APT_GAS'),
-        -- Tether has no Aptos Testnet issuance; this on-chain mock FA is for test flows only.
-        ('APTOS', 'USDT', 'APTOS_FA', 'testnet', 'APTOS_FA', '0x6b015ce46a5d15c63c659ebf949c99c3d79dab462db4cf8fb8f609e45229e2cf', 6, NULL, NULL, 'APT_GAS'),
-        ('SUI', 'USDC', 'SUI_COIN', 'testnet', 'COIN', '0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC', 6, NULL, NULL, 'SUI_GAS_OBJECT'),
-        ('TON', 'USDC', 'JETTON', 'testnet', 'JETTON', 'kQCzPT6908-8TR862TQo1S43-2kEme8UKRCRSWkaxNLD7H_2', 6, NULL, NULL, 'TON_FORWARD_FEE'),
-        ('XRP', 'USDC', 'XRPL_ISSUED', 'testnet', 'ISSUED_CURRENCY', 'rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt:5553444300000000000000000000000000000000', 6, NULL, '5553444300000000000000000000000000000000', 'XRP_TRUSTLINE'),
-        -- Testnet issued-currency template; the live flow replaces the issuer with its funded test issuer.
-        ('XRP', 'USDT', 'XRPL_ISSUED', 'testnet', 'ISSUED_CURRENCY', 'rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt:5553445400000000000000000000000000000000', 6, NULL, '5553445400000000000000000000000000000000', 'XRP_TRUSTLINE'),
-        ('ETH', 'USDT', 'ERC20', 'sepolia', 'ERC20', '0x01a6810727db185bbf7f30ec158c3ac8b8112627', 6, NULL, NULL, 'native-gas'),
-        ('POLYGON', 'USDT', 'ERC20', 'amoy', 'ERC20', '0xb5F6211f94FCC162D5c8cebba4f656c965577392', 6, NULL, NULL, 'native-gas'),
-        ('ARBITRUM', 'USDT', 'ERC20', 'sepolia', 'ERC20', '0xEf54C221Fc94517877F0F40eCd71E0A3866D66C2', 6, NULL, NULL, 'native-gas'),
-        ('OPTIMISM', 'USDT', 'ERC20', 'sepolia', 'ERC20', '0xcb4CB0127B079d42b81F53e747b763d206D050f9', 6, NULL, NULL, 'native-gas'),
-        ('BASE', 'USDT', 'ERC20', 'sepolia', 'ERC20', '0x210BBd033630e5e611B7922D70b0Caabe64636d9', 6, NULL, NULL, 'native-gas'),
-        ('AVAX_C', 'USDT', 'ERC20', 'fuji', 'ERC20', '0x1B43cbC6879C8237469794F9B8Ed290810e502d9', 6, NULL, NULL, 'native-gas'),
-        ('BNB', 'USDT', 'ERC20', 'testnet', 'ERC20', '0xE8709025f99dd1B8533FB9b78Ca879Ee4ec7E70a', 6, NULL, NULL, 'native-gas'),
-        ('TRON', 'USDT', 'TRC20', 'NILE', 'TRC20', 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', 6, 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', '41eca9bc828a3005b9a3b909f2cc5c2a54794de05f', 'energy-bandwidth'),
-        ('SOLANA', 'USDT', 'SPL', 'devnet', 'SPL', '2VHdVaW1jBGmvU1PdQpvmPnWV5AiAxrmxmUTLvf8951y', 6, '2VHdVaW1jBGmvU1PdQpvmPnWV5AiAxrmxmUTLvf8951y', NULL, 'SOL_FEE_PAYER'),
-        ('TON', 'USDT', 'JETTON', 'testnet', 'JETTON', 'kQCZ5SAA78W_0vA5eSoU23YomxnUwah3KYagqeesNQI5jOXT', 6, NULL, NULL, 'TON_FORWARD_FEE')
-)
-INSERT INTO "public"."token_config" ("chain", "symbol", "standard", "contract_address", "decimals", "enabled",
-                                     "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at",
-                                     "network", "token_standard", "contract_address_base58", "contract_address_hex",
-                                     "min_deposit_amount", "min_withdraw_amount", "collect_threshold",
-                                     "gas_strategy", "confirmation_required")
-SELECT chain, symbol, standard, contract_address, decimals, true,
-       1, 1, true, now(), now(),
-       network, token_standard, contract_address_base58, contract_address_hex,
-       1, 1, 1, gas_strategy, 1
-  FROM token_data
-ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
-    "standard" = EXCLUDED."standard",
-    "contract_address" = EXCLUDED."contract_address",
-    "decimals" = EXCLUDED."decimals",
-    "enabled" = true,
-    "min_deposit" = EXCLUDED."min_deposit",
-    "min_withdraw" = EXCLUDED."min_withdraw",
-    "collect_enabled" = true,
-    "updated_at" = now(),
-    "network" = EXCLUDED."network",
-    "token_standard" = EXCLUDED."token_standard",
-    "contract_address_base58" = EXCLUDED."contract_address_base58",
-    "contract_address_hex" = EXCLUDED."contract_address_hex",
-    "min_deposit_amount" = EXCLUDED."min_deposit_amount",
-    "min_withdraw_amount" = EXCLUDED."min_withdraw_amount",
-    "collect_threshold" = EXCLUDED."collect_threshold",
-    "gas_strategy" = EXCLUDED."gas_strategy",
-    "confirmation_required" = EXCLUDED."confirmation_required";
-
-INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
-                                    "native_asset", "active", "min_transfer", "min_withdraw",
-                                    "created_at", "updated_at")
-SELECT "chain", "symbol",
-       CASE WHEN "standard" = 'JETTON' THEN 'JETTON' ELSE 'TOKEN' END,
-       "contract_address", "decimals", false, true,
-       COALESCE("min_deposit_amount", "min_deposit", 1),
-       COALESCE("min_withdraw_amount", "min_withdraw", 1),
-       now(), now()
-  FROM "public"."token_config"
- WHERE "enabled" = true
-   AND "symbol" IN ('USDC', 'USDT')
-ON CONFLICT ("chain", "symbol") DO UPDATE SET
-    "asset_kind" = EXCLUDED."asset_kind",
-    "contract_address" = EXCLUDED."contract_address",
-    "decimals" = EXCLUDED."decimals",
-    "native_asset" = false,
-    "active" = true,
-    "min_transfer" = EXCLUDED."min_transfer",
-    "min_withdraw" = EXCLUDED."min_withdraw",
-    "updated_at" = now();
-
-UPDATE "public"."chain_asset"
-   SET "min_transfer" = 0.00000546, "min_withdraw" = 0.00000546
- WHERE "chain" IN ('BTC', 'BCH') AND "symbol" IN ('BTC', 'BCH');
-UPDATE "public"."chain_asset"
-   SET "min_transfer" = 0.001, "min_withdraw" = 0.001
- WHERE "chain" = 'LTC' AND "symbol" = 'LTC';
-UPDATE "public"."chain_asset"
-   SET "min_transfer" = 0.01, "min_withdraw" = 0.01
- WHERE "chain" = 'DOGE' AND "symbol" = 'DOGE';
-UPDATE "public"."chain_asset"
-   SET "min_transfer" = 0.001, "min_withdraw" = 0.001
- WHERE "chain" = 'SOLANA' AND "symbol" = 'SOL';
-UPDATE "public"."chain_asset"
-   SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
- WHERE "chain" = 'SOLANA' AND "symbol" IN ('USDC', 'USDT');
-UPDATE "public"."chain_asset"
-   SET "min_transfer" = 0.01, "min_withdraw" = 0.01
- WHERE "chain" = 'TON' AND "symbol" = 'TON';
-UPDATE "public"."chain_asset"
-   SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
- WHERE "chain" = 'TON' AND "symbol" IN ('USDC', 'USDT');
-UPDATE "public"."chain_asset"
-   SET "min_transfer" = 0.001, "min_withdraw" = 0.001
- WHERE "chain" IN ('APTOS', 'SUI') AND "native_asset" = true;
-UPDATE "public"."chain_asset"
-   SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
- WHERE "chain" IN ('APTOS', 'SUI') AND "native_asset" = false;
-UPDATE "public"."chain_asset"
-   SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
- WHERE "chain" = 'XRP' AND "symbol" = 'XRP';
-UPDATE "public"."chain_asset"
-   SET "min_transfer" = 0.000001, "min_withdraw" = 0.000001
- WHERE "chain" = 'XRP' AND "symbol" IN ('USDC', 'USDT');
-
--- HyperEVM is an EVM-compatible chain; HyperCore exchange-account flows are intentionally
--- not modeled here. The seeded USDC row is Circle Native USDC on HyperEVM testnet.
--- Prod databases must replace it with the HyperEVM mainnet USDC contract before enabling prod.
-INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
-                                    "native_asset", "active", "min_transfer", "min_withdraw",
-                                    "created_at", "updated_at")
-VALUES
-    ('HYPEREVM', 'HYPE', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('HYPEREVM', 'USDC', 'ERC20', '0x2B3370eE501B4a559b57D449569354196457D8Ab', 6, false, true, 1, 1, now(), now())
-ON CONFLICT ("chain", "symbol") DO UPDATE SET
-    "asset_kind" = EXCLUDED."asset_kind",
-    "contract_address" = EXCLUDED."contract_address",
-    "decimals" = EXCLUDED."decimals",
-    "native_asset" = EXCLUDED."native_asset",
-    "active" = EXCLUDED."active",
-    "min_transfer" = EXCLUDED."min_transfer",
-    "min_withdraw" = EXCLUDED."min_withdraw",
-    "updated_at" = now();
-
-INSERT INTO "public"."token_config" ("chain", "symbol", "standard", "contract_address", "decimals", "enabled",
-                                     "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at",
-                                     "network", "token_standard", "min_deposit_amount", "min_withdraw_amount",
-                                     "collect_threshold", "gas_strategy", "confirmation_required")
-VALUES
-    ('HYPEREVM', 'USDC', 'ERC20', '0x2B3370eE501B4a559b57D449569354196457D8Ab', 6, true,
-     1, 1, true, now(), now(), 'testnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
-ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
-    "standard" = EXCLUDED."standard",
-    "contract_address" = EXCLUDED."contract_address",
-    "decimals" = EXCLUDED."decimals",
-    "enabled" = EXCLUDED."enabled",
-    "min_deposit" = EXCLUDED."min_deposit",
-    "min_withdraw" = EXCLUDED."min_withdraw",
-    "collect_enabled" = EXCLUDED."collect_enabled",
-    "network" = EXCLUDED."network",
-    "token_standard" = EXCLUDED."token_standard",
-    "min_deposit_amount" = EXCLUDED."min_deposit_amount",
-    "min_withdraw_amount" = EXCLUDED."min_withdraw_amount",
-    "collect_threshold" = EXCLUDED."collect_threshold",
-    "gas_strategy" = EXCLUDED."gas_strategy",
-    "confirmation_required" = EXCLUDED."confirmation_required",
-    "updated_at" = now();
+SELECT pg_catalog.setval('"public"."token_config_id_seq"', 173, true);
 
 INSERT INTO "public"."chain_profile" ("chain", "network", "family", "runtime_currency_id", "bip44_coin_type",
                                       "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations",
@@ -5636,75 +5560,6 @@ ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDA
     "min_request_interval_ms" = EXCLUDED."min_request_interval_ms",
     "enabled" = EXCLUDED."enabled",
     "remark" = EXCLUDED."remark",
-    "updated_at" = now();
-
--- Linea, Scroll and Unichain reuse the shared EVM adapter. Testnet profiles are enabled.
--- Token rows only use verified official/token-list contracts.
--- Unichain USDC uses Circle's official Sepolia contract here; prod databases must replace it
--- with the Unichain mainnet USDC contract 0x078D782b760474a361dDA0AF3839290b0EF57AD6 before enabling prod.
-INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
-                                    "native_asset", "active", "min_transfer", "min_withdraw",
-                                    "created_at", "updated_at")
-VALUES
-    ('LINEA', 'ETH_LINEA', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('LINEA', 'USDC', 'ERC20', '0xFEce4462D57bD51A6A552365A011b95f0E16d9B7', 6, false, true, 1, 1, now(), now()),
-    ('LINEA', 'USDT', 'ERC20', '0xA219439258ca9da29E9Cc4cE5596924745e12B93', 6, false, false, 1, 1, now(), now()),
-    ('SCROLL', 'ETH_SCROLL', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('SCROLL', 'USDC', 'ERC20', '0x7878290DB8C4f02bd06E0E249617871c19508bE6', 6, false, true, 1, 1, now(), now()),
-    ('SCROLL', 'USDT', 'ERC20', '0xf55BEC9cafDbE8730f096Aa55dad6D22d44099Df', 6, false, false, 1, 1, now(), now()),
-    ('UNICHAIN', 'ETH_UNICHAIN', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('UNICHAIN', 'USDC', 'ERC20', '0x31d0220469e10c4E71834a79b1f276d740d3768F', 6, false, true, 1, 1, now(), now()),
-    ('X_LAYER', 'OKB', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('X_LAYER', 'USDC', 'ERC20', '0x74b7F16337b8972027F6196A17a631aC6dE26d22', 6, false, false, 1, 1, now(), now()),
-    ('X_LAYER', 'USDT', 'ERC20', '0x1E4a5963aBFD975d8c9021ce480b42188849D41d', 6, false, false, 1, 1, now(), now()),
-    ('ROBINHOOD_CHAIN', 'ETH_ROBINHOOD', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('ROBINHOOD_CHAIN', 'USDG', 'ERC20', '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', 6, false, false, 1, 1, now(), now())
-ON CONFLICT ("chain", "symbol") DO UPDATE SET
-    "asset_kind" = EXCLUDED."asset_kind",
-    "contract_address" = EXCLUDED."contract_address",
-    "decimals" = EXCLUDED."decimals",
-    "native_asset" = EXCLUDED."native_asset",
-    "active" = EXCLUDED."active",
-    "min_transfer" = EXCLUDED."min_transfer",
-    "min_withdraw" = EXCLUDED."min_withdraw",
-    "updated_at" = now();
-
-INSERT INTO "public"."token_config" ("chain", "symbol", "standard", "contract_address", "decimals", "enabled",
-                                     "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at",
-                                     "network", "token_standard", "min_deposit_amount", "min_withdraw_amount",
-                                     "collect_threshold", "gas_strategy", "confirmation_required")
-VALUES
-    ('LINEA', 'USDC', 'ERC20', '0xFEce4462D57bD51A6A552365A011b95f0E16d9B7', 6, true,
-     1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('LINEA', 'USDT', 'ERC20', '0xA219439258ca9da29E9Cc4cE5596924745e12B93', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('SCROLL', 'USDC', 'ERC20', '0x7878290DB8C4f02bd06E0E249617871c19508bE6', 6, true,
-     1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('SCROLL', 'USDT', 'ERC20', '0xf55BEC9cafDbE8730f096Aa55dad6D22d44099Df', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('UNICHAIN', 'USDC', 'ERC20', '0x31d0220469e10c4E71834a79b1f276d740d3768F', 6, true,
-     1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('X_LAYER', 'USDC', 'ERC20', '0x74b7F16337b8972027F6196A17a631aC6dE26d22', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('X_LAYER', 'USDT', 'ERC20', '0x1E4a5963aBFD975d8c9021ce480b42188849D41d', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('ROBINHOOD_CHAIN', 'USDG', 'ERC20', '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1)
-ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
-    "standard" = EXCLUDED."standard",
-    "contract_address" = EXCLUDED."contract_address",
-    "decimals" = EXCLUDED."decimals",
-    "enabled" = EXCLUDED."enabled",
-    "min_deposit" = EXCLUDED."min_deposit",
-    "min_withdraw" = EXCLUDED."min_withdraw",
-    "collect_enabled" = EXCLUDED."collect_enabled",
-    "network" = EXCLUDED."network",
-    "token_standard" = EXCLUDED."token_standard",
-    "min_deposit_amount" = EXCLUDED."min_deposit_amount",
-    "min_withdraw_amount" = EXCLUDED."min_withdraw_amount",
-    "collect_threshold" = EXCLUDED."collect_threshold",
-    "gas_strategy" = EXCLUDED."gas_strategy",
-    "confirmation_required" = EXCLUDED."confirmation_required",
     "updated_at" = now();
 
 INSERT INTO "public"."chain_profile" ("chain", "network", "family", "runtime_currency_id", "bip44_coin_type",
@@ -5866,47 +5721,6 @@ ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDA
     "remark" = EXCLUDED."remark",
     "updated_at" = now();
 
--- HyperCore is the Hyperliquid core account layer. USDC uses usdSend; HYPE/HIP-1 tokens use spotSend.
-INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
-                                    "native_asset", "active", "min_transfer", "min_withdraw",
-                                    "created_at", "updated_at")
-VALUES
-    ('HYPERCORE', 'USDC', 'CORE_USDC', NULL, 6, true, true, 1, 1, now(), now()),
-    ('HYPERCORE', 'HYPE', 'HIP1', '0x7317beb7cceed72ef0b346074cc8e7ab', 8, false, true, 0.000001, 0.000001, now(), now())
-ON CONFLICT ("chain", "symbol") DO UPDATE SET
-    "asset_kind" = EXCLUDED."asset_kind",
-    "contract_address" = EXCLUDED."contract_address",
-    "decimals" = EXCLUDED."decimals",
-    "native_asset" = EXCLUDED."native_asset",
-    "active" = EXCLUDED."active",
-    "min_transfer" = EXCLUDED."min_transfer",
-    "min_withdraw" = EXCLUDED."min_withdraw",
-    "updated_at" = now();
-
-INSERT INTO "public"."token_config" ("chain", "symbol", "standard", "contract_address", "decimals", "enabled",
-                                     "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at",
-                                     "network", "token_standard", "min_deposit_amount", "min_withdraw_amount",
-                                     "collect_threshold", "gas_strategy", "confirmation_required")
-VALUES
-    ('HYPERCORE', 'HYPE', 'HIP1', '0x7317beb7cceed72ef0b346074cc8e7ab', 8, true,
-     0.000001, 0.000001, true, now(), now(), 'testnet', 'HIP1', 0.000001, 0.000001, 0.000001, 'hypercore-no-gas', 1)
-ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
-    "standard" = EXCLUDED."standard",
-    "contract_address" = EXCLUDED."contract_address",
-    "decimals" = EXCLUDED."decimals",
-    "enabled" = EXCLUDED."enabled",
-    "min_deposit" = EXCLUDED."min_deposit",
-    "min_withdraw" = EXCLUDED."min_withdraw",
-    "collect_enabled" = EXCLUDED."collect_enabled",
-    "network" = EXCLUDED."network",
-    "token_standard" = EXCLUDED."token_standard",
-    "min_deposit_amount" = EXCLUDED."min_deposit_amount",
-    "min_withdraw_amount" = EXCLUDED."min_withdraw_amount",
-    "collect_threshold" = EXCLUDED."collect_threshold",
-    "gas_strategy" = EXCLUDED."gas_strategy",
-    "confirmation_required" = EXCLUDED."confirmation_required",
-    "updated_at" = now();
-
 INSERT INTO "public"."chain_profile" ("chain", "network", "family", "runtime_currency_id", "bip44_coin_type",
                                       "native_symbol", "rpc_url", "explorer_url", "deposit_confirmations",
                                       "withdraw_confirmations", "default_fee_rate", "dust_threshold", "enabled",
@@ -6006,96 +5820,6 @@ ON CONFLICT ("network", "token_index") DO UPDATE SET
     "is_canonical" = EXCLUDED."is_canonical",
     "evm_contract" = EXCLUDED."evm_contract",
     "full_name" = EXCLUDED."full_name",
-    "updated_at" = now();
-
---
--- New-chain placeholders: keep disabled until each chain adapter supports
--- deterministic address, deposit scan, withdrawal confirmation and collection.
---
-
-INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
-                                    "native_asset", "active", "min_transfer", "min_withdraw",
-                                    "created_at", "updated_at")
-VALUES
-    ('ADA', 'ADA', 'NATIVE', NULL, 6, true, false, 0.001, 0.001, now(), now()),
-    ('DOT', 'DOT', 'NATIVE', NULL, 10, true, false, 0.01, 0.01, now(), now()),
-    ('NEAR', 'NEAR', 'NATIVE', NULL, 24, true, false, 0.001, 0.001, now(), now()),
-    ('XMR', 'XMR', 'NATIVE', NULL, 12, true, false, 0.0001, 0.0001, now(), now())
-ON CONFLICT ("chain", "symbol") DO UPDATE SET
-    "asset_kind" = EXCLUDED."asset_kind",
-    "contract_address" = EXCLUDED."contract_address",
-    "decimals" = EXCLUDED."decimals",
-    "native_asset" = EXCLUDED."native_asset",
-    "active" = EXCLUDED."active",
-    "min_transfer" = EXCLUDED."min_transfer",
-    "min_withdraw" = EXCLUDED."min_withdraw",
-    "updated_at" = now();
-
-WITH new_chain_token_assets(chain, symbol, asset_kind, contract_address, decimals,
-                            min_transfer, min_withdraw) AS (
-    VALUES
-        ('ADA', 'USDC', 'CARDANO_NATIVE_ASSET', 'CHANGE_ME_CARDANO_USDC_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', 6, 1, 1),
-        ('ADA', 'USDT', 'CARDANO_NATIVE_ASSET', 'CHANGE_ME_CARDANO_USDT_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', 6, 1, 1),
-        ('DOT', 'USDC', 'ASSET_HUB_ASSET', '31337', 6, 1, 1),
-        ('DOT', 'USDT', 'ASSET_HUB_ASSET', '1984', 6, 1, 1),
-        ('NEAR', 'USDC', 'NEP141', '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af', 6, 1, 1),
-        ('NEAR', 'USDT', 'NEP141', 'CHANGE_ME_USDT_CONTRACT.testnet', 6, 1, 1)
-)
-INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
-                                    "native_asset", "active", "min_transfer", "min_withdraw",
-                                    "created_at", "updated_at")
-SELECT chain, symbol, asset_kind, contract_address, decimals, false, false,
-       min_transfer, min_withdraw, now(), now()
-  FROM new_chain_token_assets
-ON CONFLICT ("chain", "symbol") DO UPDATE SET
-    "asset_kind" = EXCLUDED."asset_kind",
-    "contract_address" = EXCLUDED."contract_address",
-    "decimals" = EXCLUDED."decimals",
-    "native_asset" = EXCLUDED."native_asset",
-    "active" = EXCLUDED."active",
-    "min_transfer" = EXCLUDED."min_transfer",
-    "min_withdraw" = EXCLUDED."min_withdraw",
-    "updated_at" = now();
-
-WITH new_chain_tokens(chain, symbol, standard, network, token_standard, contract_address, decimals,
-                      min_deposit, min_withdraw, collect_threshold, gas_strategy, confirmation_required) AS (
-    VALUES
-        ('ADA', 'USDC', 'CARDANO_NATIVE_ASSET', 'preprod', 'CARDANO_NATIVE_ASSET',
-         'CHANGE_ME_CARDANO_USDC_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', 6, 1, 1, 1, 'CARDANO_MIN_ADA', 15),
-        ('ADA', 'USDT', 'CARDANO_NATIVE_ASSET', 'preprod', 'CARDANO_NATIVE_ASSET',
-         'CHANGE_ME_CARDANO_USDT_POLICY_ID.CHANGE_ME_ASSET_NAME_HEX', 6, 1, 1, 1, 'CARDANO_MIN_ADA', 15),
-        ('DOT', 'USDC', 'ASSET_HUB_ASSET', 'westend', 'ASSET_HUB_ASSET',
-         '31337', 6, 1, 1, 1, 'ASSET_HUB_NATIVE_GAS', 12),
-        ('DOT', 'USDT', 'ASSET_HUB_ASSET', 'westend', 'ASSET_HUB_ASSET',
-         '1984', 6, 1, 1, 1, 'ASSET_HUB_NATIVE_GAS', 12),
-        ('NEAR', 'USDC', 'NEP141', 'testnet', 'NEP141',
-         '3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af', 6, 1, 1, 1, 'NEAR_STORAGE_DEPOSIT', 1),
-        ('NEAR', 'USDT', 'NEP141', 'testnet', 'NEP141',
-         'CHANGE_ME_USDT_CONTRACT.testnet', 6, 1, 1, 1, 'NEAR_STORAGE_DEPOSIT', 1)
-)
-INSERT INTO "public"."token_config" ("chain", "symbol", "standard", "contract_address", "decimals", "enabled",
-                                     "min_deposit", "min_withdraw", "collect_enabled", "created_at", "updated_at",
-                                     "network", "token_standard", "min_deposit_amount", "min_withdraw_amount",
-                                     "collect_threshold", "gas_strategy", "confirmation_required")
-SELECT chain, symbol, standard, contract_address, decimals, false,
-       min_deposit, min_withdraw, false, now(), now(), network, token_standard,
-       min_deposit, min_withdraw, collect_threshold, gas_strategy, confirmation_required
-  FROM new_chain_tokens
-ON CONFLICT ("chain", "network", "symbol") DO UPDATE SET
-    "standard" = EXCLUDED."standard",
-    "contract_address" = EXCLUDED."contract_address",
-    "decimals" = EXCLUDED."decimals",
-    "enabled" = EXCLUDED."enabled",
-    "min_deposit" = EXCLUDED."min_deposit",
-    "min_withdraw" = EXCLUDED."min_withdraw",
-    "collect_enabled" = EXCLUDED."collect_enabled",
-    "network" = EXCLUDED."network",
-    "token_standard" = EXCLUDED."token_standard",
-    "min_deposit_amount" = EXCLUDED."min_deposit_amount",
-    "min_withdraw_amount" = EXCLUDED."min_withdraw_amount",
-    "collect_threshold" = EXCLUDED."collect_threshold",
-    "gas_strategy" = EXCLUDED."gas_strategy",
-    "confirmation_required" = EXCLUDED."confirmation_required",
     "updated_at" = now();
 
 INSERT INTO "public"."chain_profile" ("chain", "network", "family", "runtime_currency_id", "bip44_coin_type",
@@ -6324,36 +6048,6 @@ UPDATE "public"."chain_rpc_node"
      OR upper(coalesce("password", '')) LIKE '%TODO_%'
    );
 
--- Safety guard: seeded token rows with placeholder or empty contract addresses
--- must stay disabled until the exact testnet/mainnet token contract is configured.
-UPDATE "public"."token_config"
-   SET "enabled" = false,
-       "collect_enabled" = false,
-       "updated_at" = now()
- WHERE "enabled" = true
-   AND (
-        coalesce("contract_address", "contract_address_base58", "contract_address_hex", '') = ''
-     OR upper(coalesce("contract_address", "contract_address_base58", "contract_address_hex", '')) LIKE '%CHANGE_ME%'
-     OR upper(coalesce("contract_address", "contract_address_base58", "contract_address_hex", '')) LIKE '%YOUR_%'
-     OR upper(coalesce("contract_address", "contract_address_base58", "contract_address_hex", '')) LIKE '%REPLACE_ME%'
-     OR upper(coalesce("contract_address", "contract_address_base58", "contract_address_hex", '')) LIKE '%TODO_%'
-   );
-
--- Safety guard: normalized token assets with placeholder or empty contracts
--- must stay inactive until they are mapped to a real token configuration.
-UPDATE "public"."chain_asset"
-   SET "active" = false,
-       "updated_at" = now()
- WHERE "active" = true
-   AND "native_asset" = false
-   AND (
-        coalesce("contract_address", '') = ''
-     OR upper(coalesce("contract_address", '')) LIKE '%CHANGE_ME%'
-     OR upper(coalesce("contract_address", '')) LIKE '%YOUR_%'
-     OR upper(coalesce("contract_address", '')) LIKE '%REPLACE_ME%'
-     OR upper(coalesce("contract_address", '')) LIKE '%TODO_%'
-   );
-
 
 --
 -- PostgreSQL database dump complete
@@ -6362,112 +6056,6 @@ UPDATE "public"."chain_asset"
 
 
 SET search_path TO public;
-
--- Official issuer references (checked 2026-07-21):
--- Circle USDC: https://developers.circle.com/stablecoins/usdc-contract-addresses
--- Tether USDt: https://tether.to/en/supported-protocols/
--- USDT0 deployments: https://docs.usdt0.to/technical-documentation/deployments
--- Mainnet contracts are configuration-only and remain disabled until the matching chain,
--- audited RPC nodes and wallet tasks are deliberately enabled.
-WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_address,
-                         contract_address_base58, contract_address_hex, decimals, gas_strategy) AS (
-    VALUES
-        ('APTOS', 'USDC', 'APTOS_FA', 'APTOS_FA',
-         '0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b', NULL, NULL, 6, 'APT_GAS'),
-        ('APTOS', 'USDT', 'APTOS_FA', 'APTOS_FA',
-         '0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b', NULL, NULL, 6, 'APT_GAS'),
-        ('ARBITRUM', 'USDC', 'ERC20', 'ERC20',
-         '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', NULL, NULL, 6, 'native-gas'),
-        ('ARBITRUM', 'USDT', 'ERC20', 'ERC20',
-         '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', NULL, NULL, 6, 'native-gas'),
-        ('AVAX_C', 'USDC', 'ERC20', 'ERC20',
-         '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', NULL, NULL, 6, 'native-gas'),
-        ('AVAX_C', 'USDT', 'ERC20', 'ERC20',
-         '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7', NULL, NULL, 6, 'native-gas'),
-        ('BASE', 'USDC', 'ERC20', 'ERC20',
-         '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', NULL, NULL, 6, 'native-gas'),
-        ('DOT', 'USDC', 'ASSET_HUB_ASSET', 'ASSET_HUB_ASSET',
-         '1337', NULL, NULL, 6, 'ASSET_HUB_NATIVE_GAS'),
-        ('DOT', 'USDT', 'ASSET_HUB_ASSET', 'ASSET_HUB_ASSET',
-         '1984', NULL, NULL, 6, 'ASSET_HUB_NATIVE_GAS'),
-        ('ETH', 'USDC', 'ERC20', 'ERC20',
-         '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', NULL, NULL, 6, 'native-gas'),
-        ('ETH', 'USDT', 'ERC20', 'ERC20',
-         '0xdAC17F958D2ee523a2206206994597C13D831ec7', NULL, NULL, 6, 'native-gas'),
-        ('HYPEREVM', 'USDC', 'ERC20', 'ERC20',
-         '0xb88339CB7199b77E23DB6E890353E22632Ba630f', NULL, NULL, 6, 'native-gas'),
-        ('HYPEREVM', 'USDT', 'ERC20', 'ERC20',
-         '0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb', NULL, NULL, 6, 'native-gas'),
-        ('LINEA', 'USDC', 'ERC20', 'ERC20',
-         '0x176211869cA2b568f2A7D4EE941E073a821EE1ff', NULL, NULL, 6, 'native-gas'),
-        ('NEAR', 'USDC', 'NEP141', 'NEP141',
-         '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1', NULL, NULL, 6, 'NEAR_STORAGE_DEPOSIT'),
-        ('NEAR', 'USDT', 'NEP141', 'NEP141',
-         'usdt.tether-token.near', NULL, NULL, 6, 'NEAR_STORAGE_DEPOSIT'),
-        ('OPTIMISM', 'USDC', 'ERC20', 'ERC20',
-         '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', NULL, NULL, 6, 'native-gas'),
-        ('OPTIMISM', 'USDT', 'ERC20', 'ERC20',
-         '0x01bFF41798a0BcF287b996046Ca68b395DbC1071', NULL, NULL, 6, 'native-gas'),
-        ('POLYGON', 'USDC', 'ERC20', 'ERC20',
-         '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', NULL, NULL, 6, 'native-gas'),
-        ('POLYGON', 'USDT', 'ERC20', 'ERC20',
-         '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', NULL, NULL, 6, 'native-gas'),
-        ('SOLANA', 'USDC', 'SPL', 'SPL',
-         'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-         'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', NULL, 6, 'SOL_FEE_PAYER'),
-        ('SOLANA', 'USDT', 'SPL', 'SPL',
-         'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
-         'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', NULL, 6, 'SOL_FEE_PAYER'),
-        ('SUI', 'USDC', 'SUI_COIN', 'COIN',
-         '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC', NULL, NULL, 6, 'SUI_GAS_OBJECT'),
-        ('TON', 'USDT', 'JETTON', 'JETTON',
-         'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', NULL, NULL, 6, 'TON_FORWARD_FEE'),
-        ('TRON', 'USDT', 'TRC20', 'TRC20',
-         'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-         'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-         '41a614f803b6fd780986a42c78ec9c7f77e6ded13c', 6, 'energy-bandwidth'),
-        ('X_LAYER', 'USDC', 'ERC20', 'ERC20',
-         '0x74b7F16337b8972027F6196A17a631aC6dE26d22', NULL, NULL, 6, 'native-gas'),
-        ('X_LAYER', 'USDT', 'ERC20', 'ERC20',
-         '0x1E4a5963aBFD975d8c9021ce480b42188849D41d', NULL, NULL, 6, 'native-gas'),
-        ('ROBINHOOD_CHAIN', 'USDG', 'ERC20', 'ERC20',
-         '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', NULL, NULL, 6, 'native-gas'),
-        ('UNICHAIN', 'USDC', 'ERC20', 'ERC20',
-         '0x078D782b760474a361dDA0AF3839290b0EF57AD6', NULL, NULL, 6, 'native-gas'),
-        ('UNICHAIN', 'USDT', 'ERC20', 'ERC20',
-         '0x9151434b16b9763660705744891fA906F660EcC5', NULL, NULL, 6, 'native-gas'),
-        ('XRP', 'USDC', 'XRPL_ISSUED', 'ISSUED_CURRENCY',
-         'rGm7WCVp9gb4jZHWTEtGUr4dd74z2XuWhE:5553444300000000000000000000000000000000',
-         NULL, '5553444300000000000000000000000000000000', 6, 'XRP_TRUSTLINE')
-)
-INSERT INTO token_config(
-    chain, network, symbol, standard, token_standard, contract_address,
-    contract_address_base58, contract_address_hex, decimals, enabled,
-    min_deposit, min_withdraw, min_deposit_amount, min_withdraw_amount,
-    collect_enabled, collect_threshold, gas_strategy, confirmation_required, updated_at)
-SELECT stablecoin.chain, 'mainnet', stablecoin.symbol, stablecoin.standard,
-       stablecoin.token_standard, stablecoin.contract_address,
-       stablecoin.contract_address_base58, stablecoin.contract_address_hex,
-       stablecoin.decimals, false, 1, 1, 1, 1, false, 1,
-       stablecoin.gas_strategy, profile.deposit_confirmations, now()
-  FROM mainnet_stablecoins stablecoin
-  JOIN chain_profile profile
-    ON profile.chain = stablecoin.chain AND profile.network = 'mainnet'
- WHERE NOT EXISTS (
-       SELECT 1
-         FROM token_config existing
-        WHERE existing.chain = stablecoin.chain
-          AND existing.network = 'mainnet'
-          AND existing.symbol = stablecoin.symbol
- );
-
-UPDATE token_config
-   SET collect_enabled = false,
-       updated_at = now()
- WHERE network = 'mainnet'
-   AND symbol IN ('USDC', 'USDT')
-   AND enabled = false
-   AND collect_enabled = true;
 
 -- Reference prices make stablecoin aggregation usable from a clean development database.
 -- Platform administrators can replace these snapshots through /custody/platform/v1/asset-prices.

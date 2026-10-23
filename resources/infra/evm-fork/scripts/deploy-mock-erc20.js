@@ -28,21 +28,19 @@ async function upsertTokenConfig(client, chain, token) {
     `insert into token_config(
         chain, symbol, standard, contract_address, decimals, enabled,
         min_deposit, min_withdraw, collect_enabled, created_at, updated_at,
-        network, token_standard, contract_address_hex, min_deposit_amount,
-        min_withdraw_amount, collect_threshold, gas_strategy, confirmation_required)
+        network, contract_address_hex, collect_threshold, gas_strategy, confirmation_required)
      values ($1, $2, 'ERC20', $3, $4, true,
              1, 1, true, now(), now(),
-             $5, 'ERC20', $3, 1, 1, 1, 'native-gas', 1)
+             $5, $3, 1, 'native-gas', 1)
      on conflict (chain, network, symbol) do update set
         standard = excluded.standard,
         contract_address = excluded.contract_address,
         decimals = excluded.decimals,
         enabled = true,
         collect_enabled = true,
-        token_standard = excluded.token_standard,
         contract_address_hex = excluded.contract_address_hex,
-        min_deposit_amount = excluded.min_deposit_amount,
-        min_withdraw_amount = excluded.min_withdraw_amount,
+        min_deposit = excluded.min_deposit,
+        min_withdraw = excluded.min_withdraw,
         collect_threshold = excluded.collect_threshold,
         gas_strategy = excluded.gas_strategy,
         confirmation_required = excluded.confirmation_required,

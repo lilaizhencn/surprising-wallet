@@ -66,16 +66,16 @@ class RuntimeConfigurationIntegrationTest {
             long id = tokens.insert("ETH", profile.getNetwork(), "TYPED_TEST", "ERC20", "0x" + "12".repeat(20),
                     "AliasBase58", "0x123456", 6, true, BigDecimal.ZERO, BigDecimal.ZERO,
                     true, BigDecimal.ZERO, "NATIVE", 3);
-            var token = tokens.findDefinition("eth", "typed_test").orElseThrow();
+            var token = tokens.findDefinition("eth", profile.getNetwork(), "typed_test").orElseThrow();
             assertEquals(id, token.getId());
             assertEquals("0x" + "12".repeat(20), token.getContractAddress());
             assertEquals("ERC20", token.getStandard());
             assertEquals(6, token.getDecimals());
-            assertEquals(token, tokens.findDefinitionByContract("ETH", "0x123456").orElseThrow());
-            assertEquals(token, tokens.findDefinitionByContract("ETH", "aliasbase58").orElseThrow());
-            assertTrue(tokens.listDefinitions("ETH").contains(token));
+            assertEquals(token, tokens.findDefinitionByContract("ETH", profile.getNetwork(), "0x123456").orElseThrow());
+            assertEquals(token, tokens.findDefinitionByContract("ETH", profile.getNetwork(), "aliasbase58").orElseThrow());
+            assertTrue(tokens.listDefinitions("ETH", profile.getNetwork()).contains(token));
             tokens.updateEnabled(id, false, false);
-            assertTrue(tokens.findDefinition("ETH", "TYPED_TEST").isEmpty());
+            assertTrue(tokens.findDefinition("ETH", profile.getNetwork(), "TYPED_TEST").isEmpty());
 
             for (String purpose : List.of("all", "rpc", "scan")) {
                 jdbc.update("""

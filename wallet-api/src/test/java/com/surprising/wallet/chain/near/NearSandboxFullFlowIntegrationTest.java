@@ -183,7 +183,7 @@ class NearSandboxFullFlowIntegrationTest {
         jdbc.update("""
                 update token_config
                    set contract_address = ?, contract_address_base58 = ?, contract_address_hex = null,
-                       decimals = 6, standard = 'NEP141', token_standard = 'NEP141', enabled = true,
+                       decimals = 6, standard = 'NEP141', enabled = true,
                        collect_enabled = true, updated_at = now()
                  where chain = 'NEAR' and network = 'testnet' and symbol = ?
                 """, contract.getAddress(), contract.getAddress(), symbol);

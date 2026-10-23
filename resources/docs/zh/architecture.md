@@ -67,6 +67,8 @@ bootstrap 包按模式显式扫描组件；签名实现由 FirstSignerRegistry /
 
 运行时配置由 ChainProfileRepository、ChainAssetRepository、TokenConfigRepository 和 ChainRpcNodeRepository 直接映射为有类型的模型；同一张表的运行时查询共用一份映射。Bitcoin-like 使用与其他链相同的 AccountChainProfile 配置，不再重复定义配置类或按网络二次查询。BlockchainRuntimeService 直接依赖配置和资产单表仓储；ChainRpcNodeService 直接依赖 RPC 单表仓储。管理页面需要的字段概览保留为独立查询投影，不再用于重建运行时模型。
 
+`token_config` 的网络为必填非空字段，标准和充提门槛分别只保留 `standard`、`min_deposit`、`min_withdraw`。`TokenConfigRepository` 统一映射为 `TokenConfiguration`；Console、租户资产、Gas/提现和批次流程直接读取类型字段，运行时 Token 定义保留网络身份。运行时查询显式传入已启用链的网络，不做空网络通配或跨网络选择；主键、网络和启用条件直接在单表 SQL 中筛选。初始化基线直接保存完整的 Token 和链资产配置及稳定 ID，不通过旧字段补齐、双写或多次种子更新构造目标状态。
+
 提现创建复用同一运行时地址校验，先验证格式、校验和及 UTXO 网络，再创建订单和冻结余额。Console 根据 Token 配置显示资产明细；链列表契约不再返回闲置报价能力字段。
 
 

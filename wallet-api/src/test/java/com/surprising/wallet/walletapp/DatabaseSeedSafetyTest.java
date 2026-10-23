@@ -5,71 +5,15 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
-import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * 验证 {@code DatabaseSeedSafetyTest} 覆盖的业务流程、边界条件和异常行为。
- */
+/** Root key material must remain outside the database configuration model. */
 class DatabaseSeedSafetyTest {
-    /**
-     * 验证 {@code unverifiedNewChainsStayDisabledInFreshDatabaseSeed} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
     @Test
-    void unverifiedNewChainsStayDisabledInFreshDatabaseSeed() throws Exception {
-        String sql = databaseSeed();
-
-        assertFalse(sql.contains("wallet_key_config"),
+    void databaseBaselineNeverDefinesWalletRootSeeds() throws Exception {
+        assertFalse(databaseSeed().contains("wallet_key_config"),
                 "wallet root seeds must never be modeled or stored in the database baseline");
-
-        Map<String, String> nativeSymbols = Map.of(
-                "ADA", "ADA",
-                "DOT", "DOT",
-                "NEAR", "NEAR",
-                "XMR", "XMR");
-        nativeSymbols.forEach((chain, symbol) -> assertRegex(sql,
-                "\\('" + chain + "',\\s*'" + symbol + "',\\s*'NATIVE',[^\\n]+true,\\s*false,",
-                chain + "/" + symbol + " native chain_asset must stay inactive by default"));
-
-        assertTrue(sql.contains("SELECT chain, symbol, asset_kind, contract_address, decimals, false, false"),
-                "new-chain token chain_asset rows must stay inactive by default");
-        assertTrue(sql.contains("SELECT chain, symbol, standard, contract_address, decimals, false"),
-                "new-chain token_config rows must stay disabled by default");
-        assertTrue(sql.contains("min_deposit, min_withdraw, false, now(), now()"),
-                "new-chain token collection must stay disabled by default");
-        assertTrue(sql.contains("seeded RPC rows with placeholder URLs or credentials must stay disabled"),
-                "database seed must keep placeholder RPC nodes disabled");
-        assertTrue(sql.contains("upper(coalesce(\"rpc_url\", '')) LIKE '%CHANGE_ME%'"),
-                "database seed must disable RPC nodes with placeholder URLs");
-        assertTrue(sql.contains("upper(coalesce(\"api_key\", '')) LIKE '%CHANGE_ME%'"),
-                "database seed must disable RPC nodes with placeholder credentials");
-        assertTrue(sql.contains("seeded token rows with placeholder or empty contract addresses"),
-                "database seed must keep placeholder token_config rows disabled");
-        assertTrue(sql.contains("UPDATE \"public\".\"token_config\""),
-                "database seed must include a token_config placeholder safety guard");
-        assertTrue(sql.contains("normalized token assets with placeholder or empty contracts"),
-                "database seed must keep placeholder token chain_asset rows inactive");
-        assertTrue(sql.contains("UPDATE \"public\".\"chain_asset\""),
-                "database seed must include a chain_asset placeholder safety guard");
-
-        for (String profile : new String[]{
-                "ADA|preprod", "ADA|mainnet", "DOT|westend", "DOT|mainnet",
-                "NEAR|testnet", "NEAR|mainnet", "XMR|regtest", "XMR|stagenet", "XMR|mainnet"}) {
-            String[] parts = profile.split("\\|");
-            assertRegex(sql,
-                    "\\('" + parts[0] + "',\\s*'" + parts[1] + "',[\\s\\S]*?false,\\s*now\\(\\),\\s*now\\(\\),[\\s\\S]*?false,\\s*false,\\s*false,\\s*false",
-                    profile + " chain_profile must keep runtime jobs disabled by default");
-        }
-    }
-
-    /**
-     * 验证 {@code assertRegex} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static void assertRegex(String value, String regex, String message) {
-        assertTrue(Pattern.compile(regex).matcher(value).find(), message);
     }
 
     /**

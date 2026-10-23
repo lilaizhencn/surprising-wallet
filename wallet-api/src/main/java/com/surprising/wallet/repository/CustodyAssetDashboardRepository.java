@@ -1,5 +1,7 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.chain.model.TokenConfiguration;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -177,7 +179,7 @@ public class CustodyAssetDashboardRepository {
                         java.util.Locale.ROOT)))
                 .toList();
         List<Map<String, Object>> assets = chainAssets.listActive();
-        List<Map<String, Object>> tokens = tokenConfigs.listAll();
+        List<TokenConfiguration> tokens = tokenConfigs.listAll();
         Map<String, ConfiguredAsset> result = new LinkedHashMap<>();
         for (Map<String, Object> profile : profiles) {
             String chain = text(profile.get("chain"));
@@ -188,9 +190,9 @@ public class CustodyAssetDashboardRepository {
                 }
                 boolean nativeAsset = bool(asset.get("native_asset"));
                 boolean configured = nativeAsset || tokens.stream().anyMatch(token ->
-                        same(token.get("chain"), chain)
-                                && same(token.get("symbol"), asset.get("symbol"))
-                                && same(token.get("network"), network));
+                        same(token.chain(), chain)
+                                && same(token.symbol(), asset.get("symbol"))
+                                && same(token.network(), network));
                 if (configured) {
                     ConfiguredAsset value = new ConfiguredAsset(
                             chain, text(asset.get("symbol")), nativeAsset);

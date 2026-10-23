@@ -419,7 +419,7 @@ class XrpTestnetFullFlowIntegrationTest {
         jdbc.update("""
                 update token_config
                    set contract_address = ?, contract_address_base58 = ?, contract_address_hex = ?,
-                       token_standard = 'ISSUED_CURRENCY', standard = 'XRPL_ISSUED', decimals = 6,
+                       standard = 'ISSUED_CURRENCY', decimals = 6,
                        enabled = true, updated_at = now()
                  where chain = 'XRP' and network = 'testnet' and symbol = ?
                 """, issuer + ":" + currency, issuer, symbol, symbol);

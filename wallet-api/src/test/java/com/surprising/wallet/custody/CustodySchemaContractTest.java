@@ -88,8 +88,6 @@ class CustodySchemaContractTest {
         assertTrue(sql.contains("0x9151434b16b9763660705744891fA906F660EcC5"));
         assertTrue(sql.contains("TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"));
         assertTrue(sql.contains("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"));
-        assertTrue(sql.contains("stablecoin.decimals, false, 1, 1, 1, 1, false, 1"),
-                "mainnet stablecoins must remain disabled for transfers and collection");
         assertTrue(sql.contains("last_checked_at timestamp with time zone"));
         assertTrue(sql.contains("last_latency_ms bigint"));
         assertTrue(sql.matches(

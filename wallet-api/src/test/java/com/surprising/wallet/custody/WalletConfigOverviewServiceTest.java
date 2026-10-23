@@ -113,10 +113,12 @@ class WalletConfigOverviewServiceTest {
                                                        CustodyRepository audit) {
         var keyMaterial = org.mockito.Mockito.mock(com.surprising.wallet.common.key.WalletKeyMaterialProvider.class);
         org.mockito.Mockito.when(keyMaterial.isConfigured()).thenReturn(keysetConfigured);
+        var tokens = org.mockito.Mockito.mock(TokenConfigRepository.class);
+        org.mockito.Mockito.when(tokens.listAll()).thenReturn(List.of());
         return new WalletConfigOverviewService(
                 new WalletSystemConfigRepository(jdbc),
                 new ChainProfileRepository(jdbc),
-                new TokenConfigRepository(jdbc),
+                tokens,
                 new ChainAssetRepository(jdbc),
                 new ChainRpcNodeRepository(jdbc),
                 audit, keyMaterial, environment);
@@ -202,10 +204,6 @@ class WalletConfigOverviewServiceTest {
          */
         private final List<Map<String, Object>> profileRows = new ArrayList<>();
         /**
-         * 保存 {@code tokenRows}，表示测试所覆盖的链、网络、资产或代币配置。
-         */
-        private final List<Map<String, Object>> tokenRows = new ArrayList<>();
-        /**
          * 保存 {@code assetRows}，表示测试所覆盖的链、网络、资产或代币配置。
          */
         private final List<Map<String, Object>> assetRows = new ArrayList<>();
@@ -228,9 +226,6 @@ class WalletConfigOverviewServiceTest {
             }
             if (sql.contains("from chain_profile")) {
                 return List.copyOf(profileRows);
-            }
-            if (sql.contains("from token_config")) {
-                return List.copyOf(tokenRows);
             }
             if (sql.contains("from chain_asset")) {
                 return List.copyOf(assetRows);

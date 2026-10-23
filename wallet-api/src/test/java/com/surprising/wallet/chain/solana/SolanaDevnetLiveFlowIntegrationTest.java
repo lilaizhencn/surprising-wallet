@@ -221,17 +221,17 @@ class SolanaDevnetLiveFlowIntegrationTest {
 
         jdbc.update("""
                 insert into token_config(
-                    chain, network, symbol, standard, token_standard, contract_address,
+                    chain, network, symbol, standard, contract_address,
                     contract_address_base58, decimals, enabled, min_deposit, min_withdraw,
-                    min_deposit_amount, min_withdraw_amount, collect_enabled, collect_threshold,
+                    collect_enabled, collect_threshold,
                     gas_strategy, confirmation_required, created_at, updated_at
                 )
-                values ('SOLANA','devnet',?,'SPL','SPL',?,?,?,true,1,1,1,1,true,1,
+                values ('SOLANA','devnet',?,'SPL',?,?,?,true,1,1,true,1,
                         'SOL_FEE_PAYER',1,now(),now())
                 on conflict(chain,network,symbol) do update set
                     network=excluded.network,
                     standard=excluded.standard,
-                    token_standard=excluded.token_standard,
+
                     contract_address=excluded.contract_address,
                     contract_address_base58=excluded.contract_address_base58,
                     decimals=excluded.decimals,

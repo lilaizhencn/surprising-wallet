@@ -154,7 +154,7 @@ class CardanoDevnetFullFlowIntegrationTest {
                 update token_config
                    set contract_address = ?, contract_address_hex = ?, contract_address_base58 = null,
                        decimals = 6, standard = 'CARDANO_NATIVE_ASSET',
-                       token_standard = 'CARDANO_NATIVE_ASSET', enabled = true,
+                       enabled = true,
                        collect_enabled = true, updated_at = now()
                  where chain = 'ADA' and network = 'preprod' and symbol = ?
                 """, unit.substring(0, 56) + "." + unit.substring(56), unit, symbol);

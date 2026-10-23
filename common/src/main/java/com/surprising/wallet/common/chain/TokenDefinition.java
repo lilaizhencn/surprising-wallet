@@ -23,6 +23,7 @@ public class TokenDefinition implements Serializable {
      * 保存 {@code chain}，表示链、网络、资产或代币配置。
      */
     private String chain;
+    private String network;
     /**
      * 保存 {@code symbol}，表示链、网络、资产或代币配置。
      */

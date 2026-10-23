@@ -1058,19 +1058,22 @@ public class ChainJdbcRepository {
      * 获取或查询 {@code findToken} 对应的数据，供调用方读取当前状态。
      */
     public Optional<TokenDefinition> findToken(String chain, String symbol) {
-        return tokenConfigRepository.findDefinition(chain, symbol);
+        return chainProfileRepository.findAccountByChain(chain)
+                .flatMap(profile -> tokenConfigRepository.findDefinition(chain, profile.getNetwork(), symbol));
     }
     /**
      * 获取或查询 {@code findTokenByContract} 对应的数据，供调用方读取当前状态。
      */
     public Optional<TokenDefinition> findTokenByContract(String chain, String contractAddress) {
-        return tokenConfigRepository.findDefinitionByContract(chain, contractAddress);
+        return chainProfileRepository.findAccountByChain(chain)
+                .flatMap(profile -> tokenConfigRepository.findDefinitionByContract(chain, profile.getNetwork(), contractAddress));
     }
     /**
      * 获取或查询 {@code listTokens} 对应的数据，供调用方读取当前状态。
      */
     public List<TokenDefinition> listTokens(String chain) {
-        return tokenConfigRepository.listDefinitions(chain);
+        return chainProfileRepository.findAccountByChain(chain)
+                .map(profile -> tokenConfigRepository.listDefinitions(chain, profile.getNetwork())).orElse(List.of());
     }
     /**
      * 获取或查询 {@code findAsset} 对应的数据，供调用方读取当前状态。

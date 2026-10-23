@@ -668,8 +668,7 @@ class Evm7702ProductionFlowIntegrationTest {
     private void configureToken(String symbol, String contractAddress) {
         assertEquals(1, jdbc.update("""
                 update token_config set contract_address = ?, contract_address_hex = ?,
-                       decimals = 6, standard = 'ERC20', token_standard = 'ERC20',
-                       collect_enabled = true
+                       decimals = 6, standard = 'ERC20', collect_enabled = true
                  where chain = ? and symbol = ? and network = 'local'
                 """, contractAddress, contractAddress, chain, symbol));
         assertEquals(1, jdbc.update("""

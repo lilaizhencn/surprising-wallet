@@ -1,5 +1,7 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.chain.model.TokenConfiguration;
+
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.evm.Evm7702PayoutReceiptParser;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -122,11 +124,11 @@ public class Evm7702WithdrawalRepository {
                 configRepository.requireActiveConfig(chain, network);
         if (!config.batchWithdrawalEnabled()) return Optional.empty();
         List<Map<String, Object>> assets = chainAssetRepository.listActiveByChain(chain);
-        List<Map<String, Object>> tokens = tokenConfigRepository.listAll();
+        List<TokenConfiguration> tokens = tokenConfigRepository.listEnabled(chain, network);
         List<Map<String, Object>> candidates = withdrawalOrderRepository.listClaimable(chain, 500);
         CandidateGroup group = null;
         for (Map<String, Object> order : candidates) {
-            CandidateGroup candidate = mapCandidate(order, chain, network, config, assets, tokens);
+            CandidateGroup candidate = mapCandidate(order, chain, assets, tokens);
             if (candidate == null) continue;
             Instant createdAt = ((Timestamp) order.get("created_at")).toInstant();
             boolean oldEnough = !createdAt.isAfter(Instant.now().minusMillis(config.withdrawalMaxWaitMs()));
@@ -478,10 +480,9 @@ public class Evm7702WithdrawalRepository {
     /**
      * 执行 {@code mapCandidate} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
-    private CandidateGroup mapCandidate(Map<String, Object> order, String chain, String network,
-                                        Evm7702CollectionRepository.RuntimeConfig config,
+    private CandidateGroup mapCandidate(Map<String, Object> order, String chain,
                                         List<Map<String, Object>> assets,
-                                        List<Map<String, Object>> tokens) {
+                                        List<TokenConfiguration> tokens) {
         UUID tenantId = (UUID) order.get("tenant_id");
         String assetSymbol = String.valueOf(order.get("asset_symbol"));
         Map<String, Object> asset = assets.stream()
@@ -489,18 +490,16 @@ public class Evm7702WithdrawalRepository {
                 .findFirst().orElse(null);
         if (asset == null) return null;
         boolean nativeAsset = Boolean.TRUE.equals(asset.get("native_asset"));
-        Map<String, Object> token = tokens.stream()
-                .filter(row -> chain.equalsIgnoreCase(String.valueOf(row.get("chain"))))
-                .filter(row -> network.equals(String.valueOf(row.get("network"))))
-                .filter(row -> assetSymbol.equalsIgnoreCase(String.valueOf(row.get("symbol"))))
-                .filter(row -> Boolean.TRUE.equals(row.get("enabled"))).findFirst().orElse(null);
+        TokenConfiguration token = tokens.stream()
+                .filter(row -> assetSymbol.equalsIgnoreCase(row.symbol()))
+                .findFirst().orElse(null);
         if (!nativeAsset && token == null) return null;
         ChainAddressRecord hot = chainAddressRepository.findEnabledByTenantAndAddress(tenantId, chain,
                 String.valueOf(order.get("from_address"))).orElse(null);
         if (hot == null || !hasActiveGasAddress(tenantId, chain, String.valueOf(order.get("from_address")))) return null;
         return new CandidateGroup(tenantId, assetSymbol, String.valueOf(order.get("from_address")),
                 nativeAsset ? "0x0000000000000000000000000000000000000000"
-                        : String.valueOf(token.get("contract_address")),
+                        : token.contractAddress(),
                 ((Number) asset.get("decimals")).intValue(), hot);
     }
 

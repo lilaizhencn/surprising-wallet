@@ -87,12 +87,14 @@ timestamp + "." + eventId + "." + eventType + "." + rawBody
 request chain/symbol/contract
   -> ChainProfileRepository / chain_profile (typed model)
   -> ChainAssetRepository / chain_asset (typed model)
-  -> TokenConfigRepository / token_config when token asset (typed model)
+  -> TokenConfigRepository / token_config (chain + configured network + symbol/contract)
   -> BlockchainRuntimeService
   -> BitcoinLikeChainRuntime (BTC/BCH/LTC/DOGE) or ChainAddressRuntime (other address operations)
 ```
 
 业务路由使用 `chain + asset` lookup。租户链列表和开链直接使用已启用的数据库配置，不再要求额外的 Adapter 注册。提现创建使用与地址运行时相同的校验入口，验证完成后才创建订单和冻结余额；UTXO 地址校验使用当前链的已配置网络。
+
+Token 配置写入只保存一份标准和充提门槛；网络必填，读写不包含旧列回退。链运行时先取得启用 profile 的网络，Token 扫描、合约解析和批次选择再按该网络查询。配置表只映射一次为 `TokenConfiguration`；管理界面在响应边界组合链/资产开关，业务层不复制和重命名 Token Map。
 
 RPC 客户端直接读取 `ChainProfileRepository` 的网络配置，再调用 `ChainRpcNodeService` 选择目的节点、应用认证并处理故障切换和限流。Aptos faucet、TON indexer、HyperCore info/exchange 等用途仍分别路由；本地端点与运行环境使用相同调用路径。
 

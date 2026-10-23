@@ -152,8 +152,7 @@ class PolkadotDevnetFullFlowIntegrationTest {
                 update token_config
                    set contract_address = ?, contract_address_hex = null,
                        contract_address_base58 = null, decimals = 6,
-                       standard = 'ASSET_HUB_ASSET', token_standard = 'ASSET_HUB_ASSET',
-                       enabled = true, collect_enabled = true, updated_at = now()
+                       standard = 'ASSET_HUB_ASSET', enabled = true, collect_enabled = true, updated_at = now()
                  where chain = 'DOT' and network = 'westend' and symbol = ?
                 """, assetId, symbol);
         TokenDefinition token = repository.findToken(CHAIN, symbol).orElseThrow();

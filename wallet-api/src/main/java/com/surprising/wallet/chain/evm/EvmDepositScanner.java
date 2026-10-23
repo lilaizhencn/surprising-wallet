@@ -186,7 +186,7 @@ public class EvmDepositScanner {
             }
 
             ArrayList<DepositEvent> events = new ArrayList<>();
-            for (var token : tokens.listDefinitions(chainType.name())) {
+            for (var token : tokens.listDefinitions(chainType.name(), profile(chainType).getNetwork())) {
                 EthFilter filter = new EthFilter(
                         DefaultBlockParameter.valueOf(BigInteger.valueOf(blockHeight)),
                         DefaultBlockParameter.valueOf(BigInteger.valueOf(blockHeight)),

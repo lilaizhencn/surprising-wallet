@@ -221,12 +221,9 @@ public class WalletConfigOverviewService {
      */
     private List<TokenRow> loadTokens() {
         return tokenConfigRepository.listAll().stream().map(row -> new TokenRow(
-                stringValue(row.get("chain")),
-                stringValue(row.get("network")),
-                stringValue(row.get("symbol")),
-                stringValue(row.get("contract_address")),
-                booleanValue(row.get("enabled"), false))).toList();
+                row.chain(), row.network(), row.symbol(), row.contractAddress(), row.enabled())).toList();
     }
+
     /**
      * 获取或查询 {@code loadAssets} 对应的数据，供调用方读取当前状态。
      */

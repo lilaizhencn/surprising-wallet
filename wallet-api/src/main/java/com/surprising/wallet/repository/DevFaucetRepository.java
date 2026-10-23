@@ -1,5 +1,7 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.chain.model.TokenConfiguration;
+
 import com.surprising.wallet.devfaucet.DevFaucetFunding;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -77,7 +79,7 @@ public class DevFaucetRepository {
                 .map(row -> uuid(row.get("custody_address_id"))).toList());
         List<Map<String, Object>> profiles = chainProfiles.listAll();
         List<Map<String, Object>> assets = chainAssets.listActive();
-        List<Map<String, Object>> tokens = tokenConfigs.listAll();
+        List<TokenConfiguration> tokens = tokenConfigs.listAll();
         List<Candidate> candidates = new ArrayList<>();
         for (Map<String, Object> address : custodyAddresses.listAll()) {
             UUID tenantId = uuid(address.get("tenant_id"));
@@ -113,28 +115,26 @@ public class DevFaucetRepository {
                         null, number(asset.get("decimals"))));
             }
             if ("ETH".equals(chain) && !gas) {
-                for (Map<String, Object> token : tokens) {
-                    if (!Set.of("USDT", "USDC").contains(text(token.get("symbol")))
-                            || !same(token.get("chain"), chain)
-                            || !bool(token.get("enabled"))
-                            || (token.get("network") != null
-                            && !same(token.get("network"), profile.get("network")))) {
+                for (TokenConfiguration token : tokens) {
+                    if (!Set.of("USDT", "USDC").contains(token.symbol())
+                            || !same(token.chain(), chain)
+                            || !token.enabled()
+                            || !same(token.network(), profile.get("network"))) {
                         continue;
                     }
                     boolean assetMatches = assets.stream().anyMatch(asset ->
                             same(asset.get("chain"), chain)
-                                    && same(asset.get("symbol"), token.get("symbol"))
+                                    && same(asset.get("symbol"), token.symbol())
                                     && !bool(asset.get("native_asset"))
                                     && bool(asset.get("active"))
-                                    && same(asset.get("contract_address"), token.get("contract_address")));
+                                    && same(asset.get("contract_address"), token.contractAddress()));
                     if (!assetMatches) {
                         continue;
                     }
                     addIfNew(candidates, new Candidate(
                             tenantId, addressId, chain, text(address.get("network")),
-                            text(token.get("symbol")), "CUSTOMER_DEPOSIT",
-                            text(address.get("address")), text(token.get("contract_address")),
-                            number(token.get("decimals"))));
+                            token.symbol(), "CUSTOMER_DEPOSIT",
+                            text(address.get("address")), token.contractAddress(), token.decimals()));
                 }
             }
         }

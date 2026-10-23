@@ -1,5 +1,7 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.chain.model.TokenConfiguration;
+
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -205,7 +207,7 @@ public class Evm7702CollectionRepository {
     public Optional<Batch> claimNextBatch(String chain, String network) {
         RuntimeConfig config = requireActiveConfig(chain, network);
         List<Map<String, Object>> assets = chainAssetRepository.listActiveByChain(chain);
-        List<Map<String, Object>> tokenConfigs = tokenConfigRepository.listCollectEnabled(chain, network);
+        List<TokenConfiguration> tokenConfigs = tokenConfigRepository.listCollectEnabled(chain, network);
         CandidateGroup group = null;
         for (Map<String, Object> record : collectionRecordRepository.listClaimable(chain, 500)) {
             UUID tenantId = (UUID) record.get("tenant_id");
@@ -222,13 +224,13 @@ public class Evm7702CollectionRepository {
             Map<String, Object> hot = findHotAddress(tenantId, chain, String.valueOf(record.get("to_address")));
             if (hot == null) continue;
             boolean nativeAsset = Boolean.TRUE.equals(asset.get("native_asset"));
-            Map<String, Object> token = tokenConfigs.stream()
-                    .filter(row -> assetSymbol.equalsIgnoreCase(String.valueOf(row.get("symbol"))))
+            TokenConfiguration token = tokenConfigs.stream()
+                    .filter(row -> assetSymbol.equalsIgnoreCase(row.symbol()))
                     .findFirst().orElse(null);
             if ((!nativeAsset && token == null) || (nativeAsset && !config.nativeCollectionEnabled())) continue;
             group = new CandidateGroup(tenantId, assetSymbol, String.valueOf(record.get("to_address")),
                     nativeAsset ? "0x0000000000000000000000000000000000000000"
-                            : String.valueOf(token.get("contract_address")),
+                            : token.contractAddress(),
                     ((Number) asset.get("decimals")).intValue());
             break;
         }

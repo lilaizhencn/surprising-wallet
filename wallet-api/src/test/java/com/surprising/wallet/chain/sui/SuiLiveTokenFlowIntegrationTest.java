@@ -185,8 +185,7 @@ class SuiLiveTokenFlowIntegrationTest {
         assertEquals(1, jdbc.update("""
                 update token_config
                    set network='localnet',
-                       standard='SUI_COIN',
-                       token_standard='COIN',
+                       standard='COIN',
                        contract_address=?,
                        decimals=6,
                        enabled=true,

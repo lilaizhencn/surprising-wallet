@@ -533,22 +533,22 @@ class TronLiveFullFlowIntegrationTest {
     private static void upsertToken(JdbcTemplate jdbcTemplate, String network, TokenSpec token) {
         String contractHex = TronAddressCodec.base58ToHex(token.contract());
         jdbcTemplate.update("""
-                        insert into token_config(chain, network, symbol, standard, token_standard, contract_address,
+                        insert into token_config(chain, network, symbol, standard, contract_address,
                                                  contract_address_base58, contract_address_hex, decimals, enabled,
-                                                 min_deposit, min_withdraw, min_deposit_amount, min_withdraw_amount,
+                                                 min_deposit, min_withdraw,
                                                  collect_threshold, gas_strategy, confirmation_required, updated_at)
-                        values (?, ?, ?, 'TRC20', 'TRC20', ?, ?, ?, ?, true,
-                                0.000001, 0.000001, 0.000001, 0.000001, 1, 'energy-bandwidth', 1, now())
+                        values (?, ?, ?, 'TRC20', ?, ?, ?, ?, true,
+                                0.000001, 0.000001, 1, 'energy-bandwidth', 1, now())
                         on conflict (chain, network, symbol) do update set
                             standard = excluded.standard,
-                            token_standard = excluded.token_standard,
+
                             contract_address = excluded.contract_address,
                             contract_address_base58 = excluded.contract_address_base58,
                             contract_address_hex = excluded.contract_address_hex,
                             decimals = excluded.decimals,
                             enabled = true,
-                            min_deposit_amount = excluded.min_deposit_amount,
-                            min_withdraw_amount = excluded.min_withdraw_amount,
+                            min_deposit = excluded.min_deposit,
+                            min_withdraw = excluded.min_withdraw,
                             collect_threshold = excluded.collect_threshold,
                             gas_strategy = excluded.gas_strategy,
                             confirmation_required = excluded.confirmation_required,

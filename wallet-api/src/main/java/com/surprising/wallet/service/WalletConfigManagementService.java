@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.chain.model.TokenConfiguration;
 import com.surprising.wallet.model.PageView;
 import tools.jackson.databind.JsonNode;
 import com.surprising.wallet.config.WalletEnvironmentPolicy;
@@ -457,21 +458,15 @@ public class WalletConfigManagementService {
         String chainFilter = normalize(chain);
         RuntimeSwitches runtime = loadRuntimeSwitches();
         return tokenConfigRepository.listAll().stream()
-                .map(this::decorateTokenRow)
-                .filter(row -> chainFilter.isEmpty()
-                        || normalize(string(row.get("chain"))).equals(chainFilter))
-                .filter(row -> enabled == null || bool(row.get("enabled")) == enabled)
-                .filter(row -> query.isEmpty()
-                        || normalize(string(row.get("symbol"))).contains(query)
-                        || normalize(string(row.get("contract_address"))).contains(query))
-                .sorted((left, right) -> {
-                    int symbol = normalize(string(left.get("symbol")))
-                            .compareTo(normalize(string(right.get("symbol"))));
-                    return symbol != 0 ? symbol : normalize(string(left.get("chain")))
-                            .compareTo(normalize(string(right.get("chain"))));
-                })
+                .filter(row -> chainFilter.isEmpty() || normalize(row.chain()).equals(chainFilter))
+                .filter(row -> enabled == null || row.enabled() == enabled)
+                .filter(row -> query.isEmpty() || normalize(row.symbol()).contains(query)
+                        || normalize(row.contractAddress()).contains(query))
+                .sorted(java.util.Comparator.comparing((TokenConfiguration row) -> normalize(row.symbol()))
+                        .thenComparing(row -> normalize(row.chain())))
                 .map(row -> tokenView(row, runtime)).toList();
     }
+
     /**
      * 校验 {@code requireChain} 对应的前置条件，不满足时抛出明确异常。
      */
@@ -508,13 +503,11 @@ public class WalletConfigManagementService {
      * 校验 {@code requireToken} 对应的前置条件，不满足时抛出明确异常。
      */
     private TokenView requireToken(long id) {
-        List<Map<String, Object>> rows = tokenConfigRepository.findById(id).stream()
-                .map(this::decorateTokenRow).toList();
-        if (rows.isEmpty()) {
-            throw new IllegalArgumentException("token not found");
-        }
-        return tokenView(rows.getFirst(), loadRuntimeSwitches());
+        TokenConfiguration row = tokenConfigRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("token not found"));
+        return tokenView(row, loadRuntimeSwitches());
     }
+
     /**
      * 校验 {@code validateCanEnable} 对应的前置条件，不满足时抛出明确异常。
      */
@@ -951,11 +944,8 @@ public class WalletConfigManagementService {
         Map<String, Object> decorated = new LinkedHashMap<>(row);
         String chain = string(row.get("chain"));
         String network = string(row.get("network"));
-        List<Map<String, Object>> tokens = tokenConfigRepository.listAll().stream()
-                .filter(token -> chain.equalsIgnoreCase(string(token.get("chain"))))
-                .filter(token -> network.equalsIgnoreCase(string(token.get("network"))))
-                .toList();
-        decorated.put("token_symbols", tokens.stream().map(token -> string(token.get("symbol")))
+        List<TokenConfiguration> tokens = tokenConfigRepository.listByChainAndNetwork(chain, network);
+        decorated.put("token_symbols", tokens.stream().map(TokenConfiguration::symbol)
                 .sorted().collect(java.util.stream.Collectors.joining(",")));
         decorated.put("token_count", tokens.size());
         decorated.put("rpc_count", rpcNodeRepository.listByChain(chain, network).size());
@@ -967,28 +957,6 @@ public class WalletConfigManagementService {
         return chainProfileRepository.listAll().stream().map(this::decorateChainRow).toList();
     }
 
-    /** 为代币配置补充链资产和链开关字段，替代数据库跨表查询。 */
-    private Map<String, Object> decorateTokenRow(Map<String, Object> row) {
-        Map<String, Object> decorated = new LinkedHashMap<>(row);
-        String chain = string(row.get("chain"));
-        String network = string(row.get("network"));
-        chainAssetRepository.find(chain, string(row.get("symbol"))).ifPresent(asset ->
-                decorated.put("asset_active", bool(asset.get("active"))));
-        decorated.putIfAbsent("asset_active", false);
-        chainProfileRepository.findByChainAndNetwork(chain, network).ifPresent(profile -> {
-            decorated.put("chain_enabled", bool(profile.get("enabled")));
-            decorated.put("chain_scan_enabled", bool(profile.get("scan_enabled")));
-            decorated.put("chain_withdraw_enabled", bool(profile.get("withdraw_enabled")));
-            decorated.put("chain_collection_enabled", bool(profile.get("collection_enabled")));
-            decorated.put("chain_transfer_enabled", bool(profile.get("transfer_enabled")));
-        });
-        decorated.putIfAbsent("chain_enabled", false);
-        decorated.putIfAbsent("chain_scan_enabled", false);
-        decorated.putIfAbsent("chain_withdraw_enabled", false);
-        decorated.putIfAbsent("chain_collection_enabled", false);
-        decorated.putIfAbsent("chain_transfer_enabled", false);
-        return decorated;
-    }
     /**
      * 执行 {@code rpcView} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
@@ -1008,32 +976,31 @@ public class WalletConfigManagementService {
     /**
      * 编码 {@code tokenView} 对应的数据，生成链上或接口所需的表示。
      */
-    private TokenView tokenView(Map<String, Object> row, RuntimeSwitches runtime) {
-        boolean configured = bool(row.get("enabled"));
-        boolean assetActive = bool(row.get("asset_active"));
-        boolean chainEnabled = bool(row.get("chain_enabled"));
-        boolean anyTaskEnabled = (runtime.scan() && bool(row.get("chain_scan_enabled")))
-                || (runtime.withdraw() && bool(row.get("chain_withdraw_enabled")))
-                || (runtime.collection() && bool(row.get("chain_collection_enabled"))
-                    && bool(row.get("collect_enabled")))
-                || (runtime.transfer() && bool(row.get("chain_transfer_enabled")));
+    private TokenView tokenView(TokenConfiguration row, RuntimeSwitches runtime) {
+        boolean configured = row.enabled();
+        boolean assetActive = chainAssetRepository.find(row.chain(), row.symbol())
+                .map(asset -> bool(asset.get("active"))).orElse(false);
+        Map<String, Object> profile = chainProfileRepository.findByChainAndNetwork(row.chain(), row.network())
+                .orElse(Map.of());
+        boolean chainEnabled = bool(profile.get("enabled"));
+        boolean anyTaskEnabled = (runtime.scan() && bool(profile.get("scan_enabled")))
+                || (runtime.withdraw() && bool(profile.get("withdraw_enabled")))
+                || (runtime.collection() && bool(profile.get("collection_enabled")) && row.collectEnabled())
+                || (runtime.transfer() && bool(profile.get("transfer_enabled")));
         List<String> blockers = new ArrayList<>();
         if (!runtime.wallet()) blockers.add("Wallet master switch is off.");
         if (!configured) blockers.add("Token is disabled.");
         if (!assetActive) blockers.add("Chain asset is disabled.");
         if (!chainEnabled) blockers.add("Chain network is disabled.");
         if (chainEnabled && !anyTaskEnabled) blockers.add("No wallet task is effectively enabled for this chain.");
-        return new TokenView(longValue(row.get("id")), string(row.get("chain")),
-                string(row.get("network")), string(row.get("symbol")), string(row.get("standard")),
-                string(row.get("contract_address")), nullable(row.get("contract_address_base58")),
-                nullable(row.get("contract_address_hex")), intValue(row.get("decimals")), configured,
-                bool(row.get("collect_enabled")), decimal(row.get("min_deposit")),
-                decimal(row.get("min_withdraw")), decimal(row.get("collect_threshold")),
-                nullable(row.get("gas_strategy")), nullableInteger(row.get("confirmation_required")),
-                assetActive, chainEnabled,
+        return new TokenView(row.id(), row.chain(), row.network(), row.symbol(), row.standard(),
+                row.contractAddress(), nullable(row.contractAddressBase58()), nullable(row.contractAddressHex()), row.decimals(), configured,
+                row.collectEnabled(), decimal(row.minDeposit()), decimal(row.minWithdraw()), decimal(row.collectThreshold()),
+                nullable(row.gasStrategy()), row.confirmationRequired(), assetActive, chainEnabled,
                 runtime.wallet() && configured && assetActive && chainEnabled && anyTaskEnabled,
-                List.copyOf(blockers), instant(row.get("created_at")), instant(row.get("updated_at")));
+                List.copyOf(blockers), row.createdAt(), row.updatedAt());
     }
+
     /**
      * 获取或查询 {@code chainHasRuntimeData} 对应的数据，并向调用方返回当前业务状态。
      */

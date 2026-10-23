@@ -1,104 +1,86 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.chain.model.TokenConfiguration;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
-/** token_config 单表仓储。 */
+/** token_config 单表仓储；运行时查询必须指定网络。 */
 @Repository
 public class TokenConfigRepository {
-    /** JDBC 模板。 */
+    private static final String COLUMNS = """
+            id, chain, network, symbol, standard, contract_address,
+            contract_address_base58, contract_address_hex, decimals, enabled, collect_enabled,
+            min_deposit, min_withdraw, collect_threshold, gas_strategy, confirmation_required,
+            created_at, updated_at
+            """;
+    private static final String NETWORK = "upper(chain) = upper(?) and lower(network) = lower(?)";
     private final JdbcTemplate jdbc;
 
-    /** 构造代币配置仓储。 */
-    public TokenConfigRepository(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
+    public TokenConfigRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+
+    public List<TokenConfiguration> listAll() {
+        return query("order by chain, network, symbol");
     }
 
-    /** 查询全部代币配置。 */
-    public List<Map<String, Object>> listAll() {
-        return jdbc.queryForList("""
-                select id, chain, network, symbol,
-                       coalesce(nullif(token_standard, ''), standard) as standard,
-                       contract_address, contract_address_base58, contract_address_hex,
-                       decimals, enabled, collect_enabled,
-                       coalesce(min_deposit_amount, min_deposit) as min_deposit,
-                       coalesce(min_withdraw_amount, min_withdraw) as min_withdraw,
-                       collect_threshold, gas_strategy, confirmation_required,
-                       created_at, updated_at
-                  from token_config order by chain, network, symbol
-                """);
+    public List<TokenConfiguration> listByChainAndNetwork(String chain, String network) {
+        return query("where " + NETWORK + " order by symbol", chain, network);
     }
 
-    /** 按链和网络查询启用的代币配置。 */
-    public List<Map<String, Object>> listEnabled(String chain, String network) {
-        return listAll().stream()
-                .filter(row -> chain.equalsIgnoreCase(String.valueOf(row.get("chain"))))
-                .filter(row -> network.equalsIgnoreCase(String.valueOf(row.get("network"))))
-                .filter(row -> Boolean.TRUE.equals(row.get("enabled"))).toList();
+    public List<TokenConfiguration> listEnabled(String chain, String network) {
+        return query("where " + NETWORK + " and enabled = true order by symbol", chain, network);
     }
 
-    /** 按主键查询代币配置。 */
-    public List<Map<String, Object>> findById(long id) {
-        return listAll().stream().filter(row -> ((Number) row.get("id")).longValue() == id).toList();
+    public Optional<TokenConfiguration> findById(long id) {
+        return query("where id = ?", id).stream().findFirst();
     }
 
-    /** 查询指定链网络下启用的代币配置。 */
-    public Optional<Map<String, Object>> findEnabled(String chain, String network, String symbol) {
-        return listAll().stream()
-                .filter(row -> chain.equalsIgnoreCase(String.valueOf(row.get("chain"))))
-                .filter(row -> network.equalsIgnoreCase(String.valueOf(row.get("network"))))
-                .filter(row -> symbol.equalsIgnoreCase(String.valueOf(row.get("symbol"))))
-                .filter(row -> Boolean.TRUE.equals(row.get("enabled"))).findFirst();
+    public Optional<TokenConfiguration> findEnabled(String chain, String network, String symbol) {
+        return query("where " + NETWORK + " and upper(symbol) = upper(?) and enabled = true",
+                chain, network, symbol).stream().findFirst();
     }
 
-    /** 创建代币配置并返回主键。 */
     public long insert(String chain, String network, String symbol, String standard,
                        String contractAddress, String contractAddressBase58, String contractAddressHex,
                        int decimals, boolean enabled, BigDecimal minDeposit, BigDecimal minWithdraw,
                        boolean collectEnabled, BigDecimal collectThreshold, String gasStrategy,
                        Integer confirmationRequired) {
-        Long id = jdbc.queryForObject("""
-                insert into token_config(chain, network, symbol, standard, token_standard, contract_address,
+        return jdbc.queryForObject("""
+                insert into token_config(chain, network, symbol, standard, contract_address,
                     contract_address_base58, contract_address_hex, decimals, enabled, min_deposit, min_withdraw,
-                    min_deposit_amount, min_withdraw_amount, collect_enabled, collect_threshold, gas_strategy,
-                    confirmation_required, updated_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now()) returning id
-                """, Long.class, chain, network, symbol, standard, standard, contractAddress,
-                contractAddressBase58, contractAddressHex, decimals, enabled, minDeposit, minWithdraw,
-                minDeposit, minWithdraw, collectEnabled, collectThreshold, gasStrategy, confirmationRequired);
-        return id;
+                    collect_enabled, collect_threshold, gas_strategy, confirmation_required)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning id
+                """, Long.class, chain, network, symbol, standard, contractAddress, contractAddressBase58,
+                contractAddressHex, decimals, enabled, minDeposit, minWithdraw, collectEnabled,
+                collectThreshold, gasStrategy, confirmationRequired);
     }
 
-    /** 更新代币配置。 */
     public int update(long id, String chain, String network, String symbol, String standard,
                       String contractAddress, String contractAddressBase58, String contractAddressHex,
                       int decimals, boolean enabled, BigDecimal minDeposit, BigDecimal minWithdraw,
                       boolean collectEnabled, BigDecimal collectThreshold, String gasStrategy,
                       Integer confirmationRequired) {
         return jdbc.update("""
-                update token_config set chain = ?, network = ?, symbol = ?, standard = ?, token_standard = ?,
+                update token_config set chain = ?, network = ?, symbol = ?, standard = ?,
                     contract_address = ?, contract_address_base58 = ?, contract_address_hex = ?, decimals = ?,
-                    enabled = ?, min_deposit = ?, min_withdraw = ?, min_deposit_amount = ?,
-                    min_withdraw_amount = ?, collect_enabled = ?, collect_threshold = ?, gas_strategy = ?,
-                    confirmation_required = ?, updated_at = now() where id = ?
-                """, chain, network, symbol, standard, standard, contractAddress, contractAddressBase58,
-                contractAddressHex, decimals, enabled, minDeposit, minWithdraw, minDeposit, minWithdraw,
-                collectEnabled, collectThreshold, gasStrategy, confirmationRequired, id);
+                    enabled = ?, min_deposit = ?, min_withdraw = ?, collect_enabled = ?, collect_threshold = ?,
+                    gas_strategy = ?, confirmation_required = ?, updated_at = now() where id = ?
+                """, chain, network, symbol, standard, contractAddress, contractAddressBase58, contractAddressHex,
+                decimals, enabled, minDeposit, minWithdraw, collectEnabled, collectThreshold, gasStrategy,
+                confirmationRequired, id);
     }
 
-    /** 修改代币启用状态。 */
     public int updateEnabled(long id, boolean enabled, boolean collectEnabled) {
         return jdbc.update("update token_config set enabled = ?, collect_enabled = ?, updated_at = now() where id = ?",
                 enabled, collectEnabled, id);
     }
 
-    /** 将代币配置迁移到新的链或网络名称。 */
     public int moveChain(String currentChain, String currentNetwork, String targetChain, String targetNetwork) {
         return jdbc.update("""
                 update token_config set chain = ?, network = ?, updated_at = now()
@@ -106,57 +88,47 @@ public class TokenConfigRepository {
                 """, targetChain, targetNetwork, currentChain, currentNetwork);
     }
 
-    /** 统计指定链的代币数量。 */
     public long countByChain(String chain) {
-        Long count = jdbc.queryForObject("select count(*) from token_config where upper(chain) = upper(?)",
-                Long.class, chain);
-        return count == null ? 0 : count;
+        return jdbc.queryForObject("select count(*) from token_config where upper(chain) = upper(?)", Long.class, chain);
     }
 
-    /** 查询启用且允许归集的代币配置。 */
-    public List<Map<String, Object>> listCollectEnabled(String chain, String network) {
-        return jdbc.queryForList("""
-                select id, chain, network, symbol, contract_address, decimals
-                  from token_config
-                 where chain = ? and (network = ? or network is null)
-                   and enabled = true and collect_enabled = true
-                """, chain, network);
+    public List<TokenConfiguration> listCollectEnabled(String chain, String network) {
+        return query("where " + NETWORK + " and enabled = true and collect_enabled = true order by symbol", chain, network);
     }
 
-    /** 查询指定代币配置。 */
-    public List<Map<String, Object>> find(String chain, String network, String symbol) {
-        return jdbc.queryForList("""
-                select id, chain, network, symbol, contract_address, decimals,
-                       enabled, collect_enabled
-                  from token_config
-                 where chain = ? and symbol = ? and (network = ? or network is null)
-                """, chain, symbol, network);
+    public Optional<TokenDefinition> findDefinition(String chain, String network, String symbol) {
+        return findEnabled(chain, network, symbol).map(TokenConfigRepository::definition);
     }
 
-    public Optional<TokenDefinition> findDefinition(String chain, String symbol) {
-        return queryDefinitions("and upper(symbol) = upper(?)", chain, symbol).stream().findFirst();
+    public Optional<TokenDefinition> findDefinitionByContract(String chain, String network, String contract) {
+        return query("where " + NETWORK + """
+                 and enabled = true and (lower(contract_address) = lower(?)
+                     or lower(contract_address_base58) = lower(?) or lower(contract_address_hex) = lower(?))
+                """, chain, network, contract, contract, contract).stream().findFirst().map(TokenConfigRepository::definition);
     }
 
-    public Optional<TokenDefinition> findDefinitionByContract(String chain, String contract) {
-        return queryDefinitions("""
-                and (lower(contract_address) = lower(?) or lower(contract_address_base58) = lower(?)
-                     or lower(contract_address_hex) = lower(?))
-                """, chain, contract, contract, contract).stream().findFirst();
+    public List<TokenDefinition> listDefinitions(String chain, String network) {
+        return listEnabled(chain, network).stream().map(TokenConfigRepository::definition).toList();
     }
 
-    public List<TokenDefinition> listDefinitions(String chain) {
-        return queryDefinitions("", chain);
+    private List<TokenConfiguration> query(String clause, Object... args) {
+        return jdbc.query("select " + COLUMNS + " from token_config " + clause,
+                (rs, rowNum) -> map(rs), args);
     }
 
-    private List<TokenDefinition> queryDefinitions(String predicate, Object... args) {
-        return jdbc.query("""
-                select id, chain, symbol, coalesce(nullif(token_standard, ''), standard) as standard,
-                       contract_address,
-                       decimals, enabled
-                  from token_config where upper(chain) = upper(?) and enabled = true
-                """ + predicate + " order by symbol, network, id", (rs, rowNum) -> TokenDefinition.builder()
-                .id(rs.getLong("id")).chain(rs.getString("chain")).symbol(rs.getString("symbol"))
-                .standard(rs.getString("standard")).contractAddress(rs.getString("contract_address"))
-                .decimals(rs.getInt("decimals")).nativeAsset(false).active(rs.getBoolean("enabled")).build(), args);
+    private static TokenConfiguration map(ResultSet rs) throws SQLException {
+        return new TokenConfiguration(rs.getLong("id"), rs.getString("chain"), rs.getString("network"),
+                rs.getString("symbol"), rs.getString("standard"), rs.getString("contract_address"),
+                rs.getString("contract_address_base58"), rs.getString("contract_address_hex"),
+                rs.getInt("decimals"), rs.getBoolean("enabled"), rs.getBoolean("collect_enabled"),
+                rs.getBigDecimal("min_deposit"), rs.getBigDecimal("min_withdraw"), rs.getBigDecimal("collect_threshold"),
+                rs.getString("gas_strategy"), rs.getObject("confirmation_required", Integer.class),
+                rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant());
+    }
+
+    private static TokenDefinition definition(TokenConfiguration row) {
+        return TokenDefinition.builder().id(row.id()).chain(row.chain()).network(row.network()).symbol(row.symbol())
+                .standard(row.standard()).contractAddress(row.contractAddress()).decimals(row.decimals())
+                .nativeAsset(false).active(row.enabled()).build();
     }
 }
