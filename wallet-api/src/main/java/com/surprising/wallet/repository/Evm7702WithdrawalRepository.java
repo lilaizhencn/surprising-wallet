@@ -246,15 +246,12 @@ public class Evm7702WithdrawalRepository {
      * 获取或查询 {@code listUnknownAttempts} 对应的数据，供调用方读取当前状态。
      */
     public List<UnknownAttempt> listUnknownAttempts(String chain, String network, int limit) {
-        Set<String> batches = batchRepository.listBroadcastUnknown(chain, network).stream()
-                .map(row -> row.get("tenant_id") + ":" + row.get("id"))
-                .collect(java.util.stream.Collectors.toSet());
-        return batchAttemptRepository.listUnknown(limit).stream()
-                .filter(row -> batches.contains(row.get("tenant_id") + ":" + row.get("batch_id")))
+        List<UUID> batches = batchRepository.listBroadcastUnknown(chain, network).stream()
+                .map(row -> (UUID) row.get("id")).toList();
+        return batchAttemptRepository.listUnknown(batches, limit).stream()
                 .map(row -> new UnknownAttempt((UUID) row.get("tenant_id"), (UUID) row.get("batch_id"),
                         (String) row.get("tx_hash"), (String) row.get("signed_tx_ciphertext"),
-                        ((Number) row.get("rebroadcast_count")).intValue()))
-                .limit(Math.min(Math.max(limit, 1), 100)).toList();
+                        ((Number) row.get("rebroadcast_count")).intValue())).toList();
     }
     /**
      * 记录或保存 {@code recordRecoveryAttempt} 对应的数据，并遵守幂等和事务约束。

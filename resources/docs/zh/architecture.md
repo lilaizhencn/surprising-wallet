@@ -139,6 +139,7 @@ Bitcoin-like RPC DTO 与 Ed25519 链枚举、派生结果和 SLIP-0010 密钥提
 - 独立 sig1/sig2 模式使用独立账号连接同一个 PostgreSQL，仅访问授权的 PGMQ 队列。消费按消息领取，处理事务持有该消息行锁；read_ct 校验阻止旧消费者确认新领取的消息。
 - UTXO 批处理通过 `UtxoSigningSubmissionService` 锁定持久化签名请求，校验租户和请求版本，再将 PGMQ 入队及 `chain_signing_transaction.enqueued_signing_request_id` 去重凭据与订单、UTXO 状态一起提交。无需 Outbox 表或派发任务；消息归档后凭据仍阻止同一请求重复投递。消费事务原子完成业务状态更新、下一阶段入队和当前消息归档。异常回滚，指数退避重试；第 20 次失败进入死信队列。
 - 提现领取按 `tenant_id` 轮转，Webhook 领取按租户公平排序；任何租户的慢 RPC、慢回调或积压都不能长期饿死其他租户。幂等键、状态机、锁定余额、失败释放和链上对账共同构成资金闭环。
+- EIP-7702 归集与提现恢复先按链、网络和 `BROADCAST_UNKNOWN` 状态读取批次主键，再在尝试单表中限定这些主键、检查冷却时间并排序分页。批次全局主键及租户/批次复合外键保证返回尝试保留原租户归属；无目标批次时不读取全局 UNKNOWN 窗口。
 - Account-Chain 调度器每秒做轻量到期检查，UTXO 调度器每 5 秒检查；只有达到该链扫描周期时才访问 RPC。
 - 扫描周期由 `WalletRuntimeConfigService` 集中维护，快速链为 2-5 秒，ETH 为 12 秒，ADA 为 20 秒，DOGE/LTC/BTC/BCH 为 15/30/60/60 秒，未知新链默认 10 秒。
 - 每次实际执行都实时读取 PostgreSQL 中的 `global.all.enabled`、全局任务开关和 `chain_profile` 链级任务开关，后台修改无需重启。

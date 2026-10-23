@@ -1,6 +1,7 @@
 package com.surprising.wallet.repository;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigInteger;
@@ -67,15 +68,16 @@ public class EvmCollectionBatchAttemptRepository {
     }
 
     /** 查询需要重播的未知尝试。 */
-    public List<Map<String, Object>> listUnknown(int limit) {
+    public List<Map<String, Object>> listUnknown(List<UUID> batchIds, int limit) {
+        if (batchIds.isEmpty()) return List.of();
         return jdbc.queryForList("""
                 select tenant_id, batch_id, tx_hash, signed_tx_ciphertext, rebroadcast_count,
                        last_rebroadcast_at, created_at
                   from evm_collection_batch_attempt
-                 where status = 'UNKNOWN'
+                 where batch_id = any (?) and status = 'UNKNOWN'
                    and (last_rebroadcast_at is null or last_rebroadcast_at < now() - interval '30 seconds')
-                 order by coalesce(last_rebroadcast_at, created_at), batch_id limit ?
-                """, Math.min(Math.max(limit, 1), 100));
+                 order by coalesce(last_rebroadcast_at, created_at), batch_id, tx_hash limit ?
+                """, new SqlArrayValue("uuid", batchIds.toArray()), Math.min(Math.max(limit, 1), 100));
     }
 
     /** 记录未知尝试重播。 */
