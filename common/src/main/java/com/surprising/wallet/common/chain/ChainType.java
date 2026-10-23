@@ -91,26 +91,6 @@ public enum ChainType {
      */
     MONAD("evm", "account"),
     /**
-     * 定义 {@code WORLD_CHAIN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    WORLD_CHAIN("evm", "account"),
-    /**
-     * 定义 {@code INK} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    INK("evm", "account"),
-    /**
-     * 定义 {@code SONEIUM} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    SONEIUM("evm", "account"),
-    /**
-     * 定义 {@code KATANA} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    KATANA("evm", "account"),
-    /**
-     * 定义 {@code MEGAETH} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    MEGAETH("evm", "account"),
-    /**
      * 定义 {@code X_LAYER} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     X_LAYER("evm", "account"),
@@ -143,21 +123,9 @@ public enum ChainType {
      */
     SOMNIA("evm", "account"),
     /**
-     * 定义 {@code RONIN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    RONIN("evm", "account"),
-    /**
-     * 定义 {@code KAIA} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    KAIA("evm", "account"),
-    /**
      * 定义 {@code PLASMA} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     PLASMA("evm", "account"),
-    /**
-     * 定义 {@code SEI} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    SEI("evm", "account"),
     /**
      * 定义 {@code HYPERCORE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */

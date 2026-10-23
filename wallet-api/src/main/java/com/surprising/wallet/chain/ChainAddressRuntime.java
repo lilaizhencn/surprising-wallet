@@ -131,9 +131,8 @@ class ChainAddressRuntime {
         return switch (chainType) {
             case ETH, BNB, POLYGON, ARBITRUM, OPTIMISM, BASE, AVAX_C, HYPEREVM,
                     MANTLE, LINEA, SCROLL, UNICHAIN, ZKSYNC, BERACHAIN, GNOSIS, CELO, MONAD,
-                    WORLD_CHAIN, INK, SONEIUM, KATANA, MEGAETH,
                     X_LAYER, ROBINHOOD_CHAIN, ETHERLINK, CRONOS, SONIC,
-                    PULSECHAIN, SOMNIA, RONIN, KAIA, PLASMA, SEI, HYPERCORE ->
+                    PULSECHAIN, SOMNIA, PLASMA, HYPERCORE ->
                     value.matches(EVM_ADDRESS_REGEX);
             case TRON -> TronAddressCodec.isValidBase58(value);
             case XRP -> isValidXrpAddress(value);

@@ -5,7 +5,7 @@ Gas 资产、普通交易使用哪一种信封，以及 EIP-7702 是否已在项
 
 - 核对日期：2026-08-02。
 - 配置基线：`resources/docs/db/surprising-wallet-init-pgsql.sql`。
-- 范围：48 个 EVM 链、93 个网络 profile。
+- 范围：25 个 EVM 链、50 个网络 profile。
 - `✓` 表示该网络 profile 在基线中 `enabled = true`。
 - 本表描述的是**项目当前配置与实现**。链协议支持某种交易类型，不代表项目已经启用该路径。
 
@@ -44,26 +44,18 @@ L2 交易不会直接从发送方的 Ethereum L1 地址扣款，也不能用仅�
 | ETHERLINK | mainnet (42793)<br>shadownet (127823) | XTZ | XTZ；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | GNOSIS | chiado (10200)<br>mainnet (100) | XDAI | XDAI；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | HYPEREVM | mainnet (999)<br>testnet (998) ✓ | HYPE | HYPE；链自身原生币 | Type 0（legacy） | standard | 未启用 |
-| INK | mainnet (57073)<br>sepolia (763373) | ETH_INK | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
-| KAIA | mainnet (8217)<br>testnet (1001) | KAIA | KAIA；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
-| KATANA | bokuto (737373)<br>mainnet (747474) | ETH_KATANA | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
 | LINEA | mainnet (59144)<br>sepolia (59141) ✓ | ETH_LINEA | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | standard | 未启用 |
 | MANTLE | mainnet (5000)<br>sepolia (5003) ✓ | MNT | MNT；链自身原生币 | Type 2（EIP-1559） | op-stack-l1 | 未启用 |
-| MEGAETH | carrot (6343)<br>mainnet (4326) | ETH_MEGAETH | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | standard | 未启用 |
 | MONAD | mainnet (143)<br>testnet (10143) | MON | MON；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | OPTIMISM | mainnet (10)<br>sepolia (11155420) ✓ | ETH_OP | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用；已有生产 runbook |
 | PLASMA | mainnet (9745)<br>testnet (9746) | XPL | XPL；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | POLYGON | amoy (80002) ✓<br>mainnet (137) | POL | POL；链自身原生币 | Type 2（EIP-1559） | standard | 未启用；已有生产 runbook |
 | PULSECHAIN | mainnet (369)<br>testnet (943) | PLS | PLS；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | ROBINHOOD_CHAIN | mainnet (4663)<br>testnet (46630) | ETH_ROBINHOOD | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | standard | 未启用 |
-| RONIN | mainnet (2020)<br>testnet (202601) | RON | RON；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | SCROLL | mainnet (534352)<br>sepolia (534351) ✓ | ETH_SCROLL | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | scroll | 未启用 |
-| SEI | mainnet (1329)<br>testnet (1328) | SEI | SEI；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | SOMNIA | mainnet (5031)<br>testnet (50312) | SOMI | SOMI；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
-| SONEIUM | mainnet (1868)<br>minato (1946) | ETH_SONEIUM | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
 | SONIC | mainnet (146)<br>testnet (14601) | S | S；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | UNICHAIN | mainnet (130)<br>sepolia (1301) ✓ | ETH_UNICHAIN | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
-| WORLD_CHAIN | mainnet (480)<br>sepolia (4801) | ETH_WORLD | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
 | X_LAYER | mainnet (196)<br>testnet (1952) | OKB | OKB；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | ZKSYNC | mainnet (324)<br>sepolia (300) | ETH_ZKSYNC | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | standard | 未启用 |
 
@@ -73,7 +65,7 @@ L2 交易不会直接从发送方的 Ethereum L1 地址扣款，也不能用仅�
 
 - `Type 0（legacy）`：使用 `gasPrice`。当前只有 BNB 和 HYPEREVM 配置为该模型。
 - `Type 2（EIP-1559）`：使用 `maxFeePerGas` 和
-  `maxPriorityFeePerGas`。其余 31 个 EVM 链当前都使用该模型。
+  `maxPriorityFeePerGas`。其余 23 个 EVM 链当前都使用该模型。
 - `fee_model` 不决定交易信封。它只决定确认和对账时是否需要额外核算 L1 数据费、
   operator fee，或拆分 Arbitrum Nitro 父链成本。
 
@@ -101,7 +93,7 @@ EIP-7702，Celo 也已支持 Type 4，但本项目基线仍没有对应的 ACTIV
 | `fee_model` | 当前链 | 结算含义 |
 |---|---|---|
 | `standard` | Ethereum、Avalanche、BNB、Polygon、Linea 及多数独立 EVM 链 | 使用回执执行费；Linea 的 L1 成本已内化到 L2 Gas 价格，并不表示 Linea 没有 L1 成本 |
-| `op-stack` | Base、Optimism、Ink、Katana、Soneium、Unichain、World Chain、Celo | 执行费 + L1 数据费 + 链升级后适用的 operator fee |
+| `op-stack` | Base、Optimism、Unichain、Celo | 执行费 + L1 数据费 + 链升级后适用的 operator fee |
 | `op-stack-l1` | Mantle | MNT 执行费 + 通过 oracle 取得的 L1 数据费；当前不计 OP operator fee |
 | `arbitrum-nitro` | Arbitrum | 父链成本已进入 Nitro gas；拆分记录时不能在总费用上二次相加 |
 | `scroll` | Scroll | ETH 执行费 + 独立 Scroll L1 数据费 |
@@ -119,10 +111,8 @@ Celo 网络上的 CELO，不能按协议能力假设本项目已经支持用 USD
 配置在正式启用前必须重新做 receipt/oracle 验证：
 
 - Robinhood Chain 官方说明其为 Arbitrum L2，但当前基线仍是 `standard`。
-- Katana 使用 CDK OP Geth，当前配置为 `op-stack`；正式启用前必须确认目标网络
-  的 Gas Price Oracle、L1 fee 和 operator fee 接口版本。
 
-这些 profile 当前全部禁用，因此不会进入发送路径。启用前应根据 RPC 实测结果决定
+该链的 profile 当前全部禁用，因此不会进入发送路径。启用前应根据 RPC 实测结果决定
 是否调整 `fee_model`，不能只根据“使用某技术栈”直接推断所有回执扩展字段完全相同。
 
 ## 官方核对资料
@@ -139,7 +129,6 @@ Celo 网络上的 CELO，不能按协议能力假设本项目已经支持用 USD
 - [BSC Pascal：BEP-441 实现 EIP-7702](https://docs.bnbchain.org/announce/pascal-bsc/)
 - [Berachain：BERA 是原生 Gas 资产](https://docs.berachain.com/general/tokens/bera)
 - [Robinhood Chain：Arbitrum L2，使用 L2 上的 ETH](https://docs.robinhood.com/chain/connecting/)
-- [Polygon AggLayer：Katana Chain ID 与 ETH Gas](https://docs.polygon.technology/interoperability/agglayer/supported-chains)
 - [Arbitrum Orbit：支持自定义原生 Gas Token](https://blog.arbitrum.io/an-quick-introduction-to-arbitrum-orbit/)
 
 ## 维护规则

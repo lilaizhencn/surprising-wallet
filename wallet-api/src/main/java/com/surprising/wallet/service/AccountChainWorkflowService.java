@@ -74,9 +74,8 @@ public class AccountChainWorkflowService {
             "HYPERCORE",
             "ETH", "BASE", "BNB", "POLYGON", "ARBITRUM", "OPTIMISM", "AVAX_C", "HYPEREVM",
             "MANTLE", "LINEA", "SCROLL", "UNICHAIN", "ZKSYNC", "BERACHAIN", "GNOSIS", "CELO", "MONAD",
-            "WORLD_CHAIN", "INK", "SONEIUM", "KATANA", "MEGAETH",
             "X_LAYER", "ROBINHOOD_CHAIN", "ETHERLINK", "CRONOS", "SONIC",
-            "PULSECHAIN", "SOMNIA", "RONIN", "KAIA", "PLASMA", "SEI",
+            "PULSECHAIN", "SOMNIA", "PLASMA",
             "STARKNET", "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
 
     /**

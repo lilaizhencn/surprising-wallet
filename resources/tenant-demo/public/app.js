@@ -13,17 +13,16 @@ const chainLabels = Object.freeze({
   BASE: "Base", AVAX_C: "Avalanche C-Chain", HYPEREVM: "HyperEVM", MANTLE: "Mantle",
   LINEA: "Linea", SCROLL: "Scroll", UNICHAIN: "Unichain", ZKSYNC: "zkSync Era",
   BERACHAIN: "Berachain", GNOSIS: "Gnosis", CELO: "Celo", MONAD: "Monad",
-  WORLD_CHAIN: "World Chain", INK: "Ink", SONEIUM: "Soneium", KATANA: "Katana",
-  MEGAETH: "MegaETH", X_LAYER: "X Layer", ROBINHOOD_CHAIN: "Robinhood Chain",
+  X_LAYER: "X Layer", ROBINHOOD_CHAIN: "Robinhood Chain",
   STARKNET: "Starknet", ETHERLINK: "Etherlink", CRONOS: "Cronos", SONIC: "Sonic",
-  PULSECHAIN: "PulseChain", SOMNIA: "Somnia", RONIN: "Ronin", KAIA: "Kaia", PLASMA: "Plasma",
-  SEI: "Sei EVM", HYPERCORE: "HyperCore", TRON: "TRON", XRP: "XRP Ledger", SOLANA: "Solana",
+  PULSECHAIN: "PulseChain", SOMNIA: "Somnia", PLASMA: "Plasma",
+  HYPERCORE: "HyperCore", TRON: "TRON", XRP: "XRP Ledger", SOLANA: "Solana",
   TON: "TON", APTOS: "Aptos", SUI: "Sui", ADA: "Cardano", DOT: "Polkadot", NEAR: "NEAR",
   XMR: "Monero"
 });
 const networkLabels = Object.freeze({
   mainnet: "主网", testnet: "测试网", devnet: "开发网", devtest: "开发测试",
-  local: "本地", regtest: "Regtest", sepolia: "Sepolia", nile: "Nile 测试网", saigon: "Saigon 测试网"
+  local: "本地", regtest: "Regtest", sepolia: "Sepolia", nile: "Nile 测试网"
 });
 const typeLabels = Object.freeze({
   DEPOSIT: "充值入账", WITHDRAWAL: "提现扣款", WITHDRAWAL_RELEASE: "提现失败释放"

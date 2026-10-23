@@ -54,8 +54,8 @@
   <line x1="810" y1="194" x2="130" y2="148" class="arrow"/>
   <line x1="890" y1="194" x2="350" y2="148" class="arrow"/>
 
-  <!-- ====== 第三层：30 条核心链 ====== -->
-  <text x="30" y="328" class="sep"> 区块链适配（30 条核心链）</text>
+  <!-- ====== 第三层：支持链（展示代表性链） ====== -->
+  <text x="30" y="328" class="sep"> 区块链适配（共 41 条链；EVM 25 条；下图展示代表性链）</text>
 
   <!-- Row 1: UTXO -->
   <rect x="30"  y="342" width="90" height="48" class="chain"/>
@@ -202,7 +202,7 @@
   <text x="985" y="600" text-anchor="middle" class="desc">Node.js Runtime 桥接</text>
 
   <!-- 底部 -->
-  <text x="550" y="648" text-anchor="middle" class="desc" fill="#94a3b8" font-size="11">surprising-wallet — 5 Java 模块 · Java 27 · Spring Boot 4.1 · 30 条核心链 · 15 个链族</text>
+  <text x="550" y="648" text-anchor="middle" class="desc" fill="#94a3b8" font-size="11">surprising-wallet — 5 Java 模块 · Java 27 · Spring Boot 4.1 · 41 条链 · 14 个接入组</text>
   <text x="30" y="770" class="desc">发布：GitHub Actions / JDK 27 → SSH 摘要校验 → Alibaba Cloud 单 JAR all · Nginx → loopback API / PostgreSQL</text>
   <rect x="30" y="674" width="1040" height="64" fill="#f8fafc" stroke="#94a3b8" rx="8"/>
   <text x="550" y="698" text-anchor="middle" class="desc">运行监控：systemd 每分钟 → Python 只读探针（资源 / 服务 / PostgreSQL / PGMQ / 日志 / HTTPS）→ Telegram</text>

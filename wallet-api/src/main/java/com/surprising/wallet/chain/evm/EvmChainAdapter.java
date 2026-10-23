@@ -216,11 +216,6 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.GNOSIS, "XDAI", 10200L, 1L);
         registerProfile(ChainType.CELO, "CELO", 11142220L, 1L);
         registerProfile(ChainType.MONAD, "MON", 10143L, 1L);
-        registerProfile(ChainType.WORLD_CHAIN, "ETH_WORLD", 4801L, 1L);
-        registerProfile(ChainType.INK, "ETH_INK", 763373L, 1L);
-        registerProfile(ChainType.SONEIUM, "ETH_SONEIUM", 1946L, 1L);
-        registerProfile(ChainType.KATANA, "ETH_KATANA", 737373L, 1L);
-        registerProfile(ChainType.MEGAETH, "ETH_MEGAETH", 6343L, 1L);
         registerProfile(ChainType.X_LAYER, "OKB", 1952L, 1L);
         registerProfile(ChainType.ROBINHOOD_CHAIN, "ETH_ROBINHOOD", 46630L, 1L);
         registerProfile(ChainType.ETHERLINK, "XTZ", 127823L, 1L);
@@ -228,10 +223,7 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.SONIC, "S", 14601L, 1L);
         registerProfile(ChainType.PULSECHAIN, "PLS", 943L, 1L);
         registerProfile(ChainType.SOMNIA, "SOMI", 50312L, 1L);
-        registerProfile(ChainType.RONIN, "RON", 202601L, 1L);
-        registerProfile(ChainType.KAIA, "KAIA", 1001L, 1L);
         registerProfile(ChainType.PLASMA, "XPL", 9746L, 1L);
-        registerProfile(ChainType.SEI, "SEI", 1328L, 1L);
     }
     /**
      * 添加 {@code registerDbProfiles} 对应的业务对象，并更新当前组件的集合或索引。

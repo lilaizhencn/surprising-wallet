@@ -112,11 +112,13 @@ Bitcoin-like RPC DTO 与 Ed25519 链枚举、派生结果和 SLIP-0010 密钥提
 
 ## 链族
 
+当前支持 41 条链，其中 EVM 链 25 条、非 EVM 链 16 条；图中展示代表性链，完整列表以 `ChainType` 为准。
+
 | 链族 | 链 | 本地测试支持 | live/testnet 支持 |
 |---|---|---|---|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH | Docker regtest 节点 | 外部 RPC 配置 |
-| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD, CRONOS, SONIC, PULSECHAIN, SOMNIA, RONIN, KAIA, PLASMA, SEI | Hardhat fork | Sepolia、BSC testnet、Amoy、Berachain Bepolia、Gnosis Chiado、Monad Testnet、Cronos Testnet、Sonic Testnet、PulseChain Testnet V4、Somnia Shannon、Ronin Saigon、Kaia Kairos、Plasma Testnet、Sei Atlantic-2 |
-| EVM L2 / L3 | ARBITRUM, OPTIMISM, BASE, AVAX_C, CELO, WORLD_CHAIN, INK, SONEIUM, KATANA, MEGAETH, X_LAYER, ROBINHOOD_CHAIN, ETHERLINK, ZKSYNC | Hardhat fork | Sepolia L2、Avalanche Fuji、Celo Sepolia、World Chain Sepolia、Ink Sepolia、Soneium Minato、Katana Bokuto、MegaETH Carrot、X Layer Testnet、Robinhood Chain Testnet、Etherlink Shadownet、zkSync Sepolia |
+| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD, CRONOS, SONIC, PULSECHAIN, SOMNIA, PLASMA | Hardhat fork | Sepolia、BSC testnet、Amoy、Berachain Bepolia、Gnosis Chiado、Monad Testnet、Cronos Testnet、Sonic Testnet、PulseChain Testnet V4、Somnia Shannon、Plasma Testnet |
+| EVM L2 / L3 | ARBITRUM, OPTIMISM, BASE, AVAX_C, CELO, X_LAYER, ROBINHOOD_CHAIN, ETHERLINK, ZKSYNC | Hardhat fork | Sepolia L2、Avalanche Fuji、Celo Sepolia、X Layer Testnet、Robinhood Chain Testnet、Etherlink Shadownet、zkSync Sepolia |
 | EVM L2 (新增) | MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM | Hardhat fork | Mantle Sepolia、Linea Sepolia、Scroll Sepolia、Unichain Sepolia、HyperEVM testnet |
 | Starknet | STARKNET | 本地 Starknet Devnet 完整流程 | Sepolia / Mainnet（RPC、账户 class hash 和 Token 配置经审批后启用） |
 | TRON | TRON | DB 测试 | Nile live flow |
