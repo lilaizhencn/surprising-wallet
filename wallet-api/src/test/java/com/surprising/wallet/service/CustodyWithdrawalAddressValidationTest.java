@@ -17,18 +17,32 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class CustodyWithdrawalAddressValidationTest {
+    @org.junit.jupiter.api.Test
+    void validClassicAndFriendlyAddressesRemainAccepted() {
+        var runtime = new ChainAddressRuntime(null, null);
+        assertTrue(runtime.checkAddress(com.surprising.wallet.common.chain.ChainType.TRON,
+                "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"));
+        assertTrue(runtime.checkAddress(com.surprising.wallet.common.chain.ChainType.XRP,
+                "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"));
+        String ton = org.ton.ton4j.address.Address.of("0:" + "00".repeat(32)).toString();
+        assertTrue(runtime.checkAddress(com.surprising.wallet.common.chain.ChainType.TON, ton));
+        String corrupted = ton.substring(0, ton.length() - 1) + (ton.endsWith("A") ? "B" : "A");
+        assertFalse(runtime.checkAddress(com.surprising.wallet.common.chain.ChainType.TON, corrupted));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"SOLANA", "TON", "APTOS", "SUI", "TRON", "XRP", "BTC"})
     void invalidAddressesAreRejectedBeforeAnyFundsOrOrdersAreChanged(String chain) {
         ChainJdbcRepository metadata = mock(ChainJdbcRepository.class);
         when(metadata.findProfileByChain(chain)).thenReturn(Optional.of(AccountChainProfile.builder()
                 .chain(chain).network("testnet").nativeSymbol(chain).build()));
-        when(metadata.findBitcoinLikeProfile("BTC", "testnet")).thenReturn(Optional.of(
-                com.surprising.wallet.chain.model.BitcoinLikeChainProfile.builder()
-                        .chain("BTC").network("testnet").build()));
         var bitcoin = new com.surprising.wallet.chain.utxo.BitcoinLikeChainRuntime(
                 metadata, null, null, null, null, null, null, null, null, null);
-        var runtime = new BlockchainRuntimeService(metadata, new ChainAddressRuntime(metadata, null), bitcoin);
+        var runtimeProfiles = mock(ChainProfileRepository.class);
+        var enabledProfile = metadata.findProfileByChain(chain);
+        when(runtimeProfiles.findAccountByChain(chain)).thenReturn(enabledProfile);
+        var runtime = new BlockchainRuntimeService(runtimeProfiles, mock(ChainAssetRepository.class),
+                new ChainAddressRuntime(metadata, null), bitcoin);
         var assets = mock(ChainAssetRepository.class);
         var profiles = mock(ChainProfileRepository.class);
         when(assets.findActive(chain, chain)).thenReturn(Optional.of(Map.of("native_asset", true, "decimals", 18)));

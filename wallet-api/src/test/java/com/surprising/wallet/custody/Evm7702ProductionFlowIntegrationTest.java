@@ -217,7 +217,7 @@ class Evm7702ProductionFlowIntegrationTest {
         depositScanner = new EvmDepositScanner(
                 chainRepository, new EvmLogScanner(), RPC, 1, httpServices);
 
-        ChainRpcNodeService rpcNodes = new ChainRpcNodeService(chainRepository);
+        ChainRpcNodeService rpcNodes = new ChainRpcNodeService(new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc));
         setField(rpcNodes, "environmentName", "eip7702-test");
         setField(rpcNodes, "maxConcurrentRequestsPerProvider", 1);
         CustodySecurityProperties security = new CustodySecurityProperties();
@@ -229,7 +229,7 @@ class Evm7702ProductionFlowIntegrationTest {
                 tenantChainRepository, custodyRepository, null);
         CustodyWithdrawalExecutionService withdrawalExecution =
                 new CustodyWithdrawalExecutionService(chainRepository, runtimeConfig,
-                        new BlockchainRuntimeService(chainRepository,
+                        new BlockchainRuntimeService(new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc),
                                 new ChainAddressRuntime(chainRepository, null), null),
                         new ChainAssetRepository(jdbc), new ChainProfileRepository(jdbc),
                         new TokenConfigRepository(jdbc), new CustodyAddressRepository(jdbc),

@@ -1,10 +1,12 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.common.chain.ChainRpcNode;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -159,5 +161,38 @@ public class ChainRpcNodeRepository {
                    set last_checked_at = ?, last_latency_ms = ?, last_http_status = ?, last_error = ?
                  where id = ?
                 """, Timestamp.from(checkedAt), latencyMs, statusCode, error, nodeId);
+    }
+
+    public List<ChainRpcNode> listRuntimeNodes(String chain, String network, String environment, String purpose) {
+        List<Object> args = new ArrayList<>(List.of(chain, network, environment == null ? "" : environment));
+        String predicate = "";
+        String order = "purpose, priority, id";
+        if (purpose != null) {
+            predicate = " and (lower(purpose) = lower(?) or lower(purpose) = 'all')";
+            order = "priority, purpose, id";
+            args.add(purpose);
+        }
+        return jdbc.query("""
+                select id, chain, network, environment, node_label, purpose, connection_type,
+                       rpc_url, auth_type, auth_header_name, api_key, api_key_ref,
+                       username, username_ref, password, password_ref,
+                       priority, min_request_interval_ms, enabled, renewal_due_at, remark
+                  from chain_rpc_node
+                 where chain = ? and network = ? and lower(environment) = lower(?) and enabled = true
+                """ + predicate + " order by " + order, (rs, rowNum) -> {
+                    var renewal = rs.getTimestamp("renewal_due_at");
+                    return ChainRpcNode.builder().id(rs.getLong("id"))
+                            .chain(rs.getString("chain")).network(rs.getString("network"))
+                            .environment(rs.getString("environment")).nodeLabel(rs.getString("node_label"))
+                            .purpose(rs.getString("purpose")).connectionType(rs.getString("connection_type"))
+                            .rpcUrl(rs.getString("rpc_url")).authType(rs.getString("auth_type"))
+                            .authHeaderName(rs.getString("auth_header_name")).apiKey(rs.getString("api_key"))
+                            .apiKeyRef(rs.getString("api_key_ref")).username(rs.getString("username"))
+                            .usernameRef(rs.getString("username_ref")).password(rs.getString("password"))
+                            .passwordRef(rs.getString("password_ref")).priority(rs.getInt("priority"))
+                            .minRequestIntervalMs(rs.getObject("min_request_interval_ms", Integer.class))
+                            .enabled(rs.getBoolean("enabled")).renewalDueAt(renewal == null ? null : renewal.toInstant())
+                            .remark(rs.getString("remark")).build();
+                }, args.toArray());
     }
 }

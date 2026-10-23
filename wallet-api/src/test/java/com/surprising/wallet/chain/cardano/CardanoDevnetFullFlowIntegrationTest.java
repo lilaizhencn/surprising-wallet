@@ -75,7 +75,7 @@ class CardanoDevnetFullFlowIntegrationTest {
         UUID tenantId = CardanoTenantIntegrationFixture.ensureTenant(jdbc);
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         CardanoKeyService keys = new CardanoKeyService(keyMaterial);
-        ChainRpcNodeService rpcNodes = new ChainRpcNodeService(repository);
+        ChainRpcNodeService rpcNodes = new ChainRpcNodeService(new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc));
         setField(rpcNodes, "environmentName", "dev");
         setField(rpcNodes, "maxConcurrentRequestsPerProvider", 4);
         CardanoBackendClient backend = new CardanoBackendClient(repository, rpcNodes);

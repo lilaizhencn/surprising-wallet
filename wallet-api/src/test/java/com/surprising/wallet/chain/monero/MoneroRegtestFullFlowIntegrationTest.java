@@ -88,7 +88,7 @@ class MoneroRegtestFullFlowIntegrationTest {
                                 """, TEST_TENANT_ID);
                 ensureMoneroConfig(jdbc, environment, network);
 
-                ChainRpcNodeService rpcNodeService = new ChainRpcNodeService(repository);
+                ChainRpcNodeService rpcNodeService = new ChainRpcNodeService(new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc));
                 setField(rpcNodeService, "environmentName", environment);
                 setField(rpcNodeService, "maxConcurrentRequestsPerProvider", 1);
 

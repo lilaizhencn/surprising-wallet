@@ -30,7 +30,7 @@ public class CustodyTenantChainService {
      */
     private final CustodyRepository custody;
     /**
-     * 保存 {@code adapters}，用于访问当前业务所依赖的仓储、客户端或服务。
+     * 校验启用链的实际运行时配置。
      */
     private final BlockchainRuntimeService runtime;
     /**

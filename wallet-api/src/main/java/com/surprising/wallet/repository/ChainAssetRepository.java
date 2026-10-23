@@ -4,6 +4,8 @@ import com.surprising.wallet.chain.model.ChainAsset;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -106,7 +108,9 @@ public class ChainAssetRepository {
                     updated_at = excluded.updated_at
                 """, asset.getChain(), asset.getSymbol(), asset.getAssetKind(), asset.getContractAddress(),
                 asset.getDecimals(), asset.getNativeAsset(), asset.getActive(), asset.getMinTransfer(),
-                asset.getMinWithdraw(), asset.getCreatedAt(), asset.getUpdatedAt());
+                asset.getMinWithdraw(),
+                asset.getCreatedAt() == null ? null : java.sql.Timestamp.from(asset.getCreatedAt()),
+                asset.getUpdatedAt() == null ? null : java.sql.Timestamp.from(asset.getUpdatedAt()));
     }
 
     /** 修改非原生资产启用状态。 */
@@ -131,5 +135,33 @@ public class ChainAssetRepository {
                    set chain = ?, updated_at = now()
                  where chain = ?
                 """, targetChain, currentChain);
+    }
+
+    public Optional<ChainAsset> findActiveDefinition(String chain, String symbol) {
+        return jdbc.query("""
+                select id, chain, symbol, asset_kind, contract_address, decimals,
+                       native_asset, active, min_transfer, min_withdraw, created_at, updated_at
+                  from chain_asset
+                 where upper(chain) = upper(?) and upper(symbol) = upper(?) and active = true
+                """, (rs, rowNum) -> mapDefinition(rs), chain, symbol).stream().findFirst();
+    }
+
+    public int countActiveNativeAssets(String chain) {
+        return jdbc.queryForObject("""
+                select count(*) from chain_asset
+                 where upper(chain) = upper(?) and native_asset = true and active = true
+                """, Integer.class, chain);
+    }
+
+    private static ChainAsset mapDefinition(ResultSet rs) throws SQLException {
+        var created = rs.getTimestamp("created_at");
+        var updated = rs.getTimestamp("updated_at");
+        return ChainAsset.builder().id(rs.getLong("id")).chain(rs.getString("chain"))
+                .symbol(rs.getString("symbol")).assetKind(rs.getString("asset_kind"))
+                .contractAddress(rs.getString("contract_address")).decimals(rs.getInt("decimals"))
+                .nativeAsset(rs.getBoolean("native_asset")).active(rs.getBoolean("active"))
+                .minTransfer(rs.getBigDecimal("min_transfer")).minWithdraw(rs.getBigDecimal("min_withdraw"))
+                .createdAt(created == null ? null : created.toInstant())
+                .updatedAt(updated == null ? null : updated.toInstant()).build();
     }
 }

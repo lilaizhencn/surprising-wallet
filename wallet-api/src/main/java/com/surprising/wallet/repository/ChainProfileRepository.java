@@ -1,7 +1,6 @@
 package com.surprising.wallet.repository;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.chain.model.BitcoinLikeChainProfile;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -168,31 +167,6 @@ public class ChainProfileRepository {
                 """, chain);
     }
 
-    /** 查询启用的 Bitcoin-like 链配置。 */
-    public Optional<BitcoinLikeChainProfile> findBitcoinLike(String chain, String network) {
-        return jdbc.query("""
-                select chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
-                       rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations, default_fee_rate,
-                       dust_threshold, enabled, chain_id, gas_policy, scan_batch_size, scan_enabled,
-                       withdraw_enabled, collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
-                  from chain_profile where chain = ? and network = ? and enabled = true
-                """, (rs, rowNum) -> BitcoinLikeChainProfile.builder()
-                .chain(rs.getString("chain")).network(rs.getString("network")).family(rs.getString("family"))
-                .runtimeCurrencyId(rs.getInt("runtime_currency_id")).bip44CoinType(rs.getInt("bip44_coin_type"))
-                .nativeSymbol(rs.getString("native_symbol")).rpcUrl(rs.getString("rpc_url"))
-                .explorerUrl(rs.getString("explorer_url")).depositConfirmations(rs.getInt("deposit_confirmations"))
-                .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
-                .defaultFeeRate(rs.getObject("default_fee_rate", Long.class))
-                .dustThreshold(rs.getObject("dust_threshold", Long.class)).enabled(rs.getBoolean("enabled"))
-                .chainId(rs.getObject("chain_id", Long.class)).gasPolicy(rs.getString("gas_policy"))
-                .scanBatchSize(rs.getObject("scan_batch_size", Integer.class)).scanEnabled(rs.getBoolean("scan_enabled"))
-                .withdrawEnabled(rs.getBoolean("withdraw_enabled")).collectionEnabled(rs.getBoolean("collection_enabled"))
-                .transferEnabled(rs.getBoolean("transfer_enabled"))
-                .scanStartHeight(rs.getObject("scan_start_height", Long.class))
-                .scanMaxBlocksPerRun(rs.getObject("scan_max_blocks_per_run", Long.class)).build(), chain, network)
-                .stream().findFirst();
-    }
-
     /** 查询启用的账户链配置。 */
     public Optional<AccountChainProfile> findAccount(String chain, String network) {
         return queryAccount("where chain = ? and network = ? and enabled = true", chain, network)
@@ -239,6 +213,10 @@ public class ChainProfileRepository {
                 select 1 from chain_profile
                  where runtime_currency_id = ? and lower(family) = lower(?) and enabled = true limit 1
                 """, runtimeCurrencyId, family).isEmpty();
+    }
+
+    public List<AccountChainProfile> listProfiles(boolean enabledOnly) {
+        return queryAccount(enabledOnly ? "where enabled = true order by chain, network" : "order by chain, network");
     }
 
     /** 查询账户链配置。 */

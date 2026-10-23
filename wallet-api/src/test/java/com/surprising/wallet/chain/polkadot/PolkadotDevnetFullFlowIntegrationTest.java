@@ -62,7 +62,7 @@ class PolkadotDevnetFullFlowIntegrationTest {
         UUID tenantId = PolkadotTenantIntegrationFixture.ensureTenant(jdbc);
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         PolkadotKeyService keys = new PolkadotKeyService(keyMaterial);
-        ChainRpcNodeService rpcNodes = new ChainRpcNodeService(repository);
+        ChainRpcNodeService rpcNodes = new ChainRpcNodeService(new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc));
         setField(rpcNodes, "environmentName", "dev");
         setField(rpcNodes, "maxConcurrentRequestsPerProvider", 8);
         PolkadotRuntimeClient runtime = new PolkadotRuntimeClient(repository, rpcNodes);

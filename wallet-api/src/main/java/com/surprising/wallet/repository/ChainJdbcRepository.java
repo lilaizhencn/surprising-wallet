@@ -3,7 +3,6 @@ package com.surprising.wallet.repository;
 import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.AptosTransactionRecord;
-import com.surprising.wallet.chain.model.BitcoinLikeChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.ChainCollectionRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
@@ -37,8 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -262,12 +259,6 @@ public class ChainJdbcRepository {
      */
     public int upsertChainAsset(ChainAsset asset) {
         return chainAssetRepository.upsert(asset);
-    }
-    /**
-     * 获取或查询 {@code findBitcoinLikeProfile} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<BitcoinLikeChainProfile> findBitcoinLikeProfile(String chain, String network) {
-        return chainProfileRepository.findBitcoinLike(chain, network);
     }
     /**
      * 获取或查询 {@code findAccountChainProfile} 对应的数据，供调用方读取当前状态。
@@ -1134,30 +1125,6 @@ public class ChainJdbcRepository {
         return withdrawalOrderRepository.find(chain, orderNo, tenantId);
     }
     /**
-     * 执行 {@code mapWithdrawalOrder} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private WithdrawalOrderRecord mapWithdrawalOrder(java.sql.ResultSet rs) throws java.sql.SQLException {
-        return WithdrawalOrderRecord.builder()
-                .id(rs.getLong("id"))
-                .tenantId(rs.getObject("tenant_id", UUID.class))
-                .orderNo(rs.getString("order_no"))
-                .userId(rs.getLong("user_id"))
-                .chain(rs.getString("chain"))
-                .assetSymbol(rs.getString("asset_symbol"))
-                .fromAddress(rs.getString("from_address"))
-                .debitAccountId(rs.getString("debit_account_id"))
-                .toAddress(rs.getString("to_address"))
-                .amount(rs.getBigDecimal("amount"))
-                .fee(rs.getBigDecimal("fee"))
-                .txHash(rs.getString("tx_hash"))
-                .status(rs.getString("status"))
-                .errorMessage(rs.getString("error_message"))
-                .createdAt(toInstant(rs.getTimestamp("created_at")))
-                .updatedAt(toInstant(rs.getTimestamp("updated_at")))
-                .build();
-    }
-
-    /**
      * 构建或生成 {@code createCollectionRecord} 对应的结果，并执行输入和状态校验。
      */
     public int createCollectionRecord(UUID tenantId, UUID custodyAddressId,
@@ -1224,30 +1191,6 @@ public class ChainJdbcRepository {
         Objects.requireNonNull(tenantId, "tenantId is required");
         return collectionRecordRepository.findTxHash(tenantId, chain, collectionNo);
     }
-    /**
-     * 执行 {@code mapCollectionRecord} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private ChainCollectionRecord mapCollectionRecord(java.sql.ResultSet rs) throws java.sql.SQLException {
-        return ChainCollectionRecord.builder()
-                .id(rs.getLong("id"))
-                .tenantId(rs.getObject("tenant_id", UUID.class))
-                .custodyAddressId(rs.getObject("custody_address_id", UUID.class))
-                .collectionNo(rs.getString("collection_no"))
-                .chain(rs.getString("chain"))
-                .assetSymbol(rs.getString("asset_symbol"))
-                .fromAddress(rs.getString("from_address"))
-                .toAddress(rs.getString("to_address"))
-                .amount(rs.getBigDecimal("amount"))
-                .fee(rs.getBigDecimal("fee"))
-                .txHash(rs.getString("tx_hash"))
-                .status(rs.getString("status"))
-                .errorMessage(rs.getString("error_message"))
-                .rawPayload(rs.getString("raw_payload"))
-                .createdAt(toInstant(rs.getTimestamp("created_at")))
-                .updatedAt(toInstant(rs.getTimestamp("updated_at")))
-                .build();
-    }
-
     /**
      * 构建或生成 {@code createBitcoinLikeSigningTransaction} 对应的结果，并执行输入和状态校验。
      */
@@ -1399,21 +1342,6 @@ public class ChainJdbcRepository {
             AssetRuntimeMetadata currency, int transactionId, long staleSeconds) {
         String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
         return chainSigningTransactionRepository.claimRecovery(chain, transactionId, Constants.SIGNING, staleSeconds);
-    }
-    /**
-     * 执行 {@code mapSigningTransaction} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private WithdrawTransaction mapSigningTransaction(java.sql.ResultSet rs) throws java.sql.SQLException {
-        return WithdrawTransaction.builder()
-                .id(rs.getInt("id"))
-                .txId(rs.getString("tx_id"))
-                .balance(rs.getBigDecimal("balance"))
-                .signature(rs.getString("signature"))
-                .currency(rs.getInt("currency"))
-                .status(rs.getShort("status"))
-                .createDate(rs.getTimestamp("create_date"))
-                .updateDate(rs.getTimestamp("update_date"))
-                .build();
     }
     /**
      * 记录或保存 {@code recordEvmTokenTransfer} 对应的数据，并遵守幂等和事务约束。
@@ -1665,73 +1593,44 @@ public class ChainJdbcRepository {
      * 获取或查询 {@code findToken} 对应的数据，供调用方读取当前状态。
      */
     public Optional<TokenDefinition> findToken(String chain, String symbol) {
-        return tokenConfigRepository.listAll().stream()
-                .filter(row -> chain.equalsIgnoreCase(String.valueOf(row.get("chain"))))
-                .filter(row -> symbol.equalsIgnoreCase(String.valueOf(row.get("symbol"))))
-                .filter(row -> Boolean.TRUE.equals(row.get("enabled")))
-                .map(ChainJdbcRepository::mapTokenDefinition)
-                .findFirst();
+        return tokenConfigRepository.findDefinition(chain, symbol);
     }
     /**
      * 获取或查询 {@code findTokenByContract} 对应的数据，供调用方读取当前状态。
      */
     public Optional<TokenDefinition> findTokenByContract(String chain, String contractAddress) {
-        return tokenConfigRepository.listAll().stream()
-                .filter(row -> chain.equalsIgnoreCase(String.valueOf(row.get("chain"))))
-                .filter(row -> Boolean.TRUE.equals(row.get("enabled")))
-                .filter(row -> contractAddress.equalsIgnoreCase(String.valueOf(row.get("contract_address")))
-                        || contractAddress.equalsIgnoreCase(String.valueOf(row.get("contract_address_base58")))
-                        || contractAddress.equalsIgnoreCase(String.valueOf(row.get("contract_address_hex"))))
-                .map(ChainJdbcRepository::mapTokenDefinition)
-                .findFirst();
+        return tokenConfigRepository.findDefinitionByContract(chain, contractAddress);
     }
     /**
      * 获取或查询 {@code listTokens} 对应的数据，供调用方读取当前状态。
      */
     public List<TokenDefinition> listTokens(String chain) {
-        return tokenConfigRepository.listAll().stream()
-                .filter(row -> chain.equalsIgnoreCase(String.valueOf(row.get("chain"))))
-                .filter(row -> Boolean.TRUE.equals(row.get("enabled")))
-                .map(ChainJdbcRepository::mapTokenDefinition)
-                .sorted(java.util.Comparator.comparing(TokenDefinition::getSymbol))
-                .toList();
+        return tokenConfigRepository.listDefinitions(chain);
     }
     /**
      * 获取或查询 {@code findAsset} 对应的数据，供调用方读取当前状态。
      */
     public Optional<ChainAsset> findAsset(String chain, String symbol) {
-        return chainAssetRepository.listActive().stream()
-                .filter(row -> chain.equalsIgnoreCase(String.valueOf(row.get("chain"))))
-                .filter(row -> symbol.equalsIgnoreCase(String.valueOf(row.get("symbol"))))
-                .map(ChainJdbcRepository::mapChainAsset)
-                .findFirst();
+        return chainAssetRepository.findActiveDefinition(chain, symbol);
     }
 
     /**
      * 执行 {@code countActiveNativeAssets} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     public int countActiveNativeAssets(String chain) {
-        return (int) chainAssetRepository.listActive().stream()
-                .filter(row -> chain.equalsIgnoreCase(String.valueOf(row.get("chain"))))
-                .filter(row -> Boolean.TRUE.equals(row.get("native_asset")))
-                .count();
+        return chainAssetRepository.countActiveNativeAssets(chain);
     }
     /**
      * 获取或查询 {@code listEnabledChainProfiles} 对应的数据，供调用方读取当前状态。
      */
     public List<AccountChainProfile> listEnabledChainProfiles() {
-        return chainProfileRepository.listAll().stream()
-                .filter(row -> Boolean.TRUE.equals(row.get("enabled")))
-                .map(ChainJdbcRepository::mapAccountProfile)
-                .toList();
+        return chainProfileRepository.listProfiles(true);
     }
     /**
      * 获取或查询 {@code listAllChainProfiles} 对应的数据，供调用方读取当前状态。
      */
     public List<AccountChainProfile> listAllChainProfiles() {
-        return chainProfileRepository.listAll().stream()
-                .map(ChainJdbcRepository::mapAccountProfile)
-                .toList();
+        return chainProfileRepository.listProfiles(false);
     }
     /**
      * 执行 {@code systemBoolean} 对应的辅助逻辑，完成数据处理并维护状态边界。
@@ -1764,16 +1663,7 @@ public class ChainJdbcRepository {
      * 获取或查询 {@code listEnabledRpcNodes} 对应的数据，供调用方读取当前状态。
      */
     public List<ChainRpcNode> listEnabledRpcNodes(String chain, String network, String environment, String purpose) {
-        String env = environment == null ? "" : environment;
-        String nodePurpose = purpose == null ? "rpc" : purpose;
-        return chainRpcNodeRepository.listByChain(chain, network).stream()
-                .filter(row -> bool(row.get("enabled")))
-                .filter(row -> env.equalsIgnoreCase(String.valueOf(row.get("environment"))))
-                .filter(row -> nodePurpose.equalsIgnoreCase(String.valueOf(row.get("purpose")))
-                        || "all".equalsIgnoreCase(String.valueOf(row.get("purpose"))))
-                .sorted(java.util.Comparator.comparing(row -> ((Number) row.get("priority")).intValue()))
-                .map(ChainJdbcRepository::mapRpcNode)
-                .toList();
+        return chainRpcNodeRepository.listRuntimeNodes(chain, network, environment, purpose == null ? "rpc" : purpose);
     }
     /**
      * 获取或查询 {@code listEnabledRpcNodes} 对应的数据，供调用方读取当前状态。
@@ -1785,246 +1675,6 @@ public class ChainJdbcRepository {
      * 获取或查询 {@code listAllEnabledRpcNodes} 对应的数据，供调用方读取当前状态。
      */
     public List<ChainRpcNode> listAllEnabledRpcNodes(String chain, String network, String environment) {
-        String env = environment == null ? "" : environment;
-        return chainRpcNodeRepository.listByChain(chain, network).stream()
-                .filter(row -> bool(row.get("enabled")))
-                .filter(row -> env.equalsIgnoreCase(String.valueOf(row.get("environment"))))
-                .sorted(java.util.Comparator.<Map<String, Object>, String>comparing(
-                                row -> String.valueOf(row.get("purpose")))
-                        .thenComparing(row -> ((Number) row.get("priority")).intValue()))
-                .map(ChainJdbcRepository::mapRpcNode)
-                .toList();
-    }
-    /**
-     * 编码 {@code toTs} 对应的数据，生成链上或接口所需的表示。
-     */
-    private static Timestamp toTs(Instant instant) {
-        return instant == null ? null : Timestamp.from(instant);
-    }
-    /**
-     * 执行 {@code nowOr} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private static Instant nowOr(Instant instant) {
-        return instant == null ? now() : instant;
-    }
-    /**
-     * 执行 {@code now} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private static Instant now() {
-        return Instant.now();
-    }
-    /**
-     * 编码 {@code toInstant} 对应的数据，生成链上或接口所需的表示。
-     */
-    private static Instant toInstant(Timestamp timestamp) {
-        return timestamp == null ? null : timestamp.toInstant();
-    }
-    /** 将 token_config 单表字段转换为代币模型。 */
-    private static TokenDefinition mapTokenDefinition(Map<String, Object> row) {
-        Object contract = row.get("contract_address");
-        if (contract == null) contract = row.get("contract_address_base58");
-        if (contract == null) contract = row.get("contract_address_hex");
-        return TokenDefinition.builder()
-                .id(((Number) row.get("id")).longValue())
-                .chain(String.valueOf(row.get("chain")))
-                .symbol(String.valueOf(row.get("symbol")))
-                .contractAddress(contract == null ? null : contract.toString())
-                .decimals(((Number) row.get("decimals")).intValue())
-                .standard(String.valueOf(row.get("standard")))
-                .nativeAsset(false)
-                .active(Boolean.TRUE.equals(row.get("enabled")))
-                .build();
-    }
-
-    /** 将 chain_asset 单表字段转换为资产模型。 */
-    private static ChainAsset mapChainAsset(Map<String, Object> row) {
-        return ChainAsset.builder()
-                .id(((Number) row.get("id")).longValue())
-                .chain(String.valueOf(row.get("chain")))
-                .symbol(String.valueOf(row.get("symbol")))
-                .assetKind(String.valueOf(row.get("asset_kind")))
-                .contractAddress((String) row.get("contract_address"))
-                .decimals(((Number) row.get("decimals")).intValue())
-                .nativeAsset(Boolean.TRUE.equals(row.get("native_asset")))
-                .active(Boolean.TRUE.equals(row.get("active")))
-                .minTransfer((java.math.BigDecimal) row.get("min_transfer"))
-                .minWithdraw((java.math.BigDecimal) row.get("min_withdraw"))
-                .createdAt(mapInstant(row.get("created_at")))
-                .updatedAt(mapInstant(row.get("updated_at")))
-                .build();
-    }
-
-    /** 将 chain_profile 单表字段转换为账户链配置模型。 */
-    private static AccountChainProfile mapAccountProfile(Map<String, Object> row) {
-        return AccountChainProfile.builder()
-                .chain(String.valueOf(row.get("chain")))
-                .network(String.valueOf(row.get("network")))
-                .family(String.valueOf(row.get("family")))
-                .runtimeCurrencyId(((Number) row.get("runtime_currency_id")).intValue())
-                .bip44CoinType(((Number) row.get("bip44_coin_type")).intValue())
-                .nativeSymbol(String.valueOf(row.get("native_symbol")))
-                .rpcUrl((String) row.get("rpc_url"))
-                .explorerUrl((String) row.get("explorer_url"))
-                .depositConfirmations(((Number) row.get("deposit_confirmations")).intValue())
-                .withdrawConfirmations(((Number) row.get("withdraw_confirmations")).intValue())
-                .defaultFee((Long) row.get("default_fee_rate"))
-                .dustThreshold((Long) row.get("dust_threshold"))
-                .enabled(Boolean.TRUE.equals(row.get("enabled")))
-                .chainId((Long) row.get("chain_id"))
-                .gasPolicy((String) row.get("gas_policy"))
-                .feeModel((String) row.get("fee_model"))
-                .scanBatchSize((Integer) row.get("scan_batch_size"))
-                .scanEnabled(Boolean.TRUE.equals(row.get("scan_enabled")))
-                .withdrawEnabled(Boolean.TRUE.equals(row.get("withdraw_enabled")))
-                .collectionEnabled(Boolean.TRUE.equals(row.get("collection_enabled")))
-                .transferEnabled(Boolean.TRUE.equals(row.get("transfer_enabled")))
-                .scanStartHeight((Long) row.get("scan_start_height"))
-                .scanMaxBlocksPerRun((Long) row.get("scan_max_blocks_per_run"))
-                .build();
-    }
-
-    /** 将 chain_rpc_node 单表字段转换为 RPC 节点模型。 */
-    private static ChainRpcNode mapRpcNode(Map<String, Object> row) {
-        return ChainRpcNode.builder()
-                .id(((Number) row.get("id")).longValue())
-                .chain(String.valueOf(row.get("chain")))
-                .network(String.valueOf(row.get("network")))
-                .environment((String) row.get("environment"))
-                .nodeLabel((String) row.get("node_label"))
-                .purpose((String) row.get("purpose"))
-                .connectionType((String) row.get("connection_type"))
-                .rpcUrl((String) row.get("rpc_url"))
-                .authType((String) row.get("auth_type"))
-                .authHeaderName((String) row.get("auth_header_name"))
-                .apiKey((String) row.get("api_key"))
-                .apiKeyRef((String) row.get("api_key_ref"))
-                .username((String) row.get("username"))
-                .usernameRef((String) row.get("username_ref"))
-                .password((String) row.get("password"))
-                .passwordRef((String) row.get("password_ref"))
-                .priority(((Number) row.get("priority")).intValue())
-                .minRequestIntervalMs((Integer) row.get("min_request_interval_ms"))
-                .enabled(Boolean.TRUE.equals(row.get("enabled")))
-                .renewalDueAt(mapInstant(row.get("renewal_due_at")))
-                .remark((String) row.get("remark"))
-                .build();
-    }
-
-    /** 读取 Map 中的时间字段。 */
-    private static Instant mapInstant(Object value) {
-        return value instanceof Timestamp timestamp ? timestamp.toInstant()
-                : value instanceof Instant instant ? instant : null;
-    }
-
-    /** 读取 Map 中的布尔字段。 */
-    private static boolean bool(Object value) {
-        return Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(String.valueOf(value));
-    }
-    /**
-     * 执行 {@code mapAccountProfile} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private static AccountChainProfile mapAccountProfile(ResultSet rs) throws SQLException {
-        return AccountChainProfile.builder()
-                .chain(rs.getString("chain"))
-                .network(rs.getString("network"))
-                .family(rs.getString("family"))
-                .runtimeCurrencyId(rs.getInt("runtime_currency_id"))
-                .bip44CoinType(rs.getInt("bip44_coin_type"))
-                .nativeSymbol(rs.getString("native_symbol"))
-                .rpcUrl(rs.getString("rpc_url"))
-                .explorerUrl(rs.getString("explorer_url"))
-                .depositConfirmations(rs.getInt("deposit_confirmations"))
-                .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
-                .defaultFee(rs.getObject("default_fee_rate", Long.class))
-                .dustThreshold(rs.getObject("dust_threshold", Long.class))
-                .enabled(rs.getBoolean("enabled"))
-                .chainId(rs.getObject("chain_id", Long.class))
-                .gasPolicy(rs.getString("gas_policy"))
-                .feeModel(rs.getString("fee_model"))
-                .scanBatchSize(rs.getObject("scan_batch_size", Integer.class))
-                .scanEnabled(rs.getBoolean("scan_enabled"))
-                .withdrawEnabled(rs.getBoolean("withdraw_enabled"))
-                .collectionEnabled(rs.getBoolean("collection_enabled"))
-                .transferEnabled(rs.getBoolean("transfer_enabled"))
-                .scanStartHeight(rs.getObject("scan_start_height", Long.class))
-                .scanMaxBlocksPerRun(rs.getObject("scan_max_blocks_per_run", Long.class))
-                .build();
-    }
-    /**
-     * 执行 {@code mapBitcoinLikeProfile} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private static BitcoinLikeChainProfile mapBitcoinLikeProfile(ResultSet rs) throws SQLException {
-        return BitcoinLikeChainProfile.builder()
-                .chain(rs.getString("chain"))
-                .network(rs.getString("network"))
-                .family(rs.getString("family"))
-                .runtimeCurrencyId(rs.getInt("runtime_currency_id"))
-                .bip44CoinType(rs.getInt("bip44_coin_type"))
-                .nativeSymbol(rs.getString("native_symbol"))
-                .rpcUrl(rs.getString("rpc_url"))
-                .explorerUrl(rs.getString("explorer_url"))
-                .depositConfirmations(rs.getInt("deposit_confirmations"))
-                .withdrawConfirmations(rs.getInt("withdraw_confirmations"))
-                .defaultFeeRate(rs.getObject("default_fee_rate", Long.class))
-                .dustThreshold(rs.getObject("dust_threshold", Long.class))
-                .enabled(rs.getBoolean("enabled"))
-                .chainId(rs.getObject("chain_id", Long.class))
-                .gasPolicy(rs.getString("gas_policy"))
-                .scanBatchSize(rs.getObject("scan_batch_size", Integer.class))
-                .scanEnabled(rs.getBoolean("scan_enabled"))
-                .withdrawEnabled(rs.getBoolean("withdraw_enabled"))
-                .collectionEnabled(rs.getBoolean("collection_enabled"))
-                .transferEnabled(rs.getBoolean("transfer_enabled"))
-                .scanStartHeight(rs.getObject("scan_start_height", Long.class))
-                .scanMaxBlocksPerRun(rs.getObject("scan_max_blocks_per_run", Long.class))
-                .build();
-    }
-    /**
-     * 执行 {@code mapRpcNode} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private static ChainRpcNode mapRpcNode(ResultSet rs) throws SQLException {
-        return ChainRpcNode.builder()
-                .id(rs.getLong("id"))
-                .chain(rs.getString("chain"))
-                .network(rs.getString("network"))
-                .environment(rs.getString("environment"))
-                .nodeLabel(rs.getString("node_label"))
-                .purpose(rs.getString("purpose"))
-                .connectionType(rs.getString("connection_type"))
-                .rpcUrl(rs.getString("rpc_url"))
-                .authType(rs.getString("auth_type"))
-                .authHeaderName(rs.getString("auth_header_name"))
-                .apiKey(rs.getString("api_key"))
-                .apiKeyRef(rs.getString("api_key_ref"))
-                .username(rs.getString("username"))
-                .usernameRef(rs.getString("username_ref"))
-                .password(rs.getString("password"))
-                .passwordRef(rs.getString("password_ref"))
-                .priority(rs.getInt("priority"))
-                .minRequestIntervalMs(rs.getObject("min_request_interval_ms", Integer.class))
-                .enabled(rs.getBoolean("enabled"))
-                .renewalDueAt(toInstant(rs.getTimestamp("renewal_due_at")))
-                .remark(rs.getString("remark"))
-                .build();
-    }
-    /**
-     * 执行 {@code mapChainAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private static ChainAddressRecord mapChainAddress(java.sql.ResultSet rs) throws java.sql.SQLException {
-        return ChainAddressRecord.builder()
-                .id(rs.getLong("id"))
-                .tenantId(rs.getObject("tenant_id", UUID.class))
-                .chain(rs.getString("chain"))
-                .assetSymbol(rs.getString("asset_symbol"))
-                .accountId(rs.getString("account_id"))
-                .userId(rs.getLong("user_id"))
-                .biz(rs.getInt("biz"))
-                .addressIndex(rs.getLong("address_index"))
-                .address(rs.getString("address"))
-                .ownerAddress(rs.getString("owner_address"))
-                .derivationPath(rs.getString("derivation_path"))
-                .walletRole(rs.getString("wallet_role"))
-                .enabled(rs.getBoolean("enabled"))
-                .build();
+        return chainRpcNodeRepository.listRuntimeNodes(chain, network, environment, null);
     }
 }

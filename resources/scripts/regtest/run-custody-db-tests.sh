@@ -6,7 +6,7 @@ source "$CUSTODY_DB_ROOT/resources/scripts/regtest/local-postgres.sh"
 
 CUSTODY_DB_BUILD_ROOT=$(mktemp -d /tmp/surprising-wallet-custody-db-tests.XXXXXX)
 CUSTODY_DB_NAME="surprising_wallet_test_custody_$$"
-CUSTODY_DB_TESTS=${CUSTODY_DB_TESTS:-CustodyDepositProjectionIntegrationTest,CustodyOperationsIntegrationTest,CustodyTenantIsolationIntegrationTest,CustodyDepositFinalityIntegrationTest,CustodyAssetRecoveryIntegrationTest,Evm7702ProductionFlowIntegrationTest}
+CUSTODY_DB_TESTS=${CUSTODY_DB_TESTS:-RuntimeConfigurationIntegrationTest,CustodyDepositProjectionIntegrationTest,CustodyOperationsIntegrationTest,CustodyTenantIsolationIntegrationTest,CustodyDepositFinalityIntegrationTest,CustodyAssetRecoveryIntegrationTest,Evm7702ProductionFlowIntegrationTest}
 
 cleanup() {
   local status=$?

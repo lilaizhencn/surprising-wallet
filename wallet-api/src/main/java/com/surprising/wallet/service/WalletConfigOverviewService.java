@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import com.surprising.wallet.exception.CustodyForbiddenException;
@@ -60,9 +59,9 @@ public class WalletConfigOverviewService {
      */
     private final CustodyRepository custodyRepository;
     /**
-     * 保存 {@code keysetConfigured}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
+     * 提供密钥配置状态，概览接口不读取或返回私钥材料。
      */
-    private final BooleanSupplier keysetConfigured;
+    private final WalletKeyMaterialProvider keyMaterial;
     /**
      * 保存 {@code environment}，用于承载当前对象的运行配置或业务数据。
      */
@@ -87,35 +86,17 @@ public class WalletConfigOverviewService {
         this.chainAssetRepository = chainAssetRepository;
         this.rpcNodeRepository = rpcNodeRepository;
         this.custodyRepository = custodyRepository;
-        this.keysetConfigured = keyMaterial::isConfigured;
+        this.keyMaterial = keyMaterial;
         this.environment = normalizeEnvironment(environment);
     }
 
-    /** 使用单表仓储构造概览服务，便于测试替换业务依赖。 */
-    public WalletConfigOverviewService(WalletSystemConfigRepository systemConfigRepository,
-                                       ChainProfileRepository chainProfileRepository,
-                                       TokenConfigRepository tokenConfigRepository,
-                                       ChainAssetRepository chainAssetRepository,
-                                       ChainRpcNodeRepository rpcNodeRepository,
-                                       CustodyRepository custodyRepository,
-                                       BooleanSupplier keysetConfigured,
-                                       String environment) {
-        this.systemConfigRepository = systemConfigRepository;
-        this.chainProfileRepository = chainProfileRepository;
-        this.tokenConfigRepository = tokenConfigRepository;
-        this.chainAssetRepository = chainAssetRepository;
-        this.rpcNodeRepository = rpcNodeRepository;
-        this.custodyRepository = custodyRepository;
-        this.keysetConfigured = keysetConfigured;
-        this.environment = normalizeEnvironment(environment);
-    }
     /**
      * 执行 {@code summary} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     public SummaryView summary(CustodyPrincipal actor) {
         requirePlatformAdmin(actor);
         GlobalSwitches switches = loadSwitches();
-        boolean keysetConfigured = this.keysetConfigured.getAsBoolean();
+        boolean keysetConfigured = this.keyMaterial.isConfigured();
         List<ProfileRow> profiles = loadProfiles();
         List<TokenRow> tokens = loadTokens();
         List<AssetRow> assets = loadAssets();

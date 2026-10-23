@@ -83,7 +83,7 @@ class EvmForkTransactionServiceIntegrationTest {
             from.setAccountId(credentials.getAddress().toLowerCase(java.util.Locale.ROOT));
             from.setOwnerAddress(credentials.getAddress());
 
-            ChainRpcNodeService rpcNodes = fixedRpcNodes(repository, localProfile);
+            ChainRpcNodeService rpcNodes = fixedRpcNodes(localProfile);
             EvmAccountTransactionService service = new EvmAccountTransactionService(
                     repository, rpcNodes, keyService, new EvmTransactionBuilder(), httpServices);
 
@@ -151,8 +151,7 @@ class EvmForkTransactionServiceIntegrationTest {
     /**
      * 创建固定本地 RPC 节点适配器，避免测试依赖真实环境的 RPC 配置。
      */
-    private static ChainRpcNodeService fixedRpcNodes(ChainJdbcRepository repository,
-                                                      AccountChainProfile profile) {
+    private static ChainRpcNodeService fixedRpcNodes(AccountChainProfile profile) {
         ChainRpcNode node = ChainRpcNode.builder()
                 .chain(profile.getChain())
                 .network(profile.getNetwork())
@@ -164,7 +163,7 @@ class EvmForkTransactionServiceIntegrationTest {
                 .priority(1)
                 .enabled(true)
                 .build();
-        return new ChainRpcNodeService(repository) {
+        return new ChainRpcNodeService(null) {
             /** 固定返回当前逐链测试使用的本地节点。 */
             @Override
             public <T> T withFailover(String chain, String network,

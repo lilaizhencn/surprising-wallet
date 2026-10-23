@@ -76,9 +76,9 @@ timestamp + "." + eventId + "." + eventType + "." + rawBody
 
 ```text
 request chain/symbol/contract
-  -> chain_profile
-  -> chain_asset
-  -> token_config when token asset
+  -> ChainProfileRepository / chain_profile (typed model)
+  -> ChainAssetRepository / chain_asset (typed model)
+  -> TokenConfigRepository / token_config when token asset (typed model)
   -> BlockchainRuntimeService
   -> BitcoinLikeChainRuntime (BTC/BCH/LTC/DOGE) or ChainAddressRuntime (other address operations)
 ```

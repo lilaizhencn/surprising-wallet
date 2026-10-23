@@ -8,7 +8,8 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainAssetRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +20,8 @@ import java.util.Locale;
 @Service
 @RequiredArgsConstructor
 public class BlockchainRuntimeService {
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
+    private final ChainAssetRepository assets;
     private final ChainAddressRuntime addressRuntime;
     private final BitcoinLikeChainRuntime bitcoinLikeRuntime;
 
@@ -91,7 +93,7 @@ public class BlockchainRuntimeService {
     }
 
     public AssetRuntimeMetadata assetMetadata(int runtimeCurrencyId) {
-        AccountChainProfile profile = repository.findProfileByRuntimeCurrencyId(runtimeCurrencyId)
+        AccountChainProfile profile = profiles.findAccountByRuntimeCurrency(runtimeCurrencyId)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for runtime_currency_id " + runtimeCurrencyId));
         return assetMetadata(profile);
@@ -106,7 +108,7 @@ public class BlockchainRuntimeService {
     }
 
     public String chainName(AssetRuntimeMetadata asset) {
-        return repository.findChainByRuntimeCurrencyId(asset.getIndex())
+        return profiles.findChainByRuntimeCurrency(asset.getIndex())
                 .map(value -> value.toUpperCase(Locale.ROOT))
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for runtime_currency_id " + asset.getIndex()));
@@ -124,12 +126,12 @@ public class BlockchainRuntimeService {
     private AccountChainProfile profile(String chain) {
         if (chain == null || chain.isBlank()) throw new IllegalArgumentException("chain is required");
         String normalized = chain.trim().toUpperCase(Locale.ROOT);
-        return repository.findProfileByChain(normalized)
+        return profiles.findAccountByChain(normalized)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + normalized));
     }
 
     private AssetRuntimeMetadata assetMetadata(AccountChainProfile profile) {
-        ChainAsset asset = repository.findAsset(profile.getChain(), profile.getNativeSymbol()).orElse(null);
+        ChainAsset asset = assets.findActiveDefinition(profile.getChain(), profile.getNativeSymbol()).orElse(null);
         return AssetRuntimeMetadata.fromProfile(profile.getRuntimeCurrencyId(), profile.getChain(),
                 profile.getNativeSymbol(), profile.getDepositConfirmations(), profile.getBip44CoinType(),
                 asset == null ? null : asset.getDecimals(), asset == null ? null : asset.getContractAddress());

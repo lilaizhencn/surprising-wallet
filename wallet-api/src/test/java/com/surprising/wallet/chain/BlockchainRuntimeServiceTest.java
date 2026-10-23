@@ -1,11 +1,12 @@
 package com.surprising.wallet.chain;
 
-import com.surprising.wallet.chain.model.BitcoinLikeChainProfile;
-import com.surprising.wallet.chain.utxo.BitcoinLikeChainRuntime;
 import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.chain.utxo.BitcoinLikeChainRuntime;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainAssetRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -16,15 +17,17 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class BlockchainRuntimeServiceTest {
+    private final ChainProfileRepository profiles = mock(ChainProfileRepository.class);
+    private final ChainAssetRepository assets = mock(ChainAssetRepository.class);
     private final ChainJdbcRepository repository = mock(ChainJdbcRepository.class);
     private final ChainAddressRuntime addresses = mock(ChainAddressRuntime.class);
     private final BitcoinLikeChainRuntime bitcoinLike = mock(BitcoinLikeChainRuntime.class);
-    private final BlockchainRuntimeService service = new BlockchainRuntimeService(repository, addresses, bitcoinLike);
+    private final BlockchainRuntimeService service = new BlockchainRuntimeService(profiles, assets, addresses, bitcoinLike);
 
     @ParameterizedTest
     @EnumSource(ChainType.class)
     void everyImplementedChainResolvesFromItsEnabledProfile(ChainType type) {
-        when(repository.findProfileByChain(type.name())).thenReturn(Optional.of(profile(type)));
+        when(profiles.findAccountByChain(type.name())).thenReturn(Optional.of(profile(type)));
 
         var runtime = service.requireRuntime(" " + type.name().toLowerCase() + " ");
 
@@ -37,7 +40,7 @@ class BlockchainRuntimeServiceTest {
     @ParameterizedTest
     @EnumSource(ChainType.class)
     void fixedIndexGenerationReachesTheRealEngineForEveryChain(ChainType type) {
-        when(repository.findProfileByChain(type.name())).thenReturn(Optional.of(profile(type)));
+        when(profiles.findAccountByChain(type.name())).thenReturn(Optional.of(profile(type)));
         Address expected = Address.builder().index(7).build();
         boolean utxo = type == ChainType.BTC || type == ChainType.BCH || type == ChainType.LTC || type == ChainType.DOGE;
         if (utxo) when(bitcoinLike.generateDepositAddressAtIndex(type, 41L, 9, 7L)).thenReturn(expected);
@@ -58,12 +61,11 @@ class BlockchainRuntimeServiceTest {
     void bitcoinAddressValidationUsesTheConfiguredNetwork() {
         AccountChainProfile profile = profile(ChainType.BTC);
         profile.setNetwork("testnet3");
+        when(profiles.findAccountByChain("BTC")).thenReturn(Optional.of(profile));
         when(repository.findProfileByChain("BTC")).thenReturn(Optional.of(profile));
-        when(repository.findBitcoinLikeProfile("BTC", "testnet3")).thenReturn(Optional.of(
-                BitcoinLikeChainProfile.builder().chain("BTC").network("testnet3").build()));
         BitcoinLikeChainRuntime runtime = new BitcoinLikeChainRuntime(
                 repository, null, null, null, null, null, null, null, null, null);
-        BlockchainRuntimeService configured = new BlockchainRuntimeService(repository, addresses, runtime);
+        BlockchainRuntimeService configured = new BlockchainRuntimeService(profiles, assets, addresses, runtime);
 
         assertTrue(configured.checkAddress("BTC", " mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn "));
         assertFalse(configured.checkAddress("BTC", "1BoatSLRHtKNngkdXEeobR76b53LETtpyT"));

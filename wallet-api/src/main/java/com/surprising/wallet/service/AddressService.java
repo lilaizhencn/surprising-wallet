@@ -63,7 +63,7 @@ public class AddressService {
     /**
      * 按 EVM 和 HyperCore 十六进制地址规则匹配。
      *
-     * 仅在主网查询未命中时触发，尝试将输入地址归一化为小写后再次查库，兼容链上校验不区分大小写场景。
+     * 精确地址查询未命中时，按当前链的十六进制地址规则归一化为小写再查询。
      */
     private Optional<Address> findCaseFoldedChainAddress(AssetRuntimeMetadata currency, String addressStr) {
         if (!ChainType.valueOf(currency.chain()).isEvm() && !"HYPERCORE".equals(currency.chain())) {

@@ -111,13 +111,15 @@ class WalletConfigOverviewServiceTest {
                                                        String environment,
                                                        boolean keysetConfigured,
                                                        CustodyRepository audit) {
+        var keyMaterial = org.mockito.Mockito.mock(com.surprising.wallet.common.key.WalletKeyMaterialProvider.class);
+        org.mockito.Mockito.when(keyMaterial.isConfigured()).thenReturn(keysetConfigured);
         return new WalletConfigOverviewService(
                 new WalletSystemConfigRepository(jdbc),
                 new ChainProfileRepository(jdbc),
                 new TokenConfigRepository(jdbc),
                 new ChainAssetRepository(jdbc),
                 new ChainRpcNodeRepository(jdbc),
-                audit, () -> keysetConfigured, environment);
+                audit, keyMaterial, environment);
     }
 
     /**

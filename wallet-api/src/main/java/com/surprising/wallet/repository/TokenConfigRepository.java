@@ -1,5 +1,6 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.common.chain.TokenDefinition;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -130,5 +131,32 @@ public class TokenConfigRepository {
                   from token_config
                  where chain = ? and symbol = ? and (network = ? or network is null)
                 """, chain, symbol, network);
+    }
+
+    public Optional<TokenDefinition> findDefinition(String chain, String symbol) {
+        return queryDefinitions("and upper(symbol) = upper(?)", chain, symbol).stream().findFirst();
+    }
+
+    public Optional<TokenDefinition> findDefinitionByContract(String chain, String contract) {
+        return queryDefinitions("""
+                and (lower(contract_address) = lower(?) or lower(contract_address_base58) = lower(?)
+                     or lower(contract_address_hex) = lower(?))
+                """, chain, contract, contract, contract).stream().findFirst();
+    }
+
+    public List<TokenDefinition> listDefinitions(String chain) {
+        return queryDefinitions("", chain);
+    }
+
+    private List<TokenDefinition> queryDefinitions(String predicate, Object... args) {
+        return jdbc.query("""
+                select id, chain, symbol, coalesce(nullif(token_standard, ''), standard) as standard,
+                       contract_address,
+                       decimals, enabled
+                  from token_config where upper(chain) = upper(?) and enabled = true
+                """ + predicate + " order by symbol, network, id", (rs, rowNum) -> TokenDefinition.builder()
+                .id(rs.getLong("id")).chain(rs.getString("chain")).symbol(rs.getString("symbol"))
+                .standard(rs.getString("standard")).contractAddress(rs.getString("contract_address"))
+                .decimals(rs.getInt("decimals")).nativeAsset(false).active(rs.getBoolean("enabled")).build(), args);
     }
 }

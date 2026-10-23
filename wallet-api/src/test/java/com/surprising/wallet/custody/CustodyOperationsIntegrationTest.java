@@ -703,7 +703,8 @@ class CustodyOperationsIntegrationTest {
             var principal = new CustodyPrincipal(CustodyPrincipal.ActorType.TENANT_USER,
                     administratorId, tenantId, slug, "TENANT_ADMIN", Set.of("*"));
             var chains = new CustodyTenantChainRepository(jdbc);
-            var runtime = new BlockchainRuntimeService(new ChainJdbcRepository(jdbc), null, null);
+            var runtime = new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
+                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null);
             var service = new CustodyTenantChainService(chains, new CustodyRepository(jdbc), runtime);
             Set<String> expected = java.util.Arrays.stream(ChainType.values())
                     .map(Enum::name).collect(java.util.stream.Collectors.toSet());
@@ -727,7 +728,8 @@ class CustodyOperationsIntegrationTest {
                     new CustodyTenantChainRepository(jdbc);
             CustodyTenantChainService service = new CustodyTenantChainService(
                     chainRepository, custody,
-                    new BlockchainRuntimeService(new ChainJdbcRepository(jdbc), null, null));
+                    new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
+                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null));
             jdbc.update("""
                     update chain_profile
                        set scan_enabled = true,
@@ -823,7 +825,8 @@ class CustodyOperationsIntegrationTest {
                     new StableEvmRuntime(jdbc),
                     new CustodyTenantChainService(
                             tenantChainRepository, custody,
-                            new BlockchainRuntimeService(new ChainJdbcRepository(jdbc), null, null)),
+                            new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
+                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)),
                     new CustodyJacksonConfiguration().custodyObjectMapper());
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER,
@@ -901,7 +904,8 @@ class CustodyOperationsIntegrationTest {
             CustodyAddressService service = new CustodyAddressService(
                     custody, new ChainJdbcRepository(jdbc), new StableEvmRuntime(jdbc),
                     new CustodyTenantChainService(tenantChains, custody,
-                            new BlockchainRuntimeService(new ChainJdbcRepository(jdbc), null, null)),
+                            new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
+                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)),
                     new CustodyJacksonConfiguration().custodyObjectMapper());
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER, administratorId, tenantId, slug,
@@ -1212,7 +1216,7 @@ class CustodyOperationsIntegrationTest {
          * 验证 {@code StableEvmRuntime} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private StableEvmRuntime(JdbcTemplate jdbc) {
-            super(null, null, null);
+            super(null, null, null, null);
             this.jdbc = jdbc;
         }
 

@@ -2,7 +2,6 @@ package com.surprising.wallet.chain.utxo;
 
 import com.googlecode.jsonrpc4j.JsonRpcClientException;
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.chain.model.BitcoinLikeChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.ChainType;
@@ -256,7 +255,7 @@ class BitcoinLikeChainRuntime {
      * @return 最小可花费金额（原子单位）
      */
     public long dustThresholdAtomic(ChainType chainType) {
-        BitcoinLikeChainProfile profile = bitcoinLikeProfile(chainType);
+        AccountChainProfile profile = bitcoinLikeProfile(chainType);
         if (chainType == ChainType.BCH && profile.getDustThreshold() == null) {
             return BitcoinCashFeePolicy.DUST_THRESHOLD_SAT;
         }
@@ -736,12 +735,9 @@ class BitcoinLikeChainRuntime {
     /**
      * 执行 {@code bitcoinLikeProfile} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
-    private BitcoinLikeChainProfile bitcoinLikeProfile(ChainType chainType) {
-        AccountChainProfile enabled = chainRepository.findProfileByChain(chainType.name())
+    private AccountChainProfile bitcoinLikeProfile(ChainType chainType) {
+        return chainRepository.findProfileByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
-        return chainRepository.findBitcoinLikeProfile(chainType.name(), enabled.getNetwork())
-                .orElseThrow(() -> new IllegalStateException(
-                        "missing enabled chain_profile for " + chainType.name() + "/" + enabled.getNetwork()));
     }
     /**
      * 获取或查询 {@code networkParameters} 对应的数据，并向调用方返回当前业务状态。

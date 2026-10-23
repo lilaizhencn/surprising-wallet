@@ -61,6 +61,8 @@ bootstrap 包按模式显式扫描组件；签名实现由 FirstSignerRegistry /
 
 `BlockchainRuntimeService` 从启用的 `chain_profile` 解析链元数据，直接调用 `BitcoinLikeChainRuntime`（BTC/BCH/LTC/DOGE）或 `ChainAddressRuntime`（其余链）的地址生成与校验。ADA 的 UTXO 模型由 Cardano 引擎处理，不进入 Bitcoin-like 引擎。账户链扫描、提现和归集由现有业务工作流调用各链实现。项目不再保留通用 BlockchainAdapter、能力注册表或无人调用的转账报价框架；28 条链使用同一套数据库元数据进入租户链列表和开关管理。
 
+运行时配置由 ChainProfileRepository、ChainAssetRepository、TokenConfigRepository 和 ChainRpcNodeRepository 直接映射为有类型的模型；同一张表的运行时查询共用一份映射。Bitcoin-like 使用与其他链相同的 AccountChainProfile 配置，不再重复定义配置类或按网络二次查询。BlockchainRuntimeService 直接依赖配置和资产单表仓储；ChainRpcNodeService 直接依赖 RPC 单表仓储。管理页面需要的字段概览保留为独立查询投影，不再用于重建运行时模型。
+
 提现创建复用同一运行时地址校验，先验证格式、校验和及 UTXO 网络，再创建订单和冻结余额。Console 根据 Token 配置显示资产明细；链列表契约不再返回闲置报价能力字段。
 
 ## 模块

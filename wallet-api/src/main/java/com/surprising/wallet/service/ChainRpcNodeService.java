@@ -1,7 +1,7 @@
 package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.chain.ChainRpcNode;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainRpcNodeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,7 +32,7 @@ import java.util.function.Function;
  *   <li>自动拼接认证头（Bearer Token 或 Basic Auth）</li>
  * </ul>
  *
- * @see ChainJdbcRepository
+ * @see ChainRpcNodeRepository
  * @see ChainRpcNode
  */
 @Slf4j
@@ -42,7 +42,7 @@ public class ChainRpcNodeService {
     /**
      * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final ChainJdbcRepository repository;
+    private final ChainRpcNodeRepository repository;
 
     /** 按 provider key 记录上次请求时间戳，用于速率节流 */
     private final Map<String, AtomicLong> lastRequestMillisByProvider = new ConcurrentHashMap<>();
@@ -66,7 +66,7 @@ public class ChainRpcNodeService {
      * @return 已启用的节点列表，按优先级排序
      */
     public List<ChainRpcNode> enabledNodes(String chain, String network) {
-        return repository.listEnabledRpcNodes(chain, network, environmentName).stream()
+        return repository.listRuntimeNodes(chain, network, environmentName, "rpc").stream()
                 .filter(node -> node.getRpcUrl() != null && !node.getRpcUrl().isBlank())
                 .toList();
     }
@@ -80,7 +80,7 @@ public class ChainRpcNodeService {
      * @return 已启用的节点列表，按优先级排序
      */
     public List<ChainRpcNode> enabledNodes(String chain, String network, String purpose) {
-        return repository.listEnabledRpcNodes(chain, network, environmentName, purpose).stream()
+        return repository.listRuntimeNodes(chain, network, environmentName, purpose == null ? "rpc" : purpose).stream()
                 .filter(node -> node.getRpcUrl() != null && !node.getRpcUrl().isBlank())
                 .toList();
     }
