@@ -2,7 +2,7 @@ package com.surprising.wallet.service;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.repository.CustodyRepository.AddressRecord;
+import com.surprising.wallet.chain.model.CustodyAddressRecord;
 import com.surprising.wallet.repository.CustodyRepository.GasAccountRecord;
 import com.surprising.wallet.repository.CustodyRepository.TenantRecord;
 import org.springframework.stereotype.Service;
@@ -39,15 +39,18 @@ public class CustodyTenantService {
      */
     private final ObjectMapper objectMapper;
     private final CustodyTransactionQueryService history;
+    private final CustodyAddressService addresses;
     /**
      * 构造 {@code CustodyTenantService}，初始化该组件运行所需的状态和依赖。
      */
     public CustodyTenantService(CustodyRepository repository, CustodyPasswordService passwords,
-                                ObjectMapper objectMapper, CustodyTransactionQueryService history) {
+                                ObjectMapper objectMapper, CustodyTransactionQueryService history,
+                                CustodyAddressService addresses) {
         this.repository = repository;
         this.passwords = passwords;
         this.objectMapper = objectMapper;
         this.history = history;
+        this.addresses = addresses;
     }
 
     /**
@@ -101,7 +104,7 @@ public class CustodyTenantService {
                 repository.onboardingStatus(tenantId),
                 repository.listTenantUsers(tenantId),
                 repository.tenantAssetOverview(tenantId),
-                repository.listAddresses(tenantId, "", "", "", "", 20, 0),
+                addresses.listForTenant(tenantId, "", "", "", "", 20, 0),
                 repository.listGasAccounts(tenantId),
                 repository.listApiKeys(tenantId),
                 repository.listIpRules(tenantId),
@@ -314,7 +317,7 @@ public class CustodyTenantService {
             Map<String, Object> onboarding,
             List<Map<String, Object>> administrators,
             List<Map<String, Object>> assets,
-            List<AddressRecord> recentAddresses,
+            List<CustodyAddressRecord> recentAddresses,
             List<GasAccountRecord> gasAccounts,
             List<Map<String, Object>> apiKeys,
             List<Map<String, Object>> ipRules,

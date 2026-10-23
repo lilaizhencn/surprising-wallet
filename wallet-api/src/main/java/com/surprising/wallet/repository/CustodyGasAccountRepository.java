@@ -10,6 +10,15 @@ import java.util.UUID;
 /** custody_gas_account 单表仓储。 */
 @Repository
 public class CustodyGasAccountRepository {
+    public java.util.Optional<Reference> findReference(UUID tenantId, UUID id) {
+        return jdbc.query("""
+                select custody_address_id, chain, native_symbol from custody_gas_account
+                 where tenant_id = ? and id = ?
+                """, (rs, rowNum) -> new Reference(rs.getObject("custody_address_id", UUID.class),
+                rs.getString("chain"), rs.getString("native_symbol")), tenantId, id).stream().findFirst();
+    }
+
+    public record Reference(UUID custodyAddressId, String chain, String nativeSymbol) { }
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 

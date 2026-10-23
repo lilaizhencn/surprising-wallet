@@ -2,7 +2,7 @@ package com.surprising.wallet.service;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.repository.CustodyRepository.AddressRecord;
+import com.surprising.wallet.chain.model.CustodyAddressRecord;
 import com.surprising.wallet.repository.CustodyRepository.IdempotencyRecord;
 import com.surprising.wallet.repository.CustodyRepository.TenantRecord;
 import org.springframework.stereotype.Service;
@@ -19,6 +19,8 @@ import java.util.UUID;
 import com.surprising.wallet.exception.CustodyForbiddenException;
 import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyGasAccountRepository;
+import com.surprising.wallet.repository.CustodyAddressRepository;
 
 /**
  * 托管提现服务，处理租户的提现请求流程。
@@ -56,6 +58,8 @@ public class CustodyWithdrawalService {
      */
     private final ObjectMapper objectMapper;
     private final CustodyEventService events;
+    private final CustodyAddressRepository addresses;
+    private final CustodyGasAccountRepository gasAccounts;
 
     /**
      * 构造 {@code CustodyWithdrawalService}，初始化该组件运行所需的状态和依赖。
@@ -66,7 +70,9 @@ public class CustodyWithdrawalService {
                                     CustodyTenantChainService tenantChains,
                                     CustodyCryptoService crypto,
                                     ObjectMapper objectMapper,
-                                    CustodyEventService events) {
+                                    CustodyEventService events,
+                                    CustodyAddressRepository addresses,
+                                    CustodyGasAccountRepository gasAccounts) {
         this.repository = repository;
         this.executionService = executionService;
         this.gasService = gasService;
@@ -74,6 +80,8 @@ public class CustodyWithdrawalService {
         this.crypto = crypto;
         this.objectMapper = objectMapper;
         this.events = events;
+        this.addresses = addresses;
+        this.gasAccounts = gasAccounts;
     }
 
     /**
@@ -91,9 +99,9 @@ public class CustodyWithdrawalService {
         if (command.custodyAddressId() == null) {
             throw new IllegalArgumentException("custodyAddressId is required");
         }
-        AddressRecord address = repository.requireAddress(
+        CustodyAddressRecord address = addresses.require(
                 principal.tenantId(), command.custodyAddressId());
-        if (repository.isGasAddress(principal.tenantId(), command.custodyAddressId())) {
+        if (gasAccounts.existsForAddress(principal.tenantId(), command.custodyAddressId())) {
             throw new IllegalArgumentException(
                     "gas reserve addresses cannot be used as customer withdrawal sources");
         }

@@ -37,8 +37,6 @@ public class CustodyRepository {
     private final CustodyAddressRepository custodyAddresses;
     /** 链地址单表仓储。 */
     private final ChainAddressRepository chainAddresses;
-    /** 派生主题单表仓储。 */
-    private final CustodyDerivationSubjectRepository derivationSubjects;
     /** Gas 账户单表仓储。 */
     private final CustodyGasAccountRepository gasAccounts;
     /** Gas 使用单表仓储。 */
@@ -108,7 +106,6 @@ public class CustodyRepository {
         this.securityRepository = securityRepository;
         this.custodyAddresses = new CustodyAddressRepository(jdbc);
         this.chainAddresses = new ChainAddressRepository(jdbc);
-        this.derivationSubjects = new CustodyDerivationSubjectRepository(jdbc);
         this.gasAccounts = new CustodyGasAccountRepository(jdbc);
         this.gasUsages = new CustodyGasUsageRepository(jdbc);
         this.ledgerBalances = new LedgerBalanceRepository(jdbc);
@@ -328,56 +325,6 @@ public class CustodyRepository {
         securityRepository.setIpAllowlistEnabled(tenantId, enabled);
     }
 
-    /** 获取租户主题派生编号。 */
-    public int resolveDerivationSubject(UUID tenantId, String subject) {
-        return derivationSubjects.resolve(tenantId, subject);
-    }
-
-    /** 保留地址分配的事务边界。 */
-    @Transactional(rollbackFor = Throwable.class)
-    public void lockSubjectAddressAllocation(UUID tenantId, String chain, String subject) {
-        derivationSubjects.resolve(tenantId, subject);
-    }
-
-    /** 创建托管地址。 */
-    public AddressRecord insertAddress(UUID id, UUID tenantId, long chainAddressId, String chain,
-                                       String network, String address, String memo, String subject,
-                                       String label, String metadataJson, String source,
-                                       int derivationSubject, long addressVersion, long derivationChild,
-                                       UUID createdBy) {
-        if (custodyAddresses.insert(id, tenantId, chainAddressId, chain, network, address, memo, subject,
-                label, metadataJson, source, derivationSubject, addressVersion, derivationChild, createdBy) != 1) {
-            throw new IllegalStateException("failed to create custody address");
-        }
-        return requireAddress(tenantId, id);
-    }
-
-    /** 设置链地址租户归属。 */
-    public void assignChainAddressTenant(UUID tenantId, long chainAddressId) {
-        if (chainAddresses.assignTenant(tenantId, chainAddressId) != 1) {
-            throw new IllegalArgumentException("chain address not found");
-        }
-    }
-
-    /** 查询并校验托管地址。 */
-    public AddressRecord requireAddress(UUID tenantId, UUID addressId) {
-        return custodyAddresses.findFullByTenantAndId(tenantId, addressId)
-                .map(CustodyRepository::mapAddress)
-                .orElseThrow(() -> new IllegalArgumentException("custody address not found"));
-    }
-
-    /** 按主题和版本查询托管地址。 */
-    public Optional<AddressRecord> findAddressBySubjectAndVersion(UUID tenantId, String chain,
-                                                                   String subject, long version) {
-        return custodyAddresses.findBySubjectAndVersion(tenantId, chain, subject, version)
-                .map(CustodyRepository::mapAddress);
-    }
-
-    /** 判断托管地址是否为 Gas 地址。 */
-    public boolean isGasAddress(UUID tenantId, UUID addressId) {
-        return gasAccounts.listCustodyAddressIds(tenantId).contains(addressId);
-    }
-
     /** 判断是否存在未解决的充值重组赤字。 */
     public boolean hasOpenReorgDeficit(UUID tenantId, UUID custodyAddressId, String chain,
                                        String assetSymbol, String accountId) {
@@ -391,89 +338,6 @@ public class CustodyRepository {
         Map<String, Object> address = chainAddresses.findByTenantAndId(tenantId,
                 longValue(custody.get("chain_address_id"), 0)).orElse(null);
         return address != null && reorgDeficits.existsOpen(tenantId, chain, assetSymbol, text(address.get("account_id")));
-    }
-
-    /** 更新托管地址。 */
-    public AddressRecord updateAddress(UUID tenantId, UUID addressId, String label, String memo,
-                                       String status, String metadataJson) {
-        if (custodyAddresses.update(tenantId, addressId, label, memo, status, metadataJson) != 1) {
-            throw new IllegalArgumentException("custody address not found");
-        }
-        return requireAddress(tenantId, addressId);
-    }
-
-    /** 更新托管地址元数据的兼容入口。 */
-    public AddressRecord updateAddress(UUID tenantId, UUID addressId, String label,
-                                       String metadataJson, String status) {
-        return updateAddress(tenantId, addressId, label, null, status, metadataJson);
-    }
-
-    /** 分页查询托管地址。 */
-    public List<AddressRecord> listAddresses(UUID tenantId, String chain, String source,
-                                              String status, int limit, int offset) {
-        return custodyAddresses.list(tenantId, blank(chain), blank(source), blank(status), limit, offset)
-                .stream().map(CustodyRepository::mapAddress).toList();
-    }
-
-    /** 分页查询托管地址并支持地址文本搜索。 */
-    public List<AddressRecord> listAddresses(UUID tenantId, String chain, String source,
-                                              String status, String search, int limit, int offset) {
-        String value = search == null ? "" : search.toLowerCase();
-        return custodyAddresses.list(tenantId, optionalBlank(chain), optionalBlank(source), optionalBlank(status), 500, 0).stream()
-                .filter(row -> !isGasAddress(tenantId, uuid(row.get("id"))))
-                .filter(row -> value.isEmpty() || (text(row.get("address")) + " " + text(row.get("subject")) + " " + text(row.get("label"))).toLowerCase().contains(value))
-                .skip(Math.max(offset, 0)).limit(Math.min(Math.max(limit, 1), 200))
-                .map(CustodyRepository::mapAddress).toList();
-    }
-
-    /** 查询指定租户用户在指定链和资产上余额足够的托管地址。 */
-    public List<Map<String, Object>> listFundedAddresses(UUID tenantId, String chain, String assetSymbol,
-                                                          String subject, BigDecimal requiredAmount) {
-        List<Map<String, Object>> funded = new java.util.ArrayList<>();
-        int offset = 0;
-        while (true) {
-            List<Map<String, Object>> page = custodyAddresses.list(tenantId, chain, null, "ACTIVE", 500, offset);
-            for (Map<String, Object> address : page) {
-                if (!subject.equals(address.get("subject"))) {
-                    continue;
-                }
-                long chainAddressId = ((Number) address.get("chain_address_id")).longValue();
-                chainAddresses.findByTenantAndId(tenantId, chainAddressId).ifPresent(chainAddress -> {
-                    String accountId = (String) chainAddress.get("account_id");
-                    ledgerBalances.find(tenantId, chain, assetSymbol, accountId).ifPresent(balance -> {
-                        if (balance.getAvailableBalance().compareTo(requiredAmount) >= 0) {
-                            Map<String, Object> item = new java.util.LinkedHashMap<>();
-                            item.put("custodyAddressId", address.get("id"));
-                            item.put("chain", address.get("chain"));
-                            item.put("network", address.get("network"));
-                            item.put("address", address.get("address"));
-                            item.put("subject", address.get("subject"));
-                            item.put("addressVersion", address.get("address_version"));
-                            item.put("assetSymbol", assetSymbol);
-                            item.put("availableBalance", balance.getAvailableBalance());
-                            funded.add(item);
-                        }
-                    });
-                });
-            }
-            if (page.size() < 500) {
-                break;
-            }
-            offset += page.size();
-        }
-        funded.sort(java.util.Comparator.comparingLong(
-                (Map<String, Object> item) -> ((Number) item.get("addressVersion")).longValue()).reversed());
-        return funded;
-    }
-
-    /** 统计托管地址。 */
-    public long countAddresses(UUID tenantId, String chain, String source, String status) {
-        return custodyAddresses.count(tenantId, blank(chain), blank(source), blank(status));
-    }
-
-    /** 统计托管地址并支持地址文本搜索。 */
-    public long countAddresses(UUID tenantId, String chain, String source, String status, String search) {
-        return listAddresses(tenantId, chain, source, status, search, Integer.MAX_VALUE, 0).size();
     }
 
     /** 查询租户资产概览，跨表数据在 Java 中组合。 */
@@ -591,14 +455,6 @@ public class CustodyRepository {
         return requireGasAccount(tenantId, gasAccountId);
     }
 
-    /** 查询 Gas 充值记录，关联逻辑在 Java 中完成。 */
-    public List<Map<String, Object>> listGasTopups(UUID tenantId, UUID gasAccountId, int limit, int offset) {
-        GasAccountRecord account = requireGasAccount(tenantId, gasAccountId);
-        return custodyDeposits.listByTenant(tenantId, account.chain(), account.nativeSymbol(), "", limit, offset)
-                .stream().filter(row -> account.custodyAddressId().equals(row.get("custody_address_id")))
-                .toList();
-    }
-
     /** 查询 Gas 定价元数据。 */
     public GasPricingMetadata gasPricingMetadata(String chain, String assetSymbol) {
         Map<String, Object> profile = chainProfiles.listAll().stream()
@@ -702,23 +558,6 @@ public class CustodyRepository {
     public List<Map<String, Object>> listGasUsage(UUID tenantId, String chain, String status,
                                                   int limit, int offset) {
         return gasUsages.list(tenantId, blank(chain), blank(status), limit, offset);
-    }
-
-    /** 查询指定 Gas 账户的使用记录。 */
-    public List<Map<String, Object>> listGasUsage(UUID tenantId, UUID gasAccountId, int limit, int offset) {
-        return gasUsages.list(tenantId, null, null, 500, 0).stream()
-                .filter(row -> gasAccountId.equals(row.get("gas_account_id")))
-                .skip(Math.max(offset, 0)).limit(Math.min(Math.max(limit, 1), 200)).map(row -> {
-                    Map<String, Object> result = new LinkedHashMap<>();
-                    result.put("id", row.get("id")); result.put("operationType", row.get("operation_type"));
-                    result.put("operationId", row.get("operation_id")); result.put("referenceNo", row.get("reference_no"));
-                    result.put("chain", row.get("chain")); result.put("nativeSymbol", row.get("native_symbol"));
-                    result.put("reservedAmount", row.get("reserved_amount")); result.put("actualAmount", row.get("actual_amount"));
-                    result.put("status", row.get("status")); result.put("pricingSource", row.get("pricing_source"));
-                    result.put("txHash", row.get("tx_hash")); result.put("errorMessage", row.get("error_message"));
-                    result.put("createdAt", instant(row.get("created_at"))); result.put("updatedAt", instant(row.get("updated_at")));
-                    result.put("settledAt", instant(row.get("settled_at"))); return result;
-                }).toList();
     }
 
     /** 查询逾期 Gas 使用记录。 */
@@ -1054,15 +893,6 @@ public class CustodyRepository {
                 text(row.get("display_currency")), instant(row.get("created_at")), instant(row.get("updated_at")));
     }
 
-    /** 将数据库地址字段转换为模型。 */
-    private static AddressRecord mapAddress(Map<String, Object> row) {
-        return new AddressRecord(uuid(row.get("id")), uuid(row.get("tenant_id")), longValue(row.get("chain_address_id"), 0),
-                text(row.get("chain")), text(row.get("network")), text(row.get("address")), text(row.get("memo")),
-                text(row.get("subject")), text(row.get("label")), text(row.get("metadata_json")), text(row.get("source")),
-                text(row.get("status")), number(row.get("derivation_subject")), longValue(row.get("address_version"), 0),
-                longValue(row.get("derivation_child"), 0), instant(row.get("created_at")), instant(row.get("updated_at")));
-    }
-
     /** 将数据库 Gas 字段和账本余额转换为模型。 */
     private GasAccountRecord mapGas(UUID tenantId, Map<String, Object> row) {
         UUID custodyId = uuid(row.get("custody_address_id"));
@@ -1114,11 +944,7 @@ public class CustodyRepository {
     }
     /** 规范化可选筛选参数。 */
     private static String blank(String value) { return value == null ? "" : value.trim(); }
-    /** 将地址查询的空筛选参数转换为无筛选语义。 */
-    private static String optionalBlank(String value) {
-        String normalized = blank(value);
-        return normalized.isEmpty() ? null : normalized;
-    }
+
 
     /** 租户记录。 */
     public record TenantRecord(UUID id, String slug, String name, String status, int derivationNamespace,
@@ -1134,11 +960,6 @@ public class CustodyRepository {
     public record ApiKeyRecord(UUID id, UUID tenantId, String tenantSlug, String tenantStatus,
                                boolean ipAllowlistEnabled, String keyId, String name, String secretCiphertext,
                                String status, Instant expiresAt, Instant createdAt) { }
-    /** 托管地址记录。 */
-    public record AddressRecord(UUID id, UUID tenantId, long chainAddressId, String chain, String network,
-                                String address, String memo, String subject, String label, String metadataJson,
-                                String source, String status, int derivationSubject, long addressVersion,
-                                long derivationChild, Instant createdAt, Instant updatedAt) { }
     /** Gas 账户记录。 */
     public record GasAccountRecord(UUID id, UUID tenantId, UUID custodyAddressId, String chain, String network,
                                    String nativeSymbol, String address, String memo, long childIndex, String accountId,

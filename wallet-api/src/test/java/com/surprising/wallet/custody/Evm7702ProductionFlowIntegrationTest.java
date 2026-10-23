@@ -229,9 +229,12 @@ class Evm7702ProductionFlowIntegrationTest {
                         new ChainAddressRepository(jdbc), new LedgerBalanceRepository(jdbc));
         withdrawalService = new CustodyWithdrawalService(
                 custodyRepository, withdrawalExecution,
-                new CustodyGasService(custodyRepository, null, null),
+                com.surprising.wallet.testutil.CustodyTestSupport.gas(jdbc, custodyRepository,
+                        org.mockito.Mockito.mock(com.surprising.wallet.service.CustodyAddressService.class),
+                        org.mockito.Mockito.mock(BlockchainRuntimeService.class)),
                 tenantChainService, crypto, objectMapper,
-                com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc));
+                com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc),
+                new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc));
         collectionRepository = new Evm7702CollectionRepository(jdbc);
         Evm7702CollectionCoordinator coordinator = new Evm7702CollectionCoordinator(collectionRepository,
                 custodyRepository,

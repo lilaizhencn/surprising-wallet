@@ -16,6 +16,16 @@ import java.util.Objects;
 /** custody_deposit 单表仓储。 */
 @Repository
 public class CustodyDepositRepository {
+    public List<Map<String, Object>> listForAddress(UUID tenantId, UUID addressId, String chain,
+                                                   String assetSymbol, int limit, int offset) {
+        return jdbc.queryForList("""
+                select id, tenant_id, custody_address_id, chain, asset_symbol, tx_hash, log_index,
+                       amount, status, credited_at, created_at, updated_at
+                  from custody_deposit
+                 where tenant_id = ? and custody_address_id = ? and chain = ? and asset_symbol = ?
+                 order by created_at desc, id limit ? offset ?
+                """, tenantId, addressId, chain, assetSymbol, Math.min(Math.max(limit, 1), 500), Math.max(offset, 0));
+    }
     private static final String HISTORY_WHERE = """
              where tenant_id = ?
                and (? = '' or chain = ?) and (? = '' or asset_symbol = ?) and (? = '' or status = ?)
@@ -41,19 +51,6 @@ public class CustodyDepositRepository {
                  limit 1
                 """, Timestamp.class, tenantId, custodyAddressId, chain, assetSymbol, txHash);
         return rows.stream().findFirst().orElse(null);
-    }
-
-    /** 查询租户托管充值记录。 */
-    public List<Map<String, Object>> listByTenant(UUID tenantId, String chain, String assetSymbol,
-                                                  String status, int limit, int offset) {
-        return jdbc.queryForList("""
-                select id, tenant_id, custody_address_id, chain, asset_symbol, tx_hash, log_index,
-                       amount, status, credited_at, created_at, updated_at
-                  from custody_deposit where tenant_id = ?
-                   and (? = '' or chain = ?) and (? = '' or asset_symbol = ?) and (? = '' or status = ?)
-                 order by created_at desc, id limit ? offset ?
-                """, tenantId, chain, chain, assetSymbol, assetSymbol, status, status,
-                Math.min(Math.max(limit, 1), 500), Math.max(offset, 0));
     }
 
     /** 统计租户托管充值记录。 */

@@ -293,9 +293,9 @@ class CustodyDepositProjectionIntegrationTest {
             UUID firstTenant = insertTenant("subject-first");
             UUID secondTenant = insertTenant("subject-second");
 
-            int first = repository.resolveDerivationSubject(firstTenant, "user_10086");
-            int repeated = repository.resolveDerivationSubject(firstTenant, "user_10086");
-            int isolated = repository.resolveDerivationSubject(secondTenant, "user_10086");
+            int first = new com.surprising.wallet.repository.CustodyDerivationSubjectRepository(jdbc).resolve(firstTenant, "user_10086");
+            int repeated = new com.surprising.wallet.repository.CustodyDerivationSubjectRepository(jdbc).resolve(firstTenant, "user_10086");
+            int isolated = new com.surprising.wallet.repository.CustodyDerivationSubjectRepository(jdbc).resolve(secondTenant, "user_10086");
 
             assertEquals(first, repeated);
             assertTrue(first > 0);

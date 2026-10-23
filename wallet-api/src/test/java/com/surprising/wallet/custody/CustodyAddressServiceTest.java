@@ -1,38 +1,16 @@
 package com.surprising.wallet.custody;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.service.CustodyAddressService;
-import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 
 /**
  * 验证 {@code CustodyAddressServiceTest} 覆盖的业务流程、边界条件和异常行为。
  */
 class CustodyAddressServiceTest {
-
-    /**
-     * 验证 {@code auditDetailsRecordAddressVersionAndChildIndex} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    @Test
-    void auditDetailsRecordAddressVersionAndChildIndex() throws Exception {
-        ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
-        CustodyAddressService service = new CustodyAddressService(
-                null, null, null, null, objectMapper);
-
-        JsonNode details = objectMapper.readTree(
-                service.addressAuditDetails("ETH", "CONSOLE", "treasury", 2, 3));
-
-        assertEquals("ETH", details.path("chain").asText());
-        assertEquals("CONSOLE", details.path("source").asText());
-        assertEquals("treasury", details.path("subject").asText());
-        assertEquals(2, details.path("addressVersion").asLong());
-        assertEquals(3, details.path("childIndex").asLong());
-    }
 
     /**
      * 验证 {@code addressVersionDefaultsToZeroAndRejectsInvalidValues} 对应的测试场景，明确输入、预期结果和异常边界。

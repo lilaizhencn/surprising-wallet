@@ -5,13 +5,21 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.pojo.Address;
-import com.surprising.wallet.repository.CustodyRepository.AddressRecord;
+import com.surprising.wallet.chain.model.CustodyAddressRecord;
 import com.surprising.wallet.repository.CustodyRepository.TenantRecord;
 import com.surprising.wallet.repository.Evm7702CollectionRepository;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.CustodyAddressRepository;
+import com.surprising.wallet.repository.CustodyGasAccountRepository;
+import com.surprising.wallet.repository.CustodyDerivationSubjectRepository;
+import com.surprising.wallet.repository.CustodyAuditRepository;
+import com.surprising.wallet.repository.LedgerBalanceRepository;
+import org.springframework.transaction.annotation.Isolation;
+import java.util.ArrayList;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -20,7 +28,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 import com.surprising.wallet.exception.CustodyForbiddenException;
@@ -28,77 +35,44 @@ import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.repository.CustodyRepository;
 
 /**
- * 托管充值地址服务，管理租户的充值地址生命周期。
- *
- * <p>核心功能：为租户创建充值地址（链上 BIP44 派生 + EIP-7702 委托）、
- * 查询地址列表、校验地址归属权限。地址创建时生成确定性 BIP32 路径，
- * 同一 externalReference 多次请求返回相同地址。
+ * 管理租户地址的确定性分配、版本和查询。
+ * 同一主题/版本重复请求返回原地址；分配锁、地址归属、EVM 投影和审计共用事务。
  */
 @Service
 public class CustodyAddressService {
-    /**
-     * 定义 {@code RESERVED_SUBJECT_PREFIX} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     private static final String RESERVED_SUBJECT_PREFIX = "__sw_";
-    /**
-     * 定义 {@code DEFAULT_ADDRESS_VERSION} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     static final long DEFAULT_ADDRESS_VERSION = 0L;
-    /**
-     * 定义 {@code MAX_ADDRESS_VERSION} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
     private static final long MAX_ADDRESS_VERSION = Integer.MAX_VALUE;
-    /**
-     * 保存 {@code custodyRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
     private final CustodyRepository custodyRepository;
-    /**
-     * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final ChainJdbcRepository chainRepository;
-    /**
-     * 保存 {@code runtime}，用于记录时间边界或审计时间。
-     */
+    private final ChainAddressRepository chainRepository;
+    private final CustodyAddressRepository addressRepository;
+    private final CustodyGasAccountRepository gasAccounts;
+    private final CustodyDerivationSubjectRepository subjects;
+    private final CustodyAuditRepository audits;
+    private final LedgerBalanceRepository balances;
     private final BlockchainRuntimeService runtime;
-    /**
-     * 保存 {@code tenantChains}，表示链、网络、资产或代币配置。
-     */
     private final CustodyTenantChainService tenantChains;
-    /**
-     * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
-     */
     private final ObjectMapper objectMapper;
 
-    /**
-     * 保存 {@code evm7702Repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final Optional<Evm7702CollectionRepository> evm7702Repository;
+    private final Evm7702CollectionRepository evm7702Repository;
 
-    /**
-     * 构造 {@code CustodyAddressService}，初始化该组件运行所需的状态和依赖。
-     */
-    @Autowired
-    public CustodyAddressService(CustodyRepository custodyRepository,
-                                 ChainJdbcRepository chainRepository,
-                                 BlockchainRuntimeService runtime,
-                                 CustodyTenantChainService tenantChains,
-                                 ObjectMapper objectMapper,
-                                 Optional<Evm7702CollectionRepository> evm7702Repository) {
+    public CustodyAddressService(CustodyRepository custodyRepository, ChainAddressRepository chainRepository,
+                                 BlockchainRuntimeService runtime, CustodyTenantChainService tenantChains,
+                                 ObjectMapper objectMapper, Evm7702CollectionRepository evm7702Repository,
+                                 CustodyAddressRepository addressRepository, CustodyGasAccountRepository gasAccounts,
+                                 CustodyDerivationSubjectRepository subjects, CustodyAuditRepository audits,
+                                 LedgerBalanceRepository balances) {
         this.custodyRepository = custodyRepository;
         this.chainRepository = chainRepository;
         this.runtime = runtime;
         this.tenantChains = tenantChains;
         this.objectMapper = objectMapper;
         this.evm7702Repository = evm7702Repository;
-    }
-
-    /** 提供不启用 EIP-7702 仓储时的测试构造函数。 */
-    public CustodyAddressService(CustodyRepository custodyRepository,
-                                 ChainJdbcRepository chainRepository,
-                                 BlockchainRuntimeService runtime,
-                                 CustodyTenantChainService tenantChains,
-                                 ObjectMapper objectMapper) {
-        this(custodyRepository, chainRepository, runtime, tenantChains, objectMapper, Optional.empty());
+        this.addressRepository = addressRepository;
+        this.gasAccounts = gasAccounts;
+        this.subjects = subjects;
+        this.audits = audits;
+        this.balances = balances;
     }
 
     /**
@@ -143,26 +117,27 @@ public class CustodyAddressService {
         }
         tenantChains.requireActive(tenant.id(), chain);
 
-        custodyRepository.lockSubjectAddressAllocation(tenant.id(), chain, subject);
-        AddressRecord existing = custodyRepository.findAddressBySubjectAndVersion(
+        int derivationSubject = subjects.resolve(tenant.id(), subject);
+        CustodyAddressRecord existing = addressRepository.findBySubjectAndVersion(
                 tenant.id(), chain, subject, addressVersion).orElse(null);
         if (existing != null) {
             return toView(existing);
         }
 
         BlockchainRuntimeService.RuntimeChain runtimeChain = runtime.requireRuntime(chain);
-        int derivationSubject = custodyRepository.resolveDerivationSubject(tenant.id(), subject);
         Address generated = runtime.generateDepositAddressAtIndex(
                 chain, Integer.toUnsignedLong(derivationSubject), tenant.derivationNamespace(),
                 childIndex);
-        ChainAddressRecord chainAddress = chainRepository.findChainAddress(
+        ChainAddressRecord chainAddress = chainRepository.find(
                         chain, runtimeChain.nativeSymbol(), Integer.toUnsignedLong(derivationSubject),
                         tenant.derivationNamespace(), generated.getIndex(), "DEPOSIT")
                 .orElseThrow(() -> new IllegalStateException("generated chain address was not persisted"));
-        custodyRepository.assignChainAddressTenant(tenant.id(), chainAddress.getId());
+        if (chainRepository.assignTenant(tenant.id(), chainAddress.getId()) != 1) {
+            throw new IllegalStateException("generated chain address tenant assignment failed");
+        }
 
         UUID addressId = UUID.randomUUID();
-        AddressRecord saved = custodyRepository.insertAddress(
+        int inserted = addressRepository.insert(
                 addressId,
                 tenant.id(),
                 chainAddress.getId(),
@@ -178,12 +153,14 @@ public class CustodyAddressService {
                 addressVersion,
                 generated.getIndex(),
                 "CONSOLE".equals(normalizedSource) ? principal.actorId() : null);
+        if (inserted != 1) throw new IllegalStateException("failed to create custody address");
         if ("evm".equalsIgnoreCase(runtimeChain.family())) {
-            evm7702Repository.ifPresent(repository -> repository.createAccountProjection(
-                    tenant.id(), addressId, chain, runtimeChain.network(), chainAddress.getAddress()));
+            evm7702Repository.createAccountProjection(
+                    tenant.id(), addressId, chain, runtimeChain.network(), chainAddress.getAddress());
         }
-        AddressView result = toView(saved);
-        custodyRepository.audit(
+        AddressView result = toView(addressRepository.require(tenant.id(), addressId));
+        audits.insert(
+                UUID.randomUUID(),
                 tenant.id(),
                 principal.actorType().name(),
                 principal.actorId().toString(),
@@ -196,71 +173,71 @@ public class CustodyAddressService {
         return result;
     }
 
-    /**
-     * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
-     */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<AddressView> list(CustodyPrincipal principal, String chain, String source,
                                   String status, String search, int limit, int offset) {
         requireScope(principal, "addresses:read");
-        return custodyRepository.listAddresses(
-                        principal.tenantId(),
-                        upperOrNull(chain),
-                        upperOrNull(source),
-                        upperOrNull(status),
-                        search,
-                        limit,
-                        offset)
-                .stream()
-                .map(this::toView)
-                .toList();
+        return listForTenant(principal.tenantId(), chain, source, status, search, limit, offset)
+                .stream().map(this::toView).toList();
     }
 
-    /**
-     * 执行 {@code page} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public PageView<AddressView> page(CustodyPrincipal principal, String chain, String source,
                                       String status, String search, int limit, int offset) {
         requireScope(principal, "addresses:read");
+        var query = addressQuery(principal.tenantId(), chain, source, status, search);
         int pageSize = Math.min(Math.max(limit, 1), 200);
         int pageOffset = Math.max(offset, 0);
-        String normalizedChain = upperOrNull(chain);
-        String normalizedSource = upperOrNull(source);
-        String normalizedStatus = upperOrNull(status);
-        return new PageView<>(
-                custodyRepository.listAddresses(
-                                principal.tenantId(), normalizedChain, normalizedSource,
-                                normalizedStatus, search, pageSize, pageOffset)
-                        .stream()
-                        .map(this::toView)
-                        .toList(),
-                custodyRepository.countAddresses(
-                        principal.tenantId(), normalizedChain, normalizedSource,
-                        normalizedStatus, search),
-                pageSize, pageOffset);
+        return new PageView<>(addressRepository.query(query, pageSize, pageOffset).stream().map(this::toView).toList(),
+                addressRepository.count(query), pageSize, pageOffset);
     }
 
-    /** Resolve addresses owned by this tenant and subject that can cover a withdrawal amount. */
+    // Platform tenant detail checks its actor and target tenant before using this shared query.
+    List<CustodyAddressRecord> listForTenant(UUID tenantId, String chain, String source, String status,
+                                             String search, int limit, int offset) {
+        return addressRepository.query(addressQuery(tenantId, chain, source, status, search), limit, offset);
+    }
+
+    private CustodyAddressRepository.Query addressQuery(UUID tenantId, String chain, String source, String status, String search) {
+        return new CustodyAddressRepository.Query(tenantId, chain, source, status, search, gasAccounts.listCustodyAddressIds(tenantId));
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<Map<String, Object>> fundedAddresses(CustodyPrincipal principal, String chain,
-                                                      String assetSymbol, String subject,
-                                                      String requiredAmount) {
+                                                      String assetSymbol, String subject, String requiredAmount) {
         requireScope(principal, "addresses:read");
         String normalizedChain = requiredUpper(chain, "chain", 32);
         String normalizedAsset = requiredUpper(assetSymbol, "assetSymbol", 32);
         String normalizedSubject = requireSubject(subject, false);
         BigDecimal amount;
         try {
-            if (requiredAmount == null || requiredAmount.isBlank()) {
-                throw new NumberFormatException("blank");
-            }
-            amount = new BigDecimal(requiredAmount.trim());
+            amount = new BigDecimal(requiredAmount == null ? "" : requiredAmount.trim());
         } catch (NumberFormatException ex) {
             throw new IllegalArgumentException("requiredAmount must be a positive decimal", ex);
         }
-        if (amount.signum() <= 0) {
-            throw new IllegalArgumentException("requiredAmount must be a positive decimal");
+        if (amount.signum() <= 0) throw new IllegalArgumentException("requiredAmount must be a positive decimal");
+        var candidates = addressRepository.listActiveBySubject(principal.tenantId(), normalizedChain, normalizedSubject);
+        var chainAddresses = chainRepository.findByIds(principal.tenantId(), candidates.stream()
+                .map(CustodyAddressRecord::chainAddressId).distinct().toList()).stream()
+                .collect(Collectors.toMap(ChainAddressRecord::getId, Function.identity()));
+        var available = balances.findByAccounts(principal.tenantId(), normalizedChain, normalizedAsset,
+                chainAddresses.values().stream().map(ChainAddressRecord::getAccountId).distinct().toList()).stream()
+                .collect(Collectors.toMap(com.surprising.wallet.chain.model.LedgerBalanceRecord::getAccountId,
+                        com.surprising.wallet.chain.model.LedgerBalanceRecord::getAvailableBalance));
+        var result = new ArrayList<Map<String, Object>>();
+        for (var address : candidates) {
+            var chainAddress = chainAddresses.get(address.chainAddressId());
+            if (chainAddress == null) continue;
+            var balance = available.get(chainAddress.getAccountId());
+            if (balance == null || balance.compareTo(amount) < 0) continue;
+            var item = new LinkedHashMap<String, Object>();
+            item.put("custodyAddressId", address.id()); item.put("chain", address.chain());
+            item.put("network", address.network()); item.put("address", address.address());
+            item.put("subject", address.subject()); item.put("addressVersion", address.addressVersion());
+            item.put("assetSymbol", normalizedAsset); item.put("availableBalance", balance);
+            result.add(item);
         }
-        return custodyRepository.listFundedAddresses(principal.tenantId(), normalizedChain,
-                normalizedAsset, normalizedSubject, amount);
+        return result;
     }
 
     /**
@@ -273,8 +250,8 @@ public class CustodyAddressService {
         if (addressId == null) {
             throw new IllegalArgumentException("addressId is required");
         }
-        AddressRecord current = custodyRepository.requireAddress(principal.tenantId(), addressId);
-        if (custodyRepository.isGasAddress(principal.tenantId(), addressId)) {
+        CustodyAddressRecord current = addressRepository.require(principal.tenantId(), addressId);
+        if (gasAccounts.existsForAddress(principal.tenantId(), addressId)) {
             throw new IllegalArgumentException(
                     "collection addresses are managed from the asset overview");
         }
@@ -291,13 +268,16 @@ public class CustodyAddressService {
         String metadata = command.metadata() == null
                 ? current.metadataJson()
                 : metadataJson(command.metadata());
-        AddressRecord saved = custodyRepository.updateAddress(
-                principal.tenantId(), addressId, label, metadata, normalizedStatus);
+        if (addressRepository.update(principal.tenantId(), addressId, label, current.memo(), normalizedStatus, metadata) != 1) {
+            throw new IllegalArgumentException("custody address not found");
+        }
+        CustodyAddressRecord saved = addressRepository.require(principal.tenantId(), addressId);
 
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("label", label);
         details.put("status", normalizedStatus);
-        custodyRepository.audit(
+        audits.insert(
+                UUID.randomUUID(),
                 principal.tenantId(),
                 principal.actorType().name(),
                 principal.actorId().toString(),
@@ -318,7 +298,7 @@ public class CustodyAddressService {
     /**
      * 编码 {@code toView} 对应的数据，生成链上或接口所需的表示。
      */
-    private AddressView toView(AddressRecord record) {
+    private AddressView toView(CustodyAddressRecord record) {
         return new AddressView(
                 record.id(),
                 record.chain(),
@@ -370,7 +350,7 @@ public class CustodyAddressService {
     /**
      * 添加 {@code addressAuditDetails} 对应的业务对象，并更新当前组件的集合或索引。
      */
-    public String addressAuditDetails(String chain, String source, String subject,
+    private String addressAuditDetails(String chain, String source, String subject,
                                long addressVersion, long childIndex) {
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("chain", chain);

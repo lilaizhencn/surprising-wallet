@@ -2,7 +2,7 @@ package com.surprising.wallet.service;
 
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.repository.CustodyRepository.AddressRecord;
+import com.surprising.wallet.chain.model.CustodyAddressRecord;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.ChainAssetRepository;
@@ -78,7 +78,7 @@ public class CustodyWithdrawalExecutionService {
     /**
      * 执行或处理 {@code execute} 对应的业务流程，并维护状态和异常边界。
      */
-    public ExecutionResult execute(UUID tenantId, AddressRecord custodyAddress,
+    public ExecutionResult execute(UUID tenantId, CustodyAddressRecord custodyAddress,
                                    String chain, String symbol, String toAddress,
                                    BigDecimal amount, String orderPrefix) {
         runtimeConfig.requireTaskEnabled(

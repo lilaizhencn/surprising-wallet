@@ -1,5 +1,6 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.chain.model.CustodyAddressRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
@@ -8,12 +9,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.time.Instant;
-import java.sql.Timestamp;
+import java.sql.SQLException;
+import java.sql.ResultSet;
+import java.util.Objects;
+import java.util.Locale;
+import java.util.ArrayList;
 
 /** custody_address 单表仓储。 */
 @Repository
 public class CustodyAddressRepository {
+    private static final String COLUMNS = """
+            id, tenant_id, chain_address_id, chain, network, address, memo, subject, label,
+            metadata::text as metadata_json, source, status, derivation_subject, address_version,
+            derivation_child, created_at, updated_at
+            """;
+    private static final String QUERY_WHERE = """
+             where tenant_id = ? and (? = '' or chain = ?) and (? = '' or source = ?)
+               and (? = '' or status = ?) and not (id = any (?))
+               and (? = '' or position(? in lower(concat_ws(' ', address, subject, label))) > 0)
+            """;
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 
@@ -122,27 +136,29 @@ public class CustodyAddressRepository {
                 source, derivationSubject, addressVersion, derivationChild, createdBy);
     }
 
-    /** 按租户和主键查询完整托管地址。 */
-    public Optional<Map<String, Object>> findFullByTenantAndId(UUID tenantId, UUID id) {
-        return jdbc.queryForList("""
-                select id, tenant_id, chain_address_id, chain, network, address, memo, subject, label,
-                       metadata::text as metadata_json, source, status, derivation_subject, address_version,
-                       derivation_child, created_at, updated_at
-                  from custody_address where tenant_id = ? and id = ?
-                """, tenantId, id).stream().findFirst();
+    public CustodyAddressRecord require(UUID tenantId, UUID id) {
+        return findFullByTenantAndId(tenantId, id)
+                .orElseThrow(() -> new IllegalArgumentException("custody address not found"));
     }
 
-    /** 按租户、subject 和版本查询托管地址。 */
-    public Optional<Map<String, Object>> findBySubjectAndVersion(UUID tenantId, String chain,
+    public Optional<CustodyAddressRecord> findFullByTenantAndId(UUID tenantId, UUID id) {
+        return jdbc.query("select " + COLUMNS + " from custody_address where tenant_id = ? and id = ?",
+                (rs, rowNum) -> mapAddress(rs), tenantId, id).stream().findFirst();
+    }
+
+    public Optional<CustodyAddressRecord> findBySubjectAndVersion(UUID tenantId, String chain,
                                                                   String subject, long version) {
-        return jdbc.queryForList("""
-                select id, tenant_id, chain_address_id, chain, network, address, memo, subject, label,
-                       metadata::text as metadata_json, source, status, derivation_subject, address_version,
-                       derivation_child, created_at, updated_at
-                  from custody_address
-                 where tenant_id = ? and chain = ? and subject = ? and address_version = ?
+        return jdbc.query("select " + COLUMNS + """
+                 from custody_address where tenant_id = ? and chain = ? and subject = ? and address_version = ?
                  order by id limit 1
-                """, tenantId, chain, subject, version).stream().findFirst();
+                """, (rs, rowNum) -> mapAddress(rs), tenantId, chain, subject, version).stream().findFirst();
+    }
+
+    public List<CustodyAddressRecord> listActiveBySubject(UUID tenantId, String chain, String subject) {
+        return jdbc.query("select " + COLUMNS + """
+                 from custody_address where tenant_id = ? and chain = ? and subject = ? and status = 'ACTIVE'
+                 order by address_version desc, id
+                """, (rs, rowNum) -> mapAddress(rs), tenantId, chain, subject);
     }
 
     /** 更新托管地址业务字段。 */
@@ -154,46 +170,58 @@ public class CustodyAddressRepository {
                 """, label, memo, status, metadataJson, tenantId, id);
     }
 
-    /** 按条件查询租户托管地址。 */
-    public List<Map<String, Object>> list(UUID tenantId, String chain, String source,
-                                          String status, int limit, int offset) {
-        return jdbc.queryForList("""
-                select id, tenant_id, chain_address_id, chain, network, address, memo, subject, label,
-                       metadata::text as metadata_json, source, status, derivation_subject, address_version,
-                       derivation_child, created_at, updated_at
-                  from custody_address
-                 where tenant_id = ? and (cast(? as varchar) is null or chain = ?) and (cast(? as varchar) is null or source = ?)
-                   and (cast(? as varchar) is null or status = ?)
-                 order by created_at desc, id desc limit ? offset ?
-                """, tenantId, chain, chain, source, source, status, status,
-                Math.min(Math.max(limit, 1), 500), Math.max(offset, 0));
+    public List<CustodyAddressRecord> query(Query query, int limit, int offset) {
+        var args = queryArgs(query);
+        args.add(Math.min(Math.max(limit, 1), 200));
+        args.add(Math.max(offset, 0));
+        return jdbc.query("select " + COLUMNS + " from custody_address " + QUERY_WHERE
+                + " order by created_at desc, id desc limit ? offset ?",
+                (rs, rowNum) -> mapAddress(rs), args.toArray());
     }
 
-    /** 统计租户托管地址数量。 */
-    public long count(UUID tenantId, String chain, String source, String status) {
-        Long count = jdbc.queryForObject("""
-                select count(*) from custody_address
-                 where tenant_id = ? and (cast(? as varchar) is null or chain = ?) and (cast(? as varchar) is null or source = ?)
-                   and (cast(? as varchar) is null or status = ?)
-                """, Long.class, tenantId, chain, chain, source, source, status, status);
-        return count == null ? 0 : count;
+    public long count(Query query) {
+        return jdbc.queryForObject("select count(*) from custody_address " + QUERY_WHERE,
+                Long.class, queryArgs(query).toArray());
     }
 
-    /** 将数据库地址字段转换为接口字段。 */
-    public static String text(Object value) {
-        return value == null ? null : value.toString();
+    private static ArrayList<Object> queryArgs(Query query) {
+        var args = new ArrayList<Object>();
+        args.add(query.tenantId());
+        args.add(query.chain()); args.add(query.chain());
+        args.add(query.source()); args.add(query.source());
+        args.add(query.status()); args.add(query.status());
+        args.add(new SqlArrayValue("uuid", query.excludedAddressIds().toArray()));
+        args.add(query.search()); args.add(query.search());
+        return args;
     }
 
-    /** 将数据库地址字段转换为时间。 */
-    public static Instant instant(Object value) {
-        return value instanceof Timestamp timestamp ? timestamp.toInstant()
-                : value instanceof java.time.OffsetDateTime offset ? offset.toInstant() : null;
+    public record Query(UUID tenantId, String chain, String source, String status, String search,
+                        List<UUID> excludedAddressIds) {
+        public Query {
+            Objects.requireNonNull(tenantId, "tenantId");
+            chain = upper(chain); source = upper(source); status = upper(status);
+            search = search == null ? "" : search.toLowerCase(Locale.ROOT);
+            excludedAddressIds = List.copyOf(excludedAddressIds);
+        }
+        private static String upper(String value) {
+            return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+        }
+    }
+
+    private static CustodyAddressRecord mapAddress(ResultSet rs) throws SQLException {
+        return new CustodyAddressRecord(rs.getObject("id", UUID.class), rs.getObject("tenant_id", UUID.class),
+                rs.getLong("chain_address_id"), rs.getString("chain"), rs.getString("network"),
+                rs.getString("address"), Objects.toString(rs.getString("memo"), ""), rs.getString("subject"),
+                Objects.toString(rs.getString("label"), ""),
+                rs.getString("metadata_json"), rs.getString("source"), rs.getString("status"),
+                rs.getInt("derivation_subject"), rs.getLong("address_version"), rs.getLong("derivation_child"),
+                rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant());
     }
 
     public java.util.Optional<DepositOwner> findDepositOwner(
             UUID tenantId, String chain, List<Long> chainAddressIds, String preferredAddress) {
         if (chainAddressIds.isEmpty()) return java.util.Optional.empty();
-        List<Object> args = new java.util.ArrayList<>();
+        List<Object> args = new ArrayList<>();
         args.add(tenantId);
         args.add(chain);
         args.addAll(chainAddressIds);
@@ -215,7 +243,7 @@ public class CustodyAddressRepository {
                 """, (rs, rowNum) -> mapDepositOwner(rs), tenantId, id).stream().findFirst();
     }
 
-    private static DepositOwner mapDepositOwner(java.sql.ResultSet rs) throws java.sql.SQLException {
+    private static DepositOwner mapDepositOwner(ResultSet rs) throws SQLException {
         return new DepositOwner(rs.getObject("id", UUID.class), rs.getString("subject"),
                 rs.getString("address"), rs.getString("memo"), rs.getString("source"));
     }

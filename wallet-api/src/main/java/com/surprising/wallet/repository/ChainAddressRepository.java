@@ -2,6 +2,7 @@ package com.surprising.wallet.repository;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -12,6 +13,15 @@ import java.util.UUID;
 /** chain_address 单表仓储。 */
 @Repository
 public class ChainAddressRepository {
+    public List<ChainAddressRecord> findByIds(UUID tenantId, List<Long> ids) {
+        if (ids.isEmpty()) return List.of();
+        return jdbc.queryForList("""
+                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                       address, owner_address, derivation_path, wallet_role, enabled
+                  from chain_address where tenant_id = ? and id = any (?)
+                """, tenantId, new SqlArrayValue("bigint", ids.toArray()))
+                .stream().map(ChainAddressRepository::mapRow).toList();
+    }
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 

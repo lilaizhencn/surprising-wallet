@@ -300,8 +300,11 @@ class CustodyOperationsIntegrationTest {
             assertEquals(0, new BigDecimal("3").compareTo(account.totalBalance()));
             assertFalse(account.lowBalance());
             assertTrue((Boolean) repository.onboardingStatus(tenantId).get("gasAccountFunded"));
-            assertTrue(repository.listAddresses(
-                    tenantId, "", "", "", "", 10, 0).isEmpty());
+            assertTrue(com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc, repository,
+                    org.mockito.Mockito.mock(BlockchainRuntimeService.class),
+                    org.mockito.Mockito.mock(CustodyTenantChainService.class)).list(
+                    new CustodyPrincipal(CustodyPrincipal.ActorType.API_KEY, UUID.randomUUID(), tenantId,
+                            "gas-address-test", "API_KEY", Set.of("addresses:read")), "", "", "", "", 10, 0).isEmpty());
             assertTrue(repository.tenantAssetOverview(tenantId).isEmpty());
             status.setRollbackOnly();
         });
@@ -551,7 +554,7 @@ class CustodyOperationsIntegrationTest {
             assertEquals(0, new BigDecimal("0.96").compareTo(account.availableBalance()));
             assertEquals(0, BigDecimal.ZERO.compareTo(account.lockedBalance()));
             assertEquals(0, new BigDecimal("0.96").compareTo(account.totalBalance()));
-            assertEquals(1, repository.listGasUsage(tenantId, gasAccountId, 10, 0).size());
+            assertEquals(1, new com.surprising.wallet.repository.CustodyGasUsageRepository(jdbc).listForAccount(tenantId, gasAccountId, 10, 0).size());
             assertEquals(1, jdbc.queryForObject("""
                     select count(*) from custody_ledger_entry
                      where tenant_id = ? and entry_type = 'NETWORK_FEE'
@@ -911,15 +914,13 @@ class CustodyOperationsIntegrationTest {
             tenantChainRepository.setStatus(tenantId, "ETH", "ACTIVE", administratorId);
             tenantChainRepository.setStatus(tenantId, "BNB", "ACTIVE", administratorId);
 
-            CustodyAddressService service = new CustodyAddressService(
+            CustodyAddressService service = com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc,
                     custody,
-                    com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc),
                     new StableEvmRuntime(jdbc),
                     new CustodyTenantChainService(
                             tenantChainRepository, custody,
                             new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
-                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)),
-                    new CustodyJacksonConfiguration().custodyObjectMapper());
+                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)));
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER,
                     administratorId, tenantId, slug, "TENANT_ADMIN",
@@ -974,6 +975,10 @@ class CustodyOperationsIntegrationTest {
             var addressPage = service.page(principal, "", "", "", "", 50, 0);
             assertEquals(4L, addressPage.total());
             assertEquals(4, addressPage.items().size());
+            assertEquals(1, jdbc.queryForObject("""
+                    select count(*) from custody_audit_log where tenant_id = ? and action = 'ADDRESS.CREATE'
+                       and resource_id = ? and details->>'addressVersion' = '1' and details->>'childIndex' = '1'
+                    """, Integer.class, tenantId, ethRotated.id().toString()));
             status.setRollbackOnly();
         });
     }
@@ -993,12 +998,11 @@ class CustodyOperationsIntegrationTest {
                     values (?, ?, ?, 'Balance administrator', 'test-only-hash', 'TENANT_ADMIN', 'ACTIVE')
                     """, administratorId, tenantId, slug + "@example.test");
             tenantChains.setStatus(tenantId, "ETH", "ACTIVE", administratorId);
-            CustodyAddressService service = new CustodyAddressService(
-                    custody, com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc), new StableEvmRuntime(jdbc),
+            CustodyAddressService service = com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc,
+                    custody, new StableEvmRuntime(jdbc),
                     new CustodyTenantChainService(tenantChains, custody,
                             new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
-                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)),
-                    new CustodyJacksonConfiguration().custodyObjectMapper());
+                            new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)));
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER, administratorId, tenantId, slug,
                     "TENANT_ADMIN", Set.of("addresses:read", "addresses:write"));

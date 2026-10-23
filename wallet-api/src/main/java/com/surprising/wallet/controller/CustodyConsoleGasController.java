@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import com.surprising.wallet.chain.model.CustodyGasUsageEntry;
 
 import com.surprising.wallet.service.CustodyGasService;
 import com.surprising.wallet.model.CustodyRequestSupport;
@@ -97,7 +98,7 @@ public class CustodyConsoleGasController {
      * 查询 gas 使用明细与余额消耗统计。
      */
     @GetMapping("/gas-accounts/{gasAccountId}/usage")
-    public List<Map<String, Object>> usage(
+    public List<CustodyGasUsageEntry> usage(
             @PathVariable UUID gasAccountId,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,

@@ -1,5 +1,7 @@
 package com.surprising.wallet.repository;
 
+import com.surprising.wallet.chain.model.CustodyGasUsageEntry;
+
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -14,6 +16,21 @@ import java.util.UUID;
 /** custody_gas_usage 单表仓储。 */
 @Repository
 public class CustodyGasUsageRepository {
+    public List<CustodyGasUsageEntry> listForAccount(UUID tenantId, UUID gasAccountId, int limit, int offset) {
+        return jdbc.query("""
+                select id, operation_type, operation_id, reference_no, chain, native_symbol,
+                       reserved_amount, actual_amount, status, pricing_source, tx_hash, error_message,
+                       created_at, updated_at, settled_at
+                  from custody_gas_usage where tenant_id = ? and gas_account_id = ?
+                 order by created_at desc, id desc limit ? offset ?
+                """, (rs, rowNum) -> new CustodyGasUsageEntry(rs.getObject("id", UUID.class),
+                rs.getString("operation_type"), rs.getObject("operation_id", UUID.class), rs.getString("reference_no"),
+                rs.getString("chain"), rs.getString("native_symbol"), rs.getBigDecimal("reserved_amount"),
+                rs.getBigDecimal("actual_amount"), rs.getString("status"), rs.getString("pricing_source"),
+                rs.getString("tx_hash"), rs.getString("error_message"), rs.getTimestamp("created_at").toInstant(),
+                rs.getTimestamp("updated_at").toInstant(), rs.getTimestamp("settled_at") == null ? null : rs.getTimestamp("settled_at").toInstant()),
+                tenantId, gasAccountId, Math.min(Math.max(limit, 1), 200), Math.max(offset, 0));
+    }
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 

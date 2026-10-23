@@ -2,6 +2,7 @@ package com.surprising.wallet.repository;
 
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
@@ -16,6 +17,15 @@ import java.util.UUID;
 /** ledger_balance 单表仓储。 */
 @Repository
 public class LedgerBalanceRepository {
+    public List<LedgerBalanceRecord> findByAccounts(UUID tenantId, String chain, String symbol, List<String> accounts) {
+        if (accounts.isEmpty()) return List.of();
+        return jdbc.query("""
+                select id, chain, asset_symbol, account_id, available_balance, locked_balance, total_balance,
+                       created_at, updated_at from ledger_balance
+                 where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = any (?)
+                """, (rs, rowNum) -> map(rs), tenantId, chain, symbol,
+                new SqlArrayValue("varchar", accounts.toArray()));
+    }
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 

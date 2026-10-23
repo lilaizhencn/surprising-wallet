@@ -1,6 +1,12 @@
 package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.chain.ChainType;
+import com.surprising.wallet.chain.model.CustodyGasUsageEntry;
+import com.surprising.wallet.repository.CustodyGasAccountRepository;
+import com.surprising.wallet.repository.CustodyGasUsageRepository;
+import com.surprising.wallet.repository.CustodyDepositRepository;
+import com.surprising.wallet.repository.CustodyDerivationSubjectRepository;
+import org.springframework.transaction.annotation.Isolation;
 import com.surprising.wallet.service.CustodyAddressService.AddressView;
 import com.surprising.wallet.service.CustodyAddressService.CreateAddressCommand;
 import com.surprising.wallet.repository.CustodyRepository.GasAccountRecord;
@@ -43,6 +49,10 @@ public class CustodyGasService {
      * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
     private final CustodyRepository repository;
+    private final CustodyGasAccountRepository gasAccounts;
+    private final CustodyGasUsageRepository usages;
+    private final CustodyDepositRepository deposits;
+    private final CustodyDerivationSubjectRepository subjects;
     /**
      * 保存 {@code addresses}，表示链、网络、资产或代币配置。
      */
@@ -57,10 +67,16 @@ public class CustodyGasService {
      */
     public CustodyGasService(CustodyRepository repository,
                              CustodyAddressService addresses,
-                             BlockchainRuntimeService runtime) {
+                             BlockchainRuntimeService runtime, CustodyGasAccountRepository gasAccounts,
+                             CustodyGasUsageRepository usages, CustodyDepositRepository deposits,
+                             CustodyDerivationSubjectRepository subjects) {
         this.repository = repository;
         this.addresses = addresses;
         this.runtime = runtime;
+        this.gasAccounts = gasAccounts;
+        this.usages = usages;
+        this.deposits = deposits;
+        this.subjects = subjects;
     }
     /**
      * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
@@ -82,8 +98,7 @@ public class CustodyGasService {
         BigDecimal threshold = DEFAULT_LOW_BALANCE_THRESHOLD;
         BlockchainRuntimeService.RuntimeChain chainRuntime = runtime.requireRuntime(chain);
         String collectionSubject = collectionSubject(chain, chainRuntime.chainType());
-        repository.lockSubjectAddressAllocation(
-                principal.tenantId(), chain, collectionSubject);
+        subjects.resolve(principal.tenantId(), collectionSubject);
         GasAccountRecord existing = repository.findGasAccount(principal.tenantId(), chain)
                 .orElse(null);
         if (existing != null) {
@@ -166,21 +181,26 @@ public class CustodyGasService {
     /**
      * 编码 {@code topups} 对应的数据，生成链上或接口所需的表示。
      */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<Map<String, Object>> topups(CustodyPrincipal principal, UUID gasAccountId,
                                              int limit, int offset) {
         requireScope(principal, "assets:read");
-        repository.requireGasAccount(principal.tenantId(), gasAccountId);
-        return repository.listGasTopups(principal.tenantId(), gasAccountId, limit, offset);
+        var account = gasAccounts.findReference(principal.tenantId(), gasAccountId)
+                .orElseThrow(() -> new IllegalArgumentException("gas account not found"));
+        return deposits.listForAddress(principal.tenantId(), account.custodyAddressId(), account.chain(),
+                account.nativeSymbol(), limit, offset);
     }
 
     /**
      * 执行 {@code usage} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
-    public List<Map<String, Object>> usage(CustodyPrincipal principal, UUID gasAccountId,
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public List<CustodyGasUsageEntry> usage(CustodyPrincipal principal, UUID gasAccountId,
                                            int limit, int offset) {
         requireScope(principal, "assets:read");
-        repository.requireGasAccount(principal.tenantId(), gasAccountId);
-        return repository.listGasUsage(principal.tenantId(), gasAccountId, limit, offset);
+        gasAccounts.findReference(principal.tenantId(), gasAccountId)
+                .orElseThrow(() -> new IllegalArgumentException("gas account not found"));
+        return usages.listForAccount(principal.tenantId(), gasAccountId, limit, offset);
     }
 
     /**
