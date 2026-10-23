@@ -63,7 +63,8 @@ timestamp + "." + eventId + "." + eventType + "." + rawBody
   -> 同一业务事务：锁定余额/UTXO、写 chain_signing_transaction
   -> UtxoSigningSubmissionService：锁定并校验持久化请求、写入去重凭据 + PGMQ SIGN_FIRST 入队
   -> PGMQ sig1 → sig2 → 广播队列；处理事务行锁 + 广播业务租约
-  -> SENT/CONFIRMED：结算账本与 Gas
+  -> 链上确认 → WithdrawalSettlementService：租户/状态/哈希校验 → 冻结扣款 + 订单确认同事务
+  -> CONFIRMED：托管状态、事件与 Gas 投影
   -> FAILED/REJECTED/CANCELLED：释放锁定本金、手续费与 Gas
   -> BROADCAST_UNKNOWN：禁止盲目重建，等待链上对账与人工审计
 ```
@@ -115,7 +116,8 @@ external withdrawal request
   -> signer service or local Ed25519 signer
   -> broadcast
   -> receipt confirm（执行费 + L1/DA 费 + Operator Fee）
-  -> ledger finalize
+  -> WithdrawalSettlementService：冻结扣款与订单确认同事务
+  -> 托管状态、事件和 Gas 投影
 ```
 
 同一个提现订单重试时，应返回或复用已有交易状态，不应重复广播新交易。

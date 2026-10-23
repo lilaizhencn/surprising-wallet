@@ -209,8 +209,9 @@
   <line x1="905" y1="730" x2="940" y2="730" class="arrow"/>
 
   <rect x="940" y="702" width="195" height="56" class="withdraw"/>
-  <text x="1037" y="726" text-anchor="middle" class="bold">Webhook 通知</text>
-  <text x="1037" y="744" text-anchor="middle" class="small">生命周期事件 · 确认/失败</text>
+  <text x="1037" y="718" text-anchor="middle" class="bold">WithdrawalSettlementService</text>
+  <text x="1037" y="736" text-anchor="middle" class="small">冻结扣款与确认同事务</text>
+  <text x="1037" y="752" text-anchor="middle" class="small">状态投影 → API Webhook</text>
 
   <!-- TRON gas / EIP-7702 batch withdrawal notes -->
   <rect x="255" y="766" width="400" height="20" class="db"/>
@@ -257,6 +258,6 @@
   <line x1="720" y1="1182" x2="760" y2="1182" class="arrow"/>
   <rect x="760" y="1150" width="350" height="65" class="dep"/>
   <text x="772" y="1172" class="bold">原交易 / 替换交易确认 → 仅结算一次</text>
-  <text x="772" y="1192" class="small">实际金额 + 费用；归集不改变用户余额 / Webhook</text>
+  <text x="772" y="1192" class="small">提现：冻结扣款/确认同事务；归集不改变用户余额 / Webhook</text>
   <text x="40" y="1230" class="small">最多 5 次；≤1000 sat/vB；费用 ≤100000 sat 且 ≤输入10%；终态不可重开</text>
 </svg>

@@ -239,8 +239,10 @@ class Evm7702ProductionFlowIntegrationTest {
                 collectionRepository, coordinator, chainRepository, rpcNodes, keyService, crypto,
                 runtimeConfig, httpServices);
         withdrawalRepository = new Evm7702WithdrawalRepository(jdbc, collectionRepository);
-        Evm7702WithdrawalCoordinator withdrawalCoordinator = new Evm7702WithdrawalCoordinator(
-                withdrawalRepository, custodyRepository, chainRepository);
+        Evm7702WithdrawalCoordinator withdrawalCoordinator = new Evm7702WithdrawalCoordinator(withdrawalRepository,
+                custodyRepository,
+                chainRepository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         withdrawalWorkflow = new Evm7702WithdrawalWorkflowService(
                 withdrawalRepository, withdrawalCoordinator, chainRepository,
                 rpcNodes, keyService, crypto, runtimeConfig, httpServices);

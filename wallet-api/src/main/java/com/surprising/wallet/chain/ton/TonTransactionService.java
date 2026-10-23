@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.service.WithdrawalSettlementService;
+
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
@@ -50,8 +52,7 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
-public
-class TonTransactionService {
+public class TonTransactionService {
 
     /** TON 链标识 */
     private static final String CHAIN = "TON";
@@ -76,6 +77,7 @@ class TonTransactionService {
 
     /** 链配置数据库访问 */
     private final ChainJdbcRepository repository;
+    private final WithdrawalSettlementService settlements;
 
     /** 运行时配置服务（可选注入） */
     @Autowired(required = false)
@@ -455,7 +457,7 @@ class TonTransactionService {
         if (!confirmSentMessage(hash, accountId)) {
             return false;
         }
-        if (repository.confirmWithdrawalAndSettle(
+        if (settlements.confirm(
                 tenantId, CHAIN, orderNo, hash, symbol, accountId, debitAmount)) {
             repository.markTonTransactionConfirmed(CHAIN, hash);
             return true;

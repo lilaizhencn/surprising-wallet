@@ -90,6 +90,7 @@ class BtcUtxoCollectionFlowTest {
     @Test
     void confirmedCollectionMarksUtxosSpentWithoutDebitingUserLedger() {
         var repository = mock(ChainJdbcRepository.class);
+        var settlements = mock(WithdrawalSettlementService.class);
         when(repository.markCollectionConfirmed(eq(TENANT), eq("BTC"), eq("COLL-1"), eq("txid"))).thenReturn(1);
         var transaction = WithdrawTransaction.builder().id(42).txId("txid").status((short) 2)
                 .signature("{\"operationType\":\"COLLECTION\",\"tenantId\":\"" + TENANT
@@ -98,13 +99,14 @@ class BtcUtxoCollectionFlowTest {
         when(repository.lockBitcoinLikeSigningTransaction(BTC, 42)).thenReturn(Optional.of(transaction));
         when(repository.updateCollectionAmounts(eq(TENANT), eq("BTC"), eq("COLL-1"), any(), any())).thenReturn(1);
         when(repository.markUtxosSpent("BTC", "42", "txid")).thenReturn(1);
-        new BitcoinLikeSettlementService(repository, new ObjectMapper())
+        new BitcoinLikeSettlementService(repository,
+                new ObjectMapper(),
+                settlements)
                 .settleConfirmed(transaction, "txid", BTC);
 
         verify(repository).markCollectionConfirmed(TENANT, "BTC", "COLL-1", "txid");
         verify(repository).markUtxosSpent("BTC", "42", "txid");
-        verify(repository, never()).confirmWithdrawalAndSettle(any(), anyString(), anyString(),
-                anyString(), anyString(), anyString(), any());
+        verifyNoInteractions(settlements);
     }
 
     @Test

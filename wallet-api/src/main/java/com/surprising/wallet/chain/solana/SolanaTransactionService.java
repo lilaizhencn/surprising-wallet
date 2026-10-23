@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.solana;
 
+import com.surprising.wallet.service.WithdrawalSettlementService;
+
 import tools.jackson.databind.JsonNode;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -49,8 +51,7 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
-public
-class SolanaTransactionService {
+public class SolanaTransactionService {
 
     /** Solana 链标识 */
     private static final String CHAIN = "SOLANA";
@@ -69,6 +70,7 @@ class SolanaTransactionService {
 
     /** 链配置数据库访问 */
     private final ChainJdbcRepository repository;
+    private final WithdrawalSettlementService settlements;
 
     /** 运行时配置服务（可选注入） */
     @Autowired(required = false)
@@ -443,7 +445,7 @@ class SolanaTransactionService {
                                      String accountId, BigDecimal debitAmount) {
         String signature = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo).orElseThrow();
         JsonNode status = requireSuccessfulConfirmation(signature, Duration.ofMinutes(2));
-        if (repository.confirmWithdrawalAndSettle(
+        if (settlements.confirm(
                 tenantId, CHAIN, orderNo, signature, assetSymbol, accountId, debitAmount)) {
             updateConfirmedTransaction(signature, status);
             return true;

@@ -74,8 +74,10 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
                 nodes("APTOS", java.util.Map.of("rpc", node("APTOS", env("APTOS_RPC_URL", "https://fullnode.testnet.aptoslabs.com/v1")), "faucet", node("APTOS", ""))));
         AptosKeyService keys = new AptosKeyService(WalletKeyTestFixture.provider());
         AptosAddressService addresses = new AptosAddressService(keys, repository);
-        AptosTransactionService transactions = new AptosTransactionService(
-                rpc, new AptosTransactionSigner(keys), repository);
+        AptosTransactionService transactions = new AptosTransactionService(rpc,
+                new AptosTransactionSigner(keys),
+                repository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         AptosDepositScanner scanner = new AptosDepositScanner(rpc, repository);
 
         JsonNode metadata = rpc.fungibleAssetMetadata(metadataAddress).path("data");

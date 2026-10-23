@@ -56,6 +56,7 @@ class TronAccountChainService {
      * 保存 {@code tronTrc20Service}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
     private final TronTrc20Service tronTrc20Service;
+    private final WithdrawalSettlementService settlements;
 
     /**
      * 发送或广播 {@code broadcast} 对应的链上请求，并返回节点处理结果。
@@ -165,7 +166,7 @@ class TronAccountChainService {
                 order.getChain(), order.getTxHash(), from.getAddress(),
                 order.getToAddress(), order.getAssetSymbol(),
                 order.getAmount(), txInfo);
-        repository.confirmWithdrawalAndSettle(
+        settlements.confirm(
                 order.getTenantId(), order.getChain(), order.getOrderNo(),
                 order.getTxHash(), order.getAssetSymbol(),
                 assets.debitAccountId(order, from),

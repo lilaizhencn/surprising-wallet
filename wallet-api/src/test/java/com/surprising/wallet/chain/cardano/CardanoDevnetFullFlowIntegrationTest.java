@@ -79,7 +79,10 @@ class CardanoDevnetFullFlowIntegrationTest {
         CardanoKeyService keys = new CardanoKeyService(keyMaterial);
         ChainRpcNodeService rpcNodes = new ChainRpcNodeService(new ChainRpcNodeRepository(jdbc), "dev", 4);
         CardanoBackendClient backend = new CardanoBackendClient(new ChainProfileRepository(jdbc), rpcNodes);
-        CardanoTransactionService transactions = new CardanoTransactionService(backend, keys, repository);
+        CardanoTransactionService transactions = new CardanoTransactionService(backend,
+                keys,
+                repository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         CardanoDepositScanner scanner = new CardanoDepositScanner(backend, repository);
 
         ChainAddressRecord hot = address(tenantId, keys, 0L, 0, 0L, "DEPOSIT", CHAIN, "cardano-hot");

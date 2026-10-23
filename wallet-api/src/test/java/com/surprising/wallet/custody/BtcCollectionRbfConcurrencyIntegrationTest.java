@@ -79,6 +79,8 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
             var lease = mock(WalletTaskLeaseService.class); when(lease.ownerId()).thenReturn("test-rbf"); return lease;
         });
         context.registerBean(RbfBumpService.class);
+        context.registerBean(WithdrawalSettlementService.class,
+                () -> com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         context.registerBean(BitcoinLikeSettlementService.class);
         context.registerBean(TransactionService.class);
         context.refresh();

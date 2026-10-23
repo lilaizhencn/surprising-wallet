@@ -84,8 +84,12 @@ class EvmForkTransactionServiceIntegrationTest {
             from.setOwnerAddress(credentials.getAddress());
 
             ChainRpcNodeService rpcNodes = fixedRpcNodes(localProfile);
-            EvmAccountTransactionService service = new EvmAccountTransactionService(
-                    repository, rpcNodes, keyService, new EvmTransactionBuilder(), httpServices);
+            EvmAccountTransactionService service = new EvmAccountTransactionService(repository,
+                    rpcNodes,
+                    keyService,
+                    new EvmTransactionBuilder(),
+                    httpServices,
+                    com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
 
             sendUnlockedNative(web3j, accounts.getFirst(), from.getAddress(), new BigDecimal("2"));
             String nativeHash = service.sendNative(

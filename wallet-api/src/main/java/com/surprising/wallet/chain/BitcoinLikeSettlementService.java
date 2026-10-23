@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain;
 
+import com.surprising.wallet.service.WithdrawalSettlementService;
+
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
@@ -29,12 +31,17 @@ public class BitcoinLikeSettlementService {
     private final ChainJdbcRepository chainRepository;
     /** Jackson 3 对象映射器，用于解析提现签名元数据。 */
     private final ObjectMapper objectMapper;
+    private final WithdrawalSettlementService settlements;
     /**
      * 构造 {@code BitcoinLikeSettlementService}，初始化该组件运行所需的状态和依赖。
      */
-    public BitcoinLikeSettlementService(ChainJdbcRepository chainRepository, ObjectMapper objectMapper) {
+    public BitcoinLikeSettlementService(
+            ChainJdbcRepository chainRepository,
+            ObjectMapper objectMapper,
+            WithdrawalSettlementService settlements) {
         this.chainRepository = chainRepository;
         this.objectMapper = objectMapper;
+        this.settlements = settlements;
     }
 
     /**
@@ -92,7 +99,7 @@ public class BitcoinLikeSettlementService {
             String debitAccountId = java.util.Optional.ofNullable(order.getDebitAccountId())
                     .filter(value -> value != null && !value.isBlank())
                     .orElse(record.getUserId().toString());
-            chainRepository.confirmWithdrawalAndSettle(
+            settlements.confirm(
                     tenantId, chain, record.getWithdrawId(), txId, chain, debitAccountId, settled);
             record.setStatus((byte) Constants.CONFIRM);
             record.setUpdateDate(Date.from(Instant.now()));

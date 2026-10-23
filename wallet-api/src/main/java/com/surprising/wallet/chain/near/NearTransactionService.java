@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.near;
 
+import com.surprising.wallet.service.WithdrawalSettlementService;
+
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -43,8 +45,7 @@ import java.util.Optional;
  * @see NearKeyService
  */
 @Service
-public
-class NearTransactionService {
+public class NearTransactionService {
 
     /** 链标识 */
     private static final String CHAIN = "NEAR";
@@ -80,6 +81,7 @@ class NearTransactionService {
      * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
      */
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final WithdrawalSettlementService settlements;
 
     /** 运行时配置服务（可选） */
     @Autowired(required = false)
@@ -88,14 +90,17 @@ class NearTransactionService {
     /**
      * 构造 {@code NearTransactionService}，初始化该组件运行所需的状态和依赖。
      */
-    public NearTransactionService(NearRpcClient rpc,
-                                  NearTransactionSigner signer,
-                                  NearKeyService keyService,
-                                  ChainJdbcRepository repository) {
+    public NearTransactionService(
+            NearRpcClient rpc,
+            NearTransactionSigner signer,
+            NearKeyService keyService,
+            ChainJdbcRepository repository,
+            WithdrawalSettlementService settlements) {
         this.rpc = rpc;
         this.signer = signer;
         this.keyService = keyService;
         this.repository = repository;
+        this.settlements = settlements;
     }
     /**
      * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
@@ -212,7 +217,7 @@ class NearTransactionService {
                                      String orderNo, String txHash,
                                      String assetSymbol, String debitAccountId, BigDecimal debitAmount) {
         JsonNode status = requireSuccessfulConfirmation(txHash, debitAccountId, Duration.ofMinutes(2));
-        if (repository.confirmWithdrawalAndSettle(
+        if (settlements.confirm(
                 tenantId, CHAIN, orderNo, txHash, assetSymbol, debitAccountId, debitAmount)) {
             repository.markNearTransactionConfirmed(CHAIN, txHash, blockHeight(status), gasBurnt(status),
                     status.toString());

@@ -55,7 +55,11 @@ class SolanaDevnetLiveFlowIntegrationTest {
                 nodes("SOLANA", env("SOLANA_RPC_URL", "https://api.devnet.solana.com")));
         SolanaKeyService keys = new SolanaKeyService(masterSeed);
         SolanaAddressService addresses = new SolanaAddressService(keys, repository);
-        SolanaTransactionService transactions = new SolanaTransactionService(rpc, keys, addresses, repository);
+        SolanaTransactionService transactions = new SolanaTransactionService(rpc,
+                keys,
+                addresses,
+                repository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         SolanaDepositScanner scanner = new SolanaDepositScanner(rpc, repository);
 
         assertTrue(rpc.health());

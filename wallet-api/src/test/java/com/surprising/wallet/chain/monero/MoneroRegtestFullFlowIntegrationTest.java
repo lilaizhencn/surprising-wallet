@@ -96,7 +96,9 @@ class MoneroRegtestFullFlowIntegrationTest {
 
                 MoneroWalletRpcClient walletRpc = new MoneroWalletRpcClient(new ObjectMapper(), new ChainProfileRepository(jdbc), rpcNodeService);
                 MoneroDepositScanner scanner = new MoneroDepositScanner(walletRpc, repository);
-                MoneroTransactionService transactionService = new MoneroTransactionService(walletRpc, repository);
+                MoneroTransactionService transactionService = new MoneroTransactionService(walletRpc,
+                        repository,
+                        com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
                 AccountChainProfile profile = profile(network);
 
                 walletRpc.refresh();

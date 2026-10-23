@@ -2,6 +2,7 @@ package com.surprising.wallet.testutil;
 
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.CustodyEventService;
+import com.surprising.wallet.service.WithdrawalSettlementService;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** Explicit construction of custody fixtures; application classes keep one injected constructor. */
@@ -16,5 +17,9 @@ public final class CustodyTestSupport {
     public static CustodyEventService events(JdbcTemplate jdbc) {
         return new CustodyEventService(new CustodyEventRepository(jdbc),
                 new CustodyWebhookEndpointRepository(jdbc), new CustodyWebhookDeliveryRepository(jdbc));
+    }
+
+    public static WithdrawalSettlementService settlements(JdbcTemplate jdbc) {
+        return new WithdrawalSettlementService(new WithdrawalOrderRepository(jdbc), new LedgerBalanceRepository(jdbc));
     }
 }

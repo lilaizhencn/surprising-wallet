@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.cardano;
 
+import com.surprising.wallet.service.WithdrawalSettlementService;
+
 import com.bloxbean.cardano.client.api.model.Amount;
 import com.bloxbean.cardano.client.crypto.SecretKey;
 import com.bloxbean.cardano.client.exception.CborSerializationException;
@@ -35,8 +37,7 @@ import java.util.Optional;
  */
 @Service
 @RequiredArgsConstructor
-public
-class CardanoTransactionService {
+public class CardanoTransactionService {
 
     /** 链标识 */
     private static final String CHAIN = CardanoBackendClient.CHAIN;
@@ -55,6 +56,7 @@ class CardanoTransactionService {
 
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
+    private final WithdrawalSettlementService settlements;
 
     /** 运行时配置服务（可选） */
     @Autowired(required = false)
@@ -83,7 +85,7 @@ class CardanoTransactionService {
         if (!confirmed(profile, txHash)) {
             return false;
         }
-        return repository.confirmWithdrawalAndSettle(tenantId, CHAIN, orderNo, txHash,
+        return settlements.confirm(tenantId, CHAIN, orderNo, txHash,
                 assetSymbol, debitAccountId, debitAmount);
     }
 

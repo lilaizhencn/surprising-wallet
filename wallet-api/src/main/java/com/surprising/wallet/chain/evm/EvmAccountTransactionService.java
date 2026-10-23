@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.evm;
 
+import com.surprising.wallet.service.WithdrawalSettlementService;
+
 import com.surprising.wallet.chain.model.EvmTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -79,6 +81,7 @@ public class EvmAccountTransactionService {
      */
     private final EvmTransactionBuilder transactionBuilder;
     private final EvmHttpServiceFactory httpServices;
+    private final WithdrawalSettlementService settlements;
 
     /**
      * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
@@ -211,7 +214,7 @@ public class EvmAccountTransactionService {
             throw new IllegalStateException("EVM transaction failed: " + txHash);
         }
         markConfirmed(chain, txHash, receipt);
-        return repository.confirmWithdrawalAndSettle(
+        return settlements.confirm(
                 tenantId, chain, orderNo, txHash, symbol, accountId, debitAmount);
     }
 

@@ -78,7 +78,10 @@ class TonLiveMockJettonFlowIntegrationTest {
                         .apiKey(env("TONCENTER_API_KEY", "")).build()));
         TonKeyService keys = new TonKeyService(masterSeed);
         TonAddressService addresses = new TonAddressService(keys, repository);
-        TonTransactionService transactions = new TonTransactionService(rpc, keys, repository);
+        TonTransactionService transactions = new TonTransactionService(rpc,
+                keys,
+                repository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         TonDepositScanner scanner = new TonDepositScanner(rpc, addresses, repository);
 
         ChainAddressRecord owner = addresses.createNativeAddress(

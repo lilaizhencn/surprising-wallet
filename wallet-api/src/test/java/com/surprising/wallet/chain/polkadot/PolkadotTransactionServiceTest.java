@@ -35,11 +35,11 @@ class PolkadotTransactionServiceTest {
         FakeRuntimeClient runtime = new FakeRuntimeClient();
         FakeRepository repository = new FakeRepository();
         ChainAddressRecord hot = address(0, 0, 0, "5HotAddress");
-        PolkadotTransactionService service = new PolkadotTransactionService(
-                runtime,
+        PolkadotTransactionService service = new PolkadotTransactionService(runtime,
                 new PolkadotKeyService(MASTER_SEED),
                 repository,
-                new FakeHotWalletAddressService(hot));
+                new FakeHotWalletAddressService(hot),
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
         ChainAddressRecord user = address(7, 0, 3, "5UserAddress");
         TokenDefinition token = TokenDefinition.builder()
                 .chain("DOT")
@@ -71,11 +71,11 @@ class PolkadotTransactionServiceTest {
         runtime.senderGas = new BigInteger("30000000000");
         FakeRepository repository = new FakeRepository();
         ChainAddressRecord hot = address(0, 0, 0, "5HotAddress");
-        PolkadotTransactionService service = new PolkadotTransactionService(
-                runtime,
+        PolkadotTransactionService service = new PolkadotTransactionService(runtime,
                 new PolkadotKeyService(MASTER_SEED),
                 repository,
-                new FakeHotWalletAddressService(hot));
+                new FakeHotWalletAddressService(hot),
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
         ChainAddressRecord user = address(7, 0, 3, "5UserAddress");
         TokenDefinition token = TokenDefinition.builder()
                 .chain("DOT")

@@ -76,7 +76,11 @@ class SuiLiveNativeFlowIntegrationTest {
         SuiKeyService keys = new SuiKeyService(masterSeed);
         SuiAddressService addresses = new SuiAddressService(keys, repository);
         SuiTransactionSigner signer = new SuiTransactionSigner(keys);
-        SuiTransactionService transactions = new SuiTransactionService(rpc, signer, repository);
+        SuiTransactionService transactions = new SuiTransactionService(rpc,
+                signer,
+                new com.surprising.wallet.chain.sui.SuiPtbTransactionBuilder(),
+                repository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         SuiDepositScanner scanner = new SuiDepositScanner(rpc, repository);
 
         ChainAddressRecord owner = addresses.createNativeAddress(

@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.service.WithdrawalSettlementService;
+
 import tools.jackson.databind.JsonNode;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.AptosTransactionRecord;
@@ -49,6 +51,7 @@ public class AptosTransactionService {
 
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
+    private final WithdrawalSettlementService settlements;
 
     /** 运行时配置服务（可选，用于任务开关控制） */
     @Autowired(required = false)
@@ -330,7 +333,7 @@ public class AptosTransactionService {
                                      String accountId, BigDecimal debitAmount) {
         String hash = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(hash, Duration.ofMinutes(2));
-        if (repository.confirmWithdrawalAndSettle(
+        if (settlements.confirm(
                 tenantId, CHAIN, orderNo, hash, assetSymbol, accountId, debitAmount)) {
             markConfirmed(hash, transaction);
             return true;

@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.sui;
 
+import com.surprising.wallet.service.WithdrawalSettlementService;
+
 import tools.jackson.databind.JsonNode;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -29,8 +31,7 @@ import java.util.UUID;
  * @see SuiRpcClient
  */
 @Service
-public
-class SuiTransactionService {
+public class SuiTransactionService {
 
     /** 链标识常量 */
     private static final String CHAIN = "SUI";
@@ -46,6 +47,7 @@ class SuiTransactionService {
 
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
+    private final WithdrawalSettlementService settlements;
 
     /** 运行时配置服务（可选） */
     @Autowired(required = false)
@@ -54,21 +56,19 @@ class SuiTransactionService {
     /**
      * 构造 {@code SuiTransactionService}，初始化该组件运行所需的状态和依赖。
      */
-    @Autowired
-    public SuiTransactionService(SuiRpcClient rpc, SuiTransactionSigner signer,
-                                 SuiPtbTransactionBuilder ptbBuilder, ChainJdbcRepository repository) {
+    public SuiTransactionService(
+            SuiRpcClient rpc,
+            SuiTransactionSigner signer,
+            SuiPtbTransactionBuilder ptbBuilder,
+            ChainJdbcRepository repository,
+            WithdrawalSettlementService settlements) {
         this.rpc = rpc;
         this.signer = signer;
         this.ptbBuilder = ptbBuilder;
         this.repository = repository;
+        this.settlements = settlements;
     }
 
-    /**
-     * 构造 {@code SuiTransactionService}，初始化该组件运行所需的状态和依赖。
-     */
-    SuiTransactionService(SuiRpcClient rpc, SuiTransactionSigner signer, ChainJdbcRepository repository) {
-        this(rpc, signer, new SuiPtbTransactionBuilder(), repository);
-    }
     /**
      * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
      */
@@ -280,7 +280,7 @@ class SuiTransactionService {
                                      String accountId, BigDecimal debitAmount) {
         String digest = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(digest, Duration.ofMinutes(2));
-        if (repository.confirmWithdrawalAndSettle(
+        if (settlements.confirm(
                 tenantId, CHAIN, orderNo, digest, assetSymbol, accountId, debitAmount)) {
             markConfirmed(digest, transaction);
             return true;

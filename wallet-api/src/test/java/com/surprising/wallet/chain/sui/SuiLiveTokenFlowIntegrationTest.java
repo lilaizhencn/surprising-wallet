@@ -94,8 +94,11 @@ class SuiLiveTokenFlowIntegrationTest {
                 nodes("SUI", env("SUI_GRPC_ENDPOINT", "fullnode.testnet.sui.io:443")));
         SuiKeyService keys = new SuiKeyService(masterSeed);
         SuiAddressService addresses = new SuiAddressService(keys, repository);
-        SuiTransactionService transactions = new SuiTransactionService(
-                rpc, new SuiTransactionSigner(keys), repository);
+        SuiTransactionService transactions = new SuiTransactionService(rpc,
+                new SuiTransactionSigner(keys),
+                new com.surprising.wallet.chain.sui.SuiPtbTransactionBuilder(),
+                repository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         SuiDepositScanner scanner = new SuiDepositScanner(rpc, repository);
 
         ChainAddressRecord owner = addresses.createCoinAddress(

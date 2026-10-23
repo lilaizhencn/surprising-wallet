@@ -99,6 +99,8 @@ Service 和 Job 统一使用构造器注入；可选基础设施依赖以 `Optio
 业务 Service 通过适配器使用队列，不直接编写 SQL；`ChainFeeRateRepository` 只访问 `chain_fee_rate`。
 RPC 客户端直接注入 `ChainProfileRepository` 与 `ChainRpcNodeService`，不再经过 `ChainJdbcRepository` 转发链配置。节点选择、故障切换、认证和 provider 限流只有一条路径；本地测试通过配置仓储提供节点，生产代码不保留固定测试端点或空依赖构造分支。`ChainRpcNodeService` 的环境名和并发上限由唯一构造器注入。
 
+`WithdrawalSettlementService` 统一编排单笔提现确认：租户、订单状态和交易哈希校验、冻结余额扣款、订单条件确认在同一事务中完成。各链交易服务、UTXO 结算、账户链工作流和 EVM 批量提现协调器直接调用该用例；`ChainJdbcRepository` 不再保留结算方法或无租户结算入口。原有余额更新和状态条件更新顺序保持不变，竞争失败时全部回滚。
+
 各模块分别声明自身实际使用的 starter，避免依赖传递造成的隐式可用。
 
 Repository 采用“单表一仓储”约束：每个 `@Repository` 只访问一个数据库表，Repository 名称与表职责一一对应。

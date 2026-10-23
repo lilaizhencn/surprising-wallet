@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.monero;
 
+import com.surprising.wallet.service.WithdrawalSettlementService;
+
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
@@ -22,8 +24,7 @@ import java.math.BigDecimal;
  */
 @Service
 @RequiredArgsConstructor
-public
-class MoneroTransactionService {
+public class MoneroTransactionService {
 
     /** 链标识 */
     private static final String CHAIN = MoneroWalletRpcClient.CHAIN;
@@ -36,6 +37,7 @@ class MoneroTransactionService {
 
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
+    private final WithdrawalSettlementService settlements;
     /**
      * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
      */
@@ -79,7 +81,7 @@ class MoneroTransactionService {
                                   String toAddress, BigDecimal amount) {
         MoneroWalletRpcClient.Transfer transfer = confirmedTransfer(profile, txHash, profile.getWithdrawConfirmations());
         if (transfer != null) {
-            if (repository.confirmWithdrawalAndSettle(
+            if (settlements.confirm(
                     tenantId, CHAIN, orderNo, txHash, SYMBOL, debitAccountId, debitAmount)) {
                 creditInternalRecipient(profile, transfer, toAddress, amount);
             }

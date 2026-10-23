@@ -200,7 +200,11 @@ class CodexLiveUserFundingTest {
         SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(), profiles("SOLANA"), nodes("SOLANA", rpcUrl));
         SolanaKeyService keys = new SolanaKeyService(seed);
         SolanaAddressService addresses = new SolanaAddressService(keys, repository);
-        SolanaTransactionService transactions = new SolanaTransactionService(rpc, keys, addresses, repository);
+        SolanaTransactionService transactions = new SolanaTransactionService(rpc,
+                keys,
+                addresses,
+                repository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         Account hot = keys.account(0, 0, 0);
         Account external = keys.account(99_000_000L + Math.abs(System.currentTimeMillis() % 100_000L));
         ChainAddressRecord userSol = repository.findChainAddress("SOLANA", "SOL", userId, 0, 0, "DEPOSIT")

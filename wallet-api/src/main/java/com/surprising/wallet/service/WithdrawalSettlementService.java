@@ -1,0 +1,47 @@
+package com.surprising.wallet.service;
+
+import com.surprising.wallet.repository.LedgerBalanceRepository;
+import com.surprising.wallet.repository.WithdrawalOrderRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+
+/** Settle a confirmed tenant withdrawal and its frozen customer balance in one transaction. */
+@Service
+@RequiredArgsConstructor
+public class WithdrawalSettlementService {
+    private final WithdrawalOrderRepository orders;
+    private final LedgerBalanceRepository balances;
+
+    @Transactional(rollbackFor = Throwable.class)
+    public boolean confirm(UUID tenantId, String chain, String orderNo, String txHash,
+                           String assetSymbol, String accountId, BigDecimal amount) {
+        Objects.requireNonNull(tenantId, "tenantId is required");
+        if (txHash == null || txHash.isBlank()) {
+            throw new IllegalArgumentException("withdrawal tx hash must not be blank");
+        }
+        var order = orders.find(chain, orderNo, tenantId)
+                .orElseThrow(() -> new IllegalStateException("missing tenant withdrawal order " + chain + ":" + orderNo));
+        if ("CONFIRMED".equals(order.getStatus())) {
+            return false;
+        }
+        if (!Set.of("SENT", "CONFIRMING").contains(order.getStatus())) {
+            throw new IllegalStateException("withdrawal " + orderNo + " is not confirmable from status " + order.getStatus());
+        }
+        if (order.getTxHash() == null || !order.getTxHash().equals(txHash)) {
+            throw new IllegalStateException("withdrawal " + orderNo + " tx hash mismatch");
+        }
+        if (!balances.settle(chain, assetSymbol, accountId, amount, tenantId)) {
+            throw new IllegalStateException("unable to settle locked " + assetSymbol + " balance");
+        }
+        if (orders.markConfirmed(tenantId, chain, orderNo, txHash) != 1) {
+            throw new IllegalStateException("unable to mark withdrawal " + orderNo + " confirmed");
+        }
+        return true;
+    }
+}

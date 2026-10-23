@@ -1,5 +1,7 @@
 package com.surprising.wallet.coordinator;
 
+import com.surprising.wallet.service.WithdrawalSettlementService;
+
 import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
 import com.surprising.wallet.chain.evm.Evm7702PayoutReceiptParser;
@@ -38,16 +40,20 @@ public class Evm7702WithdrawalCoordinator {
      * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
     private final ChainJdbcRepository chainRepository;
+    private final WithdrawalSettlementService settlements;
 
     /**
      * 构造 {@code Evm7702WithdrawalCoordinator}，初始化该组件运行所需的状态和依赖。
      */
-    public Evm7702WithdrawalCoordinator(Evm7702WithdrawalRepository repository,
-                                        CustodyRepository custodyRepository,
-                                        ChainJdbcRepository chainRepository) {
+    public Evm7702WithdrawalCoordinator(
+            Evm7702WithdrawalRepository repository,
+            CustodyRepository custodyRepository,
+            ChainJdbcRepository chainRepository,
+            WithdrawalSettlementService settlements) {
         this.repository = repository;
         this.custodyRepository = custodyRepository;
         this.chainRepository = chainRepository;
+        this.settlements = settlements;
     }
 
     /**
@@ -107,7 +113,7 @@ public class Evm7702WithdrawalCoordinator {
                         batch.tenantId(), batch.batchId(), index, result, "CONFIRMED") != 1) {
                     throw new IllegalStateException("payout item completion transition failed");
                 }
-                if (!chainRepository.confirmWithdrawalAndSettle(
+                if (!settlements.confirm(
                         batch.tenantId(), batch.chain(), item.orderNo(), txHash,
                         item.assetSymbol(), item.debitAccountId(), item.amount().add(item.fee()))) {
                     throw new IllegalStateException("withdrawal was already settled outside its payout batch");

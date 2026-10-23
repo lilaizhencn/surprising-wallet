@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.hypercore;
 
+import com.surprising.wallet.service.WithdrawalSettlementService;
+
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -29,8 +31,7 @@ import java.util.Locale;
  */
 @Service
 @RequiredArgsConstructor
-public
-class HyperCoreTransactionService {
+public class HyperCoreTransactionService {
 
     /** 链标识 */
     private static final String CHAIN = "HYPERCORE";
@@ -54,6 +55,7 @@ class HyperCoreTransactionService {
      * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
      */
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final WithdrawalSettlementService settlements;
 
     /**
      * 发送或广播 {@code sendUsd} 对应的链上请求，并返回节点处理结果。
@@ -97,7 +99,7 @@ class HyperCoreTransactionService {
         if (!hyperCoreRepository.actionAccepted(actionId)) {
             return false;
         }
-        return chainRepository.confirmWithdrawalAndSettle(tenantId, CHAIN, orderNo, actionId,
+        return settlements.confirm(tenantId, CHAIN, orderNo, actionId,
                 assetSymbol, debitAccountId, debitAmount);
     }
     /**

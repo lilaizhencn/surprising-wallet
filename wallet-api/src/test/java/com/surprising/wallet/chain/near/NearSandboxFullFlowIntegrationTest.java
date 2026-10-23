@@ -79,8 +79,11 @@ class NearSandboxFullFlowIntegrationTest {
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         NearKeyService keys = new NearKeyService(keyMaterial);
         NearRpcClient rpc = new NearRpcClient(JSON, profiles("NEAR"), nodes("NEAR", System.getProperty("near.sandbox.rpc", "http://127.0.0.1:3032")));
-        NearTransactionService transactions = new NearTransactionService(
-                rpc, new NearTransactionSigner(keys), keys, repository);
+        NearTransactionService transactions = new NearTransactionService(rpc,
+                new NearTransactionSigner(keys),
+                keys,
+                repository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         NearDepositScanner scanner = new NearDepositScanner(rpc, repository);
 
         ChainAddressRecord hot = address(tenantId, keys, 0L, 0, 0L, "DEPOSIT", CHAIN, "near-hot");

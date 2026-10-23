@@ -34,8 +34,10 @@ class AptosTransactionServiceTest {
         CapturingRpc rpc = new CapturingRpc();
         String metadata = keys.address(22);
         FakeRepository repository = new FakeRepository(token("APTOS_FA", metadata));
-        AptosTransactionService service = new AptosTransactionService(
-                rpc, new AptosTransactionSigner(keys), repository);
+        AptosTransactionService service = new AptosTransactionService(rpc,
+                new AptosTransactionSigner(keys),
+                repository,
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
         ChainAddressRecord from = address(keys, 21);
         String recipient = keys.address(23);
 
@@ -66,8 +68,10 @@ class AptosTransactionServiceTest {
         AptosKeyService keys = new AptosKeyService(MASTER_SEED);
         CapturingRpc rpc = new CapturingRpc();
         FakeRepository repository = new FakeRepository();
-        AptosTransactionService service = new AptosTransactionService(
-                rpc, new AptosTransactionSigner(keys), repository);
+        AptosTransactionService service = new AptosTransactionService(rpc,
+                new AptosTransactionSigner(keys),
+                repository,
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
         ChainAddressRecord from = address(keys, 24);
         String recipient = keys.address(25);
 
@@ -89,8 +93,10 @@ class AptosTransactionServiceTest {
     @Test
     void rejectsUnknownAptosTokenStandards() {
         AptosKeyService keys = new AptosKeyService(MASTER_SEED);
-        AptosTransactionService service = new AptosTransactionService(
-                new CapturingRpc(), new AptosTransactionSigner(keys), new FakeRepository());
+        AptosTransactionService service = new AptosTransactionService(new CapturingRpc(),
+                new AptosTransactionSigner(keys),
+                new FakeRepository(),
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.sendToken(address(keys, 27), token("UNKNOWN", keys.address(28)),

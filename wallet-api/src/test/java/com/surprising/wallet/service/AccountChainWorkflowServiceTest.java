@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.*;
 /**
  * 验证 {@code AccountChainWorkflowServiceTest} 覆盖的业务流程、边界条件和异常行为。
  */
@@ -461,8 +462,16 @@ class AccountChainWorkflowServiceTest {
                 tonService = value;
             }
         }
-        return new AccountChainWorkflowService(
-                repository,
+        var settlements = org.mockito.Mockito.mock(WithdrawalSettlementService.class);
+        org.mockito.Mockito.when(settlements.confirm(any(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), any())).thenAnswer(invocation -> {
+            if (!(repository instanceof FakeRepository fake)) {
+                throw new AssertionError("unexpected withdrawal settlement in this fixture");
+            }
+            fake.withdrawalSettlements++;
+            return true;
+        });
+        return new AccountChainWorkflowService(repository,
                 null,
                 null,
                 new AccountChainAssetService(repository, null),
@@ -477,7 +486,8 @@ class AccountChainWorkflowServiceTest {
                 null,
                 null,
                 null,
-                null);
+                null,
+                settlements);
     }
 
     /**
@@ -667,26 +677,9 @@ class AccountChainWorkflowServiceTest {
             return true;
         }
 
-        /**
-         * 验证 {@code confirmWithdrawalAndSettle} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public boolean confirmWithdrawalAndSettle(String chain, String orderNo, String txHash,
-                                                  String assetSymbol, String accountId, BigDecimal amount) {
-            withdrawalSettlements++;
-            return true;
-        }
 
-        /**
-         * 验证 {@code confirmWithdrawalAndSettle} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public boolean confirmWithdrawalAndSettle(UUID tenantId, String chain, String orderNo,
-                                                  String txHash, String assetSymbol,
-                                                  String accountId, BigDecimal amount) {
-            withdrawalSettlements++;
-            return true;
-        }
+
+
     }
 
     /**
@@ -807,7 +800,7 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code FailingEvmService} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private FailingEvmService() {
-            super(null, null, null, null, null);
+            super(null, null, null, null, null, org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
         }
 
         /**
@@ -833,7 +826,7 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code CapturingEvmFeeService} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private CapturingEvmFeeService() {
-            super(null, null, null, null, null);
+            super(null, null, null, null, null, org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
         }
 
         /**
@@ -979,7 +972,7 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code CapturingAptosService} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private CapturingAptosService() {
-            super(null, null, null);
+            super(null, null, null, org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
         }
 
         /**
@@ -1019,7 +1012,7 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code CapturingTonService} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private CapturingTonService() {
-            super(null, null, null);
+            super(null, null, null, org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
         }
 
         /**

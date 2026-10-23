@@ -44,7 +44,10 @@ class TonMessageEncodingTest {
         TonKeyService keys = new TonKeyService(MASTER_SEED);
         FakeTonCenterClient rpc = new FakeTonCenterClient();
         FakeRepository repository = new FakeRepository();
-        TonTransactionService service = new TonTransactionService(rpc, keys, repository);
+        TonTransactionService service = new TonTransactionService(rpc,
+                keys,
+                repository,
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
 
         String user = keys.wallet(3).getAddress().toString(true, true, false, true);
         String destination = keys.wallet(4).getAddress().toString(true, true, false, true);
@@ -116,8 +119,10 @@ class TonMessageEncodingTest {
      */
     @Test
     void duplicatePendingBocIsAStillPendingConfirmation() {
-        TonTransactionService service = new TonTransactionService(
-                new DuplicateTonCenterClient(), new TonKeyService(MASTER_SEED), new PendingRepository());
+        TonTransactionService service = new TonTransactionService(new DuplicateTonCenterClient(),
+                new TonKeyService(MASTER_SEED),
+                new PendingRepository(),
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
 
         assertFalse(service.confirmSentMessage("message-hash", "sender"));
     }

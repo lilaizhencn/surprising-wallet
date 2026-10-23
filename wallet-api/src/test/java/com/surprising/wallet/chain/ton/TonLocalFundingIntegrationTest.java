@@ -56,7 +56,10 @@ class TonLocalFundingIntegrationTest {
                         .authHeaderName("X-API-Key")
                         .apiKey("").build()));
         TonKeyService keys = new TonKeyService(masterSeed);
-        TonTransactionService transactions = new TonTransactionService(rpc, keys, repository);
+        TonTransactionService transactions = new TonTransactionService(rpc,
+                keys,
+                repository,
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
 
         String target = keys.wallet(4001, 0, OWNER_INDEX)
                 .getAddress().toString(true, true, false, true);

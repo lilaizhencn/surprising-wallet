@@ -122,6 +122,7 @@ public class AccountChainWorkflowService {
     private final NearTransactionService nearTransactionService;
     /** Polkadot 链交易服务 */
     private final PolkadotTransactionService polkadotTransactionService;
+    private final WithdrawalSettlementService settlements;
 
     /**
      * Monero 专用工作流：扫描 -> 提现 -> 确认提现 -> 归集 -> 确认归集。
@@ -686,7 +687,7 @@ public class AccountChainWorkflowService {
             return;
         }
         if (tonTransactionService.confirmSentMessage(order.getTxHash(), tonOwnerAddress(from))) {
-            repository.confirmWithdrawalAndSettle(order.getTenantId(), order.getChain(), order.getOrderNo(), order.getTxHash(),
+            settlements.confirm(order.getTenantId(), order.getChain(), order.getOrderNo(), order.getTxHash(),
                     order.getAssetSymbol(), debitAccountId(order, from), withdrawalDebitAmount(order));
         }
     }

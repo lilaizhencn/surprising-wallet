@@ -87,8 +87,12 @@ class HyperCoreLocalFullFlowIntegrationTest {
             HyperCoreApiClient client = new HyperCoreApiClient(JSON, profiles("HYPERCORE"), nodes("HYPERCORE", api.baseUrl()));
             HyperCoreDepositScanner scanner = new HyperCoreDepositScanner(
                     client, hyperCoreRepository, chainRepository);
-            HyperCoreTransactionService transactions = new HyperCoreTransactionService(
-                    client, new HyperCoreSigner(), hyperCoreRepository, chainRepository, keys);
+            HyperCoreTransactionService transactions = new HyperCoreTransactionService(client,
+                    new HyperCoreSigner(),
+                    hyperCoreRepository,
+                    chainRepository,
+                    keys,
+                    com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
 
             ChainAddressRecord userUsdc = address(keys, profile, tenantId, USDC, 100_001L, "DEPOSIT");
             ChainAddressRecord userHype = address(keys, profile, tenantId, HYPE, 100_001L, "DEPOSIT");

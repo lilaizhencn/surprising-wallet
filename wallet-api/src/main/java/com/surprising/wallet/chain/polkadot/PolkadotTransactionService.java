@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.polkadot;
 
+import com.surprising.wallet.service.WithdrawalSettlementService;
+
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
@@ -29,8 +31,7 @@ import java.util.Optional;
  */
 @Service
 @RequiredArgsConstructor
-public
-class PolkadotTransactionService {
+public class PolkadotTransactionService {
 
     /** 链标识 */
     private static final String CHAIN = PolkadotRuntimeClient.CHAIN;
@@ -58,6 +59,7 @@ class PolkadotTransactionService {
 
     /** 热钱包地址服务（用于 Gas 补充） */
     private final HotWalletAddressService hotWalletAddressService;
+    private final WithdrawalSettlementService settlements;
 
     /** 运行时配置服务（可选） */
     @Autowired(required = false)
@@ -134,7 +136,7 @@ class PolkadotTransactionService {
         if (!transactionFinalized(assetSymbol, txHash, confirmationLookback(profile))) {
             return false;
         }
-        return repository.confirmWithdrawalAndSettle(tenantId, CHAIN, orderNo, txHash,
+        return settlements.confirm(tenantId, CHAIN, orderNo, txHash,
                 assetSymbol, debitAccountId, debitAmount);
     }
 

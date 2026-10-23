@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.xrp;
 
+import com.surprising.wallet.service.WithdrawalSettlementService;
+
 import tools.jackson.databind.JsonNode;
 import com.google.common.primitives.UnsignedInteger;
 import com.google.common.primitives.UnsignedLong;
@@ -54,8 +56,7 @@ import java.util.Set;
  */
 @Service
 @RequiredArgsConstructor
-public
-class XrpTransactionService {
+public class XrpTransactionService {
 
     /** 链标识 */
     private static final String CHAIN = "XRP";
@@ -89,6 +90,7 @@ class XrpTransactionService {
 
     /** xrpl4j 签名服务 */
     private final BcSignatureService signatureService = new BcSignatureService();
+    private final WithdrawalSettlementService settlements;
 
     /** 运行时配置服务（可选注入，用于任务开关控制） */
     @Autowired(required = false)
@@ -183,7 +185,7 @@ class XrpTransactionService {
         if (!confirmation.confirmed()) {
             return false;
         }
-        if (repository.confirmWithdrawalAndSettle(
+        if (settlements.confirm(
                 tenantId, CHAIN, orderNo, txHash, assetSymbol, accountId, debitAmount)) {
             updateConfirmedTransaction(txHash, confirmation);
             return true;

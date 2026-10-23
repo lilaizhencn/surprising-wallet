@@ -93,7 +93,10 @@ class XrpTestnetFullFlowIntegrationTest {
                 new AccountSecp256k1KeyService(keyMaterial));
         XrpAddressService addresses = new XrpAddressService(keys, repository);
         XrpRpcClient rpc = new XrpRpcClient(new ObjectMapper(), profiles("XRP"), nodes("XRP", RPC_URL));
-        XrpTransactionService transactions = new XrpTransactionService(rpc, keys, repository);
+        XrpTransactionService transactions = new XrpTransactionService(rpc,
+                keys,
+                repository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         XrpDepositScanner scanner = new XrpDepositScanner(rpc, repository);
         FaucetClient faucet = FaucetClient.construct(HttpUrl.get(FAUCET_URL));
 

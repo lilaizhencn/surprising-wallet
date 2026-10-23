@@ -68,8 +68,11 @@ class PolkadotDevnetFullFlowIntegrationTest {
         PolkadotRuntimeClient runtime = new PolkadotRuntimeClient(new ChainProfileRepository(jdbc), rpcNodes);
         HotWalletAddressService hotWalletService = new HotWalletAddressService(repository,
                 null, null, null, null, null, null, null, null, keys, null);
-        PolkadotTransactionService transactions = new PolkadotTransactionService(
-                runtime, keys, repository, hotWalletService);
+        PolkadotTransactionService transactions = new PolkadotTransactionService(runtime,
+                keys,
+                repository,
+                hotWalletService,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         PolkadotDepositScanner scanner = new PolkadotDepositScanner(runtime, repository);
 
         ChainAddressRecord hot = address(tenantId, keys, 0L, 0, 0L, "DEPOSIT", CHAIN, "dot-hot");

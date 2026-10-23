@@ -2,7 +2,14 @@ package com.surprising.wallet.custody;
 
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+import com.surprising.wallet.service.WithdrawalSettlementService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
@@ -24,6 +31,12 @@ class CustodyTenantIsolationIntegrationTest {
      * 保存 {@code jdbc}，用于访问当前测试所依赖的仓储、客户端或服务。
      */
     private JdbcTemplate jdbc;
+    private AnnotationConfigApplicationContext context;
+    private WithdrawalSettlementService settlements;
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableTransactionManagement
+    static class Transactions { }
 
     /**
      * 验证 {@code setUp} 对应的测试场景，明确输入、预期结果和异常边界。
@@ -33,7 +46,16 @@ class CustodyTenantIsolationIntegrationTest {
         DriverManagerDataSource dataSource = CustodyIntegrationDatabase.dataSource();
         CustodyIntegrationDatabase.reset(dataSource);
         jdbc = new JdbcTemplate(dataSource);
+        context = new AnnotationConfigApplicationContext();
+        context.register(Transactions.class);
+        context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(dataSource));
+        context.registerBean(WithdrawalSettlementService.class,
+                () -> com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
+        context.refresh();
+        settlements = context.getBean(WithdrawalSettlementService.class);
     }
+
+    @AfterEach void close() { if (context != null) context.close(); }
 
     /**
      * 验证 {@code collectionStateCannotBeReadClaimedOrUpdatedByAnotherTenant} 对应的测试场景，明确输入、预期结果和异常边界。
@@ -171,9 +193,9 @@ class CustodyTenantIsolationIntegrationTest {
         assertEquals(1, repository.updateWithdrawalStatus(
                 ownerTenant, "ETH", orderNo, "SENT", accountId, txHash, null));
 
-        assertThrows(IllegalStateException.class, () -> repository.confirmWithdrawalAndSettle(
+        assertThrows(IllegalStateException.class, () -> settlements.confirm(
                 otherTenant, "ETH", orderNo, txHash, "ETH", accountId, debit));
-        assertThrows(IllegalStateException.class, () -> repository.confirmWithdrawalAndSettle(
+        assertThrows(IllegalStateException.class, () -> settlements.confirm(
                 ownerTenant, "ETH", orderNo, txHash + "bad", "ETH", accountId, debit));
         assertEquals(0, new BigDecimal("1.25").compareTo(jdbc.queryForObject("""
                 select locked_balance from ledger_balance
@@ -181,9 +203,9 @@ class CustodyTenantIsolationIntegrationTest {
                    and account_id = ?
                 """, BigDecimal.class, ownerTenant, accountId)));
 
-        assertTrue(repository.confirmWithdrawalAndSettle(
+        assertTrue(settlements.confirm(
                 ownerTenant, "ETH", orderNo, txHash, "ETH", accountId, debit));
-        assertFalse(repository.confirmWithdrawalAndSettle(
+        assertFalse(settlements.confirm(
                 ownerTenant, "ETH", orderNo, txHash, "ETH", accountId, debit));
         assertEquals("CONFIRMED", repository.findWithdrawalOrder(
                 ownerTenant, "ETH", orderNo).orElseThrow().getStatus());

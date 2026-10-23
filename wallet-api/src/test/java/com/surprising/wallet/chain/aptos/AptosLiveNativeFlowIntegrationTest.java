@@ -73,7 +73,10 @@ class AptosLiveNativeFlowIntegrationTest {
         AptosKeyService keys = new AptosKeyService(masterSeed);
         AptosAddressService addresses = new AptosAddressService(keys, repository);
         AptosTransactionSigner signer = new AptosTransactionSigner(keys);
-        AptosTransactionService transactions = new AptosTransactionService(rpc, signer, repository);
+        AptosTransactionService transactions = new AptosTransactionService(rpc,
+                signer,
+                repository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         AptosDepositScanner scanner = new AptosDepositScanner(rpc, repository);
 
         ChainAddressRecord owner = addresses.createNativeAddress(6001, 0, OWNER_INDEX, "DEPOSIT");
