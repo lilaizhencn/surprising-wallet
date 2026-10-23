@@ -11,7 +11,6 @@ import com.surprising.wallet.chain.model.TonTransactionRecord;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.ton.ton4j.cell.Cell;
 import org.ton.ton4j.cell.CellSlice;
@@ -90,32 +89,21 @@ class TonDepositScanner {
 
     /** TON API 索引器客户端（用于 Jetton Wallet 物化） */
     private final TonApiClient tonApi;
+    /** 运行时任务开关服务。 */
+    private final WalletRuntimeConfigService runtimeConfigService;
 
     /**
      * 构造 {@code TonDepositScanner}，初始化该组件运行所需的状态和依赖。
      */
-    @Autowired
     public TonDepositScanner(TonCenterClient rpc, TonAddressService addressService,
-                             ChainJdbcRepository repository, TonApiClient tonApi) {
+                             ChainJdbcRepository repository, TonApiClient tonApi,
+                             WalletRuntimeConfigService runtimeConfigService) {
         this.rpc = rpc;
         this.addressService = addressService;
         this.repository = repository;
-        this.tonApi = tonApi;
+        this.tonApi = java.util.Objects.requireNonNull(tonApi);
+        this.runtimeConfigService = java.util.Objects.requireNonNull(runtimeConfigService);
     }
-
-    /**
-     * 构造 {@code TonDepositScanner}，初始化该组件运行所需的状态和依赖。
-     */
-    TonDepositScanner(TonCenterClient rpc, TonAddressService addressService,
-                      ChainJdbcRepository repository) {
-        this(rpc, addressService, repository, null);
-    }
-
-    /**
-     * 保存 {@code runtimeConfigService}，用于保存运行配置和策略参数。
-     */
-    @Autowired(required = false)
-    private WalletRuntimeConfigService runtimeConfigService;
 
     /**
      * 执行一次完整的充值扫描并触发入账。
@@ -125,7 +113,7 @@ class TonDepositScanner {
      * @return 发现的充值事件列表
      */
     public List<DepositEvent> scanAndCredit() {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "ton scanAndCredit");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_SCAN, "ton scanAndCredit");
         AccountChainProfile profile = profile();
         long masterchainSeqno = rpc.masterchainInfo().path("last").path("seqno").asLong();
         List<DepositEvent> events = new ArrayList<>();
@@ -355,9 +343,6 @@ class TonDepositScanner {
      */
     private void materializeJettonWallets(List<ChainAddressRecord> nativeAddresses,
                                           List<TokenDefinition> tokens) {
-        if (tonApi == null) {
-            return;
-        }
         for (ChainAddressRecord owner : nativeAddresses) {
             if (!WALLET_ROLE_DEPOSIT.equals(owner.getWalletRole())
                     || HotWalletRules.isDefaultHotUser(owner.getUserId(), owner.getBiz())) {
@@ -436,20 +421,9 @@ class TonDepositScanner {
         return batchSize == null || batchSize <= 0 ? 100 : batchSize;
     }
     /**
-     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void requireTaskEnabled(String task, String operation) {
-        if (runtimeConfigService != null) {
-            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
-        }
-    }
-    /**
      * 判断 {@code isTestnet} 对应的条件是否成立，并返回明确的布尔结果。
      */
     private boolean isTestnet() {
-        if (repository == null) {
-            return true;
-        }
         return profile().getNetwork().toLowerCase(java.util.Locale.ROOT).contains("test");
     }
     /**

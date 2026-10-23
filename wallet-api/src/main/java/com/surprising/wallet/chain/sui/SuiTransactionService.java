@@ -9,7 +9,6 @@ import com.surprising.wallet.chain.model.SuiTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -49,9 +48,8 @@ public class SuiTransactionService {
     private final ChainJdbcRepository repository;
     private final WithdrawalSettlementService settlements;
 
-    /** 运行时配置服务（可选） */
-    @Autowired(required = false)
-    private WalletRuntimeConfigService runtimeConfigService;
+    /** 运行时任务开关服务。 */
+    private final WalletRuntimeConfigService runtimeConfigService;
 
     /**
      * 构造 {@code SuiTransactionService}，初始化该组件运行所需的状态和依赖。
@@ -61,12 +59,14 @@ public class SuiTransactionService {
             SuiTransactionSigner signer,
             SuiPtbTransactionBuilder ptbBuilder,
             ChainJdbcRepository repository,
-            WithdrawalSettlementService settlements) {
+            WithdrawalSettlementService settlements,
+            WalletRuntimeConfigService runtimeConfigService) {
         this.rpc = rpc;
         this.signer = signer;
         this.ptbBuilder = ptbBuilder;
         this.repository = repository;
         this.settlements = settlements;
+        this.runtimeConfigService = java.util.Objects.requireNonNull(runtimeConfigService);
     }
 
     /**
@@ -134,7 +134,7 @@ public class SuiTransactionService {
      */
     public String withdrawNative(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amount) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "sui withdrawNative");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "sui withdrawNative");
         Optional<String> existing = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -177,7 +177,7 @@ public class SuiTransactionService {
      */
     public String withdrawCoin(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                String coinType, String toAddress, BigDecimal amount) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "sui withdrawCoin");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "sui withdrawCoin");
         Optional<String> existing = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -218,7 +218,7 @@ public class SuiTransactionService {
      */
     public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountMist) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "sui collectNative");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "sui collectNative");
         Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -248,7 +248,7 @@ public class SuiTransactionService {
     public String collectCoin(java.util.UUID tenantId, String collectionNo,
                               ChainAddressRecord from, String coinType,
                               String hotAddress, BigDecimal amountAtomic) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "sui collectCoin");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "sui collectCoin");
         Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -339,14 +339,6 @@ public class SuiTransactionService {
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
-    }
-    /**
-     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void requireTaskEnabled(String task, String operation) {
-        if (runtimeConfigService != null) {
-            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
-        }
     }
 
     /**

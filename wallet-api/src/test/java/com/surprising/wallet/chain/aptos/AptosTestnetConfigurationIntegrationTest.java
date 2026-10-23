@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -36,7 +38,8 @@ class AptosTestnetConfigurationIntegrationTest {
                 env("APTOS_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
                 env("APTOS_DB_USER", "wallet"),
                 env("APTOS_DB_PASSWORD", ""));
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(new JdbcTemplate(dataSource));
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         AptosRpcClient rpc = new AptosRpcClient(new ObjectMapper(),
                 profiles("APTOS"),
                 nodes("APTOS", java.util.Map.of("rpc", node("APTOS", env("APTOS_RPC_URL", "https://fullnode.testnet.aptoslabs.com/v1")), "faucet", node("APTOS", ""))));
@@ -57,7 +60,7 @@ class AptosTestnetConfigurationIntegrationTest {
         transaction.executeWithoutResult(status -> {
             long ledgerVersion = rpc.ledgerVersion();
             repository.updateScanHeight("APTOS", AptosDepositScanner.SCANNER, ledgerVersion, ledgerVersion);
-            new AptosDepositScanner(rpc, repository).scanAndCredit();
+            new AptosDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc)).scanAndCredit();
             assertTrue(repository.findScanSafeHeight("APTOS", AptosDepositScanner.SCANNER).isPresent());
             status.setRollbackOnly();
         });

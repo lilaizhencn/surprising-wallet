@@ -10,8 +10,8 @@ import com.surprising.wallet.chain.model.NearTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -64,9 +64,9 @@ class NearDepositScanner {
     /** 扫描互斥锁 */
     private final AtomicBoolean scanning = new AtomicBoolean(false);
 
-    /** 运行时配置服务（可选） */
-    @Autowired(required = false)
-    private WalletRuntimeConfigService runtimeConfigService;
+    /** 运行时任务开关服务。 */
+    @NonNull
+    private final WalletRuntimeConfigService runtimeConfigService;
     /**
      * 扫描或观察 {@code scanAndCredit} 对应的链上状态，并转换为业务可用结果。
      */
@@ -84,7 +84,7 @@ class NearDepositScanner {
      * 执行 {@code doScanAndCredit} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private List<DepositEvent> doScanAndCredit() {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "near scanAndCredit");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_SCAN, "near scanAndCredit");
         AccountChainProfile profile = profile();
         int requiredConfirmations = requiredConfirmations(profile);
         long latest = rpc.latestFinalBlockHeight();
@@ -353,14 +353,6 @@ class NearDepositScanner {
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
-    }
-    /**
-     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void requireTaskEnabled(String task, String operation) {
-        if (runtimeConfigService != null) {
-            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
-        }
     }
     /**
      * 处理 {@code confirmations} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。

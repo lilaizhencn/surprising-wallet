@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.cardano;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import com.surprising.wallet.repository.ChainRpcNodeRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.bloxbean.cardano.client.api.common.OrderEnum;
@@ -26,7 +28,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
-import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -82,8 +83,8 @@ class CardanoDevnetFullFlowIntegrationTest {
         CardanoTransactionService transactions = new CardanoTransactionService(backend,
                 keys,
                 repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
-        CardanoDepositScanner scanner = new CardanoDepositScanner(backend, repository);
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
+        CardanoDepositScanner scanner = new CardanoDepositScanner(backend, repository, RuntimeTestSupport.database(jdbc));
 
         ChainAddressRecord hot = address(tenantId, keys, 0L, 0, 0L, "DEPOSIT", CHAIN, "cardano-hot");
         ChainAddressRecord source = address(
@@ -397,15 +398,6 @@ class CardanoDevnetFullFlowIntegrationTest {
         dataSource.setUsername(System.getProperty("cardano.db.user", "wallet"));
         dataSource.setPassword(System.getProperty("cardano.db.password", "wallet123"));
         return dataSource;
-    }
-
-    /**
-     * 验证 {@code setField} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private static void setField(Object target, String name, Object value) throws Exception {
-        Field field = target.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(target, value);
     }
 
     /**

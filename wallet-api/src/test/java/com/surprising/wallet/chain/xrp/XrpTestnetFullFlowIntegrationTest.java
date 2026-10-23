@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.xrp;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -96,8 +98,8 @@ class XrpTestnetFullFlowIntegrationTest {
         XrpTransactionService transactions = new XrpTransactionService(rpc,
                 keys,
                 repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
-        XrpDepositScanner scanner = new XrpDepositScanner(rpc, repository);
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
+        XrpDepositScanner scanner = new XrpDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc));
         FaucetClient faucet = FaucetClient.construct(HttpUrl.get(FAUCET_URL));
 
         long run = System.currentTimeMillis();

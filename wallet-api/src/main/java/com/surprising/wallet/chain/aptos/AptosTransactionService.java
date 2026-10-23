@@ -9,8 +9,8 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -53,9 +53,9 @@ public class AptosTransactionService {
     private final ChainJdbcRepository repository;
     private final WithdrawalSettlementService settlements;
 
-    /** 运行时配置服务（可选，用于任务开关控制） */
-    @Autowired(required = false)
-    private WalletRuntimeConfigService runtimeConfigService;
+    /** 运行时任务开关服务。 */
+    @NonNull
+    private final WalletRuntimeConfigService runtimeConfigService;
 
     /**
      * 发送 APT 原生转账（简化模式）。
@@ -192,7 +192,7 @@ public class AptosTransactionService {
      */
     public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amountOctas) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "aptos withdrawNative");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "aptos withdrawNative");
         Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -231,7 +231,7 @@ public class AptosTransactionService {
      */
     public String withdrawToken(String orderNo, long userId, ChainAddressRecord from,
                                 String contractAddress, String toAddress, BigDecimal atomicAmount) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "aptos withdrawToken");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "aptos withdrawToken");
         Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -269,7 +269,7 @@ public class AptosTransactionService {
      */
     public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountOctas) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "aptos collectNative");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "aptos collectNative");
         Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -295,7 +295,7 @@ public class AptosTransactionService {
     public String collectToken(java.util.UUID tenantId, String collectionNo,
                                ChainAddressRecord from, String contractAddress,
                                String hotAddress, BigDecimal atomicAmount) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "aptos collectToken");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "aptos collectToken");
         Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -387,14 +387,6 @@ public class AptosTransactionService {
     private AccountChainProfile profile() {
         return repository.findProfileByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
-    }
-    /**
-     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void requireTaskEnabled(String task, String operation) {
-        if (runtimeConfigService != null) {
-            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
-        }
     }
 
     /**

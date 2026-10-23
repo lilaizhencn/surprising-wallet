@@ -13,7 +13,6 @@ import com.surprising.wallet.chain.model.NearTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -83,9 +82,8 @@ public class NearTransactionService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final WithdrawalSettlementService settlements;
 
-    /** 运行时配置服务（可选） */
-    @Autowired(required = false)
-    private WalletRuntimeConfigService runtimeConfigService;
+    /** 运行时任务开关服务。 */
+    private final WalletRuntimeConfigService runtimeConfigService;
 
     /**
      * 构造 {@code NearTransactionService}，初始化该组件运行所需的状态和依赖。
@@ -95,12 +93,14 @@ public class NearTransactionService {
             NearTransactionSigner signer,
             NearKeyService keyService,
             ChainJdbcRepository repository,
-            WithdrawalSettlementService settlements) {
+            WithdrawalSettlementService settlements,
+            WalletRuntimeConfigService runtimeConfigService) {
         this.rpc = rpc;
         this.signer = signer;
         this.keyService = keyService;
         this.repository = repository;
         this.settlements = settlements;
+        this.runtimeConfigService = java.util.Objects.requireNonNull(runtimeConfigService);
     }
     /**
      * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
@@ -231,7 +231,7 @@ public class NearTransactionService {
      */
     public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigInteger amountYocto) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "near collectNative");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "near collectNative");
         Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -256,7 +256,7 @@ public class NearTransactionService {
      */
     public String collectToken(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                TokenDefinition token, String hotAddress, BigDecimal amount) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "near collectToken");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "near collectToken");
         Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
@@ -445,14 +445,6 @@ public class NearTransactionService {
             return objectMapper.writeValueAsBytes(json);
         } catch (JacksonException e) {
             throw new IllegalStateException("NEAR JSON serialization failed", e);
-        }
-    }
-    /**
-     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void requireTaskEnabled(String task, String operation) {
-        if (runtimeConfigService != null) {
-            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
         }
     }
     /**

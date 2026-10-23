@@ -242,6 +242,7 @@
   <!-- ====== LEGEND ====== -->
   <text x="590" y="910" text-anchor="middle" class="small" fill="#94a3b8">签名隔离：sig1 只持有 Root #1 私钥 · sig2 只持有 Root #2 私钥 · 恢复私钥离线保管 · 任两方即可签名</text>
   <text x="590" y="930" text-anchor="middle" class="small" fill="#94a3b8">查询：Controller → CustodyTransactionQueryService → 单表筛选 / 计数 / 分页 → 当前页批量关联</text>
+  <text x="590" y="952" text-anchor="middle" class="small">账户链：构造器必需运行开关 → 新扫描 / 提现 / 归集校验 → RPC；已广播确认继续</text>
 <rect x="30" y="985" width="1120" height="108" rx="8" fill="#eff6ff" stroke="#2563eb"/>
 <text x="50" y="1012" style="font:14px sans-serif;fill:#1e293b">租户 Demo：浏览器 → Worker → Durable Object 事务冻结 → HTTPS 钱包 API</text>
 <text x="50" y="1040" style="font:14px sans-serif;fill:#1e293b">钱包 HMAC Webhook → 同一对象 → 事件幂等 → 余额 + 流水原子提交</text>

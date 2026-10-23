@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
@@ -96,7 +98,7 @@ class TonDatabaseFlowIntegrationTest {
 
             FakeTonCenterClient rpc = new FakeTonCenterClient();
             TonDepositScanner scanner = new TonDepositScanner(rpc, addresses, repository,
-                    new FakeTonApiClient(keys));
+                    new FakeTonApiClient(keys), RuntimeTestSupport.database(jdbc));
             scanner.scanAndCredit();
             ChainAddressRecord userAUsdt = repository.findChainAddress(
                     "TON", "USDT", userA.getUserId(), userA.getBiz(), userA.getAddressIndex(), "DEPOSIT")

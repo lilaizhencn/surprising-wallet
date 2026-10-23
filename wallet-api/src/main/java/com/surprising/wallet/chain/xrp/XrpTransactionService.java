@@ -11,8 +11,8 @@ import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.chain.model.XrpTransactionRecord;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.xrpl.xrpl4j.crypto.keys.PrivateKey;
 import org.xrpl.xrpl4j.crypto.signing.SingleSignedTransaction;
@@ -92,9 +92,9 @@ public class XrpTransactionService {
     private final BcSignatureService signatureService = new BcSignatureService();
     private final WithdrawalSettlementService settlements;
 
-    /** 运行时配置服务（可选注入，用于任务开关控制） */
-    @Autowired(required = false)
-    private WalletRuntimeConfigService runtimeConfigService;
+    /** 运行时任务开关服务。 */
+    @NonNull
+    private final WalletRuntimeConfigService runtimeConfigService;
 
     /**
      * 发送原生 XRP 转账。
@@ -105,7 +105,7 @@ public class XrpTransactionService {
      * @return 交易哈希
      */
     public String sendNative(ChainAddressRecord from, String toAddress, BigDecimal amount) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "xrp sendNative");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "xrp sendNative");
         return sendNativeInternal(from, toAddress, amount);
     }
     /**
@@ -142,7 +142,7 @@ public class XrpTransactionService {
      */
     public String sendIssuedCurrency(ChainAddressRecord from, TokenDefinition token,
                                      String toAddress, BigDecimal amount) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "xrp sendIssuedCurrency");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "xrp sendIssuedCurrency");
         return sendIssuedCurrencyInternal(from, token, toAddress, amount);
     }
 
@@ -205,7 +205,7 @@ public class XrpTransactionService {
      */
     public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amount) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "xrp collectNative");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "xrp collectNative");
         Optional<String> previous = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
@@ -306,7 +306,7 @@ public class XrpTransactionService {
     public String collectIssuedCurrency(java.util.UUID tenantId, String collectionNo,
                                         ChainAddressRecord from,
                                         TokenDefinition token, String hotAddress, BigDecimal amount) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "xrp collectIssuedCurrency");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "xrp collectIssuedCurrency");
         Optional<String> previous = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
@@ -374,7 +374,7 @@ public class XrpTransactionService {
      * @return 准备结果（含激活和 TrustLine 状态）
      */
     public DepositPreparation ensureIssuedCurrencyDepositReady(ChainAddressRecord depositAddress, String symbol) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_TRANSFER, "xrp prepareIssuedCurrencyDepositAddress");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_TRANSFER, "xrp prepareIssuedCurrencyDepositAddress");
         TokenDefinition token = token(symbol);
         XrpIssuedCurrency issued = XrpIssuedCurrency.fromToken(token);
         validateAddress(depositAddress.getAddress());
@@ -773,14 +773,6 @@ public class XrpTransactionService {
      */
     private void validateAddress(String address) {
         Address.of(address).validateAddress();
-    }
-    /**
-     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void requireTaskEnabled(String task, String operation) {
-        if (runtimeConfigService != null) {
-            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
-        }
     }
     private record Confirmation(boolean confirmed, long ledgerIndex, long confirmations, JsonNode raw) {
     }

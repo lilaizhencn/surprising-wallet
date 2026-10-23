@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.near;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -83,8 +85,8 @@ class NearSandboxFullFlowIntegrationTest {
                 new NearTransactionSigner(keys),
                 keys,
                 repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
-        NearDepositScanner scanner = new NearDepositScanner(rpc, repository);
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
+        NearDepositScanner scanner = new NearDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc));
 
         ChainAddressRecord hot = address(tenantId, keys, 0L, 0, 0L, "DEPOSIT", CHAIN, "near-hot");
         ChainAddressRecord source = address(

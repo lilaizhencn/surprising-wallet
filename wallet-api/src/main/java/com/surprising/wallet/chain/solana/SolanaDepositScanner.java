@@ -10,8 +10,8 @@ import com.surprising.wallet.chain.model.SolanaTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -55,13 +55,13 @@ class SolanaDepositScanner {
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
 
-    /** 运行时配置服务（可选） */
-    @Autowired(required = false)
-    private WalletRuntimeConfigService runtimeConfigService;
+    /** 运行时任务开关服务。 */
+    @NonNull
+    private final WalletRuntimeConfigService runtimeConfigService;
 
-    /** 地址服务（可选，用于 ATA 派生） */
-    @Autowired(required = false)
-    private SolanaAddressService addressService;
+    /** ATA 地址派生服务。 */
+    @NonNull
+    private final SolanaAddressService addressService;
 
     /**
      * 执行一次完整的充值扫描并触发入账。
@@ -69,7 +69,7 @@ class SolanaDepositScanner {
      * @return 发现的充值事件列表
      */
     public List<DepositEvent> scanAndCredit() {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "solana scanAndCredit");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_SCAN, "solana scanAndCredit");
         AccountChainProfile profile = profile();
         long currentSlot = rpc.getSlot();
         List<DepositEvent> events = new ArrayList<>();
@@ -152,7 +152,7 @@ class SolanaDepositScanner {
      */
     private List<ChainAddressRecord> tokenScanAddresses(TokenDefinition token) {
         List<ChainAddressRecord> addresses = new ArrayList<>(repository.listChainAddresses(CHAIN, token.getSymbol()));
-        if (addressService == null || !StringUtils.hasText(token.getContractAddress())) {
+        if (!StringUtils.hasText(token.getContractAddress())) {
             return addresses;
         }
         Set<String> existing = new HashSet<>();
@@ -307,13 +307,5 @@ class SolanaDepositScanner {
      */
     private String normalize(String address) {
         return address == null ? "" : address;
-    }
-    /**
-     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void requireTaskEnabled(String task, String operation) {
-        if (runtimeConfigService != null) {
-            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
-        }
     }
 }

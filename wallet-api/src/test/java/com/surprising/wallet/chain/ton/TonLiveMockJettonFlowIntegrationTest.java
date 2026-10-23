@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
@@ -81,8 +83,9 @@ class TonLiveMockJettonFlowIntegrationTest {
         TonTransactionService transactions = new TonTransactionService(rpc,
                 keys,
                 repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
-        TonDepositScanner scanner = new TonDepositScanner(rpc, addresses, repository);
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
+        TonDepositScanner scanner = new TonDepositScanner(rpc, addresses, repository, new TonApiClient(new ObjectMapper(), new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
+                new com.surprising.wallet.service.ChainRpcNodeService(new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc), "dev", 16)), RuntimeTestSupport.database(jdbc));
 
         ChainAddressRecord owner = addresses.createNativeAddress(
                 tenantId, 4001, 0, OWNER_INDEX, "DEPOSIT");

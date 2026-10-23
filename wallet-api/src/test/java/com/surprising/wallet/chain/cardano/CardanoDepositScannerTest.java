@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.cardano;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.repository.ChainJdbcRepository;
@@ -25,7 +27,7 @@ class CardanoDepositScannerTest {
      */
     @Test
     void tracksNativeAndTokenAccountsSeparatelyForSameAddress() {
-        CardanoDepositScanner scanner = new CardanoDepositScanner(null, new FakeRepository());
+        CardanoDepositScanner scanner = new CardanoDepositScanner(null, new FakeRepository(), RuntimeTestSupport.enabled());
         TokenDefinition token = TokenDefinition.builder()
                 .chain("ADA")
                 .symbol("USDC")

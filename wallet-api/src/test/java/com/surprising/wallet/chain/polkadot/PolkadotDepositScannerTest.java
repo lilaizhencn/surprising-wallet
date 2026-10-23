@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.polkadot;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -36,7 +38,7 @@ class PolkadotDepositScannerTest {
                 95, 3, null, "{}"));
         FakeRepository repository = new FakeRepository();
         repository.address = "AddrMixed";
-        PolkadotDepositScanner scanner = new PolkadotDepositScanner(runtimeClient, repository);
+        PolkadotDepositScanner scanner = new PolkadotDepositScanner(runtimeClient, repository, RuntimeTestSupport.enabled());
 
         List<DepositEvent> events = scanner.scanAndCredit();
 
@@ -53,7 +55,7 @@ class PolkadotDepositScannerTest {
     void assetHubDepositCreditsTokenAccountWhenAddressMatchesNativeAccount() {
         FakeRuntimeClient runtimeClient = new FakeRuntimeClient();
         FakeRepository repository = new FakeRepository();
-        PolkadotDepositScanner scanner = new PolkadotDepositScanner(runtimeClient, repository);
+        PolkadotDepositScanner scanner = new PolkadotDepositScanner(runtimeClient, repository, RuntimeTestSupport.enabled());
 
         List<DepositEvent> events = scanner.scanAndCredit();
 

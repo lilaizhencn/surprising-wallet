@@ -9,8 +9,8 @@ import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -62,9 +62,9 @@ public class AptosDepositScanner {
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
 
-    /** 运行时配置服务（可选，用于任务开关控制） */
-    @Autowired(required = false)
-    private WalletRuntimeConfigService runtimeConfigService;
+    /** 运行时任务开关服务。 */
+    @NonNull
+    private final WalletRuntimeConfigService runtimeConfigService;
 
     /**
      * 执行一次完整的充值扫描并触发入账。
@@ -72,7 +72,7 @@ public class AptosDepositScanner {
      * @return 发现的充值事件列表
      */
     public List<DepositEvent> scanAndCredit() {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "aptos scanAndCredit");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_SCAN, "aptos scanAndCredit");
         AccountChainProfile profile = profile();
         int scanLimit = scanLimit(profile);
         long ledgerVersion = rpc.ledgerVersion();
@@ -183,14 +183,6 @@ public class AptosDepositScanner {
     private int scanLimit(AccountChainProfile profile) {
         Integer batchSize = profile.getScanBatchSize();
         return batchSize == null || batchSize <= 0 ? 100 : batchSize;
-    }
-    /**
-     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void requireTaskEnabled(String task, String operation) {
-        if (runtimeConfigService != null) {
-            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
-        }
     }
 
     /**

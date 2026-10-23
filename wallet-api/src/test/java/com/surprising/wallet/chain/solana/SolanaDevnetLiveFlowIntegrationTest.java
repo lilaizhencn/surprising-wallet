@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.solana;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -59,8 +61,8 @@ class SolanaDevnetLiveFlowIntegrationTest {
                 keys,
                 addresses,
                 repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
-        SolanaDepositScanner scanner = new SolanaDepositScanner(rpc, repository);
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
+        SolanaDepositScanner scanner = new SolanaDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc), addresses);
 
         assertTrue(rpc.health());
         jdbc.update("""

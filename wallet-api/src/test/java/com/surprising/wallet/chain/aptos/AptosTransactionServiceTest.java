@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -37,7 +39,7 @@ class AptosTransactionServiceTest {
         AptosTransactionService service = new AptosTransactionService(rpc,
                 new AptosTransactionSigner(keys),
                 repository,
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
         ChainAddressRecord from = address(keys, 21);
         String recipient = keys.address(23);
 
@@ -71,7 +73,7 @@ class AptosTransactionServiceTest {
         AptosTransactionService service = new AptosTransactionService(rpc,
                 new AptosTransactionSigner(keys),
                 repository,
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
         ChainAddressRecord from = address(keys, 24);
         String recipient = keys.address(25);
 
@@ -96,7 +98,7 @@ class AptosTransactionServiceTest {
         AptosTransactionService service = new AptosTransactionService(new CapturingRpc(),
                 new AptosTransactionSigner(keys),
                 new FakeRepository(),
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.sendToken(address(keys, 27), token("UNKNOWN", keys.address(28)),

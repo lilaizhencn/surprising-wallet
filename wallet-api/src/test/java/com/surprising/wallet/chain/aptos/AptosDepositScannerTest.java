@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -50,7 +52,7 @@ class AptosDepositScannerTest {
     void creditsFungibleAssetToTheTrackedNativeChainAddress() throws Exception {
         FakeRepository repository = new FakeRepository();
         ExistingStoreRpc rpc = new ExistingStoreRpc(transaction());
-        AptosDepositScanner scanner = new AptosDepositScanner(rpc, repository);
+        AptosDepositScanner scanner = new AptosDepositScanner(rpc, repository, RuntimeTestSupport.enabled());
 
         List<DepositEvent> events = scanner.scanAndCredit();
 

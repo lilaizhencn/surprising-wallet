@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.solana;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.AccountChainProfile;
@@ -112,8 +114,7 @@ class CodexLiveUserFundingTest {
         String seed = env("SW_ED25519_SEED", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
         SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(), profiles("SOLANA"), nodes("SOLANA", rpcUrl(jdbc, "SOLANA", "devnet")));
         SolanaAddressService addresses = new SolanaAddressService(new SolanaKeyService(seed), repository);
-        SolanaDepositScanner solanaScanner = new SolanaDepositScanner(rpc, repository);
-        setPrivateField(solanaScanner, "addressService", addresses);
+        SolanaDepositScanner solanaScanner = new SolanaDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc), addresses);
         var solanaEvents = solanaScanner.scanAndCredit();
         report.append("SOLANA_EVENTS=").append(solanaEvents.size()).append('\n');
 
@@ -204,7 +205,7 @@ class CodexLiveUserFundingTest {
                 keys,
                 addresses,
                 repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
         Account hot = keys.account(0, 0, 0);
         Account external = keys.account(99_000_000L + Math.abs(System.currentTimeMillis() % 100_000L));
         ChainAddressRecord userSol = repository.findChainAddress("SOLANA", "SOL", userId, 0, 0, "DEPOSIT")
@@ -427,15 +428,6 @@ class CodexLiveUserFundingTest {
                             safe_height = excluded.safe_height,
                             updated_at = now()
                         """, chain, previous, previous);
-    }
-
-    /**
-     * 验证 {@code setPrivateField} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
-    private void setPrivateField(Object target, String fieldName, Object value) throws Exception {
-        java.lang.reflect.Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
     }
 
     /**

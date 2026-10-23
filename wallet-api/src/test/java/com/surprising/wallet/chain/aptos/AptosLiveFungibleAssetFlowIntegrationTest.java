@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -77,8 +79,8 @@ class AptosLiveFungibleAssetFlowIntegrationTest {
         AptosTransactionService transactions = new AptosTransactionService(rpc,
                 new AptosTransactionSigner(keys),
                 repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
-        AptosDepositScanner scanner = new AptosDepositScanner(rpc, repository);
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
+        AptosDepositScanner scanner = new AptosDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc));
 
         JsonNode metadata = rpc.fungibleAssetMetadata(metadataAddress).path("data");
         assertEquals(symbol, metadata.path("symbol").asText().toUpperCase());

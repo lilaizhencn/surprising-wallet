@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
@@ -46,7 +48,8 @@ class TonLocalFundingIntegrationTest {
                 env("TON_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
                 env("TON_DB_USER", "wallet"),
                 env("TON_DB_PASSWORD", ""));
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(new JdbcTemplate(dataSource));
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         TonCenterClient rpc = new TonCenterClient(new ObjectMapper(),
                 profiles("TON"),
                 nodes(ChainRpcNode.builder().chain("TON")
@@ -59,7 +62,7 @@ class TonLocalFundingIntegrationTest {
         TonTransactionService transactions = new TonTransactionService(rpc,
                 keys,
                 repository,
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.database(jdbc));
 
         String target = keys.wallet(4001, 0, OWNER_INDEX)
                 .getAddress().toString(true, true, false, true);

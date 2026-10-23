@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.aptos;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -76,8 +78,8 @@ class AptosLiveNativeFlowIntegrationTest {
         AptosTransactionService transactions = new AptosTransactionService(rpc,
                 signer,
                 repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
-        AptosDepositScanner scanner = new AptosDepositScanner(rpc, repository);
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
+        AptosDepositScanner scanner = new AptosDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc));
 
         ChainAddressRecord owner = addresses.createNativeAddress(6001, 0, OWNER_INDEX, "DEPOSIT");
         ChainAddressRecord external = external(keys);

@@ -8,9 +8,9 @@ import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -66,14 +66,14 @@ class PolkadotDepositScanner {
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
 
-    /** 运行时配置服务（可选） */
-    @Autowired(required = false)
-    private WalletRuntimeConfigService runtimeConfigService;
+    /** 运行时任务开关服务。 */
+    @NonNull
+    private final WalletRuntimeConfigService runtimeConfigService;
     /**
      * 扫描或观察 {@code scanAndCredit} 对应的链上状态，并转换为业务可用结果。
      */
     public List<DepositEvent> scanAndCredit() {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "polkadot scanAndCredit");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_SCAN, "polkadot scanAndCredit");
         AccountChainProfile profile = profile();
         List<DepositEvent> events = new ArrayList<>();
         events.addAll(scanNative(profile));
@@ -316,13 +316,5 @@ class PolkadotDepositScanner {
      */
     private static String normalize(String address) {
         return address == null ? "" : address.trim().toLowerCase(Locale.ROOT);
-    }
-    /**
-     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void requireTaskEnabled(String task, String operation) {
-        if (runtimeConfigService != null) {
-            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
-        }
     }
 }

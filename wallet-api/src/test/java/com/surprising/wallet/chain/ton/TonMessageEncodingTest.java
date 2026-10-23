@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.ton;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
@@ -17,11 +19,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * 验证 {@code TonMessageEncodingTest} 覆盖的业务流程、边界条件和异常行为。
  */
 class TonMessageEncodingTest {
+    private static TonDepositScanner scanner() {
+        var repository = mock(ChainJdbcRepository.class);
+        when(repository.findProfileByChain("TON")).thenReturn(Optional.of(
+                AccountChainProfile.builder().chain("TON").network("testnet").build()));
+        return new TonDepositScanner(mock(TonCenterClient.class), mock(TonAddressService.class), repository,
+                mock(TonApiClient.class), RuntimeTestSupport.enabled());
+    }
     /**
      * 保存 {@code MASTER_SEED}，用于测试签名、认证或密钥相关逻辑。
      */
@@ -47,7 +58,7 @@ class TonMessageEncodingTest {
         TonTransactionService service = new TonTransactionService(rpc,
                 keys,
                 repository,
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
 
         String user = keys.wallet(3).getAddress().toString(true, true, false, true);
         String destination = keys.wallet(4).getAddress().toString(true, true, false, true);
@@ -80,7 +91,7 @@ class TonMessageEncodingTest {
                 .storeBit(false)
                 .endCell();
 
-        TonDepositScanner scanner = new TonDepositScanner(null, null, null);
+        TonDepositScanner scanner = scanner();
         TonDepositScanner.JettonNotification parsed = scanner.parseJettonNotification(body.toBase64(false));
 
         assertNotNull(parsed);
@@ -106,7 +117,7 @@ class TonMessageEncodingTest {
                 .storeRefMaybe(null)
                 .endCell();
 
-        TonDepositScanner scanner = new TonDepositScanner(null, null, null);
+        TonDepositScanner scanner = scanner();
         TonDepositScanner.JettonNotification parsed = scanner.parseJettonDepositBody(body.toBase64(false));
 
         assertNotNull(parsed);
@@ -122,7 +133,7 @@ class TonMessageEncodingTest {
         TonTransactionService service = new TonTransactionService(new DuplicateTonCenterClient(),
                 new TonKeyService(MASTER_SEED),
                 new PendingRepository(),
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
+                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
 
         assertFalse(service.confirmSentMessage("message-hash", "sender"));
     }

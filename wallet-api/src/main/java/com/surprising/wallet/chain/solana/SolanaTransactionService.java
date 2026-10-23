@@ -9,8 +9,8 @@ import com.surprising.wallet.chain.model.SolanaTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.p2p.solanaj.core.Account;
 import org.p2p.solanaj.core.PublicKey;
 import org.p2p.solanaj.core.Transaction;
@@ -72,9 +72,9 @@ public class SolanaTransactionService {
     private final ChainJdbcRepository repository;
     private final WithdrawalSettlementService settlements;
 
-    /** 运行时配置服务（可选注入） */
-    @Autowired(required = false)
-    private WalletRuntimeConfigService runtimeConfigService;
+    /** 运行时任务开关服务。 */
+    @NonNull
+    private final WalletRuntimeConfigService runtimeConfigService;
 
     /**
      * 发送 SOL 原生转账（通过派生索引）。
@@ -255,7 +255,7 @@ public class SolanaTransactionService {
      */
     public String withdrawNative(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amount) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "solana withdrawNative");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "solana withdrawNative");
         Optional<String> previous = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo);
         if (previous.isPresent()) {
             return previous.get();
@@ -309,7 +309,7 @@ public class SolanaTransactionService {
      */
     public String withdrawToken(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                 String mintAddress, String toOwnerAddress, BigDecimal amount) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW, "solana withdrawToken");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "solana withdrawToken");
         Optional<String> previous = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo);
         if (previous.isPresent()) {
             return previous.get();
@@ -361,7 +361,7 @@ public class SolanaTransactionService {
      */
     public String collectNative(UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountLamports) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "solana collectNative");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "solana collectNative");
         Optional<String> previous = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
@@ -400,7 +400,7 @@ public class SolanaTransactionService {
     public String collectToken(UUID tenantId, String collectionNo,
                                ChainAddressRecord from, String mintAddress,
                                String hotOwnerAddress, BigDecimal amount) {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION, "solana collectToken");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "solana collectToken");
         Optional<String> previous = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
@@ -520,14 +520,6 @@ public class SolanaTransactionService {
                 .filter(address -> Boolean.TRUE.equals(address.getEnabled()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("missing enabled Solana default hot fee payer"));
-    }
-    /**
-     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void requireTaskEnabled(String task, String operation) {
-        if (runtimeConfigService != null) {
-            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
-        }
     }
     /**
      * 编码 {@code toAtomicAmount} 对应的数据，生成链上或接口所需的表示。

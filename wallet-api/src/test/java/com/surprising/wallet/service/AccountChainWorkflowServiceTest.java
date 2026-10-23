@@ -1,5 +1,7 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -972,7 +974,8 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code CapturingAptosService} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private CapturingAptosService() {
-            super(null, null, null, org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
+            super(null, null, null, org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class),
+                    RuntimeTestSupport.enabled());
         }
 
         /**
@@ -1012,7 +1015,8 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code CapturingTonService} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private CapturingTonService() {
-            super(null, null, null, org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class));
+            super(null, null, null, org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class),
+                    RuntimeTestSupport.enabled());
         }
 
         /**

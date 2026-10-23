@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.sui;
 
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+
 import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
@@ -80,8 +82,8 @@ class SuiLiveNativeFlowIntegrationTest {
                 signer,
                 new com.surprising.wallet.chain.sui.SuiPtbTransactionBuilder(),
                 repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
-        SuiDepositScanner scanner = new SuiDepositScanner(rpc, repository);
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
+        SuiDepositScanner scanner = new SuiDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc));
 
         ChainAddressRecord owner = addresses.createNativeAddress(
                 tenantId, 7001, 0, OWNER_INDEX, "DEPOSIT");

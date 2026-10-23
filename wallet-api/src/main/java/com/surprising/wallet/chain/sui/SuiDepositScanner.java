@@ -9,8 +9,8 @@ import com.surprising.wallet.chain.model.SuiTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -44,14 +44,14 @@ class SuiDepositScanner {
     /** 数据库仓库 */
     private final ChainJdbcRepository repository;
 
-    /** 运行时配置服务（可选） */
-    @Autowired(required = false)
-    private WalletRuntimeConfigService runtimeConfigService;
+    /** 运行时任务开关服务。 */
+    @NonNull
+    private final WalletRuntimeConfigService runtimeConfigService;
     /**
      * 扫描或观察 {@code scanAndCredit} 对应的链上状态，并转换为业务可用结果。
      */
     public List<DepositEvent> scanAndCredit() {
-        requireTaskEnabled(WalletRuntimeConfigService.TASK_SCAN, "sui scanAndCredit");
+        runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_SCAN, "sui scanAndCredit");
         AccountChainProfile profile = profile();
         long latest = rpc.latestCheckpoint();
         long start = scanStart(profile, latest);
@@ -242,13 +242,5 @@ class SuiDepositScanner {
         return Math.max(requiredConfirmations, configured);
     }
     private record AssetScanTarget(String symbol, String coinType, ChainAddressRecord address) {
-    }
-    /**
-     * 校验 {@code requireTaskEnabled} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private void requireTaskEnabled(String task, String operation) {
-        if (runtimeConfigService != null) {
-            runtimeConfigService.requireTaskEnabled(CHAIN, task, operation);
-        }
     }
 }
