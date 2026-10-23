@@ -119,6 +119,7 @@ The dependency direction is `wallet-api → wallet-sig1, wallet-sig2, common, ch
 
 - JDK 27
 - Maven 3.9+
+- Spring Boot 4.1.2 / Spring Cloud 2025.1.4（统一由根 `pom.xml` 管理）
 - PostgreSQL 18
 - PGMQ 1.11.1 extension installed on the PostgreSQL server
 - Node.js only for the Polkadot runtime bridge and selected test infrastructure
