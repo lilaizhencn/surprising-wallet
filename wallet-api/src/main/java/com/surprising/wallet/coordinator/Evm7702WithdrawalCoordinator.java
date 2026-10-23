@@ -7,6 +7,7 @@ import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
 import com.surprising.wallet.chain.evm.Evm7702PayoutReceiptParser;
 import com.surprising.wallet.chain.evm.EvmFeeSupport;
 import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.EvmNonceRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +41,7 @@ public class Evm7702WithdrawalCoordinator {
      * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
     private final ChainJdbcRepository chainRepository;
+    private final EvmNonceRepository nonces;
     private final WithdrawalSettlementService settlements;
 
     /**
@@ -49,10 +51,12 @@ public class Evm7702WithdrawalCoordinator {
             Evm7702WithdrawalRepository repository,
             CustodyRepository custodyRepository,
             ChainJdbcRepository chainRepository,
-            WithdrawalSettlementService settlements) {
+            WithdrawalSettlementService settlements,
+            EvmNonceRepository nonces) {
         this.repository = repository;
         this.custodyRepository = custodyRepository;
         this.chainRepository = chainRepository;
+        this.nonces = nonces;
         this.settlements = settlements;
     }
 
@@ -63,7 +67,7 @@ public class Evm7702WithdrawalCoordinator {
     public Evm7702BatchTransactionService.SignedBatchTransaction persistSignedAttempt(
             Evm7702WithdrawalRepository.Batch batch, String relayerAddress,
             BigInteger rpcPendingNonce, SignedAttemptFactory factory) {
-        BigInteger reservedNonce = chainRepository.reserveEvmNonce(
+        BigInteger reservedNonce = nonces.reserve(
                 batch.chain(), relayerAddress.toLowerCase(), rpcPendingNonce);
         SignedAttempt signedAttempt = factory.create(reservedNonce);
         if (!reservedNonce.equals(signedAttempt.attempt().relayerNonce())) {

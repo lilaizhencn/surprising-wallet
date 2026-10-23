@@ -204,7 +204,7 @@
 
   <rect x="705" y="702" width="200" height="56" class="withdraw"/>
   <text x="805" y="726" text-anchor="middle" class="bold">广播 &amp; 等待确认</text>
-  <text x="805" y="744" text-anchor="middle" class="small">nonce · 替换加速 · RBF</text>
+  <text x="805" y="744" text-anchor="middle" class="small">原子 nonce · 替换加速 · RBF</text>
 
   <line x1="905" y1="730" x2="940" y2="730" class="arrow"/>
 

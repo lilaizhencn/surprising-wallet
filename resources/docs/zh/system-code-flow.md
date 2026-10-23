@@ -112,6 +112,7 @@ external withdrawal request
   -> ledger lock
   -> EVM: native_symbol + gas_policy + fee_model
   -> eth_estimateGas + sender/relayer 链上原生币余额校验
+  -> EvmNonceRepository：单条原子 SQL 预留 BigInteger nonce；加入已有事务时一同回滚
   -> chain transaction builder（legacy / EIP-1559 / EIP-7702 type-4）
   -> signer service or local Ed25519 signer
   -> broadcast

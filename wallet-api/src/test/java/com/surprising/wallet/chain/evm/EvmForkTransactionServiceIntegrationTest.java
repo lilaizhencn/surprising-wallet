@@ -89,7 +89,8 @@ class EvmForkTransactionServiceIntegrationTest {
                     keyService,
                     new EvmTransactionBuilder(),
                     httpServices,
-                    com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
+                    com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc),
+                    new com.surprising.wallet.repository.EvmNonceRepository(jdbc));
 
             sendUnlockedNative(web3j, accounts.getFirst(), from.getAddress(), new BigDecimal("2"));
             String nativeHash = service.sendNative(

@@ -6,7 +6,6 @@ import com.surprising.wallet.chain.model.AptosTransactionRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.ChainCollectionRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.EvmNonceRecord;
 import com.surprising.wallet.chain.model.EvmTransactionRecord;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
@@ -31,7 +30,6 @@ import com.surprising.wallet.service.DepositService;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -79,8 +77,6 @@ public class ChainJdbcRepository {
     private final ChainRpcNodeRepository chainRpcNodeRepository;
     /** 各链交易表的单表仓储。 */
     private AccountSequenceRepository accountSequenceRepository;
-    /** EVM nonce 单表仓储。 */
-    private EvmNonceRepository evmNonceRepository;
     /** EVM 交易单表仓储。 */
     private EvmTransactionRepository evmTransactionRepository;
     /** TRON 交易单表仓储。 */
@@ -148,7 +144,6 @@ public class ChainJdbcRepository {
     /** 初始化链领域各单表仓储。 */
     private void initializeTableRepositories(JdbcTemplate jdbcTemplate) {
         this.accountSequenceRepository = new AccountSequenceRepository(jdbcTemplate);
-        this.evmNonceRepository = new EvmNonceRepository(jdbcTemplate);
         this.evmTransactionRepository = new EvmTransactionRepository(jdbcTemplate);
         this.tronTransactionRepository = new TronTransactionRepository(jdbcTemplate);
         this.xrpTransactionRepository = new XrpTransactionRepository(jdbcTemplate);
@@ -192,31 +187,6 @@ public class ChainJdbcRepository {
      */
     public boolean isRuntimeCurrencyFamily(int runtimeCurrencyId, String family) {
         return chainProfileRepository.isRuntimeCurrencyFamily(runtimeCurrencyId, family);
-    }
-    /**
-     * 执行 {@code reserveNonce} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public int reserveNonce(EvmNonceRecord nonceRecord) {
-        return evmNonceRepository.upsert(nonceRecord);
-    }
-
-    /**
-     * 执行 {@code reserveEvmNonce} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    @Transactional(rollbackFor = Throwable.class)
-    public long reserveEvmNonce(String chain, String address, long chainNonce) {
-        return reserveEvmNonce(chain, address, BigInteger.valueOf(chainNonce)).longValueExact();
-    }
-
-    /**
-     * 执行 {@code reserveEvmNonce} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    @Transactional(rollbackFor = Throwable.class)
-    public BigInteger reserveEvmNonce(String chain, String address, BigInteger chainNonce) {
-        if (chainNonce == null || chainNonce.signum() < 0 || chainNonce.bitLength() > 256) {
-            throw new IllegalArgumentException("EVM nonce must be a valid uint256");
-        }
-        return evmNonceRepository.reserve(chain, address, chainNonce);
     }
     /**
      * 记录或保存 {@code recordEvmTransaction} 对应的数据，并遵守幂等和事务约束。

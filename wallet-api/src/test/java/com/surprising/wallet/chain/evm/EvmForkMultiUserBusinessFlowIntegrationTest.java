@@ -2,7 +2,6 @@ package com.surprising.wallet.chain.evm;
 
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.EvmNonceRecord;
 import com.surprising.wallet.chain.model.EvmTransactionRecord;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.repository.ChainJdbcRepository;
@@ -185,7 +184,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         createOrder(jdbcTemplate, orderNo, user.userId(), chain, nativeSymbol, user.address(), recipient, amount);
         assertTrue(repository.freezeLedgerBalance(chain.name(), nativeSymbol, user.address(), frozen));
         updateOrder(jdbcTemplate, orderNo, "FROZEN", null, BigDecimal.ZERO, null);
-        BigInteger failedNonce = reserveNonce(repository, web3j, chain, user);
+        BigInteger failedNonce = reserveNonce(jdbcTemplate, web3j, chain, user);
         updateOrder(jdbcTemplate, orderNo, "SIGNING", null, BigDecimal.ZERO, null);
         IllegalStateException error = assertThrows(IllegalStateException.class,
                 () -> sendSignedNative(web3j, user.credentials(), recipient, amount, chainId, failedNonce, BigInteger.ONE));
@@ -195,7 +194,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
 
         updateOrder(jdbcTemplate, orderNo, "RETRYING", null, BigDecimal.ZERO, "retry after rejected raw tx");
         assertTrue(repository.freezeLedgerBalance(chain.name(), nativeSymbol, user.address(), frozen));
-        BigInteger retryNonce = reserveNonce(repository, web3j, chain, user);
+        BigInteger retryNonce = reserveNonce(jdbcTemplate, web3j, chain, user);
         assertEquals(failedNonce, retryNonce, "rejected transaction must not consume nonce");
         SignedTx tx = sendSignedNative(web3j, user.credentials(), recipient, amount, chainId, retryNonce, BigInteger.valueOf(21_000L));
         updateOrder(jdbcTemplate, orderNo, "SENT", tx.receipt().getTransactionHash(), fee(tx), null);
@@ -216,7 +215,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         assertTrue(repository.freezeLedgerBalance(chain.name(), tokenSymbol, user.address(), amount));
         assertTrue(repository.freezeLedgerBalance(chain.name(), nativeSymbol, user.address(), GAS_BUFFER));
         updateOrder(jdbcTemplate, orderNo, "FROZEN", null, BigDecimal.ZERO, null);
-        BigInteger nonce = reserveNonce(repository, web3j, chain, user);
+        BigInteger nonce = reserveNonce(jdbcTemplate, web3j, chain, user);
         assertTrue(estimateTokenGas(web3j, user.address(), contract, recipient, amount, tokenDecimals)
                 .compareTo(BigInteger.ZERO) > 0);
         updateOrder(jdbcTemplate, orderNo, "SIGNING", null, BigDecimal.ZERO, null);
@@ -240,7 +239,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         createOrder(jdbcTemplate, orderNo, user.userId(), chain, nativeSymbol, user.address(), hotWallet.address(), amount);
         assertTrue(repository.freezeLedgerBalance(chain.name(), nativeSymbol, user.address(), frozen));
         updateOrder(jdbcTemplate, orderNo, "FROZEN", null, BigDecimal.ZERO, null);
-        BigInteger nonce = reserveNonce(repository, web3j, chain, user);
+        BigInteger nonce = reserveNonce(jdbcTemplate, web3j, chain, user);
         assertTrue(estimateNativeGas(web3j, user.address(), hotWallet.address(), amount).compareTo(BigInteger.ZERO) > 0);
         updateOrder(jdbcTemplate, orderNo, "SIGNING", null, BigDecimal.ZERO, null);
         SignedTx tx = sendSignedNative(web3j, user.credentials(), hotWallet.address(), amount, chainId, nonce, BigInteger.valueOf(21_000L));
@@ -288,7 +287,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
             return null;
         }
         updateOrder(jdbcTemplate, orderNo, "RETRYING", null, BigDecimal.ZERO, "recover interrupted collection");
-        BigInteger nonce = reserveNonce(repository, web3j, chain, user);
+        BigInteger nonce = reserveNonce(jdbcTemplate, web3j, chain, user);
         assertTrue(estimateTokenGas(web3j, user.address(), contract, hotWallet.address(), amount, tokenDecimals)
                 .compareTo(BigInteger.ZERO) > 0);
         updateOrder(jdbcTemplate, orderNo, "SIGNING", null, BigDecimal.ZERO, null);
@@ -389,16 +388,17 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     /**
      * 验证 {@code reserveNonce} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static BigInteger reserveNonce(ChainJdbcRepository repository, Web3j web3j,
+    private static BigInteger reserveNonce(JdbcTemplate jdbcTemplate, Web3j web3j,
                                            ChainType chain, Actor actor) throws Exception {
         BigInteger nonce = pendingNonce(web3j, actor.credentials());
-        repository.reserveNonce(EvmNonceRecord.builder()
-                .chain(chain.name())
-                .address(actor.address().toLowerCase(Locale.ROOT))
-                .chainNonce(nonce.longValueExact())
-                .reservedNonce(nonce.longValueExact())
-                .status("RESERVED")
-                .build());
+        // This fixture records explicitly submitted RPC transactions; it does not allocate wallet tasks.
+        jdbcTemplate.update("""
+                insert into evm_nonce(chain, address, chain_nonce, reserved_nonce, status)
+                values (?, ?, ?, ?, 'RESERVED')
+                on conflict (chain, address) do update set
+                    chain_nonce = greatest(evm_nonce.chain_nonce, excluded.chain_nonce),
+                    reserved_nonce = excluded.reserved_nonce, status = excluded.status, updated_at = now()
+                """, chain.name(), actor.address().toLowerCase(Locale.ROOT), new BigDecimal(nonce), new BigDecimal(nonce));
         return nonce;
     }
 

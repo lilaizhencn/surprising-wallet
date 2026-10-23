@@ -9,6 +9,7 @@ import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.service.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.ChainRpcNodeService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.EvmNonceRepository;
 import lombok.RequiredArgsConstructor;
 import org.bitcoinj.crypto.ECKey;
 import org.springframework.stereotype.Service;
@@ -82,6 +83,7 @@ public class EvmAccountTransactionService {
     private final EvmTransactionBuilder transactionBuilder;
     private final EvmHttpServiceFactory httpServices;
     private final WithdrawalSettlementService settlements;
+    private final EvmNonceRepository nonces;
 
     /**
      * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
@@ -129,8 +131,8 @@ public class EvmAccountTransactionService {
                     web3j, profile, from.getAddress(), provisionalSigned, gasLimit, quote);
             EvmFeeSupport.requireBalance(
                     web3j, from.getAddress(), value.add(provisionalFee), "EVM sender");
-            BigInteger nonce = BigInteger.valueOf(repository.reserveEvmNonce(
-                    profile.getChain(), normalize(from.getAddress()), chainNonce.longValueExact()));
+            BigInteger nonce = nonces.reserve(
+                    profile.getChain(), normalize(from.getAddress()), chainNonce);
             String signedRaw = nonce.equals(chainNonce)
                     ? provisionalSigned
                     : sign(profile, rawTransaction(

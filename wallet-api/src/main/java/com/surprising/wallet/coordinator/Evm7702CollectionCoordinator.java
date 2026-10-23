@@ -5,6 +5,7 @@ import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
 import com.surprising.wallet.chain.evm.Evm7702ReceiptParser;
 import com.surprising.wallet.chain.evm.EvmFeeSupport;
 import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.EvmNonceRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,15 +35,19 @@ public class Evm7702CollectionCoordinator {
      * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
     private final ChainJdbcRepository chainRepository;
+    private final EvmNonceRepository nonces;
     /**
      * 构造 {@code Evm7702CollectionCoordinator}，初始化该组件运行所需的状态和依赖。
      */
-    public Evm7702CollectionCoordinator(Evm7702CollectionRepository repository,
-                                        CustodyRepository custodyRepository,
-                                        ChainJdbcRepository chainRepository) {
+    public Evm7702CollectionCoordinator(
+            Evm7702CollectionRepository repository,
+            CustodyRepository custodyRepository,
+            ChainJdbcRepository chainRepository,
+            EvmNonceRepository nonces) {
         this.repository = repository;
         this.custodyRepository = custodyRepository;
         this.chainRepository = chainRepository;
+        this.nonces = nonces;
     }
 
     /**
@@ -52,7 +57,7 @@ public class Evm7702CollectionCoordinator {
     public Evm7702BatchTransactionService.SignedBatchTransaction persistSignedAttempt(
             Evm7702CollectionRepository.Batch batch, String relayerAddress,
             BigInteger rpcPendingNonce, SignedAttemptFactory factory) {
-        BigInteger reservedNonce = chainRepository.reserveEvmNonce(
+        BigInteger reservedNonce = nonces.reserve(
                 batch.chain(), relayerAddress.toLowerCase(), rpcPendingNonce);
         SignedAttempt signedAttempt = factory.create(reservedNonce);
         if (!reservedNonce.equals(signedAttempt.attempt().relayerNonce())) {
