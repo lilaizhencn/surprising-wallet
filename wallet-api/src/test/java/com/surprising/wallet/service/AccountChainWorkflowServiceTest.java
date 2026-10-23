@@ -477,7 +477,6 @@ class AccountChainWorkflowServiceTest {
                 null,
                 null,
                 null,
-                null,
                 null);
     }
 

@@ -49,7 +49,7 @@ bootstrap 包按模式显式扫描组件；签名 Bean 使用全限定名称避�
 
 | 表 | 作用 |
 |---|---|
-| `chain_profile` | 链 key、链族、启用网络、确认策略、扫描/提现/归集/划转开关、扫描起始高度、BIP44 coin type、Starknet account class hash |
+| `chain_profile` | 链 key、链族、启用网络、确认策略、扫描/提现/归集/划转开关、扫描起始高度、BIP44 coin type |
 | `chain_rpc_node` | 每条链的 RPC/fullnode/indexer/faucet 节点、环境标签、优先级、认证和备注 |
 | `wallet_system_config` | 全局扫描/提现/归集/划转总开关 |
 | `chain_asset` | 原生资产和链内资产定义 |
@@ -63,7 +63,7 @@ bootstrap 包按模式显式扫描组件；签名 Bean 使用全限定名称避�
 
 | 模块 | 职责 |
 |---|---|
-| `wallet-api` | Spring MVC 单体应用：Custody/Console REST API、Servlet/Cookie 与 HTTP 异常映射、Job 调度、业务 Service、链领域与持久化模型、链适配器（Bitcoin-like/EVM/Starknet/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、充值、账本、提现、归集、Gas、Webhook 和启动校验 |
+| `wallet-api` | Spring MVC 单体应用：Custody/Console REST API、Servlet/Cookie 与 HTTP 异常映射、Job 调度、业务 Service、链领域与持久化模型、链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、充值、账本、提现、归集、Gas、Webhook 和启动校验 |
 | `wallet-sig1` | BTC-like 2-of-3 第一签服务：对 BTC、BCH、LTC、DOGE 提现交易生成部分签名，轮询 PostgreSQL / PGMQ 队列；处理中任务可恢复 |
 | `wallet-sig2` | 第二签服务：完成最终签名并入 PGMQ 广播队列，由 wallet-api 广播；处理中任务可恢复 |
 | `common` | 无 Web 耦合、至少被两个上层模块使用的共享契约和 PGMQ 基础设施：运行时链/资产契约、签名交易 DTO、钱包密钥配置与加载、通用常量 |
@@ -112,15 +112,14 @@ Bitcoin-like RPC DTO 与 Ed25519 链枚举、派生结果和 SLIP-0010 密钥提
 
 ## 链族
 
-当前支持 34 条链，其中 EVM 链 18 条、非 EVM 链 16 条；图中展示代表性链，完整列表以 `ChainType` 为准。
+当前支持 28 条链，其中 EVM 链 13 条、非 EVM 链 15 条；架构图和下表列出全部支持链。
 
 | 链族 | 链 | 本地测试支持 | live/testnet 支持 |
 |---|---|---|---|
 | Bitcoin-like UTXO | BTC, LTC, DOGE, BCH | Docker regtest 节点 | 外部 RPC 配置 |
-| EVM | ETH, BNB, POLYGON, BERACHAIN, GNOSIS, MONAD | Hardhat fork | Sepolia、BSC testnet、Amoy、Berachain Bepolia、Gnosis Chiado、Monad Testnet |
-| EVM L2 / L3 | ARBITRUM, OPTIMISM, BASE, AVAX_C, X_LAYER, ROBINHOOD_CHAIN, ZKSYNC | Hardhat fork | Sepolia L2、Avalanche Fuji、X Layer Testnet、Robinhood Chain Testnet、zkSync Sepolia |
-| EVM L2 (新增) | MANTLE, LINEA, SCROLL, UNICHAIN, HyperEVM | Hardhat fork | Mantle Sepolia、Linea Sepolia、Scroll Sepolia、Unichain Sepolia、HyperEVM testnet |
-| Starknet | STARKNET | 本地 Starknet Devnet 完整流程 | Sepolia / Mainnet（RPC、账户 class hash 和 Token 配置经审批后启用） |
+| EVM | ETH, BNB, POLYGON | Hardhat fork | Sepolia、BSC testnet、Amoy |
+| EVM L2 / L3 | ARBITRUM, OPTIMISM, BASE, AVAX_C, X_LAYER, ROBINHOOD_CHAIN | Hardhat fork | Sepolia L2、Avalanche Fuji、X Layer Testnet、Robinhood Chain Testnet |
+| EVM L2 (新增) | LINEA, SCROLL, UNICHAIN, HyperEVM | Hardhat fork | Linea Sepolia、Scroll Sepolia、Unichain Sepolia、HyperEVM testnet |
 | TRON | TRON | DB 测试 | Nile live flow |
 | Solana | SOL | DB 测试 | Devnet live flow |
 | TON | TON | DB 测试 | Testnet |

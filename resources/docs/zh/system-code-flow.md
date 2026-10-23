@@ -131,21 +131,14 @@ EIP-7702 归集在签名或广播前失败时保留批次与批次项审计记�
 
 EVM 的三类配置必须分开解释：
 
-- `native_symbol` 指定实际支付 Gas 的链原生资产及账务符号，例如 BNB、POL、MNT、ETH_ARB；Gas 金额换算读取对应 `chain_asset.decimals`，不能固定按 18 位处理。
+- `native_symbol` 指定实际支付 Gas 的链原生资产及账务符号，例如 BNB、POL、ETH_ARB；Gas 金额换算读取对应 `chain_asset.decimals`，不能固定按 18 位处理。
 - `gas_policy` 只决定交易报价和信封类型：`legacy-gas-price` 或 `eip1559`。
-- `fee_model` 决定总费用组成：`standard`、`op-stack`、`op-stack-l1`、`arbitrum-nitro`、`scroll`。OP Stack/Scroll 必须计入回执的 L1 数据费，OP Stack 还可能有 Operator Fee；Arbitrum 的父链成本已进入 Nitro gas 计量，拆分审计时不得二次扣费。
+- `fee_model` 决定总费用组成：`standard`、`op-stack`、`arbitrum-nitro`、`scroll`。OP Stack/Scroll 必须计入回执的 L1 数据费，OP Stack 还可能有 Operator Fee；Arbitrum 的父链成本已进入 Nitro gas 计量，拆分审计时不得二次扣费。
 
 逐链 Gas 资产、普通交易信封和 EIP-7702 当前启用状态见
 [EVM 链 Gas 资产与交易模型矩阵](evm-chain-gas-and-transaction-model.md)。
 
 发送普通 EVM 交易前，服务先通过 `eth_estimateGas` 估算并加安全余量，再按最终签名交易查询链级 L1/Operator 费用，校验发送方链上原生币余额。确认时以回执实际费用覆盖预估值；需要独立 L1 费用但回执缺失对应字段时中止结算并保留人工审计，禁止静默少扣。
-
-Starknet：
-
-- 使用 `sig2` BIP32 根按项目统一路径派生 Stark Curve 私钥，依据 `account_class_hash`、公钥 calldata 和公钥 salt 计算 counterfactual 账户地址；class hash 必须由对应网络配置，不在代码中隐式替换。
-- 首次发送前先通过 `get_class_hash_at` 判断账户是否已部署；只有 RPC 明确返回“合约不存在”时才发起 `deploy_account_v3`，先估算资源费再广播，部署成功后通过 `account.execute_v3` 发送原生 STRK 或 ERC-20。
-- Starknet 的 Gas 只使用 STRK。原生 STRK 也按其 ERC-20 合约的 `Transfer` 事件扫描，Token 数量按 uint256 的 low/high 两个 128 位字段合成，扫描结果写入 `starknet_transaction` 并通过统一充值入账幂等流程处理。
-- Starknet 没有接入 EIP-7702；归集和提现仍走账户合约的单笔 `execute_v3`，交易、实际手续费、确认数和失败状态均保留审计记录。
 
 ## 归集流程
 
@@ -200,11 +193,6 @@ SOL/TON/APTOS/SUI：
 - 使用 Ed25519 key 派生。
 - DB 测试覆盖确定性的 scanner/ledger/transaction 行为。
 - live 测试依赖外部 devnet/testnet RPC、faucet 限流和已充值地址。
-
-Starknet：
-
-- 地址生成、账户部署、STRK 原生转账、ERC-20 转账、Transfer 扫描入账、原生币归集、Token 归集和交易确认已通过本地 Devnet 完整流程测试。
-- 生产启用前必须为每个网络分别核验 account class hash、STRK 合约地址、Token 合约地址、RPC 的 `rpc/scan/broadcast` 三类用途和链上实际手续费；测试网配置默认关闭。
 
 费用报价：FeeRateUpdater → FeeRateUpdateService → ChainFeeRateService → ChainFeeRateRepository → chain_fee_rate；队列和业务事务共用同一 PostgreSQL 数据源。
 

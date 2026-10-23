@@ -1394,8 +1394,8 @@ type-4 `authorizationList`，同一笔外层交易先设置 delegation，再调�
 
 ### 13.1 核验口径
 
-当前初始化 SQL 一共配置了 12 个 EVM 链族、24 个网络。测试网 `chain_profile.enabled=true`，主网 profile 已预置但
-`enabled=false`。这里的“链已支持”必须同时考虑三层，不能根据 `family='evm'` 直接判断：
+当前初始化 SQL 配置了 13 条 EVM 链、26 个网络。下表保留 2026-07-22 核验覆盖的 11 条链、22 个网络结果，
+实际启用状态以数据库配置为准。这里的“链已支持”必须同时考虑三层，不能根据 `family='evm'` 直接判断：
 
 1. **协议层**：网络已经激活 EIP-7702 或等价实现，接受 type `0x04` 和 authorization list。
 2. **RPC 层**：项目当前 `chain_rpc_node` 对应的节点能够解析、估算、广播和查询 type-4；链支持不代表每家 RPC 都支持。
@@ -1435,8 +1435,6 @@ RPC 接受交易信封，不能代替 funded end-to-end delegation 测试。
 | AVAX_C | mainnet | 43114 | disabled | 未找到官方 7702 激活依据 | **拒绝：transaction type not supported** | 必须 DISABLED，继续旧归集 |
 | HYPEREVM | testnet | 998 | enabled | 官方仍声明 Cancun without blobs | **拒绝：transaction type not supported** | 必须 DISABLED，继续旧归集 |
 | HYPEREVM | mainnet | 999 | disabled | 官方仍声明 Cancun without blobs | **拒绝：transaction type not supported** | 必须 DISABLED，继续旧归集 |
-| MANTLE | sepolia | 5003 | enabled | 未找到明确的官方 7702 激活公告 | 接受 type-4，进入余额校验 | **条件支持**；先做 funded E2E，只可 SHADOW |
-| MANTLE | mainnet | 5000 | disabled | 未找到明确的官方 7702 激活公告 | 接受 type-4，进入 nonce 校验 | 测试网 E2E 及官方确认前保持 DISABLED |
 | LINEA | sepolia | 59141 | enabled | Linea 当前 stack 已内置 EIP-7702 | 接受 type-4，进入 nonce 校验 | 可做 SHADOW/E2E |
 | LINEA | mainnet | 59144 | disabled | Linea 当前 stack 已内置 EIP-7702 | 接受 type-4，进入 Gas 价格校验 | Sepolia 通过后再开 SHADOW |
 | SCROLL | sepolia | 534351 | enabled | Euclid 2025-03-13 完成 | 接受 type-4，进入 nonce 校验 | 可做第一优先级 SHADOW/E2E |
@@ -1444,7 +1442,7 @@ RPC 接受交易信封，不能代替 funded end-to-end delegation 测试。
 | UNICHAIN | sepolia | 1301 | enabled | OP Stack Isthmus | 接受 type-4，进入 nonce 校验 | 可做 SHADOW/E2E |
 | UNICHAIN | mainnet | 130 | disabled | Isthmus 于 2025-05-09 激活 | 接受 type-4，进入 nonce 校验 | Sepolia 通过后再开 SHADOW |
 
-结论：当前可以进入项目测试阶段的是 **ETH、BNB、POLYGON、ARBITRUM、OPTIMISM、BASE、MANTLE（条件）、LINEA、
+结论：当前可以进入项目测试阶段的是 **ETH、BNB、POLYGON、ARBITRUM、OPTIMISM、BASE、LINEA、
 SCROLL、UNICHAIN**；当前明确不能使用本方案的是 **AVAX_C、HYPEREVM**。这里的“可以测试”不等于“可以生产广播”。
 
 ### 13.3 官方依据
@@ -1468,8 +1466,7 @@ SCROLL、UNICHAIN**；当前明确不能使用本方案的是 **AVAX_C、HYPEREV
 - Linea：[EIP-7702 is now built into the Linea stack](https://linea.build/blog/your-wallet-just-got-smarter-without-changing-your-address)。
 - HyperEVM：[官方 EVM 版本说明](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm) 仍是 Cancun
   without blobs，没有 Prague/EIP-7702；实际 RPC 也明确拒绝 type-4。
-- Avalanche C-Chain 和 Mantle 没有找到足以单独作为上线依据的官方 EIP-7702 激活说明，因此分别以实际 type-4 拒绝和
-  接受结果标记为“不支持”与“条件支持”。这两个结论每次网络升级后都要重新核验。
+- Avalanche C-Chain 没有找到足以单独作为上线依据的官方 EIP-7702 激活说明；实际 type-4 拒绝结果需在网络升级后重新核验。
 
 ### 13.4 上线前每条链必须执行的能力门禁
 

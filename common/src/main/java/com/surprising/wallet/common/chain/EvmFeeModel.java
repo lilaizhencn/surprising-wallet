@@ -19,10 +19,6 @@ public enum EvmFeeModel {
      */
     OP_STACK("op-stack"),
     /**
-     * 定义 {@code OP_STACK_L1} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    OP_STACK_L1("op-stack-l1"),
-    /**
      * 定义 {@code ARBITRUM_NITRO} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     ARBITRUM_NITRO("arbitrum-nitro"),
@@ -54,7 +50,7 @@ public enum EvmFeeModel {
      * 判断 {@code hasSeparateL1Fee} 对应的条件是否成立，并返回明确的布尔结果。
      */
     public boolean hasSeparateL1Fee() {
-        return this == OP_STACK || this == OP_STACK_L1 || this == SCROLL;
+        return this == OP_STACK || this == SCROLL;
     }
 
     /**

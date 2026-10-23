@@ -52,7 +52,7 @@ commands:
   test-system   Run TRON/NEAR/Cardano flows and the 1000-user load simultaneously
   dot-runtime-up    Start the local Polkadot runtime companion service
   dot-runtime-down  Stop the local Polkadot runtime companion service
-  test-evm      Run all 12 configured EVM chains locally, one Hardhat chain at a time
+  test-evm      Run all 13 configured EVM chains locally, one Hardhat chain at a time
   test-db       Run DB-only flow tests for SOL/TON/APTOS/SUI/DOGE plus UTXO migration
   test-live     Run external testnet connectivity checks; spending tests require RUN_LIVE_SPENDING=true
   test-local    Run local UTXO, XMR, EVM, TRON, Sui, Solana, and NEAR full-flow tests
@@ -88,7 +88,7 @@ chain/family                         environment in repo
 BTC/LTC/DOGE/BCH                     local Docker regtest nodes
 XMR                                  local monerod regtest + monero-wallet-rpc
 ETH/BNB/POLYGON/ARBITRUM/OPTIMISM/BASE/AVAX_C/
-HYPEREVM/LINEA/MANTLE/SCROLL/UNICHAIN
+HYPEREVM/LINEA/SCROLL/UNICHAIN/X_LAYER/ROBINHOOD_CHAIN
                                      local Hardhat, one chain per run on 127.0.0.1:8545
 TRON                                 local TRE + mock USDT/USDC full flow
 XRP                                  external Testnet XRP + issued USDC/USDT full flow

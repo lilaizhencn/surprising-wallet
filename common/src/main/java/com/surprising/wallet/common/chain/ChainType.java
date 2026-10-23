@@ -55,10 +55,6 @@ public enum ChainType {
      */
     HYPEREVM("evm", "account"),
     /**
-     * 定义 {@code MANTLE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    MANTLE("evm", "account"),
-    /**
      * 定义 {@code LINEA} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     LINEA("evm", "account"),
@@ -71,22 +67,6 @@ public enum ChainType {
      */
     UNICHAIN("evm", "account"),
     /**
-     * 定义 {@code ZKSYNC} 常量，表示 zkSync Era EVM 账户链。
-     */
-    ZKSYNC("evm", "account"),
-    /**
-     * 定义 {@code BERACHAIN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    BERACHAIN("evm", "account"),
-    /**
-     * 定义 {@code GNOSIS} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    GNOSIS("evm", "account"),
-    /**
-     * 定义 {@code MONAD} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    MONAD("evm", "account"),
-    /**
      * 定义 {@code X_LAYER} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     X_LAYER("evm", "account"),
@@ -94,10 +74,6 @@ public enum ChainType {
      * 定义 {@code ROBINHOOD_CHAIN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     ROBINHOOD_CHAIN("evm", "account"),
-    /**
-     * 定义 {@code STARKNET} 常量，表示 Starknet 原生账户抽象链。
-     */
-    STARKNET("starknet", "account"),
     /**
      * 定义 {@code HYPERCORE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */

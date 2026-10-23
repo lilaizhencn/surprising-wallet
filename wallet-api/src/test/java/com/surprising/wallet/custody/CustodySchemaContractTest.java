@@ -83,7 +83,6 @@ class CustodySchemaContractTest {
         assertTrue(sql.contains("0xdAC17F958D2ee523a2206206994597C13D831ec7"));
         assertTrue(sql.contains("0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"));
         assertTrue(sql.contains("0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb"));
-        assertTrue(sql.contains("0x779Ded0c9e1022225f8E0630b35a9b54bE713736"));
         assertTrue(sql.contains("0x01bFF41798a0BcF287b996046Ca68b395DbC1071"));
         assertTrue(sql.contains("0xc2132D05D31c914a87C6611C10748AEb04B58e8F"));
         assertTrue(sql.contains("0x9151434b16b9763660705744891fA906F660EcC5"));

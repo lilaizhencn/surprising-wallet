@@ -10,11 +10,9 @@ const $ = selector => document.querySelector(selector);
 const chainLabels = Object.freeze({
   BTC: "Bitcoin", LTC: "Litecoin", DOGE: "Dogecoin", BCH: "Bitcoin Cash", ETH: "Ethereum",
   BNB: "BNB Chain", POLYGON: "Polygon", ARBITRUM: "Arbitrum One", OPTIMISM: "OP Mainnet",
-  BASE: "Base", AVAX_C: "Avalanche C-Chain", HYPEREVM: "HyperEVM", MANTLE: "Mantle",
-  LINEA: "Linea", SCROLL: "Scroll", UNICHAIN: "Unichain", ZKSYNC: "zkSync Era",
-  BERACHAIN: "Berachain", GNOSIS: "Gnosis", MONAD: "Monad",
+  BASE: "Base", AVAX_C: "Avalanche C-Chain", HYPEREVM: "HyperEVM",
+  LINEA: "Linea", SCROLL: "Scroll", UNICHAIN: "Unichain",
   X_LAYER: "X Layer", ROBINHOOD_CHAIN: "Robinhood Chain",
-  STARKNET: "Starknet",
   HYPERCORE: "HyperCore", TRON: "TRON", XRP: "XRP Ledger", SOLANA: "Solana",
   TON: "TON", APTOS: "Aptos", SUI: "Sui", ADA: "Cardano", DOT: "Polkadot", NEAR: "NEAR",
   XMR: "Monero"

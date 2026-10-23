@@ -207,14 +207,9 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.BASE, "ETH_BASE", 84532L, 1L);
         registerProfile(ChainType.AVAX_C, "AVAX_C", 43113L, 1L);
         registerProfile(ChainType.HYPEREVM, "HYPE", 998L, 1L);
-        registerProfile(ChainType.MANTLE, "MNT", 5003L, 1L);
         registerProfile(ChainType.LINEA, "ETH_LINEA", 59141L, 1L);
         registerProfile(ChainType.SCROLL, "ETH_SCROLL", 534351L, 1L);
         registerProfile(ChainType.UNICHAIN, "ETH_UNICHAIN", 1301L, 1L);
-        registerProfile(ChainType.ZKSYNC, "ETH_ZKSYNC", 300L, 1L);
-        registerProfile(ChainType.BERACHAIN, "BERA", 80069L, 1L);
-        registerProfile(ChainType.GNOSIS, "XDAI", 10200L, 1L);
-        registerProfile(ChainType.MONAD, "MON", 10143L, 1L);
         registerProfile(ChainType.X_LAYER, "OKB", 1952L, 1L);
         registerProfile(ChainType.ROBINHOOD_CHAIN, "ETH_ROBINHOOD", 46630L, 1L);
     }

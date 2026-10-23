@@ -206,7 +206,7 @@ scripts/regtest/all-chain-regtest.sh matrix
 | `test-db` | SOL/TON/APTOS/SUI/DOGE 和 UTXO 运行状态的 DB-only scanner/ledger/flow 测试 |
 | `test-utxo` | BTC/LTC/DOGE/BCH 本地 regtest、并发、广播测试 |
 | `test-xmr` | XMR 本地 wallet-rpc regtest 充值、提现、归集和幂等测试 |
-| `test-evm` | 核心 EVM 链的 fork 测试；HyperEVM、Mantle、Linea、Scroll、Unichain 等新增 EVM 链通过 DB profile 复用共享 EVM 路径 |
+| `test-evm` | 核心 EVM 链的 fork 测试；HyperEVM、Linea、Scroll、Unichain 等新增 EVM 链通过 DB profile 复用共享 EVM 路径 |
 | `test-live` | 外部 testnet 连通性测试，以及可选花费测试 |
 | `test-all` | UTXO、EVM、DB 测试，以及可选 live 测试 |
 
@@ -408,6 +408,6 @@ SW_TEST_PGMQ=true mvn -pl common -am test -Dtest=PgmqIntegrationTest -Dsurefire.
 
 构建与运行均使用 Java 27，Lombok 1.18.48 已支持该版本。GitHub Actions 只执行不依赖数据库/链节点的单元测试；完整数据库集成测试在开发机既有 PostgreSQL 18 的隔离测试库执行。服务端仅接收已构建的校验发布包，固定使用 `surprising-wallet-all.service`。不再在服务器上拉取代码或编译，不使用旧 `backend-activate.sh` 自动迁移入口。
 
-新实例必须通过环境变量提供 `SW_CUSTODY_SECRET_MASTER_KEY`，没有内置默认加密密钥。开发水龙头默认关闭；如需启用，必须同时补齐其资金地址与节点配置。ZKSYNC 的链配置、RPC 和 USDC 默认共同关闭，避免初始化后启动校验失败。
+新实例必须通过环境变量提供 `SW_CUSTODY_SECRET_MASTER_KEY`，没有内置默认加密密钥。开发水龙头默认关闭；如需启用，必须同时补齐其资金地址与节点配置。
 
 部署回滚只覆盖 JAR 和 systemd unit，不回滚数据库或环境密钥。新部署使用新的钱包根密钥时，不能用它接管旧钱包地址。

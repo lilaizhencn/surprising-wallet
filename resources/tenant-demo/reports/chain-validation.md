@@ -8,7 +8,7 @@
 
 ## 结论
 
-当前数据库配置的 27 个链标识及其已启用 Token 已完成开发环境验收。逐链资金流、租户隔离、充值重放幂等、提现、归集、Gas、余额与流水对账均通过；随后执行的多链并发系统测试也通过。
+下表记录保留链的开发环境验收结果。逐链资金流、租户隔离、充值重放幂等、提现、归集、Gas、余额与流水对账均通过；随后执行的多链并发系统测试也通过。
 
 本报告是开发环境验收，不等同于主网容量证明。测试使用各链适合的本地节点、官方测试网络或本地 API 仿真；没有使用真实生产密钥和主网资金。
 
@@ -39,7 +39,6 @@
 | AVAX_C | 本地 Hardhat，chainId 43113 | AVAX_C、USDC、USDT | 通过 |
 | HYPEREVM | 本地 Hardhat，chainId 998 | HYPE、USDC | 通过 |
 | LINEA | 本地 Hardhat，chainId 59141 | ETH_LINEA、USDC | 通过 |
-| MANTLE | 本地 Hardhat，chainId 5003 | MNT | 通过 |
 | SCROLL | 本地 Hardhat，chainId 534351 | ETH_SCROLL、USDC | 通过 |
 | UNICHAIN | 本地 Hardhat，chainId 1301 | ETH_UNICHAIN、USDC | 通过 |
 | TRON | 本地 TRE 私链 | TRX、USDC、USDT | 通过 |

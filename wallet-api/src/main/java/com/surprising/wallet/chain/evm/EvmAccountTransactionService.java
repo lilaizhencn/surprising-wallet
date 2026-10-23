@@ -36,7 +36,7 @@ import java.util.Optional;
  * EVM 兼容链交易服务。
  *
  * <p>Gas 币种和小数位来自链配置的原生资产；交易信封由 {@code gas_policy} 决定；
- * OP Stack、Mantle、Scroll 与 Arbitrum 的附加费用由 {@code fee_model} 决定。</p>
+ * OP Stack、Scroll 与 Arbitrum 的附加费用由 {@code fee_model} 决定。</p>
  */
 @Service
 @RequiredArgsConstructor

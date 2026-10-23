@@ -38,7 +38,7 @@ class EvmFeeSupportTest {
     @Test
     void separateL1ModelAddsReceiptL1FeeWithoutGuessingFromGasPrice() {
         EvmFeeSupport.FeeComponents fee = EvmFeeSupport.actualFee(
-                null, profile("op-stack-l1"), "0x1",
+                null, profile("scroll"), "0x1",
                 BigInteger.valueOf(30_000), BigInteger.valueOf(7), BigInteger.ONE,
                 "0x64", null, "0x0", "0x0");
 

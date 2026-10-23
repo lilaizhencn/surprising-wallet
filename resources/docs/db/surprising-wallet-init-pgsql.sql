@@ -289,8 +289,6 @@ ALTER TABLE IF EXISTS ONLY public.chain_address DROP CONSTRAINT IF EXISTS chain_
 ALTER TABLE IF EXISTS ONLY public.chain_address DROP CONSTRAINT IF EXISTS chain_address_chain_asset_symbol_address_key;
 ALTER TABLE IF EXISTS ONLY public.aptos_transaction DROP CONSTRAINT IF EXISTS aptos_transaction_pkey;
 ALTER TABLE IF EXISTS ONLY public.aptos_transaction DROP CONSTRAINT IF EXISTS aptos_transaction_chain_tx_hash_key;
-ALTER TABLE IF EXISTS ONLY public.starknet_transaction DROP CONSTRAINT IF EXISTS starknet_transaction_pkey;
-ALTER TABLE IF EXISTS ONLY public.starknet_transaction DROP CONSTRAINT IF EXISTS starknet_transaction_chain_tx_hash_key;
 ALTER TABLE IF EXISTS ONLY public.account_sequence DROP CONSTRAINT IF EXISTS account_sequence_pkey;
 ALTER TABLE IF EXISTS ONLY public.account_sequence DROP CONSTRAINT IF EXISTS account_sequence_chain_address_key;
 ALTER TABLE IF EXISTS public.xrp_transaction ALTER COLUMN id DROP DEFAULT;
@@ -321,7 +319,6 @@ ALTER TABLE IF EXISTS public.chain_profile ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.chain_asset ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.chain_address ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.aptos_transaction ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.starknet_transaction ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.account_sequence ALTER COLUMN id DROP DEFAULT;
 DROP SEQUENCE IF EXISTS public.xrp_transaction_id_seq;
 DROP TABLE IF EXISTS public.xrp_transaction;
@@ -419,8 +416,6 @@ DROP SEQUENCE IF EXISTS public.chain_address_id_seq;
 DROP TABLE IF EXISTS public.chain_address;
 DROP SEQUENCE IF EXISTS public.aptos_transaction_id_seq;
 DROP TABLE IF EXISTS public.aptos_transaction;
-DROP SEQUENCE IF EXISTS public.starknet_transaction_id_seq;
-DROP TABLE IF EXISTS public.starknet_transaction;
 DROP SEQUENCE IF EXISTS public.account_sequence_id_seq;
 DROP TABLE IF EXISTS public.account_sequence;
 SET default_tablespace = '';
@@ -461,46 +456,10 @@ CREATE SEQUENCE public.account_sequence_id_seq
 
 ALTER SEQUENCE public.account_sequence_id_seq OWNED BY public.account_sequence.id;
 
---
--- Name: starknet_transaction; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.starknet_transaction (
-    id bigint NOT NULL,
-    chain character varying(32) NOT NULL,
-    tx_hash character varying(128) NOT NULL,
-    from_address character varying(160),
-    to_address character varying(160) NOT NULL,
-    asset_symbol character varying(32) NOT NULL,
-    contract_address character varying(128),
-    amount numeric(78,18) DEFAULT 0 NOT NULL,
-    fee numeric(78,18) DEFAULT 0 NOT NULL,
-    block_height bigint,
-    confirmations integer DEFAULT 0 NOT NULL,
-    status character varying(32) DEFAULT 'CREATED'::character varying NOT NULL,
-    raw_payload text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
-);
 
 
---
--- Name: starknet_transaction_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.starknet_transaction_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
 
 
---
--- Name: starknet_transaction_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.starknet_transaction_id_seq OWNED BY public.starknet_transaction.id;
 
 
 --
@@ -651,7 +610,6 @@ CREATE TABLE public.chain_profile (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     chain_id bigint,
-    account_class_hash character varying(128),
     gas_policy character varying(64),
     fee_model character varying(32) DEFAULT 'standard'::character varying NOT NULL,
     scan_batch_size integer DEFAULT 100,
@@ -665,7 +623,6 @@ CREATE TABLE public.chain_profile (
         fee_model::text = ANY (ARRAY[
             'standard'::character varying,
             'op-stack'::character varying,
-            'op-stack-l1'::character varying,
             'arbitrum-nitro'::character varying,
             'scroll'::character varying
         ]::text[])),
@@ -2656,11 +2613,6 @@ ALTER TABLE ONLY public.account_sequence ALTER COLUMN id SET DEFAULT nextval('pu
 
 ALTER TABLE ONLY public.aptos_transaction ALTER COLUMN id SET DEFAULT nextval('public.aptos_transaction_id_seq'::regclass);
 
---
--- Name: starknet_transaction id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.starknet_transaction ALTER COLUMN id SET DEFAULT nextval('public.starknet_transaction_id_seq'::regclass);
 
 
 --
@@ -2883,20 +2835,8 @@ ALTER TABLE ONLY public.aptos_transaction
 ALTER TABLE ONLY public.aptos_transaction
     ADD CONSTRAINT aptos_transaction_pkey PRIMARY KEY (id);
 
---
--- Name: starknet_transaction starknet_transaction_chain_tx_hash_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.starknet_transaction
-    ADD CONSTRAINT starknet_transaction_chain_tx_hash_key UNIQUE (chain, tx_hash);
 
 
---
--- Name: starknet_transaction starknet_transaction_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.starknet_transaction
-    ADD CONSTRAINT starknet_transaction_pkey PRIMARY KEY (id);
 
 
 --
@@ -5693,18 +5633,14 @@ ON CONFLICT ("chain", "network", "environment", "purpose", "node_label") DO UPDA
     "remark" = EXCLUDED."remark",
     "updated_at" = now();
 
--- Mantle, Linea, Scroll and Unichain reuse the shared EVM adapter. Testnet profiles are enabled.
--- Token rows only use verified official/token-list contracts. Mantle testnet USDC/USDT is not
--- present in the official Mantle token list, so Mantle token rows are kept disabled until prod.
+-- Linea, Scroll and Unichain reuse the shared EVM adapter. Testnet profiles are enabled.
+-- Token rows only use verified official/token-list contracts.
 -- Unichain USDC uses Circle's official Sepolia contract here; prod databases must replace it
 -- with the Unichain mainnet USDC contract 0x078D782b760474a361dDA0AF3839290b0EF57AD6 before enabling prod.
 INSERT INTO "public"."chain_asset" ("chain", "symbol", "asset_kind", "contract_address", "decimals",
                                     "native_asset", "active", "min_transfer", "min_withdraw",
                                     "created_at", "updated_at")
 VALUES
-    ('MANTLE', 'MNT', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('MANTLE', 'USDC', 'ERC20', '0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9', 6, false, false, 1, 1, now(), now()),
-    ('MANTLE', 'USDT', 'ERC20', '0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE', 6, false, false, 1, 1, now(), now()),
     ('LINEA', 'ETH_LINEA', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('LINEA', 'USDC', 'ERC20', '0xFEce4462D57bD51A6A552365A011b95f0E16d9B7', 6, false, true, 1, 1, now(), now()),
     ('LINEA', 'USDT', 'ERC20', '0xA219439258ca9da29E9Cc4cE5596924745e12B93', 6, false, false, 1, 1, now(), now()),
@@ -5713,17 +5649,6 @@ VALUES
     ('SCROLL', 'USDT', 'ERC20', '0xf55BEC9cafDbE8730f096Aa55dad6D22d44099Df', 6, false, false, 1, 1, now(), now()),
     ('UNICHAIN', 'ETH_UNICHAIN', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('UNICHAIN', 'USDC', 'ERC20', '0x31d0220469e10c4E71834a79b1f276d740d3768F', 6, false, true, 1, 1, now(), now()),
-    ('ZKSYNC', 'ETH_ZKSYNC', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('ZKSYNC', 'USDC', 'ERC20', '0x1d17CBcF0D6D143135aE902365D2E5e2A16538D4', 6, false, false, 1, 1, now(), now()),
-    ('BERACHAIN', 'BERA', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('BERACHAIN', 'USDC', 'ERC20', '0x549943e04f40284185054145c6E4e9568C1D3241', 6, false, false, 1, 1, now(), now()),
-    ('BERACHAIN', 'USDT0', 'ERC20', '0x779Ded0c9e1022225f8E0630b35a9b54bE713736', 6, false, false, 1, 1, now(), now()),
-    ('GNOSIS', 'XDAI', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('GNOSIS', 'USDC', 'ERC20', '0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83', 6, false, false, 1, 1, now(), now()),
-    ('GNOSIS', 'USDT', 'ERC20', '0x4ECaBa5870353805a9F068101A40E0f32ed605C6', 6, false, false, 1, 1, now(), now()),
-    ('MONAD', 'MON', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
-    ('MONAD', 'USDC', 'ERC20', '0x754704Bc059F8C67012fEd69BC8A327a5aafb603', 6, false, false, 1, 1, now(), now()),
-    ('MONAD', 'USDT0', 'ERC20', '0xe7cd86e13AC4309349F30B3435a9d337750fC82D', 6, false, false, 1, 1, now(), now()),
     ('X_LAYER', 'OKB', 'NATIVE', NULL, 18, true, true, 0.000001, 0.000001, now(), now()),
     ('X_LAYER', 'USDC', 'ERC20', '0x74b7F16337b8972027F6196A17a631aC6dE26d22', 6, false, false, 1, 1, now(), now()),
     ('X_LAYER', 'USDT', 'ERC20', '0x1E4a5963aBFD975d8c9021ce480b42188849D41d', 6, false, false, 1, 1, now(), now()),
@@ -5744,10 +5669,6 @@ INSERT INTO "public"."token_config" ("chain", "symbol", "standard", "contract_ad
                                      "network", "token_standard", "min_deposit_amount", "min_withdraw_amount",
                                      "collect_threshold", "gas_strategy", "confirmation_required")
 VALUES
-    ('MANTLE', 'USDC', 'ERC20', '0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('MANTLE', 'USDT', 'ERC20', '0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('LINEA', 'USDC', 'ERC20', '0xFEce4462D57bD51A6A552365A011b95f0E16d9B7', 6, true,
      1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('LINEA', 'USDT', 'ERC20', '0xA219439258ca9da29E9Cc4cE5596924745e12B93', 6, false,
@@ -5758,22 +5679,6 @@ VALUES
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('UNICHAIN', 'USDC', 'ERC20', '0x31d0220469e10c4E71834a79b1f276d740d3768F', 6, true,
      1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('ZKSYNC', 'USDC', 'ERC20', '0x1d17CBcF0D6D143135aE902365D2E5e2A16538D4', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('ZKSYNC', 'USDC', 'ERC20', '0xAe045DE5638162fa134807Cb558E15A3F5A7F853', 6, false,
-     1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('BERACHAIN', 'USDC', 'ERC20', '0x549943e04f40284185054145c6E4e9568C1D3241', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('BERACHAIN', 'USDT0', 'ERC20', '0x779Ded0c9e1022225f8E0630b35a9b54bE713736', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('GNOSIS', 'USDC', 'ERC20', '0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('GNOSIS', 'USDT', 'ERC20', '0x4ECaBa5870353805a9F068101A40E0f32ed605C6', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('MONAD', 'USDC', 'ERC20', '0x754704Bc059F8C67012fEd69BC8A327a5aafb603', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('MONAD', 'USDT0', 'ERC20', '0xe7cd86e13AC4309349F30B3435a9d337750fC82D', 6, false,
-     1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('X_LAYER', 'USDC', 'ERC20', '0x74b7F16337b8972027F6196A17a631aC6dE26d22', 6, false,
      1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
     ('X_LAYER', 'USDT', 'ERC20', '0x1E4a5963aBFD975d8c9021ce480b42188849D41d', 6, false,
@@ -5804,14 +5709,6 @@ INSERT INTO "public"."chain_profile" ("chain", "network", "family", "runtime_cur
                                       "scan_enabled", "withdraw_enabled", "collection_enabled", "transfer_enabled",
                                       "scan_start_height", "scan_max_blocks_per_run")
 VALUES
-    ('MANTLE', 'sepolia', 'evm', 9006, 60, 'MNT',
-     'https://rpc.sepolia.mantle.xyz', 'https://sepolia.mantlescan.xyz/tx/',
-     40, 40, 1, 0, true, now(), now(), 5003, 'eip1559', 200,
-     true, true, true, true, 0, 200),
-    ('MANTLE', 'mainnet', 'evm', 9006, 60, 'MNT',
-     'https://rpc.mantle.xyz', 'https://mantlescan.xyz/tx/',
-     40, 40, 1, 0, false, now(), now(), 5000, 'eip1559', 200,
-     false, false, false, false, 0, 200),
     ('LINEA', 'sepolia', 'evm', 9007, 60, 'ETH_LINEA',
      'https://rpc.sepolia.linea.build', 'https://sepolia.lineascan.build/tx/',
      40, 40, 1, 0, true, now(), now(), 59141, 'eip1559', 200,
@@ -5836,38 +5733,6 @@ VALUES
      'https://mainnet.unichain.org', 'https://uniscan.xyz/tx/',
      40, 40, 1, 0, false, now(), now(), 130, 'eip1559', 200,
      false, false, false, false, 0, 200),
-    ('ZKSYNC', 'sepolia', 'evm', 9044, 60, 'ETH_ZKSYNC',
-     'https://sepolia.era.zksync.dev', 'https://sepolia.explorer.zksync.io/tx/',
-     40, 40, 1, 0, false, now(), now(), 300, 'eip1559', 200,
-     false, false, false, false, 0, 200),
-    ('ZKSYNC', 'mainnet', 'evm', 9044, 60, 'ETH_ZKSYNC',
-     'https://mainnet.era.zksync.io', 'https://explorer.zksync.io/tx/',
-     40, 40, 1, 0, false, now(), now(), 324, 'eip1559', 200,
-     false, false, false, false, 0, 200),
-    ('BERACHAIN', 'bepolia', 'evm', 9010, 60, 'BERA',
-     'https://bepolia.rpc.berachain.com', 'https://testnet.berascan.com/tx/',
-     20, 20, 1, 0, false, now(), now(), 80069, 'eip1559', 200,
-     false, false, false, false, 0, 200),
-    ('BERACHAIN', 'mainnet', 'evm', 9010, 60, 'BERA',
-     'https://rpc.berachain.com', 'https://berascan.com/tx/',
-     20, 20, 1, 0, false, now(), now(), 80094, 'eip1559', 200,
-     false, false, false, false, 0, 200),
-    ('GNOSIS', 'chiado', 'evm', 9011, 60, 'XDAI',
-     'https://rpc.chiadochain.net', 'https://gnosis-chiado.blockscout.com/tx/',
-     32, 32, 1, 0, false, now(), now(), 10200, 'eip1559', 200,
-     false, false, false, false, 0, 200),
-    ('GNOSIS', 'mainnet', 'evm', 9011, 60, 'XDAI',
-     'https://rpc.gnosischain.com', 'https://gnosisscan.io/tx/',
-     32, 32, 1, 0, false, now(), now(), 100, 'eip1559', 200,
-     false, false, false, false, 0, 200),
-    ('MONAD', 'testnet', 'evm', 9013, 60, 'MON',
-     'https://testnet-rpc.monad.xyz', 'https://testnet.monadvision.com/tx/',
-     20, 20, 1, 0, false, now(), now(), 10143, 'eip1559', 500,
-     false, false, false, false, 0, 500),
-    ('MONAD', 'mainnet', 'evm', 9013, 60, 'MON',
-     'https://rpc.monad.xyz', 'https://monadvision.com/tx/',
-     20, 20, 1, 0, false, now(), now(), 143, 'eip1559', 500,
-     false, false, false, false, 0, 500),
     ('X_LAYER', 'testnet', 'evm', 9022, 60, 'OKB',
      'https://testrpc.xlayer.tech/terigon', 'https://www.okx.com/web3/explorer/xlayer-test/tx/',
      40, 40, 1, 0, false, now(), now(), 1952, 'eip1559', 200,
@@ -5912,18 +5777,6 @@ INSERT INTO "public"."chain_rpc_node" ("chain", "network", "environment", "node_
                                        "priority", "min_request_interval_ms", "enabled", "remark",
                                        "created_at", "updated_at", "api_key")
 VALUES
-    ('MANTLE', 'sepolia', 'dev', 'official-mantle-sepolia', 'rpc', 'HTTP_JSON_RPC',
-     'https://rpc.sepolia.mantle.xyz', 'NONE', NULL, 10, 500, true,
-     'Official Mantle Sepolia JSON-RPC endpoint.',
-     now(), now(), NULL),
-    ('MANTLE', 'sepolia', 'test2', 'official-mantle-sepolia', 'rpc', 'HTTP_JSON_RPC',
-     'https://rpc.sepolia.mantle.xyz', 'NONE', NULL, 10, 500, true,
-     'test2 official Mantle Sepolia JSON-RPC endpoint.',
-     now(), now(), NULL),
-    ('MANTLE', 'mainnet', 'prod', 'official-mantle-mainnet', 'rpc', 'HTTP_JSON_RPC',
-     'https://rpc.mantle.xyz', 'NONE', NULL, 10, 1000, false,
-     'Production Mantle mainnet JSON-RPC endpoint. Enable only after funding and monitoring are ready.',
-     now(), now(), NULL),
     ('LINEA', 'sepolia', 'dev', 'official-linea-sepolia', 'rpc', 'HTTP_JSON_RPC',
      'https://rpc.sepolia.linea.build', 'NONE', NULL, 10, 500, true,
      'Official Linea Sepolia JSON-RPC endpoint.',
@@ -5971,54 +5824,6 @@ VALUES
     ('UNICHAIN', 'mainnet', 'prod', 'official-unichain-mainnet', 'rpc', 'HTTP_JSON_RPC',
      'https://mainnet.unichain.org', 'NONE', NULL, 10, 1000, false,
      'Production Unichain mainnet JSON-RPC endpoint. Public endpoint is rate-limited; enable only after private RPC, funding and monitoring are ready.',
-     now(), now(), NULL),
-    ('ZKSYNC', 'sepolia', 'dev', 'official-zksync-sepolia', 'rpc', 'HTTP_JSON_RPC',
-     'https://sepolia.era.zksync.dev', 'NONE', NULL, 10, 500, false,
-     'Official zkSync Era Sepolia JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
-     now(), now(), NULL),
-    ('ZKSYNC', 'sepolia', 'test2', 'official-zksync-sepolia', 'rpc', 'HTTP_JSON_RPC',
-     'https://sepolia.era.zksync.dev', 'NONE', NULL, 10, 500, false,
-     'test2 official zkSync Era Sepolia JSON-RPC endpoint. Enable only for explicit live tests.',
-     now(), now(), NULL),
-    ('ZKSYNC', 'mainnet', 'prod', 'official-zksync-mainnet', 'rpc', 'HTTP_JSON_RPC',
-     'https://mainnet.era.zksync.io', 'NONE', NULL, 10, 1000, false,
-     'Production zkSync Era mainnet JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
-     now(), now(), NULL),
-    ('BERACHAIN', 'bepolia', 'dev', 'official-berachain-bepolia', 'rpc', 'HTTP_JSON_RPC',
-     'https://bepolia.rpc.berachain.com', 'NONE', NULL, 10, 500, false,
-     'Official Berachain Bepolia JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
-     now(), now(), NULL),
-    ('BERACHAIN', 'bepolia', 'test2', 'official-berachain-bepolia', 'rpc', 'HTTP_JSON_RPC',
-     'https://bepolia.rpc.berachain.com', 'NONE', NULL, 10, 500, false,
-     'test2 official Berachain Bepolia JSON-RPC endpoint. Enable only for explicit live tests.',
-     now(), now(), NULL),
-    ('BERACHAIN', 'mainnet', 'prod', 'official-berachain-mainnet', 'rpc', 'HTTP_JSON_RPC',
-     'https://rpc.berachain.com', 'NONE', NULL, 10, 1000, false,
-     'Production Berachain mainnet JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
-     now(), now(), NULL),
-    ('GNOSIS', 'chiado', 'dev', 'official-gnosis-chiado', 'rpc', 'HTTP_JSON_RPC',
-     'https://rpc.chiadochain.net', 'NONE', NULL, 10, 500, false,
-     'Official Gnosis Chiado JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
-     now(), now(), NULL),
-    ('GNOSIS', 'chiado', 'test2', 'official-gnosis-chiado', 'rpc', 'HTTP_JSON_RPC',
-     'https://rpc.chiadochain.net', 'NONE', NULL, 10, 500, false,
-     'test2 official Gnosis Chiado JSON-RPC endpoint. Enable only for explicit live tests.',
-     now(), now(), NULL),
-    ('GNOSIS', 'mainnet', 'prod', 'official-gnosis-mainnet', 'rpc', 'HTTP_JSON_RPC',
-     'https://rpc.gnosischain.com', 'NONE', NULL, 10, 1000, false,
-     'Production Gnosis mainnet JSON-RPC endpoint. Enable only after private RPC, funding and monitoring are ready.',
-     now(), now(), NULL),
-    ('MONAD', 'testnet', 'dev', 'official-monad-testnet', 'rpc', 'HTTP_JSON_RPC',
-     'https://testnet-rpc.monad.xyz', 'NONE', NULL, 10, 500, false,
-     'Official Monad Testnet JSON-RPC endpoint. Disabled by default; local tests use Hardhat.',
-     now(), now(), NULL),
-    ('MONAD', 'testnet', 'test2', 'official-monad-testnet', 'rpc', 'HTTP_JSON_RPC',
-     'https://testnet-rpc.monad.xyz', 'NONE', NULL, 10, 500, false,
-     'test2 official Monad Testnet JSON-RPC endpoint. Enable only for explicit live tests.',
-     now(), now(), NULL),
-    ('MONAD', 'mainnet', 'prod', 'official-monad-mainnet', 'rpc', 'HTTP_JSON_RPC',
-     'https://rpc.monad.xyz', 'NONE', NULL, 10, 1000, false,
-     'Production Monad mainnet JSON-RPC endpoint. EIP-7702 native collection must remain disabled because delegated EOAs cannot reduce balance below the 10 MON reserve.',
      now(), now(), NULL),
     ('X_LAYER', 'testnet', 'dev', 'official-x-layer-testnet', 'rpc', 'HTTP_JSON_RPC',
      'https://testrpc.xlayer.tech/terigon', 'NONE', NULL, 10, 500, false,
@@ -6590,8 +6395,6 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          '0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb', NULL, NULL, 6, 'native-gas'),
         ('LINEA', 'USDC', 'ERC20', 'ERC20',
          '0x176211869cA2b568f2A7D4EE941E073a821EE1ff', NULL, NULL, 6, 'native-gas'),
-        ('MANTLE', 'USDT', 'ERC20', 'ERC20',
-         '0x779Ded0c9e1022225f8E0630b35a9b54bE713736', NULL, NULL, 6, 'native-gas'),
         ('NEAR', 'USDC', 'NEP141', 'NEP141',
          '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1', NULL, NULL, 6, 'NEAR_STORAGE_DEPOSIT'),
         ('NEAR', 'USDT', 'NEP141', 'NEP141',
@@ -6618,18 +6421,6 @@ WITH mainnet_stablecoins(chain, symbol, standard, token_standard, contract_addre
          'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
          'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
          '41a614f803b6fd780986a42c78ec9c7f77e6ded13c', 6, 'energy-bandwidth'),
-        ('BERACHAIN', 'USDC', 'ERC20', 'ERC20',
-         '0x549943e04f40284185054145c6E4e9568C1D3241', NULL, NULL, 6, 'native-gas'),
-        ('BERACHAIN', 'USDT0', 'ERC20', 'ERC20',
-         '0x779Ded0c9e1022225f8E0630b35a9b54bE713736', NULL, NULL, 6, 'native-gas'),
-        ('GNOSIS', 'USDC', 'ERC20', 'ERC20',
-         '0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83', NULL, NULL, 6, 'native-gas'),
-        ('GNOSIS', 'USDT', 'ERC20', 'ERC20',
-         '0x4ECaBa5870353805a9F068101A40E0f32ed605C6', NULL, NULL, 6, 'native-gas'),
-        ('MONAD', 'USDC', 'ERC20', 'ERC20',
-         '0x754704Bc059F8C67012fEd69BC8A327a5aafb603', NULL, NULL, 6, 'native-gas'),
-        ('MONAD', 'USDT0', 'ERC20', 'ERC20',
-         '0xe7cd86e13AC4309349F30B3435a9d337750fC82D', NULL, NULL, 6, 'native-gas'),
         ('X_LAYER', 'USDC', 'ERC20', 'ERC20',
          '0x74b7F16337b8972027F6196A17a631aC6dE26d22', NULL, NULL, 6, 'native-gas'),
         ('X_LAYER', 'USDT', 'ERC20', 'ERC20',
@@ -6664,17 +6455,6 @@ SELECT stablecoin.chain, 'mainnet', stablecoin.symbol, stablecoin.standard,
           AND existing.network = 'mainnet'
           AND existing.symbol = stablecoin.symbol
  );
-
--- Mantle's canonical USDT moved to USDT0. Correct only the known disabled legacy
--- template; never rewrite an enabled production token contract during startup.
-UPDATE token_config
-   SET contract_address = '0x779Ded0c9e1022225f8E0630b35a9b54bE713736',
-       updated_at = now()
- WHERE chain = 'MANTLE'
-   AND network = 'mainnet'
-   AND symbol = 'USDT'
-   AND lower(contract_address) = lower('0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE')
-   AND enabled = false;
 
 UPDATE token_config
    SET collect_enabled = false,
@@ -7071,123 +6851,10 @@ CREATE TABLE IF NOT EXISTS public.evm_withdrawal_batch_attempt (
 
 -- EVM 交易信封与总费用模型是两个独立维度：
 -- gas_policy 只决定 legacy/type-2 报价与签名；fee_model 决定 L1/DA/operator 费用核算。
--- Starknet 使用合约账户模型；account_class_hash 不填入错误的默认值，启用前必须由运维按网络配置。
-INSERT INTO public.chain_asset (
-    chain, symbol, asset_kind, contract_address, decimals, native_asset, active,
-    min_transfer, min_withdraw, created_at, updated_at)
-VALUES
-    ('STARKNET', 'STRK', 'NATIVE',
-     '0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d',
-     18, true, true, 0.000001, 0.000001, now(), now()),
-    ('STARKNET', 'USDC', 'ERC20',
-     '0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343',
-     6, false, false, 1, 1, now(), now())
-ON CONFLICT (chain, symbol) DO UPDATE SET
-    asset_kind = EXCLUDED.asset_kind,
-    contract_address = EXCLUDED.contract_address,
-    decimals = EXCLUDED.decimals,
-    native_asset = EXCLUDED.native_asset,
-    active = EXCLUDED.active,
-    min_transfer = EXCLUDED.min_transfer,
-    min_withdraw = EXCLUDED.min_withdraw,
-    updated_at = now();
-
-INSERT INTO public.token_config (
-    chain, symbol, standard, contract_address, decimals, enabled,
-    min_deposit, min_withdraw, collect_enabled, created_at, updated_at,
-    network, token_standard, min_deposit_amount, min_withdraw_amount,
-    collect_threshold, gas_strategy, confirmation_required)
-VALUES
-    ('STARKNET', 'USDC', 'ERC20',
-     '0x033068F6539f8e6e6b131e6B2B814e6c34A5224bC66947c47DaB9dFeE93b35fb',
-     6, false, 1, 1, true, now(), now(), 'mainnet', 'ERC20', 1, 1, 1, 'native-gas', 1),
-    ('STARKNET', 'USDC', 'ERC20',
-     '0x0512feAc6339Ff7889822cb5aA2a86C848e9D392bB0E3E237C008674feeD8343',
-     6, false, 1, 1, true, now(), now(), 'sepolia', 'ERC20', 1, 1, 1, 'native-gas', 1)
-ON CONFLICT (chain, network, symbol) DO UPDATE SET
-    standard = EXCLUDED.standard,
-    contract_address = EXCLUDED.contract_address,
-    decimals = EXCLUDED.decimals,
-    enabled = EXCLUDED.enabled,
-    token_standard = EXCLUDED.token_standard,
-    collect_enabled = EXCLUDED.collect_enabled,
-    updated_at = now();
-
-INSERT INTO public.chain_profile (
-    chain, network, family, runtime_currency_id, bip44_coin_type, native_symbol,
-    rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
-    default_fee_rate, dust_threshold, enabled, created_at, updated_at, chain_id,
-    account_class_hash, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
-    collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run)
-VALUES
-    ('STARKNET', 'sepolia', 'starknet', 9046, 9004, 'STRK',
-     'https://alpha-sepolia.starknet.io/rpc/v0_8', 'https://sepolia.voyager.online/tx/',
-     12, 12, 1000000000000000, 0, false, now(), now(), NULL, NULL, NULL, 100,
-     false, false, false, false, 0, 100),
-    ('STARKNET', 'mainnet', 'starknet', 9046, 9004, 'STRK',
-     'https://alpha-mainnet.starknet.io/rpc/v0_8', 'https://voyager.online/tx/',
-     24, 24, 1000000000000000, 0, false, now(), now(), NULL, NULL, NULL, 100,
-     false, false, false, false, 0, 100)
-ON CONFLICT (chain, network) DO UPDATE SET
-    family = EXCLUDED.family,
-    runtime_currency_id = EXCLUDED.runtime_currency_id,
-    bip44_coin_type = EXCLUDED.bip44_coin_type,
-    native_symbol = EXCLUDED.native_symbol,
-    rpc_url = EXCLUDED.rpc_url,
-    explorer_url = EXCLUDED.explorer_url,
-    deposit_confirmations = EXCLUDED.deposit_confirmations,
-    withdraw_confirmations = EXCLUDED.withdraw_confirmations,
-    default_fee_rate = EXCLUDED.default_fee_rate,
-    dust_threshold = EXCLUDED.dust_threshold,
-    enabled = EXCLUDED.enabled,
-    updated_at = now(),
-    account_class_hash = EXCLUDED.account_class_hash,
-    scan_batch_size = EXCLUDED.scan_batch_size,
-    scan_enabled = EXCLUDED.scan_enabled,
-    withdraw_enabled = EXCLUDED.withdraw_enabled,
-    collection_enabled = EXCLUDED.collection_enabled,
-    transfer_enabled = EXCLUDED.transfer_enabled,
-    scan_start_height = EXCLUDED.scan_start_height,
-    scan_max_blocks_per_run = EXCLUDED.scan_max_blocks_per_run;
-
-INSERT INTO public.chain_rpc_node (
-    chain, network, environment, node_label, purpose, connection_type, rpc_url,
-    auth_type, auth_header_name, priority, min_request_interval_ms, enabled,
-    remark, created_at, updated_at, api_key)
-VALUES
-    ('STARKNET', 'sepolia', 'dev', 'official-starknet-sepolia', 'rpc', 'HTTP_JSON_RPC',
-     'https://alpha-sepolia.starknet.io/rpc/v0_8', 'NONE', NULL, 10, 500, false,
-     'Starknet Sepolia RPC; configure a provider/API key before enabling.', now(), now(), NULL),
-    ('STARKNET', 'sepolia', 'dev', 'official-starknet-sepolia', 'scan', 'HTTP_JSON_RPC',
-     'https://alpha-sepolia.starknet.io/rpc/v0_8', 'NONE', NULL, 10, 500, false,
-     'Starknet Sepolia event scanner RPC; configure a provider/API key before enabling.', now(), now(), NULL),
-    ('STARKNET', 'sepolia', 'dev', 'official-starknet-sepolia', 'broadcast', 'HTTP_JSON_RPC',
-     'https://alpha-sepolia.starknet.io/rpc/v0_8', 'NONE', NULL, 10, 500, false,
-     'Starknet Sepolia transaction RPC; configure a provider/API key before enabling.', now(), now(), NULL),
-    ('STARKNET', 'mainnet', 'prod', 'official-starknet-mainnet', 'rpc', 'HTTP_JSON_RPC',
-     'https://alpha-mainnet.starknet.io/rpc/v0_8', 'NONE', NULL, 10, 1000, false,
-     'Starknet mainnet RPC; keep disabled until class hash and provider are approved.', now(), now(), NULL),
-    ('STARKNET', 'mainnet', 'prod', 'official-starknet-mainnet', 'scan', 'HTTP_JSON_RPC',
-     'https://alpha-mainnet.starknet.io/rpc/v0_8', 'NONE', NULL, 10, 1000, false,
-     'Starknet mainnet event scanner RPC; keep disabled until provider is approved.', now(), now(), NULL),
-    ('STARKNET', 'mainnet', 'prod', 'official-starknet-mainnet', 'broadcast', 'HTTP_JSON_RPC',
-     'https://alpha-mainnet.starknet.io/rpc/v0_8', 'NONE', NULL, 10, 1000, false,
-     'Starknet mainnet transaction RPC; keep disabled until provider is approved.', now(), now(), NULL)
-ON CONFLICT (chain, network, environment, purpose, node_label) DO UPDATE SET
-    rpc_url = EXCLUDED.rpc_url,
-    auth_type = EXCLUDED.auth_type,
-    auth_header_name = EXCLUDED.auth_header_name,
-    priority = EXCLUDED.priority,
-    min_request_interval_ms = EXCLUDED.min_request_interval_ms,
-    enabled = EXCLUDED.enabled,
-    remark = EXCLUDED.remark,
-    updated_at = now();
-
 UPDATE public.chain_profile
 SET fee_model = CASE
         WHEN chain = 'ARBITRUM' THEN 'arbitrum-nitro'
         WHEN chain IN ('OPTIMISM', 'BASE', 'UNICHAIN') THEN 'op-stack'
-        WHEN chain = 'MANTLE' THEN 'op-stack-l1'
         WHEN chain = 'SCROLL' THEN 'scroll'
         ELSE 'standard'
     END,

@@ -41,8 +41,7 @@ chainId 的全新 Hardhat 节点，在临时 PostgreSQL 数据库中部署所需
 以及链上余额对账。每条链结束后立即停止节点，最后删除临时数据库并清理测试目录。
 
 覆盖 ETH、BNB、Polygon、Arbitrum、Optimism、Base、Avalanche C-Chain、
-HyperEVM、Linea、Mantle、Scroll、Unichain。Mantle 当前没有启用 Token，因此只
-执行原生 MNT 流程。
+HyperEVM、Linea、Scroll、Unichain、X Layer、Robinhood Chain，共 13 条链。
 
 同时运行多用户业务流测试：
 

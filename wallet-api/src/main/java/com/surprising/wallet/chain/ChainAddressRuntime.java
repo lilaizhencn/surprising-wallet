@@ -10,7 +10,6 @@ import com.surprising.wallet.chain.monero.MoneroAddressValidator;
 import com.surprising.wallet.chain.near.NearKeyService;
 import com.surprising.wallet.chain.polkadot.PolkadotKeyService;
 import com.surprising.wallet.chain.tron.TronAddressCodec;
-import com.surprising.wallet.chain.starknet.StarknetKeyService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.service.HotWalletAddressService;
 import lombok.RequiredArgsConstructor;
@@ -130,7 +129,7 @@ class ChainAddressRuntime {
         String value = address.trim();
         return switch (chainType) {
             case ETH, BNB, POLYGON, ARBITRUM, OPTIMISM, BASE, AVAX_C, HYPEREVM,
-                    MANTLE, LINEA, SCROLL, UNICHAIN, ZKSYNC, BERACHAIN, GNOSIS, MONAD,
+                    LINEA, SCROLL, UNICHAIN,
                     X_LAYER, ROBINHOOD_CHAIN, HYPERCORE ->
                     value.matches(EVM_ADDRESS_REGEX);
             case TRON -> TronAddressCodec.isValidBase58(value);
@@ -142,7 +141,6 @@ class ChainAddressRuntime {
             case DOT -> PolkadotKeyService.isValidSs58Address(value);
             case NEAR -> NearKeyService.isValidAccountId(value);
             case XMR -> MoneroAddressValidator.isValid(value);
-            case STARKNET -> StarknetKeyService.isValidAddress(value);
             default -> throw new IllegalStateException(
                     "address validation is not implemented by generic runtime for " + chainType);
         };
