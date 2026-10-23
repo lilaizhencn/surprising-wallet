@@ -83,10 +83,6 @@ public enum ChainType {
      */
     GNOSIS("evm", "account"),
     /**
-     * 定义 {@code CELO} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    CELO("evm", "account"),
-    /**
      * 定义 {@code MONAD} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     MONAD("evm", "account"),
@@ -102,30 +98,6 @@ public enum ChainType {
      * 定义 {@code STARKNET} 常量，表示 Starknet 原生账户抽象链。
      */
     STARKNET("starknet", "account"),
-    /**
-     * 定义 {@code ETHERLINK} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    ETHERLINK("evm", "account"),
-    /**
-     * 定义 {@code CRONOS} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    CRONOS("evm", "account"),
-    /**
-     * 定义 {@code SONIC} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    SONIC("evm", "account"),
-    /**
-     * 定义 {@code PULSECHAIN} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    PULSECHAIN("evm", "account"),
-    /**
-     * 定义 {@code SOMNIA} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    SOMNIA("evm", "account"),
-    /**
-     * 定义 {@code PLASMA} 常量，作为当前组件统一使用的固定协议、网络或配置值。
-     */
-    PLASMA("evm", "account"),
     /**
      * 定义 {@code HYPERCORE} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */

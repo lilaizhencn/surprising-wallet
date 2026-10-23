@@ -15,7 +15,6 @@ EVM_CHAINS=(
   "BASE|ETH_BASE|84532|USDC,USDT|sepolia|false"
   "BERACHAIN|BERA|80069|USDC,USDT0|bepolia|true"
   "BNB|BNB|97|USDC,USDT|testnet|false"
-  "CELO|CELO|11142220|USDC,USDT|celo-sepolia|true"
   "ETH|ETH|11155111|USDC,USDT|sepolia|false"
   "GNOSIS|XDAI|10200|USDC,USDT|chiado|true"
   "HYPEREVM|HYPE|998|USDC|testnet|false"
@@ -29,12 +28,6 @@ EVM_CHAINS=(
   "ZKSYNC|ETH_ZKSYNC|300|USDC|sepolia|false"
   "X_LAYER|OKB|1952|USDC,USDT|testnet|true"
   "ROBINHOOD_CHAIN|ETH_ROBINHOOD|46630|USDG|testnet|true"
-  "ETHERLINK|XTZ|127823|USDC,USDT|shadownet|true"
-  "CRONOS|CRO|338|USDC,USDT|testnet|true"
-  "SONIC|S|14601|USDC,USDT|testnet|true"
-  "PULSECHAIN|PLS|943|USDC,USDT|testnet|true"
-  "SOMNIA|SOMI|50312|USDC_E,USDT|testnet|true"
-  "PLASMA|XPL|9746|USDT0|testnet|true"
 )
 
 should_run_chain() {

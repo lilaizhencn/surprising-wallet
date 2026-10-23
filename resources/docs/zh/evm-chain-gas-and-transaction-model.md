@@ -5,7 +5,7 @@ Gas 资产、普通交易使用哪一种信封，以及 EIP-7702 是否已在项
 
 - 核对日期：2026-08-02。
 - 配置基线：`resources/docs/db/surprising-wallet-init-pgsql.sql`。
-- 范围：25 个 EVM 链、50 个网络 profile。
+- 范围：18 个 EVM 链、36 个网络 profile。
 - `✓` 表示该网络 profile 在基线中 `enabled = true`。
 - 本表描述的是**项目当前配置与实现**。链协议支持某种交易类型，不代表项目已经启用该路径。
 
@@ -38,23 +38,16 @@ L2 交易不会直接从发送方的 Ethereum L1 地址扣款，也不能用仅�
 | BASE | mainnet (8453)<br>sepolia (84532) ✓ | ETH_BASE | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用；已有生产 runbook |
 | BERACHAIN | bepolia (80069)<br>mainnet (80094) | BERA | BERA；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | BNB | mainnet (56)<br>testnet (97) ✓ | BNB | BNB；链自身原生币 | Type 0（legacy） | standard | 未启用；已有生产 runbook |
-| CELO | celo-sepolia (11142220)<br>mainnet (42220) | CELO | CELO；链自身原生币 | Type 2（EIP-1559） | op-stack | 未启用 |
-| CRONOS | mainnet (25)<br>testnet (338) | CRO | CRO；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | ETH | mainnet (1)<br>sepolia (11155111) ✓ | ETH | ETH；Ethereum L1 原生币 | Type 2（EIP-1559） | standard | 未启用；已有生产 runbook |
-| ETHERLINK | mainnet (42793)<br>shadownet (127823) | XTZ | XTZ；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | GNOSIS | chiado (10200)<br>mainnet (100) | XDAI | XDAI；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | HYPEREVM | mainnet (999)<br>testnet (998) ✓ | HYPE | HYPE；链自身原生币 | Type 0（legacy） | standard | 未启用 |
 | LINEA | mainnet (59144)<br>sepolia (59141) ✓ | ETH_LINEA | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | standard | 未启用 |
 | MANTLE | mainnet (5000)<br>sepolia (5003) ✓ | MNT | MNT；链自身原生币 | Type 2（EIP-1559） | op-stack-l1 | 未启用 |
 | MONAD | mainnet (143)<br>testnet (10143) | MON | MON；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | OPTIMISM | mainnet (10)<br>sepolia (11155420) ✓ | ETH_OP | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用；已有生产 runbook |
-| PLASMA | mainnet (9745)<br>testnet (9746) | XPL | XPL；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | POLYGON | amoy (80002) ✓<br>mainnet (137) | POL | POL；链自身原生币 | Type 2（EIP-1559） | standard | 未启用；已有生产 runbook |
-| PULSECHAIN | mainnet (369)<br>testnet (943) | PLS | PLS；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | ROBINHOOD_CHAIN | mainnet (4663)<br>testnet (46630) | ETH_ROBINHOOD | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | standard | 未启用 |
 | SCROLL | mainnet (534352)<br>sepolia (534351) ✓ | ETH_SCROLL | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | scroll | 未启用 |
-| SOMNIA | mainnet (5031)<br>testnet (50312) | SOMI | SOMI；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
-| SONIC | mainnet (146)<br>testnet (14601) | S | S；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | UNICHAIN | mainnet (130)<br>sepolia (1301) ✓ | ETH_UNICHAIN | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | op-stack | 未启用 |
 | X_LAYER | mainnet (196)<br>testnet (1952) | OKB | OKB；链自身原生币 | Type 2（EIP-1559） | standard | 未启用 |
 | ZKSYNC | mainnet (324)<br>sepolia (300) | ETH_ZKSYNC | ETH；该 L2 上的 ETH | Type 2（EIP-1559） | standard | 未启用 |
@@ -65,7 +58,7 @@ L2 交易不会直接从发送方的 Ethereum L1 地址扣款，也不能用仅�
 
 - `Type 0（legacy）`：使用 `gasPrice`。当前只有 BNB 和 HYPEREVM 配置为该模型。
 - `Type 2（EIP-1559）`：使用 `maxFeePerGas` 和
-  `maxPriorityFeePerGas`。其余 23 个 EVM 链当前都使用该模型。
+  `maxPriorityFeePerGas`。其余 16 个 EVM 链当前都使用该模型。
 - `fee_model` 不决定交易信封。它只决定确认和对账时是否需要额外核算 L1 数据费、
   operator fee，或拆分 Arbitrum Nitro 父链成本。
 
@@ -86,24 +79,17 @@ EIP-7702 是 Type 4 set-code 交易，不是某条链的通用替代交易模型
    支付外层 Gas。
 
 链协议支持 EIP-7702 也不会自动启用项目功能。例如 BSC 已在 Pascal 升级实现
-EIP-7702，Celo 也已支持 Type 4，但本项目基线仍没有对应的 ACTIVE 配置。
+EIP-7702，但本项目基线仍没有对应的 ACTIVE 配置。
 
 ## 费用模型
 
 | `fee_model` | 当前链 | 结算含义 |
 |---|---|---|
 | `standard` | Ethereum、Avalanche、BNB、Polygon、Linea 及多数独立 EVM 链 | 使用回执执行费；Linea 的 L1 成本已内化到 L2 Gas 价格，并不表示 Linea 没有 L1 成本 |
-| `op-stack` | Base、Optimism、Unichain、Celo | 执行费 + L1 数据费 + 链升级后适用的 operator fee |
+| `op-stack` | Base、Optimism、Unichain | 执行费 + L1 数据费 + 链升级后适用的 operator fee |
 | `op-stack-l1` | Mantle | MNT 执行费 + 通过 oracle 取得的 L1 数据费；当前不计 OP operator fee |
 | `arbitrum-nitro` | Arbitrum | 父链成本已进入 Nitro gas；拆分记录时不能在总费用上二次相加 |
 | `scroll` | Scroll | ETH 执行费 + 独立 Scroll L1 数据费 |
-
-### Celo 的额外限制
-
-Celo 协议除 CELO 外还支持通过 Type 123/CIP-64 使用治理允许的 ERC-20
-`feeCurrency` 支付 Gas，也支持 EIP-7702 Type 4。当前钱包实现只构造普通 Type 2
-并使用 `native_symbol = CELO`，没有实现 Type 123，因此部署方必须为发送方准备
-Celo 网络上的 CELO，不能按协议能力假设本项目已经支持用 USDC、USDT 等代付。
 
 ### 尚未启用链的费用模型复核
 
@@ -125,7 +111,6 @@ Celo 网络上的 CELO，不能按协议能力假设本项目已经支持用 USD
 - [Mantle：L1 交易使用 ETH，Mantle L2 交易使用 MNT](https://www.mantle.xyz/blog/announcements/bridging-on-mantle-mainnet)
 - [Polygon PoS：POL 是原生 Gas 和质押资产](https://docs.polygon.technology/pos/concepts/tokens/pol)
 - [Avalanche C-Chain：AVAX 与 EIP-1559 风格动态费用](https://build.avax.network/docs/rpcs/other/guides/txn-fees)
-- [Celo：Type 2、Type 4 和 Type 123 交易](https://docs.celo.org/home/protocol/transactions/transaction-types)
 - [BSC Pascal：BEP-441 实现 EIP-7702](https://docs.bnbchain.org/announce/pascal-bsc/)
 - [Berachain：BERA 是原生 Gas 资产](https://docs.berachain.com/general/tokens/bera)
 - [Robinhood Chain：Arbitrum L2，使用 L2 上的 ETH](https://docs.robinhood.com/chain/connecting/)

@@ -214,16 +214,9 @@ class EvmChainAdapter implements BlockchainAdapter {
         registerProfile(ChainType.ZKSYNC, "ETH_ZKSYNC", 300L, 1L);
         registerProfile(ChainType.BERACHAIN, "BERA", 80069L, 1L);
         registerProfile(ChainType.GNOSIS, "XDAI", 10200L, 1L);
-        registerProfile(ChainType.CELO, "CELO", 11142220L, 1L);
         registerProfile(ChainType.MONAD, "MON", 10143L, 1L);
         registerProfile(ChainType.X_LAYER, "OKB", 1952L, 1L);
         registerProfile(ChainType.ROBINHOOD_CHAIN, "ETH_ROBINHOOD", 46630L, 1L);
-        registerProfile(ChainType.ETHERLINK, "XTZ", 127823L, 1L);
-        registerProfile(ChainType.CRONOS, "CRO", 338L, 1L);
-        registerProfile(ChainType.SONIC, "S", 14601L, 1L);
-        registerProfile(ChainType.PULSECHAIN, "PLS", 943L, 1L);
-        registerProfile(ChainType.SOMNIA, "SOMI", 50312L, 1L);
-        registerProfile(ChainType.PLASMA, "XPL", 9746L, 1L);
     }
     /**
      * 添加 {@code registerDbProfiles} 对应的业务对象，并更新当前组件的集合或索引。
