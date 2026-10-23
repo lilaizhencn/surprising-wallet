@@ -354,7 +354,7 @@ public class WalletStartupValidator implements ApplicationRunner {
     private void logRuntimeMatrix() {
         log.info("wallet runtime config env={} global all={} scan={} withdraw={} collection={} transfer={}",
                 environmentName,
-                repository.systemBoolean("global.all.enabled", true),
+                runtimeConfigService.isGlobalEnabled(),
                 runtimeConfigService.isGlobalTaskEnabled(WalletRuntimeConfigService.TASK_SCAN),
                 runtimeConfigService.isGlobalTaskEnabled(WalletRuntimeConfigService.TASK_WITHDRAW),
                 runtimeConfigService.isGlobalTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION),

@@ -2,7 +2,8 @@ package com.surprising.wallet.service;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.WalletSystemConfigRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -73,7 +74,8 @@ public class WalletRuntimeConfigService {
     /**
      * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository profiles;
+    private final WalletSystemConfigRepository settings;
 
     /**
      * 查询指定资产的某任务是否启用。
@@ -94,13 +96,13 @@ public class WalletRuntimeConfigService {
      * @return 是否启用
      */
     public boolean isTaskEnabled(String chain, String task) {
-        if (!repository.systemBoolean("global.all.enabled", true)) {
+        if (!enabledSetting("global.all.enabled", true)) {
             return false;
         }
-        if (!repository.systemBoolean("global." + task + ".enabled", true)) {
+        if (!enabledSetting("global." + task + ".enabled", true)) {
             return false;
         }
-        return repository.findProfileByChain(chain)
+        return profiles.findAccountByChain(chain)
                 .map(profile -> chainTaskEnabled(profile, task))
                 .orElse(false);
     }
@@ -111,12 +113,12 @@ public class WalletRuntimeConfigService {
      * @return 是否启用
      */
     public boolean isGlobalTaskEnabled(String task) {
-        return repository.systemBoolean("global.all.enabled", true)
-                && repository.systemBoolean("global." + task + ".enabled", true);
+        return enabledSetting("global.all.enabled", true)
+                && enabledSetting("global." + task + ".enabled", true);
     }
     /** @return 全局总开关是否启用 */
     public boolean isGlobalEnabled() {
-        return repository.systemBoolean("global.all.enabled", true);
+        return enabledSetting("global.all.enabled", true);
     }
 
     /**
@@ -132,7 +134,7 @@ public class WalletRuntimeConfigService {
 
     /** @return 提现是否需要管理员审批 */
     public boolean isWithdrawalAdminApprovalRequired() {
-        return repository.systemBoolean(WITHDRAWAL_ADMIN_APPROVAL_REQUIRED, false);
+        return enabledSetting(WITHDRAWAL_ADMIN_APPROVAL_REQUIRED, false);
     }
 
     /**
@@ -167,7 +169,7 @@ public class WalletRuntimeConfigService {
      * @return 起始高度，若未配置则返回 0
      */
     public long scanStartHeight(String chain) {
-        return repository.findProfileByChain(chain)
+        return profiles.findAccountByChain(chain)
                 .map(AccountChainProfile::getScanStartHeight)
                 .filter(value -> value > 0)
                 .orElse(0L);
@@ -189,7 +191,7 @@ public class WalletRuntimeConfigService {
      * @return 最大区块数，若未配置则返回 0
      */
     public long scanMaxBlocksPerRun(String chain) {
-        return repository.findProfileByChain(chain)
+        return profiles.findAccountByChain(chain)
                 .map(AccountChainProfile::getScanMaxBlocksPerRun)
                 .filter(value -> value > 0)
                 .orElse(0L);
@@ -209,5 +211,10 @@ public class WalletRuntimeConfigService {
             case TASK_TRANSFER -> Boolean.TRUE.equals(profile.getTransferEnabled());
             default -> false;
         };
+    }
+
+    private boolean enabledSetting(String key, boolean defaultValue) {
+        return settings.find(key).map(setting -> setting.enabled() && Boolean.parseBoolean(setting.value()))
+                .orElse(defaultValue);
     }
 }

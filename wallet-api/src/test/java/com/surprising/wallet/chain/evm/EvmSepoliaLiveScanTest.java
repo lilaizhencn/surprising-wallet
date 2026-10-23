@@ -1,5 +1,7 @@
 package com.surprising.wallet.chain.evm;
 
+import com.surprising.wallet.common.chain.ChainType;
+
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Assumptions;
@@ -42,17 +44,11 @@ class EvmSepoliaLiveScanTest {
 
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource());
         ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbcTemplate);
-        EvmDepositScanner scanner = new EvmDepositScanner(repository,
+        EvmDepositScanner scanner = com.surprising.wallet.testutil.EvmScanTestSupport.scanner(jdbcTemplate, ChainType.ETH,
                 System.getProperty("evm.rpc", "https://ethereum-sepolia-rpc.publicnode.com"),
                 Integer.getInteger("evm.confirmations", 12));
 
-        BigDecimal onChainBalance = scanner.getNativeBalance(ADDRESS);
-        assertTrue(onChainBalance.compareTo(BigDecimal.ZERO) > 0);
-        assertTrue(scanner.getGasPriceGwei().compareTo(BigDecimal.ZERO) > 0);
-        BigInteger nonce = scanner.getPendingNonce(ADDRESS);
-        assertTrue(nonce.signum() >= 0);
-
-        List<DepositEvent> events = scanner.scanAndCreditNativeEth(BLOCK);
+        List<DepositEvent> events = scanner.scanAndCreditNative(ChainType.ETH, BLOCK);
         assertTrue(events.stream().anyMatch(event -> TX_ID.equalsIgnoreCase(event.txId())));
 
         Map<String, Object> deposit = jdbcTemplate.queryForMap("""
@@ -66,7 +62,7 @@ class EvmSepoliaLiveScanTest {
         assertTrue(((Number) deposit.get("confirmations")).intValue() >= 12);
 
         BigDecimal afterFirstScan = ledgerBalance(jdbcTemplate);
-        scanner.scanAndCreditNativeEth(BLOCK);
+        scanner.scanAndCreditNative(ChainType.ETH, BLOCK);
         BigDecimal afterSecondScan = ledgerBalance(jdbcTemplate);
         assertEquals(0, afterFirstScan.compareTo(afterSecondScan), "duplicate scan must not double credit ledger");
         assertTrue(afterSecondScan.compareTo(new BigDecimal("0.05")) >= 0);

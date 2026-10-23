@@ -55,7 +55,7 @@
   <line x1="890" y1="194" x2="350" y2="148" class="arrow"/>
 
   <!-- ====== 第三层：支持链 ====== -->
-  <text x="30" y="328" class="sep"> 单表配置模型 → 链运行时 / RPC 服务（28 条链） · 无 Adapter 注册层</text>
+  <text x="30" y="328" class="sep"> 单表配置 → 运行时 / RPC / EVM 扫描 · EVM 直接入账 → DepositService</text>
 
   <rect x="30" y="342" width="90" height="48" class="chain"/>
   <text x="75" y="364" text-anchor="middle" class="label">BTC</text>

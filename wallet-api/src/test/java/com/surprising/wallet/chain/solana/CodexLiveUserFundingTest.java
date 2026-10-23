@@ -229,7 +229,7 @@ class CodexLiveUserFundingTest {
     private void scanEvmBlock(JdbcTemplate jdbc, ChainJdbcRepository repository, ChainType chainType,
                               long blockHeight, StringBuilder report) throws Exception {
         AccountChainProfile profile = repository.findProfileByChain(chainType.name()).orElseThrow();
-        EvmDepositScanner scanner = new EvmDepositScanner(repository, new EvmLogScanner(),
+        EvmDepositScanner scanner = com.surprising.wallet.testutil.EvmScanTestSupport.scanner(jdbc, chainType,
                 rpcUrl(jdbc, chainType.name(), profile.getNetwork()), profile.getDepositConfirmations());
         var nativeEvents = scanner.scanAndCreditNative(chainType, blockHeight);
         var tokenEvents = scanner.scanAndCreditErc20(chainType, blockHeight);

@@ -207,8 +207,8 @@ class Evm7702ProductionFlowIntegrationTest {
                 testKeyset(), WalletKeyMaterialProvider.Mode.WALLET_SERVER));
         profile = chainRepository.findProfileByChain(chain).orElseThrow();
         nativeSymbol = profile.getNativeSymbol();
-        depositScanner = new EvmDepositScanner(
-                chainRepository, new EvmLogScanner(), RPC, 1, httpServices);
+        depositScanner = com.surprising.wallet.testutil.EvmScanTestSupport.scanner(
+                jdbc, ChainType.valueOf(chain), RPC, 1, httpServices);
 
         ChainRpcNodeService rpcNodes = new ChainRpcNodeService(new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc));
         setField(rpcNodes, "environmentName", "eip7702-test");
@@ -217,7 +217,8 @@ class Evm7702ProductionFlowIntegrationTest {
         security.setSecretMasterKey("11".repeat(32));
         CustodyCryptoService crypto = new CustodyCryptoService(security);
         WalletRuntimeConfigService runtimeConfig =
-                new WalletRuntimeConfigService(chainRepository);
+                new WalletRuntimeConfigService(new ChainProfileRepository(jdbc),
+                        new com.surprising.wallet.repository.WalletSystemConfigRepository(jdbc));
         CustodyTenantChainService tenantChainService = new CustodyTenantChainService(
                 tenantChainRepository, custodyRepository, null);
         CustodyWithdrawalExecutionService withdrawalExecution =

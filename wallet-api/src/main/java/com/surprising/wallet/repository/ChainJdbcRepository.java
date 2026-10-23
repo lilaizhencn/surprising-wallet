@@ -1425,32 +1425,13 @@ public class ChainJdbcRepository {
         return chainProfileRepository.listProfiles(false);
     }
     /**
-     * 执行 {@code systemBoolean} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public boolean systemBoolean(String configKey, boolean defaultValue) {
-        List<Map<String, Object>> rows = walletSystemConfigRepository.listAll().stream()
-                .filter(row -> configKey.equals(row.get("config_key")))
-                .toList();
-        if (rows.isEmpty()) {
-            return defaultValue;
-        }
-        Map<String, Object> row = rows.get(0);
-        Object enabled = row.get("enabled");
-        if (enabled instanceof Boolean bool && !bool) {
-            return false;
-        }
-        return Boolean.parseBoolean(String.valueOf(row.get("config_value")));
-    }
-    /**
      * 执行 {@code systemValue} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     public Optional<String> systemValue(String configKey) {
-        return walletSystemConfigRepository.listAll().stream()
-                .filter(row -> configKey.equals(row.get("config_key")))
-                .filter(row -> Boolean.TRUE.equals(row.get("enabled")))
-                .map(row -> String.valueOf(row.get("config_value")))
-                .findFirst();
+        return walletSystemConfigRepository.find(configKey)
+                .filter(WalletSystemConfigRepository.Setting::enabled).map(WalletSystemConfigRepository.Setting::value);
     }
+
     /**
      * 获取或查询 {@code listEnabledRpcNodes} 对应的数据，供调用方读取当前状态。
      */

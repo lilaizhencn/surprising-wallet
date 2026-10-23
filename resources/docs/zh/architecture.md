@@ -68,6 +68,8 @@ bootstrap 包按模式显式扫描组件；签名实现由 FirstSignerRegistry /
 
 充值和重组的事务由 `DepositService` 编排，现有 ChainJdbcRepository 充值入口显式委托该用例。确认入账时，DepositRecordRepository 的受租户约束状态更新直接返回记录 ID 与入账代次；随后更新账本并调用必需的 CustodyDepositProjectionService，投影、流水、赤字抵扣、事件和 API 来源 Webhook 与余额一起提交或回滚。投影服务要求已有事务，不再使用 Observer 接口、ObjectProvider 或空列表构造路径。SQL 只位于对应单表仓储；地址归属通过同租户派生坐标与地址版本在应用层组合，优先匹配精确地址。
 
+EvmDepositScanner 直接读取链配置、地址、Token 和扫描记录单表仓储，直接调用 DepositService 入账，不再经过通用数据门面。它只有一个构造器；RPC 发现、HTTP 工厂及 WalletRuntimeConfigService 均为必需依赖。测试节点和确认数在测试夹具/测试数据库中配置，生产类不保留固定 RPC、固定确认数或跳过扫描开关的分支。运行开关服务直接依赖 ChainProfileRepository 与 WalletSystemConfigRepository，系统配置按 key 查询并返回有类型的 Setting。
+
 ## 模块
 
 | 模块 | 职责 |

@@ -113,7 +113,7 @@
 
   <rect x="40" y="410" width="170" height="56" class="dep"/>
   <text x="125" y="434" text-anchor="middle" class="bold">链上转入</text>
-  <text x="125" y="452" text-anchor="middle" class="small">Scanner 扫块发现</text>
+  <text x="125" y="452" text-anchor="middle" class="small">EVM Scanner → DepositService</text>
 
   <line x1="210" y1="438" x2="245" y2="438" class="arrow"/>
 

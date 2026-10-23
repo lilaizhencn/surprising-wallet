@@ -51,4 +51,13 @@ public class WalletSystemConfigRepository {
                     value_type = 'boolean', enabled = true, updated_at = now()
                 """, key, Boolean.toString(value));
     }
+
+    public java.util.Optional<Setting> find(String key) {
+        return jdbc.query("""
+                select config_value, enabled from wallet_system_config where config_key = ?
+                """, (rs, rowNum) -> new Setting(rs.getString("config_value"), rs.getBoolean("enabled")), key)
+                .stream().findFirst();
+    }
+
+    public record Setting(String value, boolean enabled) { }
 }

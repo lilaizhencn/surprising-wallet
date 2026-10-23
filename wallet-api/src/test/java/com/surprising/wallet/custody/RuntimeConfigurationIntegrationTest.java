@@ -96,4 +96,34 @@ class RuntimeConfigurationIntegrationTest {
             assertTrue(rpc.listRuntimeNodes("ETH", profile.getNetwork(), "other-environment", "rpc").isEmpty());
         });
     }
+
+    @Test
+    void realRuntimeSwitchesCannotBeBypassedByTheEvmScanner() {
+        transaction.executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            jdbc.update("update chain_profile set scan_enabled = true where chain = 'ETH' and enabled = true");
+            var settings = new com.surprising.wallet.repository.WalletSystemConfigRepository(jdbc);
+            var runtime = new com.surprising.wallet.service.WalletRuntimeConfigService(
+                    new ChainProfileRepository(jdbc), settings);
+            var scanner = com.surprising.wallet.testutil.EvmScanTestSupport.scanner(jdbc,
+                    com.surprising.wallet.common.chain.ChainType.ETH, "http://127.0.0.1:1", 1);
+            settings.upsertBoolean("global.all.enabled", true);
+            settings.upsertBoolean("global.scan.enabled", false);
+            assertFalse(runtime.isTaskEnabled("ETH", "scan"));
+            var failure = assertThrows(IllegalStateException.class, () -> scanner.scanAndCreditNative(
+                    com.surprising.wallet.common.chain.ChainType.ETH, "ETH", "http://127.0.0.1:1", 1, 1L));
+            assertTrue(failure.getMessage().contains("disabled"));
+            settings.upsertBoolean("global.scan.enabled", true);
+            assertTrue(runtime.isTaskEnabled("ETH", "scan"));
+            jdbc.update("update chain_profile set scan_enabled = false where chain = 'ETH' and enabled = true");
+            assertFalse(runtime.isTaskEnabled("ETH", "scan"));
+            assertThrows(IllegalStateException.class, () -> scanner.scanAndCreditNative(
+                    com.surprising.wallet.common.chain.ChainType.ETH, "ETH", "http://127.0.0.1:1", 1, 1L));
+            jdbc.update("update chain_profile set scan_enabled = true where chain = 'ETH' and enabled = true");
+            jdbc.update("update wallet_system_config set enabled = false where config_key = 'global.all.enabled'");
+            assertFalse(runtime.isGlobalEnabled());
+            assertThrows(IllegalStateException.class, () -> scanner.scanAndCreditNative(
+                    com.surprising.wallet.common.chain.ChainType.ETH, "ETH", "http://127.0.0.1:1", 1, 1L));
+        });
+    }
 }

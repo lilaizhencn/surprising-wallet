@@ -74,7 +74,7 @@ class EvmForkFullChainIntegrationTest {
         int confirmations = Integer.getInteger("evm.confirmations", 1);
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource());
         ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbcTemplate);
-        EvmDepositScanner scanner = new EvmDepositScanner(repository, new EvmLogScanner(), LOCAL_RPC, confirmations);
+        EvmDepositScanner scanner = com.surprising.wallet.testutil.EvmScanTestSupport.scanner(jdbcTemplate, chain, LOCAL_RPC, confirmations);
 
         Credentials wallet = walletCredentials(chain);
         Web3j web3j = Web3j.build(new HttpService(LOCAL_RPC));
