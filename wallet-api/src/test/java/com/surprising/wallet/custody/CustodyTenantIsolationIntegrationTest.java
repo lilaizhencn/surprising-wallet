@@ -103,7 +103,7 @@ class CustodyTenantIsolationIntegrationTest {
         UUID gasAccountId = UUID.randomUUID();
         UUID withdrawalId = UUID.randomUUID();
         String orderNo = "tenant-gas-" + UUID.randomUUID();
-        CustodyRepository repository = new CustodyRepository(jdbc);
+        CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
 
         jdbc.update("""
                 insert into custody_gas_account(

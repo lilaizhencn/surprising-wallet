@@ -84,11 +84,11 @@ class CustodyMultiChainLoadIntegrationTest {
         DriverManagerDataSource dataSource = CustodyIntegrationDatabase.dataSource();
         CustodyIntegrationDatabase.reset(dataSource);
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        CustodyRepository custody = new CustodyRepository(jdbc);
+        CustodyRepository custody = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
         CustodyTenantChainRepository tenantChains = new CustodyTenantChainRepository(jdbc);
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         ChainJdbcRepository chains = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
-                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, custody, objectMapper));
+                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), objectMapper));
 
         Tenant tenant = createTenant(jdbc, tenantChains);
         List<UserAccount> accounts = createAccounts(jdbc, tenant, users);

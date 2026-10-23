@@ -57,9 +57,9 @@ class CustodyDepositProjectionIntegrationTest {
     @Test
     void confirmedDepositProjectsDisabledAddressAndSubjectAtomically() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
-        CustodyRepository custodyRepository = new CustodyRepository(jdbc);
+        CustodyRepository custodyRepository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
         ChainJdbcRepository chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
-                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, custodyRepository, objectMapper));
+                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), objectMapper));
 
         transactions.executeWithoutResult(status -> {
             DepositFixture fixture = createFixture("user_10086", "DISABLED");
@@ -103,9 +103,9 @@ class CustodyDepositProjectionIntegrationTest {
     @Test
     void sharedAccountIdAcrossAddressVersionsProjectsToExactAddress() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
-        CustodyRepository custodyRepository = new CustodyRepository(jdbc);
+        CustodyRepository custodyRepository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
         ChainJdbcRepository chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
-                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, custodyRepository, objectMapper));
+                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), objectMapper));
 
         transactions.executeWithoutResult(status -> {
             DepositFixture first = createFixture("versioned-user", "ACTIVE");
@@ -156,9 +156,13 @@ class CustodyDepositProjectionIntegrationTest {
     @Test
     void projectionFailureRollsBackTheEntirePostingWithoutAnOuterTransaction() {
         ObjectMapper mapper = new CustodyJacksonConfiguration().custodyObjectMapper();
-        CustodyRepository failingEvents = new CustodyRepository(jdbc) {
+        com.surprising.wallet.service.CustodyEventService failingEvents =
+                new com.surprising.wallet.service.CustodyEventService(
+                        new com.surprising.wallet.repository.CustodyEventRepository(jdbc),
+                        new com.surprising.wallet.repository.CustodyWebhookEndpointRepository(jdbc),
+                        new com.surprising.wallet.repository.CustodyWebhookDeliveryRepository(jdbc)) {
             @Override
-            public UUID insertEventWithDeliveries(UUID id, UUID tenantId, String eventType,
+            public UUID publish(UUID id, UUID tenantId, String eventType,
                                                    String aggregateType, String aggregateId,
                                                    String payload, boolean apiSource) {
                 throw new IllegalStateException("projection failure");
@@ -285,7 +289,7 @@ class CustodyDepositProjectionIntegrationTest {
     @Test
     void tenantSubjectMappingIsStableAndTenantIsolated() {
         transactions.executeWithoutResult(status -> {
-            CustodyRepository repository = new CustodyRepository(jdbc);
+            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
             UUID firstTenant = insertTenant("subject-first");
             UUID secondTenant = insertTenant("subject-second");
 
@@ -307,9 +311,9 @@ class CustodyDepositProjectionIntegrationTest {
     @Test
     void webhookDeliveryIsAutomaticOnlyForApiCreatedAddresses() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
-        CustodyRepository custodyRepository = new CustodyRepository(jdbc);
+        CustodyRepository custodyRepository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
         ChainJdbcRepository chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
-                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, custodyRepository, objectMapper));
+                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), objectMapper));
 
         transactions.executeWithoutResult(status -> {
             DepositFixture apiAddress = createFixture("api-user", "ACTIVE", "API");

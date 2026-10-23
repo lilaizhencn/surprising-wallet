@@ -53,10 +53,11 @@ class CustodyAssetRecoveryIntegrationTest {
         Fixture fixture = fixture();
         FakeGateway gateway = new FakeGateway();
         CustodyAssetRecoveryService service = new CustodyAssetRecoveryService(
-                new CustodyAssetRecoveryRepository(jdbc), new CustodyRepository(jdbc),
+                new CustodyAssetRecoveryRepository(jdbc), com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc),
                 new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc),
                 new DepositRecordRepository(jdbc),
-                List.of(gateway), new CustodyJacksonConfiguration().custodyObjectMapper());
+                List.of(gateway), new CustodyJacksonConfiguration().custodyObjectMapper(),
+                com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc));
         var command = new CustodyAssetRecoveryService.SubmitCommand(
                 "BNB", "ETH", "USDT", "0x1111111111111111111111111111111111111111",
                 "0xwrong-chain-transfer", 7L, fixture.address(), "3.25");
@@ -111,10 +112,11 @@ class CustodyAssetRecoveryIntegrationTest {
     void unownedDestinationIsRejectedBeforeARecoveryCaseIsCreated() {
         Fixture fixture = fixture();
         CustodyAssetRecoveryService service = new CustodyAssetRecoveryService(
-                new CustodyAssetRecoveryRepository(jdbc), new CustodyRepository(jdbc),
+                new CustodyAssetRecoveryRepository(jdbc), com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc),
                 new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc),
                 new DepositRecordRepository(jdbc),
-                List.of(new FakeGateway()), new CustodyJacksonConfiguration().custodyObjectMapper());
+                List.of(new FakeGateway()), new CustodyJacksonConfiguration().custodyObjectMapper(),
+                com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc));
         var command = new CustodyAssetRecoveryService.SubmitCommand(
                 "BNB", "ETH", "BNB", null, "0xunknown", 0L,
                 "0x8888888888888888888888888888888888888888", null);

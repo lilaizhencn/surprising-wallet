@@ -30,7 +30,8 @@ public class CustodyDepositProjectionService {
     private final CustodyLedgerEntryRepository entries;
     private final CustodyReorgDeficitRepository deficits;
     private final LedgerBalanceRepository balances;
-    private final CustodyRepository repository;
+    private final CustodyEventService events;
+    private final CustodyAuditRepository audits;
     private final ObjectMapper objectMapper;
 
     public void credit(UUID tenantId, DepositEvent event, long logIndex, String accountId,
@@ -79,7 +80,7 @@ public class CustodyDepositProjectionService {
                 "createdAt", Instant.now(),
                 "data", data));
 
-        repository.insertEventWithDeliveries(
+        events.publish(
                 eventId, tenantId, EVENT_TYPE, "DEPOSIT", referenceId, payload,
                 "API".equals(owner.source()));
     }
@@ -121,12 +122,12 @@ public class CustodyDepositProjectionService {
         data.put("creditGeneration", deposit.creditGeneration());
         data.put("reason", deposit.reason());
         data.put("reorgedAt", Instant.now());
-        repository.insertEventWithDeliveries(
+        events.publish(
                 eventId, deposit.tenantId(), "DEPOSIT.REORGED", "DEPOSIT", referenceId,
                 json(Map.of("id", eventId, "type", "DEPOSIT.REORGED",
                         "createdAt", Instant.now(), "data", data)),
                 "API".equals(owner.source()));
-        repository.audit(deposit.tenantId(), "SYSTEM", "deposit-finality",
+        audits.insert(UUID.randomUUID(), deposit.tenantId(), "SYSTEM", "deposit-finality",
                 "DEPOSIT.REORG", "CUSTODY_DEPOSIT", custodyDeposit.id().toString(), null,
                 json(data));
     }

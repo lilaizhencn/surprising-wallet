@@ -183,11 +183,11 @@ class Evm7702ProductionFlowIntegrationTest {
         CustodyIntegrationDatabase.reset(dataSource);
         jdbc = new JdbcTemplate(dataSource);
         ObjectMapper objectMapper = JsonMapper.builder().findAndAddModules().build();
-        custodyRepository = new CustodyRepository(jdbc);
+        custodyRepository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
         CustodyTenantChainRepository tenantChainRepository =
                 new CustodyTenantChainRepository(jdbc);
         chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
-                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, custodyRepository, objectMapper));
+                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), objectMapper));
         jdbc.update("""
                 update chain_profile
                    set network = 'local', chain_id = ?, withdraw_confirmations = 1,
@@ -230,7 +230,8 @@ class Evm7702ProductionFlowIntegrationTest {
         withdrawalService = new CustodyWithdrawalService(
                 custodyRepository, withdrawalExecution,
                 new CustodyGasService(custodyRepository, null, null),
-                tenantChainService, crypto, objectMapper);
+                tenantChainService, crypto, objectMapper,
+                com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc));
         collectionRepository = new Evm7702CollectionRepository(jdbc);
         Evm7702CollectionCoordinator coordinator = new Evm7702CollectionCoordinator(
                 collectionRepository, custodyRepository, chainRepository);

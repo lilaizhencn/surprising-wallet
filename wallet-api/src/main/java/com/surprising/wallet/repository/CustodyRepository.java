@@ -2,7 +2,7 @@ package com.surprising.wallet.repository;
 
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.surprising.wallet.service.CustodyEventService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -96,25 +96,15 @@ public class CustodyRepository {
     /** 托管流水单表仓储。 */
     private final CustodyLedgerEntryRepository ledgerEntries;
 
-    /** 兼容已有手工构造方式。 */
-    public CustodyRepository(JdbcTemplate jdbc) {
-        this(jdbc, new CustodySecurityRepository(jdbc), new CustodyTenantTableRepository(jdbc),
-                new CustodyTenantUserRepository(jdbc));
-    }
+    private final CustodyEventService eventService;
 
-    /** 兼容已有手工构造方式。 */
-    public CustodyRepository(JdbcTemplate jdbc, CustodySecurityRepository securityRepository) {
-        this(jdbc, securityRepository, new CustodyTenantTableRepository(jdbc),
-                new CustodyTenantUserRepository(jdbc));
-    }
-
-    /** 构造托管数据编排门面。 */
-    @Autowired
     public CustodyRepository(JdbcTemplate jdbc, CustodySecurityRepository securityRepository,
                              CustodyTenantTableRepository tenantTable,
-                             CustodyTenantUserRepository tenantUsers) {
+                             CustodyTenantUserRepository tenantUsers,
+                             CustodyEventService eventService) {
         this.tenantTable = tenantTable;
         this.tenantUsers = tenantUsers;
+        this.eventService = eventService;
         this.securityRepository = securityRepository;
         this.custodyAddresses = new CustodyAddressRepository(jdbc);
         this.chainAddresses = new ChainAddressRepository(jdbc);
@@ -1070,34 +1060,9 @@ public class CustodyRepository {
             findGasUsage(change.id()).ifPresent(usage -> releaseGasUsage(change.id(),
                     "withdrawal ended as " + change.nextStatus()));
         }
-        if (eventType != null) insertEventWithDeliveries(eventId, change.tenantId(), eventType,
+        if (eventType != null) eventService.publish(eventId, change.tenantId(), eventType,
                 "WITHDRAWAL", change.orderNo(), payloadJson, "API".equals(change.addressSource()));
         return true;
-    }
-
-    /** 创建领域事件及其 Webhook 投递记录。 */
-    @Transactional(rollbackFor = Throwable.class)
-    public UUID insertEventWithDeliveries(UUID eventId, UUID tenantId, String eventType,
-                                          String aggregateType, String aggregateId, String payload) {
-        return insertEventWithDeliveries(eventId, tenantId, eventType, aggregateType, aggregateId, payload, true);
-    }
-
-    /** 创建领域事件的兼容入口，保留地址来源参数供调用方审计。 */
-    public UUID insertEventWithDeliveries(UUID eventId, UUID tenantId, String eventType,
-                                          String aggregateType, String aggregateId, String payload,
-                                          boolean apiSource) {
-        UUID persisted = events.insertIfAbsent(eventId, tenantId, eventType, aggregateType, aggregateId, payload)
-                .or(() -> events.findIdByBusinessKey(tenantId, eventType, aggregateType, aggregateId))
-                .orElseThrow(() -> new IllegalStateException("failed to persist custody event"));
-        if (apiSource) {
-            for (Map<String, Object> endpoint : webhookEndpoints.list(tenantId)) {
-                if ("ACTIVE".equals(endpoint.get("status"))) {
-                    webhookDeliveries.insert(UUID.randomUUID(), tenantId, uuid(endpoint.get("id")), persisted);
-                }
-            }
-        }
-        events.markPublished(persisted);
-        return persisted;
     }
 
     /** 写入审计日志。 */

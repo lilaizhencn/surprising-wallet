@@ -95,6 +95,7 @@ wallet-api/job/
 
 - 充值入账与区块重组由 `DepositService` 显式编排；`CustodyDepositProjectionService` 是同事务中的必需步骤，不得恢复可选观察者或空回调列表。充值记录、余额、租户投影、赤字恢复及事件持久化必须一起提交或回滚。
 
+- `CustodyEventService` 统一持久化领域事件和 Webhook 投递记录，与调用方事务一起提交或回滚；API 来源才生成 Webhook，Console 来源仍记录事件。
 - 充值、提现、归集、手续费、链上确认、重放、幂等、回调都要有明确审计路径。
 - 任何余额变化都要能通过流水对账。
 - 链上交易要区分 pending、confirmed、failed、reorg 相关状态。

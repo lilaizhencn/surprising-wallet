@@ -60,6 +60,7 @@ public class CustodyAssetRecoveryService {
      * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
      */
     private final ObjectMapper objectMapper;
+    private final CustodyEventService events;
     /**
      * 构造 {@code CustodyAssetRecoveryService}，初始化该组件运行所需的状态和依赖。
      */
@@ -69,7 +70,8 @@ public class CustodyAssetRecoveryService {
                                        ChainAddressRepository chainAddressRepository,
                                        DepositRecordRepository depositRecordRepository,
                                        List<CustodyAssetRecoveryChainGateway> gateways,
-                                       ObjectMapper objectMapper) {
+                                       ObjectMapper objectMapper,
+                                       CustodyEventService events) {
         this.repository = repository;
         this.custody = custody;
         this.custodyAddressRepository = custodyAddressRepository;
@@ -77,6 +79,7 @@ public class CustodyAssetRecoveryService {
         this.depositRecordRepository = depositRecordRepository;
         this.gateways = List.copyOf(gateways);
         this.objectMapper = objectMapper;
+        this.events = events;
     }
     /**
      * 发送或广播 {@code submit} 对应的链上请求，并返回节点处理结果。
@@ -303,7 +306,7 @@ public class CustodyAssetRecoveryService {
                 "recoveryAddress", recovery.recoveryAddress(),
                 "sourceTxHash", recovery.txHash(),
                 "recoveryTxHash", recovery.recoveryTxHash());
-        custody.insertEventWithDeliveries(
+        events.publish(
                 eventId, recovery.tenantId(), "ASSET_RECOVERY.RECOVERED",
                 "ASSET_RECOVERY", recovery.id().toString(),
                 json(Map.of("id", eventId, "type", "ASSET_RECOVERY.RECOVERED",

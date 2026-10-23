@@ -89,7 +89,7 @@ RPC 客户端直接读取 `ChainProfileRepository` 的网络配置，再调用 `
 
 ## 充值流程
 
-充值与重组使用显式业务调用：DepositService → CustodyDepositProjectionService。EVM 扫描器直接调用 DepositService，且每次入账前必须经过真实全局和链扫描开关校验；测试与生产使用同一条入口。入账代次来自受租户约束的状态更新返回值，投影不再重复查询和重新分配租户。投影以 MANDATORY 传播加入当前事务；投影、流水、赤字恢复或事件持久化失败时，充值记录与余额同步回滚。单表仓储提供地址、投影、赤字和流水数据，跨表组合在应用层完成。
+充值与重组使用显式业务调用：DepositService → CustodyDepositProjectionService。EVM 扫描器直接调用 DepositService，且每次入账前必须经过真实全局和链扫描开关校验；测试与生产使用同一条入口。入账代次来自受租户约束的状态更新返回值，投影不再重复查询和重新分配租户。投影以 MANDATORY 传播加入当前事务；投影、流水、赤字恢复或事件持久化失败时，充值记录与余额同步回滚。投影直接调用 `CustodyEventService.publish`，由它在同事务中幂等创建事件与启用端点的投递记录，再标记已发布；事件与投递分别由业务键、端点/事件唯一键保证重放幂等，不重置既有投递。审计直接写入审计单表仓储。提现创建、状态同步及资产找回也使用这一事件用例。API 来源保留 Webhook，Console 来源只记录事件。单表仓储提供地址、投影、赤字和流水数据，跨表组合在应用层完成。
 
 ```text
 chain RPC/indexer

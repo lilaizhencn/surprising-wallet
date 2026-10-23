@@ -89,7 +89,7 @@ class CustodyDepositFinalityIntegrationTest {
                     select count(*) from custody_event
                      where tenant_id = ? and event_type = 'DEPOSIT.REORGED'
                     """, Integer.class, fixture.tenantId()));
-            assertTrue(new CustodyRepository(jdbc).hasOpenReorgDeficit(
+            assertTrue(com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc).hasOpenReorgDeficit(
                     fixture.tenantId(), fixture.custodyAddressId(), "ETH", "ETH"));
             var dashboardDeficits = new CustodyAssetDashboardRepository(jdbc)
                     .openReorgDeficits(fixture.tenantId());
@@ -159,9 +159,13 @@ class CustodyDepositFinalityIntegrationTest {
                     created.accountId(), new BigDecimal("7")));
             return created;
         });
-        CustodyRepository failingEvents = new CustodyRepository(jdbc) {
+        com.surprising.wallet.service.CustodyEventService failingEvents =
+                new com.surprising.wallet.service.CustodyEventService(
+                        new com.surprising.wallet.repository.CustodyEventRepository(jdbc),
+                        new com.surprising.wallet.repository.CustodyWebhookEndpointRepository(jdbc),
+                        new com.surprising.wallet.repository.CustodyWebhookDeliveryRepository(jdbc)) {
             @Override
-            public UUID insertEventWithDeliveries(UUID id, UUID tenantId, String eventType,
+            public UUID publish(UUID id, UUID tenantId, String eventType,
                                                    String aggregateType, String aggregateId,
                                                    String payload, boolean apiSource) {
                 throw new IllegalStateException("reorg event failure");
@@ -181,7 +185,7 @@ class CustodyDepositFinalityIntegrationTest {
                 select count(*) from custody_ledger_entry
                  where tenant_id = ? and entry_type = 'DEPOSIT_REORG_REVERSAL'
                 """, Integer.class, fixture.tenantId()));
-        try (var context = com.surprising.wallet.testutil.DepositTestSupport.context(jdbc, new CustodyRepository(jdbc), mapper)) {
+        try (var context = com.surprising.wallet.testutil.DepositTestSupport.context(jdbc, com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), mapper)) {
             var deposits = context.getBean(com.surprising.wallet.service.DepositService.class);
             assertEquals(1, deposits.observeCanonicalBlock("ETH", "evm-canonical", 910_001L, "0xreplacement", "0xparent")
                     .reversedDepositCount());

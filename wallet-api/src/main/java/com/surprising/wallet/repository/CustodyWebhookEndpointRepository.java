@@ -37,6 +37,13 @@ public class CustodyWebhookEndpointRepository {
                 """, tenantId);
     }
 
+    public List<UUID> listActiveIds(UUID tenantId) {
+        return jdbc.queryForList("""
+                select id from custody_webhook_endpoint
+                 where tenant_id = ? and status = 'ACTIVE' order by created_at desc, id
+                """, UUID.class, tenantId);
+    }
+
     /** 统计租户启用的 Webhook 端点。 */
     public long countActive(UUID tenantId) {
         Long count = jdbc.queryForObject("""

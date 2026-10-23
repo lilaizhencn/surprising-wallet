@@ -3,6 +3,7 @@ package com.surprising.wallet.testutil;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.CustodyDepositProjectionService;
+import com.surprising.wallet.service.CustodyEventService;
 import com.surprising.wallet.service.DepositService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.ObjectMapper;
@@ -12,12 +13,14 @@ public final class DepositTestSupport {
     private DepositTestSupport() { }
 
     public static org.springframework.context.annotation.AnnotationConfigApplicationContext context(
-            JdbcTemplate jdbc, CustodyRepository custody, ObjectMapper mapper) {
+            JdbcTemplate jdbc, CustodyEventService events, ObjectMapper mapper) {
         var context = new org.springframework.context.annotation.AnnotationConfigApplicationContext();
         context.register(Transactions.class);
         context.registerBean(org.springframework.transaction.PlatformTransactionManager.class,
                 () -> new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
-        context.registerBean(CustodyDepositProjectionService.class, () -> projection(jdbc, custody, mapper));
+        context.registerBean(CustodyEventService.class, () -> events);
+        context.registerBean(CustodyDepositProjectionService.class,
+                () -> projection(jdbc, context.getBean(CustodyEventService.class), mapper));
         context.registerBean(DepositService.class, () -> service(jdbc, context.getBean(CustodyDepositProjectionService.class)));
         context.refresh();
         return context;
@@ -28,7 +31,7 @@ public final class DepositTestSupport {
     static class Transactions { }
 
     public static ChainJdbcRepository repository(JdbcTemplate jdbc) {
-        return repository(jdbc, projection(jdbc, new CustodyRepository(jdbc),
+        return repository(jdbc, projection(jdbc, CustodyTestSupport.events(jdbc),
                 new CustodyJacksonConfiguration().custodyObjectMapper()));
     }
 
@@ -37,7 +40,7 @@ public final class DepositTestSupport {
     }
 
     public static DepositService service(JdbcTemplate jdbc) {
-        return service(jdbc, projection(jdbc, new CustodyRepository(jdbc),
+        return service(jdbc, projection(jdbc, CustodyTestSupport.events(jdbc),
                 new CustodyJacksonConfiguration().custodyObjectMapper()));
     }
 
@@ -48,10 +51,11 @@ public final class DepositTestSupport {
     }
 
     public static CustodyDepositProjectionService projection(
-            JdbcTemplate jdbc, CustodyRepository custody, ObjectMapper mapper) {
+            JdbcTemplate jdbc, CustodyEventService events, ObjectMapper mapper) {
         return new CustodyDepositProjectionService(new ChainAddressRepository(jdbc), new CustodyAddressRepository(jdbc),
                 new CustodyGasAccountRepository(jdbc), new CustodyTenantChainRepository(jdbc),
                 new CustodyDepositRepository(jdbc), new CustodyLedgerEntryRepository(jdbc),
-                new CustodyReorgDeficitRepository(jdbc), new LedgerBalanceRepository(jdbc), custody, mapper);
+                new CustodyReorgDeficitRepository(jdbc), new LedgerBalanceRepository(jdbc),
+                events, new CustodyAuditRepository(jdbc), mapper);
     }
 }

@@ -19,12 +19,13 @@ public class CustodyWebhookDeliveryRepository {
         this.jdbc = jdbc;
     }
 
-    /** 创建 Webhook 投递记录。 */
+    /** 按端点和事件幂等创建投递记录，重放不重置已有投递状态。 */
     public int insert(UUID id, UUID tenantId, UUID endpointId, UUID eventId) {
         return jdbc.update("""
                 insert into custody_webhook_delivery(id, tenant_id, endpoint_id, event_id, status,
                     next_attempt_at, next_attempt_trigger)
                 values (?, ?, ?, ?, 'PENDING', now(), 'AUTOMATIC')
+                on conflict (endpoint_id, event_id) do nothing
                 """, id, tenantId, endpointId, eventId);
     }
 

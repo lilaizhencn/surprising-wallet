@@ -57,6 +57,7 @@ public class CustodyWithdrawalService {
      * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
      */
     private final ObjectMapper objectMapper;
+    private final CustodyEventService events;
 
     /**
      * 构造 {@code CustodyWithdrawalService}，初始化该组件运行所需的状态和依赖。
@@ -66,13 +67,15 @@ public class CustodyWithdrawalService {
                                     CustodyGasService gasService,
                                     CustodyTenantChainService tenantChains,
                                     CustodyCryptoService crypto,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    CustodyEventService events) {
         this.repository = repository;
         this.executionService = executionService;
         this.gasService = gasService;
         this.tenantChains = tenantChains;
         this.crypto = crypto;
         this.objectMapper = objectMapper;
+        this.events = events;
     }
 
     /**
@@ -167,7 +170,7 @@ public class CustodyWithdrawalService {
                 withdrawalId, address.id(), orderNo, externalReference,
                 chain, symbol, broadcastAddress, amountValue, feeValue,
                 status, null, null, normalizedSource, Instant.now());
-        repository.insertEventWithDeliveries(
+        events.publish(
                 eventId, tenant.id(), "WITHDRAWAL.CREATED", "WITHDRAWAL", orderNo,
                 eventPayload(eventId, "WITHDRAWAL.CREATED", view),
                 "API".equals(address.source()));
