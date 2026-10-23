@@ -8,7 +8,6 @@ import com.surprising.wallet.chain.model.ChainCollectionRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.chain.model.EvmNonceRecord;
 import com.surprising.wallet.chain.model.EvmTransactionRecord;
-import com.surprising.wallet.chain.model.ChainScanHeightRecord;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.chain.model.HotWalletRules;
@@ -33,7 +32,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -63,10 +61,6 @@ import java.util.stream.Collectors;
  */
 @Component
 public class ChainJdbcRepository {
-    /**
-     * 保存 {@code jdbcTemplate}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final JdbcTemplate jdbcTemplate;
     /**
      * 保存 {@code utxoRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
@@ -113,8 +107,6 @@ public class ChainJdbcRepository {
     private ChainScanBlockRepository chainScanBlockRepository;
     /** 扫描高度单表仓储。 */
     private ChainScanHeightRepository chainScanHeightRepository;
-    /** 代币转账单表仓储。 */
-    private EvmTokenTransferRepository evmTokenTransferRepository;
     /** TRON 代币转账单表仓储。 */
     private TronTokenTransferRepository tronTokenTransferRepository;
     /** 签名交易单表仓储。 */
@@ -142,7 +134,6 @@ public class ChainJdbcRepository {
 
     public ChainJdbcRepository(JdbcTemplate jdbcTemplate, UtxoRepository utxoRepository,
                                DepositService depositService) {
-        this.jdbcTemplate = jdbcTemplate;
         this.utxoRepository = utxoRepository;
         this.depositService = depositService;
         this.chainAddressRepository = new ChainAddressRepository(jdbcTemplate);
@@ -171,7 +162,6 @@ public class ChainJdbcRepository {
         this.depositRecordRepository = new DepositRecordRepository(jdbcTemplate);
         this.chainScanBlockRepository = new ChainScanBlockRepository(jdbcTemplate);
         this.chainScanHeightRepository = new ChainScanHeightRepository(jdbcTemplate);
-        this.evmTokenTransferRepository = new EvmTokenTransferRepository(jdbcTemplate);
         this.tronTokenTransferRepository = new TronTokenTransferRepository(jdbcTemplate);
         this.chainSigningTransactionRepository = new ChainSigningTransactionRepository(jdbcTemplate);
         this.collectionRecordRepository = new CollectionRecordRepository(jdbcTemplate);
@@ -186,40 +176,16 @@ public class ChainJdbcRepository {
         this.evmCollectionBatchRepository = new EvmCollectionBatchRepository(jdbcTemplate);
     }
     /**
-     * 写入或更新 {@code upsertChainAsset} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
-    public int upsertChainAsset(ChainAsset asset) {
-        return chainAssetRepository.upsert(asset);
-    }
-    /**
      * 获取或查询 {@code findAccountChainProfile} 对应的数据，供调用方读取当前状态。
      */
     public Optional<AccountChainProfile> findAccountChainProfile(String chain, String network) {
         return chainProfileRepository.findAccount(chain, network);
     }
     /**
-     * 获取或查询 {@code findProfileByRuntimeCurrencyId} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<AccountChainProfile> findProfileByRuntimeCurrencyId(int runtimeCurrencyId) {
-        return chainProfileRepository.findAccountByRuntimeCurrency(runtimeCurrencyId);
-    }
-    /**
      * 获取或查询 {@code findProfileByChain} 对应的数据，供调用方读取当前状态。
      */
     public Optional<AccountChainProfile> findProfileByChain(String chain) {
         return chainProfileRepository.findAccountByChain(chain);
-    }
-    /**
-     * 获取或查询 {@code findChainByRuntimeCurrencyId} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<String> findChainByRuntimeCurrencyId(int runtimeCurrencyId) {
-        return chainProfileRepository.findChainByRuntimeCurrency(runtimeCurrencyId);
-    }
-    /**
-     * 获取或查询 {@code findNetworkByRuntimeCurrencyId} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<String> findNetworkByRuntimeCurrencyId(int runtimeCurrencyId) {
-        return chainProfileRepository.findNetworkByRuntimeCurrency(runtimeCurrencyId);
     }
     /**
      * 判断 {@code isRuntimeCurrencyFamily} 对应的条件是否成立，并返回明确的布尔结果。
@@ -275,18 +241,6 @@ public class ChainJdbcRepository {
      */
     public Optional<String> findXrpTransactionAssetSymbol(String chain, String txHash) {
         return xrpTransactionRepository.findAssetSymbol(chain, txHash);
-    }
-    /**
-     * 写入或更新 {@code upsertLedgerBalance} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
-    public int upsertLedgerBalance(LedgerBalanceRecord record) {
-        return ledgerBalanceRepository.upsert(record);
-    }
-    /**
-     * 获取或查询 {@code listEnabledHotWalletAddresses} 对应的数据，供调用方读取当前状态。
-     */
-    public Set<String> listEnabledHotWalletAddresses(String chain) {
-        return listEnabledChainScanAddresses(chain);
     }
     /**
      * 获取或查询 {@code listEnabledChainScanAddresses} 对应的数据，供调用方读取当前状态。
@@ -506,20 +460,6 @@ public class ChainJdbcRepository {
     }
 
     /**
-     * 校验 {@code requireDepositTenant} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private UUID requireDepositTenant(String chain, String accountId, String address) {
-        List<UUID> tenants = chainAddressRepository.listTenantIds(chain, accountId, address);
-        if (tenants.isEmpty()) {
-            throw new IllegalStateException("deposit address is not assigned to a tenant");
-        }
-        if (tenants.size() > 1) {
-            throw new IllegalStateException("deposit address maps to more than one tenant");
-        }
-        return tenants.getFirst();
-    }
-
-    /**
      * 写入或更新 {@code upsertUtxo} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     public void upsertUtxo(String chain, String assetSymbol, String txHash, int vout, String address,
@@ -628,12 +568,6 @@ public class ChainJdbcRepository {
      */
     public BigDecimal sumAvailableUtxoAmount(String chain, String assetSymbol) {
         return utxoRepository.sumAvailableAmount(chain, assetSymbol);
-    }
-    /**
-     * 获取或查询 {@code listUtxosByAddress} 对应的数据，供调用方读取当前状态。
-     */
-    public List<UtxoTransaction> listUtxosByAddress(String chain, String address, int limit) {
-        return utxoRepository.listByAddress(chain, address, limit, requireRuntimeCurrencyId(chain));
     }
 
     /** 获取统一 UTXO 运行时使用的币种编号。 */
@@ -1017,23 +951,6 @@ public class ChainJdbcRepository {
     }
 
     /**
-     * 获取或查询 {@code findBitcoinLikeSigningTransaction} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<WithdrawTransaction> findBitcoinLikeSigningTransaction(
-            AssetRuntimeMetadata currency, String businessType, String businessNo) {
-        return findBitcoinLikeSigningTransaction(
-                currency.getName().toUpperCase(java.util.Locale.ROOT), businessType, businessNo);
-    }
-
-    /**
-     * 获取或查询 {@code findBitcoinLikeSigningTransaction} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<WithdrawTransaction> findBitcoinLikeSigningTransaction(
-            String chain, String businessType, String businessNo) {
-        return chainSigningTransactionRepository.findByBusiness(chain, businessType, businessNo);
-    }
-
-    /**
      * 获取或查询 {@code findBitcoinLikeSigningTransactionById} 对应的数据，供调用方读取当前状态。
      */
     public Optional<WithdrawTransaction> findBitcoinLikeSigningTransactionById(
@@ -1098,48 +1015,6 @@ public class ChainJdbcRepository {
      */
     public Optional<LedgerBalanceRecord> findLedgerBalance(String chain, String assetSymbol, String accountId) {
         return ledgerBalanceRepository.find(chain, assetSymbol, accountId);
-    }
-    /**
-     * 获取或查询 {@code listLedgerBalances} 对应的数据，供调用方读取当前状态。
-     */
-    public List<LedgerBalanceRecord> listLedgerBalances() {
-        return ledgerBalanceRepository.listAll();
-    }
-    /**
-     * 执行 {@code sumLedgerTotalBalance} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public BigDecimal sumLedgerTotalBalance(String chain, String assetSymbol) {
-        return ledgerBalanceRepository.sumTotal(chain, assetSymbol);
-    }
-    /**
-     * 执行 {@code sumLedgerAvailableBalance} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public BigDecimal sumLedgerAvailableBalance(String chain, String assetSymbol) {
-        return ledgerBalanceRepository.sumAvailable(chain, assetSymbol);
-    }
-
-    /**
-     * 获取或查询 {@code findStaleBitcoinLikeSigningTransactions} 对应的数据，供调用方读取当前状态。
-     */
-    public List<WithdrawTransaction> findStaleBitcoinLikeSigningTransactions(
-            AssetRuntimeMetadata currency, long staleSeconds) {
-        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        return chainSigningTransactionRepository.listStale(chain, Constants.SIGNING, staleSeconds);
-    }
-
-    /**
-     * 执行 {@code claimBitcoinLikeSigningRecovery} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public boolean claimBitcoinLikeSigningRecovery(
-            AssetRuntimeMetadata currency, int transactionId, long staleSeconds) {
-        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        return chainSigningTransactionRepository.claimRecovery(chain, transactionId, Constants.SIGNING, staleSeconds);
-    }
-    /**
-     * 记录或保存 {@code recordEvmTokenTransfer} 对应的数据，并遵守幂等和事务约束。
-     */
-    public int recordEvmTokenTransfer(DepositEvent event, long logIndex, String status) {
-        return evmTokenTransferRepository.upsert(event, logIndex, status);
     }
     /**
      * 记录或保存 {@code recordTronTokenTransfer} 对应的数据，并遵守幂等和事务约束。
@@ -1347,12 +1222,6 @@ public class ChainJdbcRepository {
         return evm7702ConfigRepository.existsActiveNativeCollection(chain, network);
     }
     /**
-     * 判断 {@code isEvm7702BatchWithdrawalActive} 对应的条件是否成立，并返回明确的布尔结果。
-     */
-    public boolean isEvm7702BatchWithdrawalActive(String chain, String network) {
-        return evm7702ConfigRepository.existsActiveBatchWithdrawal(chain, network);
-    }
-    /**
      * 设置或更新 {@code updateScanHeight} 对应的状态，并保持相关业务字段一致。
      */
     public void updateScanHeight(String chain, String scannerName, long bestHeight, long safeHeight) {
@@ -1374,12 +1243,6 @@ public class ChainJdbcRepository {
     /** 查询指定高度范围内已入账充值对应的 canonical 区块。 */
     public List<Long> listCanonicalDepositBlockHeights(String chain, long minimumHeight, long maximumHeight) {
         return depositRecordRepository.listCanonicalBlockHeights(chain, minimumHeight, maximumHeight);
-    }
-    /**
-     * 获取或查询 {@code listActiveScanHeights} 对应的数据，供调用方读取当前状态。
-     */
-    public List<ChainScanHeightRecord> listActiveScanHeights() {
-        return chainScanHeightRepository.listActive();
     }
     /**
      * 获取或查询 {@code findToken} 对应的数据，供调用方读取当前状态。
