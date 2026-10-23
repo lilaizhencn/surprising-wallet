@@ -1,26 +1,31 @@
 package com.surprising.wallet.chain.ton;
 
-import tools.jackson.databind.JsonNode;
+import com.surprising.wallet.chain.model.HotWalletRules;
+import com.surprising.wallet.chain.model.TonTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.chain.model.TonTransactionRecord;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainScanHeightRepository;
+import com.surprising.wallet.repository.DepositRecordRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.repository.TonTransactionRepository;
+import com.surprising.wallet.service.DepositService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.ton.ton4j.cell.Cell;
-import org.ton.ton4j.cell.CellSlice;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.ton.ton4j.cell.Cell;
+import org.ton.ton4j.cell.CellSlice;
+import tools.jackson.databind.JsonNode;
 
 /**
  * TON 充值扫描器，通过解析交易消息的 Cell body 识别充值。
@@ -48,8 +53,7 @@ import java.util.Set;
  */
 @Service
 @Slf4j
-public
-class TonDepositScanner {
+public class TonDepositScanner {
 
     /** TON 链标识 */
     private static final String CHAIN = "TON";
@@ -83,9 +87,14 @@ class TonDepositScanner {
 
     /** 地址服务（用于地址规范化比较） */
     private final TonAddressService addressService;
+    private final ChainAddressRepository chainAddressRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
+    private final ChainScanHeightRepository chainScanHeightRepository;
+    private final TonTransactionRepository tonTransactionRepository;
+    private final DepositService depositService;
+    private final DepositRecordRepository depositRecordRepository;
 
-    /** 链配置数据库访问 */
-    private final ChainJdbcRepository repository;
 
     /** TON API 索引器客户端（用于 Jetton Wallet 物化） */
     private final TonApiClient tonApi;
@@ -95,12 +104,27 @@ class TonDepositScanner {
     /**
      * 构造 {@code TonDepositScanner}，初始化该组件运行所需的状态和依赖。
      */
-    public TonDepositScanner(TonCenterClient rpc, TonAddressService addressService,
-                             ChainJdbcRepository repository, TonApiClient tonApi,
-                             WalletRuntimeConfigService runtimeConfigService) {
+    public TonDepositScanner(
+            TonCenterClient rpc,
+            TonAddressService addressService,
+            ChainAddressRepository chainAddressRepository,
+            ChainProfileRepository chainProfileRepository,
+            TokenConfigRepository tokenConfigRepository,
+            ChainScanHeightRepository chainScanHeightRepository,
+            TonTransactionRepository tonTransactionRepository,
+            DepositService depositService,
+            DepositRecordRepository depositRecordRepository,
+            TonApiClient tonApi,
+            WalletRuntimeConfigService runtimeConfigService) {
         this.rpc = rpc;
         this.addressService = addressService;
-        this.repository = repository;
+        this.chainAddressRepository = chainAddressRepository;
+        this.chainProfileRepository = chainProfileRepository;
+        this.tokenConfigRepository = tokenConfigRepository;
+        this.chainScanHeightRepository = chainScanHeightRepository;
+        this.tonTransactionRepository = tonTransactionRepository;
+        this.depositService = depositService;
+        this.depositRecordRepository = depositRecordRepository;
         this.tonApi = java.util.Objects.requireNonNull(tonApi);
         this.runtimeConfigService = java.util.Objects.requireNonNull(runtimeConfigService);
     }
@@ -117,8 +141,8 @@ class TonDepositScanner {
         AccountChainProfile profile = profile();
         long masterchainSeqno = rpc.masterchainInfo().path("last").path("seqno").asLong();
         List<DepositEvent> events = new ArrayList<>();
-        List<ChainAddressRecord> nativeAddresses = repository.listChainAddresses(CHAIN, "TON");
-        List<TokenDefinition> tokens = repository.listTokens(CHAIN);
+        List<ChainAddressRecord> nativeAddresses = chainAddressRepository.listEnabled(CHAIN, "TON");
+        List<TokenDefinition> tokens = chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of());
         Set<String> platformAddresses = platformAddresses();
         for (ChainAddressRecord address : nativeAddresses) {
             if (isNativeScanRole(address)) {
@@ -127,7 +151,7 @@ class TonDepositScanner {
         }
         materializeJettonWallets(nativeAddresses, tokens);
         for (TokenDefinition token : tokens) {
-            for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, token.getSymbol())) {
+            for (ChainAddressRecord address : chainAddressRepository.listEnabled(CHAIN, token.getSymbol())) {
                 if (WALLET_ROLE_DEPOSIT.equals(address.getWalletRole())) {
                     scanJetton(address, token, profile, masterchainSeqno, platformAddresses, events);
                 }
@@ -135,7 +159,7 @@ class TonDepositScanner {
         }
         refreshPendingDeposits(profile, masterchainSeqno);
         long safeSeqno = Math.max(0L, masterchainSeqno - profile.getDepositConfirmations() + 1L);
-        repository.updateScanHeight(CHAIN, SCANNER, masterchainSeqno, safeSeqno);
+        chainScanHeightRepository.upsert(CHAIN, SCANNER, masterchainSeqno, safeSeqno);
         return events;
     }
 
@@ -241,7 +265,7 @@ class TonDepositScanner {
      */
     private void persist(DepositEvent event, JsonNode tx, String master,
                          AccountChainProfile profile, String accountId) {
-        repository.recordTonTransaction(TonTransactionRecord.builder()
+        tonTransactionRepository.upsert(TonTransactionRecord.builder()
                 .chain(CHAIN)
                 .txHash(event.txId())
                 .fromAddress(event.fromAddress())
@@ -256,14 +280,14 @@ class TonDepositScanner {
                         ? "CONFIRMED" : "CONFIRMING")
                 .rawPayload(tx.toString())
                 .build());
-        repository.recordAndCreditDeposit(event, 0, profile.getDepositConfirmations(), accountId);
+        depositService.recordAndCredit(event, 0, profile.getDepositConfirmations(), accountId);
     }
     /**
      * 写入或更新 {@code refreshPendingDeposits} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     private void refreshPendingDeposits(AccountChainProfile profile, long masterchainSeqno) {
         int requiredConfirmations = profile.getDepositConfirmations();
-        for (var pending : repository.listPendingDeposits(CHAIN, requiredConfirmations, 500)) {
+        for (var pending : depositRecordRepository.listPending(CHAIN, requiredConfirmations, 500)) {
             int confirmations = (int) Math.min(Integer.MAX_VALUE,
                     Math.max(1L, masterchainSeqno - pending.blockHeight() + 1L));
             if (confirmations <= pending.confirmations()) {
@@ -281,10 +305,8 @@ class TonDepositScanner {
                     confirmations,
                     pending.contractAddress(),
                     pending.rawPayload());
-            repository.recordAndCreditDeposit(
-                    event, pending.logIndex(), requiredConfirmations, pending.accountId());
-            repository.updateTonDepositTransactionConfirmations(
-                    CHAIN, pending.txHash(), confirmations, requiredConfirmations);
+            depositService.recordAndCredit(event, pending.logIndex(), requiredConfirmations, pending.accountId());
+            tonTransactionRepository.updateDepositConfirmations(CHAIN, pending.txHash(), confirmations, requiredConfirmations);
         }
     }
     /**
@@ -318,7 +340,7 @@ class TonDepositScanner {
      */
     private Set<String> platformAddresses() {
         Set<String> addresses = new HashSet<>();
-        for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
+        for (ChainAddressRecord tracked : chainAddressRepository.listEnabled(CHAIN)) {
             addNormalized(addresses, tracked.getAddress());
             addNormalized(addresses, tracked.getOwnerAddress());
         }
@@ -349,8 +371,13 @@ class TonDepositScanner {
                 continue;
             }
             for (TokenDefinition token : tokens) {
-                if (repository.findChainAddress(CHAIN, token.getSymbol(), owner.getUserId(), owner.getBiz(),
-                        owner.getAddressIndex(), owner.getWalletRole()).isPresent()) {
+                if (chainAddressRepository.find(
+                        CHAIN,
+                        token.getSymbol(),
+                        owner.getUserId(),
+                        owner.getBiz(),
+                        owner.getAddressIndex(),
+                        owner.getWalletRole()).isPresent()) {
                     continue;
                 }
                 try {
@@ -410,7 +437,7 @@ class TonDepositScanner {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile() {
-        return repository.findProfileByChain(CHAIN)
+        return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
     /**

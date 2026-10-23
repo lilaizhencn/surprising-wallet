@@ -1,9 +1,6 @@
 package com.surprising.wallet.repository;
 
 import com.surprising.wallet.chain.model.ChainCollectionRecord;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
-
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -13,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
 
 /** collection_record 单表仓储。 */
 @Repository
@@ -60,6 +59,8 @@ public class CollectionRecordRepository {
     /** 创建租户归集记录。 */
     public int create(UUID tenantId, UUID custodyAddressId, String collectionNo, String chain, String assetSymbol,
                       String fromAddress, String toAddress, BigDecimal amount, BigDecimal fee, String rawPayload) {
+        java.util.Objects.requireNonNull(tenantId, "tenantId is required");
+        java.util.Objects.requireNonNull(custodyAddressId, "custodyAddressId is required");
         Timestamp now = Timestamp.from(Instant.now());
         return jdbc.update("""
                 insert into collection_record(collection_no, chain, asset_symbol, from_address, to_address,
@@ -85,6 +86,7 @@ public class CollectionRecordRepository {
     /** 更新归集记录状态。 */
     public int updateStatus(UUID tenantId, String chain, String collectionNo, String status,
                             String txHash, String errorMessage, String rawPayload) {
+        java.util.Objects.requireNonNull(tenantId, "tenantId is required");
         return jdbc.update("""
                 update collection_record set status = ?, tx_hash = coalesce(?, tx_hash), error_message = ?,
                     raw_payload = coalesce(?, raw_payload), updated_at = ?
@@ -106,6 +108,7 @@ public class CollectionRecordRepository {
 
     /** 领取归集签名状态。 */
     public int claimSigning(UUID tenantId, String chain, String collectionNo, String rawPayload) {
+        java.util.Objects.requireNonNull(tenantId, "tenantId is required");
         return jdbc.update("""
                 update collection_record set status = 'SIGNING', error_message = null,
                     raw_payload = coalesce(?, raw_payload), updated_at = ?
@@ -132,6 +135,7 @@ public class CollectionRecordRepository {
 
     /** 标记归集已确认。 */
     public int markConfirmed(UUID tenantId, String chain, String collectionNo, String txHash) {
+        java.util.Objects.requireNonNull(tenantId, "tenantId is required");
         return jdbc.update("""
                 update collection_record set status = 'CONFIRMED', tx_hash = ?, error_message = null,
                     updated_at = ?
@@ -141,6 +145,7 @@ public class CollectionRecordRepository {
 
     /** 查询归集状态。 */
     public Optional<String> findStatus(UUID tenantId, String chain, String collectionNo) {
+        java.util.Objects.requireNonNull(tenantId, "tenantId is required");
         return jdbc.queryForList("""
                 select status from collection_record where tenant_id = ? and chain = ? and collection_no = ?
                 """, String.class, tenantId, chain, collectionNo).stream().findFirst();
@@ -148,6 +153,7 @@ public class CollectionRecordRepository {
 
     /** 查询归集交易哈希。 */
     public Optional<String> findTxHash(UUID tenantId, String chain, String collectionNo) {
+        java.util.Objects.requireNonNull(tenantId, "tenantId is required");
         return jdbc.queryForList("""
                 select tx_hash from collection_record
                  where tenant_id = ? and chain = ? and collection_no = ? and tx_hash is not null
@@ -192,6 +198,7 @@ public class CollectionRecordRepository {
 
     /** 按主键领取归集记录。 */
     public int claimSigning(UUID tenantId, long id) {
+        java.util.Objects.requireNonNull(tenantId, "tenantId is required");
         return jdbc.update("""
                 update collection_record set status = 'SIGNING', error_message = null, updated_at = now()
                  where tenant_id = ? and id = ? and status in ('CREATED', 'RETRYING')

@@ -1,9 +1,9 @@
 package com.surprising.wallet.chain.aptos;
 
-import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.HotWalletRules;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
-import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -24,9 +24,8 @@ public class AptosAddressService {
 
     /** 密钥服务 */
     private final AptosKeyService keyService;
+    private final ChainAddressRepository chainAddressRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
 
     /**
      * 创建原生 APT 充值/收款地址。
@@ -41,7 +40,7 @@ public class AptosAddressService {
      */
     public ChainAddressRecord createNativeAddress(long userId, int biz, long derivationIndex, String walletRole) {
         HotWalletRules.requireAllowedReservedAddress(CHAIN, "APT", "APT", userId, biz, derivationIndex, walletRole);
-        return repository.findChainAddress(CHAIN, "APT", userId, biz, derivationIndex, walletRole)
+        return chainAddressRepository.find(CHAIN, "APT", userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     Ed25519DerivedKey key = keyService.derive(userId, biz, derivationIndex);
                     String address = AptosKeyService.address(key.publicKey());
@@ -58,8 +57,8 @@ public class AptosAddressService {
                             .walletRole(walletRole)
                             .enabled(true)
                             .build();
-                    repository.upsertChainAddress(record);
-                    return repository.findChainAddress(CHAIN, "APT", userId, biz, derivationIndex, walletRole)
+                    chainAddressRepository.upsert(record);
+                    return chainAddressRepository.find(CHAIN, "APT", userId, biz, derivationIndex, walletRole)
                             .orElseThrow();
                 });
     }
@@ -81,7 +80,7 @@ public class AptosAddressService {
                                                  long derivationIndex, String walletRole) {
         HotWalletRules.requireAllowedReservedAddress(CHAIN, symbol, "APT", userId, biz, derivationIndex, walletRole);
         ChainAddressRecord owner = createNativeAddress(userId, biz, derivationIndex, walletRole);
-        return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
+        return chainAddressRepository.find(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     ChainAddressRecord record = ChainAddressRecord.builder()
                             .chain(CHAIN)
@@ -96,8 +95,8 @@ public class AptosAddressService {
                             .walletRole(walletRole)
                             .enabled(true)
                             .build();
-                    repository.upsertChainAddress(record);
-                    return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
+                    chainAddressRepository.upsert(record);
+                    return chainAddressRepository.find(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                             .orElseThrow();
                 });
     }

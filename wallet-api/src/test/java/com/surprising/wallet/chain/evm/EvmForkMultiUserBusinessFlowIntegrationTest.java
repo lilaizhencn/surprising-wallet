@@ -1,10 +1,20 @@
 package com.surprising.wallet.chain.evm;
 
+import com.surprising.wallet.chain.model.EvmTransactionRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.EvmTransactionRecord;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,17 +36,6 @@ import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.utils.Numeric;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.math.RoundingMode;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -76,7 +75,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         String nativeSymbol = System.getProperty("evm.native.symbol", "ETH");
         int confirmations = Integer.getInteger("evm.confirmations", 1);
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource());
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbcTemplate);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbcTemplate);
         EvmDepositScanner scanner = com.surprising.wallet.testutil.EvmScanTestSupport.scanner(jdbcTemplate, chain, LOCAL_RPC, confirmations);
         Web3j web3j = Web3j.build(new HttpService(LOCAL_RPC));
 
@@ -151,8 +150,12 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
                         actors.userB(), actors.hotWallet(), collectionToken.address(), collectionToken.symbol(),
                         collectionToken.decimals(),
                         new BigDecimal("100"), chainId);
-                assertFalse(repository.freezeLedgerBalance(
-                                chain.name(), collectionToken.symbol(), actors.userB().address(), BigDecimal.ONE),
+                assertFalse(repository.ledgerBalanceRepository.freeze(
+                        chain.name(),
+                        collectionToken.symbol(),
+                        actors.userB().address(),
+                        BigDecimal.ONE,
+                        null),
                         "double-spend guard must reject a second token collection after balance reached zero");
             }
             assertAddressMatchesChain(jdbcTemplate, web3j, chain, nativeSymbol, tokens, actors.userA());
@@ -167,8 +170,17 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
             assertEquals(withdrawalToken == null ? BigInteger.ZERO : BigInteger.ONE,
                     pendingNonce(web3j, actors.userD().credentials()), "user D token withdrawal nonce");
             assertEquals(0, countNonConfirmedOrders(jdbcTemplate, chain), "all stability orders must be terminal CONFIRMED");
-            assertEquals(jdbcTemplate.queryForObject("select count(*) from deposit_record where tenant_id = ? and chain = ? and credited", Long.class, TEST_TENANT_ID, chain.name()),
-                    jdbcTemplate.queryForObject("select count(*) from custody_deposit where tenant_id = ? and chain = ?", Long.class, TEST_TENANT_ID, chain.name()));
+            assertEquals(
+                    jdbcTemplate.queryForObject(
+                            "select count(*) from deposit_record where tenant_id = ? and chain = ? and credited",
+                            Long.class,
+                            TEST_TENANT_ID,
+                            chain.name()),
+                    jdbcTemplate.queryForObject(
+                            "select count(*) from custody_deposit where tenant_id = ? and chain = ?",
+                            Long.class,
+                            TEST_TENANT_ID,
+                            chain.name()));
         } finally {
             web3j.shutdown();
         }
@@ -177,25 +189,25 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     /**
      * 验证 {@code executeFailedThenRecoveredNativeWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void executeFailedThenRecoveredNativeWithdrawal(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
+    private static void executeFailedThenRecoveredNativeWithdrawal(JdbcTemplate jdbcTemplate, ChainRepositoryFixture repository,
                                                                    Web3j web3j, ChainType chain, String nativeSymbol,
                                                                    Actor user, String recipient, BigDecimal amount,
                                                                    long chainId) throws Exception {
         String orderNo = orderNo(chain, user.label(), nativeSymbol, "WD-RECOVERY");
         BigDecimal frozen = amount.add(GAS_BUFFER);
         createOrder(jdbcTemplate, orderNo, user.userId(), chain, nativeSymbol, user.address(), recipient, amount);
-        assertTrue(repository.freezeLedgerBalance(chain.name(), nativeSymbol, user.address(), frozen));
+        assertTrue(repository.ledgerBalanceRepository.freeze(chain.name(), nativeSymbol, user.address(), frozen, null));
         updateOrder(jdbcTemplate, orderNo, "FROZEN", null, BigDecimal.ZERO, null);
         BigInteger failedNonce = reserveNonce(jdbcTemplate, web3j, chain, user);
         updateOrder(jdbcTemplate, orderNo, "SIGNING", null, BigDecimal.ZERO, null);
         IllegalStateException error = assertThrows(IllegalStateException.class,
                 () -> sendSignedNative(web3j, user.credentials(), recipient, amount, chainId, failedNonce, BigInteger.ONE));
         updateOrder(jdbcTemplate, orderNo, "FAILED", null, BigDecimal.ZERO, error.getMessage());
-        assertTrue(repository.releaseLockedBalance(chain.name(), nativeSymbol, user.address(), frozen));
+        assertTrue(repository.ledgerBalanceRepository.release(chain.name(), nativeSymbol, user.address(), frozen, null));
         assertBalanceEquals(BigDecimal.ZERO, locked(jdbcTemplate, chain, nativeSymbol, user.address()));
 
         updateOrder(jdbcTemplate, orderNo, "RETRYING", null, BigDecimal.ZERO, "retry after rejected raw tx");
-        assertTrue(repository.freezeLedgerBalance(chain.name(), nativeSymbol, user.address(), frozen));
+        assertTrue(repository.ledgerBalanceRepository.freeze(chain.name(), nativeSymbol, user.address(), frozen, null));
         BigInteger retryNonce = reserveNonce(jdbcTemplate, web3j, chain, user);
         assertEquals(failedNonce, retryNonce, "rejected transaction must not consume nonce");
         SignedTx tx = sendSignedNative(web3j, user.credentials(), recipient, amount, chainId, retryNonce, BigInteger.valueOf(21_000L));
@@ -208,14 +220,14 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     /**
      * 验证 {@code executeTokenWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void executeTokenWithdrawal(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository, Web3j web3j,
+    private static void executeTokenWithdrawal(JdbcTemplate jdbcTemplate, ChainRepositoryFixture repository, Web3j web3j,
                                                ChainType chain, String nativeSymbol, Actor user, String contract,
                                                String tokenSymbol, int tokenDecimals, String recipient, BigDecimal amount,
                                                long chainId) throws Exception {
         String orderNo = orderNo(chain, user.label(), tokenSymbol, "WD");
         createOrder(jdbcTemplate, orderNo, user.userId(), chain, tokenSymbol, user.address(), recipient, amount);
-        assertTrue(repository.freezeLedgerBalance(chain.name(), tokenSymbol, user.address(), amount));
-        assertTrue(repository.freezeLedgerBalance(chain.name(), nativeSymbol, user.address(), GAS_BUFFER));
+        assertTrue(repository.ledgerBalanceRepository.freeze(chain.name(), tokenSymbol, user.address(), amount, null));
+        assertTrue(repository.ledgerBalanceRepository.freeze(chain.name(), nativeSymbol, user.address(), GAS_BUFFER, null));
         updateOrder(jdbcTemplate, orderNo, "FROZEN", null, BigDecimal.ZERO, null);
         BigInteger nonce = reserveNonce(jdbcTemplate, web3j, chain, user);
         assertTrue(estimateTokenGas(web3j, user.address(), contract, recipient, amount, tokenDecimals)
@@ -224,7 +236,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         SignedTx tx = sendSignedTokenTransfer(
                 web3j, user.credentials(), contract, recipient, amount, tokenDecimals, chainId, nonce);
         updateOrder(jdbcTemplate, orderNo, "SENT", tx.receipt().getTransactionHash(), fee(tx), null);
-        assertTrue(repository.settleLockedDebit(chain.name(), tokenSymbol, user.address(), amount));
+        assertTrue(repository.ledgerBalanceRepository.settle(chain.name(), tokenSymbol, user.address(), amount, null));
         settleFrozen(repository, chain.name(), nativeSymbol, user.address(), GAS_BUFFER, fee(tx));
         updateOrder(jdbcTemplate, orderNo, "CONFIRMED", tx.receipt().getTransactionHash(), fee(tx), null);
         recordEvmTx(repository, chain, tokenSymbol, contract, user.address(), recipient, amount, tx);
@@ -233,13 +245,13 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     /**
      * 验证 {@code executeNativeCollection} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void executeNativeCollection(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository, Web3j web3j,
+    private static void executeNativeCollection(JdbcTemplate jdbcTemplate, ChainRepositoryFixture repository, Web3j web3j,
                                                 ChainType chain, String nativeSymbol, Actor user, Actor hotWallet,
                                                 BigDecimal amount, long chainId) throws Exception {
         String orderNo = orderNo(chain, user.label(), nativeSymbol, "COLL");
         BigDecimal frozen = amount.add(GAS_BUFFER);
         createOrder(jdbcTemplate, orderNo, user.userId(), chain, nativeSymbol, user.address(), hotWallet.address(), amount);
-        assertTrue(repository.freezeLedgerBalance(chain.name(), nativeSymbol, user.address(), frozen));
+        assertTrue(repository.ledgerBalanceRepository.freeze(chain.name(), nativeSymbol, user.address(), frozen, null));
         updateOrder(jdbcTemplate, orderNo, "FROZEN", null, BigDecimal.ZERO, null);
         BigInteger nonce = reserveNonce(jdbcTemplate, web3j, chain, user);
         assertTrue(estimateNativeGas(web3j, user.address(), hotWallet.address(), amount).compareTo(BigInteger.ZERO) > 0);
@@ -247,7 +259,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         SignedTx tx = sendSignedNative(web3j, user.credentials(), hotWallet.address(), amount, chainId, nonce, BigInteger.valueOf(21_000L));
         updateOrder(jdbcTemplate, orderNo, "SENT", tx.receipt().getTransactionHash(), fee(tx), null);
         settleFrozen(repository, chain.name(), nativeSymbol, user.address(), frozen, amount.add(fee(tx)));
-        repository.incrementLedgerBalance(TEST_TENANT_ID, chain.name(), nativeSymbol, hotWallet.address(), amount);
+        repository.ledgerBalanceRepository.increment(TEST_TENANT_ID, chain.name(), nativeSymbol, hotWallet.address(), amount);
         updateOrder(jdbcTemplate, orderNo, "CONFIRMED", tx.receipt().getTransactionHash(), fee(tx), null);
         recordEvmTx(repository, chain, nativeSymbol, null, user.address(), hotWallet.address(), amount, tx);
     }
@@ -255,15 +267,15 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     /**
      * 验证 {@code executeInterruptedTokenCollectionRecovery} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void executeInterruptedTokenCollectionRecovery(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
+    private static void executeInterruptedTokenCollectionRecovery(JdbcTemplate jdbcTemplate, ChainRepositoryFixture repository,
                                                                   Web3j web3j, ChainType chain, String nativeSymbol,
                                                                   Actor user, Actor hotWallet, String contract,
                                                                   String tokenSymbol, int tokenDecimals, BigDecimal amount,
                                                                   long chainId) throws Exception {
         String orderNo = orderNo(chain, user.label(), tokenSymbol, "COLL-RECOVERY");
         createOrder(jdbcTemplate, orderNo, user.userId(), chain, tokenSymbol, user.address(), hotWallet.address(), amount);
-        assertTrue(repository.freezeLedgerBalance(chain.name(), tokenSymbol, user.address(), amount));
-        assertTrue(repository.freezeLedgerBalance(chain.name(), nativeSymbol, user.address(), GAS_BUFFER));
+        assertTrue(repository.ledgerBalanceRepository.freeze(chain.name(), tokenSymbol, user.address(), amount, null));
+        assertTrue(repository.ledgerBalanceRepository.freeze(chain.name(), nativeSymbol, user.address(), GAS_BUFFER, null));
         updateOrder(jdbcTemplate, orderNo, "SIGNING", null, BigDecimal.ZERO, "simulated interruption before broadcast");
 
         SignedTx tx = recoverTokenCollection(jdbcTemplate, repository, web3j, chain, nativeSymbol, user, hotWallet,
@@ -279,7 +291,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     /**
      * 验证 {@code recoverTokenCollection} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static SignedTx recoverTokenCollection(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository, Web3j web3j,
+    private static SignedTx recoverTokenCollection(JdbcTemplate jdbcTemplate, ChainRepositoryFixture repository, Web3j web3j,
                                                    ChainType chain, String nativeSymbol, Actor user, Actor hotWallet,
                                                    String contract, String tokenSymbol, int tokenDecimals, BigDecimal amount,
                                                    long chainId, String orderNo) throws Exception {
@@ -296,9 +308,9 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         SignedTx tx = sendSignedTokenTransfer(
                 web3j, user.credentials(), contract, hotWallet.address(), amount, tokenDecimals, chainId, nonce);
         updateOrder(jdbcTemplate, orderNo, "SENT", tx.receipt().getTransactionHash(), fee(tx), null);
-        assertTrue(repository.settleLockedDebit(chain.name(), tokenSymbol, user.address(), amount));
+        assertTrue(repository.ledgerBalanceRepository.settle(chain.name(), tokenSymbol, user.address(), amount, null));
         settleFrozen(repository, chain.name(), nativeSymbol, user.address(), GAS_BUFFER, fee(tx));
-        repository.incrementLedgerBalance(TEST_TENANT_ID, chain.name(), tokenSymbol, hotWallet.address(), amount);
+        repository.ledgerBalanceRepository.increment(TEST_TENANT_ID, chain.name(), tokenSymbol, hotWallet.address(), amount);
         updateOrder(jdbcTemplate, orderNo, "CONFIRMED", tx.receipt().getTransactionHash(), fee(tx), null);
         return tx;
     }
@@ -306,19 +318,19 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     /**
      * 验证 {@code settleFrozen} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void settleFrozen(ChainJdbcRepository repository, String chain, String asset, String account,
+    private static void settleFrozen(ChainRepositoryFixture repository, String chain, String asset, String account,
                                      BigDecimal frozen, BigDecimal actualDebit) {
         BigDecimal lockedDebit = actualDebit.min(frozen);
         if (lockedDebit.signum() > 0) {
-            assertTrue(repository.settleLockedDebit(chain, asset, account, lockedDebit));
+            assertTrue(repository.ledgerBalanceRepository.settle(chain, asset, account, lockedDebit, null));
         }
         BigDecimal remainder = frozen.subtract(lockedDebit);
         if (remainder.signum() > 0) {
-            assertTrue(repository.releaseLockedBalance(chain, asset, account, remainder));
+            assertTrue(repository.ledgerBalanceRepository.release(chain, asset, account, remainder, null));
         }
         BigDecimal unfrozenDebit = actualDebit.subtract(lockedDebit);
         if (unfrozenDebit.signum() > 0) {
-            assertTrue(repository.debitLedgerBalance(chain, asset, account, unfrozenDebit));
+            assertTrue(repository.ledgerBalanceRepository.debit(chain, asset, account, unfrozenDebit, null));
         }
     }
 
@@ -409,12 +421,12 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
     /**
      * 验证 {@code recordEvmTx} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void recordEvmTx(ChainJdbcRepository repository, ChainType chain, String asset, String contract,
+    private static void recordEvmTx(ChainRepositoryFixture repository, ChainType chain, String asset, String contract,
                                     String from, String to, BigDecimal amount, SignedTx tx) {
         if (tx == null) {
             return;
         }
-        repository.recordEvmTransaction(EvmTransactionRecord.builder()
+        repository.evmTransactionRepository.upsert(EvmTransactionRecord.builder()
                 .chain(chain.name())
                 .txHash(tx.receipt().getTransactionHash())
                 .fromAddress(from.toLowerCase(Locale.ROOT))

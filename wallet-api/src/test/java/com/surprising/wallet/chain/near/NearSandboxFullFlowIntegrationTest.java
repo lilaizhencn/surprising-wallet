@@ -1,23 +1,13 @@
 package com.surprising.wallet.chain.near;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
+import com.surprising.wallet.chain.WalletKeyTestFixture;
+import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
-import com.surprising.wallet.chain.WalletKeyTestFixture;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.file.Files;
@@ -25,7 +15,15 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -76,17 +74,32 @@ class NearSandboxFullFlowIntegrationTest {
                 "set -Dnear.sandbox.flow.enabled=true to run the local NEAR sandbox flow");
 
         JdbcTemplate jdbc = new JdbcTemplate(dataSource());
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         UUID tenantId = NearTenantIntegrationFixture.ensureTenant(jdbc);
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         NearKeyService keys = new NearKeyService(keyMaterial);
-        NearRpcClient rpc = new NearRpcClient(JSON, profiles("NEAR"), nodes("NEAR", System.getProperty("near.sandbox.rpc", "http://127.0.0.1:3032")));
-        NearTransactionService transactions = new NearTransactionService(rpc,
+        NearRpcClient rpc = new NearRpcClient(
+                JSON,
+                profiles("NEAR"),
+                nodes("NEAR", System.getProperty("near.sandbox.rpc", "http://127.0.0.1:3032")));
+        NearTransactionService transactions = new NearTransactionService(
+                rpc,
                 new NearTransactionSigner(keys),
                 keys,
-                repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
-        NearDepositScanner scanner = new NearDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc));
+                repository.nearTransactionRepository,
+                repository.collectionRecordRepository,
+                repository.chainAddressRepository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc),
+                RuntimeTestSupport.database(jdbc));
+        NearDepositScanner scanner = new NearDepositScanner(
+                rpc,
+                repository.chainScanHeightRepository,
+                repository.nearTransactionRepository,
+                repository.depositService,
+                repository.chainAddressRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                RuntimeTestSupport.database(jdbc));
 
         ChainAddressRecord hot = address(tenantId, keys, 0L, 0, 0L, "DEPOSIT", CHAIN, "near-hot");
         ChainAddressRecord source = address(
@@ -97,12 +110,12 @@ class NearSandboxFullFlowIntegrationTest {
                 "near-external");
         for (ChainAddressRecord actor : List.of(hot, source, user, external)) {
             assertTrue(transactions.accountExists(actor.getAddress()), "missing genesis actor " + actor.getAddress());
-            repository.upsertChainAddress(actor);
+            repository.chainAddressRepository.upsert(actor);
             assertEquals(GENESIS_BALANCE, rpc.accountBalanceYocto(actor.getAddress()));
         }
         UUID custodyAddressId = NearTenantIntegrationFixture.attachDepositAddress(jdbc, user);
 
-        repository.updateScanHeight(CHAIN, SCANNER, rpc.latestFinalBlockHeight(), rpc.latestFinalBlockHeight());
+        repository.chainScanHeightRepository.upsert(CHAIN, SCANNER, rpc.latestFinalBlockHeight(), rpc.latestFinalBlockHeight());
         String nativeDeposit = transactions.sendNative(source, user.getAddress(),
                 NearTransactionService.toYocto(new BigDecimal("100")));
         transactions.requireSuccessfulConfirmation(nativeDeposit, source.getAddress(), Duration.ofSeconds(30));
@@ -129,8 +142,7 @@ class NearSandboxFullFlowIntegrationTest {
         tokenFlow(tenantId, custodyAddressId, jdbc, repository, keys, rpc, transactions, scanner, contractCode,
                 "USDT", 900_003L, runId);
 
-        assertFalse(repository.freezeLedgerBalance(CHAIN, "USDC", user.getAccountId(),
-                new BigDecimal("1000")));
+        assertFalse(repository.ledgerBalanceRepository.freeze(CHAIN, "USDC", user.getAccountId(), new BigDecimal("1000"), null));
         assertEquals(0, jdbc.queryForObject("select count(*) from ledger_balance where chain='NEAR' "
                 + "and (available_balance < 0 or locked_balance < 0 or total_balance < 0)", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from ledger_balance where chain='NEAR' "
@@ -145,7 +157,7 @@ class NearSandboxFullFlowIntegrationTest {
      * 验证 {@code tokenFlow} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private static void tokenFlow(UUID tenantId, UUID custodyAddressId,
-                                  JdbcTemplate jdbc, ChainJdbcRepository repository, NearKeyService keys,
+                                  JdbcTemplate jdbc, ChainRepositoryFixture repository, NearKeyService keys,
                                   NearRpcClient rpc, NearTransactionService transactions,
                                   NearDepositScanner scanner, byte[] contractCode,
                                   String symbol, long contractUser, String runId) throws Exception {
@@ -159,7 +171,7 @@ class NearSandboxFullFlowIntegrationTest {
         ChainAddressRecord contract = address(tenantId, keys, contractUser, 9, 0L, "CONTRACT", symbol,
                 "near-contract-" + symbol.toLowerCase());
         for (ChainAddressRecord actor : List.of(source, user, external, hot, contract)) {
-            repository.upsertChainAddress(actor);
+            repository.chainAddressRepository.upsert(actor);
         }
 
         ObjectNode metadata = JSON.createObjectNode();
@@ -187,7 +199,10 @@ class NearSandboxFullFlowIntegrationTest {
                        collect_enabled = true, updated_at = now()
                  where chain = 'NEAR' and network = 'testnet' and symbol = ?
                 """, contract.getAddress(), contract.getAddress(), symbol);
-        TokenDefinition token = repository.findToken(CHAIN, symbol).orElseThrow();
+        TokenDefinition token = repository.chainProfileRepository.findAccountByChain(CHAIN).flatMap( configuredNetworkProfile -> repository.tokenConfigRepository.findDefinition(
+                CHAIN,
+                configuredNetworkProfile.getNetwork(),
+                symbol)).orElseThrow();
 
         transactions.storageDeposit(source, token, user.getAddress(), STORAGE_DEPOSIT);
         transactions.storageDeposit(source, token, external.getAddress(), STORAGE_DEPOSIT);
@@ -223,26 +238,33 @@ class NearSandboxFullFlowIntegrationTest {
     /**
      * 验证 {@code withdraw} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void withdraw(UUID tenantId, ChainJdbcRepository repository,
+    private static void withdraw(UUID tenantId, ChainRepositoryFixture repository,
                                  NearTransactionService transactions,
                                  String orderNo, ChainAddressRecord from, ChainAddressRecord to,
                                  TokenDefinition token, BigDecimal amount) {
         String symbol = token == null ? CHAIN : token.getSymbol();
-        assertEquals(1, repository.createTenantWithdrawalOrder(
-                tenantId, orderNo, from.getUserId(), CHAIN, symbol,
-                from.getAddress(), from.getAccountId(), to.getAddress(), amount, BigDecimal.ZERO));
-        assertTrue(repository.freezeLedgerBalance(tenantId, CHAIN, symbol, from.getAccountId(), amount));
-        assertEquals(1, repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FROZEN",
-                from.getAddress(), null, null));
-        assertEquals(1, repository.claimWithdrawalSigning(
-                tenantId, CHAIN, orderNo, from.getAddress()));
+        assertEquals(
+                1,
+                repository.withdrawalOrderRepository.createForTenant(
+                        tenantId,
+                        orderNo,
+                        from.getUserId(),
+                        CHAIN,
+                        symbol,
+                        from.getAddress(),
+                        from.getAccountId(),
+                        to.getAddress(),
+                        amount,
+                        BigDecimal.ZERO));
+        assertTrue(repository.ledgerBalanceRepository.freeze(CHAIN, symbol, from.getAccountId(), amount, tenantId));
+        assertEquals(1, repository.withdrawalOrderRepository.updateStatus(tenantId, CHAIN, orderNo, "FROZEN", from.getAddress(), null, null));
+        assertEquals(1, repository.withdrawalClaimService.claim(tenantId, CHAIN, orderNo, from.getAddress()));
         String txHash = token == null
                 ? transactions.sendNative(from, to.getAddress(), NearTransactionService.toYocto(amount))
                 : transactions.sendToken(from, token, to.getAddress(), amount);
-        assertEquals(1, repository.markWithdrawalSent(
-                tenantId, CHAIN, orderNo, from.getAddress(), txHash));
+        assertEquals(1, repository.withdrawalOrderRepository.markSent(tenantId, CHAIN, orderNo, from.getAddress(), txHash));
         assertTrue(transactions.confirmWithdrawal(tenantId,
-                repository.findProfileByChain(CHAIN).orElseThrow(), orderNo, txHash,
+                repository.chainProfileRepository.findAccountByChain(CHAIN).orElseThrow(), orderNo, txHash,
                 symbol, from.getAccountId(), amount));
     }
 
@@ -250,13 +272,23 @@ class NearSandboxFullFlowIntegrationTest {
      * 验证 {@code collect} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private static String collect(UUID tenantId, UUID custodyAddressId,
-                                  ChainJdbcRepository repository, NearTransactionService transactions,
+                                  ChainRepositoryFixture repository, NearTransactionService transactions,
                                   String collectionNo, ChainAddressRecord from, ChainAddressRecord hot,
                                   TokenDefinition token, BigDecimal amount) {
         String symbol = token == null ? CHAIN : token.getSymbol();
-        assertEquals(1, repository.createCollectionRecord(
-                tenantId, custodyAddressId, collectionNo, CHAIN, symbol,
-                from.getAddress(), hot.getAddress(), amount, BigDecimal.ZERO, null));
+        assertEquals(
+                1,
+                repository.collectionRecordRepository.create(
+                        tenantId,
+                        custodyAddressId,
+                        collectionNo,
+                        CHAIN,
+                        symbol,
+                        from.getAddress(),
+                        hot.getAddress(),
+                        amount,
+                        BigDecimal.ZERO,
+                        null));
         String txHash = token == null
                 ? transactions.collectNative(
                         tenantId, collectionNo, from, hot.getAddress(), NearTransactionService.toYocto(amount))
@@ -266,7 +298,7 @@ class NearSandboxFullFlowIntegrationTest {
                         tenantId, collectionNo, from, hot.getAddress(), NearTransactionService.toYocto(amount))
                 : transactions.collectToken(tenantId, collectionNo, from, token, hot.getAddress(), amount));
         assertTrue(transactions.confirmCollection(
-                tenantId, repository.findProfileByChain(CHAIN).orElseThrow(), collectionNo));
+                tenantId, repository.chainProfileRepository.findAccountByChain(CHAIN).orElseThrow(), collectionNo));
         return txHash;
     }
 
@@ -274,7 +306,7 @@ class NearSandboxFullFlowIntegrationTest {
      * 验证 {@code assertInternalCollectionNotCredited} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private static void assertInternalCollectionNotCredited(
-            JdbcTemplate jdbc, ChainJdbcRepository repository, String txHash,
+            JdbcTemplate jdbc, ChainRepositoryFixture repository, String txHash,
             String symbol, String userAccountId) {
         assertEquals(0, jdbc.queryForObject("""
                 select count(*) from deposit_record
@@ -367,8 +399,8 @@ class NearSandboxFullFlowIntegrationTest {
     /**
      * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String symbol, String accountId) {
-        return repository.findLedgerBalance(CHAIN, symbol, accountId)
+    private static LedgerBalanceRecord ledger(ChainRepositoryFixture repository, String symbol, String accountId) {
+        return repository.ledgerBalanceRepository.find(CHAIN, symbol, accountId)
                 .orElseThrow(() -> new IllegalStateException("missing NEAR ledger " + symbol + "/" + accountId));
     }
 

@@ -1,14 +1,18 @@
 package com.surprising.wallet.gateway;
 
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
+import com.surprising.wallet.chain.evm.EvmAccountTransactionService;
+import com.surprising.wallet.chain.evm.EvmHttpServiceFactory;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.chain.evm.EvmAccountTransactionService;
-import com.surprising.wallet.chain.evm.EvmHttpServiceFactory;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import org.springframework.stereotype.Component;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.DefaultBlockParameterName;
@@ -17,12 +21,8 @@ import org.web3j.protocol.core.methods.response.EthBlock;
 import org.web3j.protocol.core.methods.response.Log;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.utils.Numeric;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * EVM 链资产找回网关，负责构造和广播资产找回交易。
@@ -50,7 +50,9 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
     /**
      * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
+
     /**
      * 保存 {@code rpcNodes}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
@@ -68,12 +70,15 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
     /**
      * 构造 {@code EvmAssetRecoveryChainGateway}，初始化该组件运行所需的状态和依赖。
      */
-    public EvmAssetRecoveryChainGateway(ChainJdbcRepository repository,
-                                        ChainRpcNodeService rpcNodes,
-                                        EvmAccountTransactionService transactions,
-                                        ObjectMapper objectMapper,
-                                        EvmHttpServiceFactory httpServices) {
-        this.repository = repository;
+    public EvmAssetRecoveryChainGateway(
+            ChainProfileRepository chainProfileRepository,
+            TokenConfigRepository tokenConfigRepository,
+            ChainRpcNodeService rpcNodes,
+            EvmAccountTransactionService transactions,
+            ObjectMapper objectMapper,
+            EvmHttpServiceFactory httpServices) {
+        this.chainProfileRepository = chainProfileRepository;
+        this.tokenConfigRepository = tokenConfigRepository;
         this.rpcNodes = rpcNodes;
         this.transactions = transactions;
         this.objectMapper = objectMapper;
@@ -248,7 +253,10 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
      * 编码 {@code tokenDecimals} 对应的数据，生成链上或接口所需的表示。
      */
     private int tokenDecimals(Web3j web3j, String chain, String contract) throws Exception {
-        TokenDefinition configured = repository.findTokenByContract(chain, contract).orElse(null);
+        TokenDefinition configured = chainProfileRepository.findAccountByChain(chain).flatMap( configuredNetworkProfile -> tokenConfigRepository.findDefinitionByContract(
+                chain,
+                configuredNetworkProfile.getNetwork(),
+                contract)).orElse(null);
         if (configured != null && configured.getDecimals() != null) {
             return configured.getDecimals();
         }
@@ -266,7 +274,7 @@ public class EvmAssetRecoveryChainGateway implements CustodyAssetRecoveryChainGa
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile(String chain) {
-        AccountChainProfile profile = repository.findProfileByChain(chain)
+        AccountChainProfile profile = chainProfileRepository.findAccountByChain(chain)
                 .orElseThrow(() -> new IllegalArgumentException("actual chain is not enabled by the platform"));
         if (!"evm".equalsIgnoreCase(profile.getFamily())) {
             throw new IllegalArgumentException("automatic recovery currently supports EVM chains");

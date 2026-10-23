@@ -11,12 +11,13 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainScanHeightRepository;
+import com.surprising.wallet.repository.DepositRecordRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.service.DepositService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -26,6 +27,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 /**
  * Cardano 链充值扫描器，通过 Blockfrost API 扫描地址交易中的 UTxO 输出识别充值。
@@ -38,8 +42,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
-public
-class CardanoDepositScanner {
+public class CardanoDepositScanner {
 
     /** 链标识 */
     private static final String CHAIN = CardanoBackendClient.CHAIN;
@@ -55,9 +58,13 @@ class CardanoDepositScanner {
 
     /** Blockfrost 后端客户端 */
     private final CardanoBackendClient backendClient;
+    private final ChainAddressRepository chainAddressRepository;
+    private final DepositRecordRepository depositRecordRepository;
+    private final DepositService depositService;
+    private final ChainScanHeightRepository chainScanHeightRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
 
     /** 运行时任务开关服务。 */
     @NonNull
@@ -72,7 +79,7 @@ class CardanoDepositScanner {
         if (addresses.isEmpty()) {
             return List.of();
         }
-        Set<String> managedAddresses = repository.listChainAddresses(CHAIN).stream()
+        Set<String> managedAddresses = chainAddressRepository.listEnabled(CHAIN).stream()
                 .map(ChainAddressRecord::getAddress)
                 .map(CardanoDepositScanner::normalize)
                 .collect(Collectors.toSet());
@@ -95,7 +102,7 @@ class CardanoDepositScanner {
                             tx, confirmations, requiredConfirmations, events);
                 }
             }
-            for (var pending : repository.listPendingDeposits(CHAIN, requiredConfirmations, 500)) {
+            for (var pending : depositRecordRepository.listPending(CHAIN, requiredConfirmations, 500)) {
                 int confirmations = confirmations(latest, pending.blockHeight());
                 if (confirmations <= pending.confirmations()) {
                     continue;
@@ -103,8 +110,7 @@ class CardanoDepositScanner {
                 CardanoBackendClient.requireSuccess(
                         backend.getTransactionService().getTransactionUtxos(pending.txHash()),
                         "pending deposit transaction utxos");
-                repository.recordAndCreditDeposit(
-                        new DepositEvent(
+                depositService.recordAndCredit(new DepositEvent(
                                 ChainType.ADA,
                                 pending.assetSymbol(),
                                 pending.txHash(),
@@ -115,13 +121,10 @@ class CardanoDepositScanner {
                                 pending.blockHash(),
                                 confirmations,
                                 pending.contractAddress(),
-                                pending.rawPayload()),
-                        pending.logIndex(),
-                        requiredConfirmations,
-                        pending.accountId());
+                                pending.rawPayload()), pending.logIndex(), requiredConfirmations, pending.accountId());
             }
             long safeHeight = Math.max(0L, latest - requiredConfirmations + 1L);
-            repository.updateScanHeight(CHAIN, SCANNER, latest, safeHeight);
+            chainScanHeightRepository.upsert(CHAIN, SCANNER, latest, safeHeight);
             return events;
         });
     }
@@ -162,9 +165,11 @@ class CardanoDepositScanner {
                     assetIndex++;
                     continue;
                 }
-                repository.recordAndCreditDeposit(deposit.event(),
+                depositService.recordAndCredit(
+                        deposit.event(),
                         CardanoAssetUnit.depositLogIndex(output.getOutputIndex(), assetIndex),
-                        requiredConfirmations, deposit.addressRecord().getAccountId());
+                        requiredConfirmations,
+                        deposit.addressRecord().getAccountId());
                 events.add(deposit.event());
                 assetIndex++;
             }
@@ -209,7 +214,7 @@ class CardanoDepositScanner {
      */
     Map<String, TrackedCardanoAddress> trackedDepositAddresses(Map<String, TokenDefinition> tokensByUnit) {
         Map<String, MutableTrackedCardanoAddress> addresses = new HashMap<>();
-        for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, SYMBOL)) {
+        for (ChainAddressRecord address : chainAddressRepository.listEnabled(CHAIN, SYMBOL)) {
             if ("DEPOSIT".equals(address.getWalletRole())) {
                 String normalizedAddress = normalize(address.getAddress());
                 addresses.computeIfAbsent(normalizedAddress, key -> new MutableTrackedCardanoAddress(
@@ -218,7 +223,7 @@ class CardanoDepositScanner {
         }
         for (TokenDefinition token : tokensByUnit.values()) {
             String unit = CardanoAssetUnit.fromTokenContract(token.getContractAddress());
-            for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, token.getSymbol())) {
+            for (ChainAddressRecord address : chainAddressRepository.listEnabled(CHAIN, token.getSymbol())) {
                 if ("DEPOSIT".equals(address.getWalletRole())) {
                     String normalizedAddress = normalize(address.getAddress());
                     addresses.computeIfAbsent(normalizedAddress, key -> new MutableTrackedCardanoAddress(
@@ -235,7 +240,7 @@ class CardanoDepositScanner {
      */
     private Map<String, TokenDefinition> tokensByUnit() {
         Map<String, TokenDefinition> tokens = new HashMap<>();
-        for (TokenDefinition token : repository.listTokens(CHAIN)) {
+        for (TokenDefinition token : chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of())) {
             if (Boolean.TRUE.equals(token.getActive()) && token.getContractAddress() != null) {
                 tokens.put(CardanoAssetUnit.fromTokenContract(token.getContractAddress()), token);
             }

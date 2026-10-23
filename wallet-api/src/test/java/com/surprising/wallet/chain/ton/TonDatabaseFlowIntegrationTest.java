@@ -1,18 +1,18 @@
 package com.surprising.wallet.chain.ton;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import com.surprising.wallet.common.chain.ChainRpcNode;
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
+import com.surprising.wallet.chain.model.TonTransactionRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.TonTransactionRecord;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Connection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -21,14 +21,12 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.ton.ton4j.address.Address;
 import org.ton.ton4j.cell.Cell;
 import org.ton.ton4j.cell.CellBuilder;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.sql.Connection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -62,16 +60,16 @@ class TonDatabaseFlowIntegrationTest {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+            ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             TonKeyService keys = new TonKeyService(MASTER_SEED);
-            TonAddressService addresses = new TonAddressService(keys, repository);
+            TonAddressService addresses = new TonAddressService(keys, repository.chainAddressRepository, repository.chainProfileRepository);
             UUID tenantId = TonTenantIntegrationFixture.ensureTenant(jdbc);
             long baseIndex = 900_000L + Math.abs(UUID.randomUUID().getLeastSignificantBits() % 100_000L);
 
             ChainAddressRecord userA = addresses.createNativeAddress(
                     tenantId, 3001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userAAfterRestart = new TonAddressService(
-                    new TonKeyService(MASTER_SEED), repository)
+                    new TonKeyService(MASTER_SEED), repository.chainAddressRepository, repository.chainProfileRepository)
                     .createNativeAddress(tenantId, 3001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userB = addresses.createNativeAddress(
                     tenantId, 3002, 0, baseIndex + 1, "DEPOSIT");
@@ -82,26 +80,38 @@ class TonDatabaseFlowIntegrationTest {
             DepositEvent deposit = new DepositEvent(ChainType.TON, "TON", txHash,
                     "external", userA.getAddress(), BigDecimal.ONE,
                     123L, txHash, 1, null, "{}");
-            assertTrue(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
-            assertFalse(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
-            assertTrue(repository.freezeLedgerBalance("TON", "TON", userA.getAccountId(),
-                    new BigDecimal("0.2")));
-            assertFalse(repository.freezeLedgerBalance("TON", "TON", userA.getAccountId(),
-                    new BigDecimal("0.9")));
-            assertTrue(repository.releaseLockedBalance("TON", "TON", userA.getAccountId(),
-                    new BigDecimal("0.2")));
+            assertTrue(repository.depositService.recordAndCredit(deposit, 0, 1, userA.getAccountId()));
+            assertFalse(repository.depositService.recordAndCredit(deposit, 0, 1, userA.getAccountId()));
+            assertTrue(repository.ledgerBalanceRepository.freeze("TON", "TON", userA.getAccountId(), new BigDecimal("0.2"), null));
+            assertFalse(repository.ledgerBalanceRepository.freeze("TON", "TON", userA.getAccountId(), new BigDecimal("0.9"), null));
+            assertTrue(repository.ledgerBalanceRepository.release("TON", "TON", userA.getAccountId(), new BigDecimal("0.2"), null));
 
-            long seq0 = repository.reserveAccountSequence("TON", userA.getAddress(), 4);
-            long seq1 = repository.reserveAccountSequence("TON", userA.getAddress(), 4);
+            long seq0 = repository.accountSequenceRepository.reserve("TON", userA.getAddress(), 4);
+            long seq1 = repository.accountSequenceRepository.reserve("TON", userA.getAddress(), 4);
             assertEquals(4L, seq0);
             assertEquals(5L, seq1);
 
             FakeTonCenterClient rpc = new FakeTonCenterClient();
-            TonDepositScanner scanner = new TonDepositScanner(rpc, addresses, repository,
-                    new FakeTonApiClient(keys), RuntimeTestSupport.database(jdbc));
+            TonDepositScanner scanner = new TonDepositScanner(
+                    rpc,
+                    addresses,
+                    repository.chainAddressRepository,
+                    repository.chainProfileRepository,
+                    repository.tokenConfigRepository,
+                    repository.chainScanHeightRepository,
+                    repository.tonTransactionRepository,
+                    repository.depositService,
+                    repository.depositRecordRepository,
+                    new FakeTonApiClient(keys),
+                    RuntimeTestSupport.database(jdbc));
             scanner.scanAndCredit();
-            ChainAddressRecord userAUsdt = repository.findChainAddress(
-                    "TON", "USDT", userA.getUserId(), userA.getBiz(), userA.getAddressIndex(), "DEPOSIT")
+            ChainAddressRecord userAUsdt = repository.chainAddressRepository.find(
+                    "TON",
+                    "USDT",
+                    userA.getUserId(),
+                    userA.getBiz(),
+                    userA.getAddressIndex(),
+                    "DEPOSIT")
                     .orElseThrow();
             assertEquals(userA.getAddress(), userAUsdt.getOwnerAddress());
             assertEquals(userA.getAccountId(), userAUsdt.getAccountId());
@@ -110,13 +120,15 @@ class TonDatabaseFlowIntegrationTest {
             rpc.addJettonTransfer(userAUsdt.getAddress(), external, BigInteger.valueOf(123_456_789L));
             rpc.addJettonTransfer(userAUsdt.getAddress(), userB.getAddress(), BigInteger.valueOf(50_000_000L));
             assertEquals(1, scanner.scanAndCredit().size());
-            assertEquals(new BigDecimal("123.456789000000000000"), repository
-                    .findLedgerBalance("TON", "USDT", userA.getAccountId()).orElseThrow().getTotalBalance());
+            assertEquals(
+                    new BigDecimal("123.456789000000000000"),
+                    repository.ledgerBalanceRepository.find("TON", "USDT", userA.getAccountId()).orElseThrow().getTotalBalance());
             scanner.scanAndCredit();
-            assertEquals(new BigDecimal("123.456789000000000000"), repository
-                    .findLedgerBalance("TON", "USDT", userA.getAccountId()).orElseThrow().getTotalBalance());
+            assertEquals(
+                    new BigDecimal("123.456789000000000000"),
+                    repository.ledgerBalanceRepository.find("TON", "USDT", userA.getAccountId()).orElseThrow().getTotalBalance());
 
-            repository.recordTonTransaction(TonTransactionRecord.builder()
+            repository.tonTransactionRepository.upsert(TonTransactionRecord.builder()
                     .chain("TON")
                     .txHash(txHash)
                     .fromAddress("external")
@@ -129,7 +141,7 @@ class TonDatabaseFlowIntegrationTest {
                     .status("CONFIRMED")
                     .rawPayload("{}")
                     .build());
-            repository.recordTonTransaction(TonTransactionRecord.builder()
+            repository.tonTransactionRepository.upsert(TonTransactionRecord.builder()
                     .chain("TON")
                     .txHash(txHash)
                     .fromAddress("external")
@@ -190,14 +202,11 @@ class TonDatabaseFlowIntegrationTest {
          * 验证 {@code FakeTonApiClient} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private FakeTonApiClient(TonKeyService keys) {
-            super(new ObjectMapper(),
+            super(
+                    new ObjectMapper(),
                     profiles("TON"),
-                    nodes(ChainRpcNode.builder().chain("TON")
-                            .network("test")
-                            .rpcUrl("http://ton-api.invalid")
-                            .authType("bearer")
-                            .authHeaderName("Authorization")
-                            .apiKey("").build()));
+                    nodes(ChainRpcNode.builder().chain("TON").network("test").rpcUrl("http://ton-api.invalid").authType("bearer").authHeaderName("Authorization").apiKey("").build())
+);
             this.keys = keys;
         }
 
@@ -231,14 +240,11 @@ class TonDatabaseFlowIntegrationTest {
          * 验证 {@code FakeTonCenterClient} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private FakeTonCenterClient() {
-            super(new ObjectMapper(),
+            super(
+                    new ObjectMapper(),
                     profiles("TON"),
-                    nodes(ChainRpcNode.builder().chain("TON")
-                            .network("test")
-                            .rpcUrl("http://ton-center.invalid")
-                            .authType("api_key")
-                            .authHeaderName("X-API-Key")
-                            .apiKey("").build()));
+                    nodes(ChainRpcNode.builder().chain("TON").network("test").rpcUrl("http://ton-center.invalid").authType("api_key").authHeaderName("X-API-Key").apiKey("").build())
+);
         }
 
         /**

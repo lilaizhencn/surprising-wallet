@@ -1,12 +1,13 @@
 package com.surprising.wallet.chain.solana;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.p2p.solanaj.core.Account;
@@ -16,12 +17,9 @@ import org.p2p.solanaj.programs.SystemProgram;
 import org.p2p.solanaj.programs.TokenProgram;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import tools.jackson.databind.ObjectMapper;
 
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.util.List;
-import java.util.UUID;
-
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -51,18 +49,37 @@ class SolanaDevnetLiveFlowIntegrationTest {
                 env("SOLANA_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         UUID tenantId = SolanaTenantIntegrationFixture.ensureTenant(jdbc);
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(),
                 profiles("SOLANA"),
                 nodes("SOLANA", env("SOLANA_RPC_URL", "https://api.devnet.solana.com")));
         SolanaKeyService keys = new SolanaKeyService(masterSeed);
-        SolanaAddressService addresses = new SolanaAddressService(keys, repository);
-        SolanaTransactionService transactions = new SolanaTransactionService(rpc,
+        SolanaAddressService addresses = new SolanaAddressService(keys, repository.chainAddressRepository);
+        SolanaTransactionService transactions = new SolanaTransactionService(
+                rpc,
                 keys,
                 addresses,
-                repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
-        SolanaDepositScanner scanner = new SolanaDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc), addresses);
+                repository.withdrawalOrderRepository,
+                repository.ledgerBalanceRepository,
+                repository.withdrawalClaimService,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.collectionRecordRepository,
+                repository.chainAddressRepository,
+                repository.solanaTransactionRepository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc),
+                RuntimeTestSupport.database(jdbc));
+        SolanaDepositScanner scanner = new SolanaDepositScanner(
+                rpc,
+                repository.chainAddressRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.chainScanHeightRepository,
+                repository.solanaTransactionRepository,
+                repository.depositService,
+                repository.depositRecordRepository,
+                RuntimeTestSupport.database(jdbc),
+                addresses);
 
         assertTrue(rpc.health());
         jdbc.update("""
@@ -117,10 +134,19 @@ class SolanaDevnetLiveFlowIntegrationTest {
                 withdrawAmount.add(new BigDecimal("0.000005")));
 
         String collectionNo = "sol-live-collection-" + UUID.randomUUID();
-        assertEquals(1, repository.createCollectionRecord(
-                tenantId, custodyAddressId, collectionNo, "SOLANA", "SOL",
-                userA.getAddress(), hot.getAddress(), new BigDecimal("0.004"),
-                new BigDecimal("0.000005"), null));
+        assertEquals(
+                1,
+                repository.collectionRecordRepository.create(
+                        tenantId,
+                        custodyAddressId,
+                        collectionNo,
+                        "SOLANA",
+                        "SOL",
+                        userA.getAddress(),
+                        hot.getAddress(),
+                        new BigDecimal("0.004"),
+                        new BigDecimal("0.000005"),
+                        null));
         String collection = transactions.collectNative(
                 tenantId, collectionNo, userA, hot.getAddress(), new BigDecimal("4000000"));
         assertEquals(collection, transactions.collectNative(
@@ -131,7 +157,7 @@ class SolanaDevnetLiveFlowIntegrationTest {
         assertThrows(IllegalStateException.class, () -> transactions.withdrawNative(
                 tenantId, insufficientOrder, userA.getUserId(), userA, external.getPublicKeyBase58(),
                 new BigDecimal("999")));
-        assertEquals("FAILED", repository.findWithdrawalOrder(tenantId, "SOLANA", insufficientOrder)
+        assertEquals("FAILED", repository.withdrawalOrderRepository.find("SOLANA", insufficientOrder, tenantId)
                 .orElseThrow().getStatus());
 
         TokenFlow usdt = createAndFundMockToken("USDT", 6, runBase + 100, funderIndex,
@@ -198,7 +224,7 @@ class SolanaDevnetLiveFlowIntegrationTest {
             ChainAddressRecord nativeUserA, ChainAddressRecord nativeUserB, ChainAddressRecord hot,
             Account external, SolanaRpcClient rpc, SolanaKeyService keys, SolanaAddressService addresses,
             SolanaTransactionService transactions, SolanaDepositScanner scanner,
-            ChainJdbcRepository repository, JdbcTemplate jdbc) {
+            ChainRepositoryFixture repository, JdbcTemplate jdbc) {
         Account mint = keys.account(mintIndex);
         long rent = rpc.call("getMinimumBalanceForRentExemption", List.of(82)).asLong();
         Transaction createMint = new Transaction()
@@ -224,8 +250,7 @@ class SolanaDevnetLiveFlowIntegrationTest {
                     chain, network, symbol, standard, contract_address,
                     contract_address_base58, decimals, enabled, min_deposit, min_withdraw,
                     collect_enabled, collect_threshold,
-                    gas_strategy, confirmation_required, created_at, updated_at
-                )
+                    gas_strategy, confirmation_required, created_at, updated_at)
                 values ('SOLANA','devnet',?,'SPL',?,?,?,true,1,1,true,1,
                         'SOL_FEE_PAYER',1,now(),now())
                 on conflict(chain,network,symbol) do update set
@@ -276,9 +301,19 @@ class SolanaDevnetLiveFlowIntegrationTest {
 
         String collectionNo = "sol-" + symbol.toLowerCase() + "-collection-" + UUID.randomUUID();
         BigDecimal collectionAmount = new BigDecimal("3");
-        assertEquals(1, repository.createCollectionRecord(
-                tenantId, custodyAddressId, collectionNo, "SOLANA", symbol,
-                userA.getOwnerAddress(), hot.getAddress(), collectionAmount, BigDecimal.ZERO, null));
+        assertEquals(
+                1,
+                repository.collectionRecordRepository.create(
+                        tenantId,
+                        custodyAddressId,
+                        collectionNo,
+                        "SOLANA",
+                        symbol,
+                        userA.getOwnerAddress(),
+                        hot.getAddress(),
+                        collectionAmount,
+                        BigDecimal.ZERO,
+                        null));
         String collection = transactions.collectToken(
                 tenantId, collectionNo, userA, mint.getPublicKeyBase58(),
                 hot.getAddress(), collectionAmount);
@@ -324,8 +359,8 @@ class SolanaDevnetLiveFlowIntegrationTest {
     /**
      * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String symbol, String accountId) {
-        return repository.findLedgerBalance("SOLANA", symbol, accountId).orElseThrow();
+    private static LedgerBalanceRecord ledger(ChainRepositoryFixture repository, String symbol, String accountId) {
+        return repository.ledgerBalanceRepository.find("SOLANA", symbol, accountId).orElseThrow();
     }
 
     /**

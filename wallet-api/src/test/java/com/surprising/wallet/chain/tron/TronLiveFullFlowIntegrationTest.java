@@ -1,11 +1,23 @@
 package com.surprising.wallet.chain.tron;
 
+import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
-import com.surprising.wallet.chain.WalletKeyTestFixture;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import org.bitcoinj.crypto.ECKey;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -22,19 +34,6 @@ import org.tron.trident.core.key.KeyPair;
 import org.tron.trident.proto.Chain;
 import org.tron.trident.proto.Response;
 import org.tron.trident.utils.Numeric;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.math.RoundingMode;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -80,8 +79,13 @@ class TronLiveFullFlowIntegrationTest {
 
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource());
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbcTemplate);
-        TronDepositScanner depositScanner = new TronDepositScanner(repository, new TronScanner());
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbcTemplate);
+        TronDepositScanner depositScanner = new TronDepositScanner(
+                repository.tronTransactionRepository,
+                repository.depositService,
+                repository.chainScanHeightRepository,
+                repository.tronTokenTransferRepository,
+                new TronScanner());
         TronTransactionService trxService = new TronTransactionService();
         TronTrc20Service trc20Service = new TronTrc20Service();
         TronGasEstimator gasEstimator = new TronGasEstimator();
@@ -146,7 +150,7 @@ class TronLiveFullFlowIntegrationTest {
                     userA, external.address(), new BigDecimal("0.5"));
             assertNotEquals(trxWithdraw1.txId(), trxWithdraw2.txId());
             assertChainLedgerTrx(client, jdbcTemplate, userA);
-            assertFalse(repository.freezeLedgerBalance(CHAIN, "TRX", ledgerAccount(userA), new BigDecimal("1000")),
+            assertFalse(repository.ledgerBalanceRepository.freeze(CHAIN, "TRX", ledgerAccount(userA), new BigDecimal("1000"), null),
                     "overspend guard must reject impossible TRX withdrawal before broadcast");
             TxResult trxCollection = collectTrx(jdbcTemplate, repository, client, trxService,
                     runId + "-TRX-COLLECT", userA, hot, new BigDecimal("1"));
@@ -186,7 +190,7 @@ class TronLiveFullFlowIntegrationTest {
     /**
      * 验证 {@code executeTokenFlow} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static TokenFlowResult executeTokenFlow(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
+    private static TokenFlowResult executeTokenFlow(JdbcTemplate jdbcTemplate, ChainRepositoryFixture repository,
                                                     TronDepositScanner depositScanner, TronTridentClient client,
                                                     TronTransactionService trxService, TronTrc20Service trc20Service,
                                                     TronGasEstimator gasEstimator,
@@ -212,7 +216,10 @@ class TronLiveFullFlowIntegrationTest {
         TxResult collectionGasTopup = sendTrx(client, trxService, source, collectionUser.address(),
                 collectionGas.topupAmount());
         updateGasTaskConfirmed(jdbcTemplate, collectionGas.gasTaskNo(), collectionGasTopup.txId());
-        repository.incrementLedgerBalance(TEST_TENANT_ID, CHAIN, "TRX",
+        repository.ledgerBalanceRepository.increment(
+                TEST_TENANT_ID,
+                CHAIN,
+                "TRX",
                 collectionUser.address().toLowerCase(Locale.ROOT),
                 collectionGas.topupAmount());
 
@@ -242,7 +249,10 @@ class TronLiveFullFlowIntegrationTest {
         TxResult withdrawalGasTopup = sendTrx(client, trxService, source, withdrawalUser.address(),
                 withdrawalGas.topupAmount());
         updateGasTaskConfirmed(jdbcTemplate, withdrawalGas.gasTaskNo(), withdrawalGasTopup.txId());
-        repository.incrementLedgerBalance(TEST_TENANT_ID, CHAIN, "TRX",
+        repository.ledgerBalanceRepository.increment(
+                TEST_TENANT_ID,
+                CHAIN,
+                "TRX",
                 withdrawalUser.address().toLowerCase(Locale.ROOT),
                 withdrawalGas.topupAmount());
 
@@ -295,18 +305,18 @@ class TronLiveFullFlowIntegrationTest {
     /**
      * 验证 {@code withdrawTrx} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static TxResult withdrawTrx(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
+    private static TxResult withdrawTrx(JdbcTemplate jdbcTemplate, ChainRepositoryFixture repository,
                                         TronTridentClient client, TronTransactionService service,
                                         String orderNo, Actor from, String to, BigDecimal amount) throws Exception {
         insertWithdrawal(jdbcTemplate, orderNo, from, to, "TRX", amount, "CREATED");
-        assertTrue(repository.freezeLedgerBalance(CHAIN, "TRX", ledgerAccount(from), amount));
+        assertTrue(repository.ledgerBalanceRepository.freeze(CHAIN, "TRX", ledgerAccount(from), amount, null));
         updateWithdrawal(jdbcTemplate, orderNo, "FROZEN", null, BigDecimal.ZERO);
         updateWithdrawal(jdbcTemplate, orderNo, "SIGNING", null, BigDecimal.ZERO);
         TxResult tx = sendTrx(client, service, from, to, amount);
         updateWithdrawal(jdbcTemplate, orderNo, "SENT", tx.txId(), tx.fee());
-        assertTrue(repository.settleLockedDebit(CHAIN, "TRX", ledgerAccount(from), amount));
+        assertTrue(repository.ledgerBalanceRepository.settle(CHAIN, "TRX", ledgerAccount(from), amount, null));
         if (tx.fee().signum() > 0) {
-            assertTrue(repository.debitLedgerBalance(CHAIN, "TRX", ledgerAccount(from), tx.fee()));
+            assertTrue(repository.ledgerBalanceRepository.debit(CHAIN, "TRX", ledgerAccount(from), tx.fee(), null));
         }
         updateWithdrawal(jdbcTemplate, orderNo, "CONFIRMED", tx.txId(), tx.fee());
         return tx;
@@ -315,7 +325,7 @@ class TronLiveFullFlowIntegrationTest {
     /**
      * 验证 {@code collectTrx} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static TxResult collectTrx(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
+    private static TxResult collectTrx(JdbcTemplate jdbcTemplate, ChainRepositoryFixture repository,
                                        TronTridentClient client, TronTransactionService service,
                                        String collectionNo, Actor from, Actor to, BigDecimal amount) throws Exception {
         jdbcTemplate.update("""
@@ -325,7 +335,7 @@ class TronLiveFullFlowIntegrationTest {
                         on conflict (chain, collection_no) do update
                         set status = 'CREATED', updated_at = now()
                         """, collectionNo, CHAIN, from.address(), to.address(), amount);
-        assertTrue(repository.freezeLedgerBalance(CHAIN, "TRX", ledgerAccount(from), amount));
+        assertTrue(repository.ledgerBalanceRepository.freeze(CHAIN, "TRX", ledgerAccount(from), amount, null));
         jdbcTemplate.update("update collection_record set status = 'SIGNING', updated_at = now() where collection_no = ?",
                 collectionNo);
         TxResult tx = sendTrx(client, service, from, to.address(), amount);
@@ -334,9 +344,9 @@ class TronLiveFullFlowIntegrationTest {
                         set status = 'SENT', tx_hash = ?, fee = ?, updated_at = now()
                         where collection_no = ?
                         """, tx.txId(), tx.fee(), collectionNo);
-        assertTrue(repository.settleLockedDebit(CHAIN, "TRX", ledgerAccount(from), amount));
+        assertTrue(repository.ledgerBalanceRepository.settle(CHAIN, "TRX", ledgerAccount(from), amount, null));
         if (tx.fee().signum() > 0) {
-            assertTrue(repository.debitLedgerBalance(CHAIN, "TRX", ledgerAccount(from), tx.fee()));
+            assertTrue(repository.ledgerBalanceRepository.debit(CHAIN, "TRX", ledgerAccount(from), tx.fee(), null));
         }
         jdbcTemplate.update("""
                         update collection_record
@@ -349,19 +359,19 @@ class TronLiveFullFlowIntegrationTest {
     /**
      * 验证 {@code withdrawTrc20} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static TxResult withdrawTrc20(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
+    private static TxResult withdrawTrc20(JdbcTemplate jdbcTemplate, ChainRepositoryFixture repository,
                                           TronTridentClient client, TronTrc20Service service,
                                           String orderNo, Actor from, String to, BigDecimal amount,
                                           TokenSpec token) throws Exception {
         insertWithdrawal(jdbcTemplate, orderNo, from, to, token.symbol(), amount, "CREATED");
-        assertTrue(repository.freezeLedgerBalance(CHAIN, token.symbol(), ledgerAccount(from), amount));
+        assertTrue(repository.ledgerBalanceRepository.freeze(CHAIN, token.symbol(), ledgerAccount(from), amount, null));
         updateWithdrawal(jdbcTemplate, orderNo, "FROZEN", null, BigDecimal.ZERO);
         updateWithdrawal(jdbcTemplate, orderNo, "SIGNING", null, BigDecimal.ZERO);
         TxResult tx = sendTrc20(client, service, from, token.contract(), to, amount, token.decimals());
         updateWithdrawal(jdbcTemplate, orderNo, "SENT", tx.txId(), tx.fee());
-        assertTrue(repository.settleLockedDebit(CHAIN, token.symbol(), ledgerAccount(from), amount));
+        assertTrue(repository.ledgerBalanceRepository.settle(CHAIN, token.symbol(), ledgerAccount(from), amount, null));
         if (tx.fee().signum() > 0) {
-            assertTrue(repository.debitLedgerBalance(CHAIN, "TRX", ledgerAccount(from), tx.fee()));
+            assertTrue(repository.ledgerBalanceRepository.debit(CHAIN, "TRX", ledgerAccount(from), tx.fee(), null));
         }
         updateWithdrawal(jdbcTemplate, orderNo, "CONFIRMED", tx.txId(), tx.fee());
         return tx;
@@ -370,7 +380,7 @@ class TronLiveFullFlowIntegrationTest {
     /**
      * 验证 {@code collectTrc20} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static TxResult collectTrc20(JdbcTemplate jdbcTemplate, ChainJdbcRepository repository,
+    private static TxResult collectTrc20(JdbcTemplate jdbcTemplate, ChainRepositoryFixture repository,
                                          TronTridentClient client, TronTrc20Service service,
                                          String collectionNo, Actor from, Actor to, BigDecimal amount,
                                          TokenSpec token) throws Exception {
@@ -381,7 +391,7 @@ class TronLiveFullFlowIntegrationTest {
                         on conflict (chain, collection_no) do update
                         set status = 'CREATED', updated_at = now()
                         """, collectionNo, CHAIN, token.symbol(), from.address(), to.address(), amount);
-        assertTrue(repository.freezeLedgerBalance(CHAIN, token.symbol(), ledgerAccount(from), amount));
+        assertTrue(repository.ledgerBalanceRepository.freeze(CHAIN, token.symbol(), ledgerAccount(from), amount, null));
         jdbcTemplate.update("update collection_record set status = 'SIGNING', updated_at = now() where collection_no = ?",
                 collectionNo);
         TxResult tx = sendTrc20(client, service, from, token.contract(), to.address(), amount, token.decimals());
@@ -390,9 +400,9 @@ class TronLiveFullFlowIntegrationTest {
                         set status = 'SENT', tx_hash = ?, fee = ?, updated_at = now()
                         where collection_no = ?
                         """, tx.txId(), tx.fee(), collectionNo);
-        assertTrue(repository.settleLockedDebit(CHAIN, token.symbol(), ledgerAccount(from), amount));
+        assertTrue(repository.ledgerBalanceRepository.settle(CHAIN, token.symbol(), ledgerAccount(from), amount, null));
         if (tx.fee().signum() > 0) {
-            assertTrue(repository.debitLedgerBalance(CHAIN, "TRX", ledgerAccount(from), tx.fee()));
+            assertTrue(repository.ledgerBalanceRepository.debit(CHAIN, "TRX", ledgerAccount(from), tx.fee(), null));
         }
         jdbcTemplate.update("""
                         update collection_record

@@ -76,7 +76,7 @@ API 的 `PubKeyConfig` 只通过正常构造器接收角色密钥提供者，不
 `BitcoinLikeChainRuntime` 读取区块和交易事实，不再回调 `TransactionService` 或持有账务结算依赖。`BitcoinLikeDepositScanService` 按数据库游标取得完整 `UtxoBlock`，交给 `UtxoDepositService` 原子完成 canonical 区块、UTXO、充值、租户投影、PGMQ 通知与游标更新；任一 RPC 交易读取失败时不推进区块。交易哈希和 int 输出序号独立传递，不经过旧 DTO 或字符串解析。`UtxoConfirmationJob` 使用提现调度池，调用 `BitcoinLikeConfirmationService` 观察在途充值与提现；新扫描开关关闭仍继续确认。补确认与重组统一按 canonical 区块、UTXO、充值/账本的顺序加锁。内部提现队列由 `QueuedUtxoWithdrawalService` 直接编排订单与冻结，原混合事务服务和无效果的余额汇总转发均已删除。
 
 
-充值和重组的事务由 `DepositService` 编排，现有 ChainJdbcRepository 充值入口显式委托该用例。确认入账时，DepositRecordRepository 的受租户约束状态更新直接返回记录 ID 与入账代次；随后更新账本并调用必需的 CustodyDepositProjectionService，投影、流水、赤字抵扣、事件和 API 来源 Webhook 与余额一起提交或回滚。投影服务要求已有事务，不再使用 Observer 接口、ObjectProvider 或空列表构造路径。SQL 只位于对应单表仓储；地址归属通过同租户派生坐标与地址版本在应用层组合，优先匹配精确地址。
+充值和重组的事务由 `DepositService` 编排，所有链扫描器直接调用该用例。确认入账时，DepositRecordRepository 的受租户约束状态更新直接返回记录 ID 与入账代次；随后更新账本并调用必需的 CustodyDepositProjectionService，投影、流水、赤字抵扣、事件和 API 来源 Webhook 与余额一起提交或回滚。投影服务要求已有事务，不再使用 Observer 接口、ObjectProvider 或空列表构造路径。SQL 只位于对应单表仓储；地址归属通过同租户派生坐标与地址版本在应用层组合，优先匹配精确地址。
 
 EvmDepositScanner 直接读取链配置、地址、Token 和扫描记录单表仓储，直接调用 DepositService 入账，不再经过通用数据门面。它只有一个构造器；RPC 发现、HTTP 工厂及 WalletRuntimeConfigService 均为必需依赖。测试节点和确认数在测试夹具/测试数据库中配置，生产类不保留固定 RPC、固定确认数或跳过扫描开关的分支。运行开关服务直接依赖 ChainProfileRepository 与 WalletSystemConfigRepository，系统配置按 key 查询并返回有类型的 Setting。
 
@@ -107,18 +107,20 @@ Service 和 Job 统一使用构造器注入；可选基础设施依赖以 `Optio
 `CustodyAddressService` 直接编排地址、主题派生、链地址、Gas 账户、账本和审计单表仓储。地址分配在原事务内解析一次主题并持有锁；同租户主题/版本幂等、链地址归属、EVM 委托投影和审计共同提交或回滚。EIP-7702 仓储为正常构造器依赖，不再通过测试构造器或 Optional 跳过投影。托管地址行由 `CustodyAddressRepository` 唯一映射为 `CustodyAddressRecord`，不经总仓储二次重建。
 地址列表、总数与搜索使用同一单表筛选条件，排除本租户所有 Gas 地址后再分页。平台租户详情复用地址服务的内部查询。可提现地址按租户/链/主题读取，再批量组合链地址和账本余额；不逐页扫描全租户或逐条查询余额。Gas 历史直接按租户和账户/地址筛选分页；账户身份查询不再加载账本余额。Gas 使用明细直接返回有类型的公开查询字段，不在总仓储中复制和重命名 Map。
 APTOS、ADA、NEAR、DOT、SOLANA、SUI、TON、XRP 的扫描器和交易服务必须通过构造器接收运行时开关服务，不再通过字段注入或空依赖跳过校验。Solana 扫描器的 ATA 地址服务和 TON 扫描器的索引器同样是必需依赖；TON 网络始终读取数据库 profile，不保留默认测试网络或测试专用构造器。单元测试提供明确替身，数据库链路测试使用实际开关服务。
-`CustodyEventService` 显式编排领域事件、启用端点和 Webhook 投递记录，加入调用方事务；独立调用时也原子提交或回滚。充值投影直接依赖该服务和审计单表仓储，不再经过 `CustodyRepository`。提现创建、状态同步和资产找回共用同一事件入口，保持 API 来源才生成 Webhook 的规则。事件按业务键去重，投递按端点与事件的已有唯一键去重，重复调用不重置投递状态。两个存量跨表门面均只保留一个构造器，不提供测试专用或兼容构造分支。
+`CustodyEventService` 显式编排领域事件、启用端点和 Webhook 投递记录，加入调用方事务；独立调用时也原子提交或回滚。充值投影直接依赖该服务和审计单表仓储，不再经过 `CustodyRepository`。提现创建、状态同步和资产找回共用同一事件入口，保持 API 来源才生成 Webhook 的规则。事件按业务键去重，投递按端点与事件的已有唯一键去重，重复调用不重置投递状态。托管控制面的事件发布使用必需构造器依赖，不提供测试专用或兼容构造分支。
 `common.queue` 提供无 Web 依赖的 PGMQ JDBC 适配器和消费事务执行器，唯一启动入口显式导入配置。
 业务 Service 通过适配器使用队列，不直接编写 SQL；`ChainFeeRateRepository` 只访问 `chain_fee_rate`。
 EVM 普通交易和两个 EIP-7702 协调器直接注入 `EvmNonceRepository`。Nonce 预留通过一条 `INSERT ... ON CONFLICT ... RETURNING` 完成，独立调用也可并发分配，加入已有事务时可随签名/Gas 失败回滚；不再经通用门面传递，也不做 BigInteger/long 往返转换。输入沿用 uint256 校验且不返回范围外值；生产代码不保留覆盖已预留计数的通用 upsert 或测试 DTO。
 RPC 客户端直接注入 `ChainProfileRepository` 与 `ChainRpcNodeService`，不再经过 `ChainJdbcRepository` 转发链配置。节点选择、故障切换、认证和 provider 限流只有一条路径；本地测试通过配置仓储提供节点，生产代码不保留固定测试端点或空依赖构造分支。`ChainRpcNodeService` 的环境名和并发上限由唯一构造器注入。
 
-`WithdrawalSettlementService` 统一编排单笔提现确认：租户、订单状态和交易哈希校验、冻结余额扣款、订单条件确认在同一事务中完成。各链交易服务、UTXO 结算、账户链工作流和 EVM 批量提现协调器直接调用该用例；`ChainJdbcRepository` 不再保留结算方法或无租户结算入口。原有余额更新和状态条件更新顺序保持不变，竞争失败时全部回滚。
+`WithdrawalSettlementService` 统一编排单笔提现确认：租户、订单状态和交易哈希校验、冻结余额扣款、订单条件确认在同一事务中完成。各链交易服务、UTXO 结算、账户链工作流和 EVM 批量提现协调器直接调用该用例，结算入口必须明确租户。原有余额更新和状态条件更新顺序保持不变，竞争失败时全部回滚。
 
 各模块分别声明自身实际使用的 starter，避免依赖传递造成的隐式可用。
 
+链配置、链地址、交易、账本、订单和扫描记录由调用方直接注入各自的单表仓储，不经过统一链数据门面。跨表规则由明确用例处理：`CollectionPlanningService` 计算充值减已归集金额、抑制在途重复归集并解析租户归集地址；`UtxoSelectionService` 在调用方事务内完成租户输入选择和锁定；`WithdrawalClaimService` 以重组赤字检查和条件更新领取租户提现；`EvmBatchOwnershipService` 检查批次接管状态，批次身份始终使用 UUID。`AccountSequenceRepository.reserve` 用单条 UPSERT RETURNING 预留序号，独立调用也不会重复分配，加入业务事务时随外层回滚。测试使用实际仓储/用例的正常构造器，不继承生产数据门面或在生产代码中保留测试装配入口。
+
 Repository 采用“单表一仓储”约束：每个 `@Repository` 只访问一个数据库表，Repository 名称与表职责一一对应。
-`CustodyRepository`、`ChainJdbcRepository` 等保留名称的跨表门面使用 `@Component`，自身不执行 SQL，只在 Java 中组合
+`CustodyRepository` 等托管控制面组合组件使用 `@Component`，自身不执行 SQL，只在 Java 中组合
 单表仓储并维护必要的事务边界；它们不属于 SQL Repository。Service 不持有 `JdbcTemplate`、不执行 SQL，负责业务规则
 和工作流调用。任何 SQL Repository 内禁止使用 JOIN、跨表子查询或同时读写多张业务表。
 

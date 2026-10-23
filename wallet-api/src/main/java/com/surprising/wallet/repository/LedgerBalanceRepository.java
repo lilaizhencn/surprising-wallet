@@ -1,10 +1,6 @@
 package com.surprising.wallet.repository;
 
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.support.SqlArrayValue;
-import org.springframework.stereotype.Repository;
-
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -13,6 +9,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
+import org.springframework.stereotype.Repository;
 
 /** ledger_balance 单表仓储。 */
 @Repository
@@ -89,8 +88,9 @@ public class LedgerBalanceRepository {
 
     /** 为租户增加可用余额和总余额，租户归属不匹配时不更新。 */
     public int increment(UUID tenantId, String chain, String assetSymbol, String accountId, BigDecimal amount) {
+        java.util.Objects.requireNonNull(tenantId, "tenantId is required");
         Timestamp now = Timestamp.from(Instant.now());
-        return jdbc.update("""
+        int updated = jdbc.update("""
                 insert into ledger_balance(tenant_id, chain, asset_symbol, account_id, available_balance,
                                            locked_balance, total_balance, created_at, updated_at)
                 values (?, ?, ?, ?, ?, 0, ?, ?, ?)
@@ -101,6 +101,8 @@ public class LedgerBalanceRepository {
                     updated_at = excluded.updated_at
                 where ledger_balance.tenant_id is null or ledger_balance.tenant_id = excluded.tenant_id
                 """, tenantId, chain, assetSymbol, accountId, amount, amount, now, now);
+        if (updated != 1) throw new IllegalStateException("ledger balance belongs to another tenant");
+        return updated;
     }
 
     /** 扣减可用余额和总余额。 */

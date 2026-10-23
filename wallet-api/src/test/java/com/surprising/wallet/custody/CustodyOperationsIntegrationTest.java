@@ -1,23 +1,37 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.pojo.Address;
-import com.surprising.wallet.chain.BlockchainRuntimeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.transaction.support.TransactionTemplate;
-
+import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
+import com.surprising.wallet.exception.CustodyForbiddenException;
+import com.surprising.wallet.model.CustodyPrincipal;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.CustodyAddressRepository;
+import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
+import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.repository.LedgerBalanceRepository;
+import com.surprising.wallet.repository.WithdrawalOrderRepository;
+import com.surprising.wallet.service.CustodyAddressService;
+import com.surprising.wallet.service.CustodyAssetDashboardService;
+import com.surprising.wallet.service.CustodyTenantChainService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,17 +39,6 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import com.surprising.wallet.service.CustodyAddressService;
-import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
-import com.surprising.wallet.service.CustodyAssetDashboardService;
-import com.surprising.wallet.exception.CustodyForbiddenException;
-import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
-import com.surprising.wallet.model.CustodyPrincipal;
-import com.surprising.wallet.repository.CustodyRepository;
-import com.surprising.wallet.repository.LedgerBalanceRepository;
-import com.surprising.wallet.repository.CustodyTenantChainRepository;
-import com.surprising.wallet.service.CustodyTenantChainService;
 
 /**
  * 验证 {@code CustodyOperationsIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
@@ -301,8 +304,8 @@ class CustodyOperationsIntegrationTest {
             assertFalse(account.lowBalance());
             assertTrue((Boolean) repository.onboardingStatus(tenantId).get("gasAccountFunded"));
             assertTrue(com.surprising.wallet.testutil.CustodyTestSupport.addresses(jdbc, repository,
-                    org.mockito.Mockito.mock(BlockchainRuntimeService.class),
-                    org.mockito.Mockito.mock(CustodyTenantChainService.class)).list(
+                    Mockito.mock(BlockchainRuntimeService.class),
+                    Mockito.mock(CustodyTenantChainService.class)).list(
                     new CustodyPrincipal(CustodyPrincipal.ActorType.API_KEY, UUID.randomUUID(), tenantId,
                             "gas-address-test", "API_KEY", Set.of("addresses:read")), "", "", "", "", 10, 0).isEmpty());
             assertTrue(repository.tenantAssetOverview(tenantId).isEmpty());
@@ -383,6 +386,7 @@ class CustodyOperationsIntegrationTest {
 
             var summary = repository.tenantOperationsSummary(tenantId);
             org.junit.jupiter.api.Assertions.assertAll(
+
                     () -> assertEquals(620L, summary.get("depositCount")),
                     () -> assertEquals(620L, summary.get("withdrawalCount")),
                     () -> assertEquals(620, history.depositPage(historyPrincipal(tenantId), "", "", "", "", 20, 0).total()),
@@ -554,7 +558,11 @@ class CustodyOperationsIntegrationTest {
             assertEquals(0, new BigDecimal("0.96").compareTo(account.availableBalance()));
             assertEquals(0, BigDecimal.ZERO.compareTo(account.lockedBalance()));
             assertEquals(0, new BigDecimal("0.96").compareTo(account.totalBalance()));
-            assertEquals(1, new com.surprising.wallet.repository.CustodyGasUsageRepository(jdbc).listForAccount(tenantId, gasAccountId, 10, 0).size());
+            assertEquals(1, new com.surprising.wallet.repository.CustodyGasUsageRepository(jdbc).listForAccount(
+                    tenantId,
+                    gasAccountId,
+                    10,
+                    0).size());
             assertEquals(1, jdbc.queryForObject("""
                     select count(*) from custody_ledger_entry
                      where tenant_id = ? and entry_type = 'NETWORK_FEE'

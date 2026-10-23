@@ -1,20 +1,15 @@
 package com.surprising.wallet.chain.near;
 
-import com.surprising.wallet.service.WithdrawalSettlementService;
-
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.chain.model.NearTransactionRecord;
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.CollectionRecordRepository;
+import com.surprising.wallet.repository.NearTransactionRepository;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.springframework.stereotype.Service;
-
+import com.surprising.wallet.service.WithdrawalSettlementService;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -23,6 +18,12 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
+import org.springframework.stereotype.Service;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * NEAR 链交易服务，负责构造、签名、广播 Borsh 序列化交易及提现/归集流程。
@@ -72,9 +73,10 @@ public class NearTransactionService {
 
     /** NEAR 密钥服务 */
     private final NearKeyService keyService;
+    private final NearTransactionRepository nearTransactionRepository;
+    private final CollectionRecordRepository collectionRecordRepository;
+    private final ChainAddressRepository chainAddressRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
 
     /**
      * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
@@ -92,13 +94,17 @@ public class NearTransactionService {
             NearRpcClient rpc,
             NearTransactionSigner signer,
             NearKeyService keyService,
-            ChainJdbcRepository repository,
+            NearTransactionRepository nearTransactionRepository,
+            CollectionRecordRepository collectionRecordRepository,
+            ChainAddressRepository chainAddressRepository,
             WithdrawalSettlementService settlements,
             WalletRuntimeConfigService runtimeConfigService) {
         this.rpc = rpc;
         this.signer = signer;
         this.keyService = keyService;
-        this.repository = repository;
+        this.nearTransactionRepository = nearTransactionRepository;
+        this.collectionRecordRepository = collectionRecordRepository;
+        this.chainAddressRepository = chainAddressRepository;
         this.settlements = settlements;
         this.runtimeConfigService = java.util.Objects.requireNonNull(runtimeConfigService);
     }
@@ -219,8 +225,7 @@ public class NearTransactionService {
         JsonNode status = requireSuccessfulConfirmation(txHash, debitAccountId, Duration.ofMinutes(2));
         if (settlements.confirm(
                 tenantId, CHAIN, orderNo, txHash, assetSymbol, debitAccountId, debitAmount)) {
-            repository.markNearTransactionConfirmed(CHAIN, txHash, blockHeight(status), gasBurnt(status),
-                    status.toString());
+            nearTransactionRepository.markConfirmed(CHAIN, txHash, blockHeight(status), gasBurnt(status), status.toString());
             return true;
         }
         return false;
@@ -232,21 +237,20 @@ public class NearTransactionService {
     public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigInteger amountYocto) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "near collectNative");
-        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
+        Optional<String> existing = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
-        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
+        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("NEAR collection is not retryable"));
         }
         try {
             String txHash = sendNative(from, hotAddress, amountYocto);
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
             return txHash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
-                    "FAILED", null, e.getMessage(), null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -257,22 +261,21 @@ public class NearTransactionService {
     public String collectToken(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                TokenDefinition token, String hotAddress, BigDecimal amount) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "near collectToken");
-        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
+        Optional<String> existing = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
-        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
+        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("NEAR token collection is not retryable"));
         }
         try {
             ensureTokenStorageRegistered(token, hotAddress);
             String txHash = sendToken(from, token, hotAddress, amount);
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
             return txHash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
-                    "FAILED", null, e.getMessage(), null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -283,11 +286,13 @@ public class NearTransactionService {
         if (tokenStorageRegistered(token, accountId)) {
             return;
         }
-        ChainAddressRecord payer = repository.findChainAddress(CHAIN, SYMBOL,
-                        HotWalletRules.DEFAULT_HOT_USER_ID,
-                        HotWalletRules.DEFAULT_HOT_BIZ,
-                        HotWalletRules.DEFAULT_HOT_ADDRESS_INDEX,
-                        HotWalletRules.DEFAULT_HOT_WALLET_ROLE)
+        ChainAddressRecord payer = chainAddressRepository.find(
+                CHAIN,
+                SYMBOL,
+                HotWalletRules.DEFAULT_HOT_USER_ID,
+                HotWalletRules.DEFAULT_HOT_BIZ,
+                HotWalletRules.DEFAULT_HOT_ADDRESS_INDEX,
+                HotWalletRules.DEFAULT_HOT_WALLET_ROLE)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing NEAR hot wallet for token storage registration"));
         BigInteger minimum = tokenStorageMinimum(token);
@@ -319,11 +324,10 @@ public class NearTransactionService {
      */
     public boolean confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
                                      String collectionNo) {
-        String txHash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
+        String txHash = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         JsonNode status = requireSuccessfulConfirmation(txHash, null, Duration.ofMinutes(2));
-        if (repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, txHash) == 1) {
-            repository.markNearTransactionConfirmed(CHAIN, txHash, blockHeight(status), gasBurnt(status),
-                    status.toString());
+        if (collectionRecordRepository.markConfirmed(tenantId, CHAIN, collectionNo, txHash) == 1) {
+            nearTransactionRepository.markConfirmed(CHAIN, txHash, blockHeight(status), gasBurnt(status), status.toString());
             return true;
         }
         return false;
@@ -334,7 +338,7 @@ public class NearTransactionService {
     public JsonNode requireSuccessfulConfirmation(String txHash, String senderAccountId, Duration timeout) {
         Instant deadline = Instant.now().plus(timeout);
         String sender = senderAccountId == null || senderAccountId.isBlank()
-                ? repository.findNearTransactionSender(CHAIN, txHash).orElseThrow()
+                ? nearTransactionRepository.findSender(CHAIN, txHash).orElseThrow()
                 : senderAccountId;
         while (Instant.now().isBefore(deadline)) {
             JsonNode result = rpc.transactionStatus(txHash, sender);
@@ -376,7 +380,7 @@ public class NearTransactionService {
     private void record(String hash, long actionIndex, String sender, String receiver,
                         String assetSymbol, BigDecimal amount,
                         long gasBurnt, long blockHeight, String status, String rawPayload) {
-        repository.recordNearTransaction(NearTransactionRecord.builder()
+        nearTransactionRepository.upsert(NearTransactionRecord.builder()
                 .chain(CHAIN)
                 .txHash(hash)
                 .actionIndex(actionIndex)

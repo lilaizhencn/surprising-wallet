@@ -1,14 +1,16 @@
 package com.surprising.wallet.chain.cardano;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Test;
-
+import com.surprising.wallet.repository.UtxoRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -27,7 +29,15 @@ class CardanoDepositScannerTest {
      */
     @Test
     void tracksNativeAndTokenAccountsSeparatelyForSameAddress() {
-        CardanoDepositScanner scanner = new CardanoDepositScanner(null, new FakeRepository(), RuntimeTestSupport.enabled());
+        CardanoDepositScanner scanner = new CardanoDepositScanner(
+                null,
+                new FakeRepository().chainAddressRepository,
+                new FakeRepository().depositRecordRepository,
+                new FakeRepository().depositService,
+                new FakeRepository().chainScanHeightRepository,
+                new FakeRepository().chainProfileRepository,
+                new FakeRepository().tokenConfigRepository,
+                RuntimeTestSupport.enabled());
         TokenDefinition token = TokenDefinition.builder()
                 .chain("ADA")
                 .symbol("USDC")
@@ -47,28 +57,20 @@ class CardanoDepositScannerTest {
     /**
      * 测试替身 {@code FakeRepository}，用于隔离外部依赖并验证调用参数和状态变化。
      */
-    private static final class FakeRepository extends ChainJdbcRepository {
+    private static final class FakeRepository extends ChainRepositoryFixture {
         /**
          * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         FakeRepository() {
-            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
+            super();
+            Mockito.doAnswer(invocation -> java.util.Optional.of(com.surprising.wallet.common.chain.AccountChainProfile.builder().chain(invocation.getArgument(0)).network("testnet").build())).when(chainProfileRepository).findAccountByChain(ArgumentMatchers.anyString());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_assetSymbol = invocation.getArgument(1);
+                String accountId = "ADA".equals(arg_assetSymbol) ? "ada-account" : "usdc-account";
+                return List.of(ChainAddressRecord.builder().chain("ADA").assetSymbol(arg_assetSymbol).accountId(accountId).address("addr").walletRole("DEPOSIT").enabled(true).build());
+            }).when(chainAddressRepository).listEnabled(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
         }
 
-        /**
-         * 验证 {@code listChainAddresses} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<ChainAddressRecord> listChainAddresses(String chain, String assetSymbol) {
-            String accountId = "ADA".equals(assetSymbol) ? "ada-account" : "usdc-account";
-            return List.of(ChainAddressRecord.builder()
-                    .chain("ADA")
-                    .assetSymbol(assetSymbol)
-                    .accountId(accountId)
-                    .address("addr")
-                    .walletRole("DEPOSIT")
-                    .enabled(true)
-                    .build());
-        }
     }
 }

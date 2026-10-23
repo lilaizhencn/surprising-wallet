@@ -19,15 +19,19 @@ import com.surprising.wallet.chain.xrp.XrpDepositScanner;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainScanHeightRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 /**
  * 账户链充值扫描工作流。
@@ -42,7 +46,11 @@ public class AccountChainDepositWorkflow {
     /**
      * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final ChainJdbcRepository repository;
+    private final ChainAddressRepository chainAddressRepository;
+    private final ChainScanHeightRepository chainScanHeightRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
+
     /**
      * 保存 {@code runtimeConfigService}，用于保存运行配置和策略参数。
      */
@@ -156,7 +164,7 @@ public class AccountChainDepositWorkflow {
             long latest = client.getNowBlock().getBlockHeader().getRawData().getNumber();
             long start = scanStart(profile, latest, "TRON_TRX", "TRON_TRC20");
             long end = Math.min(latest, start + scanBatch(profile) - 1L);
-            Set<String> addresses = repository.listEnabledChainScanAddresses("TRON");
+            Set<String> addresses = chainAddressRepository.listEnabledAddresses("TRON").stream().collect(Collectors.toSet());
             Map<String, TronScanner.TokenConfig> tokens = tronTokens();
             for (long height = start; height <= end; height++) {
                 tronDepositScanner.scanAndCreditTrx(
@@ -177,7 +185,7 @@ public class AccountChainDepositWorkflow {
                 : Math.max(0L, latest - scanBatch(profile) + 1L);
         long next = Long.MAX_VALUE;
         for (String scannerName : scannerNames) {
-            long candidate = repository.findScanSafeHeight(profile.getChain(), scannerName)
+            long candidate = chainScanHeightRepository.findSafeHeight(profile.getChain(), scannerName)
                     .map(height -> height + 1L)
                     .orElse(fallback);
             next = Math.min(next, candidate);
@@ -207,7 +215,7 @@ public class AccountChainDepositWorkflow {
      */
     private Map<String, TronScanner.TokenConfig> tronTokens() {
         Map<String, TronScanner.TokenConfig> tokens = new LinkedHashMap<>();
-        for (TokenDefinition token : repository.listTokens("TRON")) {
+        for (TokenDefinition token : chainProfileRepository.findAccountByChain("TRON").map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions("TRON", configuredNetworkProfile.getNetwork())).orElse(List.of())) {
             String contract = token.getContractAddress();
             if (contract == null || contract.isBlank()) {
                 continue;

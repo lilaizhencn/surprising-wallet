@@ -1,7 +1,5 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.chain.evm.Evm7702AuthorizationService;
 import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
 import com.surprising.wallet.chain.evm.Evm7702PayoutCodec;
@@ -11,7 +9,24 @@ import com.surprising.wallet.chain.evm.Evm7702PayoutRequest;
 import com.surprising.wallet.chain.evm.Evm7702PayoutSigner;
 import com.surprising.wallet.chain.evm.EvmFeeSupport;
 import com.surprising.wallet.chain.evm.EvmHttpServiceFactory;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.ChainRpcNode;
+import com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.Evm7702CollectionRepository;
+import com.surprising.wallet.repository.Evm7702WithdrawalRepository;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.bitcoinj.crypto.ECKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,21 +52,6 @@ import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.utils.Numeric;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.math.RoundingMode;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import com.surprising.wallet.repository.Evm7702CollectionRepository;
-import com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator;
-import com.surprising.wallet.repository.Evm7702WithdrawalRepository;
 
 /**
  * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
@@ -85,7 +85,9 @@ public class Evm7702WithdrawalWorkflowService {
     /**
      * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final ChainJdbcRepository chainRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final ChainAssetRepository chainAssetRepository;
+
     /**
      * 保存 {@code rpcNodes}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
@@ -134,7 +136,8 @@ public class Evm7702WithdrawalWorkflowService {
     public Evm7702WithdrawalWorkflowService(
             Evm7702WithdrawalRepository repository,
             Evm7702WithdrawalCoordinator coordinator,
-            ChainJdbcRepository chainRepository,
+            ChainProfileRepository chainProfileRepository,
+            ChainAssetRepository chainAssetRepository,
             ChainRpcNodeService rpcNodes,
             AccountSecp256k1KeyService keyService,
             CustodyCryptoService crypto,
@@ -142,7 +145,8 @@ public class Evm7702WithdrawalWorkflowService {
             EvmHttpServiceFactory httpServices) {
         this.repository = repository;
         this.coordinator = coordinator;
-        this.chainRepository = chainRepository;
+        this.chainProfileRepository = chainProfileRepository;
+        this.chainAssetRepository = chainAssetRepository;
         this.rpcNodes = rpcNodes;
         this.keyService = keyService;
         this.crypto = crypto;
@@ -157,7 +161,7 @@ public class Evm7702WithdrawalWorkflowService {
         try {
             for (Evm7702WithdrawalRepository.RuntimeTarget target : repository.listRuntimeTargets()) {
                 try {
-                    AccountChainProfile profile = chainRepository.findProfileByChain(target.chain())
+                    AccountChainProfile profile = chainProfileRepository.findAccountByChain(target.chain())
                             .orElseThrow(() -> new IllegalStateException(
                                     "enabled EVM profile is missing for " + target.chain()));
                     if (!"evm".equalsIgnoreCase(profile.getFamily())
@@ -516,7 +520,7 @@ public class Evm7702WithdrawalWorkflowService {
      * 执行 {@code nativeDecimals} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private int nativeDecimals(AccountChainProfile profile) {
-        var asset = chainRepository.findAsset(profile.getChain(), profile.getNativeSymbol())
+        var asset = chainAssetRepository.findActiveDefinition(profile.getChain(), profile.getNativeSymbol())
                 .orElseThrow(() -> new IllegalStateException(
                         "missing active native chain_asset for " + profile.getChain()));
         if (!Boolean.TRUE.equals(asset.getNativeAsset()) || asset.getDecimals() == null) {

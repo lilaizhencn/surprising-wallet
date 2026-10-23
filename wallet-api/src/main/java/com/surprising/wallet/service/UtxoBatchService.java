@@ -1,30 +1,30 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.repository.ChainFeeRateRepository;
+import com.surprising.wallet.chain.BlockchainRuntimeService;
+import com.surprising.wallet.chain.model.UtxoSigningTransaction;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
-import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
-import com.surprising.wallet.chain.model.UtxoSigningTransaction;
 import com.surprising.wallet.common.signing.UtxoSigningRequest;
-import com.surprising.wallet.repository.ChainSigningTransactionRepository;
-import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainFeeRateRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainSigningTransactionRepository;
+import com.surprising.wallet.repository.CollectionRecordRepository;
+import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashFeePolicy;
-import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.sdk.bitcoinj.core.P2shMultisigFeeCalculator;
+import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinFeePolicy;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinFeePolicy;
-import com.surprising.wallet.chain.BlockchainRuntimeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.extern.slf4j.Slf4j;
-
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.util.*;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * UTXO 链批处理服务（提现 + 归集）。
@@ -42,8 +42,13 @@ public class UtxoBatchService {
     private static final int COLLECTION_INPUT_LIMIT = 50;
     /** 链元数据服务。 */
     private final BlockchainRuntimeService blockchainRuntimeService;
-    /** 统一数据库访问，包含订单、UTXO、签名交易等表。 */
-    private final ChainJdbcRepository chainJdbcRepository;
+    /** 提现订单与归集规划分别由对应仓储和用例负责。 */
+    private final WithdrawalOrderRepository withdrawalOrderRepository;
+    private final CollectionPlanningService collectionPlanningService;
+    private final UtxoSelectionService utxoSelectionService;
+    private final CollectionRecordRepository collectionRecordRepository;
+    private final ChainAddressRepository chainAddressRepository;
+
     /** 提现任务开关服务。 */
     private final WalletRuntimeConfigService runtimeConfigService;
     /** PostgreSQL 网络费率报价。 */
@@ -55,14 +60,22 @@ public class UtxoBatchService {
     /** 构造 UTXO 批处理服务。 */
     public UtxoBatchService(
             BlockchainRuntimeService blockchainRuntimeService,
-            ChainJdbcRepository chainJdbcRepository,
+            WithdrawalOrderRepository withdrawalOrderRepository,
+            CollectionPlanningService collectionPlanningService,
+            UtxoSelectionService utxoSelectionService,
+            CollectionRecordRepository collectionRecordRepository,
+            ChainAddressRepository chainAddressRepository,
             WalletRuntimeConfigService runtimeConfigService,
             ChainFeeRateRepository feeRates,
             UtxoSigningSubmissionService signingSubmissions,
             ChainSigningTransactionRepository signingTransactions,
             ChainProfileRepository profiles) {
         this.blockchainRuntimeService = blockchainRuntimeService;
-        this.chainJdbcRepository = chainJdbcRepository;
+        this.withdrawalOrderRepository = withdrawalOrderRepository;
+        this.collectionPlanningService = collectionPlanningService;
+        this.utxoSelectionService = utxoSelectionService;
+        this.collectionRecordRepository = collectionRecordRepository;
+        this.chainAddressRepository = chainAddressRepository;
         this.runtimeConfigService = runtimeConfigService;
         this.feeRates = feeRates;
         this.signingTransactions = signingTransactions;
@@ -88,7 +101,7 @@ public class UtxoBatchService {
         try {
             while (withdrawEnabled) {
                 List<WithdrawalOrderRecord> queuedOrders =
-                        chainJdbcRepository.listWithdrawalsForSigning(chain, chain, COUNT);
+                        withdrawalOrderRepository.listForSigning(chain, chain, COUNT);
                 if (queuedOrders == null || queuedOrders.isEmpty()) {
                     break;
                 }
@@ -132,18 +145,22 @@ public class UtxoBatchService {
                 ? defaultFeeRate(chain) : Integer.parseInt(configured);
         long confirmations = blockchainRuntimeService.depositConfirmationThreshold(currency);
         long dust = blockchainRuntimeService.dustThresholdAtomic(currency);
-        List<CollectionCandidateRecord> candidates = chainJdbcRepository.listCollectableLedgerBalances(
-                chain, BigDecimal.ZERO, COLLECTION_LIMIT);
+        List<CollectionCandidateRecord> candidates = collectionPlanningService.candidates(chain, BigDecimal.ZERO, COLLECTION_LIMIT);
         for (CollectionCandidateRecord candidate : candidates) {
             UUID tenantId = candidate.getTenantId();
             String source = candidate.getAddress();
-            String target = chainJdbcRepository.findActiveTenantCollectionAddress(tenantId, chain)
+            String target = collectionPlanningService.destination(tenantId, chain)
                     .orElseThrow(() -> new IllegalStateException("BTC collection address is missing"));
             if (source.equalsIgnoreCase(target)) {
                 continue;
             }
-            List<UtxoTransaction> utxos = chainJdbcRepository.listCreditedSpendableUtxosAtAddress(
-                    tenantId, chain, chain, source, confirmations, COLLECTION_INPUT_LIMIT);
+            List<UtxoTransaction> utxos = utxoSelectionService.creditedAtAddress(
+                    tenantId,
+                    chain,
+                    chain,
+                    source,
+                    confirmations,
+                    COLLECTION_INPUT_LIMIT);
             if (utxos.isEmpty()) {
                 continue;
             }
@@ -156,8 +173,17 @@ public class UtxoBatchService {
                 continue;
             }
             String collectionNo = "COLL-BTC-" + UUID.randomUUID();
-            if (chainJdbcRepository.createCollectionRecord(tenantId, candidate.getCustodyAddressId(),
-                    collectionNo, chain, chain, source, target, amount, fee, null) != 1) {
+            if (collectionRecordRepository.create(
+                    tenantId,
+                    candidate.getCustodyAddressId(),
+                    collectionNo,
+                    chain,
+                    chain,
+                    source,
+                    target,
+                    amount,
+                    fee,
+                    null) != 1) {
                 continue;
             }
             var output = new UtxoSigningRequest.Payment(collectionNo, candidate.getUserId(), target, amount, BigDecimal.ZERO);
@@ -166,12 +192,11 @@ public class UtxoBatchService {
                     UtxoSigningRequest.Operation.COLLECTION, collectionNo, inputs, List.of(output), target, feeRate, dust);
             UtxoSigningTransaction transaction = signingTransactions.create(request, collectionNo);
             for (UtxoTransaction utxo : utxos) {
-                if (chainJdbcRepository.lockUtxo(tenantId, chain, utxo.getTxId(), utxo.getSeq(),
-                        Integer.toString(transaction.id())) != 1) {
+                if (utxoSelectionService.lock(tenantId, chain, utxo.getTxId(), utxo.getSeq(), Integer.toString(transaction.id())) != 1) {
                     throw new IllegalStateException("BTC collection UTXO lock failed");
                 }
             }
-            if (chainJdbcRepository.claimCollectionSigning(tenantId, chain, collectionNo, null) != 1) {
+            if (collectionRecordRepository.claimSigning(tenantId, chain, collectionNo, null) != 1) {
                 throw new IllegalStateException("BTC collection claim failed");
             }
             signingSubmissions.enqueue(tenantId, chain, transaction.id(), transaction.request().requestId());
@@ -251,8 +276,7 @@ public class UtxoBatchService {
 
         // 锁定本次交易所有输入 UTXO，避免双花
         for (UtxoTransaction utxo : utxos) {
-            int locked = chainJdbcRepository.lockUtxo(
-                    tenantId, chain, utxo.getTxId(), utxo.getSeq(), transactionId);
+            int locked = utxoSelectionService.lock(tenantId, chain, utxo.getTxId(), utxo.getSeq(), transactionId);
             if (locked != 1) {
                 throw new IllegalStateException(
                         "failed to lock unified " + chain + " UTXO "
@@ -263,10 +287,8 @@ public class UtxoBatchService {
         // 更新提现订单状态：先锁定再进入签名态
         String fromAddress = inputs.getFirst().address();
         records.forEach(record -> {
-            chainJdbcRepository.updateWithdrawalStatus(
-                    tenantId, chain, record.reference(), "UTXO_LOCKED", fromAddress, null, null);
-            chainJdbcRepository.updateWithdrawalStatus(
-                    tenantId, chain, record.reference(), "SIGNING", fromAddress, null, null);
+            withdrawalOrderRepository.updateStatus(tenantId, chain, record.reference(), "UTXO_LOCKED", fromAddress, null, null);
+            withdrawalOrderRepository.updateStatus(tenantId, chain, record.reference(), "SIGNING", fromAddress, null, null);
         });
 
         log.info("交易创建完成");
@@ -322,23 +344,25 @@ public class UtxoBatchService {
             int offset,
             AssetRuntimeMetadata currency) {
         String chain = currency.getName().toUpperCase(Locale.ROOT);
-        return chainJdbcRepository.listSpendableUtxos(
-                tenantId, chain, chain, depositConfirmationThreshold, limit, offset);
+        return utxoSelectionService.spendable(tenantId, chain, chain, depositConfirmationThreshold, limit, offset);
     }
 
     /**
      * 查询租户可用热钱包地址，作为本次构建交易找零输出地址。
      */
     private String defaultHotChangeAddress(UUID tenantId, AssetRuntimeMetadata currency) {
-        return chainJdbcRepository.findActiveTenantCollectionAddress(tenantId, currency.chain())
-                .flatMap(address -> chainJdbcRepository.findChainAddressByAddress(
-                        tenantId, currency.chain(), currency.assetSymbol(), address))
+        return collectionPlanningService.destination(tenantId, currency.chain())
+                .flatMap(address -> chainAddressRepository.findEnabledByTenantAndAddress(
+                        tenantId,
+                        currency.chain(),
+                        currency.assetSymbol(),
+                        address))
                 .map(ChainAddressRecord::getAddress)
                 .orElseThrow(() -> new IllegalStateException("missing tenant change address for " + currency.chain()));
     }
 
     private UtxoSigningRequest.Input signingInput(UUID tenantId, String chain, UtxoTransaction utxo) {
-        var address = chainJdbcRepository.findChainAddressByAddress(tenantId, chain, utxo.getAddress())
+        var address = chainAddressRepository.findEnabledByTenantAndAddress(tenantId, chain, utxo.getAddress())
                 .orElseThrow(() -> new IllegalStateException("missing input address for " + chain));
         var key = new UtxoSigningRequest.Key(address.getUserId(), address.getBiz(),
                 Math.toIntExact(address.getAddressIndex()), null);

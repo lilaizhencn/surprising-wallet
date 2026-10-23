@@ -1,28 +1,32 @@
-package com.surprising.wallet.repository;
+package com.surprising.wallet.service;
+
+import com.surprising.wallet.repository.*;
 
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
-import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class ChainJdbcRepositoryCollectionCandidateTest {
+class CollectionPlanningServiceTest {
     private static final UUID TENANT_A = UUID.fromString("77020000-0000-0000-0000-000000000101");
     private static final UUID TENANT_B = UUID.fromString("77020000-0000-0000-0000-000000000102");
 
     @Test
     void collectionCandidatesUseGroupedRowsAndPreserveEligibilityAmountAndOrdering() {
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(new CollectionJdbcTemplate());
+        var jdbc = new CollectionJdbcTemplate();
+        var planning = new CollectionPlanningService(new DepositRecordRepository(jdbc),
+                new CollectionRecordRepository(jdbc), new ChainAssetRepository(jdbc),
+                new CustodyAddressRepository(jdbc), new ChainAddressRepository(jdbc),
+                new CustodyGasAccountRepository(jdbc));
 
-        List<CollectionCandidateRecord> candidates = repository.listCollectableLedgerBalances(
-                "ETH", BigDecimal.ZERO, 20);
+        List<CollectionCandidateRecord> candidates = planning.candidates("ETH", BigDecimal.ZERO, 20);
 
         assertEquals(2, candidates.size());
         assertCandidate(candidates.get(0), TENANT_B, "0xdef", "15");

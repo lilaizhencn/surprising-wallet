@@ -3,16 +3,15 @@ package com.surprising.wallet.chain.solana;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.math.BigDecimal;
+import java.sql.Connection;
+import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
-
-import java.math.BigDecimal;
-import java.sql.Connection;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -43,16 +42,16 @@ class SolanaDatabaseFlowIntegrationTest {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+            ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             SolanaKeyService keys = new SolanaKeyService(MASTER_SEED);
-            SolanaAddressService addresses = new SolanaAddressService(keys, repository);
+            SolanaAddressService addresses = new SolanaAddressService(keys, repository.chainAddressRepository);
             UUID tenantId = SolanaTenantIntegrationFixture.ensureTenant(jdbc);
             long baseIndex = 700_000L + Math.abs(UUID.randomUUID().getLeastSignificantBits() % 100_000L);
 
             ChainAddressRecord userA = addresses.createNativeAddress(
                     tenantId, 1001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userAAfterRestart = new SolanaAddressService(
-                    new SolanaKeyService(MASTER_SEED), repository)
+                    new SolanaKeyService(MASTER_SEED), repository.chainAddressRepository)
                     .createNativeAddress(tenantId, 1001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userB = addresses.createNativeAddress(
                     tenantId, 1002, 0, baseIndex + 1, "DEPOSIT");
@@ -63,14 +62,11 @@ class SolanaDatabaseFlowIntegrationTest {
             DepositEvent deposit = new DepositEvent(ChainType.SOLANA, "SOL", signature,
                     "external", userA.getAddress(), new BigDecimal("10000000"),
                     123L, signature, 2, null, "{}");
-            assertTrue(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
-            assertFalse(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
-            assertTrue(repository.freezeLedgerBalance(tenantId, "SOLANA", "SOL", userA.getAccountId(),
-                    new BigDecimal("2000000")));
-            assertFalse(repository.freezeLedgerBalance(tenantId, "SOLANA", "SOL", userA.getAccountId(),
-                    new BigDecimal("9000000")));
-            assertTrue(repository.releaseLockedBalance(tenantId, "SOLANA", "SOL", userA.getAccountId(),
-                    new BigDecimal("2000000")));
+            assertTrue(repository.depositService.recordAndCredit(deposit, 0, 1, userA.getAccountId()));
+            assertFalse(repository.depositService.recordAndCredit(deposit, 0, 1, userA.getAccountId()));
+            assertTrue(repository.ledgerBalanceRepository.freeze("SOLANA", "SOL", userA.getAccountId(), new BigDecimal("2000000"), tenantId));
+            assertFalse(repository.ledgerBalanceRepository.freeze("SOLANA", "SOL", userA.getAccountId(), new BigDecimal("9000000"), tenantId));
+            assertTrue(repository.ledgerBalanceRepository.release("SOLANA", "SOL", userA.getAccountId(), new BigDecimal("2000000"), tenantId));
 
             assertEquals(1L, jdbc.queryForObject("""
                     select count(*) from deposit_record

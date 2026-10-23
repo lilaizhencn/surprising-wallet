@@ -1,18 +1,20 @@
 package com.surprising.wallet.chain.polkadot;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.UtxoRepository;
 import com.surprising.wallet.service.HotWalletAddressService;
-import org.junit.jupiter.api.Test;
-
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,9 +41,9 @@ class PolkadotTransactionServiceTest {
         ChainAddressRecord hot = address(0, 0, 0, "5HotAddress");
         PolkadotTransactionService service = new PolkadotTransactionService(runtime,
                 new PolkadotKeyService(MASTER_SEED),
-                repository,
-                new FakeHotWalletAddressService(hot),
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
+                repository.collectionRecordRepository,
+                repository.walletSystemConfigRepository, new FakeHotWalletAddressService(hot),
+                Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
         ChainAddressRecord user = address(7, 0, 3, "5UserAddress");
         TokenDefinition token = TokenDefinition.builder()
                 .chain("DOT")
@@ -75,9 +77,9 @@ class PolkadotTransactionServiceTest {
         ChainAddressRecord hot = address(0, 0, 0, "5HotAddress");
         PolkadotTransactionService service = new PolkadotTransactionService(runtime,
                 new PolkadotKeyService(MASTER_SEED),
-                repository,
-                new FakeHotWalletAddressService(hot),
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
+                repository.collectionRecordRepository,
+                repository.walletSystemConfigRepository, new FakeHotWalletAddressService(hot),
+                Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
         ChainAddressRecord user = address(7, 0, 3, "5UserAddress");
         TokenDefinition token = TokenDefinition.builder()
                 .chain("DOT")
@@ -189,7 +191,7 @@ class PolkadotTransactionServiceTest {
     /**
      * 测试替身 {@code FakeRepository}，用于隔离外部依赖并验证调用参数和状态变化。
      */
-    private static final class FakeRepository extends ChainJdbcRepository {
+    private static final class FakeRepository extends ChainRepositoryFixture {
         /**
          * 保存 {@code status}，记录测试开关、处理状态、确认结果或重试信息。
          */
@@ -199,44 +201,42 @@ class PolkadotTransactionServiceTest {
          * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         FakeRepository() {
-            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
+            super();
+            Mockito.doAnswer(invocation -> java.util.Optional.of(com.surprising.wallet.common.chain.AccountChainProfile.builder().chain(invocation.getArgument(0)).network("testnet").build())).when(chainProfileRepository).findAccountByChain(ArgumentMatchers.anyString());
+            Mockito.doAnswer(invocation -> {
+                UUID arg_tenantId = invocation.getArgument(0);
+                String arg_chain = invocation.getArgument(1);
+                String arg_collectionNo = invocation.getArgument(2);
+                return Optional.empty();
+            }).when(collectionRecordRepository).findTxHash(ArgumentMatchers.<UUID>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                UUID arg_tenantId = invocation.getArgument(0);
+                String arg_chain = invocation.getArgument(1);
+                String arg_collectionNo = invocation.getArgument(2);
+                String arg_rawPayload = invocation.getArgument(3);
+                return 1;
+            }).when(collectionRecordRepository).claimSigning(ArgumentMatchers.<UUID>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                UUID arg_tenantId = invocation.getArgument(0);
+                String arg_chain = invocation.getArgument(1);
+                String arg_collectionNo = invocation.getArgument(2);
+                String arg_status = invocation.getArgument(3);
+                String arg_txHash = invocation.getArgument(4);
+                String arg_errorMessage = invocation.getArgument(5);
+                String arg_rawPayload = invocation.getArgument(6);
+                this.status = arg_status;
+                return 1;
+            }).when(collectionRecordRepository).updateStatus(
+                    ArgumentMatchers.<UUID>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any());
         }
 
-        /**
-         * 验证 {@code systemValue} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<String> systemValue(String configKey) {
-            return Optional.empty();
-        }
 
-        /**
-         * 验证 {@code findCollectionTxHash} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<String> findCollectionTxHash(UUID tenantId, String chain, String collectionNo) {
-            return Optional.empty();
-        }
-
-        /**
-         * 验证 {@code claimCollectionSigning} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public int claimCollectionSigning(UUID tenantId, String chain,
-                                          String collectionNo, String rawPayload) {
-            return 1;
-        }
-
-        /**
-         * 验证 {@code updateCollectionStatus} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public int updateCollectionStatus(UUID tenantId, String chain, String collectionNo,
-                                          String status, String txHash,
-                                          String errorMessage, String rawPayload) {
-            this.status = status;
-            return 1;
-        }
     }
 
     /**

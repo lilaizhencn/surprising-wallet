@@ -1,21 +1,21 @@
 package com.surprising.wallet.chain.xrp;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 import com.google.common.primitives.UnsignedInteger;
 import com.google.common.primitives.UnsignedLong;
+import com.surprising.wallet.chain.WalletKeyTestFixture;
+import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
-import com.surprising.wallet.chain.WalletKeyTestFixture;
-import com.surprising.wallet.service.AccountSecp256k1KeyService;
 import com.surprising.wallet.config.PubKeyConfig;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.service.AccountSecp256k1KeyService;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.util.List;
+import java.util.UUID;
 import okhttp3.HttpUrl;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -27,17 +27,15 @@ import org.xrpl.xrpl4j.crypto.keys.KeyPair;
 import org.xrpl.xrpl4j.crypto.keys.Seed;
 import org.xrpl.xrpl4j.crypto.signing.SingleSignedTransaction;
 import org.xrpl.xrpl4j.crypto.signing.bc.BcSignatureService;
-import org.xrpl.xrpl4j.model.transactions.Address;
 import org.xrpl.xrpl4j.model.transactions.AccountSet;
+import org.xrpl.xrpl4j.model.transactions.Address;
 import org.xrpl.xrpl4j.model.transactions.IssuedCurrencyAmount;
 import org.xrpl.xrpl4j.model.transactions.Payment;
 import org.xrpl.xrpl4j.model.transactions.XrpCurrencyAmount;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.util.List;
-import java.util.UUID;
-
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -88,18 +86,33 @@ class XrpTestnetFullFlowIntegrationTest {
                 "set -Dxrp.live.flow.enabled=true to broadcast XRPL Testnet transactions");
 
         JdbcTemplate jdbc = new JdbcTemplate(dataSource());
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         UUID tenantId = XrpTenantIntegrationFixture.ensureTenant(jdbc);
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         XrpKeyService keys = new XrpKeyService(new PubKeyConfig(keyMaterial),
                 new AccountSecp256k1KeyService(keyMaterial));
-        XrpAddressService addresses = new XrpAddressService(keys, repository);
+        XrpAddressService addresses = new XrpAddressService(keys, repository.chainAddressRepository, repository.chainProfileRepository);
         XrpRpcClient rpc = new XrpRpcClient(new ObjectMapper(), profiles("XRP"), nodes("XRP", RPC_URL));
-        XrpTransactionService transactions = new XrpTransactionService(rpc,
+        XrpTransactionService transactions = new XrpTransactionService(
+                rpc,
                 keys,
-                repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
-        XrpDepositScanner scanner = new XrpDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc));
+                repository.withdrawalOrderRepository,
+                repository.collectionRecordRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.chainAddressRepository,
+                repository.xrpTransactionRepository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc),
+                RuntimeTestSupport.database(jdbc));
+        XrpDepositScanner scanner = new XrpDepositScanner(
+                rpc,
+                repository.chainScanHeightRepository,
+                repository.chainAddressRepository,
+                repository.depositService,
+                repository.xrpTransactionRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                RuntimeTestSupport.database(jdbc));
         FaucetClient faucet = FaucetClient.construct(HttpUrl.get(FAUCET_URL));
 
         long run = System.currentTimeMillis();
@@ -152,8 +165,7 @@ class XrpTestnetFullFlowIntegrationTest {
         issuedCurrencyFlow(tenantId, custodyAddressId, jdbc, repository, addresses, transactions, scanner, rpc,
                 issuer, issuerAddress, user, external, hot, USDT, USDT_CURRENCY, runId);
 
-        assertFalse(repository.freezeLedgerBalance(
-                tenantId, CHAIN, USDC, user.getAccountId(), new BigDecimal("1000")));
+        assertFalse(repository.ledgerBalanceRepository.freeze(CHAIN, USDC, user.getAccountId(), new BigDecimal("1000"), tenantId));
         assertEquals(0, jdbc.queryForObject("select count(*) from ledger_balance where available_balance < 0 "
                 + "or locked_balance < 0 or total_balance < 0", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from withdrawal_order where chain='XRP' "
@@ -167,13 +179,16 @@ class XrpTestnetFullFlowIntegrationTest {
      * 验证 {@code issuedCurrencyFlow} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private static void issuedCurrencyFlow(
-            UUID tenantId, UUID custodyAddressId, JdbcTemplate jdbc, ChainJdbcRepository repository,
+            UUID tenantId, UUID custodyAddressId, JdbcTemplate jdbc, ChainRepositoryFixture repository,
             XrpAddressService addresses, XrpTransactionService transactions, XrpDepositScanner scanner,
             XrpRpcClient rpc, KeyPair issuer, String issuerAddress,
             ChainAddressRecord user, ChainAddressRecord external, ChainAddressRecord hot,
             String symbol, String currency, String runId) {
         upsertMockToken(jdbc, issuerAddress, symbol, currency);
-        TokenDefinition token = repository.findToken(CHAIN, symbol).orElseThrow();
+        TokenDefinition token = repository.chainProfileRepository.findAccountByChain(CHAIN).flatMap( configuredNetworkProfile -> repository.tokenConfigRepository.findDefinition(
+                CHAIN,
+                configuredNetworkProfile.getNetwork(),
+                symbol)).orElseThrow();
         ChainAddressRecord userToken = addresses.createIssuedCurrencyAddress(
                 symbol, user.getUserId(), user.getBiz(), user.getAddressIndex(), "DEPOSIT");
         ChainAddressRecord externalToken = addresses.createIssuedCurrencyAddress(
@@ -210,64 +225,80 @@ class XrpTestnetFullFlowIntegrationTest {
     /**
      * 验证 {@code withdrawNative} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void withdrawNative(UUID tenantId, ChainJdbcRepository repository,
+    private static void withdrawNative(UUID tenantId, ChainRepositoryFixture repository,
                                        XrpTransactionService transactions,
                                        XrpRpcClient rpc, String orderNo, ChainAddressRecord from,
                                        ChainAddressRecord to, BigDecimal amount) {
         createAndFreeze(tenantId, repository, orderNo, from, to, CHAIN, amount);
         String txHash = transactions.sendNative(from, to.getAddress(), amount);
-        assertEquals(1, repository.markWithdrawalSent(
-                tenantId, CHAIN, orderNo, from.getAddress(), txHash));
+        assertEquals(1, repository.withdrawalOrderRepository.markSent(tenantId, CHAIN, orderNo, from.getAddress(), txHash));
         waitValidated(rpc, txHash);
         assertTrue(transactions.confirmWithdrawal(tenantId,
-                repository.findProfileByChain(CHAIN).orElseThrow(),
+                repository.chainProfileRepository.findAccountByChain(CHAIN).orElseThrow(),
                 orderNo, CHAIN, from.getAccountId(), amount));
     }
 
     /**
      * 验证 {@code withdrawToken} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void withdrawToken(UUID tenantId, ChainJdbcRepository repository,
+    private static void withdrawToken(UUID tenantId, ChainRepositoryFixture repository,
                                       XrpTransactionService transactions,
                                       XrpRpcClient rpc, String orderNo, ChainAddressRecord from,
                                       ChainAddressRecord to, TokenDefinition token, BigDecimal amount) {
         createAndFreeze(tenantId, repository, orderNo, from, to, token.getSymbol(), amount);
         String txHash = transactions.sendIssuedCurrency(from, token, to.getAddress(), amount);
-        assertEquals(1, repository.markWithdrawalSent(
-                tenantId, CHAIN, orderNo, from.getAddress(), txHash));
+        assertEquals(1, repository.withdrawalOrderRepository.markSent(tenantId, CHAIN, orderNo, from.getAddress(), txHash));
         waitValidated(rpc, txHash);
         assertTrue(transactions.confirmWithdrawal(tenantId,
-                repository.findProfileByChain(CHAIN).orElseThrow(),
+                repository.chainProfileRepository.findAccountByChain(CHAIN).orElseThrow(),
                 orderNo, token.getSymbol(), from.getAccountId(), amount));
     }
 
     /**
      * 验证 {@code createAndFreeze} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void createAndFreeze(UUID tenantId, ChainJdbcRepository repository, String orderNo,
+    private static void createAndFreeze(UUID tenantId, ChainRepositoryFixture repository, String orderNo,
                                         ChainAddressRecord from, ChainAddressRecord to,
                                         String symbol, BigDecimal amount) {
-        assertEquals(1, repository.createTenantWithdrawalOrder(
-                tenantId, orderNo, from.getUserId(), CHAIN, symbol,
-                from.getAddress(), from.getAccountId(), to.getAddress(), amount, BigDecimal.ZERO));
-        assertTrue(repository.freezeLedgerBalance(tenantId, CHAIN, symbol, from.getAccountId(), amount));
-        assertEquals(1, repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FROZEN",
-                from.getAddress(), null, null));
-        assertEquals(1, repository.claimWithdrawalSigning(
-                tenantId, CHAIN, orderNo, from.getAddress()));
+        assertEquals(
+                1,
+                repository.withdrawalOrderRepository.createForTenant(
+                        tenantId,
+                        orderNo,
+                        from.getUserId(),
+                        CHAIN,
+                        symbol,
+                        from.getAddress(),
+                        from.getAccountId(),
+                        to.getAddress(),
+                        amount,
+                        BigDecimal.ZERO));
+        assertTrue(repository.ledgerBalanceRepository.freeze(CHAIN, symbol, from.getAccountId(), amount, tenantId));
+        assertEquals(1, repository.withdrawalOrderRepository.updateStatus(tenantId, CHAIN, orderNo, "FROZEN", from.getAddress(), null, null));
+        assertEquals(1, repository.withdrawalClaimService.claim(tenantId, CHAIN, orderNo, from.getAddress()));
     }
 
     /**
      * 验证 {@code collect} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private static String collect(
-            UUID tenantId, UUID custodyAddressId, ChainJdbcRepository repository,
+            UUID tenantId, UUID custodyAddressId, ChainRepositoryFixture repository,
             XrpTransactionService transactions, XrpRpcClient rpc, String collectionNo,
             ChainAddressRecord from, ChainAddressRecord hot, TokenDefinition token, BigDecimal amount) {
         String symbol = token == null ? CHAIN : token.getSymbol();
-        assertEquals(1, repository.createCollectionRecord(
-                tenantId, custodyAddressId, collectionNo, CHAIN, symbol,
-                from.getAddress(), hot.getAddress(), amount, BigDecimal.ZERO, null));
+        assertEquals(
+                1,
+                repository.collectionRecordRepository.create(
+                        tenantId,
+                        custodyAddressId,
+                        collectionNo,
+                        CHAIN,
+                        symbol,
+                        from.getAddress(),
+                        hot.getAddress(),
+                        amount,
+                        BigDecimal.ZERO,
+                        null));
         String txHash = token == null
                 ? transactions.collectNative(tenantId, collectionNo, from, hot.getAddress(), amount)
                 : transactions.collectIssuedCurrency(
@@ -278,7 +309,7 @@ class XrpTestnetFullFlowIntegrationTest {
                         tenantId, collectionNo, from, token, hot.getAddress(), amount));
         waitValidated(rpc, txHash);
         assertTrue(transactions.confirmCollection(
-                tenantId, repository.findProfileByChain(CHAIN).orElseThrow(), collectionNo));
+                tenantId, repository.chainProfileRepository.findAccountByChain(CHAIN).orElseThrow(), collectionNo));
         return txHash;
     }
 
@@ -400,8 +431,8 @@ class XrpTestnetFullFlowIntegrationTest {
     /**
      * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String symbol, String accountId) {
-        return repository.findLedgerBalance(CHAIN, symbol, accountId)
+    private static LedgerBalanceRecord ledger(ChainRepositoryFixture repository, String symbol, String accountId) {
+        return repository.ledgerBalanceRepository.find(CHAIN, symbol, accountId)
                 .orElseThrow(() -> new IllegalStateException("missing ledger " + symbol + "/" + accountId));
     }
 

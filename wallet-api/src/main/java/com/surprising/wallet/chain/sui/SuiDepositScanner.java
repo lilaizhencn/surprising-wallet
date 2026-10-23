@@ -1,23 +1,28 @@
 package com.surprising.wallet.chain.sui;
 
-import tools.jackson.databind.JsonNode;
+import com.surprising.wallet.chain.model.SuiTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.SuiTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainScanHeightRepository;
+import com.surprising.wallet.repository.SuiTransactionRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.service.DepositService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Sui 链充值扫描器，通过检查 checkpoint 交易中的 balance_changes 识别充值事件。
@@ -29,8 +34,7 @@ import java.util.Set;
  */
 @Service
 @RequiredArgsConstructor
-public
-class SuiDepositScanner {
+public class SuiDepositScanner {
 
     /** 链标识常量 */
     private static final String CHAIN = "SUI";
@@ -40,9 +44,14 @@ class SuiDepositScanner {
 
     /** Sui gRPC 客户端 */
     private final SuiRpcClient rpc;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
+    private final ChainScanHeightRepository chainScanHeightRepository;
+    private final ChainAddressRepository chainAddressRepository;
+    private final SuiTransactionRepository suiTransactionRepository;
+    private final DepositService depositService;
+    private final ChainAssetRepository chainAssetRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
 
     /** 运行时任务开关服务。 */
     @NonNull
@@ -60,7 +69,7 @@ class SuiDepositScanner {
         List<AssetScanTarget> targets = new ArrayList<>();
         Set<String> platformAddresses = platformAddresses();
         addTargets(targets, "SUI", SuiRpcClient.SUI_COIN_TYPE);
-        for (TokenDefinition token : repository.listTokens(CHAIN)) {
+        for (TokenDefinition token : chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of())) {
             if (token.getContractAddress() != null && Boolean.TRUE.equals(token.getActive())) {
                 addTargets(targets, token.getSymbol(), token.getContractAddress());
             }
@@ -72,14 +81,14 @@ class SuiDepositScanner {
             }
         }
         long safeHeight = Math.max(0L, end - profile.getDepositConfirmations() + 1L);
-        repository.updateScanHeight(CHAIN, SCANNER, end, safeHeight);
+        chainScanHeightRepository.upsert(CHAIN, SCANNER, end, safeHeight);
         return events;
     }
     /**
      * 添加 {@code addTargets} 对应的业务对象，并更新当前组件的集合或索引。
      */
     private void addTargets(List<AssetScanTarget> targets, String symbol, String coinType) {
-        for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, symbol)) {
+        for (ChainAddressRecord address : chainAddressRepository.listEnabled(CHAIN, symbol)) {
             if ("DEPOSIT".equals(address.getWalletRole())) {
                 targets.add(new AssetScanTarget(symbol, coinType, address));
             }
@@ -121,7 +130,7 @@ class SuiDepositScanner {
                     address.getAddress(), amount, checkpoint, digest, confirmations,
                     SuiRpcClient.SUI_COIN_TYPE.equals(coinType) ? null : coinType,
                     transaction.toString());
-            repository.recordSuiTransaction(SuiTransactionRecord.builder()
+            suiTransactionRepository.upsert(SuiTransactionRecord.builder()
                     .chain(CHAIN)
                     .txDigest(digest)
                     .sender(sender)
@@ -134,8 +143,7 @@ class SuiDepositScanner {
                     .status(confirmations >= profile.getDepositConfirmations() ? "CONFIRMED" : "CONFIRMING")
                     .rawPayload(transaction.toString())
                     .build());
-            repository.recordAndCreditDeposit(event, index, profile.getDepositConfirmations(),
-                    address.getAccountId());
+            depositService.recordAndCredit(event, index, profile.getDepositConfirmations(), address.getAccountId());
             events.add(event);
         }
     }
@@ -155,7 +163,7 @@ class SuiDepositScanner {
      */
     private Set<String> platformAddresses() {
         Set<String> addresses = new HashSet<>();
-        for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
+        for (ChainAddressRecord tracked : chainAddressRepository.listEnabled(CHAIN)) {
             addAddress(addresses, tracked.getAddress());
             addAddress(addresses, tracked.getOwnerAddress());
         }
@@ -194,9 +202,12 @@ class SuiDepositScanner {
      * 获取或查询 {@code decimals} 对应的数据，并向调用方返回当前业务状态。
      */
     private int decimals(String symbol) {
-        return repository.findAsset(CHAIN, symbol)
+        return chainAssetRepository.findActiveDefinition(CHAIN, symbol)
                 .map(asset -> asset.getDecimals())
-                .orElseGet(() -> repository.findToken(CHAIN, symbol)
+                .orElseGet(() -> chainProfileRepository.findAccountByChain(CHAIN).flatMap( configuredNetworkProfile -> tokenConfigRepository.findDefinition(
+                        CHAIN,
+                        configuredNetworkProfile.getNetwork(),
+                        symbol))
                         .map(TokenDefinition::getDecimals)
                         .orElse(9));
     }
@@ -212,14 +223,14 @@ class SuiDepositScanner {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile() {
-        return repository.findProfileByChain(CHAIN)
+        return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
     /**
      * 扫描或观察 {@code scanStart} 对应的链上状态，并转换为业务可用结果。
      */
     private long scanStart(AccountChainProfile profile, long latest) {
-        return repository.findScanSafeHeight(CHAIN, SCANNER)
+        return chainScanHeightRepository.findSafeHeight(CHAIN, SCANNER)
                 .map(height -> Math.min(latest, height + 1L))
                 .orElseGet(() -> {
                     long configured = profile.getScanStartHeight() == null

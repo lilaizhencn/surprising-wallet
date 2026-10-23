@@ -3,12 +3,24 @@ package com.surprising.wallet.chain.evm;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
+import org.spongycastle.util.encoders.Hex;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.spongycastle.util.encoders.Hex;
 import org.web3j.abi.FunctionEncoder;
 import org.web3j.abi.FunctionReturnDecoder;
 import org.web3j.abi.TypeReference;
@@ -26,19 +38,6 @@ import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.utils.Numeric;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.math.RoundingMode;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -73,7 +72,7 @@ class EvmForkFullChainIntegrationTest {
         String nativeSymbol = System.getProperty("evm.native.symbol", "ETH");
         int confirmations = Integer.getInteger("evm.confirmations", 1);
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource());
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbcTemplate);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbcTemplate);
         EvmDepositScanner scanner = com.surprising.wallet.testutil.EvmScanTestSupport.scanner(jdbcTemplate, chain, LOCAL_RPC, confirmations);
 
         Credentials wallet = walletCredentials(chain);
@@ -116,14 +115,22 @@ class EvmForkFullChainIntegrationTest {
             BigDecimal nativeWithdraw = new BigDecimal("0.1");
             SignedTx nativeWithdrawTx = sendSignedNative(web3j, wallet, recipient, nativeWithdraw, chainId);
             BigDecimal nativeWithdrawFee = fee(nativeWithdrawTx);
-            assertTrue(repository.debitLedgerBalance(chain.name(), nativeSymbol, wallet.getAddress(),
-                    nativeWithdraw.add(nativeWithdrawFee)));
+            assertTrue(repository.ledgerBalanceRepository.debit(
+                    chain.name(),
+                    nativeSymbol,
+                    wallet.getAddress(),
+                    nativeWithdraw.add(nativeWithdrawFee),
+                    null));
 
             BigDecimal nativeCollection = new BigDecimal("0.2");
             SignedTx nativeCollectionTx = sendSignedNative(web3j, wallet, deployer, nativeCollection, chainId);
             BigDecimal nativeCollectionFee = fee(nativeCollectionTx);
-            assertTrue(repository.debitLedgerBalance(chain.name(), nativeSymbol, wallet.getAddress(),
-                    nativeCollection.add(nativeCollectionFee)));
+            assertTrue(repository.ledgerBalanceRepository.debit(
+                    chain.name(),
+                    nativeSymbol,
+                    wallet.getAddress(),
+                    nativeCollection.add(nativeCollectionFee),
+                    null));
 
             for (Map.Entry<TokenContract, BigDecimal> entry : tokenDeposits.entrySet()) {
                 TokenContract token = entry.getKey();
@@ -131,18 +138,14 @@ class EvmForkFullChainIntegrationTest {
                 BigDecimal withdrawal = deposit.movePointLeft(1);
                 SignedTx withdrawalTx = sendSignedTokenTransfer(
                         web3j, wallet, token.address(), recipient, withdrawal, token.decimals(), chainId);
-                assertTrue(repository.debitLedgerBalance(
-                        chain.name(), token.symbol(), wallet.getAddress(), withdrawal));
-                assertTrue(repository.debitLedgerBalance(
-                        chain.name(), nativeSymbol, wallet.getAddress(), fee(withdrawalTx)));
+                assertTrue(repository.ledgerBalanceRepository.debit(chain.name(), token.symbol(), wallet.getAddress(), withdrawal, null));
+                assertTrue(repository.ledgerBalanceRepository.debit(chain.name(), nativeSymbol, wallet.getAddress(), fee(withdrawalTx), null));
 
                 BigDecimal collection = deposit.subtract(withdrawal);
                 SignedTx collectionTx = sendSignedTokenTransfer(
                         web3j, wallet, token.address(), deployer, collection, token.decimals(), chainId);
-                assertTrue(repository.debitLedgerBalance(
-                        chain.name(), token.symbol(), wallet.getAddress(), collection));
-                assertTrue(repository.debitLedgerBalance(
-                        chain.name(), nativeSymbol, wallet.getAddress(), fee(collectionTx)));
+                assertTrue(repository.ledgerBalanceRepository.debit(chain.name(), token.symbol(), wallet.getAddress(), collection, null));
+                assertTrue(repository.ledgerBalanceRepository.debit(chain.name(), nativeSymbol, wallet.getAddress(), fee(collectionTx), null));
             }
 
             assertBalanceEquals(getNativeBalance(web3j, wallet.getAddress()), ledger(jdbcTemplate, chain, nativeSymbol, wallet.getAddress()));
@@ -151,8 +154,7 @@ class EvmForkFullChainIntegrationTest {
                         ledger(jdbcTemplate, chain, token.symbol(), wallet.getAddress()));
                 assertEquals(BigDecimal.ZERO.setScale(18),
                         ledger(jdbcTemplate, chain, token.symbol(), wallet.getAddress()).setScale(18));
-                assertFalse(repository.debitLedgerBalance(
-                                chain.name(), token.symbol(), wallet.getAddress(), BigDecimal.ONE),
+                assertFalse(repository.ledgerBalanceRepository.debit(chain.name(), token.symbol(), wallet.getAddress(), BigDecimal.ONE, null),
                         "ledger debit guard must reject " + token.symbol() + " double spend");
             }
 
@@ -160,8 +162,17 @@ class EvmForkFullChainIntegrationTest {
                     .send().getTransactionCount();
             assertEquals(BigInteger.valueOf(2L + tokens.size() * 2L), pendingNonce,
                     "native withdrawal/collection plus two transfers per configured token");
-            assertEquals(jdbcTemplate.queryForObject("select count(*) from deposit_record where tenant_id = ? and chain = ? and credited", Long.class, TEST_TENANT_ID, chain.name()),
-                    jdbcTemplate.queryForObject("select count(*) from custody_deposit where tenant_id = ? and chain = ?", Long.class, TEST_TENANT_ID, chain.name()));
+            assertEquals(
+                    jdbcTemplate.queryForObject(
+                            "select count(*) from deposit_record where tenant_id = ? and chain = ? and credited",
+                            Long.class,
+                            TEST_TENANT_ID,
+                            chain.name()),
+                    jdbcTemplate.queryForObject(
+                            "select count(*) from custody_deposit where tenant_id = ? and chain = ?",
+                            Long.class,
+                            TEST_TENANT_ID,
+                            chain.name()));
         } finally {
             web3j.shutdown();
         }

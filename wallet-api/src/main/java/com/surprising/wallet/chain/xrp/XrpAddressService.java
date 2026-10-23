@@ -1,9 +1,10 @@
 package com.surprising.wallet.chain.xrp;
 
+import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.chain.model.HotWalletRules;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -21,8 +22,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
-public
-class XrpAddressService {
+public class XrpAddressService {
 
     /** 链标识 */
     private static final String CHAIN = "XRP";
@@ -32,9 +32,9 @@ class XrpAddressService {
 
     /** 密钥派生服务 */
     private final XrpKeyService keyService;
+    private final ChainAddressRepository chainAddressRepository;
+    private final ChainProfileRepository chainProfileRepository;
 
-    /** 链配置数据库访问 */
-    private final ChainJdbcRepository repository;
 
     /**
      * 创建原生 XRP 地址并持久化。
@@ -48,7 +48,7 @@ class XrpAddressService {
     public ChainAddressRecord createNativeAddress(long userId, int biz, long derivationIndex, String walletRole) {
         HotWalletRules.requireAllowedReservedAddress(
                 CHAIN, NATIVE_SYMBOL, NATIVE_SYMBOL, userId, biz, derivationIndex, walletRole);
-        return repository.findChainAddress(CHAIN, NATIVE_SYMBOL, userId, biz, derivationIndex, walletRole)
+        return chainAddressRepository.find(CHAIN, NATIVE_SYMBOL, userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     AccountChainProfile profile = profile();
                     String address = keyService.address(profile, userId, biz, derivationIndex);
@@ -65,8 +65,8 @@ class XrpAddressService {
                             .walletRole(walletRole)
                             .enabled(true)
                             .build();
-                    repository.upsertChainAddress(record);
-                    return repository.findChainAddress(CHAIN, NATIVE_SYMBOL, userId, biz, derivationIndex, walletRole)
+                    chainAddressRepository.upsert(record);
+                    return chainAddressRepository.find(CHAIN, NATIVE_SYMBOL, userId, biz, derivationIndex, walletRole)
                             .orElseThrow();
                 });
     }
@@ -89,7 +89,7 @@ class XrpAddressService {
         HotWalletRules.requireAllowedReservedAddress(
                 CHAIN, symbol, NATIVE_SYMBOL, userId, biz, derivationIndex, walletRole);
         ChainAddressRecord owner = createNativeAddress(userId, biz, derivationIndex, walletRole);
-        return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
+        return chainAddressRepository.find(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     ChainAddressRecord record = ChainAddressRecord.builder()
                             .chain(CHAIN)
@@ -104,8 +104,8 @@ class XrpAddressService {
                             .walletRole(walletRole)
                             .enabled(true)
                             .build();
-                    repository.upsertChainAddress(record);
-                    return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
+                    chainAddressRepository.upsert(record);
+                    return chainAddressRepository.find(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                             .orElseThrow();
                 });
     }
@@ -113,7 +113,7 @@ class XrpAddressService {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile() {
-        return repository.findProfileByChain(CHAIN)
+        return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
     /**

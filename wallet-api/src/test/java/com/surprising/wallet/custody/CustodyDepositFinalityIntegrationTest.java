@@ -1,26 +1,26 @@
 package com.surprising.wallet.custody;
 
-import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
+import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
+import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.service.DepositService;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.math.BigDecimal;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
-
-import java.math.BigDecimal;
-import java.util.UUID;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
-import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
-import com.surprising.wallet.repository.CustodyRepository;
-import com.surprising.wallet.repository.CustodyTenantChainRepository;
 
 /**
  * 验证 {@code CustodyDepositFinalityIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
@@ -53,20 +53,18 @@ class CustodyDepositFinalityIntegrationTest {
     void creditedDepositReorgCreatesCompensationDeficitAndRecreditsOnce() {
         transactions.executeWithoutResult(status -> {
             Fixture fixture = fixture();
-            ChainJdbcRepository chains = repository();
+            ChainRepositoryFixture chains = repository();
             long height = 900_001L;
             String originalBlock = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
             String replacementBlock = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
             DepositEvent original = event(fixture.address(), "0xdeposit-original",
                     new BigDecimal("10"), height, originalBlock);
 
-            chains.observeCanonicalBlock("ETH", "evm-canonical", height, originalBlock, "0xparent");
-            assertTrue(chains.recordAndCreditDeposit(original, 0L, 12, fixture.accountId()));
-            assertTrue(chains.debitLedgerBalance(
-                    fixture.tenantId(), "ETH", "ETH", fixture.accountId(), new BigDecimal("7")));
+            chains.depositService.observeCanonicalBlock("ETH", "evm-canonical", height, originalBlock, "0xparent");
+            assertTrue(chains.depositService.recordAndCredit(original, 0L, 12, fixture.accountId()));
+            assertTrue(chains.ledgerBalanceRepository.debit("ETH", "ETH", fixture.accountId(), new BigDecimal("7"), fixture.tenantId()));
 
-            var reorg = chains.observeCanonicalBlock(
-                    "ETH", "evm-canonical", height, replacementBlock, "0xparent");
+            var reorg = chains.depositService.observeCanonicalBlock("ETH", "evm-canonical", height, replacementBlock, "0xparent");
             assertTrue(reorg.reorg());
             assertEquals(1, reorg.reversedDepositCount());
             assertEquals("REORGED", value("""
@@ -95,16 +93,28 @@ class CustodyDepositFinalityIntegrationTest {
                     .openReorgDeficits(fixture.tenantId());
             assertEquals(1, dashboardDeficits.size());
             assertAmount("7", dashboardDeficits.getFirst().outstandingAmount());
-            assertEquals(1, chains.createTenantWithdrawalOrder(
-                    fixture.tenantId(), "reorg-blocked-withdrawal", 1L,
-                    "ETH", "ETH", fixture.address(), fixture.accountId(),
-                    "0x2222222222222222222222222222222222222222",
-                    BigDecimal.ONE, BigDecimal.ZERO));
-            chains.updateWithdrawalStatus(
-                    fixture.tenantId(), "ETH", "reorg-blocked-withdrawal",
-                    "FROZEN", fixture.address(), null, null);
-            assertEquals(0, chains.claimWithdrawalSigning(
-                    fixture.tenantId(), "ETH", "reorg-blocked-withdrawal", fixture.address()));
+            assertEquals(
+                    1,
+                    chains.withdrawalOrderRepository.createForTenant(
+                            fixture.tenantId(),
+                            "reorg-blocked-withdrawal",
+                            1L,
+                            "ETH",
+                            "ETH",
+                            fixture.address(),
+                            fixture.accountId(),
+                            "0x2222222222222222222222222222222222222222",
+                            BigDecimal.ONE,
+                            BigDecimal.ZERO));
+            chains.withdrawalOrderRepository.updateStatus(
+                    fixture.tenantId(),
+                    "ETH",
+                    "reorg-blocked-withdrawal",
+                    "FROZEN",
+                    fixture.address(),
+                    null,
+                    null);
+            assertEquals(0, chains.withdrawalClaimService.claim(fixture.tenantId(), "ETH", "reorg-blocked-withdrawal", fixture.address()));
 
             credit(chains, fixture, "0xdeposit-five", new BigDecimal("5"), height + 1, "0xblock-five");
             assertAmount("0", balance(fixture));
@@ -116,14 +126,11 @@ class CustodyDepositFinalityIntegrationTest {
                      where tenant_id = ? and status = 'OPEN'
                     """, Integer.class, fixture.tenantId()));
 
-            chains.observeCanonicalBlock("ETH", "evm-canonical", height + 3,
-                    "0xblock-reappeared", "0xblock-two");
+            chains.depositService.observeCanonicalBlock("ETH", "evm-canonical", height + 3, "0xblock-reappeared", "0xblock-two");
             DepositEvent reappeared = event(fixture.address(), original.txId(),
                     original.amount(), height + 3, "0xblock-reappeared");
-            assertTrue(chains.recordAndCreditDeposit(
-                    reappeared, 0L, 12, fixture.accountId()));
-            assertFalse(chains.recordAndCreditDeposit(
-                    reappeared, 0L, 12, fixture.accountId()));
+            assertTrue(chains.depositService.recordAndCredit(reappeared, 0L, 12, fixture.accountId()));
+            assertFalse(chains.depositService.recordAndCredit(reappeared, 0L, 12, fixture.accountId()));
             assertAmount("10", balance(fixture));
             assertEquals(2, value("""
                     select credit_generation from deposit_record
@@ -135,10 +142,8 @@ class CustodyDepositFinalityIntegrationTest {
                        and payload #>> '{data,txHash}' = '0xdeposit-original'
                     """, Integer.class, fixture.tenantId()));
 
-            assertTrue(chains.debitLedgerBalance(
-                    fixture.tenantId(), "ETH", "ETH", fixture.accountId(), new BigDecimal("4")));
-            chains.observeCanonicalBlock("ETH", "evm-canonical", height + 3,
-                    "0xsecond-replacement", "0xblock-two");
+            assertTrue(chains.ledgerBalanceRepository.debit("ETH", "ETH", fixture.accountId(), new BigDecimal("4"), fixture.tenantId()));
+            chains.depositService.observeCanonicalBlock("ETH", "evm-canonical", height + 3, "0xsecond-replacement", "0xblock-two");
             assertAmount("0", balance(fixture));
             assertAmount("4", openDeficit(fixture));
             assertEquals(0, value("""
@@ -153,10 +158,9 @@ class CustodyDepositFinalityIntegrationTest {
     void reorgProjectionFailureRollsBackLedgerDeficitAndCanonicalState() {
         Fixture fixture = transactions.execute(status -> {
             Fixture created = fixture();
-            ChainJdbcRepository chains = repository();
+            ChainRepositoryFixture chains = repository();
             credit(chains, created, "0xrollback-reorg", new BigDecimal("10"), 910_001L, "0xoriginal");
-            assertTrue(chains.debitLedgerBalance(created.tenantId(), "ETH", "ETH",
-                    created.accountId(), new BigDecimal("7")));
+            assertTrue(chains.ledgerBalanceRepository.debit("ETH", "ETH", created.accountId(), new BigDecimal("7"), created.tenantId()));
             return created;
         });
         com.surprising.wallet.service.CustodyEventService failingEvents =
@@ -185,7 +189,10 @@ class CustodyDepositFinalityIntegrationTest {
                 select count(*) from custody_ledger_entry
                  where tenant_id = ? and entry_type = 'DEPOSIT_REORG_REVERSAL'
                 """, Integer.class, fixture.tenantId()));
-        try (var context = com.surprising.wallet.testutil.DepositTestSupport.context(jdbc, com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), mapper)) {
+        try (var context = com.surprising.wallet.testutil.DepositTestSupport.context(
+                jdbc,
+                com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc),
+                mapper)) {
             var deposits = context.getBean(com.surprising.wallet.service.DepositService.class);
             assertEquals(1, deposits.observeCanonicalBlock("ETH", "evm-canonical", 910_001L, "0xreplacement", "0xparent")
                     .reversedDepositCount());
@@ -198,18 +205,16 @@ class CustodyDepositFinalityIntegrationTest {
     /**
      * 验证 {@code credit} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private void credit(ChainJdbcRepository chains, Fixture fixture, String txHash,
+    private void credit(ChainRepositoryFixture chains, Fixture fixture, String txHash,
                         BigDecimal amount, long height, String blockHash) {
-        chains.observeCanonicalBlock("ETH", "evm-canonical", height, blockHash, "0xparent");
-        assertTrue(chains.recordAndCreditDeposit(
-                event(fixture.address(), txHash, amount, height, blockHash),
-                0L, 12, fixture.accountId()));
+        chains.depositService.observeCanonicalBlock("ETH", "evm-canonical", height, blockHash, "0xparent");
+        assertTrue(chains.depositService.recordAndCredit(event(fixture.address(), txHash, amount, height, blockHash), 0L, 12, fixture.accountId()));
     }
 
     /**
      * 验证 {@code repository} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private ChainJdbcRepository repository() {
+    private ChainRepositoryFixture repository() {
         return com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
     }
 

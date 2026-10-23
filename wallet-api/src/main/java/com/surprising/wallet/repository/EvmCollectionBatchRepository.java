@@ -1,13 +1,12 @@
 package com.surprising.wallet.repository;
 
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
-
-import java.util.List;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
 
 /** evm_collection_batch 单表仓储。 */
 @Repository
@@ -21,7 +20,7 @@ public class EvmCollectionBatchRepository {
     }
 
     /** 查询批次状态。 */
-    public List<String> findStatuses(UUID tenantId, long batchId) {
+    public List<String> findStatuses(UUID tenantId, UUID batchId) {
         return jdbc.queryForList("""
                 select status from evm_collection_batch where tenant_id = ? and id = ?
                 """, String.class, tenantId, batchId);

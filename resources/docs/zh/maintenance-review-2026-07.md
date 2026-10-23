@@ -24,7 +24,7 @@
 |---|---|---|---|
 | 已完成 | 原 `UtxoBatchJob` 包含选币、锁 UTXO、计算手续费、创建交易和状态推进 | 已违反薄 Job 边界 | 已迁入 `UtxoBatchService`，Job 只保留 `service.execute(chain)` |
 | P0 | `AccountChainWorkflowService` 同时编排十余条链，接近单体链路由器 | 新增链或修改一条链容易影响其他链 | 按 family 建立 `AccountChainHandler` 注册表，工作流只做遍历、开关和错误隔离 |
-| P0 | `ChainJdbcRepository` 聚合配置、充值、提现、UTXO、地址和 checkpoint 等多类数据访问 | 修改 SQL 的影响范围过大，审查困难 | 按领域拆为 `ChainProfileRepository`、`DepositRepository`、`WithdrawalRepository`、`UtxoRepository`、`ScanCheckpointRepository` |
+| 已完成 | 原 `ChainJdbcRepository` 聚合链配置、充值、提现、UTXO、地址和 checkpoint | 纯转发与跨表业务混在统一门面中 | 已删除该门面；调用方直接注入单表仓储，归集规划、UTXO 选择、提现领取和批次归属由明确应用用例负责 |
 | P1 | 部分链服务通过可选注入运行时开关，非 Spring 构造路径可能绕过底层校验 | 安全边界依赖调用方自律 | 保留工作流入口硬校验，逐步将链网关改为必须注入或只暴露包内方法 |
 | P1 | UTXO 提现和归集共用批处理描述，但当前入口主要按提现开关控制 | 开关语义容易与真实订单类型不一致 | 在迁移 UTXO 工作流时按订单业务类型分别判定 withdraw/collection，再合并可兼容的链上输出 |
 | P1 | `transfer` 开关已进入配置模型，但通用跨链转账能力尚未形成统一入口 | 配置项含义容易被误解 | 明确 transfer 仅控制已实现的主动转账能力；新增链能力时必须从统一执行服务进入 |
@@ -48,7 +48,7 @@
 ## 推荐优化顺序
 
 1. [已完成] 将 `UtxoBatchJob` 业务逻辑迁入 `UtxoBatchService`，消除当前最明确的分层违规。
-2. 拆分 `ChainJdbcRepository`，优先拆充值和扫描 checkpoint，再拆提现/UTXO。
+2. [已完成] 删除 `ChainJdbcRepository` 及其转发入口；账户序号以单条原子 SQL 预留，批次归属使用 UUID 和租户边界。
 3. 为账户链建立 handler 注册表，移除中心服务中的大型 `switch`。
 4. 统一状态枚举、任务开关判定入口和审计事件模型。
 5. [已完成] console 大表已统一服务端分页；后续仅在单页数据量确实超过渲染阈值时引入虚拟列表。

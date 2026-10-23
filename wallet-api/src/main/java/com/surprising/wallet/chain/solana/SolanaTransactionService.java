@@ -1,14 +1,28 @@
 package com.surprising.wallet.chain.solana;
 
-import com.surprising.wallet.service.WithdrawalSettlementService;
-
-import tools.jackson.databind.JsonNode;
+import com.surprising.wallet.chain.model.HotWalletRules;
+import com.surprising.wallet.chain.model.SolanaTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.chain.model.SolanaTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.CollectionRecordRepository;
+import com.surprising.wallet.repository.LedgerBalanceRepository;
+import com.surprising.wallet.repository.SolanaTransactionRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.service.WithdrawalClaimService;
+import com.surprising.wallet.service.WithdrawalSettlementService;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.p2p.solanaj.core.Account;
@@ -19,15 +33,7 @@ import org.p2p.solanaj.programs.MemoProgram;
 import org.p2p.solanaj.programs.SystemProgram;
 import org.p2p.solanaj.programs.TokenProgram;
 import org.springframework.stereotype.Service;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.UUID;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Solana 交易服务，负责构建、签名和发送 Solana 交易。
@@ -67,9 +73,16 @@ public class SolanaTransactionService {
 
     /** 地址服务 */
     private final SolanaAddressService addressService;
+    private final WithdrawalOrderRepository withdrawalOrderRepository;
+    private final LedgerBalanceRepository ledgerBalanceRepository;
+    private final WithdrawalClaimService withdrawalClaimService;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
+    private final CollectionRecordRepository collectionRecordRepository;
+    private final ChainAddressRepository chainAddressRepository;
+    private final SolanaTransactionRepository solanaTransactionRepository;
 
-    /** 链配置数据库访问 */
-    private final ChainJdbcRepository repository;
+
     private final WithdrawalSettlementService settlements;
 
     /** 运行时任务开关服务。 */
@@ -256,41 +269,54 @@ public class SolanaTransactionService {
     public String withdrawNative(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amount) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "solana withdrawNative");
-        Optional<String> previous = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo);
+        Optional<String> previous = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId);
         if (previous.isPresent()) {
             return previous.get();
         }
         long amountLamports = toAtomicAmount(amount, 9);
         long feeLamports = profile().getDefaultFee();
         BigDecimal fee = BigDecimal.valueOf(feeLamports).movePointLeft(9);
-        int inserted = repository.createTenantWithdrawalOrder(
-                tenantId, orderNo, userId, CHAIN, "SOL", from.getAddress(), from.getAccountId(),
-                toAddress, amount, fee);
+        int inserted = withdrawalOrderRepository.createForTenant(
+                tenantId,
+                orderNo,
+                userId,
+                CHAIN,
+                "SOL",
+                from.getAddress(),
+                from.getAccountId(),
+                toAddress,
+                amount,
+                fee);
         if (inserted == 0) {
-            return repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo)
+            return withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId)
                     .orElseThrow(() -> new IllegalStateException("withdrawal already claimed without tx hash"));
         }
         BigDecimal totalDebit = amount.add(fee);
-        if (!repository.freezeLedgerBalance(tenantId, CHAIN, "SOL", from.getAccountId(), totalDebit)) {
-            repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FAILED", from.getAddress(), null,
+        if (!ledgerBalanceRepository.freeze(CHAIN, "SOL", from.getAccountId(), totalDebit, tenantId)) {
+            withdrawalOrderRepository.updateStatus(
+                    tenantId,
+                    CHAIN,
+                    orderNo,
+                    "FAILED",
+                    from.getAddress(),
+                    null,
                     "insufficient available ledger balance");
             throw new IllegalStateException("insufficient SOL ledger balance");
         }
-        repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
+        withdrawalOrderRepository.updateStatus(tenantId, CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
-            if (repository.claimWithdrawalSigning(tenantId, CHAIN, orderNo, from.getAddress()) != 1) {
+            if (withdrawalClaimService.claim(tenantId, CHAIN, orderNo, from.getAddress()) != 1) {
                 throw new IllegalStateException("Solana withdrawal is not signable: " + orderNo);
             }
             String signature = sendNative(from, toAddress, amountLamports);
-            if (repository.markWithdrawalSent(tenantId, CHAIN, orderNo, from.getAddress(), signature) != 1) {
+            if (withdrawalOrderRepository.markSent(tenantId, CHAIN, orderNo, from.getAddress(), signature) != 1) {
                 throw new IllegalStateException("Solana withdrawal state changed before SENT: " + orderNo);
             }
             recordTransaction(signature, from.getAddress(), toAddress, "SOL", null,
                     amount, feeLamports, "SENT");
             return signature;
         } catch (RuntimeException e) {
-            repository.markWithdrawalBroadcastUnknown(
-                    tenantId, CHAIN, orderNo, from.getAddress(), e.getMessage());
+            withdrawalOrderRepository.markBroadcastUnknown(tenantId, CHAIN, orderNo, from.getAddress(), e.getMessage());
             throw e;
         }
     }
@@ -310,41 +336,55 @@ public class SolanaTransactionService {
     public String withdrawToken(UUID tenantId, String orderNo, long userId, ChainAddressRecord from,
                                 String mintAddress, String toOwnerAddress, BigDecimal amount) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "solana withdrawToken");
-        Optional<String> previous = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo);
+        Optional<String> previous = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId);
         if (previous.isPresent()) {
             return previous.get();
         }
-        TokenDefinition token = repository.findTokenByContract(CHAIN, mintAddress)
+        TokenDefinition token = chainProfileRepository.findAccountByChain(CHAIN).flatMap( configuredNetworkProfile -> tokenConfigRepository.findDefinitionByContract(
+                CHAIN,
+                configuredNetworkProfile.getNetwork(),
+                mintAddress))
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Solana mint " + mintAddress));
-        int inserted = repository.createTenantWithdrawalOrder(
-                tenantId, orderNo, userId, CHAIN, token.getSymbol(), from.getOwnerAddress(),
-                from.getAccountId(), toOwnerAddress, amount, BigDecimal.ZERO);
+        int inserted = withdrawalOrderRepository.createForTenant(
+                tenantId,
+                orderNo,
+                userId,
+                CHAIN,
+                token.getSymbol(),
+                from.getOwnerAddress(),
+                from.getAccountId(),
+                toOwnerAddress,
+                amount,
+                BigDecimal.ZERO);
         if (inserted == 0) {
-            return repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo)
+            return withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId)
                     .orElseThrow(() -> new IllegalStateException("withdrawal already claimed without tx hash"));
         }
-        if (!repository.freezeLedgerBalance(tenantId, CHAIN, token.getSymbol(), from.getAccountId(), amount)) {
-            repository.updateWithdrawalStatus(tenantId, CHAIN, orderNo, "FAILED", from.getOwnerAddress(), null,
+        if (!ledgerBalanceRepository.freeze(CHAIN, token.getSymbol(), from.getAccountId(), amount, tenantId)) {
+            withdrawalOrderRepository.updateStatus(
+                    tenantId,
+                    CHAIN,
+                    orderNo,
+                    "FAILED",
+                    from.getOwnerAddress(),
+                    null,
                     "insufficient available token ledger balance");
             throw new IllegalStateException("insufficient " + token.getSymbol() + " ledger balance");
         }
-        repository.updateWithdrawalStatus(
-                tenantId, CHAIN, orderNo, "FROZEN", from.getOwnerAddress(), null, null);
+        withdrawalOrderRepository.updateStatus(tenantId, CHAIN, orderNo, "FROZEN", from.getOwnerAddress(), null, null);
         try {
-            if (repository.claimWithdrawalSigning(tenantId, CHAIN, orderNo, from.getOwnerAddress()) != 1) {
+            if (withdrawalClaimService.claim(tenantId, CHAIN, orderNo, from.getOwnerAddress()) != 1) {
                 throw new IllegalStateException("Solana token withdrawal is not signable: " + orderNo);
             }
             String signature = sendTokenAmount(from, mintAddress, toOwnerAddress, amount, token.getDecimals());
-            if (repository.markWithdrawalSent(
-                    tenantId, CHAIN, orderNo, from.getOwnerAddress(), signature) != 1) {
+            if (withdrawalOrderRepository.markSent(tenantId, CHAIN, orderNo, from.getOwnerAddress(), signature) != 1) {
                 throw new IllegalStateException("Solana token withdrawal state changed before SENT: " + orderNo);
             }
             recordTransaction(signature, from.getAddress(), toOwnerAddress, token.getSymbol(), mintAddress,
                     amount, profile().getDefaultFee(), "SENT");
             return signature;
         } catch (RuntimeException e) {
-            repository.markWithdrawalBroadcastUnknown(
-                    tenantId, CHAIN, orderNo, from.getOwnerAddress(), e.getMessage());
+            withdrawalOrderRepository.markBroadcastUnknown(tenantId, CHAIN, orderNo, from.getOwnerAddress(), e.getMessage());
             throw e;
         }
     }
@@ -362,24 +402,23 @@ public class SolanaTransactionService {
     public String collectNative(UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountLamports) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "solana collectNative");
-        Optional<String> previous = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
+        Optional<String> previous = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
         }
         long fee = profile().getDefaultFee();
-        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
+        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
         }
         try {
             String signature = sendNative(from, hotAddress, amountLamports.longValueExact());
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", signature, null, null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", signature, null, null);
             recordTransaction(signature, from.getAddress(), hotAddress, "SOL", null,
                     amountLamports.movePointLeft(9), fee, "SENT");
             return signature;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
-                    "FAILED", null, e.getMessage(), null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -401,32 +440,33 @@ public class SolanaTransactionService {
                                ChainAddressRecord from, String mintAddress,
                                String hotOwnerAddress, BigDecimal amount) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "solana collectToken");
-        Optional<String> previous = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
+        Optional<String> previous = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
         }
-        TokenDefinition token = repository.findTokenByContract(CHAIN, mintAddress)
+        TokenDefinition token = chainProfileRepository.findAccountByChain(CHAIN).flatMap( configuredNetworkProfile -> tokenConfigRepository.findDefinitionByContract(
+                CHAIN,
+                configuredNetworkProfile.getNetwork(),
+                mintAddress))
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Solana mint " + mintAddress));
-        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
+        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
         }
         try {
-            ChainAddressRecord hot = repository.findChainAddressByAddress(
-                            tenantId, CHAIN, "SOL", hotOwnerAddress)
-                    .or(() -> repository.findChainAddressByAddress(tenantId, CHAIN, hotOwnerAddress))
+            ChainAddressRecord hot = chainAddressRepository.findEnabledByTenantAndAddress(tenantId, CHAIN, "SOL", hotOwnerAddress)
+                    .or(() -> chainAddressRepository.findEnabledByTenantAndAddress(tenantId, CHAIN, hotOwnerAddress))
                     .orElseThrow(() -> new IllegalStateException("missing Solana hot fee payer " + hotOwnerAddress));
             Account sourceOwner = keyService.account(from.getUserId(), from.getBiz(), from.getAddressIndex());
             Account feePayer = keyService.account(hot.getUserId(), hot.getBiz(), hot.getAddressIndex());
             String signature = sendTokenWithFeePayer(sourceOwner, feePayer, mintAddress, hotOwnerAddress,
                     toAtomicAmount(amount, token.getDecimals()), token.getDecimals());
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", signature, null, null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", signature, null, null);
             recordTransaction(signature, from.getAddress(), hotOwnerAddress, token.getSymbol(), mintAddress,
                     amount, profile().getDefaultFee(), "SENT");
             return signature;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
-                    "FAILED", null, e.getMessage(), null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -443,7 +483,7 @@ public class SolanaTransactionService {
      */
     public boolean confirmWithdrawal(UUID tenantId, String orderNo, String assetSymbol,
                                      String accountId, BigDecimal debitAmount) {
-        String signature = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo).orElseThrow();
+        String signature = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId).orElseThrow();
         JsonNode status = requireSuccessfulConfirmation(signature, Duration.ofMinutes(2));
         if (settlements.confirm(
                 tenantId, CHAIN, orderNo, signature, assetSymbol, accountId, debitAmount)) {
@@ -460,9 +500,9 @@ public class SolanaTransactionService {
      * @return true 表示确认成功
      */
     public boolean confirmCollection(UUID tenantId, String collectionNo) {
-        String signature = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
+        String signature = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         JsonNode status = requireSuccessfulConfirmation(signature, Duration.ofMinutes(2));
-        boolean updated = repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, signature) == 1;
+        boolean updated = collectionRecordRepository.markConfirmed(tenantId, CHAIN, collectionNo, signature) == 1;
         updateConfirmedTransaction(signature, status);
         return updated;
     }
@@ -508,14 +548,19 @@ public class SolanaTransactionService {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile() {
-        return repository.findProfileByChain(CHAIN)
+        return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
     /**
      * 执行 {@code defaultHotFeePayer} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private ChainAddressRecord defaultHotFeePayer(UUID tenantId) {
-        return repository.listDefaultHotAddressCandidates(CHAIN, "SOL").stream()
+        return chainAddressRepository.listDefaultHot(
+                CHAIN,
+                "SOL",
+                HotWalletRules.DEFAULT_HOT_USER_ID,
+                HotWalletRules.DEFAULT_HOT_BIZ,
+                HotWalletRules.DEFAULT_HOT_WALLET_ROLE).stream()
                 .filter(address -> tenantId.equals(address.getTenantId()))
                 .filter(address -> Boolean.TRUE.equals(address.getEnabled()))
                 .findFirst()
@@ -534,7 +579,7 @@ public class SolanaTransactionService {
      */
     private void recordTransaction(String signature, String from, String to, String symbol, String mint,
                                    BigDecimal amount, long fee, String status) {
-        repository.recordSolanaTransaction(SolanaTransactionRecord.builder()
+        solanaTransactionRepository.upsert(SolanaTransactionRecord.builder()
                 .chain(CHAIN)
                 .signature(signature)
                 .fromAddress(from)
@@ -552,7 +597,7 @@ public class SolanaTransactionService {
      */
     private void updateConfirmedTransaction(String signature, JsonNode status) {
         JsonNode transaction = rpc.getTransaction(signature);
-        repository.recordSolanaTransaction(SolanaTransactionRecord.builder()
+        solanaTransactionRepository.upsert(SolanaTransactionRecord.builder()
                 .chain(CHAIN)
                 .signature(signature)
                 .fromAddress("")

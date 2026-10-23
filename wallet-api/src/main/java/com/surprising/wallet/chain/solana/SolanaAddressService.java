@@ -1,18 +1,17 @@
 package com.surprising.wallet.chain.solana;
 
-import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.HotWalletRules;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.p2p.solanaj.core.PublicKey;
 import org.p2p.solanaj.programs.AssociatedTokenProgram;
 import org.p2p.solanaj.programs.TokenProgram;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
 
 /**
  * Solana 链地址管理服务，负责创建和管理链上地址（SOL 原生地址和 SPL Token ATA 地址）。
@@ -27,17 +26,15 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
-public
-class SolanaAddressService {
+public class SolanaAddressService {
 
     /** 链标识常量 */
     private static final String CHAIN = "SOLANA";
 
     /** Solana 密钥服务 */
     private final SolanaKeyService keyService;
+    private final ChainAddressRepository chainAddressRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
 
     /**
      * 创建原生 SOL 地址并持久化。
@@ -53,7 +50,7 @@ class SolanaAddressService {
                                                   long derivationIndex, String walletRole) {
         Objects.requireNonNull(tenantId, "tenantId is required");
         HotWalletRules.requireAllowedReservedAddress(CHAIN, "SOL", "SOL", userId, biz, derivationIndex, walletRole);
-        return repository.findChainAddress(CHAIN, "SOL", userId, biz, derivationIndex, walletRole)
+        return chainAddressRepository.find(CHAIN, "SOL", userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     Ed25519DerivedKey key = keyService.derive(userId, biz, derivationIndex);
                     String address = new PublicKey(key.publicKey()).toBase58();
@@ -71,8 +68,8 @@ class SolanaAddressService {
                             .walletRole(walletRole)
                             .enabled(true)
                             .build();
-                    repository.upsertChainAddress(record);
-                    return repository.findChainAddress(CHAIN, "SOL", userId, biz, derivationIndex, walletRole)
+                    chainAddressRepository.upsert(record);
+                    return chainAddressRepository.find(CHAIN, "SOL", userId, biz, derivationIndex, walletRole)
                             .orElseThrow();
                 });
     }
@@ -97,7 +94,7 @@ class SolanaAddressService {
                                                   long derivationIndex, String walletRole) {
         HotWalletRules.requireAllowedReservedAddress(CHAIN, symbol, "SOL", userId, biz, derivationIndex, walletRole);
         ChainAddressRecord owner = createNativeAddress(tenantId, userId, biz, derivationIndex, walletRole);
-        return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
+        return chainAddressRepository.find(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     String ata = associatedTokenAddress(owner.getAddress(), mintAddress);
                     ChainAddressRecord record = ChainAddressRecord.builder()
@@ -114,8 +111,8 @@ class SolanaAddressService {
                             .walletRole(walletRole)
                             .enabled(true)
                             .build();
-                    repository.upsertChainAddress(record);
-                    return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
+                    chainAddressRepository.upsert(record);
+                    return chainAddressRepository.find(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                             .orElseThrow();
                 });
     }

@@ -1,20 +1,23 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.chain.xrp.XrpTransactionService;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.Evm7702ConfigRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 /**
  * 账户链资产解析与精度换算服务。
@@ -28,7 +31,12 @@ class AccountChainAssetService {
     /**
      * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final ChainJdbcRepository repository;
+    private final Evm7702ConfigRepository evm7702ConfigRepository;
+    private final ChainAddressRepository chainAddressRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
+    private final ChainAssetRepository chainAssetRepository;
+
     /**
      * 保存 {@code xrpTransactionService}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
@@ -47,8 +55,7 @@ class AccountChainAssetService {
             return amount;
         }
         if ("evm".equalsIgnoreCase(profile.getFamily())
-                && repository.isEvm7702Managed(
-                        profile.getChain(), profile.getNetwork())) {
+                && evm7702ConfigRepository.existsManaged(profile.getChain(), profile.getNetwork())) {
             return amount;
         }
         if ("XRP".equals(profile.getChain())) {
@@ -67,8 +74,8 @@ class AccountChainAssetService {
         if (address == null || address.isBlank()) {
             throw new IllegalStateException("missing source address");
         }
-        return repository.findChainAddressByAddress(chain, symbol, address)
-                .or(() -> repository.findChainAddressByAddress(chain, address))
+        return chainAddressRepository.findEnabledByAddress(chain, symbol, address)
+                .or(() -> chainAddressRepository.findEnabledByAddress(chain, address))
                 .orElseThrow(() -> new IllegalStateException(
                         "missing chain_address for "
                                 + chain + "/" + symbol + " " + address));
@@ -82,10 +89,8 @@ class AccountChainAssetService {
         if (address == null || address.isBlank()) {
             throw new IllegalStateException("missing source address");
         }
-        return repository.findChainAddressByAddress(
-                        tenantId, chain, symbol, address)
-                .or(() -> repository.findChainAddressByAddress(
-                        tenantId, chain, address))
+        return chainAddressRepository.findEnabledByTenantAndAddress(tenantId, chain, symbol, address)
+                .or(() -> chainAddressRepository.findEnabledByTenantAndAddress(tenantId, chain, address))
                 .orElseThrow(() -> new IllegalStateException(
                         "missing tenant chain_address for "
                                 + chain + "/" + symbol + " " + address));
@@ -95,7 +100,10 @@ class AccountChainAssetService {
      * 校验 {@code requireToken} 对应的前置条件，不满足时抛出明确异常。
      */
     TokenDefinition requireToken(String chain, String symbol) {
-        return repository.findToken(chain, symbol)
+        return chainProfileRepository.findAccountByChain(chain).flatMap( configuredNetworkProfile -> tokenConfigRepository.findDefinition(
+                chain,
+                configuredNetworkProfile.getNetwork(),
+                symbol))
                 .orElseThrow(() -> new IllegalStateException(
                         "missing token_config for " + chain + "/" + symbol));
     }
@@ -104,7 +112,7 @@ class AccountChainAssetService {
      * 获取或查询 {@code assetDecimals} 对应的数据，并向调用方返回当前业务状态。
      */
     int assetDecimals(String chain, String symbol) {
-        return repository.findAsset(chain, symbol)
+        return chainAssetRepository.findActiveDefinition(chain, symbol)
                 .map(ChainAsset::getDecimals)
                 .orElseGet(() -> requireToken(chain, symbol).getDecimals());
     }

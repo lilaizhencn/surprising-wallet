@@ -1,19 +1,20 @@
 package com.surprising.wallet.chain.aptos;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.AptosTransactionRecord;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Test;
-
+import com.surprising.wallet.repository.UtxoRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
 import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -36,10 +37,19 @@ class AptosTransactionServiceTest {
         CapturingRpc rpc = new CapturingRpc();
         String metadata = keys.address(22);
         FakeRepository repository = new FakeRepository(token("APTOS_FA", metadata));
-        AptosTransactionService service = new AptosTransactionService(rpc,
+        AptosTransactionService service = new AptosTransactionService(
+                rpc,
                 new AptosTransactionSigner(keys),
-                repository,
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
+                repository.accountSequenceRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.withdrawalOrderRepository,
+                repository.ledgerBalanceRepository,
+                repository.withdrawalClaimService,
+                repository.collectionRecordRepository,
+                repository.aptosTransactionRepository,
+                Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class),
+                RuntimeTestSupport.enabled());
         ChainAddressRecord from = address(keys, 21);
         String recipient = keys.address(23);
 
@@ -70,10 +80,19 @@ class AptosTransactionServiceTest {
         AptosKeyService keys = new AptosKeyService(MASTER_SEED);
         CapturingRpc rpc = new CapturingRpc();
         FakeRepository repository = new FakeRepository();
-        AptosTransactionService service = new AptosTransactionService(rpc,
+        AptosTransactionService service = new AptosTransactionService(
+                rpc,
                 new AptosTransactionSigner(keys),
-                repository,
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
+                repository.accountSequenceRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.withdrawalOrderRepository,
+                repository.ledgerBalanceRepository,
+                repository.withdrawalClaimService,
+                repository.collectionRecordRepository,
+                repository.aptosTransactionRepository,
+                Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class),
+                RuntimeTestSupport.enabled());
         ChainAddressRecord from = address(keys, 24);
         String recipient = keys.address(25);
 
@@ -95,10 +114,19 @@ class AptosTransactionServiceTest {
     @Test
     void rejectsUnknownAptosTokenStandards() {
         AptosKeyService keys = new AptosKeyService(MASTER_SEED);
-        AptosTransactionService service = new AptosTransactionService(new CapturingRpc(),
+        AptosTransactionService service = new AptosTransactionService(
+                new CapturingRpc(),
                 new AptosTransactionSigner(keys),
-                new FakeRepository(),
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
+                new FakeRepository().accountSequenceRepository,
+                new FakeRepository().chainProfileRepository,
+                new FakeRepository().tokenConfigRepository,
+                new FakeRepository().withdrawalOrderRepository,
+                new FakeRepository().ledgerBalanceRepository,
+                new FakeRepository().withdrawalClaimService,
+                new FakeRepository().collectionRecordRepository,
+                new FakeRepository().aptosTransactionRepository,
+                Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class),
+                RuntimeTestSupport.enabled());
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.sendToken(address(keys, 27), token("UNKNOWN", keys.address(28)),
@@ -152,7 +180,8 @@ class AptosTransactionServiceTest {
          * 验证 {@code CapturingRpc} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private CapturingRpc() {
-            super(new ObjectMapper(),
+            super(
+                    new ObjectMapper(),
                     profiles("APTOS"),
                     nodes("APTOS", java.util.Map.of("rpc", node("APTOS", "http://aptos.invalid/v1"), "faucet", node("APTOS", ""))));
         }
@@ -194,7 +223,7 @@ class AptosTransactionServiceTest {
     /**
      * 测试替身 {@code FakeRepository}，用于隔离外部依赖并验证调用参数和状态变化。
      */
-    private static final class FakeRepository extends ChainJdbcRepository {
+    private static final class FakeRepository extends ChainRepositoryFixture {
         /**
          * 保存 {@code token}，表示测试所覆盖的链、网络、资产或代币配置。
          */
@@ -215,50 +244,30 @@ class AptosTransactionServiceTest {
          * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private FakeRepository(TokenDefinition token) {
-            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
+            super();
             this.token = token;
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_address = invocation.getArgument(1);
+                long arg_chainSequence = invocation.getArgument(2);
+                return arg_chainSequence;
+            }).when(accountSequenceRepository).reserve(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.anyLong());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_contractAddress = invocation.getArgument(2);
+                return token != null && token.getContractAddress().equals(arg_contractAddress) ? Optional.of(token) : Optional.empty();
+            }).when(tokenConfigRepository).findDefinitionByContract(ArgumentMatchers.<String>any(), ArgumentMatchers.any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                AptosTransactionRecord arg_transaction = invocation.getArgument(0);
+                recorded = arg_transaction;
+                return 1;
+            }).when(aptosTransactionRepository).upsert(ArgumentMatchers.<AptosTransactionRecord>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                return Optional.of(AccountChainProfile.builder().chain("APTOS").network("testnet").family("aptos").nativeSymbol("APT").defaultFee(5_000_000L).enabled(true).build());
+            }).when(chainProfileRepository).findAccountByChain(ArgumentMatchers.<String>any());
         }
 
-        /**
-         * 验证 {@code reserveAccountSequence} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public long reserveAccountSequence(String chain, String address, long chainSequence) {
-            return chainSequence;
-        }
 
-        /**
-         * 验证 {@code findTokenByContract} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<TokenDefinition> findTokenByContract(String chain, String contractAddress) {
-            return token != null && token.getContractAddress().equals(contractAddress)
-                    ? Optional.of(token)
-                    : Optional.empty();
-        }
-
-        /**
-         * 验证 {@code recordAptosTransaction} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public int recordAptosTransaction(AptosTransactionRecord transaction) {
-            recorded = transaction;
-            return 1;
-        }
-
-        /**
-         * 验证 {@code findProfileByChain} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<AccountChainProfile> findProfileByChain(String chain) {
-            return Optional.of(AccountChainProfile.builder()
-                    .chain("APTOS")
-                    .network("testnet")
-                    .family("aptos")
-                    .nativeSymbol("APT")
-                    .defaultFee(5_000_000L)
-                    .enabled(true)
-                    .build());
-        }
     }
 }

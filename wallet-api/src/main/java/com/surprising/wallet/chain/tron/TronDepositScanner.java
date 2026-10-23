@@ -1,25 +1,27 @@
 package com.surprising.wallet.chain.tron;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.surprising.wallet.chain.model.TronTransactionRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.TronTransactionRecord;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.RequiredArgsConstructor;
-import org.tron.trident.core.ApiWrapper;
-import org.tron.trident.core.NodeType;
-import org.tron.trident.proto.Chain;
-import org.tron.trident.proto.Contract;
-import org.tron.trident.proto.Response;
-import org.tron.trident.utils.Numeric;
-import org.springframework.stereotype.Service;
-
+import com.surprising.wallet.repository.ChainScanHeightRepository;
+import com.surprising.wallet.repository.TronTokenTransferRepository;
+import com.surprising.wallet.repository.TronTransactionRepository;
+import com.surprising.wallet.service.DepositService;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.tron.trident.core.ApiWrapper;
+import org.tron.trident.core.NodeType;
+import org.tron.trident.proto.Chain;
+import org.tron.trident.proto.Contract;
+import org.tron.trident.proto.Response;
+import org.tron.trident.utils.Numeric;
 
 /**
  * 负责扫描链上区块、交易或事件，并转换为钱包领域事件。
@@ -34,7 +36,11 @@ public class TronDepositScanner {
     /**
      * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final ChainJdbcRepository repository;
+    private final TronTransactionRepository tronTransactionRepository;
+    private final DepositService depositService;
+    private final ChainScanHeightRepository chainScanHeightRepository;
+    private final TronTokenTransferRepository tronTokenTransferRepository;
+
     /**
      * 保存 {@code tronScanner}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
@@ -69,7 +75,7 @@ public class TronDepositScanner {
                 BigDecimal amount = new BigDecimal(transfer.getAmount()).divide(SUN_PER_TRX);
                 DepositEvent event = new DepositEvent(ChainType.TRON, "TRX", txId, from, to, amount,
                         blockHeight, txId, confirmations, null, tx.toString());
-                repository.recordTronTransaction(TronTransactionRecord.builder()
+                tronTransactionRepository.upsert(TronTransactionRecord.builder()
                         .chain(ChainType.TRON.name())
                         .txHash(txId)
                         .fromAddress(from)
@@ -82,12 +88,12 @@ public class TronDepositScanner {
                         .status(confirmations >= requiredConfirmations ? "CONFIRMED" : "CONFIRMING")
                         .rawPayload(tx.toString())
                         .build());
-                repository.recordAndCreditDeposit(event, 0L, requiredConfirmations);
+                depositService.recordAndCredit(event, 0L, requiredConfirmations);
                 detected.add(event);
             }
         }
         long safeHeight = Math.max(0L, blockHeight - requiredConfirmations + 1L);
-        repository.updateScanHeight(ChainType.TRON.name(), "TRON_TRX", blockHeight, safeHeight);
+        chainScanHeightRepository.upsert(ChainType.TRON.name(), "TRON_TRX", blockHeight, safeHeight);
         return detected;
     }
 
@@ -112,14 +118,13 @@ public class TronDepositScanner {
                 DepositEvent event = new DepositEvent(ChainType.TRON, transfer.symbol(), txId, transfer.fromAddress(),
                         transfer.toAddress(), transfer.amount(), transfer.blockHeight(), txId, confirmations,
                         transfer.contractAddress(), txInfo.toString());
-                repository.recordTronTokenTransfer(event, transfer.logIndex(),
-                        confirmations >= requiredConfirmations ? "CONFIRMED" : "CONFIRMING");
-                repository.recordAndCreditDeposit(event, transfer.logIndex(), requiredConfirmations);
+                tronTokenTransferRepository.upsert(event, transfer.logIndex(), confirmations >= requiredConfirmations ? "CONFIRMED" : "CONFIRMING");
+                depositService.recordAndCredit(event, transfer.logIndex(), requiredConfirmations);
                 detected.add(event);
             }
         }
         long safeHeight = Math.max(0L, blockHeight - requiredConfirmations + 1L);
-        repository.updateScanHeight(ChainType.TRON.name(), "TRON_TRC20", blockHeight, safeHeight);
+        chainScanHeightRepository.upsert(ChainType.TRON.name(), "TRON_TRC20", blockHeight, safeHeight);
         return detected;
     }
 

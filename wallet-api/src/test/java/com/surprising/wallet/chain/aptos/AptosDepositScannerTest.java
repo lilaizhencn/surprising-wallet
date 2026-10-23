@@ -1,23 +1,24 @@
 package com.surprising.wallet.chain.aptos;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.AptosTransactionRecord;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Test;
-
+import com.surprising.wallet.repository.UtxoRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -52,7 +53,16 @@ class AptosDepositScannerTest {
     void creditsFungibleAssetToTheTrackedNativeChainAddress() throws Exception {
         FakeRepository repository = new FakeRepository();
         ExistingStoreRpc rpc = new ExistingStoreRpc(transaction());
-        AptosDepositScanner scanner = new AptosDepositScanner(rpc, repository, RuntimeTestSupport.enabled());
+        AptosDepositScanner scanner = new AptosDepositScanner(
+                rpc,
+                repository.chainAddressRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.chainScanHeightRepository,
+                repository.aptosTransactionRepository,
+                repository.depositService,
+                repository.chainAssetRepository,
+                RuntimeTestSupport.enabled());
 
         List<DepositEvent> events = scanner.scanAndCredit();
 
@@ -135,7 +145,8 @@ class AptosDepositScannerTest {
          * 验证 {@code ExistingStoreRpc} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private ExistingStoreRpc(JsonNode transaction) {
-            super(new ObjectMapper(),
+            super(
+                    new ObjectMapper(),
                     profiles("APTOS"),
                     nodes("APTOS", java.util.Map.of("rpc", node("APTOS", "http://aptos.invalid/v1"), "faucet", node("APTOS", ""))));
             transactions = new ObjectMapper().createArrayNode().add(transaction);
@@ -170,7 +181,7 @@ class AptosDepositScannerTest {
     /**
      * 测试替身 {@code FakeRepository}，用于隔离外部依赖并验证调用参数和状态变化。
      */
-    private static final class FakeRepository extends ChainJdbcRepository {
+    private static final class FakeRepository extends ChainRepositoryFixture {
         /**
          * 保存 {@code token}，表示测试所覆盖的链、网络、资产或代币配置。
          */
@@ -195,81 +206,44 @@ class AptosDepositScannerTest {
          * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private FakeRepository() {
-            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
+            super();
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                return Optional.of(AccountChainProfile.builder().chain("APTOS").network("testnet").family("aptos").nativeSymbol("APT").depositConfirmations(1).scanBatchSize(100).enabled(true).build());
+            }).when(chainProfileRepository).findAccountByChain(ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                return List.of(token);
+            }).when(tokenConfigRepository).listDefinitions(ArgumentMatchers.<String>any(), ArgumentMatchers.any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_assetSymbol = invocation.getArgument(1);
+                return "APT".equals(arg_assetSymbol) ? List.of(depositAddress()) : List.of();
+            }).when(chainAddressRepository).listEnabled(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                return List.of(depositAddress());
+            }).when(chainAddressRepository).listEnabled(ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_scannerName = invocation.getArgument(1);
+                return Optional.of(99L);
+            }).when(chainScanHeightRepository).findSafeHeight(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                AptosTransactionRecord arg_tx = invocation.getArgument(0);
+                return 1;
+            }).when(aptosTransactionRepository).upsert(ArgumentMatchers.<AptosTransactionRecord>any());
+            Mockito.doAnswer(invocation -> {
+                DepositEvent arg_event = invocation.getArgument(0);
+                long arg_logIndex = invocation.getArgument(1);
+                int arg_requiredConfirmations = invocation.getArgument(2);
+                String arg_accountId = invocation.getArgument(3);
+                credited = arg_event;
+                creditedAccountId = arg_accountId;
+                return true;
+            }).when(depositService).recordAndCredit(ArgumentMatchers.<DepositEvent>any(), ArgumentMatchers.anyLong(), ArgumentMatchers.anyInt(), ArgumentMatchers.<String>any());
         }
 
-        /**
-         * 验证 {@code findProfileByChain} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<AccountChainProfile> findProfileByChain(String chain) {
-            return Optional.of(AccountChainProfile.builder()
-                    .chain("APTOS")
-                    .network("testnet")
-                    .family("aptos")
-                    .nativeSymbol("APT")
-                    .depositConfirmations(1)
-                    .scanBatchSize(100)
-                    .enabled(true)
-                    .build());
-        }
 
-        /**
-         * 验证 {@code listTokens} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<TokenDefinition> listTokens(String chain) {
-            return List.of(token);
-        }
-
-        /**
-         * 验证 {@code listChainAddresses} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<ChainAddressRecord> listChainAddresses(String chain, String assetSymbol) {
-            return "APT".equals(assetSymbol) ? List.of(depositAddress()) : List.of();
-        }
-
-        /**
-         * 验证 {@code listChainAddresses} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<ChainAddressRecord> listChainAddresses(String chain) {
-            return List.of(depositAddress());
-        }
-
-        /**
-         * 验证 {@code findScanSafeHeight} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<Long> findScanSafeHeight(String chain, String scannerName) {
-            return Optional.of(99L);
-        }
-
-        /**
-         * 验证 {@code recordAptosTransaction} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public int recordAptosTransaction(AptosTransactionRecord tx) {
-            return 1;
-        }
-
-        /**
-         * 验证 {@code recordAndCreditDeposit} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public boolean recordAndCreditDeposit(DepositEvent event, long logIndex,
-                                              int requiredConfirmations, String accountId) {
-            credited = event;
-            creditedAccountId = accountId;
-            return true;
-        }
-
-        /**
-         * 验证 {@code updateScanHeight} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public void updateScanHeight(String chain, String scannerName, long bestHeight, long safeHeight) {
-        }
     }
 }

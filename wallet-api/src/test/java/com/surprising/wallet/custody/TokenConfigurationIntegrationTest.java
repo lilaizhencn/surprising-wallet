@@ -3,14 +3,13 @@ package com.surprising.wallet.custody;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
 import com.surprising.wallet.testutil.DepositTestSupport;
+import java.math.BigDecimal;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import java.math.BigDecimal;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -44,11 +43,10 @@ class TokenConfigurationIntegrationTest {
         var tokens = new TokenConfigRepository(jdbc);
         tokens.insert("ETH", "mainnet", "NETWORK_FENCE", "ERC20", "0x" + "98".repeat(20),
                 null, null, 6, true, BigDecimal.ZERO, BigDecimal.ZERO, true, null, null, null);
-        var runtime = DepositTestSupport.repository(jdbc);
         assertEquals("sepolia", network);
-        assertTrue(runtime.findToken("ETH", "NETWORK_FENCE").isEmpty());
-        assertTrue(runtime.findTokenByContract("ETH", "0x" + "98".repeat(20)).isEmpty());
-        assertTrue(runtime.listTokens("ETH").stream().noneMatch(token -> token.getSymbol().equals("NETWORK_FENCE")));
+        assertTrue(tokens.findDefinition("ETH", network, "NETWORK_FENCE").isEmpty());
+        assertTrue(tokens.findDefinitionByContract("ETH", network, "0x" + "98".repeat(20)).isEmpty());
+        assertTrue(tokens.listDefinitions("ETH", network).stream().noneMatch(token -> token.getSymbol().equals("NETWORK_FENCE")));
     }
 
     @Test void tokenWithoutANetworkCannotEnterTheConfigurationTable() {

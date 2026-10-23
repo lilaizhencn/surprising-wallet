@@ -1,23 +1,29 @@
 package com.surprising.wallet.chain.aptos;
 
-import com.surprising.wallet.service.WithdrawalSettlementService;
-
-import tools.jackson.databind.JsonNode;
-import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.AptosTransactionRecord;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.repository.AccountSequenceRepository;
+import com.surprising.wallet.repository.AptosTransactionRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.CollectionRecordRepository;
+import com.surprising.wallet.repository.LedgerBalanceRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
+import com.surprising.wallet.service.WithdrawalClaimService;
+import com.surprising.wallet.service.WithdrawalSettlementService;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Aptos 链交易服务，负责构造、签名、广播交易，以及提现/归集的确认流程。
@@ -48,9 +54,16 @@ public class AptosTransactionService {
 
     /** 交易签名器 */
     private final AptosTransactionSigner signer;
+    private final AccountSequenceRepository accountSequenceRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
+    private final WithdrawalOrderRepository withdrawalOrderRepository;
+    private final LedgerBalanceRepository ledgerBalanceRepository;
+    private final WithdrawalClaimService withdrawalClaimService;
+    private final CollectionRecordRepository collectionRecordRepository;
+    private final AptosTransactionRepository aptosTransactionRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
+
     private final WithdrawalSettlementService settlements;
 
     /** 运行时任务开关服务。 */
@@ -91,7 +104,7 @@ public class AptosTransactionService {
                               String fromAddress, String toAddress, long amountOctas) {
         GasPlan gas = gasPlan();
         long chainSequence = rpc.sequenceNumber(fromAddress);
-        long sequence = repository.reserveAccountSequence(CHAIN, AptosHex.normalizeAddress(fromAddress), chainSequence);
+        long sequence = accountSequenceRepository.reserve(CHAIN, AptosHex.normalizeAddress(fromAddress), chainSequence);
         AptosTransactionSigner.SignedTransaction tx = signer.nativeTransfer(
                 userId, biz, derivationIndex, fromAddress, sequence, toAddress, amountOctas,
                 gas.maxGasAmount(), gas.gasUnitPrice(), rpc.chainId());
@@ -116,13 +129,15 @@ public class AptosTransactionService {
      */
     public String sendFungibleAsset(ChainAddressRecord from, String metadataAddress,
                                     String toAddress, long amountAtomic) {
-        TokenDefinition token = repository.findTokenByContract(CHAIN, metadataAddress)
+        TokenDefinition token = chainProfileRepository.findAccountByChain(CHAIN).flatMap( configuredNetworkProfile -> tokenConfigRepository.findDefinitionByContract(
+                CHAIN,
+                configuredNetworkProfile.getNetwork(),
+                metadataAddress))
                 .orElseThrow(() -> new IllegalArgumentException(
                         "unconfigured Aptos fungible asset " + metadataAddress));
         GasPlan gas = gasPlan();
         long chainSequence = rpc.sequenceNumber(from.getAddress());
-        long sequence = repository.reserveAccountSequence(
-                CHAIN, AptosHex.normalizeAddress(from.getAddress()), chainSequence);
+        long sequence = accountSequenceRepository.reserve(CHAIN, AptosHex.normalizeAddress(from.getAddress()), chainSequence);
         AptosTransactionSigner.SignedTransaction tx = signer.fungibleAssetTransfer(
                 from.getUserId(), from.getBiz(), from.getAddressIndex(), from.getAddress(), sequence,
                 metadataAddress, toAddress, amountAtomic,
@@ -145,7 +160,7 @@ public class AptosTransactionService {
                                    List<AptosTransactionSigner.FunctionArgument> arguments) {
         GasPlan gas = gasPlan();
         long chainSequence = rpc.sequenceNumber(fromAddress);
-        long sequence = repository.reserveAccountSequence(CHAIN, AptosHex.normalizeAddress(fromAddress), chainSequence);
+        long sequence = accountSequenceRepository.reserve(CHAIN, AptosHex.normalizeAddress(fromAddress), chainSequence);
         AptosTransactionSigner.SignedTransaction tx = signer.entryFunction(
                 derivationIndex, fromAddress, sequence, module, function,
                 typeArguments, arguments, gas.maxGasAmount(), gas.gasUnitPrice(), rpc.chainId());
@@ -167,8 +182,7 @@ public class AptosTransactionService {
             throw new IllegalArgumentException("Aptos package modules are required");
         }
         long chainSequence = rpc.sequenceNumber(publisher.getAddress());
-        long sequence = repository.reserveAccountSequence(
-                CHAIN, AptosHex.normalizeAddress(publisher.getAddress()), chainSequence);
+        long sequence = accountSequenceRepository.reserve(CHAIN, AptosHex.normalizeAddress(publisher.getAddress()), chainSequence);
         AptosTransactionSigner.SignedTransaction tx = signer.publishPackage(
                 publisher.getUserId(),
                 publisher.getBiz(),
@@ -193,35 +207,42 @@ public class AptosTransactionService {
     public String withdrawNative(String orderNo, long userId, ChainAddressRecord from,
                                  String toAddress, BigDecimal amountOctas) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "aptos withdrawNative");
-        Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
+        Optional<String> existing = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, null);
         if (existing.isPresent()) {
             return existing.get();
         }
         long amount = amountOctas.longValueExact();
         long feeReserve = profile().getDefaultFee();
-        if (repository.createWithdrawalOrder(orderNo, userId, CHAIN, "APT", toAddress,
-                amountOctas, BigDecimal.valueOf(feeReserve)) == 0) {
-            return repository.findWithdrawalTxHash(CHAIN, orderNo)
+        if (withdrawalOrderRepository.create(
+                orderNo,
+                userId,
+                CHAIN,
+                "APT",
+                null,
+                null,
+                toAddress,
+                amountOctas,
+                BigDecimal.valueOf(feeReserve)) == 0) {
+            return withdrawalOrderRepository.findTxHash(CHAIN, orderNo, null)
                     .orElseThrow(() -> new IllegalStateException("Aptos withdrawal already claimed"));
         }
         BigDecimal debit = amountOctas.add(BigDecimal.valueOf(feeReserve));
-        if (!repository.freezeLedgerBalance(CHAIN, "APT", from.getAccountId(), debit)) {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null,
-                    "insufficient APT ledger balance");
+        if (!ledgerBalanceRepository.freeze(CHAIN, "APT", from.getAccountId(), debit, null)) {
+            withdrawalOrderRepository.updateStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null, "insufficient APT ledger balance");
             throw new IllegalStateException("insufficient APT ledger balance");
         }
-        repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
+        withdrawalOrderRepository.updateStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
-            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
+            if (withdrawalClaimService.claim(withdrawalOrderRepository.requireTenant(CHAIN, orderNo), CHAIN, orderNo, from.getAddress()) != 1) {
                 throw new IllegalStateException("Aptos withdrawal is not signable: " + orderNo);
             }
             String hash = sendNative(from, toAddress, amount);
-            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), hash) != 1) {
+            if (withdrawalOrderRepository.markSent(CHAIN, orderNo, from.getAddress(), hash) != 1) {
                 throw new IllegalStateException("Aptos withdrawal state changed before SENT: " + orderNo);
             }
             return hash;
         } catch (RuntimeException e) {
-            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
+            withdrawalOrderRepository.markBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
             throw e;
         }
     }
@@ -232,34 +253,41 @@ public class AptosTransactionService {
     public String withdrawToken(String orderNo, long userId, ChainAddressRecord from,
                                 String contractAddress, String toAddress, BigDecimal atomicAmount) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_WITHDRAW, "aptos withdrawToken");
-        Optional<String> existing = repository.findWithdrawalTxHash(CHAIN, orderNo);
+        Optional<String> existing = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, null);
         if (existing.isPresent()) {
             return existing.get();
         }
-        TokenDefinition token = repository.findTokenByContract(CHAIN, contractAddress)
+        TokenDefinition token = chainProfileRepository.findAccountByChain(CHAIN).flatMap( configuredNetworkProfile -> tokenConfigRepository.findDefinitionByContract(
+                CHAIN,
+                configuredNetworkProfile.getNetwork(),
+                contractAddress))
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Aptos token " + contractAddress));
-        if (repository.createWithdrawalOrder(orderNo, userId, CHAIN, token.getSymbol(), toAddress,
-                atomicAmount, BigDecimal.ZERO) == 0) {
-            return repository.findWithdrawalTxHash(CHAIN, orderNo)
+        if (withdrawalOrderRepository.create(orderNo, userId, CHAIN, token.getSymbol(), null, null, toAddress, atomicAmount, BigDecimal.ZERO) == 0) {
+            return withdrawalOrderRepository.findTxHash(CHAIN, orderNo, null)
                     .orElseThrow(() -> new IllegalStateException("Aptos token withdrawal already claimed"));
         }
-        if (!repository.freezeLedgerBalance(CHAIN, token.getSymbol(), from.getAccountId(), atomicAmount)) {
-            repository.updateWithdrawalStatus(CHAIN, orderNo, "FAILED", from.getAddress(), null,
+        if (!ledgerBalanceRepository.freeze(CHAIN, token.getSymbol(), from.getAccountId(), atomicAmount, null)) {
+            withdrawalOrderRepository.updateStatus(
+                    CHAIN,
+                    orderNo,
+                    "FAILED",
+                    from.getAddress(),
+                    null,
                     "insufficient " + token.getSymbol() + " ledger balance");
             throw new IllegalStateException("insufficient " + token.getSymbol() + " ledger balance");
         }
-        repository.updateWithdrawalStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
+        withdrawalOrderRepository.updateStatus(CHAIN, orderNo, "FROZEN", from.getAddress(), null, null);
         try {
-            if (repository.claimWithdrawalSigning(CHAIN, orderNo, from.getAddress()) != 1) {
+            if (withdrawalClaimService.claim(withdrawalOrderRepository.requireTenant(CHAIN, orderNo), CHAIN, orderNo, from.getAddress()) != 1) {
                 throw new IllegalStateException("Aptos token withdrawal is not signable: " + orderNo);
             }
             String hash = sendToken(from, token, toAddress, atomicAmount.longValueExact());
-            if (repository.markWithdrawalSent(CHAIN, orderNo, from.getAddress(), hash) != 1) {
+            if (withdrawalOrderRepository.markSent(CHAIN, orderNo, from.getAddress(), hash) != 1) {
                 throw new IllegalStateException("Aptos token withdrawal state changed before SENT: " + orderNo);
             }
             return hash;
         } catch (RuntimeException e) {
-            repository.markWithdrawalBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
+            withdrawalOrderRepository.markBroadcastUnknown(CHAIN, orderNo, from.getAddress(), e.getMessage());
             throw e;
         }
     }
@@ -270,21 +298,20 @@ public class AptosTransactionService {
     public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amountOctas) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "aptos collectNative");
-        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
+        Optional<String> existing = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
-        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
+        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("Aptos collection is not retryable"));
         }
         try {
             String hash = sendNative(from, hotAddress, amountOctas.longValueExact());
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", hash, null, null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", hash, null, null);
             return hash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
-                    "FAILED", null, e.getMessage(), null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -296,23 +323,25 @@ public class AptosTransactionService {
                                ChainAddressRecord from, String contractAddress,
                                String hotAddress, BigDecimal atomicAmount) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "aptos collectToken");
-        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
+        Optional<String> existing = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
-        TokenDefinition token = repository.findTokenByContract(CHAIN, contractAddress)
+        TokenDefinition token = chainProfileRepository.findAccountByChain(CHAIN).flatMap( configuredNetworkProfile -> tokenConfigRepository.findDefinitionByContract(
+                CHAIN,
+                configuredNetworkProfile.getNetwork(),
+                contractAddress))
                 .orElseThrow(() -> new IllegalArgumentException("unconfigured Aptos token " + contractAddress));
-        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
+        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("Aptos token collection is not retryable"));
         }
         try {
             String hash = sendToken(from, token, hotAddress, atomicAmount.longValueExact());
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", hash, null, null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", hash, null, null);
             return hash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
-                    "FAILED", null, e.getMessage(), null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -322,7 +351,7 @@ public class AptosTransactionService {
      */
     public boolean confirmWithdrawal(String orderNo, String assetSymbol,
                                      String accountId, BigDecimal debitAmount) {
-        return confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
+        return confirmWithdrawal(withdrawalOrderRepository.requireTenant(CHAIN, orderNo),
                 orderNo, assetSymbol, accountId, debitAmount);
     }
 
@@ -331,7 +360,7 @@ public class AptosTransactionService {
      */
     public boolean confirmWithdrawal(java.util.UUID tenantId, String orderNo, String assetSymbol,
                                      String accountId, BigDecimal debitAmount) {
-        String hash = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo).orElseThrow();
+        String hash = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(hash, Duration.ofMinutes(2));
         if (settlements.confirm(
                 tenantId, CHAIN, orderNo, hash, assetSymbol, accountId, debitAmount)) {
@@ -344,9 +373,9 @@ public class AptosTransactionService {
      * 处理 {@code confirmCollection} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
      */
     public boolean confirmCollection(java.util.UUID tenantId, String collectionNo) {
-        String hash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
+        String hash = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         JsonNode transaction = requireSuccessfulConfirmation(hash, Duration.ofMinutes(2));
-        if (repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, hash) == 1) {
+        if (collectionRecordRepository.markConfirmed(tenantId, CHAIN, collectionNo, hash) == 1) {
             markConfirmed(hash, transaction);
             return true;
         }
@@ -385,7 +414,7 @@ public class AptosTransactionService {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile() {
-        return repository.findProfileByChain(CHAIN)
+        return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
 
@@ -395,7 +424,7 @@ public class AptosTransactionService {
     private void record(String hash, String sender, String receiver, String symbol, String coinType,
                         BigDecimal amount, long gasUsed, long gasUnitPrice, long sequenceNumber,
                         String status, String rawPayload) {
-        repository.recordAptosTransaction(AptosTransactionRecord.builder()
+        aptosTransactionRepository.upsert(AptosTransactionRecord.builder()
                 .chain(CHAIN)
                 .txHash(hash)
                 .sender(AptosHex.normalizeAddress(sender))
@@ -418,12 +447,10 @@ public class AptosTransactionService {
         long version = transaction.path("version").asLong(0);
         long gasUsed = transaction.path("gas_used").asLong(0);
         long gasUnitPrice = transaction.path("gas_unit_price").asLong(0);
-        repository.markAptosTransactionConfirmed(CHAIN, hash, version, gasUsed, gasUnitPrice,
-                transaction.toString());
+        aptosTransactionRepository.markConfirmed(CHAIN, hash, version, gasUsed, gasUnitPrice, transaction.toString());
         String sender = transaction.path("sender").asText();
         if (!sender.isBlank()) {
-            repository.synchronizeAccountSequence(CHAIN, AptosHex.normalizeAddress(sender),
-                    transaction.path("sequence_number").asLong(0) + 1L);
+            accountSequenceRepository.synchronize(CHAIN, AptosHex.normalizeAddress(sender), transaction.path("sequence_number").asLong(0) + 1L);
         }
     }
     /**

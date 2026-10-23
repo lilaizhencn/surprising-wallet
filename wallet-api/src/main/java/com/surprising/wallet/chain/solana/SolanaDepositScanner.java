@@ -1,25 +1,30 @@
 package com.surprising.wallet.chain.solana;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.node.ArrayNode;
+import com.surprising.wallet.chain.model.SolanaTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.SolanaTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainScanHeightRepository;
+import com.surprising.wallet.repository.DepositRecordRepository;
+import com.surprising.wallet.repository.SolanaTransactionRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.service.DepositService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
-
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
 
 /**
  * Solana 链充值扫描器，通过 RPC 获取签名列表并解析交易指令识别充值。
@@ -37,8 +42,7 @@ import java.util.Set;
  */
 @Service
 @RequiredArgsConstructor
-public
-class SolanaDepositScanner {
+public class SolanaDepositScanner {
 
     /** 链标识 */
     private static final String CHAIN = "SOLANA";
@@ -51,9 +55,14 @@ class SolanaDepositScanner {
 
     /** Solana RPC 客户端 */
     private final SolanaRpcClient rpc;
+    private final ChainAddressRepository chainAddressRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
+    private final ChainScanHeightRepository chainScanHeightRepository;
+    private final SolanaTransactionRepository solanaTransactionRepository;
+    private final DepositService depositService;
+    private final DepositRecordRepository depositRecordRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
 
     /** 运行时任务开关服务。 */
     @NonNull
@@ -76,12 +85,12 @@ class SolanaDepositScanner {
         Set<String> processed = new HashSet<>();
         Set<String> platformAddresses = platformAddresses();
 
-        for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, "SOL")) {
+        for (ChainAddressRecord address : chainAddressRepository.listEnabled(CHAIN, "SOL")) {
             if ("DEPOSIT".equals(address.getWalletRole())) {
                 scanAddress(address, null, profile, currentSlot, processed, platformAddresses, events);
             }
         }
-        for (TokenDefinition token : repository.listTokens(CHAIN)) {
+        for (TokenDefinition token : chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of())) {
             for (ChainAddressRecord address : tokenScanAddresses(token)) {
                 if ("DEPOSIT".equals(address.getWalletRole())) {
                     scanAddress(address, token, profile, currentSlot, processed, platformAddresses, events);
@@ -90,7 +99,7 @@ class SolanaDepositScanner {
         }
         refreshPendingDeposits(profile, currentSlot);
         long safeSlot = Math.max(0, currentSlot - profile.getDepositConfirmations() + 1L);
-        repository.updateScanHeight(CHAIN, SCANNER, currentSlot, safeSlot);
+        chainScanHeightRepository.upsert(CHAIN, SCANNER, currentSlot, safeSlot);
         return events;
     }
 
@@ -127,7 +136,7 @@ class SolanaDepositScanner {
                 if (event == null || platformAddresses.contains(event.fromAddress())) {
                     continue;
                 }
-                repository.recordSolanaTransaction(SolanaTransactionRecord.builder()
+                solanaTransactionRepository.upsert(SolanaTransactionRecord.builder()
                         .chain(CHAIN)
                         .signature(signature)
                         .fromAddress(event.fromAddress())
@@ -141,8 +150,7 @@ class SolanaDepositScanner {
                         .status(confirmations >= profile.getDepositConfirmations() ? "CONFIRMED" : "CONFIRMING")
                         .rawPayload(transaction.toString())
                         .build());
-                repository.recordAndCreditDeposit(event, instructionIndex,
-                        profile.getDepositConfirmations(), tracked.getAccountId());
+                depositService.recordAndCredit(event, instructionIndex, profile.getDepositConfirmations(), tracked.getAccountId());
                 events.add(event);
             }
         }
@@ -151,7 +159,7 @@ class SolanaDepositScanner {
      * 编码 {@code tokenScanAddresses} 对应的数据，生成链上或接口所需的表示。
      */
     private List<ChainAddressRecord> tokenScanAddresses(TokenDefinition token) {
-        List<ChainAddressRecord> addresses = new ArrayList<>(repository.listChainAddresses(CHAIN, token.getSymbol()));
+        List<ChainAddressRecord> addresses = new ArrayList<>(chainAddressRepository.listEnabled(CHAIN, token.getSymbol()));
         if (!StringUtils.hasText(token.getContractAddress())) {
             return addresses;
         }
@@ -159,7 +167,7 @@ class SolanaDepositScanner {
         for (ChainAddressRecord address : addresses) {
             existing.add(normalize(address.getAddress()));
         }
-        for (ChainAddressRecord owner : repository.listChainAddresses(CHAIN, "SOL")) {
+        for (ChainAddressRecord owner : chainAddressRepository.listEnabled(CHAIN, "SOL")) {
             if (!"DEPOSIT".equals(owner.getWalletRole())) {
                 continue;
             }
@@ -191,7 +199,7 @@ class SolanaDepositScanner {
      */
     private Set<String> platformAddresses() {
         Set<String> addresses = new HashSet<>();
-        for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
+        for (ChainAddressRecord tracked : chainAddressRepository.listEnabled(CHAIN)) {
             if (StringUtils.hasText(tracked.getAddress())) {
                 addresses.add(tracked.getAddress());
             }
@@ -260,7 +268,7 @@ class SolanaDepositScanner {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile() {
-        return repository.findProfileByChain(CHAIN)
+        return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
     /**
@@ -268,7 +276,7 @@ class SolanaDepositScanner {
      */
     private void refreshPendingDeposits(AccountChainProfile profile, long currentSlot) {
         int requiredConfirmations = profile.getDepositConfirmations();
-        for (var pending : repository.listPendingDeposits(CHAIN, requiredConfirmations, 500)) {
+        for (var pending : depositRecordRepository.listPending(CHAIN, requiredConfirmations, 500)) {
             JsonNode transaction = rpc.getTransaction(pending.txHash());
             if (transaction == null || transaction.isNull()) {
                 continue;
@@ -291,8 +299,7 @@ class SolanaDepositScanner {
                     confirmations,
                     pending.contractAddress(),
                     transaction.toString());
-            repository.recordAndCreditDeposit(
-                    event, pending.logIndex(), requiredConfirmations, pending.accountId());
+            depositService.recordAndCredit(event, pending.logIndex(), requiredConfirmations, pending.accountId());
         }
     }
     /**

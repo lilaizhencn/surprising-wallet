@@ -1,22 +1,21 @@
 package com.surprising.wallet.service;
 
 import com.surprising.wallet.chain.BlockchainRuntimeService;
-import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.chain.model.CustodyAddressRecord;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
-import org.springframework.stereotype.Service;
-
+import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.stereotype.Service;
 
 /**
  * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
@@ -30,10 +29,10 @@ public class CustodyWithdrawalExecutionService {
     /**
      * 保存 {@code jdbc}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    /**
-     * 保存 {@code chains}，表示链、网络、资产或代币配置。
-     */
-    private final ChainJdbcRepository chains;
+    private final WithdrawalOrderRepository withdrawalOrderRepository;
+    private final CollectionPlanningService collectionPlanningService;
+
+
     /**
      * 保存 {@code runtimeConfig}，用于保存运行配置和策略参数。
      */
@@ -55,16 +54,19 @@ public class CustodyWithdrawalExecutionService {
     /**
      * 构造 {@code CustodyWithdrawalExecutionService}，初始化该组件运行所需的状态和依赖。
      */
-    public CustodyWithdrawalExecutionService(ChainJdbcRepository chains,
-                                             WalletRuntimeConfigService runtimeConfig,
-                                             BlockchainRuntimeService runtime,
-                                             ChainAssetRepository chainAssetRepository,
-                                             ChainProfileRepository chainProfileRepository,
-                                             TokenConfigRepository tokenConfigRepository,
-                                             CustodyAddressRepository custodyAddressRepository,
-                                             ChainAddressRepository chainAddressRepository,
-                                             LedgerBalanceRepository ledgerBalanceRepository) {
-        this.chains = chains;
+    public CustodyWithdrawalExecutionService(
+            WithdrawalOrderRepository withdrawalOrderRepository,
+            CollectionPlanningService collectionPlanningService,
+            WalletRuntimeConfigService runtimeConfig,
+            BlockchainRuntimeService runtime,
+            ChainAssetRepository chainAssetRepository,
+            ChainProfileRepository chainProfileRepository,
+            TokenConfigRepository tokenConfigRepository,
+            CustodyAddressRepository custodyAddressRepository,
+            ChainAddressRepository chainAddressRepository,
+            LedgerBalanceRepository ledgerBalanceRepository) {
+        this.withdrawalOrderRepository = withdrawalOrderRepository;
+        this.collectionPlanningService = collectionPlanningService;
         this.runtimeConfig = runtimeConfig;
         this.runtime = runtime;
         this.chainAssetRepository = chainAssetRepository;
@@ -92,16 +94,22 @@ public class CustodyWithdrawalExecutionService {
         String orderNo = normalizeOrderPrefix(orderPrefix) + "-" + System.currentTimeMillis()
                 + "-" + randomSuffix();
 
-        int created = chains.createTenantWithdrawalOrder(
-                tenantId, orderNo, Integer.toUnsignedLong(custodyAddress.derivationSubject()),
-                chain, symbol, sourceAddress, spend.accountId(), toAddress,
-                amount, asset.networkFeeReserve());
+        int created = withdrawalOrderRepository.createForTenant(
+                tenantId,
+                orderNo,
+                Integer.toUnsignedLong(custodyAddress.derivationSubject()),
+                chain,
+                symbol,
+                sourceAddress,
+                spend.accountId(),
+                toAddress,
+                amount,
+                asset.networkFeeReserve());
         if (created != 1) {
             throw new IllegalStateException("duplicate withdrawal order");
         }
-        if (!chains.freezeLedgerBalance(tenantId, chain, symbol, spend.accountId(), frozenAmount)) {
-            chains.updateWithdrawalStatus(
-                    tenantId, chain, orderNo, "FAILED", sourceAddress, null, "insufficient balance");
+        if (!ledgerBalanceRepository.freeze(chain, symbol, spend.accountId(), frozenAmount, tenantId)) {
+            withdrawalOrderRepository.updateStatus(tenantId, chain, orderNo, "FAILED", sourceAddress, null, "insufficient balance");
             throw new IllegalArgumentException("insufficient available balance");
         }
 
@@ -110,8 +118,7 @@ public class CustodyWithdrawalExecutionService {
         String statusMessage = approvalRequired
                 ? "waiting for platform withdrawal approval before broadcast"
                 : null;
-        chains.updateWithdrawalStatus(
-                tenantId, chain, orderNo, status, sourceAddress, null, statusMessage);
+        withdrawalOrderRepository.updateStatus(tenantId, chain, orderNo, status, sourceAddress, null, statusMessage);
         return new ExecutionResult(orderNo, status, chain, symbol, amount,
                 asset.networkFeeReserve(), toAddress, sourceAddress, spend.address(), approvalRequired);
     }
@@ -171,7 +178,7 @@ public class CustodyWithdrawalExecutionService {
         if (ChainType.valueOf(asset.chain()).isUtxo()) {
             return spend.address();
         }
-        return chains.findActiveTenantCollectionAddress(tenantId, asset.chain())
+        return collectionPlanningService.destination(tenantId, asset.chain())
                 .orElse(spend.address());
     }
     /**

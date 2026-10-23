@@ -5,12 +5,14 @@ import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.CustodyDepositProjectionService;
 import com.surprising.wallet.service.CustodyEventService;
 import com.surprising.wallet.service.DepositService;
+import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /** Explicit wiring for fixtures that construct application services outside a Spring context. */
 public final class DepositTestSupport {
-    private DepositTestSupport() { }
+    private DepositTestSupport() {
+    }
 
     /** 为直接创建链地址的链路测试建立真实托管归属；生产入口由地址创建用例完成。 */
     public static void attachCustodyAddress(JdbcTemplate jdbc, java.util.UUID tenant, String chain,
@@ -45,13 +47,13 @@ public final class DepositTestSupport {
     @org.springframework.transaction.annotation.EnableTransactionManagement
     static class Transactions { }
 
-    public static ChainJdbcRepository repository(JdbcTemplate jdbc) {
+    public static ChainRepositoryFixture repository(JdbcTemplate jdbc) {
         return repository(jdbc, projection(jdbc, CustodyTestSupport.events(jdbc),
                 new CustodyJacksonConfiguration().custodyObjectMapper()));
     }
 
-    public static ChainJdbcRepository repository(JdbcTemplate jdbc, CustodyDepositProjectionService projection) {
-        return new ChainJdbcRepository(jdbc, new UtxoRepository(jdbc), service(jdbc, projection));
+    public static ChainRepositoryFixture repository(JdbcTemplate jdbc, CustodyDepositProjectionService projection) {
+        return new ChainRepositoryFixture(jdbc, new UtxoRepository(jdbc), service(jdbc, projection));
     }
 
     public static DepositService service(JdbcTemplate jdbc) {
@@ -60,9 +62,15 @@ public final class DepositTestSupport {
     }
 
     public static DepositService service(JdbcTemplate jdbc, CustodyDepositProjectionService projection) {
-        return new DepositService(new ChainAddressRepository(jdbc), new DepositRecordRepository(jdbc),
-                new LedgerBalanceRepository(jdbc), new ChainScanBlockRepository(jdbc), new UtxoRepository(jdbc),
-                new CollectionRecordRepository(jdbc), new ChainSigningTransactionRepository(jdbc, new tools.jackson.databind.ObjectMapper()), projection);
+        return new DepositService(
+                new ChainAddressRepository(jdbc),
+                new DepositRecordRepository(jdbc),
+                new LedgerBalanceRepository(jdbc),
+                new ChainScanBlockRepository(jdbc),
+                new UtxoRepository(jdbc),
+                new CollectionRecordRepository(jdbc),
+                new ChainSigningTransactionRepository(jdbc, new tools.jackson.databind.ObjectMapper()),
+                projection);
     }
 
     public static CustodyDepositProjectionService projection(

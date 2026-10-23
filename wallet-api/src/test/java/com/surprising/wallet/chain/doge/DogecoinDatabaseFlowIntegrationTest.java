@@ -2,17 +2,16 @@ package com.surprising.wallet.chain.doge;
 
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.math.BigDecimal;
+import java.sql.Connection;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
-
-import java.math.BigDecimal;
-import java.sql.Connection;
-import java.util.UUID;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -31,7 +30,7 @@ class DogecoinDatabaseFlowIntegrationTest {
                 env("DOGE_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
                 env("DOGE_DB_USER", "wallet"),
                 env("DOGE_DB_PASSWORD", ""));
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(new JdbcTemplate(dataSource));
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(new JdbcTemplate(dataSource));
 
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
@@ -45,14 +44,12 @@ class DogecoinDatabaseFlowIntegrationTest {
                         chainType, chain, txid, null, "synthetic",
                         new BigDecimal("25.00000000"), 1L, txid, 6, null, "{}");
 
-                assertTrue(repository.recordAndCreditDeposit(event, 0, 6, account));
-                assertFalse(repository.recordAndCreditDeposit(event, 0, 6, account));
-                repository.upsertUtxo(
-                        chain, chain, txid, 0, "synthetic",
-                        new BigDecimal("25.00000000"), 1L, txid, 6, true);
-                assertEquals(1, repository.lockUtxo(chain, txid, 0, "lock-1"));
-                assertEquals(0, repository.lockUtxo(chain, txid, 0, "lock-2"));
-                assertEquals(1, repository.releaseUtxos(chain, "lock-1"));
+                assertTrue(repository.depositService.recordAndCredit(event, 0, 6, account));
+                assertFalse(repository.depositService.recordAndCredit(event, 0, 6, account));
+                repository.utxoRepository.upsert(chain, chain, txid, 0, "synthetic", new BigDecimal("25.00000000"), 1L, txid, 6, true);
+                assertEquals(1, repository.utxoRepository.lock(chain, txid, 0, "lock-1"));
+                assertEquals(0, repository.utxoRepository.lock(chain, txid, 0, "lock-2"));
+                assertEquals(1, repository.utxoRepository.release(chain, "lock-1"));
 
                 BigDecimal total = jdbc.queryForObject("""
                     select total_balance from ledger_balance
@@ -70,13 +67,13 @@ class DogecoinDatabaseFlowIntegrationTest {
                     """, Long.class, chain));
 
                 String scannerName = chain.toLowerCase() + "-scanner-" + UUID.randomUUID();
-                repository.updateScanHeight(chain, scannerName, 10L, 9L);
-                repository.updateScanHeight(chain, scannerName, 10L, 4L);
+                repository.chainScanHeightRepository.upsert(chain, scannerName, 10L, 9L);
+                repository.chainScanHeightRepository.upsert(chain, scannerName, 10L, 4L);
                 assertEquals(4L, jdbc.queryForObject("""
                     select safe_height from chain_scan_height
                     where chain=? and scanner_name=?
                     """, Long.class, chain, scannerName));
-                repository.updateScanHeight(chain, scannerName, 9L, 8L);
+                repository.chainScanHeightRepository.upsert(chain, scannerName, 9L, 8L);
                 assertEquals(4L, jdbc.queryForObject("""
                     select safe_height from chain_scan_height
                     where chain=? and scanner_name=?

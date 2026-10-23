@@ -94,6 +94,7 @@ wallet-api/job/
 ## 资金和链上安全
 
 - 充值入账与区块重组由 `DepositService` 显式编排；`CustodyDepositProjectionService` 是同事务中的必需步骤，不得恢复可选观察者或空回调列表。充值记录、余额、租户投影、赤字恢复及事件持久化必须一起提交或回滚。
+- 链业务直接注入对应单表仓储，不恢复统一链数据门面。`CollectionPlanningService` 计算可归集金额与租户归集地址，`UtxoSelectionService` 在调用方事务内校验归属并选择/锁定输入，`WithdrawalClaimService` 检查重组赤字后领取提现，`EvmBatchOwnershipService` 防止批次与单笔流程重复确认。账户序号由单表原子 UPSERT 预留，不依赖转发层事务。
 - 已观察充值的入账、补确认和投影不受新任务开关或租户关闭链影响；这些开关只控制新业务入口。充值缺失托管地址归属时整笔回滚，不得静默跳过投影后保留余额变化。
 
 - `WithdrawalSettlementService` 统一确认租户提现：订单归属、状态与交易哈希校验、冻结扣款和条件确认必须在同一事务内完成；竞争或状态变更失败时回滚扣款，不恢复无租户结算入口。

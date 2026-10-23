@@ -1,27 +1,26 @@
 package com.surprising.wallet.custody;
 
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.annotation.EnableTransactionManagement;
+import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.service.WithdrawalSettlementService;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.repository.CustodyRepository;
 
 /**
  * 验证 {@code CustodyTenantIsolationIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
@@ -67,34 +66,33 @@ class CustodyTenantIsolationIntegrationTest {
         String accountId = "tenant-collection-" + UUID.randomUUID();
         UUID custodyAddressId = createAddress(ownerTenant, accountId);
         String collectionNo = "tenant-scoped-" + UUID.randomUUID();
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
 
-        assertEquals(1, repository.createCollectionRecord(
-                ownerTenant, custodyAddressId, collectionNo, "ETH", "USDT",
-                accountId, "0x0000000000000000000000000000000000000001",
-                BigDecimal.ONE, BigDecimal.ZERO, null));
+        assertEquals(
+                1,
+                repository.collectionRecordRepository.create(
+                        ownerTenant,
+                        custodyAddressId,
+                        collectionNo,
+                        "ETH",
+                        "USDT",
+                        accountId,
+                        "0x0000000000000000000000000000000000000001",
+                        BigDecimal.ONE,
+                        BigDecimal.ZERO,
+                        null));
 
-        assertEquals(0, repository.claimCollectionSigning(
-                otherTenant, "ETH", collectionNo, null));
-        assertTrue(repository.findCollectionStatus(
-                otherTenant, "ETH", collectionNo).isEmpty());
-        assertEquals(0, repository.updateCollectionStatus(
-                otherTenant, "ETH", collectionNo, "SENT", "0xwrong", null, null));
-        assertTrue(repository.findCollectionTxHash(
-                otherTenant, "ETH", collectionNo).isEmpty());
+        assertEquals(0, repository.collectionRecordRepository.claimSigning(otherTenant, "ETH", collectionNo, null));
+        assertTrue(repository.collectionRecordRepository.findStatus(otherTenant, "ETH", collectionNo).isEmpty());
+        assertEquals(0, repository.collectionRecordRepository.updateStatus(otherTenant, "ETH", collectionNo, "SENT", "0xwrong", null, null));
+        assertTrue(repository.collectionRecordRepository.findTxHash(otherTenant, "ETH", collectionNo).isEmpty());
 
-        assertEquals(1, repository.claimCollectionSigning(
-                ownerTenant, "ETH", collectionNo, null));
-        assertEquals(1, repository.updateCollectionStatus(
-                ownerTenant, "ETH", collectionNo, "SENT", "0xowner", null, null));
-        assertEquals(0, repository.markCollectionConfirmed(
-                otherTenant, "ETH", collectionNo, "0xowner"));
-        assertEquals(1, repository.markCollectionConfirmed(
-                ownerTenant, "ETH", collectionNo, "0xowner"));
-        assertEquals("CONFIRMED", repository.findCollectionStatus(
-                ownerTenant, "ETH", collectionNo).orElseThrow());
-        assertEquals("0xowner", repository.findCollectionTxHash(
-                ownerTenant, "ETH", collectionNo).orElseThrow());
+        assertEquals(1, repository.collectionRecordRepository.claimSigning(ownerTenant, "ETH", collectionNo, null));
+        assertEquals(1, repository.collectionRecordRepository.updateStatus(ownerTenant, "ETH", collectionNo, "SENT", "0xowner", null, null));
+        assertEquals(0, repository.collectionRecordRepository.markConfirmed(otherTenant, "ETH", collectionNo, "0xowner"));
+        assertEquals(1, repository.collectionRecordRepository.markConfirmed(ownerTenant, "ETH", collectionNo, "0xowner"));
+        assertEquals("CONFIRMED", repository.collectionRecordRepository.findStatus(ownerTenant, "ETH", collectionNo).orElseThrow());
+        assertEquals("0xowner", repository.collectionRecordRepository.findTxHash(ownerTenant, "ETH", collectionNo).orElseThrow());
     }
 
     /**
@@ -102,15 +100,23 @@ class CustodyTenantIsolationIntegrationTest {
      */
     @Test
     void collectionApiRejectsMissingTenantContext() {
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
 
-        assertThrows(NullPointerException.class, () -> repository.createCollectionRecord(
-                null, null, "missing-tenant", "ETH", "ETH",
-                "0x0000000000000000000000000000000000000001",
-                "0x0000000000000000000000000000000000000002",
-                BigDecimal.ONE, BigDecimal.ZERO, null));
+        assertThrows(
+                NullPointerException.class,
+                () -> repository.collectionRecordRepository.create(
+                        null,
+                        null,
+                        "missing-tenant",
+                        "ETH",
+                        "ETH",
+                        "0x0000000000000000000000000000000000000001",
+                        "0x0000000000000000000000000000000000000002",
+                        BigDecimal.ONE,
+                        BigDecimal.ZERO,
+                        null));
         assertThrows(NullPointerException.class,
-                () -> repository.findCollectionStatus(null, "ETH", "missing-tenant"));
+                () -> repository.collectionRecordRepository.findStatus(null, "ETH", "missing-tenant"));
     }
 
     /**
@@ -175,7 +181,7 @@ class CustodyTenantIsolationIntegrationTest {
         UUID otherTenant = createTenant();
         String accountId = "tenant-withdrawal-" + UUID.randomUUID();
         createAddress(ownerTenant, accountId);
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         String orderNo = "tenant-withdrawal-" + UUID.randomUUID();
         String txHash = "0x" + UUID.randomUUID().toString().replace("-", "");
         BigDecimal debit = new BigDecimal("1.25");
@@ -186,12 +192,20 @@ class CustodyTenantIsolationIntegrationTest {
                     available_balance, locked_balance, total_balance)
                 values (?, 'ETH', 'ETH', ?, 0, ?, ?)
                 """, ownerTenant, accountId, debit, debit);
-        assertEquals(1, repository.createTenantWithdrawalOrder(
-                ownerTenant, orderNo, 1L, "ETH", "ETH", accountId, accountId,
-                "0x0000000000000000000000000000000000000002",
-                BigDecimal.ONE, new BigDecimal("0.25")));
-        assertEquals(1, repository.updateWithdrawalStatus(
-                ownerTenant, "ETH", orderNo, "SENT", accountId, txHash, null));
+        assertEquals(
+                1,
+                repository.withdrawalOrderRepository.createForTenant(
+                        ownerTenant,
+                        orderNo,
+                        1L,
+                        "ETH",
+                        "ETH",
+                        accountId,
+                        accountId,
+                        "0x0000000000000000000000000000000000000002",
+                        BigDecimal.ONE,
+                        new BigDecimal("0.25")));
+        assertEquals(1, repository.withdrawalOrderRepository.updateStatus(ownerTenant, "ETH", orderNo, "SENT", accountId, txHash, null));
 
         assertThrows(IllegalStateException.class, () -> settlements.confirm(
                 otherTenant, "ETH", orderNo, txHash, "ETH", accountId, debit));
@@ -207,8 +221,7 @@ class CustodyTenantIsolationIntegrationTest {
                 ownerTenant, "ETH", orderNo, txHash, "ETH", accountId, debit));
         assertFalse(settlements.confirm(
                 ownerTenant, "ETH", orderNo, txHash, "ETH", accountId, debit));
-        assertEquals("CONFIRMED", repository.findWithdrawalOrder(
-                ownerTenant, "ETH", orderNo).orElseThrow().getStatus());
+        assertEquals("CONFIRMED", repository.withdrawalOrderRepository.find("ETH", orderNo, ownerTenant).orElseThrow().getStatus());
         assertEquals(0, BigDecimal.ZERO.compareTo(jdbc.queryForObject("""
                 select locked_balance from ledger_balance
                  where tenant_id = ? and chain = 'ETH' and asset_symbol = 'ETH'
@@ -232,38 +245,63 @@ class CustodyTenantIsolationIntegrationTest {
         String secondAddress = "btc-second-" + UUID.randomUUID();
         createChainAddress(firstTenant, "BTC", firstAddress);
         createChainAddress(secondTenant, "BTC", secondAddress);
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
 
-        assertEquals(1, repository.createTenantWithdrawalOrder(
-                firstTenant, "btc-first-order", 11L, "BTC", "BTC",
-                firstAddress, firstAddress, "btc-first-recipient",
-                new BigDecimal("0.10"), new BigDecimal("0.001")));
-        assertEquals(1, repository.updateWithdrawalStatus(
-                firstTenant, "BTC", "btc-first-order", "FROZEN", firstAddress, null, null));
-        assertEquals(1, repository.createTenantWithdrawalOrder(
-                secondTenant, "btc-second-order", 12L, "BTC", "BTC",
-                secondAddress, secondAddress, "btc-second-recipient",
-                new BigDecimal("0.20"), new BigDecimal("0.001")));
-        assertEquals(1, repository.updateWithdrawalStatus(
-                secondTenant, "BTC", "btc-second-order", "FROZEN", secondAddress, null, null));
+        assertEquals(
+                1,
+                repository.withdrawalOrderRepository.createForTenant(
+                        firstTenant,
+                        "btc-first-order",
+                        11L,
+                        "BTC",
+                        "BTC",
+                        firstAddress,
+                        firstAddress,
+                        "btc-first-recipient",
+                        new BigDecimal("0.10"),
+                        new BigDecimal("0.001")));
+        assertEquals(1, repository.withdrawalOrderRepository.updateStatus(
+                firstTenant,
+                "BTC",
+                "btc-first-order",
+                "FROZEN",
+                firstAddress,
+                null,
+                null));
+        assertEquals(
+                1,
+                repository.withdrawalOrderRepository.createForTenant(
+                        secondTenant,
+                        "btc-second-order",
+                        12L,
+                        "BTC",
+                        "BTC",
+                        secondAddress,
+                        secondAddress,
+                        "btc-second-recipient",
+                        new BigDecimal("0.20"),
+                        new BigDecimal("0.001")));
+        assertEquals(1, repository.withdrawalOrderRepository.updateStatus(
+                secondTenant,
+                "BTC",
+                "btc-second-order",
+                "FROZEN",
+                secondAddress,
+                null,
+                null));
 
         List<com.surprising.wallet.common.chain.WithdrawalOrderRecord> batch =
-                repository.listWithdrawalsForSigning("BTC", "BTC", 10);
+                repository.withdrawalOrderRepository.listForSigning("BTC", "BTC", 10);
         assertEquals(1, batch.size());
         assertEquals(firstTenant, batch.getFirst().getTenantId());
 
-        repository.upsertUtxo("BTC", "BTC", "first-utxo", 0,
-                firstAddress, BigDecimal.ONE, 100L, "first-block", 12, true);
-        repository.upsertUtxo("BTC", "BTC", "second-utxo", 0,
-                secondAddress, new BigDecimal("2"), 100L, "second-block", 12, true);
-        var firstUtxos = repository.listSpendableUtxos(
-                firstTenant, "BTC", "BTC", 6, 10, 0);
+        repository.utxoRepository.upsert("BTC", "BTC", "first-utxo", 0, firstAddress, BigDecimal.ONE, 100L, "first-block", 12, true);
+        repository.utxoRepository.upsert("BTC", "BTC", "second-utxo", 0, secondAddress, new BigDecimal("2"), 100L, "second-block", 12, true);
+        var firstUtxos = repository.utxoSelectionService.spendable(firstTenant, "BTC", "BTC", 6, 10, 0);
         assertEquals(1, firstUtxos.size());
         assertEquals("first-utxo", firstUtxos.getFirst().getTxId());
-        assertEquals(0, repository.lockUtxo(
-                secondTenant, "BTC", "first-utxo", 0, "wrong-tenant-lock"));
-        assertEquals(1, repository.lockUtxo(
-                firstTenant, "BTC", "first-utxo", 0, "owner-lock"));
+        assertEquals(0, repository.utxoSelectionService.lock(secondTenant, "BTC", "first-utxo", 0, "wrong-tenant-lock"));
+        assertEquals(1, repository.utxoSelectionService.lock(firstTenant, "BTC", "first-utxo", 0, "owner-lock"));
     }
 
     /**

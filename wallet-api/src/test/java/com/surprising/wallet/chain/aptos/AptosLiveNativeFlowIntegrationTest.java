@@ -1,22 +1,20 @@
 package com.surprising.wallet.chain.aptos;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import tools.jackson.databind.ObjectMapper;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -68,18 +66,41 @@ class AptosLiveNativeFlowIntegrationTest {
                 env("APTOS_DB_USER", "wallet"),
                 env("APTOS_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
-        AptosRpcClient rpc = new AptosRpcClient(new ObjectMapper(),
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        AptosRpcClient rpc = new AptosRpcClient(
+                new ObjectMapper(),
                 profiles("APTOS"),
-                nodes("APTOS", java.util.Map.of("rpc", node("APTOS", env("APTOS_RPC_URL", "https://fullnode.devnet.aptoslabs.com/v1")), "faucet", node("APTOS", env("APTOS_FAUCET_URL", "https://faucet.devnet.aptoslabs.com")))));
+                nodes("APTOS", java.util.Map.of(
+                        "rpc",
+                        node("APTOS", env("APTOS_RPC_URL", "https://fullnode.devnet.aptoslabs.com/v1")),
+                        "faucet",
+                        node("APTOS", env("APTOS_FAUCET_URL", "https://faucet.devnet.aptoslabs.com")))));
         AptosKeyService keys = new AptosKeyService(masterSeed);
-        AptosAddressService addresses = new AptosAddressService(keys, repository);
+        AptosAddressService addresses = new AptosAddressService(keys, repository.chainAddressRepository);
         AptosTransactionSigner signer = new AptosTransactionSigner(keys);
-        AptosTransactionService transactions = new AptosTransactionService(rpc,
+        AptosTransactionService transactions = new AptosTransactionService(
+                rpc,
                 signer,
-                repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
-        AptosDepositScanner scanner = new AptosDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc));
+                repository.accountSequenceRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.withdrawalOrderRepository,
+                repository.ledgerBalanceRepository,
+                repository.withdrawalClaimService,
+                repository.collectionRecordRepository,
+                repository.aptosTransactionRepository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc),
+                RuntimeTestSupport.database(jdbc));
+        AptosDepositScanner scanner = new AptosDepositScanner(
+                rpc,
+                repository.chainAddressRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.chainScanHeightRepository,
+                repository.aptosTransactionRepository,
+                repository.depositService,
+                repository.chainAssetRepository,
+                RuntimeTestSupport.database(jdbc));
 
         ChainAddressRecord owner = addresses.createNativeAddress(6001, 0, OWNER_INDEX, "DEPOSIT");
         ChainAddressRecord external = external(keys);
@@ -92,7 +113,7 @@ class AptosLiveNativeFlowIntegrationTest {
         waitForBalanceAtLeast(rpc, external.getAddress(), 3L * ONE_APT, Duration.ofMinutes(2));
 
         long checkpoint = rpc.ledgerVersion();
-        repository.updateScanHeight("APTOS", AptosDepositScanner.SCANNER, checkpoint, checkpoint);
+        repository.chainScanHeightRepository.upsert("APTOS", AptosDepositScanner.SCANNER, checkpoint, checkpoint);
         String depositHash = transactions.sendNative(
                 external, owner.getAddress(), ONE_APT);
         transactions.requireSuccessfulConfirmation(depositHash, Duration.ofMinutes(2));
@@ -102,30 +123,55 @@ class AptosLiveNativeFlowIntegrationTest {
         assertAmount(DEPOSIT_AMOUNT, ledger(jdbc, tenantAddress.tenantId(), owner.getAccountId()));
 
         String withdrawOrder = "aptos-live-withdraw-" + UUID.randomUUID();
-        assertEquals(1, repository.createTenantWithdrawalOrder(
-                tenantAddress.tenantId(), withdrawOrder, owner.getUserId(), "APTOS", "APT",
-                owner.getAddress(), owner.getAccountId(), external.getAddress(),
-                WITHDRAW_AMOUNT, BigDecimal.ZERO));
-        assertTrue(repository.freezeLedgerBalance(
-                tenantAddress.tenantId(), "APTOS", "APT", owner.getAccountId(), WITHDRAW_AMOUNT));
-        repository.updateWithdrawalStatus(
-                tenantAddress.tenantId(), "APTOS", withdrawOrder,
-                "FROZEN", owner.getAddress(), null, null);
-        assertEquals(1, repository.claimWithdrawalSigning(
-                tenantAddress.tenantId(), "APTOS", withdrawOrder, owner.getAddress()));
+        assertEquals(
+                1,
+                repository.withdrawalOrderRepository.createForTenant(
+                        tenantAddress.tenantId(),
+                        withdrawOrder,
+                        owner.getUserId(),
+                        "APTOS",
+                        "APT",
+                        owner.getAddress(),
+                        owner.getAccountId(),
+                        external.getAddress(),
+                        WITHDRAW_AMOUNT,
+                        BigDecimal.ZERO));
+        assertTrue(repository.ledgerBalanceRepository.freeze("APTOS", "APT", owner.getAccountId(), WITHDRAW_AMOUNT, tenantAddress.tenantId()));
+        repository.withdrawalOrderRepository.updateStatus(
+                tenantAddress.tenantId(),
+                "APTOS",
+                withdrawOrder,
+                "FROZEN",
+                owner.getAddress(),
+                null,
+                null);
+        assertEquals(1, repository.withdrawalClaimService.claim(tenantAddress.tenantId(), "APTOS", withdrawOrder, owner.getAddress()));
         String withdrawHash = transactions.sendNative(
                 owner, external.getAddress(), toOctas(WITHDRAW_AMOUNT));
-        assertEquals(1, repository.markWithdrawalSent(
-                tenantAddress.tenantId(), "APTOS", withdrawOrder, owner.getAddress(), withdrawHash));
+        assertEquals(1, repository.withdrawalOrderRepository.markSent(
+                tenantAddress.tenantId(),
+                "APTOS",
+                withdrawOrder,
+                owner.getAddress(),
+                withdrawHash));
         assertTrue(transactions.confirmWithdrawal(
                 tenantAddress.tenantId(), withdrawOrder, "APT",
                 owner.getAccountId(), WITHDRAW_AMOUNT));
 
         String collectionNo = "aptos-live-collection-" + UUID.randomUUID();
-        assertEquals(1, repository.createCollectionRecord(
-                tenantAddress.tenantId(), tenantAddress.custodyAddressId(), collectionNo,
-                "APTOS", "APT", owner.getAddress(), hot.getAddress(),
-                COLLECTION_AMOUNT, BigDecimal.ZERO, null));
+        assertEquals(
+                1,
+                repository.collectionRecordRepository.create(
+                        tenantAddress.tenantId(),
+                        tenantAddress.custodyAddressId(),
+                        collectionNo,
+                        "APTOS",
+                        "APT",
+                        owner.getAddress(),
+                        hot.getAddress(),
+                        COLLECTION_AMOUNT,
+                        BigDecimal.ZERO,
+                        null));
         String collectionHash = transactions.collectNative(
                 tenantAddress.tenantId(), collectionNo, owner, hot.getAddress(),
                 BigDecimal.valueOf(toOctas(COLLECTION_AMOUNT)));

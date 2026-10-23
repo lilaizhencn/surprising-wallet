@@ -6,9 +6,14 @@ import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.service.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.ChainRpcNodeService;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
+import java.util.List;
+import java.util.Map;
 import org.bitcoinj.crypto.ECKey;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -28,12 +33,6 @@ import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.utils.Numeric;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.math.RoundingMode;
-import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -58,8 +57,8 @@ class EvmForkTransactionServiceIntegrationTest {
 
         ChainType chain = ChainType.valueOf(System.getProperty("evm.fork.chain", "ETH"));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource());
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
-        AccountChainProfile originalProfile = repository.findProfileByChain(chain.name()).orElseThrow();
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        AccountChainProfile originalProfile = repository.chainProfileRepository.findAccountByChain(chain.name()).orElseThrow();
         String originalNetwork = originalProfile.getNetwork();
         Web3j web3j = Web3j.build(new HttpService(LOCAL_RPC));
         EvmHttpServiceFactory httpServices = new EvmHttpServiceFactory();
@@ -74,7 +73,7 @@ class EvmForkTransactionServiceIntegrationTest {
             jdbc.update("update chain_profile set network = 'local', updated_at = now() "
                             + "where chain = ? and network = ?",
                     chain.name(), originalNetwork);
-            AccountChainProfile localProfile = repository.findProfileByChain(chain.name()).orElseThrow();
+            AccountChainProfile localProfile = repository.chainProfileRepository.findAccountByChain(chain.name()).orElseThrow();
             AccountSecp256k1KeyService keyService =
                     new AccountSecp256k1KeyService(WalletKeyTestFixture.provider());
             ChainAddressRecord from = addressRecord(localProfile, chain);
@@ -84,7 +83,12 @@ class EvmForkTransactionServiceIntegrationTest {
             from.setOwnerAddress(credentials.getAddress());
 
             ChainRpcNodeService rpcNodes = fixedRpcNodes(localProfile);
-            EvmAccountTransactionService service = new EvmAccountTransactionService(repository,
+            EvmAccountTransactionService service = new EvmAccountTransactionService(
+                    repository.withdrawalOrderRepository,
+                    repository.collectionRecordRepository,
+                    repository.evmTransactionRepository,
+                    repository.chainProfileRepository,
+                    repository.chainAssetRepository,
                     rpcNodes,
                     keyService,
                     new EvmTransactionBuilder(),
@@ -99,7 +103,7 @@ class EvmForkTransactionServiceIntegrationTest {
             assertTrue(nativeReceipt.isStatusOK(), "service native transaction must succeed");
             assertSentTransaction(jdbc, chain, nativeHash, localProfile.getNativeSymbol(), null);
 
-            List<TokenDefinition> configuredTokens = repository.listTokens(chain.name());
+            List<TokenDefinition> configuredTokens = repository.chainProfileRepository.findAccountByChain(chain.name()).map( configuredNetworkProfile -> repository.tokenConfigRepository.listDefinitions(chain.name(), configuredNetworkProfile.getNetwork())).orElse(List.of());
             if (!configuredTokens.isEmpty()) {
                 TokenDefinition token = configuredTokens.getFirst();
                 sendUnlockedTokenCall(web3j, accounts.getFirst(), token.getContractAddress(),

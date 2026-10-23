@@ -1,21 +1,20 @@
 package com.surprising.wallet.chain.hypercore;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.HyperCoreRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * HyperCore 充值扫描器，通过查询 spotClearinghouseState 接口对比余额变化识别充值。
@@ -28,8 +27,7 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public
-class HyperCoreDepositScanner {
+public class HyperCoreDepositScanner {
 
     /** 链标识 */
     private static final String CHAIN = "HYPERCORE";
@@ -39,9 +37,8 @@ class HyperCoreDepositScanner {
 
     /** HyperCore 数据仓库 */
     private final HyperCoreRepository hyperCoreRepository;
+    private final ChainAddressRepository chainAddressRepository;
 
-    /** 链通用数据库仓库 */
-    private final ChainJdbcRepository chainRepository;
 
     /**
      * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
@@ -52,7 +49,7 @@ class HyperCoreDepositScanner {
      */
     public void scanAndCredit(AccountChainProfile profile) {
         syncSpotMetadata(profile.getNetwork());
-        List<ChainAddressRecord> addresses = chainRepository.listChainAddresses(CHAIN).stream()
+        List<ChainAddressRecord> addresses = chainAddressRepository.listEnabled(CHAIN).stream()
                 .filter(ChainAddressRecord::getEnabled)
                 .filter(address -> address.getUserId() != null && address.getUserId() != 0L)
                 .filter(address -> "DEPOSIT".equalsIgnoreCase(address.getWalletRole()))

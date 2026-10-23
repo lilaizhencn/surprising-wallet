@@ -1,20 +1,12 @@
 package com.surprising.wallet.chain.monero;
 
-import tools.jackson.databind.ObjectMapper;
-
-import com.surprising.wallet.repository.ChainRpcNodeRepository;
-import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.chain.model.LedgerBalanceRecord;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainRpcNodeRepository;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.jdbc.datasource.SingleConnectionDataSource;
-
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
@@ -27,6 +19,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -81,7 +79,7 @@ class MoneroRegtestFullFlowIntegrationTest {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+            ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             try {
                 String environment = env("MONERO_REGTEST_ENVIRONMENT", "dev");
                 String network = env("MONERO_REGTEST_PROFILE_NETWORK", "regtest");
@@ -95,9 +93,19 @@ class MoneroRegtestFullFlowIntegrationTest {
                 ChainRpcNodeService rpcNodeService = new ChainRpcNodeService(new ChainRpcNodeRepository(jdbc), environment, 1);
 
                 MoneroWalletRpcClient walletRpc = new MoneroWalletRpcClient(new ObjectMapper(), new ChainProfileRepository(jdbc), rpcNodeService);
-                MoneroDepositScanner scanner = new MoneroDepositScanner(walletRpc, repository);
-                MoneroTransactionService transactionService = new MoneroTransactionService(walletRpc,
-                        repository,
+                MoneroDepositScanner scanner = new MoneroDepositScanner(
+                        walletRpc,
+                        repository.chainScanHeightRepository,
+                        repository.chainAddressRepository,
+                        repository.moneroTransactionRepository,
+                        repository.depositService);
+                MoneroTransactionService transactionService = new MoneroTransactionService(
+                        walletRpc,
+                        repository.moneroTransactionRepository,
+                        repository.withdrawalOrderRepository,
+                        repository.collectionRecordRepository,
+                        repository.chainAddressRepository,
+                        repository.depositService,
                         com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
                 AccountChainProfile profile = profile(network);
 
@@ -106,7 +114,7 @@ class MoneroRegtestFullFlowIntegrationTest {
                         walletRpc.createAddress("java-regtest-user-" + UUID.randomUUID());
                 String userAccount = "xmr-regtest-user-" + UUID.randomUUID();
                 ChainAddressRecord userRecord = addressRecord(1001L, userAccount, userAddress);
-                repository.upsertChainAddress(userRecord);
+                repository.chainAddressRepository.upsert(userRecord);
 
                 runScript(root, "fund", userAddress.address(), DEPOSIT_AMOUNT.toPlainString());
                 runScript(root, "mine", "12");
@@ -120,23 +128,29 @@ class MoneroRegtestFullFlowIntegrationTest {
                         walletRpc.createAddress("java-regtest-recipient-" + UUID.randomUUID());
                 String recipientAccount = "xmr-regtest-recipient-" + UUID.randomUUID();
                 ChainAddressRecord recipientRecord = addressRecord(1002L, recipientAccount, recipientAddress);
-                repository.upsertChainAddress(recipientRecord);
+                repository.chainAddressRepository.upsert(recipientRecord);
 
                 String orderNo = "xmr-regtest-withdraw-" + UUID.randomUUID();
-                repository.createTenantWithdrawalOrder(TEST_TENANT_ID, orderNo, 1001L, CHAIN, SYMBOL,
-                        userAddress.address(), userAccount, recipientAddress.address(),
-                        WITHDRAW_AMOUNT, BigDecimal.ZERO);
-                assertTrue(repository.freezeLedgerBalance(
-                        TEST_TENANT_ID, CHAIN, SYMBOL, userAccount, WITHDRAW_AMOUNT));
+                repository.withdrawalOrderRepository.createForTenant(
+                        TEST_TENANT_ID,
+                        orderNo,
+                        1001L,
+                        CHAIN,
+                        SYMBOL,
+                        userAddress.address(),
+                        userAccount,
+                        recipientAddress.address(),
+                        WITHDRAW_AMOUNT,
+                        BigDecimal.ZERO);
+                assertTrue(repository.ledgerBalanceRepository.freeze(CHAIN, SYMBOL, userAccount, WITHDRAW_AMOUNT, TEST_TENANT_ID));
                 String txHash = transactionService.sendNative(profile, userRecord, recipientAddress.address(), WITHDRAW_AMOUNT);
-                repository.updateWithdrawalStatus(
-                        TEST_TENANT_ID, CHAIN, orderNo, "SENT", userAddress.address(), txHash, null);
+                repository.withdrawalOrderRepository.updateStatus(TEST_TENANT_ID, CHAIN, orderNo, "SENT", userAddress.address(), txHash, null);
                 runScript(root, "mine", "12");
                 walletRpc.refresh();
 
                 transactionService.confirmWithdrawal(TEST_TENANT_ID, profile, orderNo, txHash,
                         userAccount, WITHDRAW_AMOUNT, recipientAddress.address(), WITHDRAW_AMOUNT);
-                assertEquals("CONFIRMED", repository.findWithdrawalOrder(TEST_TENANT_ID, CHAIN, orderNo)
+                assertEquals("CONFIRMED", repository.withdrawalOrderRepository.find(CHAIN, orderNo, TEST_TENANT_ID)
                         .orElseThrow().getStatus());
                 assertBalance(repository, userAccount,
                         DEPOSIT_AMOUNT.subtract(WITHDRAW_AMOUNT), BigDecimal.ZERO,
@@ -204,8 +218,7 @@ class MoneroRegtestFullFlowIntegrationTest {
                             rpc_url, explorer_url, deposit_confirmations, withdraw_confirmations,
                             default_fee_rate, dust_threshold, enabled, created_at, updated_at,
                             chain_id, gas_policy, scan_batch_size, scan_enabled, withdraw_enabled,
-                            collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run
-                        )
+                            collection_enabled, transfer_enabled, scan_start_height, scan_max_blocks_per_run)
                         values (?, ?, 'monero', 128, 128, ?, ?, null, ?, ?, null, 100000000, true, now(), now(),
                                 null, 'monero-wallet-rpc', 100, true, true, true, false, 0, 0)
                         on conflict (chain, network) do update set
@@ -259,9 +272,9 @@ class MoneroRegtestFullFlowIntegrationTest {
     /**
      * 验证 {@code assertBalance} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void assertBalance(ChainJdbcRepository repository, String accountId,
+    private static void assertBalance(ChainRepositoryFixture repository, String accountId,
                                       BigDecimal available, BigDecimal locked, BigDecimal total) {
-        LedgerBalanceRecord balance = repository.findLedgerBalance(CHAIN, SYMBOL, accountId).orElseThrow();
+        LedgerBalanceRecord balance = repository.ledgerBalanceRepository.find(CHAIN, SYMBOL, accountId).orElseThrow();
         assertEquals(0, available.compareTo(balance.getAvailableBalance().stripTrailingZeros()));
         assertEquals(0, locked.compareTo(balance.getLockedBalance().stripTrailingZeros()));
         assertEquals(0, total.compareTo(balance.getTotalBalance().stripTrailingZeros()));

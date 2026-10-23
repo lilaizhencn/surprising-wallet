@@ -1,18 +1,18 @@
 package com.surprising.wallet.chain.polkadot;
 
-import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.ChainAsset;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainScanHeightRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.service.DepositService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -20,6 +20,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 /**
  * Polkadot 链充值扫描器，通过运行时服务扫描中继链和 Asset Hub 的转账事件。
@@ -36,8 +40,7 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public
-class PolkadotDepositScanner {
+public class PolkadotDepositScanner {
 
     /** 链标识 */
     private static final String CHAIN = PolkadotRuntimeClient.CHAIN;
@@ -62,9 +65,13 @@ class PolkadotDepositScanner {
 
     /** 运行时客户端 */
     private final PolkadotRuntimeClient runtimeClient;
+    private final ChainScanHeightRepository chainScanHeightRepository;
+    private final DepositService depositService;
+    private final ChainAddressRepository chainAddressRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
+    private final ChainAssetRepository chainAssetRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
 
     /** 运行时任务开关服务。 */
     @NonNull
@@ -92,7 +99,7 @@ class PolkadotDepositScanner {
         long safeHeight = Math.max(0L, latest - requiredConfirmations + 1L);
         long start = scanStart(profile, safeHeight, NATIVE_SCANNER);
         if (start > safeHeight) {
-            repository.updateScanHeight(CHAIN, NATIVE_SCANNER, latest, safeHeight);
+            chainScanHeightRepository.upsert(CHAIN, NATIVE_SCANNER, latest, safeHeight);
             return List.of();
         }
         long end = Math.min(safeHeight, start + scanBatch(profile) - 1L);
@@ -115,11 +122,10 @@ class PolkadotDepositScanner {
                 continue;
             }
             ChainAddressRecord tracked = addresses.get(normalize(event.toAddress()));
-            repository.recordAndCreditDeposit(event, transfer.eventIndex(), requiredConfirmations,
-                    tracked.getAccountId());
+            depositService.recordAndCredit(event, transfer.eventIndex(), requiredConfirmations, tracked.getAccountId());
             events.add(event);
         }
-        repository.updateScanHeight(CHAIN, NATIVE_SCANNER, latest, end);
+        chainScanHeightRepository.upsert(CHAIN, NATIVE_SCANNER, latest, end);
         return events;
     }
     /**
@@ -131,7 +137,7 @@ class PolkadotDepositScanner {
         long safeHeight = Math.max(0L, latest - requiredConfirmations + 1L);
         long start = scanStart(profile, safeHeight, ASSET_HUB_SCANNER);
         if (start > safeHeight) {
-            repository.updateScanHeight(CHAIN, ASSET_HUB_SCANNER, latest, safeHeight);
+            chainScanHeightRepository.upsert(CHAIN, ASSET_HUB_SCANNER, latest, safeHeight);
             return List.of();
         }
         long end = Math.min(safeHeight, start + scanBatch(profile) - 1L);
@@ -154,11 +160,10 @@ class PolkadotDepositScanner {
                 continue;
             }
             ChainAddressRecord tracked = addressBook.get(normalize(event.toAddress()));
-            repository.recordAndCreditDeposit(event, transfer.eventIndex(), requiredConfirmations,
-                    tracked.getAccountId());
+            depositService.recordAndCredit(event, transfer.eventIndex(), requiredConfirmations, tracked.getAccountId());
             events.add(event);
         }
-        repository.updateScanHeight(CHAIN, ASSET_HUB_SCANNER, latest, end);
+        chainScanHeightRepository.upsert(CHAIN, ASSET_HUB_SCANNER, latest, end);
         return events;
     }
 
@@ -205,7 +210,7 @@ class PolkadotDepositScanner {
      */
     private Map<String, ChainAddressRecord> trackedDepositAddresses(String assetSymbol) {
         Map<String, ChainAddressRecord> addresses = new HashMap<>();
-        for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, assetSymbol)) {
+        for (ChainAddressRecord address : chainAddressRepository.listEnabled(CHAIN, assetSymbol)) {
             if (isTrackedRole(address)) {
                 addresses.put(normalize(address.getAddress()), address);
             }
@@ -243,7 +248,7 @@ class PolkadotDepositScanner {
      */
     private Map<String, TokenDefinition> tokensByAssetId() {
         Map<String, TokenDefinition> tokens = new HashMap<>();
-        for (TokenDefinition token : repository.listTokens(CHAIN)) {
+        for (TokenDefinition token : chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of())) {
             String assetId = PolkadotRuntimeClient.normalizeAssetId(token.getContractAddress());
             if (Boolean.TRUE.equals(token.getActive()) && !assetId.isBlank()) {
                 tokens.put(assetId, token);
@@ -255,7 +260,7 @@ class PolkadotDepositScanner {
      * 扫描或观察 {@code scanStart} 对应的链上状态，并转换为业务可用结果。
      */
     private long scanStart(AccountChainProfile profile, long safeHeight, String scannerName) {
-        return repository.findScanSafeHeight(CHAIN, scannerName)
+        return chainScanHeightRepository.findSafeHeight(CHAIN, scannerName)
                 .map(height -> Math.min(height + 1L, safeHeight + 1L))
                 .orElseGet(() -> {
                     Long configured = profile.getScanStartHeight();
@@ -287,14 +292,14 @@ class PolkadotDepositScanner {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile() {
-        return repository.findProfileByChain(CHAIN)
+        return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
     /**
      * 执行 {@code nativeDecimals} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private int nativeDecimals() {
-        return repository.findAsset(CHAIN, SYMBOL)
+        return chainAssetRepository.findActiveDefinition(CHAIN, SYMBOL)
                 .map(ChainAsset::getDecimals)
                 .filter(decimals -> decimals != null && decimals > 0)
                 .orElse(DEFAULT_DOT_DECIMALS);

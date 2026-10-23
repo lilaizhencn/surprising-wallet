@@ -1,15 +1,24 @@
 package com.surprising.wallet.chain.evm;
 
-import com.surprising.wallet.service.WithdrawalSettlementService;
-
 import com.surprising.wallet.chain.model.EvmTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.CollectionRecordRepository;
+import com.surprising.wallet.repository.EvmNonceRepository;
+import com.surprising.wallet.repository.EvmTransactionRepository;
+import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import com.surprising.wallet.service.AccountSecp256k1KeyService;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import com.surprising.wallet.repository.EvmNonceRepository;
+import com.surprising.wallet.service.WithdrawalSettlementService;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.bitcoinj.crypto.ECKey;
 import org.springframework.stereotype.Service;
@@ -28,12 +37,6 @@ import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.utils.Numeric;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.math.RoundingMode;
-import java.util.List;
-import java.util.Optional;
 
 /**
  * EVM 兼容链交易服务。
@@ -65,10 +68,13 @@ public class EvmAccountTransactionService {
      */
     private static final BigInteger COLLECTION_FEE_SAFETY_MULTIPLIER = BigInteger.TWO;
 
-    /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final ChainJdbcRepository repository;
+    private final WithdrawalOrderRepository withdrawalOrderRepository;
+    private final CollectionRecordRepository collectionRecordRepository;
+    private final EvmTransactionRepository evmTransactionRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final ChainAssetRepository chainAssetRepository;
+
+
     /**
      * 保存 {@code rpcNodeService}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
@@ -197,7 +203,7 @@ public class EvmAccountTransactionService {
     public boolean confirmWithdrawal(
             String chain, String orderNo, String symbol,
             String accountId, BigDecimal debitAmount) {
-        return confirmWithdrawal(repository.requireWithdrawalTenant(chain, orderNo),
+        return confirmWithdrawal(withdrawalOrderRepository.requireTenant(chain, orderNo),
                 chain, orderNo, symbol, accountId, debitAmount);
     }
 
@@ -207,7 +213,7 @@ public class EvmAccountTransactionService {
     public boolean confirmWithdrawal(
             java.util.UUID tenantId, String chain, String orderNo, String symbol,
             String accountId, BigDecimal debitAmount) {
-        String txHash = repository.findWithdrawalTxHash(tenantId, chain, orderNo).orElseThrow();
+        String txHash = withdrawalOrderRepository.findTxHash(chain, orderNo, tenantId).orElseThrow();
         EvmTransactionReceipt receipt = confirmedReceipt(chain, txHash).orElse(null);
         if (receipt == null) {
             return false;
@@ -225,7 +231,7 @@ public class EvmAccountTransactionService {
      */
     public boolean confirmCollection(
             java.util.UUID tenantId, String chain, String collectionNo) {
-        String txHash = repository.findCollectionTxHash(tenantId, chain, collectionNo).orElseThrow();
+        String txHash = collectionRecordRepository.findTxHash(tenantId, chain, collectionNo).orElseThrow();
         EvmTransactionReceipt receipt = confirmedReceipt(chain, txHash).orElse(null);
         if (receipt == null) {
             return false;
@@ -234,7 +240,7 @@ public class EvmAccountTransactionService {
             throw new IllegalStateException("EVM collection transaction failed: " + txHash);
         }
         markConfirmed(chain, txHash, receipt);
-        return repository.markCollectionConfirmed(tenantId, chain, collectionNo, txHash) == 1;
+        return collectionRecordRepository.markConfirmed(tenantId, chain, collectionNo, txHash) == 1;
     }
 
     /**
@@ -275,7 +281,7 @@ public class EvmAccountTransactionService {
                     web3j, profile, receipt.getFrom(), gasUsed, effectiveGasPrice,
                     receipt.getBlockNumber(), receipt.getL1Fee(), receipt.getGasUsedForL1(),
                     receipt.getOperatorFeeScalar(), receipt.getOperatorFeeConstant());
-            repository.recordEvmTransaction(EvmTransactionRecord.builder()
+            evmTransactionRepository.upsert(EvmTransactionRecord.builder()
                     .chain(chain)
                     .txHash(txHash)
                     .fromAddress(receipt.getFrom())
@@ -393,7 +399,7 @@ public class EvmAccountTransactionService {
     private void record(
             String chain, String hash, String from, String to, String symbol, String contract,
             BigDecimal amount, BigDecimal fee, long nonce, String status, String rawPayload) {
-        repository.recordEvmTransaction(EvmTransactionRecord.builder()
+        evmTransactionRepository.upsert(EvmTransactionRecord.builder()
                 .chain(chain)
                 .txHash(hash)
                 .fromAddress(normalize(from))
@@ -432,7 +438,7 @@ public class EvmAccountTransactionService {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile(String chain) {
-        return repository.findProfileByChain(chain)
+        return chainProfileRepository.findAccountByChain(chain)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for " + chain));
     }
@@ -441,7 +447,7 @@ public class EvmAccountTransactionService {
      * 执行 {@code nativeDecimals} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private int nativeDecimals(AccountChainProfile profile) {
-        var asset = repository.findAsset(profile.getChain(), nativeSymbol(profile))
+        var asset = chainAssetRepository.findActiveDefinition(profile.getChain(), nativeSymbol(profile))
                 .orElseThrow(() -> new IllegalStateException(
                         "missing active native chain_asset for " + profile.getChain()));
         if (!Boolean.TRUE.equals(asset.getNativeAsset()) || asset.getDecimals() == null) {

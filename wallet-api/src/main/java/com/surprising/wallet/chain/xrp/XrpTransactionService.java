@@ -1,16 +1,31 @@
 package com.surprising.wallet.chain.xrp;
 
-import com.surprising.wallet.service.WithdrawalSettlementService;
-
-import tools.jackson.databind.JsonNode;
 import com.google.common.primitives.UnsignedInteger;
 import com.google.common.primitives.UnsignedLong;
+import com.surprising.wallet.chain.model.HotWalletRules;
+import com.surprising.wallet.chain.model.XrpTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.chain.model.XrpTransactionRecord;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.CollectionRecordRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.repository.WithdrawalOrderRepository;
+import com.surprising.wallet.repository.XrpTransactionRepository;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.service.WithdrawalSettlementService;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,16 +38,7 @@ import org.xrpl.xrpl4j.model.transactions.IssuedCurrencyAmount;
 import org.xrpl.xrpl4j.model.transactions.Payment;
 import org.xrpl.xrpl4j.model.transactions.TrustSet;
 import org.xrpl.xrpl4j.model.transactions.XrpCurrencyAmount;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import tools.jackson.databind.JsonNode;
 
 /**
  * XRP Ledger 交易服务，负责构建、签名和发送 XRPL 交易。
@@ -84,9 +90,13 @@ public class XrpTransactionService {
 
     /** 密钥服务 */
     private final XrpKeyService keyService;
+    private final WithdrawalOrderRepository withdrawalOrderRepository;
+    private final CollectionRecordRepository collectionRecordRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
+    private final ChainAddressRepository chainAddressRepository;
+    private final XrpTransactionRepository xrpTransactionRepository;
 
-    /** 链配置数据库访问 */
-    private final ChainJdbcRepository repository;
 
     /** xrpl4j 签名服务 */
     private final BcSignatureService signatureService = new BcSignatureService();
@@ -180,7 +190,7 @@ public class XrpTransactionService {
     public boolean confirmWithdrawal(java.util.UUID tenantId, AccountChainProfile profile,
                                      String orderNo, String assetSymbol,
                                      String accountId, BigDecimal debitAmount) {
-        String txHash = repository.findWithdrawalTxHash(tenantId, CHAIN, orderNo).orElseThrow();
+        String txHash = withdrawalOrderRepository.findTxHash(CHAIN, orderNo, tenantId).orElseThrow();
         Confirmation confirmation = confirmation(profile, txHash);
         if (!confirmation.confirmed()) {
             return false;
@@ -206,21 +216,20 @@ public class XrpTransactionService {
     public String collectNative(java.util.UUID tenantId, String collectionNo, ChainAddressRecord from,
                                 String hotAddress, BigDecimal amount) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "xrp collectNative");
-        Optional<String> previous = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
+        Optional<String> previous = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
         }
-        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
+        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
         }
         try {
             String txHash = sendNativeInternal(from, hotAddress, amount);
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
             return txHash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
-                    "FAILED", null, e.getMessage(), null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -260,12 +269,12 @@ public class XrpTransactionService {
      */
     private int missingIssuedCurrencyTrustLines(String address) {
         Map<String, TokenDefinition> tokens = new HashMap<>();
-        for (TokenDefinition token : repository.listTokens(CHAIN)) {
+        for (TokenDefinition token : chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of())) {
             tokens.put(token.getSymbol().toUpperCase(Locale.ROOT), token);
         }
         Set<String> checkedSymbols = new HashSet<>();
         int missing = 0;
-        for (ChainAddressRecord record : repository.listChainAddresses(CHAIN)) {
+        for (ChainAddressRecord record : chainAddressRepository.listEnabled(CHAIN)) {
             if (NATIVE_SYMBOL.equalsIgnoreCase(record.getAssetSymbol())
                     || !address.equals(record.getAddress())) {
                 continue;
@@ -307,22 +316,21 @@ public class XrpTransactionService {
                                         ChainAddressRecord from,
                                         TokenDefinition token, String hotAddress, BigDecimal amount) {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_COLLECTION, "xrp collectIssuedCurrency");
-        Optional<String> previous = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
+        Optional<String> previous = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
         if (previous.isPresent()) {
             return previous.get();
         }
         ensureCollectionDestinationTrustLine(token, hotAddress);
-        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
+        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("collection is not retryable"));
         }
         try {
             String txHash = sendIssuedCurrencyInternal(from, token, hotAddress, amount);
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
             return txHash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
-                    "FAILED", null, e.getMessage(), null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -334,8 +342,8 @@ public class XrpTransactionService {
         if (hotAddress.equals(issued.issuer()) || hasTrustLine(hotAddress, issued)) {
             return;
         }
-        ChainAddressRecord hot = repository.findChainAddressByAddress(CHAIN, NATIVE_SYMBOL, hotAddress)
-                .or(() -> repository.findChainAddressByAddress(CHAIN, hotAddress))
+        ChainAddressRecord hot = chainAddressRepository.findEnabledByAddress(CHAIN, NATIVE_SYMBOL, hotAddress)
+                .or(() -> chainAddressRepository.findEnabledByAddress(CHAIN, hotAddress))
                 .orElseThrow(() -> new IllegalStateException(
                         "missing XRP hot wallet address for issued-currency collection: " + hotAddress));
         String trustSetTxHash = createTrustLine(hot, issued);
@@ -354,12 +362,12 @@ public class XrpTransactionService {
      */
     public boolean confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
                                      String collectionNo) {
-        String txHash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
+        String txHash = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         Confirmation confirmation = confirmation(profile, txHash);
         if (!confirmation.confirmed()) {
             return false;
         }
-        boolean updated = repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, txHash) == 1;
+        boolean updated = collectionRecordRepository.markConfirmed(tenantId, CHAIN, collectionNo, txHash) == 1;
         updateConfirmedTransaction(txHash, confirmation);
         return updated;
     }
@@ -525,7 +533,12 @@ public class XrpTransactionService {
      * 执行 {@code defaultHotAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private ChainAddressRecord defaultHotAddress() {
-        return repository.listDefaultHotAddressCandidates(CHAIN, NATIVE_SYMBOL).stream()
+        return chainAddressRepository.listDefaultHot(
+                CHAIN,
+                NATIVE_SYMBOL,
+                HotWalletRules.DEFAULT_HOT_USER_ID,
+                HotWalletRules.DEFAULT_HOT_BIZ,
+                HotWalletRules.DEFAULT_HOT_WALLET_ROLE).stream()
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("missing XRP default hot wallet address"));
     }
@@ -534,7 +547,7 @@ public class XrpTransactionService {
      */
     private TokenDefinition token(String symbol) {
         String value = symbol == null ? "" : symbol.trim();
-        return repository.listTokens(CHAIN).stream()
+        return chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of()).stream()
                 .filter(candidate -> candidate.getSymbol().equalsIgnoreCase(value))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("XRPL issued currency not configured: " + symbol));
@@ -579,7 +592,7 @@ public class XrpTransactionService {
     private void updateSystemTransaction(String txHash, String symbol, String issuer,
                                          String currencyCode, Confirmation confirmation) {
         JsonNode tx = txNode(confirmation.raw());
-        repository.recordXrpTransaction(XrpTransactionRecord.builder()
+        xrpTransactionRepository.upsert(XrpTransactionRecord.builder()
                 .chain(CHAIN)
                 .txHash(txHash)
                 .fromAddress(tx.path("Account").asText(""))
@@ -642,7 +655,7 @@ public class XrpTransactionService {
         } else {
             String currency = amountNode.path("currency").asText("");
             String issuer = amountNode.path("issuer").asText("");
-            TokenDefinition token = repository.listTokens(CHAIN).stream()
+            TokenDefinition token = chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of()).stream()
                     .filter(candidate -> matchesIssuedCurrency(candidate, issuer, currency))
                     .findFirst()
                     .orElse(null);
@@ -651,7 +664,7 @@ public class XrpTransactionService {
                     .currencyCode(currency)
                     .amount(new BigDecimal(amountNode.path("value").asText("0")));
         }
-        repository.recordXrpTransaction(builder.build());
+        xrpTransactionRepository.upsert(builder.build());
     }
     /**
      * 校验 {@code matchesIssuedCurrency} 对应的输入或状态，失败时抛出明确异常。
@@ -670,7 +683,7 @@ public class XrpTransactionService {
     private void recordTransaction(String txHash, String from, String to, String symbol,
                                    String issuer, String currencyCode, BigDecimal amount,
                                    long feeDrops, String status, String rawPayload) {
-        repository.recordXrpTransaction(XrpTransactionRecord.builder()
+        xrpTransactionRepository.upsert(XrpTransactionRecord.builder()
                 .chain(CHAIN)
                 .txHash(txHash)
                 .fromAddress(from)
@@ -713,7 +726,7 @@ public class XrpTransactionService {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile() {
-        return repository.findProfileByChain(CHAIN)
+        return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
     /**
@@ -795,7 +808,6 @@ public class XrpTransactionService {
             boolean trustLineBefore,
             BigDecimal activationAmount,
             String activationTxHash,
-            String trustSetTxHash
-    ) {
+            String trustSetTxHash) {
     }
 }

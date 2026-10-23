@@ -1,28 +1,28 @@
 package com.surprising.wallet.chain;
 
-import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.chain.model.HotWalletRules;
-import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.chain.cardano.CardanoKeyService;
+import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.chain.monero.MoneroAddressValidator;
 import com.surprising.wallet.chain.near.NearKeyService;
 import com.surprising.wallet.chain.polkadot.PolkadotKeyService;
 import com.surprising.wallet.chain.tron.TronAddressCodec;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.ChainType;
+import com.surprising.wallet.common.pojo.Address;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.service.HotWalletAddressService;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Date;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.bitcoinj.base.Base58;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.Date;
-import java.util.Locale;
 
 /**
  * 链地址运行时服务，统一管理跨链充值地址的生成和校验。
@@ -33,8 +33,7 @@ import java.util.Locale;
  */
 @Service
 @RequiredArgsConstructor
-public
-class ChainAddressRuntime {
+public class ChainAddressRuntime {
 
     /** 充值地址的钱包角色 */
     private static final String WALLET_ROLE_DEPOSIT = "DEPOSIT";
@@ -43,10 +42,10 @@ class ChainAddressRuntime {
     /** 32 字节十六进制地址正则（Aptos、Sui） */
     private static final String HEX_32_BYTE_ADDRESS_REGEX = "^0x[0-9a-fA-F]{64}$";
 
-    /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final ChainJdbcRepository repository;
+    private final ChainAddressRepository chainAddressRepository;
+    private final ChainProfileRepository chainProfileRepository;
+
+
     /**
      * 保存 {@code hotWalletAddressService}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
@@ -76,9 +75,14 @@ class ChainAddressRuntime {
                 long index = nextAddressIndex(profile, userId, biz);
                 ChainAddressRecord record = hotWalletAddressService.deriveAddress(
                         profile, userId, biz, index, WALLET_ROLE_DEPOSIT);
-                repository.upsertChainAddress(record);
-                ChainAddressRecord saved = repository.findChainAddress(
-                                profile.getChain(), profile.getNativeSymbol(), userId, biz, index, WALLET_ROLE_DEPOSIT)
+                chainAddressRepository.upsert(record);
+                ChainAddressRecord saved = chainAddressRepository.find(
+                        profile.getChain(),
+                        profile.getNativeSymbol(),
+                        userId,
+                        biz,
+                        index,
+                        WALLET_ROLE_DEPOSIT)
                         .orElse(record);
                 return toAddress(profile, saved);
             } catch (DuplicateKeyException e) {
@@ -112,10 +116,14 @@ class ChainAddressRuntime {
         AccountChainProfile profile = profile(chainType);
         ChainAddressRecord record = hotWalletAddressService.deriveAddress(
                 profile, userId, biz, childIndex, WALLET_ROLE_DEPOSIT);
-        repository.upsertChainAddress(record);
-        ChainAddressRecord saved = repository.findChainAddress(
-                        profile.getChain(), profile.getNativeSymbol(), userId, biz,
-                        childIndex, WALLET_ROLE_DEPOSIT)
+        chainAddressRepository.upsert(record);
+        ChainAddressRecord saved = chainAddressRepository.find(
+                profile.getChain(),
+                profile.getNativeSymbol(),
+                userId,
+                biz,
+                childIndex,
+                WALLET_ROLE_DEPOSIT)
                 .orElse(record);
         return toAddress(profile, saved);
     }
@@ -149,8 +157,7 @@ class ChainAddressRuntime {
      * 执行 {@code nextAddressIndex} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private long nextAddressIndex(AccountChainProfile profile, long userId, int biz) {
-        return repository.findMaxChainAddressIndex(
-                        profile.getChain(), profile.getNativeSymbol(), userId, biz, WALLET_ROLE_DEPOSIT)
+        return chainAddressRepository.findMaxIndex(profile.getChain(), profile.getNativeSymbol(), userId, biz, WALLET_ROLE_DEPOSIT)
                 .map(value -> value + 1L)
                 .orElse(0L);
     }
@@ -158,7 +165,7 @@ class ChainAddressRuntime {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile(ChainType chainType) {
-        return repository.findProfileByChain(chainType.name())
+        return chainProfileRepository.findAccountByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
     }
     /**

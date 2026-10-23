@@ -1,24 +1,22 @@
 package com.surprising.wallet.chain.aptos;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
-
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,14 +37,19 @@ class AptosTestnetConfigurationIntegrationTest {
                 env("APTOS_DB_USER", "wallet"),
                 env("APTOS_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
-        AptosRpcClient rpc = new AptosRpcClient(new ObjectMapper(),
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        AptosRpcClient rpc = new AptosRpcClient(
+                new ObjectMapper(),
                 profiles("APTOS"),
-                nodes("APTOS", java.util.Map.of("rpc", node("APTOS", env("APTOS_RPC_URL", "https://fullnode.testnet.aptoslabs.com/v1")), "faucet", node("APTOS", ""))));
+                nodes("APTOS", java.util.Map.of(
+                        "rpc",
+                        node("APTOS", env("APTOS_RPC_URL", "https://fullnode.testnet.aptoslabs.com/v1")),
+                        "faucet",
+                        node("APTOS", ""))));
 
-        assertEquals("testnet", repository.findProfileByChain("APTOS").orElseThrow().getNetwork());
+        assertEquals("testnet", repository.chainProfileRepository.findAccountByChain("APTOS").orElseThrow().getNetwork());
         assertEquals(2, rpc.chainId());
-        Map<String, TokenDefinition> tokens = repository.listTokens("APTOS").stream()
+        Map<String, TokenDefinition> tokens = repository.chainProfileRepository.findAccountByChain("APTOS").map( configuredNetworkProfile -> repository.tokenConfigRepository.listDefinitions("APTOS", configuredNetworkProfile.getNetwork())).orElse(List.of()).stream()
                 .collect(Collectors.toMap(TokenDefinition::getSymbol, Function.identity()));
         assertEquals(List.of("USDC", "USDT"), tokens.keySet().stream().sorted().toList());
         for (TokenDefinition token : tokens.values()) {
@@ -59,9 +62,18 @@ class AptosTestnetConfigurationIntegrationTest {
         TransactionTemplate transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         transaction.executeWithoutResult(status -> {
             long ledgerVersion = rpc.ledgerVersion();
-            repository.updateScanHeight("APTOS", AptosDepositScanner.SCANNER, ledgerVersion, ledgerVersion);
-            new AptosDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc)).scanAndCredit();
-            assertTrue(repository.findScanSafeHeight("APTOS", AptosDepositScanner.SCANNER).isPresent());
+            repository.chainScanHeightRepository.upsert("APTOS", AptosDepositScanner.SCANNER, ledgerVersion, ledgerVersion);
+            new AptosDepositScanner(
+                    rpc,
+                    repository.chainAddressRepository,
+                    repository.chainProfileRepository,
+                    repository.tokenConfigRepository,
+                    repository.chainScanHeightRepository,
+                    repository.aptosTransactionRepository,
+                    repository.depositService,
+                    repository.chainAssetRepository,
+                    RuntimeTestSupport.database(jdbc)).scanAndCredit();
+            assertTrue(repository.chainScanHeightRepository.findSafeHeight("APTOS", AptosDepositScanner.SCANNER).isPresent());
             status.setRollbackOnly();
         });
     }

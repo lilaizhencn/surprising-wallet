@@ -54,7 +54,7 @@ ETH/BNB/Polygon/Base/Arbitrum/Optimism 共用的第一阶段当前已经具备�
 - `../../../pom.xml` 使用 Web3j `6.0.0`，依赖中已有 `Transaction7702` 和 `AuthorizationTuple`；
 - `resources/infra/evm-fork` 使用 Hardhat `2.26.3`，包含 Prague/EIP-7702 交易字段；
 - `AccountSecp256k1KeyService` 能从现有 sig2 根密钥派生 EVM Authority 私钥；
-- `ChainJdbcRepository.reserveEvmNonce` 已有数据库 Nonce 预留；
+- `EvmNonceRepository.reserve` 已有数据库 Nonce 预留；
 - `CustodyGasService` 已有租户 Gas 预留、释放和结算框架；
 - `AccountChainWorkflowService` 已有 EVM 归集候选、广播和确认调度。
 - `Eip7702CollectionDelegate` 与 `Eip7702BatchCollector` 已实现、可编译、可部署并有失败隔离测试；
@@ -875,7 +875,7 @@ CREATE TABLE public.evm_collection_batch_attempt (
 上再增加反向 ID，避免循环外键。
 
 当前 `collection_record` 本身没有 `tenant_id/custody_address_id`，这不满足目标 SaaS 隔离边界。直接修改初始化 DDL 和
-`ChainJdbcRepository.createCollectionRecord`，为所有新归集记录写入非空 `tenant_id`、`custody_address_id`，并建立：
+`CollectionRecordRepository.create`，为所有新归集记录写入非空 `tenant_id`、`custody_address_id`，并建立：
 
 ```sql
 UNIQUE (tenant_id, id),
@@ -1083,7 +1083,7 @@ public String signType4(
 复制到 7702 服务。广播用 `eth_sendRawTransaction`；本地计算的 txHash、RPC 返回的 txHash 必须一致，否则进入
 `BROADCAST_UNKNOWN` 并按 nonce 查询，绝不能立即换 nonce 重发。
 
-relayer nonce 继续复用 `ChainJdbcRepository.reserveEvmNonce(chain, relayerAddress, pendingNonce)` 的数据库锁定能力，
+relayer nonce 继续复用 `EvmNonceRepository.reserve(chain, relayerAddress, pendingNonce)` 的数据库锁定能力，
 但需要把内部 `long` 改为 `BigInteger`/`numeric(78,0)`，避免协议值被 Java `long` 人为截断。一个 relayer 地址必须由一个
 逻辑 nonce 分配器负责。
 
@@ -1490,3 +1490,7 @@ SCROLL、UNICHAIN**；当前明确不能使用本方案的是 **AVAX_C、HYPEREV
 - [EIP-7702: Set EOA account code](https://eips.ethereum.org/EIPS/eip-7702)
 - [Ethereum.org：EIP-7702](https://ethereum.org/roadmap/pectra/7702/)
 - [ERC-4337 Account Abstraction](https://eips.ethereum.org/EIPS/eip-4337)
+
+
+本机贯通回归可运行 `bash resources/infra/evm-fork/scripts/run-local-7702-flow.sh`。
+脚本在隔离构建目录启动 Hardhat Prague 并部署归集与提现合约，使用开发机既有 PostgreSQL 18 中的独立临时数据库执行 `Evm7702ProductionFlowIntegrationTest`；结束后移除临时数据库、节点和构建目录。测试覆盖真实充值、按租户批量归集、提现、重试与 Gas 结算，使用测试密钥，不连接外部链。

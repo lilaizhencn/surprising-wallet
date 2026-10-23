@@ -1,12 +1,8 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.chain.model.HotWalletRules;
-import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
 import com.surprising.wallet.chain.aptos.AptosKeyService;
 import com.surprising.wallet.chain.cardano.CardanoKeyService;
+import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.chain.monero.MoneroAddressService;
 import com.surprising.wallet.chain.near.NearKeyService;
 import com.surprising.wallet.chain.polkadot.PolkadotKeyService;
@@ -14,11 +10,18 @@ import com.surprising.wallet.chain.solana.SolanaKeyService;
 import com.surprising.wallet.chain.sui.SuiKeyService;
 import com.surprising.wallet.chain.ton.TonKeyService;
 import com.surprising.wallet.chain.xrp.XrpKeyService;
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.config.PubKeyConfig;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashAddressCodec;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParameters;
 import com.surprising.wallet.sdk.bitcoinj.core.BitcoinLikeNetwork;
+import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.bitcoinj.base.LegacyAddress;
 import org.bitcoinj.core.NetworkParameters;
@@ -29,10 +32,6 @@ import org.springframework.util.StringUtils;
 import org.tron.TronWalletApi;
 import org.web3j.crypto.Keys;
 import org.web3j.crypto.Sign;
-
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
 
 /**
  * 热钱包地址派生服务，负责跨链的 BIP44/Ed25519 地址派生。
@@ -45,13 +44,11 @@ import java.util.Optional;
  */
 @Service
 @RequiredArgsConstructor
-public
-class HotWalletAddressService {
+public class HotWalletAddressService {
 
-    /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final ChainJdbcRepository repository;
+    private final ChainAddressRepository chainAddressRepository;
+
+
     /** 多签公钥配置（用于 BTC-like 链地址派生） */
     private final PubKeyConfig pubKeyConfig;
     /**
@@ -99,7 +96,7 @@ class HotWalletAddressService {
      * @return 地址记录（可能为 Optional.empty()）
      */
     public Optional<ChainAddressRecord> findDefaultHotAddress(String chain, String assetSymbol) {
-        return repository.findChainAddress(
+        return chainAddressRepository.find(
                 chain,
                 assetSymbol,
                 HotWalletRules.DEFAULT_HOT_USER_ID,
@@ -142,7 +139,10 @@ class HotWalletAddressService {
                     + " actual=" + actual.getDerivationPath());
         }
 
-        List<ChainAddressRecord> reservedRows = repository.listReservedHotNamespaceAddresses(profile.getChain());
+        List<ChainAddressRecord> reservedRows = chainAddressRepository.listReservedHot(
+                profile.getChain(),
+                HotWalletRules.DEFAULT_HOT_USER_ID,
+                HotWalletRules.DEFAULT_HOT_BIZ);
         List<ChainAddressRecord> extra = reservedRows.stream()
                 .filter(record -> !isDefaultHotAddressRow(profile, record))
                 .toList();

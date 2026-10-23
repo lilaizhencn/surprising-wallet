@@ -1,14 +1,17 @@
 package com.surprising.wallet.chain.ton;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import com.surprising.wallet.common.chain.ChainRpcNode;
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.ChainRpcNode;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainRpcNodeRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -18,13 +21,10 @@ import org.ton.ton4j.cell.Cell;
 import org.ton.ton4j.smartcontract.token.ft.JettonMinter;
 import org.ton.ton4j.smartcontract.token.ft.JettonWallet;
 import org.ton.ton4j.smartcontract.token.nft.NftUtils;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.UUID;
-
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -68,7 +68,7 @@ class TonLiveMockJettonFlowIntegrationTest {
                 env("TON_DB_USER", "wallet"),
                 env("TON_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         UUID tenantId = TonTenantIntegrationFixture.ensureTenant(jdbc);
         TonCenterClient rpc = new TonCenterClient(new ObjectMapper(),
                 profiles("TON"),
@@ -79,13 +79,35 @@ class TonLiveMockJettonFlowIntegrationTest {
                         .authHeaderName("X-API-Key")
                         .apiKey(env("TONCENTER_API_KEY", "")).build()));
         TonKeyService keys = new TonKeyService(masterSeed);
-        TonAddressService addresses = new TonAddressService(keys, repository);
-        TonTransactionService transactions = new TonTransactionService(rpc,
+        TonAddressService addresses = new TonAddressService(keys, repository.chainAddressRepository, repository.chainProfileRepository);
+        TonTransactionService transactions = new TonTransactionService(
+                rpc,
                 keys,
-                repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
-        TonDepositScanner scanner = new TonDepositScanner(rpc, addresses, repository, new TonApiClient(new ObjectMapper(), new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
-                new com.surprising.wallet.service.ChainRpcNodeService(new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc), "dev", 16)), RuntimeTestSupport.database(jdbc));
+                repository.accountSequenceRepository,
+                repository.tonTransactionRepository,
+                repository.withdrawalOrderRepository,
+                repository.ledgerBalanceRepository,
+                repository.withdrawalClaimService,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.collectionRecordRepository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc),
+                RuntimeTestSupport.database(jdbc));
+        TonDepositScanner scanner = new TonDepositScanner(
+                rpc,
+                addresses,
+                repository.chainAddressRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.chainScanHeightRepository,
+                repository.tonTransactionRepository,
+                repository.depositService,
+                repository.depositRecordRepository,
+                new TonApiClient(
+                        new ObjectMapper(),
+                        new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
+                        new com.surprising.wallet.service.ChainRpcNodeService(new com.surprising.wallet.repository.ChainRpcNodeRepository(jdbc), "dev", 16)),
+                RuntimeTestSupport.database(jdbc));
 
         ChainAddressRecord owner = addresses.createNativeAddress(
                 tenantId, 4001, 0, OWNER_INDEX, "DEPOSIT");
@@ -189,7 +211,7 @@ class TonLiveMockJettonFlowIntegrationTest {
                                             String externalFundingOwner,
                                             TonCenterClient rpc, TonTransactionService transactions,
                                             TonAddressService addresses, TonDepositScanner scanner,
-                                            ChainJdbcRepository repository, JdbcTemplate jdbc) {
+                                            ChainRepositoryFixture repository, JdbcTemplate jdbc) {
         String uri = "https://example.invalid/surprising-wallet/ton-testnet-" + symbol.toLowerCase() + ".json";
         JettonMinter minter = JettonMinter.builder()
                 .adminAddress(Address.of(owner.getAddress()))
@@ -214,7 +236,7 @@ class TonLiveMockJettonFlowIntegrationTest {
         }
 
         scanner.scanAndCredit();
-        if (repository.findLedgerBalance("TON", symbol, userJettonWallet.getAccountId())
+        if (repository.ledgerBalanceRepository.find("TON", symbol, userJettonWallet.getAccountId())
                 .map(LedgerBalanceRecord::getTotalBalance)
                 .filter(balance -> balance.compareTo(new BigDecimal("1000")) >= 0)
                 .isPresent()) {
@@ -251,7 +273,7 @@ class TonLiveMockJettonFlowIntegrationTest {
                                                     String symbol, MockJetton jetton,
                                                     ChainAddressRecord external, ChainAddressRecord hot,
                                                     TonCenterClient rpc, TonTransactionService transactions,
-                                                    ChainJdbcRepository repository) {
+                                                    ChainRepositoryFixture repository) {
         long withdrawSeqno = rpc.seqno(jetton.userJettonWallet().getOwnerAddress());
         String orderNo = "ton-" + symbol.toLowerCase() + "-withdraw-" + UUID.randomUUID();
         BigDecimal withdrawAmount = new BigDecimal("100");
@@ -270,10 +292,19 @@ class TonLiveMockJettonFlowIntegrationTest {
 
         String collectionNo = "ton-" + symbol.toLowerCase() + "-collection-" + UUID.randomUUID();
         BigDecimal collectionAmount = new BigDecimal("100");
-        assertEquals(1, repository.createCollectionRecord(
-                tenantId, custodyAddressId, collectionNo, "TON", symbol,
-                jetton.userJettonWallet().getOwnerAddress(), hot.getAddress(),
-                collectionAmount, BigDecimal.ZERO, null));
+        assertEquals(
+                1,
+                repository.collectionRecordRepository.create(
+                        tenantId,
+                        custodyAddressId,
+                        collectionNo,
+                        "TON",
+                        symbol,
+                        jetton.userJettonWallet().getOwnerAddress(),
+                        hot.getAddress(),
+                        collectionAmount,
+                        BigDecimal.ZERO,
+                        null));
         long collectionSeqno = rpc.seqno(jetton.userJettonWallet().getOwnerAddress());
         String collection = transactions.collectJetton(
                 tenantId, collectionNo, jetton.userJettonWallet(), jetton.masterAddress(),
@@ -286,7 +317,7 @@ class TonLiveMockJettonFlowIntegrationTest {
         assertTrue(transactions.confirmCollection(
                 tenantId, collectionNo, jetton.userJettonWallet().getOwnerAddress()));
 
-        assertTrue(repository.findLedgerBalance("TON", symbol, jetton.userJettonWallet().getAccountId())
+        assertTrue(repository.ledgerBalanceRepository.find("TON", symbol, jetton.userJettonWallet().getAccountId())
                 .orElseThrow().getLockedBalance().signum() == 0);
         return new TokenTx(withdraw, collection);
     }
@@ -297,13 +328,23 @@ class TonLiveMockJettonFlowIntegrationTest {
     private static String collectNative(UUID tenantId, UUID custodyAddressId,
                                         ChainAddressRecord owner, ChainAddressRecord hot,
                                         TonTransactionService transactions,
-                                        ChainJdbcRepository repository, TonCenterClient rpc) {
+                                        ChainRepositoryFixture repository, TonCenterClient rpc) {
         String collectionNo = "ton-live-collection-" + UUID.randomUUID();
         BigDecimal amount = new BigDecimal("0.1");
         BigDecimal fee = new BigDecimal("0.005");
-        assertEquals(1, repository.createCollectionRecord(
-                tenantId, custodyAddressId, collectionNo, "TON", "TON",
-                owner.getAddress(), hot.getAddress(), amount, fee, null));
+        assertEquals(
+                1,
+                repository.collectionRecordRepository.create(
+                        tenantId,
+                        custodyAddressId,
+                        collectionNo,
+                        "TON",
+                        "TON",
+                        owner.getAddress(),
+                        hot.getAddress(),
+                        amount,
+                        fee,
+                        null));
         long seqno = rpc.seqno(owner.getAddress());
         String collection = transactions.collectNative(
                 tenantId, collectionNo, owner, hot.getAddress(), amount, "TON collection gate");
@@ -317,12 +358,12 @@ class TonLiveMockJettonFlowIntegrationTest {
     /**
      * 验证 {@code waitForJettonLedger} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void waitForJettonLedger(TonDepositScanner scanner, ChainJdbcRepository repository, String symbol,
+    private static void waitForJettonLedger(TonDepositScanner scanner, ChainRepositoryFixture repository, String symbol,
                                             String accountId, BigDecimal minimum) {
         Instant deadline = Instant.now().plus(FLOW_TIMEOUT);
         while (Instant.now().isBefore(deadline)) {
             scanner.scanAndCredit();
-            if (repository.findLedgerBalance("TON", symbol, accountId)
+            if (repository.ledgerBalanceRepository.find("TON", symbol, accountId)
                     .map(LedgerBalanceRecord::getTotalBalance)
                     .filter(balance -> balance.compareTo(minimum) >= 0)
                     .isPresent()) {
@@ -380,8 +421,7 @@ class TonLiveMockJettonFlowIntegrationTest {
                 insert into token_config(
                     chain, network, symbol, standard, contract_address,
                     decimals, enabled, min_deposit, min_withdraw, collect_enabled, collect_threshold, gas_strategy,
-                    confirmation_required, created_at, updated_at
-                )
+                    confirmation_required, created_at, updated_at)
                 values ('TON','testnet',?,'JETTON',?,6,true,1,1,true,1,
                         'TON_FORWARD_FEE',1,now(),now())
                 on conflict(chain,network,symbol) do update set
@@ -410,8 +450,8 @@ class TonLiveMockJettonFlowIntegrationTest {
     /**
      * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String symbol, String accountId) {
-        return repository.findLedgerBalance("TON", symbol, accountId).orElseThrow();
+    private static LedgerBalanceRecord ledger(ChainRepositoryFixture repository, String symbol, String accountId) {
+        return repository.ledgerBalanceRepository.find("TON", symbol, accountId).orElseThrow();
     }
 
     /**

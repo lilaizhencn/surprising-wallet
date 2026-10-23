@@ -16,7 +16,6 @@ import java.util.Map;
  * <p>任务类型包括扫描（scan）、提现（withdraw）、归集（collection）、转账（transfer）。
  * 开关优先级：全局总开关 > 全局任务开关 > 链级别任务开关。任何一层关闭即视为禁用。</p>
  *
- * @see ChainJdbcRepository
  * @see AssetRuntimeMetadata
  */
 @Service

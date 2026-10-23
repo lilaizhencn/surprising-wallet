@@ -4,16 +4,15 @@ import com.surprising.wallet.chain.model.AptosTransactionRecord;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.math.BigDecimal;
+import java.sql.Connection;
+import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
-
-import java.math.BigDecimal;
-import java.sql.Connection;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -44,14 +43,14 @@ class AptosDatabaseFlowIntegrationTest {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+            ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             AptosKeyService keys = new AptosKeyService(MASTER_SEED);
-            AptosAddressService addresses = new AptosAddressService(keys, repository);
+            AptosAddressService addresses = new AptosAddressService(keys, repository.chainAddressRepository);
             long baseIndex = 1_200_000L + Math.abs(UUID.randomUUID().getLeastSignificantBits() % 100_000L);
 
             ChainAddressRecord userA = addresses.createNativeAddress(5001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userAAfterRestart = new AptosAddressService(
-                    new AptosKeyService(MASTER_SEED), repository)
+                    new AptosKeyService(MASTER_SEED), repository.chainAddressRepository)
                     .createNativeAddress(5001, 0, baseIndex, "DEPOSIT");
             ChainAddressRecord userB = addresses.createNativeAddress(5002, 0, baseIndex + 1, "DEPOSIT");
             assertEquals(userA.getAddress(), userAAfterRestart.getAddress());
@@ -62,21 +61,18 @@ class AptosDatabaseFlowIntegrationTest {
             DepositEvent deposit = new DepositEvent(ChainType.APTOS, "APT", txHash,
                     "0x1", userA.getAddress(), new BigDecimal("100000000"),
                     123L, txHash, 1, null, "{}");
-            assertTrue(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
-            assertFalse(repository.recordAndCreditDeposit(deposit, 0, 1, userA.getAccountId()));
-            assertTrue(repository.freezeLedgerBalance("APTOS", "APT", userA.getAccountId(),
-                    new BigDecimal("20000000")));
-            assertFalse(repository.freezeLedgerBalance("APTOS", "APT", userA.getAccountId(),
-                    new BigDecimal("90000000")));
-            assertTrue(repository.releaseLockedBalance("APTOS", "APT", userA.getAccountId(),
-                    new BigDecimal("20000000")));
+            assertTrue(repository.depositService.recordAndCredit(deposit, 0, 1, userA.getAccountId()));
+            assertFalse(repository.depositService.recordAndCredit(deposit, 0, 1, userA.getAccountId()));
+            assertTrue(repository.ledgerBalanceRepository.freeze("APTOS", "APT", userA.getAccountId(), new BigDecimal("20000000"), null));
+            assertFalse(repository.ledgerBalanceRepository.freeze("APTOS", "APT", userA.getAccountId(), new BigDecimal("90000000"), null));
+            assertTrue(repository.ledgerBalanceRepository.release("APTOS", "APT", userA.getAccountId(), new BigDecimal("20000000"), null));
 
-            long seq0 = repository.reserveAccountSequence("APTOS", userA.getAddress(), 4);
-            long seq1 = repository.reserveAccountSequence("APTOS", userA.getAddress(), 4);
+            long seq0 = repository.accountSequenceRepository.reserve("APTOS", userA.getAddress(), 4);
+            long seq1 = repository.accountSequenceRepository.reserve("APTOS", userA.getAddress(), 4);
             assertEquals(4L, seq0);
             assertEquals(5L, seq1);
 
-            repository.recordAptosTransaction(AptosTransactionRecord.builder()
+            repository.aptosTransactionRepository.upsert(AptosTransactionRecord.builder()
                     .chain("APTOS")
                     .txHash(txHash)
                     .sender("0x1")
@@ -92,7 +88,7 @@ class AptosDatabaseFlowIntegrationTest {
                     .status("CONFIRMED")
                     .rawPayload("{}")
                     .build());
-            repository.recordAptosTransaction(AptosTransactionRecord.builder()
+            repository.aptosTransactionRepository.upsert(AptosTransactionRecord.builder()
                     .chain("APTOS")
                     .txHash(txHash)
                     .sender("0x1")

@@ -1,19 +1,18 @@
 package com.surprising.wallet.coordinator;
 
-import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.chain.evm.Evm7702BatchTransactionService;
 import com.surprising.wallet.chain.evm.Evm7702ReceiptParser;
 import com.surprising.wallet.chain.evm.EvmFeeSupport;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.Evm7702CollectionRepository;
 import com.surprising.wallet.repository.EvmNonceRepository;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
-
-import com.surprising.wallet.repository.Evm7702CollectionRepository;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 协调 EIP-7702 归集批次的事务边界。
@@ -34,7 +33,8 @@ public class Evm7702CollectionCoordinator {
     /**
      * 保存 {@code chainRepository}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final ChainJdbcRepository chainRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final ChainAssetRepository chainAssetRepository;
     private final EvmNonceRepository nonces;
     /**
      * 构造 {@code Evm7702CollectionCoordinator}，初始化该组件运行所需的状态和依赖。
@@ -42,11 +42,13 @@ public class Evm7702CollectionCoordinator {
     public Evm7702CollectionCoordinator(
             Evm7702CollectionRepository repository,
             CustodyRepository custodyRepository,
-            ChainJdbcRepository chainRepository,
+            ChainProfileRepository chainProfileRepository,
+            ChainAssetRepository chainAssetRepository,
             EvmNonceRepository nonces) {
         this.repository = repository;
         this.custodyRepository = custodyRepository;
-        this.chainRepository = chainRepository;
+        this.chainProfileRepository = chainProfileRepository;
+        this.chainAssetRepository = chainAssetRepository;
         this.nonces = nonces;
     }
 
@@ -94,10 +96,10 @@ public class Evm7702CollectionCoordinator {
      */
     private BigDecimal actualFee(
             String chain, BigInteger l2Fee, BigInteger l1Fee, BigInteger operatorFee) {
-        var profile = chainRepository.findProfileByChain(chain)
+        var profile = chainProfileRepository.findAccountByChain(chain)
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain_profile for " + chain));
-        var asset = chainRepository.findAsset(chain, profile.getNativeSymbol())
+        var asset = chainAssetRepository.findActiveDefinition(chain, profile.getNativeSymbol())
                 .orElseThrow(() -> new IllegalStateException(
                         "missing active native chain_asset for " + chain));
         if (!Boolean.TRUE.equals(asset.getNativeAsset()) || asset.getDecimals() == null) {

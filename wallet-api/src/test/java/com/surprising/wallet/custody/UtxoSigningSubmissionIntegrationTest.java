@@ -1,24 +1,28 @@
 package com.surprising.wallet.custody;
 
 import com.surprising.wallet.chain.BlockchainRuntimeService;
+import com.surprising.wallet.chain.model.UtxoSigningTransaction;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.json.JacksonJson;
-import com.surprising.wallet.chain.model.UtxoSigningTransaction;
-import com.surprising.wallet.common.signing.*;
-import com.surprising.wallet.repository.ChainProfileRepository;
-import static com.surprising.wallet.testutil.UtxoSigningTestSupport.*;
 import com.surprising.wallet.common.queue.PgmqClient;
 import com.surprising.wallet.common.queue.WalletQueue;
+import com.surprising.wallet.common.signing.*;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.repository.ChainFeeRateRepository;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.ChainSigningTransactionRepository;
 import com.surprising.wallet.service.UtxoBatchService;
 import com.surprising.wallet.service.UtxoSigningSubmissionService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import com.surprising.wallet.testutil.DepositTestSupport;
+import java.math.BigDecimal;
+import java.util.UUID;
+import java.util.concurrent.*;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.mockito.Mockito;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -28,13 +32,9 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
-import java.math.BigDecimal;
-import java.util.UUID;
-import java.util.concurrent.*;
-import java.util.stream.IntStream;
-
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static com.surprising.wallet.testutil.UtxoSigningTestSupport.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 /** Real PG18 transactions cover initial signing without a second delivery store. */
 @EnabledIfEnvironmentVariable(named = "SW_TEST_CUSTODY_DB_URL", matches = ".+")
@@ -44,7 +44,7 @@ class UtxoSigningSubmissionIntegrationTest {
     private final ObjectMapper json = new ObjectMapper();
     private AnnotationConfigApplicationContext context;
     private JdbcTemplate jdbc;
-    private ChainJdbcRepository repository;
+    private ChainRepositoryFixture repository;
     private ChainSigningTransactionRepository transactions;
     private UtxoSigningSubmissionService submissions;
     private PgmqClient queue;
@@ -72,7 +72,7 @@ class UtxoSigningSubmissionIntegrationTest {
         context = new AnnotationConfigApplicationContext();
         context.register(Transactions.class);
         context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(ds));
-        context.registerBean(ChainJdbcRepository.class, () -> repository);
+        context.registerBean(ChainRepositoryFixture.class, () -> repository);
         context.registerBean(ChainSigningTransactionRepository.class, () -> transactions);
         context.registerBean(ChainProfileRepository.class, () -> new ChainProfileRepository(jdbc));
         context.registerBean(BlockchainRuntimeService.class, () -> runtime);
@@ -82,6 +82,7 @@ class UtxoSigningSubmissionIntegrationTest {
         context.registerBean(ObjectMapper.class, () -> json);
         context.registerBean(UtxoSigningSubmissionService.class);
         context.registerBean(UtxoBatchService.class);
+        repository.register(context);
         context.refresh();
         submissions = context.getBean(UtxoSigningSubmissionService.class);
     }
@@ -199,9 +200,18 @@ class UtxoSigningSubmissionIntegrationTest {
                 insert into custody_gas_account(id, tenant_id, custody_address_id, chain, network, native_symbol)
                 values (?, ?, ?, 'BTC', 'regtest', 'BTC')
                 """, UUID.randomUUID(), TENANT, custody);
-        repository.createTenantWithdrawalOrder(TENANT, "TEST-SUBMIT", 100, "BTC", "BTC", "hot", "user",
-                "destination", new BigDecimal("0.001"), new BigDecimal("0.00002"));
-        repository.updateWithdrawalStatus(TENANT, "BTC", "TEST-SUBMIT", "FROZEN", "hot", null, null);
-        repository.upsertUtxo("BTC", "BTC", "c".repeat(64), 0, "hot", new BigDecimal("0.01"), 1, "block", 6, true);
+        repository.withdrawalOrderRepository.createForTenant(
+                TENANT,
+                "TEST-SUBMIT",
+                100,
+                "BTC",
+                "BTC",
+                "hot",
+                "user",
+                "destination",
+                new BigDecimal("0.001"),
+                new BigDecimal("0.00002"));
+        repository.withdrawalOrderRepository.updateStatus(TENANT, "BTC", "TEST-SUBMIT", "FROZEN", "hot", null, null);
+        repository.utxoRepository.upsert("BTC", "BTC", "c".repeat(64), 0, "hot", new BigDecimal("0.01"), 1, "block", 6, true);
     }
 }

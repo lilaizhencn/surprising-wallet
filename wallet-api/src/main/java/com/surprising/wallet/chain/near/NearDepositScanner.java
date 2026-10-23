@@ -1,19 +1,18 @@
 package com.surprising.wallet.chain.near;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import com.surprising.wallet.chain.model.NearTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.NearTransactionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainScanHeightRepository;
+import com.surprising.wallet.repository.NearTransactionRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.service.DepositService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -23,6 +22,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * NEAR 链充值扫描器，逐块扫描交易中的 Transfer 和 ft_transfer 操作识别充值。
@@ -35,8 +39,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Service
 @RequiredArgsConstructor
-public
-class NearDepositScanner {
+public class NearDepositScanner {
 
     /** 链标识 */
     private static final String CHAIN = "NEAR";
@@ -57,9 +60,13 @@ class NearDepositScanner {
 
     /** NEAR RPC 客户端 */
     private final NearRpcClient rpc;
+    private final ChainScanHeightRepository chainScanHeightRepository;
+    private final NearTransactionRepository nearTransactionRepository;
+    private final DepositService depositService;
+    private final ChainAddressRepository chainAddressRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
 
     /** 扫描互斥锁 */
     private final AtomicBoolean scanning = new AtomicBoolean(false);
@@ -91,7 +98,7 @@ class NearDepositScanner {
         long safeHeight = Math.max(0L, latest - requiredConfirmations + 1L);
         long start = scanStart(profile, safeHeight);
         if (start > safeHeight) {
-            repository.updateScanHeight(CHAIN, SCANNER, latest, safeHeight);
+            chainScanHeightRepository.upsert(CHAIN, SCANNER, latest, safeHeight);
             return List.of();
         }
         long end = Math.min(safeHeight, start + maxBlocksPerRun(profile) - 1L);
@@ -103,10 +110,10 @@ class NearDepositScanner {
             for (long height = start; height <= end; height++) {
                 scanBlock(height, latest, requiredConfirmations,
                         nativeAddresses, tokensByContract, tokenAddresses, events);
-                repository.updateScanHeight(CHAIN, SCANNER, latest, height);
+                chainScanHeightRepository.upsert(CHAIN, SCANNER, latest, height);
             }
         }
-        repository.updateScanHeight(CHAIN, SCANNER, latest, end);
+        chainScanHeightRepository.upsert(CHAIN, SCANNER, latest, end);
         return events;
     }
 
@@ -144,7 +151,7 @@ class NearDepositScanner {
                 DepositEvent event = new DepositEvent(ChainType.NEAR, SYMBOL, transfer.txHash(),
                         transfer.sender(), address.getAddress(), transfer.amount(), transfer.blockHeight(),
                         transfer.txHash(), transfer.confirmations(), null, transfer.rawPayload());
-                repository.recordNearTransaction(NearTransactionRecord.builder()
+                nearTransactionRepository.upsert(NearTransactionRecord.builder()
                         .chain(CHAIN)
                         .txHash(transfer.txHash())
                         .actionIndex((long) transfer.actionIndex())
@@ -157,8 +164,7 @@ class NearDepositScanner {
                         .status(transfer.confirmations() >= requiredConfirmations ? "CONFIRMED" : "CONFIRMING")
                         .rawPayload(transfer.rawPayload())
                         .build());
-                repository.recordAndCreditDeposit(event, transfer.actionIndex(), requiredConfirmations,
-                        address.getAccountId());
+                depositService.recordAndCredit(event, transfer.actionIndex(), requiredConfirmations, address.getAccountId());
                 events.add(event);
             }
             for (TokenTransfer transfer : tokenTransfers(chunk, tokensByContract, height, latest)) {
@@ -173,7 +179,7 @@ class NearDepositScanner {
                 DepositEvent event = new DepositEvent(ChainType.NEAR, transfer.symbol(), transfer.txHash(),
                         transfer.sender(), address.getAddress(), transfer.amount(), transfer.blockHeight(),
                         transfer.txHash(), transfer.confirmations(), transfer.contractId(), transfer.rawPayload());
-                repository.recordNearTransaction(NearTransactionRecord.builder()
+                nearTransactionRepository.upsert(NearTransactionRecord.builder()
                         .chain(CHAIN)
                         .txHash(transfer.txHash())
                         .actionIndex((long) transfer.actionIndex())
@@ -186,8 +192,7 @@ class NearDepositScanner {
                         .status(transfer.confirmations() >= requiredConfirmations ? "CONFIRMED" : "CONFIRMING")
                         .rawPayload(transfer.rawPayload())
                         .build());
-                repository.recordAndCreditDeposit(event, transfer.actionIndex(), requiredConfirmations,
-                        address.getAccountId());
+                depositService.recordAndCredit(event, transfer.actionIndex(), requiredConfirmations, address.getAccountId());
                 events.add(event);
             }
         }
@@ -273,7 +278,7 @@ class NearDepositScanner {
      */
     private Map<String, ChainAddressRecord> trackedNativeDepositAddresses() {
         Map<String, ChainAddressRecord> addresses = new HashMap<>();
-        for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, SYMBOL)) {
+        for (ChainAddressRecord address : chainAddressRepository.listEnabled(CHAIN, SYMBOL)) {
             if ("DEPOSIT".equals(address.getWalletRole())) {
                 addresses.put(normalize(address.getAddress()), address);
             }
@@ -285,7 +290,7 @@ class NearDepositScanner {
      */
     private Map<String, TokenDefinition> tokensByContract() {
         Map<String, TokenDefinition> tokens = new HashMap<>();
-        for (TokenDefinition token : repository.listTokens(CHAIN)) {
+        for (TokenDefinition token : chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of())) {
             if (token.getContractAddress() != null && Boolean.TRUE.equals(token.getActive())) {
                 tokens.put(normalize(token.getContractAddress()), token);
             }
@@ -301,7 +306,7 @@ class NearDepositScanner {
         Map<String, Map<String, ChainAddressRecord>> addresses = new HashMap<>();
         for (TokenDefinition token : tokensByContract.values()) {
             Map<String, ChainAddressRecord> byReceiver = new HashMap<>();
-            for (ChainAddressRecord address : repository.listChainAddresses(CHAIN, token.getSymbol())) {
+            for (ChainAddressRecord address : chainAddressRepository.listEnabled(CHAIN, token.getSymbol())) {
                 if ("DEPOSIT".equals(address.getWalletRole())) {
                     byReceiver.put(normalize(address.getAddress()), address);
                 }
@@ -316,7 +321,7 @@ class NearDepositScanner {
      * 扫描或观察 {@code scanStart} 对应的链上状态，并转换为业务可用结果。
      */
     private long scanStart(AccountChainProfile profile, long safeHeight) {
-        return repository.findScanSafeHeight(CHAIN, SCANNER)
+        return chainScanHeightRepository.findSafeHeight(CHAIN, SCANNER)
                 .map(height -> Math.min(height + 1L, safeHeight + 1L))
                 .orElseGet(() -> {
                     Long configured = profile.getScanStartHeight();
@@ -351,7 +356,7 @@ class NearDepositScanner {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile() {
-        return repository.findProfileByChain(CHAIN)
+        return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
     /**

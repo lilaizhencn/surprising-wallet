@@ -1,17 +1,19 @@
 package com.surprising.wallet.chain.monero;
 
+import com.surprising.wallet.chain.model.MoneroTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.MoneroTransactionRecord;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainScanHeightRepository;
+import com.surprising.wallet.repository.MoneroTransactionRepository;
+import com.surprising.wallet.service.DepositService;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 /**
  * Monero 链充值扫描器，通过 monero-wallet-rpc 的 get_transfers 接口获取入账记录。
@@ -24,8 +26,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
-public
-class MoneroDepositScanner {
+public class MoneroDepositScanner {
 
     /** 链标识 */
     private static final String CHAIN = MoneroWalletRpcClient.CHAIN;
@@ -38,9 +39,12 @@ class MoneroDepositScanner {
 
     /** Monero 钱包 RPC 客户端 */
     private final MoneroWalletRpcClient walletRpcClient;
+    private final ChainScanHeightRepository chainScanHeightRepository;
+    private final ChainAddressRepository chainAddressRepository;
+    private final MoneroTransactionRepository moneroTransactionRepository;
+    private final DepositService depositService;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
+
     /**
      * 扫描或观察 {@code scanAndCredit} 对应的链上状态，并转换为业务可用结果。
      */
@@ -51,12 +55,12 @@ class MoneroDepositScanner {
         int requiredConfirmations = profile.getDepositConfirmations() == null
                 ? 1
                 : Math.max(1, profile.getDepositConfirmations());
-        long minHeight = repository.findScanSafeHeight(CHAIN, SCANNER_NAME)
+        long minHeight = chainScanHeightRepository.findSafeHeight(CHAIN, SCANNER_NAME)
                 .map(height -> Math.max(0L, height - 20L))
                 .orElseGet(() -> profile.getScanStartHeight() == null
                         ? 0L
                         : Math.max(0L, profile.getScanStartHeight() - 1L));
-        Map<String, ChainAddressRecord> addresses = repository.listChainAddresses(CHAIN, SYMBOL).stream()
+        Map<String, ChainAddressRecord> addresses = chainAddressRepository.listEnabled(CHAIN, SYMBOL).stream()
                 .collect(Collectors.toMap(ChainAddressRecord::getAddress, address -> address, (left, right) -> left));
         Map<String, Integer> seenByTx = new HashMap<>();
         long bestHeight = minHeight;
@@ -69,7 +73,7 @@ class MoneroDepositScanner {
             }
             int ordinal = seenByTx.merge(transfer.txHash(), 1, Integer::sum) - 1;
             long logIndex = (((long) transfer.subaddressIndex()) << 32) | (ordinal & 0xffffffffL);
-            repository.recordMoneroTransaction(MoneroTransactionRecord.builder()
+            moneroTransactionRepository.upsert(MoneroTransactionRecord.builder()
                     .chain(CHAIN)
                     .txHash(transfer.txHash())
                     .direction("IN")
@@ -84,7 +88,7 @@ class MoneroDepositScanner {
                     .status(transfer.confirmations() >= requiredConfirmations ? "CONFIRMED" : "CONFIRMING")
                     .rawPayload(transfer.rawPayload())
                     .build());
-            repository.recordAndCreditDeposit(new DepositEvent(
+            depositService.recordAndCredit(new DepositEvent(
                             ChainType.XMR,
                             SYMBOL,
                             transfer.txHash(),
@@ -95,16 +99,13 @@ class MoneroDepositScanner {
                             transfer.txHash(),
                             transfer.confirmations(),
                             null,
-                            transfer.rawPayload()),
-                    logIndex,
-                    requiredConfirmations,
-                    address.getAccountId());
+                            transfer.rawPayload()), logIndex, requiredConfirmations, address.getAccountId());
         }
 
         long bestObservedHeight = Math.max(bestHeight, walletHeight);
         if (bestObservedHeight > 0) {
             long safeHeight = Math.max(0L, Math.min(bestObservedHeight, walletHeight) - requiredConfirmations);
-            repository.updateScanHeight(CHAIN, SCANNER_NAME, bestObservedHeight, safeHeight);
+            chainScanHeightRepository.upsert(CHAIN, SCANNER_NAME, bestObservedHeight, safeHeight);
         }
     }
 }

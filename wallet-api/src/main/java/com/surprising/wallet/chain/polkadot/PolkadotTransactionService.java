@@ -1,23 +1,23 @@
 package com.surprising.wallet.chain.polkadot;
 
-import com.surprising.wallet.service.WithdrawalSettlementService;
-
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.repository.CollectionRecordRepository;
+import com.surprising.wallet.repository.WalletSystemConfigRepository;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
-import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.service.HotWalletAddressService;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
+import com.surprising.wallet.service.WalletRuntimeConfigService;
+import com.surprising.wallet.service.WithdrawalSettlementService;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.HexFormat;
 import java.util.Optional;
+import java.util.UUID;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 /**
  * Polkadot 链交易服务，负责通过运行时服务构造和广播交易。
@@ -53,9 +53,9 @@ public class PolkadotTransactionService {
 
     /** Polkadot 密钥服务 */
     private final PolkadotKeyService keyService;
+    private final CollectionRecordRepository collectionRecordRepository;
+    private final WalletSystemConfigRepository walletSystemConfigRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
 
     /** 热钱包地址服务（用于 Gas 补充） */
     private final HotWalletAddressService hotWalletAddressService;
@@ -163,9 +163,9 @@ public class PolkadotTransactionService {
      */
     public boolean confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
                                      String collectionNo, String assetSymbol) {
-        String txHash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
+        String txHash = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         if (transactionFinalized(assetSymbol, txHash, confirmationLookback(profile))) {
-            return repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, txHash) == 1;
+            return collectionRecordRepository.markConfirmed(tenantId, CHAIN, collectionNo, txHash) == 1;
         }
         return false;
     }
@@ -186,21 +186,20 @@ public class PolkadotTransactionService {
      * 处理 {@code collect} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
      */
     private String collect(java.util.UUID tenantId, String collectionNo, TxSubmitter submitter) {
-        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
+        Optional<String> existing = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
-        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
+        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("DOT collection is not retryable"));
         }
         try {
             String txHash = submitter.submit();
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
             return txHash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
-                    "FAILED", null, e.getMessage(), null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -240,7 +239,7 @@ public class PolkadotTransactionService {
      * 执行 {@code systemPlanck} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private BigInteger systemPlanck(String key, BigInteger fallback) {
-        return repository.systemValue(key)
+        return walletSystemConfigRepository.find(key).filter(WalletSystemConfigRepository.Setting::enabled).map(WalletSystemConfigRepository.Setting::value)
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
                 .map(BigInteger::new)

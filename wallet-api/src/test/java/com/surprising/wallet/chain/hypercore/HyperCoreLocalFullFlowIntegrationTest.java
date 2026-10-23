@@ -1,28 +1,16 @@
 package com.surprising.wallet.chain.hypercore;
 
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import com.surprising.wallet.chain.WalletKeyTestFixture;
+import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
-import com.surprising.wallet.chain.WalletKeyTestFixture;
-import com.surprising.wallet.service.AccountSecp256k1KeyService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.repository.HyperCoreRepository;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
-import org.web3j.crypto.Keys;
-import org.web3j.crypto.Sign;
-
+import com.surprising.wallet.service.AccountSecp256k1KeyService;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.InetSocketAddress;
@@ -37,7 +25,18 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.web3j.crypto.Keys;
+import org.web3j.crypto.Sign;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -76,22 +75,22 @@ class HyperCoreLocalFullFlowIntegrationTest {
                 required("HYPERCORE_DB_USER"),
                 System.getenv().getOrDefault("HYPERCORE_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        ChainJdbcRepository chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
-        HyperCoreRepository hyperCoreRepository = new HyperCoreRepository(jdbc, chainRepository);
+        ChainRepositoryFixture chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        HyperCoreRepository hyperCoreRepository = new HyperCoreRepository(jdbc, chainRepository.depositService);
         UUID tenantId = ensureTenant(jdbc);
-        AccountChainProfile profile = chainRepository.findProfileByChain(CHAIN).orElseThrow();
+        AccountChainProfile profile = chainRepository.chainProfileRepository.findAccountByChain(CHAIN).orElseThrow();
         AccountSecp256k1KeyService keys =
                 new AccountSecp256k1KeyService(WalletKeyTestFixture.provider());
 
         try (FakeHyperCoreApi api = new FakeHyperCoreApi()) {
             HyperCoreApiClient client = new HyperCoreApiClient(JSON, profiles("HYPERCORE"), nodes("HYPERCORE", api.baseUrl()));
             HyperCoreDepositScanner scanner = new HyperCoreDepositScanner(
-                    client, hyperCoreRepository, chainRepository);
+                    client, hyperCoreRepository, chainRepository.chainAddressRepository);
             HyperCoreTransactionService transactions = new HyperCoreTransactionService(client,
                     new HyperCoreSigner(),
                     hyperCoreRepository,
-                    chainRepository,
-                    keys,
+                    chainRepository.collectionRecordRepository,
+                    chainRepository.accountSequenceRepository, keys,
                     com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
 
             ChainAddressRecord userUsdc = address(keys, profile, tenantId, USDC, 100_001L, "DEPOSIT");
@@ -100,7 +99,7 @@ class HyperCoreLocalFullFlowIntegrationTest {
             ChainAddressRecord hotHype = address(keys, profile, tenantId, HYPE, 0L, "DEPOSIT");
             ChainAddressRecord external = address(keys, profile, tenantId, HYPE, 100_002L, "EXTERNAL");
             for (ChainAddressRecord value : List.of(userUsdc, userHype, hotUsdc, hotHype)) {
-                assertEquals(1, chainRepository.upsertChainAddress(value));
+                assertEquals(1, chainRepository.chainAddressRepository.upsert(value));
             }
             UUID custodyAddressId = attachCustodyAddress(jdbc, tenantId, userUsdc);
 
@@ -118,7 +117,10 @@ class HyperCoreLocalFullFlowIntegrationTest {
             assertEquals(2, jdbc.queryForObject(
                     "select count(*) from deposit_record where chain='HYPERCORE'", Integer.class));
 
-            TokenDefinition hype = chainRepository.findToken(CHAIN, HYPE).orElseThrow();
+            TokenDefinition hype = chainRepository.chainProfileRepository.findAccountByChain(CHAIN).flatMap( configuredNetworkProfile -> chainRepository.tokenConfigRepository.findDefinition(
+                    CHAIN,
+                    configuredNetworkProfile.getNetwork(),
+                    HYPE)).orElseThrow();
             String runId = "HC-LOCAL-" + System.currentTimeMillis();
             withdraw(tenantId, chainRepository, transactions, api, profile,
                     runId + "-USDC-WD", userUsdc, external, null, new BigDecimal("20"));
@@ -162,25 +164,33 @@ class HyperCoreLocalFullFlowIntegrationTest {
     /**
      * 验证 {@code withdraw} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void withdraw(UUID tenantId, ChainJdbcRepository repository,
+    private static void withdraw(UUID tenantId, ChainRepositoryFixture repository,
                                  HyperCoreTransactionService transactions, FakeHyperCoreApi api,
                                  AccountChainProfile profile, String orderNo,
                                  ChainAddressRecord from, ChainAddressRecord to,
                                  TokenDefinition token, BigDecimal amount) {
         String symbol = token == null ? USDC : token.getSymbol();
-        assertEquals(1, repository.createTenantWithdrawalOrder(
-                tenantId, orderNo, from.getUserId(), CHAIN, symbol,
-                from.getAddress(), from.getAccountId(), to.getAddress(), amount, BigDecimal.ZERO));
-        assertTrue(repository.freezeLedgerBalance(tenantId, CHAIN, symbol, from.getAccountId(), amount));
-        assertEquals(1, repository.updateWithdrawalStatus(
-                tenantId, CHAIN, orderNo, "FROZEN", from.getAddress(), null, null));
-        assertEquals(1, repository.claimWithdrawalSigning(tenantId, CHAIN, orderNo, from.getAddress()));
+        assertEquals(
+                1,
+                repository.withdrawalOrderRepository.createForTenant(
+                        tenantId,
+                        orderNo,
+                        from.getUserId(),
+                        CHAIN,
+                        symbol,
+                        from.getAddress(),
+                        from.getAccountId(),
+                        to.getAddress(),
+                        amount,
+                        BigDecimal.ZERO));
+        assertTrue(repository.ledgerBalanceRepository.freeze(CHAIN, symbol, from.getAccountId(), amount, tenantId));
+        assertEquals(1, repository.withdrawalOrderRepository.updateStatus(tenantId, CHAIN, orderNo, "FROZEN", from.getAddress(), null, null));
+        assertEquals(1, repository.withdrawalClaimService.claim(tenantId, CHAIN, orderNo, from.getAddress()));
         api.useSource(from.getAddress());
         String actionId = token == null
                 ? transactions.sendUsd(profile, from, to.getAddress(), amount)
                 : transactions.sendSpot(profile, from, token, to.getAddress(), amount);
-        assertEquals(1, repository.markWithdrawalSent(
-                tenantId, CHAIN, orderNo, from.getAddress(), actionId));
+        assertEquals(1, repository.withdrawalOrderRepository.markSent(tenantId, CHAIN, orderNo, from.getAddress(), actionId));
         assertTrue(transactions.confirmWithdrawal(
                 tenantId, orderNo, actionId, symbol, from.getAccountId(), amount));
     }
@@ -189,22 +199,31 @@ class HyperCoreLocalFullFlowIntegrationTest {
      * 验证 {@code collect} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private static void collect(UUID tenantId, UUID custodyAddressId,
-                                ChainJdbcRepository repository,
+                                ChainRepositoryFixture repository,
                                 HyperCoreTransactionService transactions, FakeHyperCoreApi api,
                                 AccountChainProfile profile, String collectionNo,
                                 ChainAddressRecord from, ChainAddressRecord hot,
                                 TokenDefinition token, BigDecimal amount) {
         String symbol = token == null ? USDC : token.getSymbol();
-        assertEquals(1, repository.createCollectionRecord(
-                tenantId, custodyAddressId, collectionNo, CHAIN, symbol,
-                from.getAddress(), hot.getAddress(), amount, BigDecimal.ZERO, null));
-        assertEquals(1, repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null));
+        assertEquals(
+                1,
+                repository.collectionRecordRepository.create(
+                        tenantId,
+                        custodyAddressId,
+                        collectionNo,
+                        CHAIN,
+                        symbol,
+                        from.getAddress(),
+                        hot.getAddress(),
+                        amount,
+                        BigDecimal.ZERO,
+                        null));
+        assertEquals(1, repository.collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null));
         api.useSource(from.getAddress());
         String actionId = token == null
                 ? transactions.sendUsd(profile, from, hot.getAddress(), amount)
                 : transactions.sendSpot(profile, from, token, hot.getAddress(), amount);
-        assertEquals(1, repository.updateCollectionStatus(
-                tenantId, CHAIN, collectionNo, "SENT", actionId, null, null));
+        assertEquals(1, repository.collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", actionId, null, null));
         assertTrue(transactions.confirmCollection(tenantId, collectionNo, actionId));
     }
 
@@ -213,7 +232,7 @@ class HyperCoreLocalFullFlowIntegrationTest {
      */
     private static void assertConcurrentNonceReservations(
             UUID tenantId, DriverManagerDataSource dataSource, JdbcTemplate jdbc,
-            ChainJdbcRepository chainRepository, HyperCoreRepository hyperCoreRepository,
+            ChainRepositoryFixture chainRepository, HyperCoreRepository hyperCoreRepository,
             HyperCoreTransactionService transactions, FakeHyperCoreApi api,
             AccountSecp256k1KeyService keys, AccountChainProfile profile, TokenDefinition hype) throws Exception {
         ChainAddressRecord source = address(keys, profile, tenantId, HYPE, 200_001L, "EXTERNAL");
@@ -242,18 +261,18 @@ class HyperCoreLocalFullFlowIntegrationTest {
         assertEquals(32, jdbc.queryForObject("select count(*) from hypercore_action_record "
                 + "where from_address=?", Integer.class, source.getAddress()));
         assertFalse(hyperCoreRepository.tokenNameBySymbol(profile.getNetwork(), HYPE).isEmpty());
-        assertFalse(chainRepository.findProfileByChain(CHAIN).isEmpty());
+        assertFalse(chainRepository.chainProfileRepository.findAccountByChain(CHAIN).isEmpty());
     }
 
     /**
      * 验证 {@code assertConcurrentFirstSnapshotCreditsOnce} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private static void assertConcurrentFirstSnapshotCreditsOnce(
-            UUID tenantId, DriverManagerDataSource dataSource, JdbcTemplate jdbc, ChainJdbcRepository chainRepository,
+            UUID tenantId, DriverManagerDataSource dataSource, JdbcTemplate jdbc, ChainRepositoryFixture chainRepository,
             HyperCoreRepository hyperCoreRepository, AccountSecp256k1KeyService keys,
             AccountChainProfile profile) throws Exception {
         ChainAddressRecord address = address(keys, profile, tenantId, HYPE, 300_001L, "DEPOSIT");
-        chainRepository.upsertChainAddress(address);
+        chainRepository.chainAddressRepository.upsert(address);
         attachCustodyAddress(jdbc, tenantId, address);
         TransactionTemplate transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         ExecutorService workers = Executors.newFixedThreadPool(8);
@@ -343,9 +362,9 @@ class HyperCoreLocalFullFlowIntegrationTest {
     /**
      * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String symbol,
+    private static LedgerBalanceRecord ledger(ChainRepositoryFixture repository, String symbol,
                                                ChainAddressRecord address) {
-        return repository.findLedgerBalance(CHAIN, symbol, address.getAccountId()).orElseThrow();
+        return repository.ledgerBalanceRepository.find(CHAIN, symbol, address.getAccountId()).orElseThrow();
     }
 
     /**

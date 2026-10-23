@@ -1,16 +1,23 @@
 package com.surprising.wallet.chain.solana;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.ObjectMapper;
+import com.surprising.wallet.chain.evm.EvmDepositScanner;
+import com.surprising.wallet.chain.evm.EvmLogScanner;
+import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.chain.evm.EvmDepositScanner;
-import com.surprising.wallet.chain.evm.EvmLogScanner;
-import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import org.bitcoinj.crypto.ECKey;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
@@ -38,17 +45,9 @@ import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.utils.Numeric;
+import tools.jackson.databind.ObjectMapper;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -77,7 +76,7 @@ class CodexLiveUserFundingTest {
                 "set -Dcodex.live.user-funding=true to broadcast funded testnet transactions");
 
         JdbcTemplate jdbc = jdbc();
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         long userId = userId(jdbc, USER_EMAIL);
         StringBuilder report = new StringBuilder();
         report.append("Codex live funding report\n");
@@ -103,7 +102,7 @@ class CodexLiveUserFundingTest {
                 "set -Dcodex.live.user-scan=true to scan the known live deposit blocks");
 
         JdbcTemplate jdbc = jdbc();
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         StringBuilder report = new StringBuilder();
         report.append("Codex live scan report\n");
         scanEvmBlock(jdbc, repository, ChainType.ETH,
@@ -113,8 +112,18 @@ class CodexLiveUserFundingTest {
 
         String seed = env("SW_ED25519_SEED", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
         SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(), profiles("SOLANA"), nodes("SOLANA", rpcUrl(jdbc, "SOLANA", "devnet")));
-        SolanaAddressService addresses = new SolanaAddressService(new SolanaKeyService(seed), repository);
-        SolanaDepositScanner solanaScanner = new SolanaDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc), addresses);
+        SolanaAddressService addresses = new SolanaAddressService(new SolanaKeyService(seed), repository.chainAddressRepository);
+        SolanaDepositScanner solanaScanner = new SolanaDepositScanner(
+                rpc,
+                repository.chainAddressRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.chainScanHeightRepository,
+                repository.solanaTransactionRepository,
+                repository.depositService,
+                repository.depositRecordRepository,
+                RuntimeTestSupport.database(jdbc),
+                addresses);
         var solanaEvents = solanaScanner.scanAndCredit();
         report.append("SOLANA_EVENTS=").append(solanaEvents.size()).append('\n');
 
@@ -127,12 +136,17 @@ class CodexLiveUserFundingTest {
     /**
      * 验证 {@code fundEth} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private void fundEth(JdbcTemplate jdbc, ChainJdbcRepository repository, long userId, StringBuilder report)
+    private void fundEth(JdbcTemplate jdbc, ChainRepositoryFixture repository, long userId, StringBuilder report)
             throws Exception {
-        AccountChainProfile profile = repository.findProfileByChain("ETH").orElseThrow();
+        AccountChainProfile profile = repository.chainProfileRepository.findAccountByChain("ETH").orElseThrow();
         String rpcUrl = rpcUrl(jdbc, "ETH", profile.getNetwork());
-        ChainAddressRecord hot = repository.listDefaultHotAddressCandidates("ETH", "ETH").getFirst();
-        ChainAddressRecord user = repository.findChainAddress("ETH", "ETH", userId, 0, 0, "DEPOSIT").orElseThrow();
+        ChainAddressRecord hot = repository.chainAddressRepository.listDefaultHot(
+                "ETH",
+                "ETH",
+                HotWalletRules.DEFAULT_HOT_USER_ID,
+                HotWalletRules.DEFAULT_HOT_BIZ,
+                HotWalletRules.DEFAULT_HOT_WALLET_ROLE).getFirst();
+        ChainAddressRecord user = repository.chainAddressRepository.find("ETH", "ETH", userId, 0, 0, "DEPOSIT").orElseThrow();
         Credentials hotCredentials = credentials(profile, hot);
         Credentials external = Credentials.create(Keys.createEcKeyPair());
 
@@ -158,12 +172,17 @@ class CodexLiveUserFundingTest {
     /**
      * 验证 {@code fundBaseUsdc} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private void fundBaseUsdc(JdbcTemplate jdbc, ChainJdbcRepository repository, long userId, StringBuilder report)
+    private void fundBaseUsdc(JdbcTemplate jdbc, ChainRepositoryFixture repository, long userId, StringBuilder report)
             throws Exception {
-        AccountChainProfile profile = repository.findProfileByChain("BASE").orElseThrow();
+        AccountChainProfile profile = repository.chainProfileRepository.findAccountByChain("BASE").orElseThrow();
         String rpcUrl = rpcUrl(jdbc, "BASE", profile.getNetwork());
-        ChainAddressRecord hot = repository.listDefaultHotAddressCandidates("BASE", "ETH_BASE").getFirst();
-        ChainAddressRecord user = repository.findChainAddress("BASE", "USDC", userId, 0, 0, "DEPOSIT").orElseThrow();
+        ChainAddressRecord hot = repository.chainAddressRepository.listDefaultHot(
+                "BASE",
+                "ETH_BASE",
+                HotWalletRules.DEFAULT_HOT_USER_ID,
+                HotWalletRules.DEFAULT_HOT_BIZ,
+                HotWalletRules.DEFAULT_HOT_WALLET_ROLE).getFirst();
+        ChainAddressRecord user = repository.chainAddressRepository.find("BASE", "USDC", userId, 0, 0, "DEPOSIT").orElseThrow();
         Credentials hotCredentials = credentials(profile, hot);
         Credentials external = Credentials.create(Keys.createEcKeyPair());
 
@@ -194,21 +213,30 @@ class CodexLiveUserFundingTest {
     /**
      * 验证 {@code fundSolana} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private void fundSolana(JdbcTemplate jdbc, ChainJdbcRepository repository, long userId, StringBuilder report)
+    private void fundSolana(JdbcTemplate jdbc, ChainRepositoryFixture repository, long userId, StringBuilder report)
             throws Exception {
         String seed = env("SW_ED25519_SEED", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
         String rpcUrl = rpcUrl(jdbc, "SOLANA", "devnet");
         SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(), profiles("SOLANA"), nodes("SOLANA", rpcUrl));
         SolanaKeyService keys = new SolanaKeyService(seed);
-        SolanaAddressService addresses = new SolanaAddressService(keys, repository);
-        SolanaTransactionService transactions = new SolanaTransactionService(rpc,
+        SolanaAddressService addresses = new SolanaAddressService(keys, repository.chainAddressRepository);
+        SolanaTransactionService transactions = new SolanaTransactionService(
+                rpc,
                 keys,
                 addresses,
-                repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
+                repository.withdrawalOrderRepository,
+                repository.ledgerBalanceRepository,
+                repository.withdrawalClaimService,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.collectionRecordRepository,
+                repository.chainAddressRepository,
+                repository.solanaTransactionRepository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc),
+                RuntimeTestSupport.database(jdbc));
         Account hot = keys.account(0, 0, 0);
         Account external = keys.account(99_000_000L + Math.abs(System.currentTimeMillis() % 100_000L));
-        ChainAddressRecord userSol = repository.findChainAddress("SOLANA", "SOL", userId, 0, 0, "DEPOSIT")
+        ChainAddressRecord userSol = repository.chainAddressRepository.find("SOLANA", "SOL", userId, 0, 0, "DEPOSIT")
                 .orElseThrow();
 
         String hotToExternal = sendSol(rpc, hot, external.getPublicKeyBase58(), 30_000_000L);
@@ -232,9 +260,9 @@ class CodexLiveUserFundingTest {
     /**
      * 验证 {@code scanEvmBlock} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private void scanEvmBlock(JdbcTemplate jdbc, ChainJdbcRepository repository, ChainType chainType,
+    private void scanEvmBlock(JdbcTemplate jdbc, ChainRepositoryFixture repository, ChainType chainType,
                               long blockHeight, StringBuilder report) throws Exception {
-        AccountChainProfile profile = repository.findProfileByChain(chainType.name()).orElseThrow();
+        AccountChainProfile profile = repository.chainProfileRepository.findAccountByChain(chainType.name()).orElseThrow();
         EvmDepositScanner scanner = com.surprising.wallet.testutil.EvmScanTestSupport.scanner(jdbc, chainType,
                 rpcUrl(jdbc, chainType.name(), profile.getNetwork()), profile.getDepositConfirmations());
         var nativeEvents = scanner.scanAndCreditNative(chainType, blockHeight);

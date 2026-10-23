@@ -1,16 +1,14 @@
 package com.surprising.wallet.chain.polkadot;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.ChainAsset;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.repository.UtxoRepository;
 import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Test;
-
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -18,6 +16,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -38,7 +39,15 @@ class PolkadotDepositScannerTest {
                 95, 3, null, "{}"));
         FakeRepository repository = new FakeRepository();
         repository.address = "AddrMixed";
-        PolkadotDepositScanner scanner = new PolkadotDepositScanner(runtimeClient, repository, RuntimeTestSupport.enabled());
+        PolkadotDepositScanner scanner = new PolkadotDepositScanner(
+                runtimeClient,
+                repository.chainScanHeightRepository,
+                repository.depositService,
+                repository.chainAddressRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.chainAssetRepository,
+                RuntimeTestSupport.enabled());
 
         List<DepositEvent> events = scanner.scanAndCredit();
 
@@ -55,7 +64,15 @@ class PolkadotDepositScannerTest {
     void assetHubDepositCreditsTokenAccountWhenAddressMatchesNativeAccount() {
         FakeRuntimeClient runtimeClient = new FakeRuntimeClient();
         FakeRepository repository = new FakeRepository();
-        PolkadotDepositScanner scanner = new PolkadotDepositScanner(runtimeClient, repository, RuntimeTestSupport.enabled());
+        PolkadotDepositScanner scanner = new PolkadotDepositScanner(
+                runtimeClient,
+                repository.chainScanHeightRepository,
+                repository.depositService,
+                repository.chainAddressRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.chainAssetRepository,
+                RuntimeTestSupport.enabled());
 
         List<DepositEvent> events = scanner.scanAndCredit();
 
@@ -130,7 +147,7 @@ class PolkadotDepositScannerTest {
     /**
      * 测试替身 {@code FakeRepository}，用于隔离外部依赖并验证调用参数和状态变化。
      */
-    private static final class FakeRepository extends ChainJdbcRepository {
+    private static final class FakeRepository extends ChainRepositoryFixture {
         /**
          * 保存 {@code creditedAccounts}，用于承载当前测试夹具的配置或运行数据。
          */
@@ -144,88 +161,41 @@ class PolkadotDepositScannerTest {
          * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         FakeRepository() {
-            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
+            super();
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                return Optional.of(AccountChainProfile.builder().chain("DOT").network("westend").depositConfirmations(1).scanBatchSize(10).build());
+            }).when(chainProfileRepository).findAccountByChain(ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_scannerName = invocation.getArgument(1);
+                return Optional.empty();
+            }).when(chainScanHeightRepository).findSafeHeight(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                return List.of(TokenDefinition.builder().chain("DOT").symbol("USDC").contractAddress("1984").decimals(6).active(true).build());
+            }).when(tokenConfigRepository).listDefinitions(ArgumentMatchers.<String>any(), ArgumentMatchers.any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_symbol = invocation.getArgument(1);
+                return Optional.of(ChainAsset.builder().chain("DOT").symbol("DOT").decimals(12).active(true).build());
+            }).when(chainAssetRepository).findActiveDefinition(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_assetSymbol = invocation.getArgument(1);
+                String accountId = "DOT".equals(arg_assetSymbol) ? "dot-account" : "usdc-account";
+                return List.of(ChainAddressRecord.builder().chain("DOT").assetSymbol(arg_assetSymbol).accountId(accountId).address(address).walletRole("DEPOSIT").enabled(true).build());
+            }).when(chainAddressRepository).listEnabled(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                DepositEvent arg_event = invocation.getArgument(0);
+                long arg_logIndex = invocation.getArgument(1);
+                int arg_requiredConfirmations = invocation.getArgument(2);
+                String arg_accountId = invocation.getArgument(3);
+                creditedAccounts.add(arg_accountId);
+                return true;
+            }).when(depositService).recordAndCredit(ArgumentMatchers.<DepositEvent>any(), ArgumentMatchers.anyLong(), ArgumentMatchers.anyInt(), ArgumentMatchers.<String>any());
         }
 
-        /**
-         * 验证 {@code findProfileByChain} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<AccountChainProfile> findProfileByChain(String chain) {
-            return Optional.of(AccountChainProfile.builder()
-                    .chain("DOT")
-                    .network("westend")
-                    .depositConfirmations(1)
-                    .scanBatchSize(10)
-                    .build());
-        }
 
-        /**
-         * 验证 {@code findScanSafeHeight} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<Long> findScanSafeHeight(String chain, String scannerName) {
-            return Optional.empty();
-        }
-
-        /**
-         * 验证 {@code updateScanHeight} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public void updateScanHeight(String chain, String scannerName, long bestHeight, long safeHeight) {
-        }
-
-        /**
-         * 验证 {@code listTokens} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<TokenDefinition> listTokens(String chain) {
-            return List.of(TokenDefinition.builder()
-                    .chain("DOT")
-                    .symbol("USDC")
-                    .contractAddress("1984")
-                    .decimals(6)
-                    .active(true)
-                    .build());
-        }
-
-        /**
-         * 验证 {@code findAsset} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<ChainAsset> findAsset(String chain, String symbol) {
-            return Optional.of(ChainAsset.builder()
-                    .chain("DOT")
-                    .symbol("DOT")
-                    .decimals(12)
-                    .active(true)
-                    .build());
-        }
-
-        /**
-         * 验证 {@code listChainAddresses} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<ChainAddressRecord> listChainAddresses(String chain, String assetSymbol) {
-            String accountId = "DOT".equals(assetSymbol) ? "dot-account" : "usdc-account";
-            return List.of(ChainAddressRecord.builder()
-                    .chain("DOT")
-                    .assetSymbol(assetSymbol)
-                    .accountId(accountId)
-                    .address(address)
-                    .walletRole("DEPOSIT")
-                    .enabled(true)
-                    .build());
-        }
-
-        /**
-         * 验证 {@code recordAndCreditDeposit} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public boolean recordAndCreditDeposit(DepositEvent event, long logIndex,
-                                              int requiredConfirmations, String accountId) {
-            creditedAccounts.add(accountId);
-            return true;
-        }
     }
 }

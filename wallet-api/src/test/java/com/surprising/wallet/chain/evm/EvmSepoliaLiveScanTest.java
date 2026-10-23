@@ -1,18 +1,16 @@
 package com.surprising.wallet.chain.evm;
 
 import com.surprising.wallet.common.chain.ChainType;
-
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -43,7 +41,7 @@ class EvmSepoliaLiveScanTest {
                 "set -Devm.live.enabled=true to run live Sepolia scan");
 
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource());
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbcTemplate);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbcTemplate);
         EvmDepositScanner scanner = com.surprising.wallet.testutil.EvmScanTestSupport.scanner(jdbcTemplate, ChainType.ETH,
                 System.getProperty("evm.rpc", "https://ethereum-sepolia-rpc.publicnode.com"),
                 Integer.getInteger("evm.confirmations", 12));

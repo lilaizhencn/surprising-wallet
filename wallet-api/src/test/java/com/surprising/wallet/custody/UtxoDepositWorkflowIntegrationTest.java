@@ -10,19 +10,20 @@ import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.repository.*;
 import com.surprising.wallet.service.*;
 import com.surprising.wallet.testutil.*;
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.math.BigDecimal;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 @EnabledIfEnvironmentVariable(named = "SW_TEST_CUSTODY_DB_URL", matches = ".+")
 class UtxoDepositWorkflowIntegrationTest {
@@ -48,7 +49,9 @@ class UtxoDepositWorkflowIntegrationTest {
         jdbc = new JdbcTemplate(ds);
         jdbc.queryForList("select pgmq.create(?)", WalletQueue.DEPOSIT_EVENT.queueName());
         jdbc.update("delete from pgmq.q_wallet_deposit_event");
-        jdbc.update("update chain_profile set deposit_confirmations = 2, scan_enabled = true, scan_start_height = ? where chain = 'BTC' and enabled", HEIGHT);
+        jdbc.update(
+                "update chain_profile set deposit_confirmations = 2, scan_enabled = true, scan_start_height = ? where chain = 'BTC' and enabled",
+                HEIGHT);
         var profiles = new ChainProfileRepository(jdbc);
         profile = profiles.findAccountByChain("BTC").orElseThrow();
         switches = new WalletRuntimeConfigService(profiles, new WalletSystemConfigRepository(jdbc));
@@ -174,7 +177,10 @@ class UtxoDepositWorkflowIntegrationTest {
         posting.refresh(profile, stale, 99);
         assertAmount("3", balance("available_balance"));
         assertEquals("ORPHANED", jdbc.queryForObject("select state from utxo_record where tx_hash = ?", String.class, original.txHash()));
-        assertEquals("REORGED", jdbc.queryForObject("select canonical_status from deposit_record where tx_hash = ?", String.class, original.txHash()));
+        assertEquals("REORGED", jdbc.queryForObject(
+                "select canonical_status from deposit_record where tx_hash = ?",
+                String.class,
+                original.txHash()));
         assertEquals(HEIGHT + 10, checkpoint());
         assertEquals(2, queueCount());
         assertEquals(3, count("custody_event"));
@@ -209,7 +215,8 @@ class UtxoDepositWorkflowIntegrationTest {
         output.setScriptPubKey(script);
         raw.setVout(List.of(output));
         when(command.getRawTransaction("first", true)).thenReturn(raw);
-        var realRuntime = new BitcoinLikeChainRuntime(DepositTestSupport.repository(jdbc),
+        var realRuntime = new BitcoinLikeChainRuntime(new ChainProfileRepository(jdbc),
+                new com.surprising.wallet.repository.ChainAssetRepository(jdbc),
                 mock(com.surprising.wallet.config.PubKeyConfig.class), command,
                 mock(com.surprising.wallet.chain.ltc.LitecoinEsploraCommand.class),
                 mock(com.surprising.wallet.chain.rpc.DogeCommand.class), mock(com.surprising.wallet.chain.rpc.BchCommand.class),

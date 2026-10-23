@@ -50,9 +50,7 @@ public class DepositService {
         if (event.confirmations() < requiredConfirmations) return false;
         var credit = deposits.markCredited(tenantId, chain, event.txId(), logIndex);
         if (credit.isEmpty()) return false;
-        if (balances.increment(tenantId, chain, event.assetSymbol(), accountId, event.amount()) != 1) {
-            throw new IllegalStateException("ledger balance belongs to another tenant");
-        }
+        balances.increment(tenantId, chain, event.assetSymbol(), accountId, event.amount());
         projection.credit(tenantId, event, logIndex, accountId, credit.orElseThrow());
         return true;
     }

@@ -242,7 +242,7 @@
   <!-- ====== LEGEND ====== -->
   <text x="590" y="910" text-anchor="middle" class="small" fill="#94a3b8">2-of-3：sig1 / sig2 分持私钥 · 恢复私钥离线；API 使用角色公钥 / 显式网络派生地址</text>
   <text x="590" y="930" text-anchor="middle" class="small" fill="#94a3b8">查询：充提 / 地址 / Gas → 单表筛选 / 计数 / 分页；地址排除 Gas；关联数据批量组合</text>
-  <text x="590" y="952" text-anchor="middle" class="small">UTXO 充值/游标同事务 · 在途继续确认；7702 恢复：链网络批次 → 尝试冷却筛选 / 分页</text>
+  <text x="590" y="952" text-anchor="middle" class="small">链业务 → 单表仓储；归集计划 / 租户 UTXO / 赤字领取 / 批次归属由应用用例编排</text>
   <text x="590" y="974" text-anchor="middle" class="small">Token：启用 profile 的网络 → 单表精确查询 → 类型记录；标准 / 充提门槛只存一份</text>
 <rect x="30" y="985" width="1120" height="108" rx="8" fill="#eff6ff" stroke="#2563eb"/>
 <text x="50" y="1012" style="font:14px sans-serif;fill:#1e293b">租户 Demo：浏览器 → Worker → Durable Object 事务冻结 → HTTPS 钱包 API</text>

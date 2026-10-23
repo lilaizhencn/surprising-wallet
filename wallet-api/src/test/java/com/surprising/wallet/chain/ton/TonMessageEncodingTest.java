@@ -1,37 +1,48 @@
 package com.surprising.wallet.chain.ton;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import com.surprising.wallet.common.chain.ChainRpcNode;
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.common.chain.ChainRpcNode;
+import com.surprising.wallet.repository.UtxoRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
+import java.math.BigInteger;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 import org.ton.ton4j.address.Address;
 import org.ton.ton4j.cell.Cell;
 import org.ton.ton4j.cell.CellBuilder;
+import tools.jackson.databind.ObjectMapper;
 
-import java.math.BigInteger;
-import java.util.Optional;
-
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * 验证 {@code TonMessageEncodingTest} 覆盖的业务流程、边界条件和异常行为。
  */
 class TonMessageEncodingTest {
     private static TonDepositScanner scanner() {
-        var repository = mock(ChainJdbcRepository.class);
-        when(repository.findProfileByChain("TON")).thenReturn(Optional.of(
+        var repository = ChainRepositoryFixture.mocked();
+        when(repository.chainProfileRepository.findAccountByChain("TON")).thenReturn(Optional.of(
                 AccountChainProfile.builder().chain("TON").network("testnet").build()));
-        return new TonDepositScanner(mock(TonCenterClient.class), mock(TonAddressService.class), repository,
-                mock(TonApiClient.class), RuntimeTestSupport.enabled());
+        return new TonDepositScanner(
+                mock(TonCenterClient.class),
+                mock(TonAddressService.class),
+                repository.chainAddressRepository,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.chainScanHeightRepository,
+                repository.tonTransactionRepository,
+                repository.depositService,
+                repository.depositRecordRepository,
+                mock(TonApiClient.class),
+                RuntimeTestSupport.enabled());
     }
     /**
      * 保存 {@code MASTER_SEED}，用于测试签名、认证或密钥相关逻辑。
@@ -55,10 +66,19 @@ class TonMessageEncodingTest {
         TonKeyService keys = new TonKeyService(MASTER_SEED);
         FakeTonCenterClient rpc = new FakeTonCenterClient();
         FakeRepository repository = new FakeRepository();
-        TonTransactionService service = new TonTransactionService(rpc,
+        TonTransactionService service = new TonTransactionService(
+                rpc,
                 keys,
-                repository,
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
+                repository.accountSequenceRepository,
+                repository.tonTransactionRepository,
+                repository.withdrawalOrderRepository,
+                repository.ledgerBalanceRepository,
+                repository.withdrawalClaimService,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.collectionRecordRepository,
+                Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class),
+                RuntimeTestSupport.enabled());
 
         String user = keys.wallet(3).getAddress().toString(true, true, false, true);
         String destination = keys.wallet(4).getAddress().toString(true, true, false, true);
@@ -130,10 +150,19 @@ class TonMessageEncodingTest {
      */
     @Test
     void duplicatePendingBocIsAStillPendingConfirmation() {
-        TonTransactionService service = new TonTransactionService(new DuplicateTonCenterClient(),
+        TonTransactionService service = new TonTransactionService(
+                new DuplicateTonCenterClient(),
                 new TonKeyService(MASTER_SEED),
-                new PendingRepository(),
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.enabled());
+                new PendingRepository().accountSequenceRepository,
+                new PendingRepository().tonTransactionRepository,
+                new PendingRepository().withdrawalOrderRepository,
+                new PendingRepository().ledgerBalanceRepository,
+                new PendingRepository().withdrawalClaimService,
+                new PendingRepository().chainProfileRepository,
+                new PendingRepository().tokenConfigRepository,
+                new PendingRepository().collectionRecordRepository,
+                Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class),
+                RuntimeTestSupport.enabled());
 
         assertFalse(service.confirmSentMessage("message-hash", "sender"));
     }
@@ -146,14 +175,11 @@ class TonMessageEncodingTest {
          * 验证 {@code FakeTonCenterClient} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         FakeTonCenterClient() {
-            super(new ObjectMapper(),
+            super(
+                    new ObjectMapper(),
                     profiles("TON"),
-                    nodes(ChainRpcNode.builder().chain("TON")
-                            .network("test")
-                            .rpcUrl("http://127.0.0.1")
-                            .authType("api_key")
-                            .authHeaderName("X-API-Key")
-                            .apiKey("").build()));
+                    nodes(ChainRpcNode.builder().chain("TON").network("test").rpcUrl("http://127.0.0.1").authType("api_key").authHeaderName("X-API-Key").apiKey("").build())
+);
         }
 
         /**
@@ -168,7 +194,7 @@ class TonMessageEncodingTest {
     /**
      * 测试替身 {@code FakeRepository}，用于隔离外部依赖并验证调用参数和状态变化。
      */
-    private static final class FakeRepository extends ChainJdbcRepository {
+    private static final class FakeRepository extends ChainRepositoryFixture {
         /**
          * 保存 {@code next}，用于承载当前测试夹具的配置或运行数据。
          */
@@ -178,38 +204,27 @@ class TonMessageEncodingTest {
          * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         FakeRepository() {
-            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
+            super();
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_address = invocation.getArgument(1);
+                long arg_chainSequence = invocation.getArgument(2);
+                long reserved = Math.max(arg_chainSequence, next);
+                next = reserved + 1;
+                return reserved;
+            }).when(accountSequenceRepository).reserve(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.anyLong());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_network = invocation.getArgument(1);
+                return Optional.empty();
+            }).when(chainProfileRepository).findAccount(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                return Optional.of(AccountChainProfile.builder().chain(arg_chain).network("testnet").build());
+            }).when(chainProfileRepository).findAccountByChain(ArgumentMatchers.<String>any());
         }
 
-        /**
-         * 验证 {@code reserveAccountSequence} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public long reserveAccountSequence(String chain, String address, long chainSequence) {
-            long reserved = Math.max(chainSequence, next);
-            next = reserved + 1;
-            return reserved;
-        }
 
-        /**
-         * 验证 {@code findAccountChainProfile} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<com.surprising.wallet.common.chain.AccountChainProfile> findAccountChainProfile(
-                String chain, String network) {
-            return Optional.empty();
-        }
-
-        /**
-         * 验证 {@code findProfileByChain} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<AccountChainProfile> findProfileByChain(String chain) {
-            return Optional.of(AccountChainProfile.builder()
-                    .chain(chain)
-                    .network("testnet")
-                    .build());
-        }
     }
 
     /**
@@ -220,14 +235,11 @@ class TonMessageEncodingTest {
          * 验证 {@code DuplicateTonCenterClient} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private DuplicateTonCenterClient() {
-            super(new ObjectMapper(),
+            super(
+                    new ObjectMapper(),
                     profiles("TON"),
-                    nodes(ChainRpcNode.builder().chain("TON")
-                            .network("test")
-                            .rpcUrl("http://127.0.0.1")
-                            .authType("api_key")
-                            .authHeaderName("X-API-Key")
-                            .apiKey("").build()));
+                    nodes(ChainRpcNode.builder().chain("TON").network("test").rpcUrl("http://127.0.0.1").authType("api_key").authHeaderName("X-API-Key").apiKey("").build())
+);
         }
 
         /**
@@ -251,20 +263,19 @@ class TonMessageEncodingTest {
     /**
      * 测试替身 {@code PendingRepository}，用于隔离外部依赖并验证调用参数和状态变化。
      */
-    private static final class PendingRepository extends ChainJdbcRepository {
+    private static final class PendingRepository extends ChainRepositoryFixture {
         /**
          * 验证 {@code PendingRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private PendingRepository() {
-            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
+            super();
+            Mockito.doAnswer(invocation -> java.util.Optional.of(com.surprising.wallet.common.chain.AccountChainProfile.builder().chain(invocation.getArgument(0)).network("testnet").build())).when(chainProfileRepository).findAccountByChain(ArgumentMatchers.anyString());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_txHash = invocation.getArgument(1);
+                return Optional.of("AQ==");
+            }).when(tonTransactionRepository).findRawPayload(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
         }
 
-        /**
-         * 验证 {@code findTonTransactionRawPayload} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<String> findTonTransactionRawPayload(String chain, String txHash) {
-            return Optional.of("AQ==");
-        }
     }
 }

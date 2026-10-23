@@ -1,30 +1,34 @@
 package com.surprising.wallet.chain.xrp;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.node.ArrayNode;
+import com.surprising.wallet.chain.model.HotWalletRules;
+import com.surprising.wallet.chain.model.XrpTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.HotWalletRules;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.chain.model.XrpTransactionRecord;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainScanHeightRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.repository.XrpTransactionRepository;
+import com.surprising.wallet.service.DepositService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
 
 /**
  * XRP Ledger 充值扫描器，通过 account_tx API 扫描链上 Payment 交易。
@@ -45,8 +49,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
-public
-class XrpDepositScanner {
+public class XrpDepositScanner {
 
     /** 链标识 */
     private static final String CHAIN = "XRP";
@@ -62,9 +65,13 @@ class XrpDepositScanner {
 
     /** XRPL RPC 客户端 */
     private final XrpRpcClient rpc;
+    private final ChainScanHeightRepository chainScanHeightRepository;
+    private final ChainAddressRepository chainAddressRepository;
+    private final DepositService depositService;
+    private final XrpTransactionRepository xrpTransactionRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
 
-    /** 链配置数据库访问 */
-    private final ChainJdbcRepository repository;
 
     /** 运行时任务开关服务。 */
     @NonNull
@@ -79,22 +86,22 @@ class XrpDepositScanner {
         runtimeConfigService.requireTaskEnabled(CHAIN, WalletRuntimeConfigService.TASK_SCAN, "xrp scanAndCredit");
         AccountChainProfile profile = profile();
         long latest = rpc.latestLedgerIndex();
-        long start = repository.findScanSafeHeight(CHAIN, SCANNER)
+        long start = chainScanHeightRepository.findSafeHeight(CHAIN, SCANNER)
                 .map(height -> Math.min(height + 1L, latest))
                 .orElse(Math.max(0L, latest - scanLimit(profile) + 1L));
         long end = Math.min(latest, start + scanLimit(profile) - 1L);
         List<DepositEvent> events = new ArrayList<>();
         if (start > end) {
-            repository.updateScanHeight(CHAIN, SCANNER, latest, latest);
+            chainScanHeightRepository.upsert(CHAIN, SCANNER, latest, latest);
             return events;
         }
 
-        Map<String, ChainAddressRecord> nativeAddresses = repository.listChainAddresses(CHAIN, NATIVE_SYMBOL).stream()
+        Map<String, ChainAddressRecord> nativeAddresses = chainAddressRepository.listEnabled(CHAIN, NATIVE_SYMBOL).stream()
                 .filter(address -> "DEPOSIT".equals(address.getWalletRole()))
                 .filter(this::isUserDepositAddress)
                 .collect(Collectors.toMap(ChainAddressRecord::getAddress, Function.identity(), (a, b) -> a));
         Map<String, TokenDefinition> tokens = tokenMap();
-        Map<String, ChainAddressRecord> tokenAddresses = repository.listChainAddresses(CHAIN).stream()
+        Map<String, ChainAddressRecord> tokenAddresses = chainAddressRepository.listEnabled(CHAIN).stream()
                 .filter(address -> !"XRP".equalsIgnoreCase(address.getAssetSymbol()))
                 .filter(address -> "DEPOSIT".equals(address.getWalletRole()))
                 .filter(this::isUserDepositAddress)
@@ -102,7 +109,7 @@ class XrpDepositScanner {
                         address -> address.getAssetSymbol().toUpperCase(Locale.ROOT) + "|" + address.getAddress(),
                         Function.identity(),
                         (a, b) -> a));
-        Set<String> scanAddresses = repository.listChainAddresses(CHAIN).stream()
+        Set<String> scanAddresses = chainAddressRepository.listEnabled(CHAIN).stream()
                 .filter(address -> "DEPOSIT".equals(address.getWalletRole()))
                 .filter(this::isUserDepositAddress)
                 .map(ChainAddressRecord::getAddress)
@@ -115,7 +122,7 @@ class XrpDepositScanner {
             }
         }
         long safeHeight = Math.max(0L, end - profile.getDepositConfirmations() + 1L);
-        repository.updateScanHeight(CHAIN, SCANNER, latest, safeHeight);
+        chainScanHeightRepository.upsert(CHAIN, SCANNER, latest, safeHeight);
         return events;
     }
 
@@ -162,7 +169,7 @@ class XrpDepositScanner {
                     tx.path("Account").asText(""), destination, amount, ledgerIndex, txHash, confirmations,
                     null, entry.toString());
             recordTransaction(event, tx, ledgerIndex, confirmations, null, null, profile);
-            repository.recordAndCreditDeposit(event, 0L, profile.getDepositConfirmations(), address.getAccountId());
+            depositService.recordAndCredit(event, 0L, profile.getDepositConfirmations(), address.getAccountId());
             events.add(event);
             return;
         }
@@ -186,8 +193,7 @@ class XrpDepositScanner {
                 tx.path("Account").asText(""), destination, amount, ledgerIndex, txHash, confirmations,
                 token.getContractAddress(), entry.toString());
         recordTransaction(event, tx, ledgerIndex, confirmations, issuer, currency, profile);
-        repository.recordAndCreditDeposit(event, token.getId() == null ? 0L : token.getId(),
-                profile.getDepositConfirmations(), address.getAccountId());
+        depositService.recordAndCredit(event, token.getId() == null ? 0L : token.getId(), profile.getDepositConfirmations(), address.getAccountId());
         events.add(event);
     }
 
@@ -196,7 +202,7 @@ class XrpDepositScanner {
      */
     private void recordTransaction(DepositEvent event, JsonNode tx, long ledgerIndex, int confirmations,
                                    String issuer, String currencyCode, AccountChainProfile profile) {
-        repository.recordXrpTransaction(XrpTransactionRecord.builder()
+        xrpTransactionRepository.upsert(XrpTransactionRecord.builder()
                 .chain(CHAIN)
                 .txHash(event.txId())
                 .fromAddress(event.fromAddress())
@@ -218,7 +224,7 @@ class XrpDepositScanner {
      */
     private Map<String, TokenDefinition> tokenMap() {
         Map<String, TokenDefinition> tokens = new LinkedHashMap<>();
-        for (TokenDefinition token : repository.listTokens(CHAIN)) {
+        for (TokenDefinition token : chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of())) {
             try {
                 XrpIssuedCurrency issued = XrpIssuedCurrency.fromToken(token);
                 tokens.put(tokenKey(issued.issuer(), issued.currencyCode()), token);
@@ -281,7 +287,7 @@ class XrpDepositScanner {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile() {
-        return repository.findProfileByChain(CHAIN)
+        return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
     /**
@@ -302,7 +308,7 @@ class XrpDepositScanner {
      * 判断 {@code isSystemActivationTransaction} 对应的条件是否成立，并返回明确的布尔结果。
      */
     private boolean isSystemActivationTransaction(String txHash) {
-        return repository.findXrpTransactionAssetSymbol(CHAIN, txHash)
+        return xrpTransactionRepository.findAssetSymbol(CHAIN, txHash)
                 .filter(XrpTransactionService.ACTIVATION_SYMBOL::equals)
                 .isPresent();
     }

@@ -2,8 +2,10 @@ package com.surprising.wallet.config.eip7702;
 
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.service.HotWalletAddressService;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,8 +14,6 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Locale;
 
 /**
  * 创建开发环境下确定性 relayer 钱包地址，用于本地 EIP-7702 流程的授权签名入口。
@@ -37,10 +37,10 @@ public class DevEip7702RelayerBootstrap implements ApplicationRunner {
     /** 角色标识，用于查找/持久化钱包地址。 */
     static final String RELAYER_ROLE = "EIP7702_RELAYER";
 
-    /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final ChainAddressRepository chainAddressRepository;
+
+
     /**
      * 保存 {@code addressService}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
@@ -72,7 +72,7 @@ public class DevEip7702RelayerBootstrap implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         // 环境/网络校验通过后，初始化或校验 dev relayer 地址是否稳定可用。
         requireSafeDevEnvironment();
-        AccountChainProfile profile = repository.findProfileByChain(chain.toUpperCase(Locale.ROOT))
+        AccountChainProfile profile = chainProfileRepository.findAccountByChain(chain.toUpperCase(Locale.ROOT))
                 .orElseThrow(() -> new IllegalStateException(
                         "missing enabled chain profile for dev EIP-7702 bootstrap: " + chain));
         if (!"evm".equalsIgnoreCase(profile.getFamily())
@@ -85,9 +85,13 @@ public class DevEip7702RelayerBootstrap implements ApplicationRunner {
         ChainAddressRecord expected = addressService.deriveAddress(
                 profile, RELAYER_USER_ID, RELAYER_BIZ, RELAYER_ADDRESS_INDEX, RELAYER_ROLE);
         expected.setTenantId(null);
-        var existing = repository.findChainAddress(
-                        profile.getChain(), profile.getNativeSymbol(), RELAYER_USER_ID,
-                        RELAYER_BIZ, RELAYER_ADDRESS_INDEX, RELAYER_ROLE);
+        var existing = chainAddressRepository.find(
+                profile.getChain(),
+                profile.getNativeSymbol(),
+                RELAYER_USER_ID,
+                RELAYER_BIZ,
+                RELAYER_ADDRESS_INDEX,
+                RELAYER_ROLE);
         existing.ifPresent(record -> {
                     if (record.getTenantId() != null
                             || !record.getAddress().equalsIgnoreCase(expected.getAddress())) {
@@ -96,12 +100,16 @@ public class DevEip7702RelayerBootstrap implements ApplicationRunner {
                     }
                 });
         if (existing.isEmpty()) {
-            repository.upsertChainAddress(expected);
+            chainAddressRepository.upsert(expected);
         }
 
-        ChainAddressRecord saved = repository.findChainAddress(
-                        profile.getChain(), profile.getNativeSymbol(), RELAYER_USER_ID,
-                        RELAYER_BIZ, RELAYER_ADDRESS_INDEX, RELAYER_ROLE)
+        ChainAddressRecord saved = chainAddressRepository.find(
+                profile.getChain(),
+                profile.getNativeSymbol(),
+                RELAYER_USER_ID,
+                RELAYER_BIZ,
+                RELAYER_ADDRESS_INDEX,
+                RELAYER_ROLE)
                 .orElseThrow(() -> new IllegalStateException("dev EIP-7702 relayer was not persisted"));
         if (saved.getTenantId() != null || !saved.getAddress().equalsIgnoreCase(expected.getAddress())) {
             throw new IllegalStateException("dev EIP-7702 relayer ownership or derived address mismatch");

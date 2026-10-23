@@ -1,23 +1,10 @@
 package com.surprising.wallet.custody;
 
-import com.surprising.wallet.repository.ChainRpcNodeRepository;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.chain.ChainAddressRuntime;
-import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
-import com.surprising.wallet.service.CustodyWithdrawalReconciliationService;
-import com.surprising.wallet.repository.CustodyRepository;
-import com.surprising.wallet.service.CustodyCryptoService;
-import com.surprising.wallet.service.CustodyWithdrawalService;
-import com.surprising.wallet.model.CustodyPrincipal;
-import com.surprising.wallet.model.CustodySecurityProperties;
-import com.surprising.wallet.repository.CustodyTenantChainRepository;
-import com.surprising.wallet.service.CustodyGasService;
-import com.surprising.wallet.service.CustodyTenantChainService;
-import com.surprising.wallet.service.CustodyWithdrawalExecutionService;
-
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
+import com.surprising.wallet.chain.evm.EvmDepositScanner;
+import com.surprising.wallet.chain.evm.EvmHttpServiceFactory;
+import com.surprising.wallet.chain.evm.EvmLogScanner;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
@@ -25,28 +12,55 @@ import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.key.WalletKeyConfig;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.coordinator.Evm7702CollectionCoordinator;
-import com.surprising.wallet.repository.Evm7702CollectionRepository;
-import com.surprising.wallet.service.Evm7702CollectionWorkflowService;
 import com.surprising.wallet.coordinator.Evm7702WithdrawalCoordinator;
-import com.surprising.wallet.repository.Evm7702WithdrawalRepository;
-import com.surprising.wallet.service.Evm7702WithdrawalWorkflowService;
-import com.surprising.wallet.chain.evm.EvmDepositScanner;
-import com.surprising.wallet.chain.evm.EvmHttpServiceFactory;
-import com.surprising.wallet.chain.evm.EvmLogScanner;
-import com.surprising.wallet.service.AccountSecp256k1KeyService;
-import com.surprising.wallet.service.ChainRpcNodeService;
-import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
+import com.surprising.wallet.model.CustodyPrincipal;
+import com.surprising.wallet.model.CustodySecurityProperties;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainRpcNodeRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
+import com.surprising.wallet.repository.CustodyGasAccountRepository;
+import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.repository.Evm7702CollectionRepository;
+import com.surprising.wallet.repository.Evm7702WithdrawalRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
-import org.junit.jupiter.api.Assumptions;
+import com.surprising.wallet.repository.WalletSystemConfigRepository;
+import com.surprising.wallet.service.AccountSecp256k1KeyService;
+import com.surprising.wallet.service.ChainRpcNodeService;
+import com.surprising.wallet.service.CustodyCryptoService;
+import com.surprising.wallet.service.CustodyGasService;
+import com.surprising.wallet.service.CustodyTenantChainService;
+import com.surprising.wallet.service.CustodyWithdrawalExecutionService;
+import com.surprising.wallet.service.CustodyWithdrawalReconciliationService;
+import com.surprising.wallet.service.CustodyWithdrawalService;
+import com.surprising.wallet.service.Evm7702CollectionWorkflowService;
+import com.surprising.wallet.service.Evm7702WithdrawalWorkflowService;
+import com.surprising.wallet.service.WalletRuntimeConfigService;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.lang.reflect.Field;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.web3j.abi.FunctionEncoder;
@@ -68,22 +82,9 @@ import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.utils.Numeric;
-
-import java.lang.reflect.Field;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -116,7 +117,7 @@ class Evm7702ProductionFlowIntegrationTest {
     /**
      * 保存 {@code chainRepository}，用于访问当前测试所依赖的仓储、客户端或服务。
      */
-    private ChainJdbcRepository chainRepository;
+    private ChainRepositoryFixture chainRepository;
     /**
      * 保存 {@code keyService}，用于访问当前测试所依赖的仓储、客户端或服务。
      */
@@ -186,8 +187,12 @@ class Evm7702ProductionFlowIntegrationTest {
         custodyRepository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
         CustodyTenantChainRepository tenantChainRepository =
                 new CustodyTenantChainRepository(jdbc);
-        chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
-                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), objectMapper));
+        chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(
+                jdbc,
+                com.surprising.wallet.testutil.DepositTestSupport.projection(
+                        jdbc,
+                        com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc),
+                        objectMapper));
         jdbc.update("""
                 update chain_profile
                    set network = 'local', chain_id = ?, withdraw_confirmations = 1,
@@ -206,7 +211,7 @@ class Evm7702ProductionFlowIntegrationTest {
                 """, chain, RPC);
         keyService = new AccountSecp256k1KeyService(new WalletKeyMaterialProvider(
                 testKeyset(), WalletKeyMaterialProvider.Mode.WALLET_SERVER));
-        profile = chainRepository.findProfileByChain(chain).orElseThrow();
+        profile = chainRepository.chainProfileRepository.findAccountByChain(chain).orElseThrow();
         nativeSymbol = profile.getNativeSymbol();
         depositScanner = com.surprising.wallet.testutil.EvmScanTestSupport.scanner(
                 jdbc, ChainType.valueOf(chain), RPC, 1, httpServices);
@@ -221,37 +226,63 @@ class Evm7702ProductionFlowIntegrationTest {
         CustodyTenantChainService tenantChainService = new CustodyTenantChainService(
                 tenantChainRepository, custodyRepository, null);
         CustodyWithdrawalExecutionService withdrawalExecution =
-                new CustodyWithdrawalExecutionService(chainRepository, runtimeConfig,
-                        new BlockchainRuntimeService(new ChainProfileRepository(jdbc), new ChainAssetRepository(jdbc),
-                                new ChainAddressRuntime(chainRepository, null), null),
-                        new ChainAssetRepository(jdbc), new ChainProfileRepository(jdbc),
-                        new TokenConfigRepository(jdbc), new CustodyAddressRepository(jdbc),
-                        new ChainAddressRepository(jdbc), new LedgerBalanceRepository(jdbc));
+                new CustodyWithdrawalExecutionService(
+                        chainRepository.withdrawalOrderRepository,
+                        chainRepository.collectionPlanningService,
+                        runtimeConfig,
+                        new BlockchainRuntimeService(
+                                new ChainProfileRepository(jdbc),
+                                new ChainAssetRepository(jdbc),
+                                new ChainAddressRuntime(chainRepository.chainAddressRepository, chainRepository.chainProfileRepository, null),
+                                null),
+                        new ChainAssetRepository(jdbc),
+                        new ChainProfileRepository(jdbc),
+                        new TokenConfigRepository(jdbc),
+                        new CustodyAddressRepository(jdbc),
+                        new ChainAddressRepository(jdbc),
+                        new LedgerBalanceRepository(jdbc));
         withdrawalService = new CustodyWithdrawalService(
-                custodyRepository, withdrawalExecution,
-                com.surprising.wallet.testutil.CustodyTestSupport.gas(jdbc, custodyRepository,
-                        org.mockito.Mockito.mock(com.surprising.wallet.service.CustodyAddressService.class),
-                        org.mockito.Mockito.mock(BlockchainRuntimeService.class)),
-                tenantChainService, crypto, objectMapper,
-                com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), new com.surprising.wallet.repository.CustodyAddressRepository(jdbc),
+
+                custodyRepository,
+                withdrawalExecution,
+                com.surprising.wallet.testutil.CustodyTestSupport.gas(
+                        jdbc,
+                        custodyRepository,
+                        Mockito.mock(com.surprising.wallet.service.CustodyAddressService.class),
+                        Mockito.mock(BlockchainRuntimeService.class)),
+                tenantChainService,
+                crypto,
+                objectMapper,
+                com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc),
+                new com.surprising.wallet.repository.CustodyAddressRepository(jdbc),
                 new com.surprising.wallet.repository.CustodyGasAccountRepository(jdbc));
         collectionRepository = new Evm7702CollectionRepository(jdbc);
         Evm7702CollectionCoordinator coordinator = new Evm7702CollectionCoordinator(collectionRepository,
                 custodyRepository,
-                chainRepository,
-                new com.surprising.wallet.repository.EvmNonceRepository(jdbc));
+                chainRepository.chainProfileRepository,
+                chainRepository.chainAssetRepository, new com.surprising.wallet.repository.EvmNonceRepository(jdbc));
         workflow = new Evm7702CollectionWorkflowService(
-                collectionRepository, coordinator, chainRepository, rpcNodes, keyService, crypto,
-                runtimeConfig, httpServices);
+                collectionRepository,
+                coordinator,
+                chainRepository.chainProfileRepository,
+                chainRepository.chainAssetRepository,
+                rpcNodes,
+                keyService,
+                crypto,
+                runtimeConfig,
+                httpServices);
         withdrawalRepository = new Evm7702WithdrawalRepository(jdbc, collectionRepository);
-        Evm7702WithdrawalCoordinator withdrawalCoordinator = new Evm7702WithdrawalCoordinator(withdrawalRepository,
+        Evm7702WithdrawalCoordinator withdrawalCoordinator = new Evm7702WithdrawalCoordinator(
+                withdrawalRepository,
                 custodyRepository,
-                chainRepository,
+                chainRepository.ledgerBalanceRepository,
+                chainRepository.chainProfileRepository,
+                chainRepository.chainAssetRepository,
                 com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc),
                 new com.surprising.wallet.repository.EvmNonceRepository(jdbc));
         withdrawalWorkflow = new Evm7702WithdrawalWorkflowService(
-                withdrawalRepository, withdrawalCoordinator, chainRepository,
-                rpcNodes, keyService, crypto, runtimeConfig, httpServices);
+                withdrawalRepository, withdrawalCoordinator, chainRepository.chainProfileRepository,
+                chainRepository.chainAssetRepository, rpcNodes, keyService, crypto, runtimeConfig, httpServices);
         reconciliationJob = new CustodyWithdrawalReconciliationJob(
                 new CustodyWithdrawalReconciliationService(custodyRepository, objectMapper));
     }
@@ -392,7 +423,9 @@ class Evm7702ProductionFlowIntegrationTest {
             assertTenantCompleted(web3j, tenantB, tenantBTx);
 
             assertEquals(5, jdbc.queryForObject("select count(*) from evm_collection_batch", Integer.class));
-            assertEquals(2, jdbc.queryForObject("select count(*) from custody_gas_usage where operation_type = 'COLLECTION_BATCH' and status = 'SETTLED'", Integer.class));
+            assertEquals(
+                    2,
+                    jdbc.queryForObject("select count(*) from custody_gas_usage where operation_type = 'COLLECTION_BATCH' and status = 'SETTLED'", Integer.class));
             assertEquals(2, jdbc.queryForObject("select count(distinct canonical_tx_hash) from evm_collection_batch", Integer.class));
             assertEquals(0, jdbc.queryForObject("""
                     select count(*) from evm_collection_batch_item i
@@ -821,20 +854,26 @@ class Evm7702ProductionFlowIntegrationTest {
      * 验证 {@code createCollectionCandidates} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private void createCollectionCandidates(String symbol, int expected) {
-        List<CollectionCandidateRecord> candidates = chainRepository.listCollectableLedgerBalances(
-                chain, BigDecimal.ZERO, 20);
+        List<CollectionCandidateRecord> candidates = chainRepository.collectionPlanningService.candidates(chain, BigDecimal.ZERO, 20);
         assertEquals(expected, candidates.size());
         assertTrue(candidates.stream().allMatch(
                 candidate -> symbol.equals(candidate.getAssetSymbol())));
         assertEquals(2, candidates.stream().map(CollectionCandidateRecord::getTenantId).distinct().count());
         for (CollectionCandidateRecord candidate : candidates) {
-            String hotWallet = chainRepository.findActiveTenantCollectionAddress(
-                    candidate.getTenantId(), candidate.getChain()).orElseThrow();
-            assertEquals(1, chainRepository.createCollectionRecord(
-                    candidate.getTenantId(), candidate.getCustodyAddressId(),
-                    "7702:" + symbol + ":" + candidate.getTenantId() + ":" + candidate.getAddress(),
-                    candidate.getChain(), candidate.getAssetSymbol(), candidate.getAddress(), hotWallet,
-                    candidate.getAmount(), BigDecimal.ZERO, null));
+            String hotWallet = chainRepository.collectionPlanningService.destination(candidate.getTenantId(), candidate.getChain()).orElseThrow();
+            assertEquals(
+                    1,
+                    chainRepository.collectionRecordRepository.create(
+                            candidate.getTenantId(),
+                            candidate.getCustodyAddressId(),
+                            "7702:" + symbol + ":" + candidate.getTenantId() + ":" + candidate.getAddress(),
+                            candidate.getChain(),
+                            candidate.getAssetSymbol(),
+                            candidate.getAddress(),
+                            hotWallet,
+                            candidate.getAmount(),
+                            BigDecimal.ZERO,
+                            null));
         }
     }
 

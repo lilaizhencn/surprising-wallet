@@ -1,20 +1,19 @@
 package com.surprising.wallet.chain;
 
-import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.math.BigDecimal;
+import java.sql.Connection;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
-
-import java.math.BigDecimal;
-import java.sql.Connection;
-import java.util.List;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -38,7 +37,7 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+            ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
 
             try {
                 ensureBitcoinLikeProfiles(jdbc);
@@ -49,10 +48,15 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                     String accountId = "migration-account-" + chain.toLowerCase() + "-" + UUID.randomUUID();
                     BigDecimal amount = new BigDecimal("1.25000000");
 
-                    repository.upsertUtxo(
-                            chain, chain, txHash, 0, address, amount, 100L, txHash, 6, false);
+                    repository.utxoRepository.upsert(chain, chain, txHash, 0, address, amount, 100L, txHash, 6, false);
 
-                    List<UtxoTransaction> spendable = repository.listSpendableUtxos(chain, chain, 1, 10, 0);
+                    List<UtxoTransaction> spendable = repository.utxoRepository.listSpendable(
+                            chain,
+                            chain,
+                            1,
+                            10,
+                            0,
+                            repository.chainProfileRepository.findAccountByChain(chain).orElseThrow(() -> new IllegalStateException("missing enabled chain profile for unified UTXO chain")).getRuntimeCurrencyId());
                     UtxoTransaction selected = spendable.stream()
                             .filter(utxo -> txHash.equals(utxo.getTxId()) && utxo.getSeq() == 0)
                             .findFirst()
@@ -61,20 +65,20 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                     assertEquals(runtimeCurrencyId(jdbc, chain), selected.getCurrency());
 
                     String lockRef = "migration-lock-" + UUID.randomUUID();
-                    assertEquals(1, repository.lockUtxo(chain, txHash, 0, lockRef));
-                    assertEquals(0, repository.lockUtxo(chain, txHash, 0, lockRef + "-duplicate"));
-                    assertEquals(1, repository.releaseUtxos(chain, lockRef));
-                    assertEquals(1, repository.lockUtxo(chain, txHash, 0, lockRef));
-                    assertEquals(1, repository.markUtxosSpent(chain, lockRef, txHash + "-spent"));
-                    assertEquals(0, repository.releaseUtxos(chain, lockRef));
+                    assertEquals(1, repository.utxoRepository.lock(chain, txHash, 0, lockRef));
+                    assertEquals(0, repository.utxoRepository.lock(chain, txHash, 0, lockRef + "-duplicate"));
+                    assertEquals(1, repository.utxoRepository.release(chain, lockRef));
+                    assertEquals(1, repository.utxoRepository.lock(chain, txHash, 0, lockRef));
+                    assertEquals(1, repository.utxoRepository.markSpent(chain, lockRef, txHash + "-spent"));
+                    assertEquals(0, repository.utxoRepository.release(chain, lockRef));
 
                     String depositTx = "deposit" + UUID.randomUUID().toString().replace("-", "");
                     DepositEvent event = new DepositEvent(
                             chainType, chain, depositTx, null, address,
                             amount, 101L, depositTx, 6, null, "{}");
-                    assertTrue(repository.recordAndCreditDeposit(event, 0, 6, accountId));
-                    assertFalse(repository.recordAndCreditDeposit(event, 0, 6, accountId));
-                    assertTrue(repository.depositRecordExists(chain, depositTx, 0));
+                    assertTrue(repository.depositService.recordAndCredit(event, 0, 6, accountId));
+                    assertFalse(repository.depositService.recordAndCredit(event, 0, 6, accountId));
+                    assertTrue(repository.depositRecordRepository.existsCanonical(chain, depositTx, 0));
                     assertEquals(amount.setScale(18), jdbc.queryForObject("""
                             select total_balance from ledger_balance
                             where chain=? and asset_symbol=? and account_id=?
@@ -85,9 +89,8 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                             """, Long.class, chain, depositTx));
 
                     long userId = 70_000L + chainType.ordinal();
-                    assertTrue(repository.findMaxChainAddressIndex(
-                            chain, chain, userId, 1, "DEPOSIT").isEmpty());
-                    repository.upsertChainAddress(ChainAddressRecord.builder()
+                    assertTrue(repository.chainAddressRepository.findMaxIndex(chain, chain, userId, 1, "DEPOSIT").isEmpty());
+                    repository.chainAddressRepository.upsert(ChainAddressRecord.builder()
                             .chain(chain)
                             .assetSymbol(chain)
                             .accountId(Long.toString(userId))
@@ -99,7 +102,7 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                             .walletRole("DEPOSIT")
                             .enabled(true)
                             .build());
-                    repository.upsertChainAddress(ChainAddressRecord.builder()
+                    repository.chainAddressRepository.upsert(ChainAddressRecord.builder()
                             .chain(chain)
                             .assetSymbol(chain)
                             .accountId(Long.toString(userId))
@@ -111,11 +114,9 @@ class BitcoinLikeUnifiedUtxoRuntimeMigrationTest {
                             .walletRole("DEPOSIT")
                             .enabled(true)
                             .build());
-                    assertEquals(1L, repository.findMaxChainAddressIndex(
-                                    chain, chain, userId, 1, "DEPOSIT")
+                    assertEquals(1L, repository.chainAddressRepository.findMaxIndex(chain, chain, userId, 1, "DEPOSIT")
                             .orElseThrow());
-                    assertTrue(repository.findChainAddressByAddress(
-                            chain, "migration-address-" + chain.toLowerCase() + "-1").isPresent());
+                    assertTrue(repository.chainAddressRepository.findEnabledByAddress(chain, "migration-address-" + chain.toLowerCase() + "-1").isPresent());
                 }
             } finally {
                 connection.rollback();

@@ -1,7 +1,7 @@
 package com.surprising.wallet.chain.monero;
 
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainAddressRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -15,8 +15,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @RequiredArgsConstructor
-public
-class MoneroAddressService {
+public class MoneroAddressService {
 
     /** 链标识 */
     private static final String CHAIN = MoneroWalletRpcClient.CHAIN;
@@ -26,9 +25,9 @@ class MoneroAddressService {
 
     /** Monero 钱包 RPC 客户端 */
     private final MoneroWalletRpcClient walletRpcClient;
+    private final ChainAddressRepository chainAddressRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
+
     /**
      * 构建或生成 {@code createNativeAddress} 对应的结果，并执行输入和状态校验。
      */
@@ -49,8 +48,8 @@ class MoneroAddressService {
                 .walletRole(walletRole)
                 .enabled(true)
                 .build();
-        repository.upsertChainAddress(record);
-        return repository.findChainAddress(CHAIN, SYMBOL, userId, biz, subaddress.addressIndex(), walletRole)
+        chainAddressRepository.upsert(record);
+        return chainAddressRepository.find(CHAIN, SYMBOL, userId, biz, subaddress.addressIndex(), walletRole)
                 .orElseThrow();
     }
     /**

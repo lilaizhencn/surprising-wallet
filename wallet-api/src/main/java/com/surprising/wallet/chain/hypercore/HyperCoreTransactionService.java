@@ -1,22 +1,22 @@
 package com.surprising.wallet.chain.hypercore;
 
-import com.surprising.wallet.service.WithdrawalSettlementService;
-
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.service.AccountSecp256k1KeyService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.AccountSequenceRepository;
+import com.surprising.wallet.repository.CollectionRecordRepository;
 import com.surprising.wallet.repository.HyperCoreRepository;
+import com.surprising.wallet.service.AccountSecp256k1KeyService;
+import com.surprising.wallet.service.WithdrawalSettlementService;
+import java.math.BigDecimal;
+import java.util.Locale;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.bitcoinj.crypto.ECKey;
 import org.springframework.stereotype.Service;
-
-import java.math.BigDecimal;
-import java.util.Locale;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * HyperCore 链交易服务，负责 EIP-712 签名和 exchange 接口提交。
@@ -44,9 +44,9 @@ public class HyperCoreTransactionService {
 
     /** HyperCore 数据仓库 */
     private final HyperCoreRepository hyperCoreRepository;
+    private final CollectionRecordRepository collectionRecordRepository;
+    private final AccountSequenceRepository accountSequenceRepository;
 
-    /** 链通用数据库仓库 */
-    private final ChainJdbcRepository chainRepository;
 
     /** Secp256k1 密钥服务 */
     private final AccountSecp256k1KeyService keyService;
@@ -107,8 +107,7 @@ public class HyperCoreTransactionService {
      */
     public boolean confirmCollection(java.util.UUID tenantId, String collectionNo, String actionId) {
         return hyperCoreRepository.actionAccepted(actionId)
-                && chainRepository.markCollectionConfirmed(
-                        tenantId, CHAIN, collectionNo, actionId) == 1;
+                && collectionRecordRepository.markConfirmed(tenantId, CHAIN, collectionNo, actionId) == 1;
     }
 
     /**
@@ -147,10 +146,7 @@ public class HyperCoreTransactionService {
      * 执行 {@code nextNonce} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private long nextNonce(ChainAddressRecord from) {
-        return chainRepository.reserveAccountSequence(
-                CHAIN,
-                normalizeAddress(from.getAddress()),
-                System.currentTimeMillis());
+        return accountSequenceRepository.reserve(CHAIN, normalizeAddress(from.getAddress()), System.currentTimeMillis());
     }
     /**
      * 判断 {@code isMainnet} 对应的条件是否成立，并返回明确的布尔结果。

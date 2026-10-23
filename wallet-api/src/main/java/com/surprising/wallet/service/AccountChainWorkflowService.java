@@ -1,15 +1,10 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.chain.model.ChainCollectionRecord;
-import com.surprising.wallet.common.chain.CollectionCandidateRecord;
-import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.chain.aptos.AptosTransactionService;
 import com.surprising.wallet.chain.cardano.CardanoTransactionService;
 import com.surprising.wallet.chain.evm.EvmAccountTransactionService;
 import com.surprising.wallet.chain.hypercore.HyperCoreTransactionService;
+import com.surprising.wallet.chain.model.ChainCollectionRecord;
 import com.surprising.wallet.chain.monero.MoneroTransactionService;
 import com.surprising.wallet.chain.near.NearTransactionService;
 import com.surprising.wallet.chain.polkadot.PolkadotTransactionService;
@@ -17,11 +12,17 @@ import com.surprising.wallet.chain.solana.SolanaTransactionService;
 import com.surprising.wallet.chain.sui.SuiTransactionService;
 import com.surprising.wallet.chain.ton.TonTransactionService;
 import com.surprising.wallet.chain.xrp.XrpTransactionService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.CollectionCandidateRecord;
+import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.CollectionRecordRepository;
+import com.surprising.wallet.repository.Evm7702ConfigRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.repository.WithdrawalOrderRepository;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -36,6 +37,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 /**
  * 账户链工作流服务，编排多链的充值扫描、提现签名/确认、归集与归集确认的完整流程。
@@ -53,7 +57,6 @@ import java.util.UUID;
  * </ul>
  *
  * @see WalletRuntimeConfigService
- * @see ChainJdbcRepository
  */
 @Slf4j
 @Service
@@ -76,10 +79,17 @@ public class AccountChainWorkflowService {
             "X_LAYER", "ROBINHOOD_CHAIN",
             "SOLANA", "TRON", "XRP", "ADA", "TON", "APTOS", "SUI", "NEAR");
 
-    /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final Evm7702ConfigRepository evm7702ConfigRepository;
+    private final WithdrawalOrderRepository withdrawalOrderRepository;
+    private final CollectionRecordRepository collectionRecordRepository;
+    private final WithdrawalClaimService withdrawalClaimService;
+    private final EvmBatchOwnershipService evmBatchOwnershipService;
+    private final CollectionPlanningService collectionPlanningService;
+    private final TokenConfigRepository tokenConfigRepository;
+    private final ChainAddressRepository chainAddressRepository;
+
+
     /**
      * 保存 {@code runtimeConfigService}，用于保存运行配置和策略参数。
      */
@@ -128,7 +138,7 @@ public class AccountChainWorkflowService {
      * Monero 专用工作流：扫描 -> 提现 -> 确认提现 -> 归集 -> 确认归集。
      */
     public void moneroWorkflow() {
-        AccountChainProfile profile = repository.findProfileByChain("XMR")
+        AccountChainProfile profile = chainProfileRepository.findAccountByChain("XMR")
                 .filter(candidate -> Boolean.TRUE.equals(candidate.getEnabled()))
                 .orElse(null);
         if (profile == null) {
@@ -223,17 +233,15 @@ public class AccountChainWorkflowService {
             return;
         }
         if ("evm".equalsIgnoreCase(profile.getFamily())
-                && repository.isEvm7702BatchWithdrawalManaged(
-                        profile.getChain(), profile.getNetwork())) {
+                && evm7702ConfigRepository.existsManagedBatchWithdrawal(profile.getChain(), profile.getNetwork())) {
             return;
         }
-        int stale = repository.markStaleSigningWithdrawalsUnknown(
-                profile.getChain(), Instant.now().minus(SIGNING_STALE_TIMEOUT));
+        int stale = withdrawalOrderRepository.markStaleSigningUnknown(profile.getChain(), Instant.now().minus(SIGNING_STALE_TIMEOUT));
         if (stale > 0) {
             log.warn("marked stale signing withdrawals as broadcast-unknown: chain={} count={}",
                     profile.getChain(), stale);
         }
-        for (WithdrawalOrderRecord order : repository.listWithdrawalsForSigning(profile.getChain(), WITHDRAW_LIMIT)) {
+        for (WithdrawalOrderRecord order : withdrawalOrderRepository.listForSigning(profile.getChain(), WITHDRAW_LIMIT)) {
             try {
                 processWithdrawal(profile, order);
             } catch (Exception e) {
@@ -246,8 +254,7 @@ public class AccountChainWorkflowService {
      * 处理 {@code confirmWithdrawals} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
      */
     private void confirmWithdrawals(AccountChainProfile profile) {
-        for (WithdrawalOrderRecord order : repository.listWithdrawalsByStatus(
-                profile.getChain(), "SENT", CONFIRM_LIMIT)) {
+        for (WithdrawalOrderRecord order : withdrawalOrderRepository.listByStatus(profile.getChain(), "SENT", CONFIRM_LIMIT)) {
             try {
                 confirmWithdrawal(profile, order);
             } catch (Exception e) {
@@ -264,18 +271,23 @@ public class AccountChainWorkflowService {
             return;
         }
         if ("evm".equalsIgnoreCase(profile.getFamily())
-                && repository.isEvm7702Managed(profile.getChain(), profile.getNetwork())
-                && !repository.isEvm7702CollectionActive(profile.getChain(), profile.getNetwork())) {
+                && evm7702ConfigRepository.existsManaged(profile.getChain(), profile.getNetwork())
+                && !evm7702ConfigRepository.existsActive(profile.getChain(), profile.getNetwork())) {
             return;
         }
         createCollectionCandidates(profile);
-        for (ChainCollectionRecord record : repository.listCollectionsForSigning(
-                profile.getChain(), COLLECTION_LIMIT)) {
+        for (ChainCollectionRecord record : collectionRecordRepository.listForSigning(profile.getChain(), COLLECTION_LIMIT)) {
             try {
                 processCollection(profile, record);
             } catch (Exception e) {
-                repository.updateCollectionStatus(record.getTenantId(), record.getChain(), record.getCollectionNo(),
-                        "FAILED", null, e.getMessage(), null);
+                collectionRecordRepository.updateStatus(
+                        record.getTenantId(),
+                        record.getChain(),
+                        record.getCollectionNo(),
+                        "FAILED",
+                        null,
+                        e.getMessage(),
+                        null);
                 log.warn("account-chain collection failed: chain={} collectionNo={} error={}",
                         record.getChain(), record.getCollectionNo(), e.getMessage(), e);
             }
@@ -285,8 +297,7 @@ public class AccountChainWorkflowService {
      * 处理 {@code confirmCollections} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
      */
     private void confirmCollections(AccountChainProfile profile) {
-        for (ChainCollectionRecord record : repository.listCollectionsByStatus(
-                profile.getChain(), "SENT", CONFIRM_LIMIT)) {
+        for (ChainCollectionRecord record : collectionRecordRepository.listByStatus(profile.getChain(), "SENT", CONFIRM_LIMIT)) {
             try {
                 confirmCollection(profile, record);
             } catch (Exception e) {
@@ -302,8 +313,7 @@ public class AccountChainWorkflowService {
         UUID tenantId = Objects.requireNonNull(order.getTenantId(), "withdrawal tenantId is required");
         ChainAddressRecord from = requireAddress(
                 tenantId, order.getChain(), order.getAssetSymbol(), order.getFromAddress());
-        if (repository.claimWithdrawalSigning(
-                tenantId, order.getChain(), order.getOrderNo(), from.getAddress()) != 1) {
+        if (withdrawalClaimService.claim(tenantId, order.getChain(), order.getOrderNo(), from.getAddress()) != 1) {
             return;
         }
         try {
@@ -311,13 +321,11 @@ public class AccountChainWorkflowService {
             if (txHash == null || txHash.isBlank()) {
                 throw new IllegalStateException("withdrawal broadcast returned empty tx hash");
             }
-            if (repository.markWithdrawalSent(
-                    tenantId, order.getChain(), order.getOrderNo(), from.getAddress(), txHash) != 1) {
+            if (withdrawalOrderRepository.markSent(tenantId, order.getChain(), order.getOrderNo(), from.getAddress(), txHash) != 1) {
                 throw new IllegalStateException("withdrawal state changed before SENT: " + order.getOrderNo());
             }
         } catch (Exception e) {
-            repository.markWithdrawalBroadcastUnknown(
-                    tenantId, order.getChain(), order.getOrderNo(), from.getAddress(), e.getMessage());
+            withdrawalOrderRepository.markBroadcastUnknown(tenantId, order.getChain(), order.getOrderNo(), from.getAddress(), e.getMessage());
             throw new IllegalStateException(e);
         }
     }
@@ -409,7 +417,7 @@ public class AccountChainWorkflowService {
     private void confirmWithdrawal(AccountChainProfile profile, WithdrawalOrderRecord order) throws Exception {
         UUID tenantId = Objects.requireNonNull(order.getTenantId(), "withdrawal tenantId is required");
         if ("evm".equalsIgnoreCase(profile.getFamily())
-                && repository.isWithdrawalInPendingEvm7702Batch(tenantId, order.getId())) {
+                && evmBatchOwnershipService.withdrawalPending(tenantId, order.getId())) {
             return;
         }
         ChainAddressRecord from = requireAddress(
@@ -453,14 +461,15 @@ public class AccountChainWorkflowService {
      * 构建或生成 {@code createCollectionCandidates} 对应的结果，并执行输入和状态校验。
      */
     private void createCollectionCandidates(AccountChainProfile profile) {
-        List<CollectionCandidateRecord> candidates = repository.listCollectableLedgerBalances(
-                profile.getChain(), BigDecimal.ZERO, COLLECTION_LIMIT);
+        List<CollectionCandidateRecord> candidates = collectionPlanningService.candidates(profile.getChain(), BigDecimal.ZERO, COLLECTION_LIMIT);
         if (candidates.isEmpty()) {
             return;
         }
         BigDecimal evmFeeReserve = "evm".equalsIgnoreCase(profile.getFamily())
                 ? evmTransactionService.estimateCollectionFeeReserve(
-                        profile.getChain(), repository.listTokens(profile.getChain()).size())
+
+                        profile.getChain(),
+                        chainProfileRepository.findAccountByChain(profile.getChain()).map(configuredNetworkProfile -> tokenConfigRepository.listDefinitions(profile.getChain(), configuredNetworkProfile.getNetwork())).orElse(List.of()).size())
                 : BigDecimal.ZERO;
         record TenantChainKey(UUID tenantId, String chain) { }
         Map<TenantChainKey, Optional<String>> collectionAddresses = new HashMap<>();
@@ -471,15 +480,21 @@ public class AccountChainWorkflowService {
             }
             TenantChainKey key = new TenantChainKey(candidate.getTenantId(), candidate.getChain());
             String hotAddress = collectionAddresses.computeIfAbsent(key,
-                            ignored -> repository.findActiveTenantCollectionAddress(
-                                    candidate.getTenantId(), candidate.getChain()))
+                            ignored -> collectionPlanningService.destination(candidate.getTenantId(), candidate.getChain()))
                     .orElseThrow(() -> new IllegalStateException(
                             "active tenant collection/gas address is required for "
                                     + candidate.getChain() + " collection"));
-            repository.createCollectionRecord(candidate.getTenantId(), candidate.getCustodyAddressId(),
-                    collectionNo(candidate, amount), candidate.getChain(),
-                    candidate.getAssetSymbol(), candidate.getAddress(), hotAddress,
-                    amount, BigDecimal.ZERO, null);
+            collectionRecordRepository.create(
+                    candidate.getTenantId(),
+                    candidate.getCustodyAddressId(),
+                    collectionNo(candidate, amount),
+                    candidate.getChain(),
+                    candidate.getAssetSymbol(),
+                    candidate.getAddress(),
+                    hotAddress,
+                    amount,
+                    BigDecimal.ZERO,
+                    null);
         }
     }
     /**
@@ -487,21 +502,19 @@ public class AccountChainWorkflowService {
      */
     private void processCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {
         if ("evm".equalsIgnoreCase(profile.getFamily())
-                && repository.isEvm7702Managed(profile.getChain(), profile.getNetwork())) {
+                && evm7702ConfigRepository.existsManaged(profile.getChain(), profile.getNetwork())) {
             return;
         }
         ChainAddressRecord from = requireAddress(record.getChain(), record.getAssetSymbol(), record.getFromAddress());
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
-            if (repository.claimCollectionSigning(
-                    record.getTenantId(), record.getChain(), record.getCollectionNo(), null) != 1) {
+            if (collectionRecordRepository.claimSigning(record.getTenantId(), record.getChain(), record.getCollectionNo(), null) != 1) {
                 return;
             }
             String txHash = isNative(profile, record.getAssetSymbol())
                     ? evmTransactionService.sendNative(record.getChain(), from, record.getToAddress(), record.getAmount())
                     : evmTransactionService.sendToken(record.getChain(), from, requireToken(record.getChain(),
                     record.getAssetSymbol()), record.getToAddress(), record.getAmount());
-            repository.updateCollectionStatus(record.getTenantId(), record.getChain(),
-                    record.getCollectionNo(), "SENT", txHash, null, null);
+            collectionRecordRepository.updateStatus(record.getTenantId(), record.getChain(), record.getCollectionNo(), "SENT", txHash, null, null);
             return;
         }
         switch (profile.getChain()) {
@@ -592,8 +605,7 @@ public class AccountChainWorkflowService {
                 }
             }
             case "HYPERCORE" -> {
-                if (repository.claimCollectionSigning(
-                        record.getTenantId(), record.getChain(), record.getCollectionNo(), null) != 1) {
+                if (collectionRecordRepository.claimSigning(record.getTenantId(), record.getChain(), record.getCollectionNo(), null) != 1) {
                     return;
                 }
                 String actionId = isNative(profile, record.getAssetSymbol())
@@ -601,8 +613,14 @@ public class AccountChainWorkflowService {
                         : hyperCoreTransactionService.sendSpot(profile, from,
                         requireToken(record.getChain(), record.getAssetSymbol()),
                         record.getToAddress(), record.getAmount());
-                repository.updateCollectionStatus(record.getTenantId(), record.getChain(), record.getCollectionNo(),
-                        "SENT", actionId, null, null);
+                collectionRecordRepository.updateStatus(
+                        record.getTenantId(),
+                        record.getChain(),
+                        record.getCollectionNo(),
+                        "SENT",
+                        actionId,
+                        null,
+                        null);
             }
             case "TRON" -> tronWorkflow.processCollection(profile, record, from);
             default -> {
@@ -614,8 +632,7 @@ public class AccountChainWorkflowService {
      */
     private void confirmCollection(AccountChainProfile profile, ChainCollectionRecord record) throws Exception {
         if ("evm".equalsIgnoreCase(profile.getFamily())) {
-            if (repository.isCollectionInPendingEvm7702Batch(
-                    record.getTenantId(), record.getId())) {
+            if (evmBatchOwnershipService.collectionPending(record.getTenantId(), record.getId())) {
                 return;
             }
             evmTransactionService.confirmCollection(
@@ -666,9 +683,13 @@ public class AccountChainWorkflowService {
      * 发送或广播 {@code broadcastTonJetton} 对应的链上请求，并返回节点处理结果。
      */
     private String broadcastTonJetton(WithdrawalOrderRecord order, ChainAddressRecord from, TokenDefinition token) {
-        ChainAddressRecord jettonWallet = repository.findChainAddress(
-                        order.getChain(), token.getSymbol(), from.getUserId(), from.getBiz(),
-                        from.getAddressIndex(), from.getWalletRole())
+        ChainAddressRecord jettonWallet = chainAddressRepository.find(
+                order.getChain(),
+                token.getSymbol(),
+                from.getUserId(),
+                from.getBiz(),
+                from.getAddressIndex(),
+                from.getWalletRole())
                 .orElseThrow(() -> new IllegalStateException("missing materialized TON Jetton wallet for "
                         + token.getSymbol() + " owner=" + from.getAddress()));
         TonTransactionService.PreparedTransfer prepared = tonTransactionService.prepareJetton(
@@ -782,7 +803,7 @@ public class AccountChainWorkflowService {
      * 写入或更新 {@code enabledAccountProfiles} 对应的业务状态，并保持关联字段与审计状态一致。
      */
     private List<AccountChainProfile> enabledAccountProfiles() {
-        return repository.listEnabledChainProfiles().stream()
+        return chainProfileRepository.listProfiles(true).stream()
                 .filter(profile -> !"utxo".equalsIgnoreCase(profile.getFamily()))
                 .filter(profile -> !"bitcoin-like".equalsIgnoreCase(profile.getFamily()))
                 .sorted(Comparator

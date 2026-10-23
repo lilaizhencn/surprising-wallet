@@ -1,7 +1,5 @@
 package com.surprising.wallet.chain.cardano;
 
-import com.surprising.wallet.service.WithdrawalSettlementService;
-
 import com.bloxbean.cardano.client.api.model.Amount;
 import com.bloxbean.cardano.client.crypto.SecretKey;
 import com.bloxbean.cardano.client.exception.CborSerializationException;
@@ -12,19 +10,20 @@ import com.bloxbean.cardano.client.quicktx.TxResult;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.repository.CollectionRecordRepository;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
+import com.surprising.wallet.service.WithdrawalSettlementService;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 /**
  * Cardano 链交易服务，使用 QuickTx 构造并签名交易，通过 Blockfrost 提交。
@@ -53,9 +52,9 @@ public class CardanoTransactionService {
 
     /** Cardano 密钥服务 */
     private final CardanoKeyService keyService;
+    private final CollectionRecordRepository collectionRecordRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
+
     private final WithdrawalSettlementService settlements;
 
     /** 运行时任务开关服务。 */
@@ -112,9 +111,9 @@ public class CardanoTransactionService {
      */
     public boolean confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
                                      String collectionNo) {
-        String txHash = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
+        String txHash = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo).orElseThrow();
         if (confirmed(profile, txHash)) {
-            return repository.markCollectionConfirmed(tenantId, CHAIN, collectionNo, txHash) == 1;
+            return collectionRecordRepository.markConfirmed(tenantId, CHAIN, collectionNo, txHash) == 1;
         }
         return false;
     }
@@ -164,21 +163,20 @@ public class CardanoTransactionService {
      * 处理 {@code collect} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
      */
     private String collect(java.util.UUID tenantId, String collectionNo, TxSubmitter submitter) {
-        Optional<String> existing = repository.findCollectionTxHash(tenantId, CHAIN, collectionNo);
+        Optional<String> existing = collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo);
         if (existing.isPresent()) {
             return existing.get();
         }
-        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
-            return repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
+        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+            return collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
                     .orElseThrow(() -> new IllegalStateException("Cardano collection is not retryable"));
         }
         try {
             String txHash = submitter.submit();
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
             return txHash;
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
-                    "FAILED", null, e.getMessage(), null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }

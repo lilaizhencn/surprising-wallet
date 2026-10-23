@@ -3,15 +3,15 @@ package com.surprising.wallet.repository;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
+import com.surprising.wallet.service.DepositService;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /** HyperCore 业务仓储门面，实际 SQL 由各单表仓储执行。 */
 @Component
@@ -27,14 +27,16 @@ public class HyperCoreRepository {
     /** 操作记录单表仓储。 */
     private final HyperCoreActionRepository actions;
     /** 链充值业务门面。 */
-    private final ChainJdbcRepository chainRepository;
+    private final DepositService depositService;
 
     /** 兼容测试和手工构造。 */
-    public HyperCoreRepository(JdbcTemplate jdbc, ChainJdbcRepository chainRepository) {
-        this(new HyperCoreBalanceSnapshotRepository(jdbc),
+    public HyperCoreRepository(JdbcTemplate jdbc, DepositService depositService) {
+        this(
+                new HyperCoreBalanceSnapshotRepository(jdbc),
                 new HyperCoreTokenMetadataRepository(jdbc),
                 new HyperCoreSpotAssetRepository(jdbc),
-                new HyperCoreActionRepository(jdbc), chainRepository);
+                new HyperCoreActionRepository(jdbc),
+                depositService);
     }
 
     /** Spring 构造器，注入各自负责单表的数据访问组件。 */
@@ -44,12 +46,12 @@ public class HyperCoreRepository {
             HyperCoreTokenMetadataRepository tokenMetadata,
             HyperCoreSpotAssetRepository spotAssets,
             HyperCoreActionRepository actions,
-            ChainJdbcRepository chainRepository) {
+            DepositService depositService) {
         this.snapshots = snapshots;
         this.tokenMetadata = tokenMetadata;
         this.spotAssets = spotAssets;
         this.actions = actions;
-        this.chainRepository = chainRepository;
+        this.depositService = depositService;
     }
 
     /** 记录余额快照并将正向增量转为充值事件。 */
@@ -72,7 +74,7 @@ public class HyperCoreRepository {
         DepositEvent event = new DepositEvent(
                 ChainType.HYPERCORE, symbol, txHash, "hypercore", address.getAddress(), delta,
                 System.currentTimeMillis(), txHash, 1, null, rawPayload);
-        chainRepository.recordAndCreditDeposit(event, 0L, 1, address.getAccountId());
+        depositService.recordAndCredit(event, 0L, 1, address.getAccountId());
         return Optional.of(delta);
     }
 

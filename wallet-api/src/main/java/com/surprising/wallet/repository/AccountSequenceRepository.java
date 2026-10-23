@@ -1,10 +1,9 @@
 package com.surprising.wallet.repository;
 
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
-
 import java.sql.Timestamp;
 import java.time.Instant;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
 
 /** account_sequence 单表仓储。 */
 @Repository
@@ -19,24 +18,18 @@ public class AccountSequenceRepository {
 
     /** 原子预留下一个账户序列号。 */
     public long reserve(String chain, String address, long chainSequence) {
+        if (chainSequence < 0 || chainSequence == Long.MAX_VALUE)
+            throw new IllegalArgumentException("account sequence is outside the reservable range");
         Timestamp now = Timestamp.from(Instant.now());
-        jdbc.update("""
+        return jdbc.queryForObject("""
                 insert into account_sequence(chain, address, chain_sequence, next_sequence, status, created_at, updated_at)
                 values (?, ?, ?, ?, 'ACTIVE', ?, ?)
-                on conflict (chain, address) do nothing
-                """, chain, address, chainSequence, chainSequence, now, now);
-        Long next = jdbc.queryForObject("""
-                select next_sequence from account_sequence
-                 where chain = ? and address = ? for update
-                """, Long.class, chain, address);
-        long reserved = Math.max(chainSequence, next == null ? chainSequence : next);
-        jdbc.update("""
-                update account_sequence
-                   set chain_sequence = greatest(chain_sequence, ?), next_sequence = ?,
-                       status = 'ACTIVE', updated_at = ?
-                 where chain = ? and address = ?
-                """, chainSequence, reserved + 1, Timestamp.from(Instant.now()), chain, address);
-        return reserved;
+                on conflict (chain, address) do update set
+                    chain_sequence = greatest(account_sequence.chain_sequence, excluded.chain_sequence),
+                    next_sequence = greatest(account_sequence.next_sequence, excluded.chain_sequence) + 1,
+                    status = 'ACTIVE', updated_at = excluded.updated_at
+                returning next_sequence - 1
+                """, Long.class, chain, address, chainSequence, chainSequence + 1, now, now);
     }
 
     /** 同步链上账户序列号。 */

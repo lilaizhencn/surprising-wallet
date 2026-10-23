@@ -1,13 +1,21 @@
 package com.surprising.wallet.config;
 
+import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.chain.EvmFeeModel;
 import com.surprising.wallet.common.chain.EvmGasPolicy;
-import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainRpcNodeRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,12 +25,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 /**
  * 应用启动自检器，防止在链配置、RPC 配置、资产配置存在缺失时上线路径运行。
  */
@@ -31,7 +33,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class WalletStartupValidator implements ApplicationRunner {
     /** 链配置仓储，用于读取 chain_profile/rpc/config 运行状态。 */
-    private final ChainJdbcRepository repository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final ChainAssetRepository chainAssetRepository;
+    private final TokenConfigRepository tokenConfigRepository;
+    private final ChainRpcNodeRepository chainRpcNodeRepository;
+
     /** 运行时开关配置，核验任务总开关与链级开关。 */
     private final WalletRuntimeConfigService runtimeConfigService;
     /** 原始 SQL 查询器，用于关键配置一致性校验。 */
@@ -147,7 +153,7 @@ public class WalletStartupValidator implements ApplicationRunner {
      * 每条链必须有且仅有一个启用网络；生产环境只允许生产网络。
      */
     List<AccountChainProfile> validateProfiles() {
-        List<AccountChainProfile> enabledProfiles = repository.listEnabledChainProfiles();
+        List<AccountChainProfile> enabledProfiles = chainProfileRepository.listProfiles(true);
         if (enabledProfiles.isEmpty()) {
             throw new IllegalStateException("no enabled chain_profile rows");
         }
@@ -196,12 +202,11 @@ public class WalletStartupValidator implements ApplicationRunner {
             throw new IllegalStateException("enabled EVM chain_profile has invalid fee policy: "
                     + profile.getChain() + "/" + profile.getNetwork(), e);
         }
-        ChainAsset nativeAsset = repository.findAsset(
-                        profile.getChain(), profile.getNativeSymbol())
+        ChainAsset nativeAsset = chainAssetRepository.findActiveDefinition(profile.getChain(), profile.getNativeSymbol())
                 .orElseThrow(() -> new IllegalStateException(
                         "enabled EVM chain_profile requires an active native chain_asset: "
                                 + profile.getChain() + "/" + profile.getNativeSymbol()));
-        if (repository.countActiveNativeAssets(profile.getChain()) != 1) {
+        if (chainAssetRepository.countActiveNativeAssets(profile.getChain()) != 1) {
             throw new IllegalStateException(
                     "enabled EVM chain_profile requires exactly one active native chain_asset: "
                             + profile.getChain());
@@ -294,9 +299,15 @@ public class WalletStartupValidator implements ApplicationRunner {
      */
     private void validateRequiredRpcPurposes(AccountChainProfile profile) {
         for (String purpose : WalletRpcPolicy.requiredPurposes(
-                profile.getChain(), profile.getNetwork(), !repository.listTokens(profile.getChain()).isEmpty())) {
-            List<ChainRpcNode> purposeNodes = repository.listEnabledRpcNodes(
-                    profile.getChain(), profile.getNetwork(), environmentName, purpose);
+
+                profile.getChain(),
+                profile.getNetwork(),
+                !chainProfileRepository.findAccountByChain(profile.getChain()).map(configuredNetworkProfile -> tokenConfigRepository.listDefinitions(profile.getChain(), configuredNetworkProfile.getNetwork())).orElse(List.of()).isEmpty())) {
+            List<ChainRpcNode> purposeNodes = chainRpcNodeRepository.listRuntimeNodes(
+                    profile.getChain(),
+                    profile.getNetwork(),
+                    environmentName,
+                    purpose == null ? "rpc" : purpose);
             if (purposeNodes.isEmpty()) {
                 throw new IllegalStateException(
                         "enabled chain_profile has no enabled chain_rpc_node for required purpose="
@@ -360,9 +371,9 @@ public class WalletStartupValidator implements ApplicationRunner {
                 runtimeConfigService.isGlobalTaskEnabled(WalletRuntimeConfigService.TASK_COLLECTION),
                 runtimeConfigService.isGlobalTaskEnabled(WalletRuntimeConfigService.TASK_TRANSFER));
 
-        for (AccountChainProfile profile : repository.listAllChainProfiles()) {
+        for (AccountChainProfile profile : chainProfileRepository.listProfiles(false)) {
             List<ChainRpcNode> nodes = Boolean.TRUE.equals(profile.getEnabled())
-                    ? repository.listAllEnabledRpcNodes(profile.getChain(), profile.getNetwork(), environmentName)
+                    ? chainRpcNodeRepository.listRuntimeNodes(profile.getChain(), profile.getNetwork(), environmentName, null)
                     : List.of();
             if (!Boolean.TRUE.equals(profile.getEnabled())) {
                 log.warn("chain disabled: {}/{}", profile.getChain(), profile.getNetwork());

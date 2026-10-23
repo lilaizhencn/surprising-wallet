@@ -1,25 +1,30 @@
 package com.surprising.wallet.chain.aptos;
 
-import tools.jackson.databind.JsonNode;
-import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.AptosTransactionRecord;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.common.chain.TokenDefinition;
+import com.surprising.wallet.repository.AptosTransactionRepository;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainScanHeightRepository;
+import com.surprising.wallet.repository.TokenConfigRepository;
+import com.surprising.wallet.service.DepositService;
 import com.surprising.wallet.service.WalletRuntimeConfigService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
-import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Aptos 链充值扫描器，通过扫描链上交易事件识别 Fungible Asset Deposit 事件。
@@ -58,9 +63,14 @@ public class AptosDepositScanner {
 
     /** Aptos RPC 客户端 */
     private final AptosRpcClient rpc;
+    private final ChainAddressRepository chainAddressRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final TokenConfigRepository tokenConfigRepository;
+    private final ChainScanHeightRepository chainScanHeightRepository;
+    private final AptosTransactionRepository aptosTransactionRepository;
+    private final DepositService depositService;
+    private final ChainAssetRepository chainAssetRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
 
     /** 运行时任务开关服务。 */
     @NonNull
@@ -77,16 +87,16 @@ public class AptosDepositScanner {
         int scanLimit = scanLimit(profile);
         long ledgerVersion = rpc.ledgerVersion();
         List<DepositEvent> events = new ArrayList<>();
-        Map<String, ChainAddressRecord> nativeAddresses = repository.listChainAddresses(CHAIN, "APT").stream()
+        Map<String, ChainAddressRecord> nativeAddresses = chainAddressRepository.listEnabled(CHAIN, "APT").stream()
                 .filter(address -> "DEPOSIT".equals(address.getWalletRole()))
                 .collect(Collectors.toMap(address -> AptosHex.normalizeAddress(address.getAddress()),
                         address -> address, (a, b) -> a));
-        Map<String, TokenDefinition> metadataTokens = repository.listTokens(CHAIN).stream()
+        Map<String, TokenDefinition> metadataTokens = chainProfileRepository.findAccountByChain(CHAIN).map( configuredNetworkProfile -> tokenConfigRepository.listDefinitions(CHAIN, configuredNetworkProfile.getNetwork())).orElse(List.of()).stream()
                 .filter(AptosFungibleAsset::supports)
                 .collect(Collectors.toMap(token -> AptosHex.normalizeAddress(token.getContractAddress()),
                         token -> token, (a, b) -> a));
 
-        long start = repository.findScanSafeHeight(CHAIN, SCANNER)
+        long start = chainScanHeightRepository.findSafeHeight(CHAIN, SCANNER)
                 .map(height -> Math.min(height + 1L, ledgerVersion))
                 .orElse(Math.max(0L, ledgerVersion - scanLimit + 1L));
         while (start <= ledgerVersion) {
@@ -98,7 +108,7 @@ public class AptosDepositScanner {
             start += limit;
         }
         long safeVersion = Math.max(0, ledgerVersion - profile.getDepositConfirmations() + 1L);
-        repository.updateScanHeight(CHAIN, SCANNER, ledgerVersion, safeVersion);
+        chainScanHeightRepository.upsert(CHAIN, SCANNER, ledgerVersion, safeVersion);
         return events;
     }
 
@@ -149,7 +159,7 @@ public class AptosDepositScanner {
             DepositEvent event = new DepositEvent(ChainType.APTOS, asset.symbol(), hash, sender,
                     asset.address().getAddress(), amount, version, hash, confirmations,
                     asset.tokenAddress(), transaction.toString());
-            repository.recordAptosTransaction(AptosTransactionRecord.builder()
+            aptosTransactionRepository.upsert(AptosTransactionRecord.builder()
                     .chain(CHAIN)
                     .txHash(hash)
                     .sender(sender)
@@ -165,8 +175,7 @@ public class AptosDepositScanner {
                     .status(confirmations >= profile.getDepositConfirmations() ? "CONFIRMED" : "CONFIRMING")
                     .rawPayload(transaction.toString())
                     .build());
-            repository.recordAndCreditDeposit(event, eventIndex, profile.getDepositConfirmations(),
-                    asset.address().getAccountId());
+            depositService.recordAndCredit(event, eventIndex, profile.getDepositConfirmations(), asset.address().getAccountId());
             events.add(event);
         }
     }
@@ -174,7 +183,7 @@ public class AptosDepositScanner {
      * 获取或查询 {@code profile} 对应的数据，并向调用方返回当前业务状态。
      */
     private AccountChainProfile profile() {
-        return repository.findProfileByChain(CHAIN)
+        return chainProfileRepository.findAccountByChain(CHAIN)
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
     }
     /**
@@ -192,7 +201,7 @@ public class AptosDepositScanner {
                                        Map<String, ChainAddressRecord> nativeAddresses,
                                        Map<String, TokenDefinition> metadataTokens) {
         if (APT_METADATA.equals(metadata) && nativeAddresses.containsKey(owner)) {
-            int decimals = repository.findAsset(CHAIN, "APT").map(asset -> asset.getDecimals()).orElse(8);
+            int decimals = chainAssetRepository.findActiveDefinition(CHAIN, "APT").map(asset -> asset.getDecimals()).orElse(8);
             return new ResolvedAsset("APT", AptosRpcClient.aptCoinType(), null, nativeAddresses.get(owner),
                     decimals);
         }
@@ -240,7 +249,7 @@ public class AptosDepositScanner {
      * 判断 {@code isPlatformAddress} 对应的条件是否成立，并返回明确的布尔结果。
      */
     private boolean isPlatformAddress(String address) {
-        for (ChainAddressRecord tracked : repository.listChainAddresses(CHAIN)) {
+        for (ChainAddressRecord tracked : chainAddressRepository.listEnabled(CHAIN)) {
             if (sameAddress(address, tracked.getAddress()) || sameAddress(address, tracked.getOwnerAddress())) {
                 return true;
             }

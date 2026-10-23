@@ -1,19 +1,24 @@
 package com.surprising.wallet.custody;
 
-import com.surprising.wallet.repository.ChainFeeRateRepository;
 import com.surprising.wallet.chain.BitcoinLikeSettlementService;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
+import com.surprising.wallet.chain.model.UtxoSigningTransaction;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.json.JacksonJson;
-import com.surprising.wallet.chain.model.UtxoSigningTransaction;
-import com.surprising.wallet.common.signing.*;
-import static com.surprising.wallet.testutil.UtxoSigningTestSupport.*;
 import com.surprising.wallet.common.queue.*;
+import com.surprising.wallet.common.signing.*;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.repository.*;
+import com.surprising.wallet.repository.ChainFeeRateRepository;
 import com.surprising.wallet.service.*;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.concurrent.*;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -21,12 +26,11 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import tools.jackson.databind.ObjectMapper;
-import java.math.BigDecimal;
-import java.util.*;
-import java.util.concurrent.*;
-import static org.junit.jupiter.api.Assertions.*;
+
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static com.surprising.wallet.testutil.UtxoSigningTestSupport.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 /** Real PG18 row locks, queue transactions and settlement; no extra database server. */
 @EnabledIfEnvironmentVariable(named = "SW_TEST_CUSTODY_DB_URL", matches = ".+")
@@ -37,7 +41,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
     final ObjectMapper json = new ObjectMapper();
     AnnotationConfigApplicationContext context;
     JdbcTemplate jdbc;
-    ChainJdbcRepository repository;
+    ChainRepositoryFixture repository;
     RbfBumpService rbf;
     BitcoinLikeSettlementService settlement;
     UtxoBroadcastService broadcaster;
@@ -67,7 +71,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         context = new AnnotationConfigApplicationContext();
         context.register(Transactions.class);
         context.registerBean(PlatformTransactionManager.class, () -> manager);
-        context.registerBean(ChainJdbcRepository.class, () -> repository);
+        context.registerBean(ChainRepositoryFixture.class, () -> repository);
         signing = new ChainSigningTransactionRepository(jdbc, json);
         context.registerBean(ChainSigningTransactionRepository.class, () -> signing);
         context.registerBean(WithdrawalOrderRepository.class, () -> new WithdrawalOrderRepository(jdbc));
@@ -88,6 +92,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
                 () -> com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         context.registerBean(BitcoinLikeSettlementService.class);
         context.registerBean(UtxoBroadcastService.class);
+        repository.register(context);
         context.refresh();
         rbf = context.getBean(RbfBumpService.class);
         settlement = context.getBean(BitcoinLikeSettlementService.class);
@@ -104,16 +109,25 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
                     subject, source, derivation_subject, derivation_child)
                 values (?, ?, ?, 'BTC', 'regtest', 'source', 'test-user', 'API', 100, 0)
                 """, custodyAddress, TENANT, addressId);
-        repository.createCollectionRecord(TENANT, custodyAddress, "COLL-RBF", "BTC", "BTC", "source", "collector",
-                new BigDecimal("0.00998410"), new BigDecimal("0.00001590"), null);
-        repository.claimCollectionSigning(TENANT, "BTC", "COLL-RBF", null);
-        repository.updateCollectionStatus(TENANT, "BTC", "COLL-RBF", "SENT", ORIGINAL, null, null);
+        repository.collectionRecordRepository.create(
+                TENANT,
+                custodyAddress,
+                "COLL-RBF",
+                "BTC",
+                "BTC",
+                "source",
+                "collector",
+                new BigDecimal("0.00998410"),
+                new BigDecimal("0.00001590"),
+                null);
+        repository.collectionRecordRepository.claimSigning(TENANT, "BTC", "COLL-RBF", null);
+        repository.collectionRecordRepository.updateStatus(TENANT, "BTC", "COLL-RBF", "SENT", ORIGINAL, null, null);
         var request = request(TENANT, UtxoSigningRequest.Operation.COLLECTION, "0.01", "0.00998410");
         var transaction = signing.create(request, "COLL-RBF");
         id = transaction.id();
         signing.update(transaction.withSigned(com.surprising.wallet.testutil.UtxoSigningTestSupport.signed(ORIGINAL, 1590), Constants.SENT));
-        repository.upsertUtxo("BTC", "BTC", INPUT, 0, "source", new BigDecimal("0.01"), 1, "block", 6, true);
-        assertEquals(1, repository.lockUtxo("BTC", INPUT, 0, String.valueOf(id)));
+        repository.utxoRepository.upsert("BTC", "BTC", INPUT, 0, "source", new BigDecimal("0.01"), 1, "block", 6, true);
+        assertEquals(1, repository.utxoRepository.lock("BTC", INPUT, 0, String.valueOf(id)));
         jdbc.update("insert into ledger_balance(tenant_id, chain, asset_symbol, account_id, available_balance, total_balance) "
                 + "values (?, 'BTC', 'BTC', 'test-user', 0.01, 0.01)", TENANT);
     }
@@ -152,9 +166,9 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
     }
     @Test void originalConfirmationRestoresAmountsAfterReplacementBroadcast() {
         broadcaster.apply(signed(rbf.bumpFee(id, TENANT, ORIGINAL), true));
-        assertTrue(repository.isInternalCollectionTransfer(TENANT, "BTC", ORIGINAL, "collector"));
-        assertFalse(repository.isInternalCollectionTransfer(UUID.randomUUID(), "BTC", ORIGINAL, "collector"));
-        assertFalse(repository.isInternalCollectionTransfer(TENANT, "BTC", ORIGINAL, "external"));
+        assertTrue(repository.depositService.isInternalCollectionTransfer(TENANT, "BTC", ORIGINAL, "collector"));
+        assertFalse(repository.depositService.isInternalCollectionTransfer(UUID.randomUUID(), "BTC", ORIGINAL, "collector"));
+        assertFalse(repository.depositService.isInternalCollectionTransfer(TENANT, "BTC", ORIGINAL, "external"));
         settlement.settleConfirmed("BTC", id, ORIGINAL);
         assertAmounts("0.00998410", "0.00001590");
         assertEquals(3180, current().attempts().get(1).transaction().feeAtomic());
@@ -243,7 +257,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
     }
     private UtxoSigningTransaction current() { return signing.findById("BTC", id).orElseThrow(); }
     private String inputState() { return jdbc.queryForObject("select state from utxo_record where tx_hash = ?", String.class, INPUT); }
-    private String collectionStatus() { return repository.findCollectionStatus(TENANT, "BTC", "COLL-RBF").orElseThrow(); }
+    private String collectionStatus() { return repository.collectionRecordRepository.findStatus(TENANT, "BTC", "COLL-RBF").orElseThrow(); }
     private void assertAmounts(String amount, String fee) {
         var row = jdbc.queryForMap("select amount, fee from collection_record where collection_no = 'COLL-RBF'");
         assertEquals(0, new BigDecimal(amount).compareTo((BigDecimal) row.get("amount")));

@@ -1,29 +1,31 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.aptos.AptosKeyService;
 import com.surprising.wallet.chain.solana.SolanaKeyService;
 import com.surprising.wallet.chain.sui.SuiKeyService;
 import com.surprising.wallet.chain.ton.TonKeyService;
-import com.surprising.wallet.config.PubKeyConfig;
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
 import com.surprising.wallet.common.signing.UtxoSigningRequest;
-import com.surprising.wallet.sdk.bitcoinj.core.BitcoinLikeNetwork;
+import com.surprising.wallet.config.PubKeyConfig;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashAddressCodec;
 import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParameters;
-import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
+import com.surprising.wallet.sdk.bitcoinj.core.BitcoinLikeNetwork;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.stream.Stream;
 import org.bitcoinj.base.LegacyAddress;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.stream.Stream;
+import org.mockito.Mockito;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -49,11 +51,11 @@ class HotWalletAddressServiceTest {
      */
     @Test
     void hyperCoreUsesSecp256k1AccountDerivation() {
-        var material = org.mockito.Mockito.mock(com.surprising.wallet.common.key.WalletKeyMaterialProvider.class);
-        org.mockito.Mockito.when(material.sig2PublicRoot()).thenReturn(Bip32Node.decode(XPUB_2));
+        var material = Mockito.mock(com.surprising.wallet.common.key.WalletKeyMaterialProvider.class);
+        Mockito.when(material.sig2PublicRoot()).thenReturn(Bip32Node.decode(XPUB_2));
         PubKeyConfig pubKeyConfig = new PubKeyConfig(material);
         HotWalletAddressService service = new HotWalletAddressService(
-                null, pubKeyConfig, null, null, null, null, null, null, null, null, null);
+                Mockito.mock(ChainAddressRepository.class), pubKeyConfig, null, null, null, null, null, null, null, null, null);
         AccountChainProfile profile = AccountChainProfile.builder()
                 .chain("HYPERCORE")
                 .network("testnet")
@@ -76,11 +78,11 @@ class HotWalletAddressServiceTest {
      */
     @Test
     void evmChainsShareAddressAtTheSameTenantCoordinates() {
-        var material = org.mockito.Mockito.mock(com.surprising.wallet.common.key.WalletKeyMaterialProvider.class);
-        org.mockito.Mockito.when(material.sig2PublicRoot()).thenReturn(Bip32Node.decode(XPUB_2));
+        var material = Mockito.mock(com.surprising.wallet.common.key.WalletKeyMaterialProvider.class);
+        Mockito.when(material.sig2PublicRoot()).thenReturn(Bip32Node.decode(XPUB_2));
         PubKeyConfig pubKeyConfig = new PubKeyConfig(material);
         HotWalletAddressService service = new HotWalletAddressService(
-                null, pubKeyConfig, null, null, null, null, null, null, null, null, null);
+                Mockito.mock(ChainAddressRepository.class), pubKeyConfig, null, null, null, null, null, null, null, null, null);
         AccountChainProfile ethereum = profile("ETH", "evm", "ETH", 60);
         AccountChainProfile bnb = profile("BNB", "evm", "BNB", 714);
 
@@ -141,14 +143,14 @@ class HotWalletAddressServiceTest {
 
     private static HotWalletAddressService bitcoinLikeService(PubKeyConfig keys) {
         return new HotWalletAddressService(
-                org.mockito.Mockito.mock(com.surprising.wallet.repository.ChainJdbcRepository.class), keys,
-                org.mockito.Mockito.mock(SolanaKeyService.class), org.mockito.Mockito.mock(SuiKeyService.class),
-                org.mockito.Mockito.mock(AptosKeyService.class), org.mockito.Mockito.mock(TonKeyService.class),
-                org.mockito.Mockito.mock(com.surprising.wallet.chain.xrp.XrpKeyService.class),
-                org.mockito.Mockito.mock(com.surprising.wallet.chain.cardano.CardanoKeyService.class),
-                org.mockito.Mockito.mock(com.surprising.wallet.chain.near.NearKeyService.class),
-                org.mockito.Mockito.mock(com.surprising.wallet.chain.polkadot.PolkadotKeyService.class),
-                org.mockito.Mockito.mock(com.surprising.wallet.chain.monero.MoneroAddressService.class));
+                Mockito.mock(ChainAddressRepository.class), keys,
+                Mockito.mock(SolanaKeyService.class), Mockito.mock(SuiKeyService.class),
+                Mockito.mock(AptosKeyService.class), Mockito.mock(TonKeyService.class),
+                Mockito.mock(com.surprising.wallet.chain.xrp.XrpKeyService.class),
+                Mockito.mock(com.surprising.wallet.chain.cardano.CardanoKeyService.class),
+                Mockito.mock(com.surprising.wallet.chain.near.NearKeyService.class),
+                Mockito.mock(com.surprising.wallet.chain.polkadot.PolkadotKeyService.class),
+                Mockito.mock(com.surprising.wallet.chain.monero.MoneroAddressService.class));
     }
 
     private static byte[] seedBytes(int marker) {
@@ -207,7 +209,7 @@ class HotWalletAddressServiceTest {
      */
     private static HotWalletAddressService tenantEd25519Service() {
         return new HotWalletAddressService(
-                null,
+                Mockito.mock(ChainAddressRepository.class),
                 null,
                 new SolanaKeyService(ED25519_SEED),
                 new SuiKeyService(ED25519_SEED),

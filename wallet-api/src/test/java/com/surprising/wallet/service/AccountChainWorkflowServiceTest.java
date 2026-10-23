@@ -1,19 +1,17 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.chain.aptos.AptosTransactionService;
+import com.surprising.wallet.chain.evm.EvmAccountTransactionService;
 import com.surprising.wallet.chain.model.ChainAsset;
+import com.surprising.wallet.chain.ton.TonTransactionService;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
-import com.surprising.wallet.chain.aptos.AptosTransactionService;
-import com.surprising.wallet.chain.evm.EvmAccountTransactionService;
-import com.surprising.wallet.chain.ton.TonTransactionService;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Test;
-
+import com.surprising.wallet.repository.*;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
@@ -21,15 +19,21 @@ import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.mock;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.*;
+
 /**
  * 验证 {@code AccountChainWorkflowServiceTest} 覆盖的业务流程、边界条件和异常行为。
  */
+
 class AccountChainWorkflowServiceTest {
     /**
      * 保存 {@code TENANT_ID}，用于标识测试中的交易、区块或业务记录。
@@ -361,7 +365,7 @@ class AccountChainWorkflowServiceTest {
     /**
      * 验证 {@code service} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static AccountChainWorkflowService service(ChainJdbcRepository repository,
+    private static AccountChainWorkflowService service(ChainRepositoryFixture repository,
                                                        EvmAccountTransactionService evmService) {
         return createService(
                 repository,
@@ -401,7 +405,7 @@ class AccountChainWorkflowServiceTest {
     /**
      * 验证 {@code service} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static AccountChainWorkflowService service(ChainJdbcRepository repository,
+    private static AccountChainWorkflowService service(ChainRepositoryFixture repository,
                                                        AptosTransactionService aptosService) {
         return createService(
                 repository,
@@ -438,7 +442,7 @@ class AccountChainWorkflowServiceTest {
     /**
      * 验证 {@code service} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static AccountChainWorkflowService service(ChainJdbcRepository repository,
+    private static AccountChainWorkflowService service(ChainRepositoryFixture repository,
                                                        TonTransactionService tonService) {
         return createService(
                 repository,
@@ -451,7 +455,7 @@ class AccountChainWorkflowServiceTest {
      * 验证 {@code createService} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private static AccountChainWorkflowService createService(
-            ChainJdbcRepository repository, Object... dependencies) {
+            ChainRepositoryFixture repository, Object... dependencies) {
         EvmAccountTransactionService evmService = null;
         AptosTransactionService aptosService = null;
         TonTransactionService tonService = null;
@@ -464,8 +468,8 @@ class AccountChainWorkflowServiceTest {
                 tonService = value;
             }
         }
-        var settlements = org.mockito.Mockito.mock(WithdrawalSettlementService.class);
-        org.mockito.Mockito.when(settlements.confirm(any(), anyString(), anyString(), anyString(),
+        var settlements = Mockito.mock(WithdrawalSettlementService.class);
+        Mockito.when(settlements.confirm(any(), anyString(), anyString(), anyString(),
                 anyString(), anyString(), any())).thenAnswer(invocation -> {
             if (!(repository instanceof FakeRepository fake)) {
                 throw new AssertionError("unexpected withdrawal settlement in this fixture");
@@ -473,10 +477,25 @@ class AccountChainWorkflowServiceTest {
             fake.withdrawalSettlements++;
             return true;
         });
-        return new AccountChainWorkflowService(repository,
+        return new AccountChainWorkflowService(
+                repository.chainProfileRepository,
+                repository.evm7702ConfigRepository,
+                repository.withdrawalOrderRepository,
+                repository.collectionRecordRepository,
+                repository.withdrawalClaimService,
+                repository.evmBatchOwnershipService,
+                repository.collectionPlanningService,
+                repository.tokenConfigRepository,
+                repository.chainAddressRepository,
                 null,
                 null,
-                new AccountChainAssetService(repository, null),
+                new AccountChainAssetService(
+                        repository.evm7702ConfigRepository,
+                        repository.chainAddressRepository,
+                        repository.chainProfileRepository,
+                        repository.tokenConfigRepository,
+                        repository.chainAssetRepository,
+                        null),
                 null,
                 evmService,
                 null,
@@ -495,7 +514,7 @@ class AccountChainWorkflowServiceTest {
     /**
      * 测试替身 {@code FakeRepository}，用于隔离外部依赖并验证调用参数和状态变化。
      */
-    private static final class FakeRepository extends ChainJdbcRepository {
+    private static final class FakeRepository extends ChainRepositoryFixture {
         /**
          * 保存 {@code address}，表示测试所覆盖的链、网络、资产或代币配置。
          */
@@ -546,140 +565,117 @@ class AccountChainWorkflowServiceTest {
         /**
          * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
-        private FakeRepository(ChainAddressRecord address, TokenDefinition token,
-                               ChainAddressRecord tokenAddress) {
-            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
+        private FakeRepository(ChainAddressRecord address, TokenDefinition token, ChainAddressRecord tokenAddress) {
+            super();
             this.address = address;
             this.token = token;
             this.tokenAddress = tokenAddress;
+            Mockito.doAnswer(invocation -> java.util.Optional.of(com.surprising.wallet.common.chain.AccountChainProfile.builder().chain(invocation.getArgument(0)).network("testnet").build())).when(chainProfileRepository).findAccountByChain(ArgumentMatchers.anyString());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_assetSymbol = invocation.getArgument(1);
+                long arg_userId = invocation.getArgument(2);
+                int arg_biz = invocation.getArgument(3);
+                long arg_addressIndex = invocation.getArgument(4);
+                String arg_walletRole = invocation.getArgument(5);
+                return Optional.ofNullable(tokenAddress);
+            }).when(chainAddressRepository).find(
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.anyLong(),
+                    ArgumentMatchers.anyInt(),
+                    ArgumentMatchers.anyLong(),
+                    ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_assetSymbol = invocation.getArgument(1);
+                String arg_address = invocation.getArgument(2);
+                return Optional.of(this.address);
+            }).when(chainAddressRepository).findEnabledByAddress(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_address = invocation.getArgument(1);
+                return Optional.of(this.address);
+            }).when(chainAddressRepository).findEnabledByAddress(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                UUID arg_tenantId = invocation.getArgument(0);
+                String arg_chain = invocation.getArgument(1);
+                String arg_assetSymbol = invocation.getArgument(2);
+                String arg_address = invocation.getArgument(3);
+                return TENANT_ID.equals(arg_tenantId) ? Optional.of(this.address) : Optional.empty();
+            }).when(chainAddressRepository).findEnabledByTenantAndAddress(ArgumentMatchers.<UUID>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                UUID arg_tenantId = invocation.getArgument(0);
+                String arg_chain = invocation.getArgument(1);
+                String arg_address = invocation.getArgument(2);
+                return TENANT_ID.equals(arg_tenantId) ? Optional.of(this.address) : Optional.empty();
+            }).when(chainAddressRepository).findEnabledByTenantAndAddress(ArgumentMatchers.<UUID>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_symbol = invocation.getArgument(2);
+                return Optional.ofNullable(token);
+            }).when(tokenConfigRepository).findDefinition(ArgumentMatchers.<String>any(), ArgumentMatchers.any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_symbol = invocation.getArgument(1);
+                return Optional.empty();
+            }).when(chainAssetRepository).findActiveDefinition(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                UUID arg_tenantId = invocation.getArgument(0);
+                long arg_withdrawalOrderId = invocation.getArgument(1);
+                return false;
+            }).when(evmBatchOwnershipService).withdrawalPending(ArgumentMatchers.<UUID>any(), ArgumentMatchers.anyLong());
+            Mockito.doAnswer(invocation -> {
+                UUID arg_tenantId = invocation.getArgument(0);
+                long arg_collectionRecordId = invocation.getArgument(1);
+                return false;
+            }).when(evmBatchOwnershipService).collectionPending(ArgumentMatchers.<UUID>any(), ArgumentMatchers.anyLong());
+            Mockito.doAnswer(invocation -> {
+                UUID arg_tenantId = invocation.getArgument(0);
+                String arg_chain = invocation.getArgument(1);
+                String arg_orderNo = invocation.getArgument(2);
+                String arg_fromAddress = invocation.getArgument(3);
+                signingClaims++;
+                return 1;
+            }).when(withdrawalClaimService).claim(ArgumentMatchers.<UUID>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_orderNo = invocation.getArgument(1);
+                String arg_fromAddress = invocation.getArgument(2);
+                String arg_errorMessage = invocation.getArgument(3);
+                broadcastUnknownMarks++;
+                broadcastError = arg_errorMessage;
+                return 1;
+            }).when(withdrawalOrderRepository).markBroadcastUnknown(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                UUID arg_tenantId = invocation.getArgument(0);
+                String arg_chain = invocation.getArgument(1);
+                String arg_orderNo = invocation.getArgument(2);
+                String arg_fromAddress = invocation.getArgument(3);
+                String arg_errorMessage = invocation.getArgument(4);
+                broadcastUnknownMarks++;
+                broadcastError = arg_errorMessage;
+                return 1;
+            }).when(withdrawalOrderRepository).markBroadcastUnknown(
+                    ArgumentMatchers.<UUID>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_assetSymbol = invocation.getArgument(1);
+                String arg_accountId = invocation.getArgument(2);
+                BigDecimal arg_amount = invocation.getArgument(3);
+                lockReleases++;
+                return true;
+            }).when(ledgerBalanceRepository).release(
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<BigDecimal>any(),
+                    ArgumentMatchers.isNull());
         }
-
-        /**
-         * 验证 {@code findChainAddress} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<ChainAddressRecord> findChainAddress(String chain, String assetSymbol, long userId,
-                                                             int biz, long addressIndex, String walletRole) {
-            return Optional.ofNullable(tokenAddress);
-        }
-
-        /**
-         * 验证 {@code findChainAddressByAddress} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<ChainAddressRecord> findChainAddressByAddress(String chain, String assetSymbol, String address) {
-            return Optional.of(this.address);
-        }
-
-        /**
-         * 验证 {@code findChainAddressByAddress} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<ChainAddressRecord> findChainAddressByAddress(String chain, String address) {
-            return Optional.of(this.address);
-        }
-
-        /**
-         * 验证 {@code findChainAddressByAddress} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<ChainAddressRecord> findChainAddressByAddress(
-                UUID tenantId, String chain, String assetSymbol, String address) {
-            return TENANT_ID.equals(tenantId) ? Optional.of(this.address) : Optional.empty();
-        }
-
-        /**
-         * 验证 {@code findChainAddressByAddress} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<ChainAddressRecord> findChainAddressByAddress(
-                UUID tenantId, String chain, String address) {
-            return TENANT_ID.equals(tenantId) ? Optional.of(this.address) : Optional.empty();
-        }
-
-        /**
-         * 验证 {@code findToken} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<TokenDefinition> findToken(String chain, String symbol) {
-            return Optional.ofNullable(token);
-        }
-
-        /**
-         * 验证 {@code findAsset} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<ChainAsset> findAsset(String chain, String symbol) {
-            return Optional.empty();
-        }
-
-        /**
-         * 验证 {@code isWithdrawalInPendingEvm7702Batch} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public boolean isWithdrawalInPendingEvm7702Batch(UUID tenantId, long withdrawalOrderId) {
-            return false;
-        }
-
-        /**
-         * 验证 {@code isCollectionInPendingEvm7702Batch} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public boolean isCollectionInPendingEvm7702Batch(UUID tenantId, long collectionRecordId) {
-            return false;
-        }
-
-        /**
-         * 验证 {@code claimWithdrawalSigning} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public int claimWithdrawalSigning(String chain, String orderNo, String fromAddress) {
-            signingClaims++;
-            return 1;
-        }
-
-        /**
-         * 验证 {@code claimWithdrawalSigning} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public int claimWithdrawalSigning(
-                UUID tenantId, String chain, String orderNo, String fromAddress) {
-            signingClaims++;
-            return 1;
-        }
-
-        /**
-         * 验证 {@code markWithdrawalBroadcastUnknown} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public int markWithdrawalBroadcastUnknown(String chain, String orderNo,
-                                                  String fromAddress, String errorMessage) {
-            broadcastUnknownMarks++;
-            broadcastError = errorMessage;
-            return 1;
-        }
-
-        /**
-         * 验证 {@code markWithdrawalBroadcastUnknown} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public int markWithdrawalBroadcastUnknown(UUID tenantId, String chain, String orderNo,
-                                                  String fromAddress, String errorMessage) {
-            broadcastUnknownMarks++;
-            broadcastError = errorMessage;
-            return 1;
-        }
-
-        /**
-         * 验证 {@code releaseLockedBalance} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public boolean releaseLockedBalance(String chain, String assetSymbol, String accountId, BigDecimal amount) {
-            lockReleases++;
-            return true;
-        }
-
-
 
 
     }
@@ -687,7 +683,7 @@ class AccountChainWorkflowServiceTest {
     /**
      * 测试辅助类 {@code TenantCollectionRepository}，为相关测试提供隔离环境或共享数据。
      */
-    private static final class TenantCollectionRepository extends ChainJdbcRepository {
+    private static final class TenantCollectionRepository extends ChainRepositoryFixture {
         /**
          * 保存 {@code custodyAddressId}，表示测试所覆盖的链、网络、资产或代币配置。
          */
@@ -716,81 +712,74 @@ class AccountChainWorkflowServiceTest {
         }
 
         private TenantCollectionRepository(int candidateCount) {
-            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
+            super();
             this.candidateCount = candidateCount;
+            Mockito.doAnswer(invocation -> java.util.Optional.of(com.surprising.wallet.common.chain.AccountChainProfile.builder().chain(invocation.getArgument(0)).network("testnet").build())).when(chainProfileRepository).findAccountByChain(ArgumentMatchers.anyString());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                BigDecimal arg_minimumAmount = invocation.getArgument(1);
+                int arg_limit = invocation.getArgument(2);
+                return java.util.stream.IntStream.range(0, candidateCount).mapToObj(index -> CollectionCandidateRecord.builder().tenantId(TENANT_ID).custodyAddressId(custodyAddressId).chain("APTOS").assetSymbol("APT").accountId("0xdeposit" + index).address("0xdeposit" + index).ownerAddress("0xdeposit" + index).userId(1L).biz(0).addressIndex((long) index).walletRole("DEPOSIT").amount(BigDecimal.ONE).build()).toList();
+            }).when(collectionPlanningService).candidates(ArgumentMatchers.<String>any(), ArgumentMatchers.<BigDecimal>any(), ArgumentMatchers.anyInt());
+            Mockito.doAnswer(invocation -> {
+                UUID arg_tenantId = invocation.getArgument(0);
+                String arg_chain = invocation.getArgument(1);
+                collectionAddressLookups++;
+                return Optional.of("0xtenant-collection");
+            }).when(collectionPlanningService).destination(ArgumentMatchers.<UUID>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_symbol = invocation.getArgument(1);
+                return Optional.of(ChainAsset.builder().chain("APTOS").symbol("APT").decimals(8).nativeAsset(true).active(true).build());
+            }).when(chainAssetRepository).findActiveDefinition(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                UUID arg_tenantId = invocation.getArgument(0);
+                UUID arg_custodyAddressId = invocation.getArgument(1);
+                String arg_collectionNo = invocation.getArgument(2);
+                String arg_chain = invocation.getArgument(3);
+                String arg_assetSymbol = invocation.getArgument(4);
+                String arg_fromAddress = invocation.getArgument(5);
+                String arg_toAddress = invocation.getArgument(6);
+                BigDecimal arg_amount = invocation.getArgument(7);
+                BigDecimal arg_fee = invocation.getArgument(8);
+                String arg_rawPayload = invocation.getArgument(9);
+                assertEquals(TENANT_ID, arg_tenantId);
+                assertEquals(this.custodyAddressId, arg_custodyAddressId);
+                collectionTarget = arg_toAddress;
+                collectionAmount = arg_amount;
+                created = true;
+                createdCount++;
+                return 1;
+            }).when(collectionRecordRepository).create(
+                    ArgumentMatchers.<UUID>any(),
+                    ArgumentMatchers.<UUID>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<BigDecimal>any(),
+                    ArgumentMatchers.<BigDecimal>any(),
+                    ArgumentMatchers.<String>any());
         }
 
-        /**
-         * 验证 {@code listCollectableLedgerBalances} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<CollectionCandidateRecord> listCollectableLedgerBalances(
-                String chain, BigDecimal minimumAmount, int limit) {
-            return java.util.stream.IntStream.range(0, candidateCount)
-                    .mapToObj(index -> CollectionCandidateRecord.builder()
-                            .tenantId(TENANT_ID).custodyAddressId(custodyAddressId).chain("APTOS")
-                            .assetSymbol("APT").accountId("0xdeposit" + index)
-                            .address("0xdeposit" + index).ownerAddress("0xdeposit" + index)
-                            .userId(1L).biz(0).addressIndex((long) index).walletRole("DEPOSIT")
-                            .amount(BigDecimal.ONE).build())
-                    .toList();
-        }
 
-        /**
-         * 验证 {@code findActiveTenantCollectionAddress} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<String> findActiveTenantCollectionAddress(UUID tenantId, String chain) {
-            collectionAddressLookups++;
-            return Optional.of("0xtenant-collection");
-        }
-
-        /**
-         * 验证 {@code findAsset} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<ChainAsset> findAsset(String chain, String symbol) {
-            return Optional.of(ChainAsset.builder()
-                    .chain("APTOS")
-                    .symbol("APT")
-                    .decimals(8)
-                    .nativeAsset(true)
-                    .active(true)
-                    .build());
-        }
-
-        /**
-         * 验证 {@code createCollectionRecord} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public int createCollectionRecord(
-                UUID tenantId, UUID custodyAddressId, String collectionNo,
-                String chain, String assetSymbol, String fromAddress, String toAddress,
-                BigDecimal amount, BigDecimal fee, String rawPayload) {
-            assertEquals(TENANT_ID, tenantId);
-            assertEquals(this.custodyAddressId, custodyAddressId);
-            collectionTarget = toAddress;
-            collectionAmount = amount;
-            created = true;
-            createdCount++;
-            return 1;
-        }
     }
 
-    private static final class EmptyCollectionRepository extends ChainJdbcRepository {
+    private static final class EmptyCollectionRepository extends ChainRepositoryFixture {
         private EmptyCollectionRepository() {
-            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
-        }
-
-        @Override
-        public List<CollectionCandidateRecord> listCollectableLedgerBalances(
-                String chain, BigDecimal minimumAmount, int limit) {
-            return List.of();
-        }
-
-        @Override
-        public List<TokenDefinition> listTokens(String chain) {
-            return List.of();
+            super();
+            Mockito.doAnswer(invocation -> java.util.Optional.of(com.surprising.wallet.common.chain.AccountChainProfile.builder().chain(invocation.getArgument(0)).network("testnet").build())).when(chainProfileRepository).findAccountByChain(ArgumentMatchers.anyString());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                BigDecimal arg_minimumAmount = invocation.getArgument(1);
+                int arg_limit = invocation.getArgument(2);
+                return List.of();
+            }).when(collectionPlanningService).candidates(ArgumentMatchers.<String>any(), ArgumentMatchers.<BigDecimal>any(), ArgumentMatchers.anyInt());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                return List.of();
+            }).when(tokenConfigRepository).listDefinitions(ArgumentMatchers.<String>any(), ArgumentMatchers.any());
         }
     }
 
@@ -802,7 +791,18 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code FailingEvmService} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private FailingEvmService() {
-            super(null, null, null, null, null, org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), org.mockito.Mockito.mock(com.surprising.wallet.repository.EvmNonceRepository.class));
+            super(
+                    mock(WithdrawalOrderRepository.class),
+                    mock(CollectionRecordRepository.class),
+                    mock(EvmTransactionRepository.class),
+                    mock(ChainProfileRepository.class),
+                    mock(ChainAssetRepository.class),
+                    null,
+                    null,
+                    null,
+                    null,
+                    mock(WithdrawalSettlementService.class),
+                    mock(EvmNonceRepository.class));
         }
 
         /**
@@ -828,7 +828,18 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code CapturingEvmFeeService} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private CapturingEvmFeeService() {
-            super(null, null, null, null, null, org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), org.mockito.Mockito.mock(com.surprising.wallet.repository.EvmNonceRepository.class));
+            super(
+                    mock(WithdrawalOrderRepository.class),
+                    mock(CollectionRecordRepository.class),
+                    mock(EvmTransactionRepository.class),
+                    mock(ChainProfileRepository.class),
+                    mock(ChainAssetRepository.class),
+                    null,
+                    null,
+                    null,
+                    null,
+                    mock(WithdrawalSettlementService.class),
+                    mock(EvmNonceRepository.class));
         }
 
         /**
@@ -845,7 +856,7 @@ class AccountChainWorkflowServiceTest {
     /**
      * 测试辅助类 {@code EvmCollectionRepository}，为相关测试提供隔离环境或共享数据。
      */
-    private static final class EvmCollectionRepository extends ChainJdbcRepository {
+    private static final class EvmCollectionRepository extends ChainRepositoryFixture {
         /**
          * 保存 {@code custodyAddressId}，表示测试所覆盖的链、网络、资产或代币配置。
          */
@@ -874,87 +885,69 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code EvmCollectionRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private EvmCollectionRepository(boolean eip7702Managed) {
-            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
+            super();
             this.eip7702Managed = eip7702Managed;
+            Mockito.doAnswer(invocation -> java.util.Optional.of(com.surprising.wallet.common.chain.AccountChainProfile.builder().chain(invocation.getArgument(0)).network("testnet").build())).when(chainProfileRepository).findAccountByChain(ArgumentMatchers.anyString());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                BigDecimal arg_minimumAmount = invocation.getArgument(1);
+                int arg_limit = invocation.getArgument(2);
+                return List.of(CollectionCandidateRecord.builder().tenantId(TENANT_ID).custodyAddressId(custodyAddressId).chain("ETH").assetSymbol("ETH").accountId("0xdeposit").address("0xdeposit").ownerAddress("0xdeposit").userId(1L).biz(0).addressIndex(0L).walletRole("DEPOSIT").amount(new BigDecimal("5")).build());
+            }).when(collectionPlanningService).candidates(ArgumentMatchers.<String>any(), ArgumentMatchers.<BigDecimal>any(), ArgumentMatchers.anyInt());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                return List.of(
+                        TokenDefinition.builder().chain(arg_chain).symbol("USDC").active(true).build(),
+                        TokenDefinition.builder().chain(arg_chain).symbol("USDT").active(true).build());
+            }).when(tokenConfigRepository).listDefinitions(ArgumentMatchers.<String>any(), ArgumentMatchers.any());
+            Mockito.doAnswer(invocation -> {
+                UUID arg_tenantId = invocation.getArgument(0);
+                String arg_chain = invocation.getArgument(1);
+                return Optional.of("0xtenant-collection");
+            }).when(collectionPlanningService).destination(ArgumentMatchers.<UUID>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_symbol = invocation.getArgument(1);
+                return Optional.of(ChainAsset.builder().chain(arg_chain).symbol(arg_symbol).decimals(18).nativeAsset(true).active(true).build());
+            }).when(chainAssetRepository).findActiveDefinition(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_network = invocation.getArgument(1);
+                return false;
+            }).when(evm7702ConfigRepository).existsActiveNativeCollection(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_network = invocation.getArgument(1);
+                return eip7702Managed;
+            }).when(evm7702ConfigRepository).existsManaged(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                UUID arg_tenantId = invocation.getArgument(0);
+                UUID arg_custodyAddressId = invocation.getArgument(1);
+                String arg_collectionNo = invocation.getArgument(2);
+                String arg_chain = invocation.getArgument(3);
+                String arg_assetSymbol = invocation.getArgument(4);
+                String arg_fromAddress = invocation.getArgument(5);
+                String arg_toAddress = invocation.getArgument(6);
+                BigDecimal arg_amount = invocation.getArgument(7);
+                BigDecimal arg_fee = invocation.getArgument(8);
+                String arg_rawPayload = invocation.getArgument(9);
+                this.collectionAmount = arg_amount;
+                this.created = true;
+                return 1;
+            }).when(collectionRecordRepository).create(
+                    ArgumentMatchers.<UUID>any(),
+                    ArgumentMatchers.<UUID>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<String>any(),
+                    ArgumentMatchers.<BigDecimal>any(),
+                    ArgumentMatchers.<BigDecimal>any(),
+                    ArgumentMatchers.<String>any());
         }
 
-        /**
-         * 验证 {@code listCollectableLedgerBalances} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<CollectionCandidateRecord> listCollectableLedgerBalances(
-                String chain, BigDecimal minimumAmount, int limit) {
-            return List.of(CollectionCandidateRecord.builder()
-                    .tenantId(TENANT_ID)
-                    .custodyAddressId(custodyAddressId)
-                    .chain("ETH")
-                    .assetSymbol("ETH")
-                    .accountId("0xdeposit")
-                    .address("0xdeposit")
-                    .ownerAddress("0xdeposit")
-                    .userId(1L)
-                    .biz(0)
-                    .addressIndex(0L)
-                    .walletRole("DEPOSIT")
-                    .amount(new BigDecimal("5"))
-                    .build());
-        }
 
-        /**
-         * 验证 {@code listTokens} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<TokenDefinition> listTokens(String chain) {
-            return List.of(
-                    TokenDefinition.builder().chain(chain).symbol("USDC").active(true).build(),
-                    TokenDefinition.builder().chain(chain).symbol("USDT").active(true).build());
-        }
-
-        /**
-         * 验证 {@code findActiveTenantCollectionAddress} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<String> findActiveTenantCollectionAddress(UUID tenantId, String chain) {
-            return Optional.of("0xtenant-collection");
-        }
-
-        /**
-         * 验证 {@code findAsset} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<ChainAsset> findAsset(String chain, String symbol) {
-            return Optional.of(ChainAsset.builder()
-                    .chain(chain).symbol(symbol).decimals(18).nativeAsset(true).active(true).build());
-        }
-
-        /**
-         * 验证 {@code isEvm7702NativeCollectionActive} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public boolean isEvm7702NativeCollectionActive(String chain, String network) {
-            return false;
-        }
-
-        /**
-         * 验证 {@code isEvm7702Managed} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public boolean isEvm7702Managed(String chain, String network) {
-            return eip7702Managed;
-        }
-
-        /**
-         * 验证 {@code createCollectionRecord} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public int createCollectionRecord(
-                UUID tenantId, UUID custodyAddressId, String collectionNo,
-                String chain, String assetSymbol, String fromAddress, String toAddress,
-                BigDecimal amount, BigDecimal fee, String rawPayload) {
-            this.collectionAmount = amount;
-            this.created = true;
-            return 1;
-        }
     }
 
     /**
@@ -974,7 +967,18 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code CapturingAptosService} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private CapturingAptosService() {
-            super(null, null, null, org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class),
+            super(
+                    null,
+                    null,
+                    mock(AccountSequenceRepository.class),
+                    mock(ChainProfileRepository.class),
+                    mock(TokenConfigRepository.class),
+                    mock(WithdrawalOrderRepository.class),
+                    mock(LedgerBalanceRepository.class),
+                    mock(WithdrawalClaimService.class),
+                    mock(CollectionRecordRepository.class),
+                    mock(AptosTransactionRepository.class),
+                    mock(WithdrawalSettlementService.class),
                     RuntimeTestSupport.enabled());
         }
 
@@ -1015,7 +1019,18 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code CapturingTonService} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private CapturingTonService() {
-            super(null, null, null, org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class),
+            super(
+                    null,
+                    null,
+                    mock(AccountSequenceRepository.class),
+                    mock(TonTransactionRepository.class),
+                    mock(WithdrawalOrderRepository.class),
+                    mock(LedgerBalanceRepository.class),
+                    mock(WithdrawalClaimService.class),
+                    mock(ChainProfileRepository.class),
+                    mock(TokenConfigRepository.class),
+                    mock(CollectionRecordRepository.class),
+                    mock(WithdrawalSettlementService.class),
                     RuntimeTestSupport.enabled());
         }
 

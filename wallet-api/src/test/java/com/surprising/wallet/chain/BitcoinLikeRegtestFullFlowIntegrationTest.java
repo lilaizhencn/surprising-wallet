@@ -1,23 +1,15 @@
 package com.surprising.wallet.chain;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.model.ChainAsset;
+import com.surprising.wallet.chain.model.LedgerBalanceRecord;
+import com.surprising.wallet.common.chain.AccountChainProfile;
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.LedgerBalanceRecord;
-import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.signing.*;
-import com.surprising.wallet.repository.ChainSigningTransactionRepository;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.jdbc.datasource.SingleConnectionDataSource;
-
+import com.surprising.wallet.repository.ChainSigningTransactionRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
@@ -43,6 +35,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -139,7 +138,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+            ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             try {
                 ensureTestTenant(jdbc);
                 ensureBitcoinLikeProfiles(jdbc);
@@ -165,7 +164,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 env("BITCOINLIKE_REGTEST_DB_USER", "wallet"),
                 env("BITCOINLIKE_REGTEST_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         String runId = "c" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
 
         try {
@@ -197,7 +196,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 env("BITCOINLIKE_REGTEST_DB_USER", "wallet"),
                 env("BITCOINLIKE_REGTEST_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         String runId = "b" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         List<String> cleanupTxids = Collections.synchronizedList(new ArrayList<>());
 
@@ -240,7 +239,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
      * 验证 {@code runFullFlow} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private void runFullFlow(Path root, RegtestChain chain, JdbcTemplate jdbc,
-                             ChainJdbcRepository repository) throws Exception {
+                             ChainRepositoryFixture repository) throws Exception {
         String chainName = chain.chainType().name();
         JsonNode info = json(rpc(root, chain, chain.chainRpc(), "getblockchaininfo"));
         assertEquals("regtest", info.path("chain").asText(), chainName + " node must be regtest");
@@ -251,18 +250,23 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         RealTx depositTx = sendAndMine(root, chain, depositAddress, chain.depositAmount());
         Output depositOutput = findOutput(depositTx.raw(), depositAddress, chain.depositAmount());
 
-        repository.upsertUtxo(
-                chainName, chainName, depositTx.txid(), depositOutput.vout(),
-                depositAddress, chain.depositAmount(), depositTx.blockHeight(),
-                depositTx.txid(), depositTx.confirmations(), false);
+        repository.utxoRepository.upsert(
+                chainName,
+                chainName,
+                depositTx.txid(),
+                depositOutput.vout(),
+                depositAddress,
+                chain.depositAmount(),
+                depositTx.blockHeight(),
+                depositTx.txid(),
+                depositTx.confirmations(),
+                false);
         DepositEvent depositEvent = new DepositEvent(
                 chain.chainType(), chainName, depositTx.txid(), null, depositAddress,
                 chain.depositAmount(), depositTx.blockHeight(), depositTx.txid(), depositTx.confirmations(),
                 null, depositTx.raw().toString());
-        assertTrue(repository.recordAndCreditDeposit(
-                depositEvent, depositOutput.vout(), REQUIRED_CONFIRMATIONS, accountId));
-        assertFalse(repository.recordAndCreditDeposit(
-                depositEvent, depositOutput.vout(), REQUIRED_CONFIRMATIONS, accountId));
+        assertTrue(repository.depositService.recordAndCredit(depositEvent, depositOutput.vout(), REQUIRED_CONFIRMATIONS, accountId));
+        assertFalse(repository.depositService.recordAndCredit(depositEvent, depositOutput.vout(), REQUIRED_CONFIRMATIONS, accountId));
         assertEquals(1L, count(jdbc, """
                 select count(*) from deposit_record
                 where chain = ? and tx_hash = ? and log_index = ? and credited = true
@@ -273,17 +277,34 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         BigDecimal withdrawDebit = chain.withdrawAmount().add(chain.withdrawFee());
         String withdrawAddress = walletRpc(root, chain, "getnewaddress").trim();
         String withdrawalOrder = chainName.toLowerCase(Locale.ROOT) + "-regtest-withdraw-" + UUID.randomUUID();
-        assertEquals(1, repository.createWithdrawalOrder(
-                withdrawalOrder, 9901L, chainName, chainName,
-                withdrawAddress, chain.withdrawAmount(), chain.withdrawFee()));
-        assertEquals(0, repository.createWithdrawalOrder(
-                withdrawalOrder, 9901L, chainName, chainName,
-                withdrawAddress, chain.withdrawAmount(), chain.withdrawFee()));
-        assertTrue(repository.freezeLedgerBalance(chainName, chainName, accountId, withdrawDebit));
-        assertFalse(repository.freezeLedgerBalance(chainName, chainName, accountId, chain.depositAmount()),
+        assertEquals(
+                1,
+                repository.withdrawalOrderRepository.create(
+                        withdrawalOrder,
+                        9901L,
+                        chainName,
+                        chainName,
+                        null,
+                        null,
+                        withdrawAddress,
+                        chain.withdrawAmount(),
+                        chain.withdrawFee()));
+        assertEquals(
+                0,
+                repository.withdrawalOrderRepository.create(
+                        withdrawalOrder,
+                        9901L,
+                        chainName,
+                        chainName,
+                        null,
+                        null,
+                        withdrawAddress,
+                        chain.withdrawAmount(),
+                        chain.withdrawFee()));
+        assertTrue(repository.ledgerBalanceRepository.freeze(chainName, chainName, accountId, withdrawDebit, null));
+        assertFalse(repository.ledgerBalanceRepository.freeze(chainName, chainName, accountId, chain.depositAmount(), null),
                 "freeze must reject over-spend and keep ledger non-negative");
-        assertEquals(1, repository.updateWithdrawalStatus(
-                chainName, withdrawalOrder, "FROZEN", depositAddress, null, null));
+        assertEquals(1, repository.withdrawalOrderRepository.updateStatus(chainName, withdrawalOrder, "FROZEN", depositAddress, null, null));
         AssetRuntimeMetadata currency = assetMetadata(repository, chainName);
         var signingRepository = new ChainSigningTransactionRepository(jdbc, JSON);
         var request = new UtxoSigningRequest(TEST_TENANT_ID, UUID.randomUUID(),
@@ -295,12 +316,10 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         var signing = signingRepository.create(request, withdrawalOrder);
         assertTrue(signingRepository.findById(chainName, signing.id()).isPresent());
         String signingLockRef = Integer.toString(signing.id());
-        assertEquals(1, repository.lockUtxo(chainName, depositTx.txid(), depositOutput.vout(), signingLockRef));
-        assertEquals(0, repository.lockUtxo(chainName, depositTx.txid(), depositOutput.vout(), signingLockRef + "-again"));
-        assertEquals(1, repository.updateWithdrawalStatus(
-                chainName, withdrawalOrder, "UTXO_LOCKED", depositAddress, null, null));
-        assertEquals(1, repository.updateWithdrawalStatus(
-                chainName, withdrawalOrder, "SIGNING", depositAddress, null, null));
+        assertEquals(1, repository.utxoRepository.lock(chainName, depositTx.txid(), depositOutput.vout(), signingLockRef));
+        assertEquals(0, repository.utxoRepository.lock(chainName, depositTx.txid(), depositOutput.vout(), signingLockRef + "-again"));
+        assertEquals(1, repository.withdrawalOrderRepository.updateStatus(chainName, withdrawalOrder, "UTXO_LOCKED", depositAddress, null, null));
+        assertEquals(1, repository.withdrawalOrderRepository.updateStatus(chainName, withdrawalOrder, "SIGNING", depositAddress, null, null));
 
         RealTx withdrawTx = sendAndMine(root, chain, withdrawAddress, chain.withdrawAmount());
         findOutput(withdrawTx.raw(), withdrawAddress, chain.withdrawAmount());
@@ -309,16 +328,21 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         assertEquals(1, signingRepository.update(signing.withSigned(signed, Constants.SENT)));
         assertTrue(signingRepository.exists(chainName, withdrawTx.txid()));
         assertTrue(signingRepository.findByTxId(chainName, withdrawTx.txid()).isPresent());
-        assertEquals(1, repository.updateWithdrawalStatus(
-                chainName, withdrawalOrder, "SENT", depositAddress, withdrawTx.txid(), null));
-        assertEquals(1, repository.markWithdrawalConfirmed(chainName, withdrawalOrder, withdrawTx.txid()));
-        assertEquals(0, repository.markWithdrawalConfirmed(chainName, withdrawalOrder, withdrawTx.txid()));
-        assertEquals(1, repository.markUtxosSpent(chainName, signingLockRef, withdrawTx.txid()));
-        assertEquals(0, repository.markUtxosSpent(chainName, signingLockRef, withdrawTx.txid()));
-        assertTrue(repository.settleLockedDebit(chainName, chainName, accountId, withdrawDebit));
-        assertFalse(repository.settleLockedDebit(chainName, chainName, accountId, withdrawDebit));
-        assertEquals(Optional.of("CONFIRMED"), repository.findWithdrawalStatus(chainName, withdrawalOrder));
-        assertEquals(Optional.of(withdrawTx.txid()), repository.findWithdrawalTxHash(chainName, withdrawalOrder));
+        assertEquals(1, repository.withdrawalOrderRepository.updateStatus(
+                chainName,
+                withdrawalOrder,
+                "SENT",
+                depositAddress,
+                withdrawTx.txid(),
+                null));
+        assertEquals(1, repository.withdrawalOrderRepository.markConfirmed(chainName, withdrawalOrder, withdrawTx.txid()));
+        assertEquals(0, repository.withdrawalOrderRepository.markConfirmed(chainName, withdrawalOrder, withdrawTx.txid()));
+        assertEquals(1, repository.utxoRepository.markSpent(chainName, signingLockRef, withdrawTx.txid()));
+        assertEquals(0, repository.utxoRepository.markSpent(chainName, signingLockRef, withdrawTx.txid()));
+        assertTrue(repository.ledgerBalanceRepository.settle(chainName, chainName, accountId, withdrawDebit, null));
+        assertFalse(repository.ledgerBalanceRepository.settle(chainName, chainName, accountId, withdrawDebit, null));
+        assertEquals(Optional.of("CONFIRMED"), repository.withdrawalOrderRepository.findStatus(chainName, withdrawalOrder));
+        assertEquals(Optional.of(withdrawTx.txid()), repository.withdrawalOrderRepository.findTxHash(chainName, withdrawalOrder, null));
         BigDecimal afterWithdraw = chain.depositAmount().subtract(withdrawDebit);
         assertLedger(jdbc, chainName, accountId, afterWithdraw, BigDecimal.ZERO, afterWithdraw);
         assertEquals("SPENT", scalarString(jdbc, """
@@ -328,8 +352,8 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         assertNoNegativeLedger(jdbc, chainName);
 
         String scannerName = chainName.toLowerCase(Locale.ROOT) + "-regtest-scanner-" + UUID.randomUUID();
-        repository.updateScanHeight(chainName, scannerName, withdrawTx.blockHeight(), withdrawTx.blockHeight() - 1);
-        repository.updateScanHeight(chainName, scannerName, withdrawTx.blockHeight() - 1, 0);
+        repository.chainScanHeightRepository.upsert(chainName, scannerName, withdrawTx.blockHeight(), withdrawTx.blockHeight() - 1);
+        repository.chainScanHeightRepository.upsert(chainName, scannerName, withdrawTx.blockHeight() - 1, 0);
         assertEquals(withdrawTx.blockHeight() - 1, scalarLong(jdbc, """
                 select safe_height from chain_scan_height
                 where chain = ? and scanner_name = ?
@@ -345,7 +369,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
      * 验证 {@code runConcurrencyGuards} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private void runConcurrencyGuards(RegtestChain chain, JdbcTemplate jdbc,
-                                      ChainJdbcRepository repository, String runId) throws Exception {
+                                      ChainRepositoryFixture repository, String runId) throws Exception {
         String chainName = chain.chainType().name();
         BigDecimal one = new BigDecimal("1.00000000");
 
@@ -355,8 +379,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 runId + "-" + chainName + "-duplicate-address", chain.depositAmount());
         registerTestAddress(jdbc, chainName, duplicateAccount, duplicateDeposit.toAddress());
         List<Boolean> duplicateCredits = runConcurrently(24,
-                ignored -> repository.recordAndCreditDeposit(
-                        duplicateDeposit, 0L, REQUIRED_CONFIRMATIONS, duplicateAccount));
+                ignored -> repository.depositService.recordAndCredit(duplicateDeposit, 0L, REQUIRED_CONFIRMATIONS, duplicateAccount));
         assertEquals(1L, countTrue(duplicateCredits), chainName + " duplicate deposit credit");
         assertEquals(1L, count(jdbc, """
                 select count(*) from deposit_record
@@ -371,32 +394,43 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
             registerTestAddress(jdbc, chainName, fanoutAccount,
                     runId + "-" + chainName + "-fanout-address-" + index);
         }
-        List<Boolean> fanoutCredits = runConcurrently(32, index -> {
-            String txHash = runId + "-" + chainName + "-fanout-" + index;
-            return repository.recordAndCreditDeposit(
-                    syntheticDeposit(chain, txHash, runId + "-" + chainName + "-fanout-address-" + index,
-                            fanoutAmount),
-                    0L, REQUIRED_CONFIRMATIONS, fanoutAccount);
-        });
+        List<Boolean> fanoutCredits = runConcurrently(
+                32,
+                index -> {
+                    String txHash = runId + "-" + chainName + "-fanout-" + index;
+                    return repository.depositService.recordAndCredit(
+                            syntheticDeposit(chain, txHash, runId + "-" + chainName + "-fanout-address-" + index, fanoutAmount),
+                            0L,
+                            REQUIRED_CONFIRMATIONS,
+                            fanoutAccount);
+                });
         assertEquals(32L, countTrue(fanoutCredits), chainName + " fanout deposit credits");
         BigDecimal fanoutTotal = fanoutAmount.multiply(new BigDecimal("32"));
         assertLedger(jdbc, chainName, fanoutAccount, fanoutTotal, BigDecimal.ZERO, fanoutTotal);
 
         String freezeAccount = runId + "-" + chainName + "-freeze-account";
-        repository.incrementLedgerBalance(TEST_TENANT_ID, chainName, chainName, freezeAccount, one);
+        repository.ledgerBalanceRepository.increment(TEST_TENANT_ID, chainName, chainName, freezeAccount, one);
         BigDecimal freezeAmount = new BigDecimal("0.20000000");
         List<Boolean> freezeResults = runConcurrently(16,
-                ignored -> repository.freezeLedgerBalance(chainName, chainName, freezeAccount, freezeAmount));
+                ignored -> repository.ledgerBalanceRepository.freeze(chainName, chainName, freezeAccount, freezeAmount, null));
         assertEquals(5L, countTrue(freezeResults), chainName + " overspend freeze guard");
         assertLedger(jdbc, chainName, freezeAccount, BigDecimal.ZERO, one, one);
         assertNoNegativeLedger(jdbc, chainName);
 
         String utxoTx = runId + "-" + chainName + "-utxo";
-        repository.upsertUtxo(chainName, chainName, utxoTx, 0,
-                runId + "-" + chainName + "-utxo-address", one, 100L, utxoTx,
-                REQUIRED_CONFIRMATIONS, true);
+        repository.utxoRepository.upsert(
+                chainName,
+                chainName,
+                utxoTx,
+                0,
+                runId + "-" + chainName + "-utxo-address",
+                one,
+                100L,
+                utxoTx,
+                REQUIRED_CONFIRMATIONS,
+                true);
         List<Integer> lockResults = runConcurrently(16,
-                index -> repository.lockUtxo(chainName, utxoTx, 0, runId + "-" + chainName + "-lock-" + index));
+                index -> repository.utxoRepository.lock(chainName, utxoTx, 0, runId + "-" + chainName + "-lock-" + index));
         assertEquals(1L, sumUpdates(lockResults), chainName + " single UTXO lock winner");
         String lockRef = scalarString(jdbc, """
                 select lock_ref from utxo_record
@@ -409,19 +443,40 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 """, chainName, utxoTx));
 
         String withdrawalOrder = runId + "-" + chainName + "-withdraw-claim";
-        assertEquals(1, repository.createWithdrawalOrder(withdrawalOrder, 9902L, chainName, chainName,
-                runId + "-" + chainName + "-withdraw-to", new BigDecimal("0.10000000"), BigDecimal.ZERO));
-        assertEquals(1, repository.updateWithdrawalStatus(
-                chainName, withdrawalOrder, "FROZEN", runId + "-" + chainName + "-withdraw-from", null, null));
-        List<Integer> withdrawalClaims = runConcurrently(16,
-                index -> repository.claimWithdrawalSigning(
-                        chainName, withdrawalOrder, runId + "-" + chainName + "-withdraw-from-" + index));
+        assertEquals(
+                1,
+                repository.withdrawalOrderRepository.create(
+                        withdrawalOrder,
+                        9902L,
+                        chainName,
+                        chainName,
+                        null,
+                        null,
+                        runId + "-" + chainName + "-withdraw-to",
+                        new BigDecimal("0.10000000"),
+                        BigDecimal.ZERO));
+        assertEquals(
+                1,
+                repository.withdrawalOrderRepository.updateStatus(
+                        chainName,
+                        withdrawalOrder,
+                        "FROZEN",
+                        runId + "-" + chainName + "-withdraw-from",
+                        null,
+                        null));
+        List<Integer> withdrawalClaims = runConcurrently(
+                16,
+                index -> repository.withdrawalClaimService.claim(
+                        repository.withdrawalOrderRepository.requireTenant(chainName, withdrawalOrder),
+                        chainName,
+                        withdrawalOrder,
+                        runId + "-" + chainName + "-withdraw-from-" + index));
         assertEquals(1L, sumUpdates(withdrawalClaims), chainName + " withdrawal claim winner");
-        assertEquals(Optional.of("SIGNING"), repository.findWithdrawalStatus(chainName, withdrawalOrder));
+        assertEquals(Optional.of("SIGNING"), repository.withdrawalOrderRepository.findStatus(chainName, withdrawalOrder));
 
         String scannerName = runId + "-" + chainName + "-scanner";
         runConcurrently(32, index -> {
-            repository.updateScanHeight(chainName, scannerName, 100L + index, 90L + index);
+            repository.chainScanHeightRepository.upsert(chainName, scannerName, 100L + index, 90L + index);
             return 1;
         });
         assertEquals(131L, scalarLong(jdbc, """
@@ -459,7 +514,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
      * 验证 {@code runBulkBroadcastFlow} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private void runBulkBroadcastFlow(Path root, RegtestChain chain, JdbcTemplate jdbc,
-                                      ChainJdbcRepository repository, String runId, List<String> cleanupTxids,
+                                      ChainRepositoryFixture repository, String runId, List<String> cleanupTxids,
                                       int depositCount, int withdrawalCount) throws Exception {
         String chainName = chain.chainType().name();
         rpc(root, chain, null, "init");
@@ -491,20 +546,37 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         rpc(root, chain, null, "mine", String.valueOf(REQUIRED_CONFIRMATIONS));
         List<RealTx> depositTxs = fetchBroadcastTransactions(root, chain, depositBroadcasts);
 
-        List<Boolean> credited = runConcurrently(depositTxs.size(), index -> {
-            BroadcastResult broadcast = depositBroadcasts.get(index);
-            RealTx tx = depositTxs.get(index);
-            Output output = findOutput(tx.raw(), broadcast.address(), broadcast.amount());
-            repository.upsertUtxo(
-                    chainName, chainName, tx.txid(), output.vout(), broadcast.address(), broadcast.amount(),
-                    tx.blockHeight(), tx.txid(), tx.confirmations(), false);
-            DepositEvent event = new DepositEvent(
-                    chain.chainType(), chainName, tx.txid(),
-                    runId + "-" + chainName + "-bulk-faucet", broadcast.address(), broadcast.amount(),
-                    tx.blockHeight(), tx.txid(), tx.confirmations(), null,
-                    "{\"runId\":\"" + runId + "\",\"type\":\"bulk-deposit\"}");
-            return repository.recordAndCreditDeposit(event, output.vout(), REQUIRED_CONFIRMATIONS, accountId);
-        });
+        List<Boolean> credited = runConcurrently(
+                depositTxs.size(),
+                index -> {
+                    BroadcastResult broadcast = depositBroadcasts.get(index);
+                    RealTx tx = depositTxs.get(index);
+                    Output output = findOutput(tx.raw(), broadcast.address(), broadcast.amount());
+                    repository.utxoRepository.upsert(
+                            chainName,
+                            chainName,
+                            tx.txid(),
+                            output.vout(),
+                            broadcast.address(),
+                            broadcast.amount(),
+                            tx.blockHeight(),
+                            tx.txid(),
+                            tx.confirmations(),
+                            false);
+                    DepositEvent event = new DepositEvent(
+                            chain.chainType(),
+                            chainName,
+                            tx.txid(),
+                            runId + "-" + chainName + "-bulk-faucet",
+                            broadcast.address(),
+                            broadcast.amount(),
+                            tx.blockHeight(),
+                            tx.txid(),
+                            tx.confirmations(),
+                            null,
+                            "{\"runId\":\"" + runId + "\",\"type\":\"bulk-deposit\"}");
+                    return repository.depositService.recordAndCredit(event, output.vout(), REQUIRED_CONFIRMATIONS, accountId);
+                });
         assertEquals(depositCount, countTrue(credited), chainName + " bulk deposit credits");
         assertEquals(depositCount, count(jdbc, """
                 select count(*) from deposit_record
@@ -521,15 +593,24 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                     withdrawalAmount,
                     withdrawalFee));
         }
-        List<Boolean> frozen = runConcurrently(withdrawals.size(), index -> {
-            WithdrawalPlan plan = withdrawals.get(index);
-            assertEquals(1, repository.createWithdrawalOrder(
-                    plan.orderNo(), 9903L, chainName, chainName, plan.address(), plan.amount(), plan.fee()));
-            assertTrue(repository.freezeLedgerBalance(chainName, chainName, accountId, withdrawalDebit));
-            assertEquals(1, repository.updateWithdrawalStatus(
-                    chainName, plan.orderNo(), "FROZEN", accountId, null, null));
-            return true;
-        });
+        List<Boolean> frozen = runConcurrently(
+                withdrawals.size(),
+                index -> {
+                    WithdrawalPlan plan = withdrawals.get(index);
+                    assertEquals(1, repository.withdrawalOrderRepository.create(
+                            plan.orderNo(),
+                            9903L,
+                            chainName,
+                            chainName,
+                            null,
+                            null,
+                            plan.address(),
+                            plan.amount(),
+                            plan.fee()));
+                    assertTrue(repository.ledgerBalanceRepository.freeze(chainName, chainName, accountId, withdrawalDebit, null));
+                    assertEquals(1, repository.withdrawalOrderRepository.updateStatus(chainName, plan.orderNo(), "FROZEN", accountId, null, null));
+                    return true;
+                });
         assertEquals(withdrawalCount, countTrue(frozen), chainName + " bulk withdrawal freezes");
 
         List<BroadcastPayment> withdrawalPayments = withdrawals.stream()
@@ -541,17 +622,24 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         rpc(root, chain, null, "mine", String.valueOf(REQUIRED_CONFIRMATIONS));
         List<RealTx> withdrawalTxs = fetchBroadcastTransactions(root, chain, withdrawalBroadcasts);
 
-        List<Boolean> settled = runConcurrently(withdrawals.size(), index -> {
-            WithdrawalPlan plan = withdrawals.get(index);
-            BroadcastResult broadcast = withdrawalBroadcasts.get(index);
-            RealTx tx = withdrawalTxs.get(index);
-            findOutput(tx.raw(), broadcast.address(), broadcast.amount());
-            assertEquals(1, repository.updateWithdrawalStatus(
-                    chainName, plan.orderNo(), "SENT", accountId, tx.txid(), null));
-            assertEquals(1, repository.markWithdrawalConfirmed(chainName, plan.orderNo(), tx.txid()));
-            assertTrue(repository.settleLockedDebit(chainName, chainName, accountId, withdrawalDebit));
-            return true;
-        });
+        List<Boolean> settled = runConcurrently(
+                withdrawals.size(),
+                index -> {
+                    WithdrawalPlan plan = withdrawals.get(index);
+                    BroadcastResult broadcast = withdrawalBroadcasts.get(index);
+                    RealTx tx = withdrawalTxs.get(index);
+                    findOutput(tx.raw(), broadcast.address(), broadcast.amount());
+                    assertEquals(1, repository.withdrawalOrderRepository.updateStatus(
+                            chainName,
+                            plan.orderNo(),
+                            "SENT",
+                            accountId,
+                            tx.txid(),
+                            null));
+                    assertEquals(1, repository.withdrawalOrderRepository.markConfirmed(chainName, plan.orderNo(), tx.txid()));
+                    assertTrue(repository.ledgerBalanceRepository.settle(chainName, chainName, accountId, withdrawalDebit, null));
+                    return true;
+                });
         assertEquals(withdrawalCount, countTrue(settled), chainName + " bulk withdrawal settlements");
         assertEquals(withdrawalCount, count(jdbc, """
                 select count(*) from withdrawal_order
@@ -802,8 +890,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
      */
     private static void assertLedger(JdbcTemplate jdbc, String chain, String accountId,
                                      BigDecimal available, BigDecimal locked, BigDecimal total) {
-        LedgerBalanceRecord record = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc)
-                .findLedgerBalance(chain, chain, accountId)
+        LedgerBalanceRecord record = new com.surprising.wallet.repository.LedgerBalanceRepository(jdbc).find(chain, chain, accountId)
                 .orElseThrow();
         assertDecimalEquals(available, record.getAvailableBalance(), chain + " available");
         assertDecimalEquals(locked, record.getLockedBalance(), chain + " locked");
@@ -872,10 +959,10 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
     /**
      * 验证 {@code assetMetadata} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static AssetRuntimeMetadata assetMetadata(ChainJdbcRepository repository, String chain) {
-        AccountChainProfile profile = repository.findProfileByChain(chain)
+    private static AssetRuntimeMetadata assetMetadata(ChainRepositoryFixture repository, String chain) {
+        AccountChainProfile profile = repository.chainProfileRepository.findAccountByChain(chain)
                 .orElseThrow(() -> new IllegalStateException("missing chain_profile for " + chain));
-        ChainAsset asset = repository.findAsset(profile.getChain(), profile.getNativeSymbol())
+        ChainAsset asset = repository.chainAssetRepository.findActiveDefinition(profile.getChain(), profile.getNativeSymbol())
                 .orElseThrow(() -> new IllegalStateException(
                         "missing chain_asset for " + profile.getChain() + "/" + profile.getNativeSymbol()));
         return AssetRuntimeMetadata.fromProfile(

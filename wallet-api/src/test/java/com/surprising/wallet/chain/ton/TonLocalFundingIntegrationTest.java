@@ -1,20 +1,19 @@
 package com.surprising.wallet.chain.ton;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
 import com.surprising.wallet.common.chain.ChainRpcNode;
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
 import java.math.BigInteger;
 import java.time.Duration;
 import java.time.Instant;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import tools.jackson.databind.ObjectMapper;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -49,7 +48,7 @@ class TonLocalFundingIntegrationTest {
                 env("TON_DB_USER", "wallet"),
                 env("TON_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         TonCenterClient rpc = new TonCenterClient(new ObjectMapper(),
                 profiles("TON"),
                 nodes(ChainRpcNode.builder().chain("TON")
@@ -59,10 +58,19 @@ class TonLocalFundingIntegrationTest {
                         .authHeaderName("X-API-Key")
                         .apiKey("").build()));
         TonKeyService keys = new TonKeyService(masterSeed);
-        TonTransactionService transactions = new TonTransactionService(rpc,
+        TonTransactionService transactions = new TonTransactionService(
+                rpc,
                 keys,
-                repository,
-                org.mockito.Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class), RuntimeTestSupport.database(jdbc));
+                repository.accountSequenceRepository,
+                repository.tonTransactionRepository,
+                repository.withdrawalOrderRepository,
+                repository.ledgerBalanceRepository,
+                repository.withdrawalClaimService,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.collectionRecordRepository,
+                Mockito.mock(com.surprising.wallet.service.WithdrawalSettlementService.class),
+                RuntimeTestSupport.database(jdbc));
 
         String target = keys.wallet(4001, 0, OWNER_INDEX)
                 .getAddress().toString(true, true, false, true);

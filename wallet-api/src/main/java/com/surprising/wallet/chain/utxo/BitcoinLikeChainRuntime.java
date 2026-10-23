@@ -1,33 +1,38 @@
 package com.surprising.wallet.chain.utxo;
 
 import com.googlecode.jsonrpc4j.JsonRpcClientException;
-import com.surprising.wallet.common.chain.AccountChainProfile;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.chain.ltc.LitecoinEsploraCommand;
 import com.surprising.wallet.chain.model.ChainAsset;
-import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.chain.model.HotWalletRules;
+import com.surprising.wallet.chain.model.UtxoBlock;
+import com.surprising.wallet.chain.rpc.BchCommand;
+import com.surprising.wallet.chain.rpc.BtcCommand;
+import com.surprising.wallet.chain.rpc.BtcLikeCommand;
+import com.surprising.wallet.chain.rpc.DogeCommand;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.ChainType;
+import com.surprising.wallet.common.chain.UtxoOutput;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.signing.UtxoSignedTransaction;
+import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.config.PubKeyConfig;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashAddressCodec;
+import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashFeePolicy;
+import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParameters;
 import com.surprising.wallet.sdk.bitcoinj.core.BitcoinLikeNetwork;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeBlock;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeRawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.ScriptPubKey;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.TxOutput;
-import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashAddressCodec;
-import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashFeePolicy;
-import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParameters;
-import com.surprising.wallet.chain.ltc.LitecoinEsploraCommand;
-import com.surprising.wallet.chain.rpc.BchCommand;
-import com.surprising.wallet.chain.rpc.BtcCommand;
-import com.surprising.wallet.chain.rpc.BtcLikeCommand;
-import com.surprising.wallet.chain.rpc.DogeCommand;
-import com.surprising.wallet.config.PubKeyConfig;
-import com.surprising.wallet.repository.ChainAddressRepository;
-import com.surprising.wallet.common.chain.UtxoOutput;
-import com.surprising.wallet.chain.model.UtxoBlock;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Date;
+import java.util.Optional;
 import org.bitcoinj.base.LegacyAddress;
 import org.bitcoinj.base.exceptions.AddressFormatException;
 import org.bitcoinj.core.NetworkParameters;
@@ -37,18 +42,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.Date;
-import java.util.Optional;
-
 
 /** Bitcoin-like 地址派生、地址校验、完整区块/交易观察和签名广播；账务由应用用例编排。 */
 @Service
-public
-class BitcoinLikeChainRuntime {
+public class BitcoinLikeChainRuntime {
 
-    private final ChainJdbcRepository chainRepository;
+    private final ChainProfileRepository chainProfileRepository;
+    private final ChainAssetRepository chainAssetRepository;
     private final ChainAddressRepository addresses;
     private final PubKeyConfig pubKeyConfig;
 
@@ -64,11 +64,17 @@ class BitcoinLikeChainRuntime {
     /** BCH JSON-RPC 命令执行器 */
     private final BchCommand bchCommand;
 
-    public BitcoinLikeChainRuntime(ChainJdbcRepository chainRepository, PubKeyConfig pubKeyConfig,
-                                   BtcCommand btcCommand, LitecoinEsploraCommand ltcCommand,
-                                   DogeCommand dogeCommand, BchCommand bchCommand,
-                                   ChainAddressRepository addresses) {
-        this.chainRepository = java.util.Objects.requireNonNull(chainRepository);
+    public BitcoinLikeChainRuntime(
+            ChainProfileRepository chainProfileRepository,
+            ChainAssetRepository chainAssetRepository,
+            PubKeyConfig pubKeyConfig,
+            BtcCommand btcCommand,
+            LitecoinEsploraCommand ltcCommand,
+            DogeCommand dogeCommand,
+            BchCommand bchCommand,
+            ChainAddressRepository addresses) {
+        this.chainProfileRepository = java.util.Objects.requireNonNull(chainProfileRepository);
+        this.chainAssetRepository = java.util.Objects.requireNonNull(chainAssetRepository);
         this.pubKeyConfig = java.util.Objects.requireNonNull(pubKeyConfig);
         this.btcCommand = java.util.Objects.requireNonNull(btcCommand);
         this.ltcCommand = java.util.Objects.requireNonNull(ltcCommand);
@@ -96,7 +102,7 @@ class BitcoinLikeChainRuntime {
             try {
                 int index = nextAddressIndex(asset, userId, biz);
                 Address address = buildAddress(chainType, userId, biz, index);
-                chainRepository.upsertChainAddress(toChainAddressRecord(address, asset));
+                addresses.upsert(toChainAddressRecord(address, asset));
                 return address;
             } catch (DuplicateKeyException e) {
                 if (attempt == 4) {
@@ -126,7 +132,7 @@ class BitcoinLikeChainRuntime {
         }
         AssetRuntimeMetadata asset = assetMetadata(chainType);
         Address address = buildAddress(chainType, userId, biz, Math.toIntExact(childIndex));
-        chainRepository.upsertChainAddress(toChainAddressRecord(address, asset));
+        addresses.upsert(toChainAddressRecord(address, asset));
         return address;
     }
     /**
@@ -262,9 +268,9 @@ class BitcoinLikeChainRuntime {
      * @throws IllegalStateException 如果链配置或资产信息缺失
      */
     public AssetRuntimeMetadata assetMetadata(ChainType chainType) {
-        AccountChainProfile profile = chainRepository.findProfileByChain(chainType.name())
+        AccountChainProfile profile = chainProfileRepository.findAccountByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
-        ChainAsset asset = chainRepository.findAsset(profile.getChain(), profile.getNativeSymbol()).orElse(null);
+        ChainAsset asset = chainAssetRepository.findActiveDefinition(profile.getChain(), profile.getNativeSymbol()).orElse(null);
         return AssetRuntimeMetadata.fromProfile(
                 profile.getRuntimeCurrencyId(),
                 profile.getChain(),
@@ -278,8 +284,7 @@ class BitcoinLikeChainRuntime {
      * 执行 {@code nextAddressIndex} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private int nextAddressIndex(AssetRuntimeMetadata asset, long userId, int biz) {
-        return chainRepository.findMaxChainAddressIndex(
-                        asset.chain(), asset.assetSymbol(), userId, biz, "DEPOSIT")
+        return addresses.findMaxIndex(asset.chain(), asset.assetSymbol(), userId, biz, "DEPOSIT")
                 .map(value -> Math.toIntExact(value + 1))
                 .orElse(0);
     }
@@ -436,7 +441,7 @@ class BitcoinLikeChainRuntime {
      * 执行 {@code bitcoinLikeProfile} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private AccountChainProfile bitcoinLikeProfile(ChainType chainType) {
-        return chainRepository.findProfileByChain(chainType.name())
+        return chainProfileRepository.findAccountByChain(chainType.name())
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + chainType.name()));
     }
     /**

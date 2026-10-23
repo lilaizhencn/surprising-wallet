@@ -1,10 +1,6 @@
 package com.surprising.wallet.repository;
 
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.support.SqlArrayValue;
-import org.springframework.stereotype.Repository;
-
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -14,6 +10,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
+import org.springframework.stereotype.Repository;
 
 /** withdrawal_order 单表仓储。 */
 @Repository
@@ -98,8 +97,7 @@ public class WithdrawalOrderRepository {
                         where tenant_id is not null and chain = ? and asset_symbol = ?
                           and status in ('FROZEN', 'RETRYING')
                           and (next_attempt_at is null or next_attempt_at <= now())
-                        order by id limit 1
-                 )
+                        order by id limit 1)
                    and chain = ? and asset_symbol = ?
                    and status in ('FROZEN', 'RETRYING')
                    and (next_attempt_at is null or next_attempt_at <= now())
@@ -118,8 +116,7 @@ public class WithdrawalOrderRepository {
                        select o.*, row_number() over (partition by tenant_id order by id) as tenant_rank
                          from withdrawal_order o
                         where tenant_id is not null and chain = ? and status in ('FROZEN', 'RETRYING')
-                          and (next_attempt_at is null or next_attempt_at <= now())
-                  ) queued
+                          and (next_attempt_at is null or next_attempt_at <= now())) queued
                  order by tenant_rank, id, tenant_id
                  limit ?
                 """, (rs, rowNum) -> map(rs), chain, limit);
@@ -168,6 +165,7 @@ public class WithdrawalOrderRepository {
 
     /** 标记提现已发送。 */
     public int markSent(UUID tenantId, String chain, String orderNo, String fromAddress, String txHash) {
+        requireTransactionHash(txHash);
         return jdbc.update("""
                 update withdrawal_order set status = 'SENT', from_address = coalesce(?, from_address),
                     tx_hash = ?, error_message = null, lease_owner = null, lease_until = null, updated_at = ?
@@ -177,6 +175,7 @@ public class WithdrawalOrderRepository {
 
     /** 标记非租户提现已发送。 */
     public int markSent(String chain, String orderNo, String fromAddress, String txHash) {
+        requireTransactionHash(txHash);
         return jdbc.update("""
                 update withdrawal_order set status = 'SENT', from_address = coalesce(?, from_address),
                     tx_hash = ?, error_message = null, lease_owner = null, lease_until = null, updated_at = ?
@@ -270,6 +269,15 @@ public class WithdrawalOrderRepository {
         return jdbc.queryForList("""
                 select tenant_id from withdrawal_order where chain = ? and order_no = ? and tenant_id is not null
                 """, UUID.class, chain, orderNo).stream().findFirst();
+    }
+
+    public UUID requireTenant(String chain, String orderNo) {
+        return findTenant(chain, orderNo).orElseThrow(() -> new IllegalStateException(
+                "withdrawal order must belong to exactly one tenant: " + chain + ":" + orderNo));
+    }
+
+    private static void requireTransactionHash(String hash) {
+        if (hash == null || hash.isBlank()) throw new IllegalArgumentException("withdrawal tx hash must not be blank");
     }
 
     /** 查询非租户条件的提现订单。 */

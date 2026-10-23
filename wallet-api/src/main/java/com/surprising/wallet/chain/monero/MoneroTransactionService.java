@@ -1,17 +1,20 @@
 package com.surprising.wallet.chain.monero;
 
-import com.surprising.wallet.service.WithdrawalSettlementService;
-
+import com.surprising.wallet.chain.model.MoneroTransactionRecord;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.chain.model.MoneroTransactionRecord;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.CollectionRecordRepository;
+import com.surprising.wallet.repository.MoneroTransactionRepository;
+import com.surprising.wallet.repository.WithdrawalOrderRepository;
+import com.surprising.wallet.service.DepositService;
+import com.surprising.wallet.service.WithdrawalSettlementService;
+import java.math.BigDecimal;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
-import java.math.BigDecimal;
 
 /**
  * Monero 链交易服务，通过 monero-wallet-rpc 发送转账并管理提现/归集流程。
@@ -34,9 +37,13 @@ public class MoneroTransactionService {
 
     /** Monero 钱包 RPC 客户端 */
     private final MoneroWalletRpcClient walletRpcClient;
+    private final MoneroTransactionRepository moneroTransactionRepository;
+    private final WithdrawalOrderRepository withdrawalOrderRepository;
+    private final CollectionRecordRepository collectionRecordRepository;
+    private final ChainAddressRepository chainAddressRepository;
+    private final DepositService depositService;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
+
     private final WithdrawalSettlementService settlements;
     /**
      * 发送或广播 {@code sendNative} 对应的链上请求，并返回节点处理结果。
@@ -44,7 +51,7 @@ public class MoneroTransactionService {
     public String sendNative(AccountChainProfile profile, ChainAddressRecord from, String toAddress, BigDecimal amount) {
         MoneroWalletRpcClient.Transfer transfer = walletRpcClient.transfer(
                 Math.toIntExact(from.getAddressIndex()), toAddress, amount, network(profile), "rpc");
-        repository.recordMoneroTransaction(MoneroTransactionRecord.builder()
+        moneroTransactionRepository.upsert(MoneroTransactionRecord.builder()
                 .chain(CHAIN)
                 .txHash(transfer.txHash())
                 .direction("OUT")
@@ -68,7 +75,7 @@ public class MoneroTransactionService {
     public void confirmWithdrawal(AccountChainProfile profile, String orderNo, String txHash,
                                   String debitAccountId, BigDecimal debitAmount,
                                   String toAddress, BigDecimal amount) {
-        confirmWithdrawal(repository.requireWithdrawalTenant(CHAIN, orderNo),
+        confirmWithdrawal(withdrawalOrderRepository.requireTenant(CHAIN, orderNo),
                 profile, orderNo, txHash, debitAccountId, debitAmount, toAddress, amount);
     }
 
@@ -93,15 +100,14 @@ public class MoneroTransactionService {
      */
     public void collectNative(java.util.UUID tenantId, AccountChainProfile profile, String collectionNo,
                               ChainAddressRecord from, String toAddress, BigDecimal amount) {
-        if (repository.claimCollectionSigning(tenantId, CHAIN, collectionNo, null) != 1) {
+        if (collectionRecordRepository.claimSigning(tenantId, CHAIN, collectionNo, null) != 1) {
             return;
         }
         try {
             String txHash = sendNative(profile, from, toAddress, amount);
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "SENT", txHash, null, null);
         } catch (RuntimeException e) {
-            repository.updateCollectionStatus(tenantId, CHAIN, collectionNo,
-                    "FAILED", null, e.getMessage(), null);
+            collectionRecordRepository.updateStatus(tenantId, CHAIN, collectionNo, "FAILED", null, e.getMessage(), null);
             throw e;
         }
     }
@@ -111,10 +117,9 @@ public class MoneroTransactionService {
      */
     public void confirmCollection(java.util.UUID tenantId, AccountChainProfile profile,
                                   String collectionNo) {
-        repository.findCollectionTxHash(tenantId, CHAIN, collectionNo)
+        collectionRecordRepository.findTxHash(tenantId, CHAIN, collectionNo)
                 .filter(txHash -> confirmedTransfer(profile, txHash, profile.getWithdrawConfirmations()) != null)
-                .ifPresent(txHash -> repository.markCollectionConfirmed(
-                        tenantId, CHAIN, collectionNo, txHash));
+                .ifPresent(txHash -> collectionRecordRepository.markConfirmed(tenantId, CHAIN, collectionNo, txHash));
     }
 
     /**
@@ -125,8 +130,9 @@ public class MoneroTransactionService {
         if (toAddress == null || toAddress.isBlank()) {
             return;
         }
-        repository.findChainAddressByAddress(CHAIN, SYMBOL, toAddress)
-                .ifPresent(recipient -> repository.recordAndCreditDeposit(new DepositEvent(
+        chainAddressRepository.findEnabledByAddress(CHAIN, SYMBOL, toAddress)
+                .ifPresent(recipient -> depositService.recordAndCredit(
+                        new DepositEvent(
                                 ChainType.XMR,
                                 SYMBOL,
                                 transfer.txHash(),
@@ -165,7 +171,7 @@ public class MoneroTransactionService {
         }
         int confirmations = Math.max(0, transfer.confirmations());
         int required = Math.max(1, requiredConfirmations);
-        repository.recordMoneroTransaction(MoneroTransactionRecord.builder()
+        moneroTransactionRepository.upsert(MoneroTransactionRecord.builder()
                 .chain(CHAIN)
                 .txHash(transfer.txHash())
                 .direction(transfer.direction())

@@ -1,27 +1,28 @@
 package com.surprising.wallet.custody;
 
-import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
+import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.repository.DepositRecordRepository;
+import com.surprising.wallet.service.DepositService;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.math.BigDecimal;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
-
-import java.math.BigDecimal;
-import java.util.Map;
-import java.util.UUID;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
-import com.surprising.wallet.repository.CustodyRepository;
-import com.surprising.wallet.repository.CustodyTenantChainRepository;
 
 /**
  * 验证 {@code CustodyDepositProjectionIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
@@ -58,13 +59,17 @@ class CustodyDepositProjectionIntegrationTest {
     void confirmedDepositProjectsDisabledAddressAndSubjectAtomically() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         CustodyRepository custodyRepository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
-        ChainJdbcRepository chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
-                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), objectMapper));
+        ChainRepositoryFixture chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(
+                jdbc,
+                com.surprising.wallet.testutil.DepositTestSupport.projection(
+                        jdbc,
+                        com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc),
+                        objectMapper));
 
         transactions.executeWithoutResult(status -> {
             DepositFixture fixture = createFixture("user_10086", "DISABLED");
             DepositEvent event = event(fixture.address(), new BigDecimal("5.25"));
-            assertTrue(chainRepository.recordAndCreditDeposit(event, 0L, 12, fixture.accountId()));
+            assertTrue(chainRepository.depositService.recordAndCredit(event, 0L, 12, fixture.accountId()));
             assertEquals(0, jdbc.queryForObject("""
                     select count(*) from custody_address
                      where id = ? and status <> 'DISABLED'
@@ -104,8 +109,12 @@ class CustodyDepositProjectionIntegrationTest {
     void sharedAccountIdAcrossAddressVersionsProjectsToExactAddress() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         CustodyRepository custodyRepository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
-        ChainJdbcRepository chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
-                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), objectMapper));
+        ChainRepositoryFixture chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(
+                jdbc,
+                com.surprising.wallet.testutil.DepositTestSupport.projection(
+                        jdbc,
+                        com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc),
+                        objectMapper));
 
         transactions.executeWithoutResult(status -> {
             DepositFixture first = createFixture("versioned-user", "ACTIVE");
@@ -137,7 +146,7 @@ class CustodyDepositProjectionIntegrationTest {
             jdbc.update("update chain_address set account_id = '69' where id = ?", firstChainAddressId);
 
             DepositEvent event = event(latestAddress, new BigDecimal("6.50"));
-            assertTrue(chainRepository.recordAndCreditDeposit(event, 0L, 12, "69"));
+            assertTrue(chainRepository.depositService.recordAndCredit(event, 0L, 12, "69"));
             assertEquals(latestCustodyAddressId, jdbc.queryForObject("""
                     select custody_address_id from custody_deposit
                      where tenant_id = ? and tx_hash = ?
@@ -196,7 +205,7 @@ class CustodyDepositProjectionIntegrationTest {
     void pendingDepositIsAttributedToTenantBeforeCredit() {
         transactions.executeWithoutResult(status -> {
             DepositFixture fixture = createFixture("pending-user", "ACTIVE");
-            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+            ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             DepositEvent event = new DepositEvent(
                     ChainType.ETH, "ETH",
                     "0x" + UUID.randomUUID().toString().replace("-", ""),
@@ -204,8 +213,7 @@ class CustodyDepositProjectionIntegrationTest {
                     fixture.address(), new BigDecimal("1.25"),
                     123_456L, "0xpending-block", 1, null, "{\"integration\":true}");
 
-            assertFalse(repository.recordAndCreditDeposit(
-                    event, 0L, 12, fixture.accountId()));
+            assertFalse(repository.depositService.recordAndCredit(event, 0L, 12, fixture.accountId()));
             assertEquals(fixture.tenantId(), jdbc.queryForObject("""
                     select tenant_id from deposit_record
                      where chain = 'ETH' and tx_hash = ? and log_index = 0
@@ -225,7 +233,7 @@ class CustodyDepositProjectionIntegrationTest {
     void collectionTransferToTenantHotAddressIsNotCreditedAsANewDeposit() {
         transactions.executeWithoutResult(status -> {
             DepositFixture fixture = createFixture("internal-hot", "ACTIVE");
-            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+            ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             DepositEvent event = event(fixture.address(), new BigDecimal("3.50"));
             jdbc.update("""
                     insert into collection_record(
@@ -237,8 +245,7 @@ class CustodyDepositProjectionIntegrationTest {
                     "0x1111111111111111111111111111111111111111",
                     fixture.address(), event.txId());
 
-            assertFalse(repository.recordAndCreditDeposit(
-                    event, 0L, 12, fixture.accountId()));
+            assertFalse(repository.depositService.recordAndCredit(event, 0L, 12, fixture.accountId()));
             assertEquals(0, jdbc.queryForObject("""
                     select count(*) from deposit_record
                      where chain = 'ETH' and tx_hash = ?
@@ -260,7 +267,7 @@ class CustodyDepositProjectionIntegrationTest {
         transactions.executeWithoutResult(status -> {
             DepositFixture sender = createFixture("internal-sender", "ACTIVE");
             DepositFixture recipient = createFixture("internal-recipient", "ACTIVE");
-            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+            ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             DepositEvent event = new DepositEvent(
                     ChainType.ETH, "ETH",
                     "0x" + UUID.randomUUID().toString().replace("-", ""),
@@ -268,8 +275,7 @@ class CustodyDepositProjectionIntegrationTest {
                     123_456L, "0xinternal-transfer-block", 12, null,
                     "{\"integration\":true}");
 
-            assertTrue(repository.recordAndCreditDeposit(
-                    event, 0L, 12, recipient.accountId()));
+            assertTrue(repository.depositService.recordAndCredit(event, 0L, 12, recipient.accountId()));
             assertEquals(recipient.tenantId(), jdbc.queryForObject("""
                     select tenant_id from deposit_record
                      where chain = 'ETH' and tx_hash = ? and log_index = 0
@@ -312,22 +318,24 @@ class CustodyDepositProjectionIntegrationTest {
     void webhookDeliveryIsAutomaticOnlyForApiCreatedAddresses() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         CustodyRepository custodyRepository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
-        ChainJdbcRepository chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
-                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), objectMapper));
+        ChainRepositoryFixture chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(
+                jdbc,
+                com.surprising.wallet.testutil.DepositTestSupport.projection(
+                        jdbc,
+                        com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc),
+                        objectMapper));
 
         transactions.executeWithoutResult(status -> {
             DepositFixture apiAddress = createFixture("api-user", "ACTIVE", "API");
             insertActiveWebhook(apiAddress.tenantId());
             DepositEvent apiEvent = event(apiAddress.address(), new BigDecimal("1.25"));
-            assertTrue(chainRepository.recordAndCreditDeposit(
-                    apiEvent, 0L, 12, apiAddress.accountId()));
+            assertTrue(chainRepository.depositService.recordAndCredit(apiEvent, 0L, 12, apiAddress.accountId()));
             assertEquals(1, deliveryCount(apiAddress.tenantId()));
 
             DepositFixture consoleAddress = createFixture("console-user", "ACTIVE", "CONSOLE");
             insertActiveWebhook(consoleAddress.tenantId());
             DepositEvent consoleEvent = event(consoleAddress.address(), new BigDecimal("2.50"));
-            assertTrue(chainRepository.recordAndCreditDeposit(
-                    consoleEvent, 0L, 12, consoleAddress.accountId()));
+            assertTrue(chainRepository.depositService.recordAndCredit(consoleEvent, 0L, 12, consoleAddress.accountId()));
             assertEquals(0, deliveryCount(consoleAddress.tenantId()));
             status.setRollbackOnly();
         });
@@ -444,7 +452,6 @@ class CustodyDepositProjectionIntegrationTest {
             UUID tenantId,
             UUID custodyAddressId,
             String address,
-            String accountId
-    ) {
+            String accountId) {
     }
 }

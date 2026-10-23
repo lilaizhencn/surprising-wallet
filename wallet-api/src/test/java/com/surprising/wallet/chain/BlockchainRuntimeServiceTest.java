@@ -1,25 +1,26 @@
 package com.surprising.wallet.chain;
 
-import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.chain.utxo.BitcoinLikeChainRuntime;
+import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.pojo.Address;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.ChainAssetRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.Mockito;
 
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 class BlockchainRuntimeServiceTest {
     private final ChainProfileRepository profiles = mock(ChainProfileRepository.class);
     private final ChainAssetRepository assets = mock(ChainAssetRepository.class);
-    private final ChainJdbcRepository repository = mock(ChainJdbcRepository.class);
+    private final ChainRepositoryFixture repository = ChainRepositoryFixture.mocked();
     private final ChainAddressRuntime addresses = mock(ChainAddressRuntime.class);
     private final BitcoinLikeChainRuntime bitcoinLike = mock(BitcoinLikeChainRuntime.class);
     private final BlockchainRuntimeService service = new BlockchainRuntimeService(profiles, assets, addresses, bitcoinLike);
@@ -62,11 +63,15 @@ class BlockchainRuntimeServiceTest {
         AccountChainProfile profile = profile(ChainType.BTC);
         profile.setNetwork("testnet3");
         when(profiles.findAccountByChain("BTC")).thenReturn(Optional.of(profile));
-        when(repository.findProfileByChain("BTC")).thenReturn(Optional.of(profile));
+        when(repository.chainProfileRepository.findAccountByChain("BTC")).thenReturn(Optional.of(profile));
         BitcoinLikeChainRuntime runtime = new BitcoinLikeChainRuntime(
-                repository, mock(com.surprising.wallet.config.PubKeyConfig.class),
-                mock(com.surprising.wallet.chain.rpc.BtcCommand.class), mock(com.surprising.wallet.chain.ltc.LitecoinEsploraCommand.class),
-                mock(com.surprising.wallet.chain.rpc.DogeCommand.class), mock(com.surprising.wallet.chain.rpc.BchCommand.class),
+                repository.chainProfileRepository,
+                repository.chainAssetRepository,
+                mock(com.surprising.wallet.config.PubKeyConfig.class),
+                mock(com.surprising.wallet.chain.rpc.BtcCommand.class),
+                mock(com.surprising.wallet.chain.ltc.LitecoinEsploraCommand.class),
+                mock(com.surprising.wallet.chain.rpc.DogeCommand.class),
+                mock(com.surprising.wallet.chain.rpc.BchCommand.class),
                 mock(com.surprising.wallet.repository.ChainAddressRepository.class));
         BlockchainRuntimeService configured = new BlockchainRuntimeService(profiles, assets, addresses, runtime);
 

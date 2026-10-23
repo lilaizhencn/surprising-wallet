@@ -1,5 +1,7 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.chain.model.ChainCollectionRecord;
+import com.surprising.wallet.chain.model.TronTransactionRecord;
 import com.surprising.wallet.chain.tron.TronClientFactory;
 import com.surprising.wallet.chain.tron.TronTransactionService;
 import com.surprising.wallet.chain.tron.TronTrc20Service;
@@ -7,19 +9,17 @@ import com.surprising.wallet.chain.tron.TronTridentClient;
 import com.surprising.wallet.chain.tron.TronTridentKeyFactory;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
-import com.surprising.wallet.chain.model.ChainCollectionRecord;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.chain.model.TronTransactionRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.repository.CollectionRecordRepository;
+import com.surprising.wallet.repository.TronTransactionRepository;
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import org.bitcoinj.crypto.ECKey;
 import org.springframework.stereotype.Service;
 import org.tron.trident.core.NodeType;
 import org.tron.trident.core.key.KeyPair;
 import org.tron.trident.proto.Response;
-
-import java.math.BigDecimal;
 
 /**
  * TRON 账户链提现、归集和确认服务。
@@ -32,10 +32,10 @@ class TronAccountChainService {
      */
     private static final BigDecimal TRX_SUN = new BigDecimal("1000000");
 
-    /**
-     * 保存 {@code repository}，用于访问当前业务所依赖的仓储、客户端或服务。
-     */
-    private final ChainJdbcRepository repository;
+    private final CollectionRecordRepository collectionRecordRepository;
+    private final TronTransactionRepository tronTransactionRepository;
+
+
     /**
      * 保存 {@code secp256k1KeyService}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
      */
@@ -103,9 +103,7 @@ class TronAccountChainService {
             AccountChainProfile profile,
             ChainCollectionRecord record,
             ChainAddressRecord from) throws Exception {
-        if (repository.claimCollectionSigning(
-                record.getTenantId(), record.getChain(),
-                record.getCollectionNo(), null) != 1) {
+        if (collectionRecordRepository.claimSigning(record.getTenantId(), record.getChain(), record.getCollectionNo(), null) != 1) {
             return;
         }
         try (TronTridentClient client = tronClientFactory.create()) {
@@ -138,14 +136,16 @@ class TronAccountChainService {
                         record.getToAddress(), token.getSymbol(),
                         token.getContractAddress(), record.getAmount());
             }
-            repository.updateCollectionStatus(
-                    record.getTenantId(), record.getChain(),
-                    record.getCollectionNo(), "SENT", txHash, null, null);
+            collectionRecordRepository.updateStatus(record.getTenantId(), record.getChain(), record.getCollectionNo(), "SENT", txHash, null, null);
         } catch (Exception error) {
-            repository.updateCollectionStatus(
-                    record.getTenantId(), record.getChain(),
-                    record.getCollectionNo(), "FAILED", null,
-                    error.getMessage(), null);
+            collectionRecordRepository.updateStatus(
+                    record.getTenantId(),
+                    record.getChain(),
+                    record.getCollectionNo(),
+                    "FAILED",
+                    null,
+                    error.getMessage(),
+                    null);
             throw error;
         }
     }
@@ -188,9 +188,7 @@ class TronAccountChainService {
                 record.getChain(), record.getTxHash(), record.getFromAddress(),
                 record.getToAddress(), record.getAssetSymbol(),
                 record.getAmount(), txInfo);
-        repository.markCollectionConfirmed(
-                record.getTenantId(), record.getChain(),
-                record.getCollectionNo(), record.getTxHash());
+        collectionRecordRepository.markConfirmed(record.getTenantId(), record.getChain(), record.getCollectionNo(), record.getTxHash());
     }
 
     /**
@@ -231,7 +229,7 @@ class TronAccountChainService {
             String symbol,
             BigDecimal amount,
             Response.TransactionInfo txInfo) {
-        repository.recordTronTransaction(TronTransactionRecord.builder()
+        tronTransactionRepository.upsert(TronTransactionRecord.builder()
                 .chain(chain)
                 .txHash(txHash)
                 .fromAddress(from)
@@ -257,7 +255,7 @@ class TronAccountChainService {
             String symbol,
             String contract,
             BigDecimal amount) {
-        repository.recordTronTransaction(TronTransactionRecord.builder()
+        tronTransactionRepository.upsert(TronTransactionRecord.builder()
                 .chain(chain)
                 .txHash(txHash)
                 .fromAddress(from)

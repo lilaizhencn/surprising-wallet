@@ -1,22 +1,24 @@
 package com.surprising.wallet.config;
 
+import com.surprising.wallet.chain.model.ChainAsset;
 import com.surprising.wallet.common.chain.AccountChainProfile;
 import com.surprising.wallet.common.chain.ChainRpcNode;
 import com.surprising.wallet.common.chain.TokenDefinition;
-import com.surprising.wallet.chain.model.ChainAsset;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-
+import com.surprising.wallet.config.WalletStartupValidator;
+import com.surprising.wallet.repository.UtxoRepository;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.config.WalletStartupValidator;
 
 /**
  * 验证 {@code WalletStartupValidatorTest} 覆盖的业务流程、边界条件和异常行为。
@@ -432,16 +434,23 @@ class WalletStartupValidatorTest {
     /**
      * 验证 {@code validator} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static WalletStartupValidator validator(ChainJdbcRepository repository) throws Exception {
+    private static WalletStartupValidator validator(ChainRepositoryFixture repository) throws Exception {
         return validator(repository, new FakeJdbcTemplate(List.of(), List.of()));
     }
 
     /**
      * 验证 {@code validator} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static WalletStartupValidator validator(ChainJdbcRepository repository,
+    private static WalletStartupValidator validator(ChainRepositoryFixture repository,
                                                     JdbcTemplate jdbcTemplate) throws Exception {
-        WalletStartupValidator validator = new WalletStartupValidator(repository, null, jdbcTemplate, null);
+        WalletStartupValidator validator = new WalletStartupValidator(
+                repository.chainProfileRepository,
+                repository.chainAssetRepository,
+                repository.tokenConfigRepository,
+                repository.chainRpcNodeRepository,
+                null,
+                jdbcTemplate,
+                null);
         setField(validator, "environmentName", "test2");
         return validator;
     }
@@ -558,7 +567,7 @@ class WalletStartupValidatorTest {
     /**
      * 测试替身 {@code FakeRepository}，用于隔离外部依赖并验证调用参数和状态变化。
      */
-    private static final class FakeRepository extends ChainJdbcRepository {
+    private static final class FakeRepository extends ChainRepositoryFixture {
         /**
          * 保存 {@code profiles}，用于承载当前测试夹具的配置或运行数据。
          */
@@ -575,79 +584,41 @@ class WalletStartupValidatorTest {
         /**
          * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
-        private FakeRepository(List<AccountChainProfile> profiles, List<ChainRpcNode> nodes,
-                               List<TokenDefinition> tokens) {
-            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
+        private FakeRepository(
+                List<AccountChainProfile> profiles,
+                List<ChainRpcNode> nodes,
+                List<TokenDefinition> tokens) {
+            super();
             this.profiles = profiles;
             this.nodes = nodes;
             this.tokens = tokens;
+            Mockito.doAnswer(invocation -> profiles.stream().filter(p -> p.getChain().equalsIgnoreCase(invocation.getArgument(0))).findFirst()).when(chainProfileRepository).findAccountByChain(ArgumentMatchers.anyString());
+            Mockito.doAnswer(invocation -> {
+                return profiles;
+            }).when(chainProfileRepository).listProfiles(ArgumentMatchers.eq(true));
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_network = invocation.getArgument(1);
+                String arg_environment = invocation.getArgument(2);
+                String arg_purpose = invocation.getArgument(3);
+                return nodes.stream().filter(node -> node.getChain().equalsIgnoreCase(arg_chain)).filter(node -> node.getNetwork().equalsIgnoreCase(arg_network)).filter(node -> node.getPurpose().equalsIgnoreCase(arg_purpose)).toList();
+            }).when(chainRpcNodeRepository).listRuntimeNodes(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                return tokens.stream().filter(token -> token.getChain().equalsIgnoreCase(arg_chain)).toList();
+            }).when(tokenConfigRepository).listDefinitions(ArgumentMatchers.<String>any(), ArgumentMatchers.any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                String arg_symbol = invocation.getArgument(1);
+                return profiles.stream().filter(profile -> profile.getChain().equalsIgnoreCase(arg_chain)).filter(profile -> profile.getNativeSymbol().equalsIgnoreCase(arg_symbol)).findFirst().map(profile -> ChainAsset.builder().chain(arg_chain).symbol(arg_symbol).decimals(18).nativeAsset(true).active(true).build());
+            }).when(chainAssetRepository).findActiveDefinition(ArgumentMatchers.<String>any(), ArgumentMatchers.<String>any());
+            Mockito.doAnswer(invocation -> {
+                String arg_chain = invocation.getArgument(0);
+                return profiles.stream().anyMatch(profile -> profile.getChain().equalsIgnoreCase(arg_chain)) ? 1 : 0;
+            }).when(chainAssetRepository).countActiveNativeAssets(ArgumentMatchers.<String>any());
         }
 
-        /**
-         * 验证 {@code listEnabledChainProfiles} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<AccountChainProfile> listEnabledChainProfiles() {
-            return profiles;
-        }
 
-        /**
-         * 验证 {@code listEnabledRpcNodes} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<ChainRpcNode> listEnabledRpcNodes(String chain, String network, String environment) {
-            return listEnabledRpcNodes(chain, network, environment, "rpc");
-        }
-
-        /**
-         * 验证 {@code listEnabledRpcNodes} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<ChainRpcNode> listEnabledRpcNodes(String chain, String network,
-                                                      String environment, String purpose) {
-            return nodes.stream()
-                    .filter(node -> node.getChain().equalsIgnoreCase(chain))
-                    .filter(node -> node.getNetwork().equalsIgnoreCase(network))
-                    .filter(node -> node.getPurpose().equalsIgnoreCase(purpose))
-                    .toList();
-        }
-
-        /**
-         * 验证 {@code listTokens} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public List<TokenDefinition> listTokens(String chain) {
-            return tokens.stream()
-                    .filter(token -> token.getChain().equalsIgnoreCase(chain))
-                    .toList();
-        }
-
-        /**
-         * 验证 {@code findAsset} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public Optional<ChainAsset> findAsset(String chain, String symbol) {
-            return profiles.stream()
-                    .filter(profile -> profile.getChain().equalsIgnoreCase(chain))
-                    .filter(profile -> profile.getNativeSymbol().equalsIgnoreCase(symbol))
-                    .findFirst()
-                    .map(profile -> ChainAsset.builder()
-                            .chain(chain)
-                            .symbol(symbol)
-                            .decimals(18)
-                            .nativeAsset(true)
-                            .active(true)
-                            .build());
-        }
-
-        /**
-         * 验证 {@code countActiveNativeAssets} 对应的测试场景，明确输入、预期结果和异常边界。
-         */
-        @Override
-        public int countActiveNativeAssets(String chain) {
-            return profiles.stream()
-                    .anyMatch(profile -> profile.getChain().equalsIgnoreCase(chain)) ? 1 : 0;
-        }
     }
 
     /**
@@ -674,27 +645,28 @@ class WalletStartupValidatorTest {
         /**
          * 验证 {@code FakeJdbcTemplate} 对应的测试场景，明确输入、预期结果和异常边界。
          */
-        private FakeJdbcTemplate(List<Map<String, Object>> tokenRows,
-                                 List<Map<String, Object>> assetRows) {
+        private FakeJdbcTemplate(List<Map<String, Object>> tokenRows, List<Map<String, Object>> assetRows) {
             this(tokenRows, assetRows, List.of(), List.of());
         }
 
         /**
          * 验证 {@code FakeJdbcTemplate} 对应的测试场景，明确输入、预期结果和异常边界。
          */
-        private FakeJdbcTemplate(List<Map<String, Object>> tokenRows,
-                                 List<Map<String, Object>> assetRows,
-                                 List<Map<String, Object>> profileRows) {
+        private FakeJdbcTemplate(
+                List<Map<String, Object>> tokenRows,
+                List<Map<String, Object>> assetRows,
+                List<Map<String, Object>> profileRows) {
             this(tokenRows, assetRows, profileRows, List.of());
         }
 
         /**
          * 验证 {@code FakeJdbcTemplate} 对应的测试场景，明确输入、预期结果和异常边界。
          */
-        private FakeJdbcTemplate(List<Map<String, Object>> tokenRows,
-                                 List<Map<String, Object>> assetRows,
-                                 List<Map<String, Object>> profileRows,
-                                 List<Map<String, Object>> eip7702Rows) {
+        private FakeJdbcTemplate(
+                List<Map<String, Object>> tokenRows,
+                List<Map<String, Object>> assetRows,
+                List<Map<String, Object>> profileRows,
+                List<Map<String, Object>> eip7702Rows) {
             this.tokenRows = tokenRows;
             this.assetRows = assetRows;
             this.profileRows = profileRows;

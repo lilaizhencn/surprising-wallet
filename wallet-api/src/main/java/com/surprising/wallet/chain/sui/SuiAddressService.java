@@ -1,14 +1,13 @@
 package com.surprising.wallet.chain.sui;
 
-import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.HotWalletRules;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.sdk.ed25519.Ed25519DerivedKey;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
 import java.util.Objects;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 /**
  * Sui 链地址管理服务，负责创建和管理链上地址。
@@ -18,17 +17,15 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
-public
-class SuiAddressService {
+public class SuiAddressService {
 
     /** 链标识常量 */
     private static final String CHAIN = "SUI";
 
     /** Sui 密钥服务 */
     private final SuiKeyService keyService;
+    private final ChainAddressRepository chainAddressRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
 
     /**
      * 构建或生成 {@code createNativeAddress} 对应的结果，并执行输入和状态校验。
@@ -53,7 +50,7 @@ class SuiAddressService {
                                              long derivationIndex, String walletRole) {
         Objects.requireNonNull(tenantId, "tenantId is required");
         HotWalletRules.requireAllowedReservedAddress(CHAIN, symbol, "SUI", userId, biz, derivationIndex, walletRole);
-        return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
+        return chainAddressRepository.find(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     Ed25519DerivedKey key = keyService.derive(userId, biz, derivationIndex);
                     String address = SuiKeyService.address(key.publicKey());
@@ -71,8 +68,8 @@ class SuiAddressService {
                             .walletRole(walletRole)
                             .enabled(true)
                             .build();
-                    repository.upsertChainAddress(record);
-                    return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
+                    chainAddressRepository.upsert(record);
+                    return chainAddressRepository.find(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                             .orElseThrow();
                 });
     }

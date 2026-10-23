@@ -1,17 +1,9 @@
 package com.surprising.wallet.chain.sui;
 
-import com.surprising.wallet.testutil.RuntimeTestSupport;
-
-import static com.surprising.wallet.testutil.RpcTestSupport.*;
-import tools.jackson.databind.ObjectMapper;
-import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
+import com.surprising.wallet.testutil.RuntimeTestSupport;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
@@ -21,7 +13,13 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import tools.jackson.databind.ObjectMapper;
 
+import static com.surprising.wallet.testutil.RpcTestSupport.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -71,19 +69,37 @@ class SuiLiveNativeFlowIntegrationTest {
                 env("SUI_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         UUID tenantId = SuiTenantIntegrationFixture.ensureTenant(jdbc);
-        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
+        ChainRepositoryFixture repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         SuiRpcClient rpc = new SuiRpcClient(new ObjectMapper(),
                 profiles("SUI"),
                 nodes("SUI", env("SUI_GRPC_ENDPOINT", "fullnode.testnet.sui.io:443")));
         SuiKeyService keys = new SuiKeyService(masterSeed);
-        SuiAddressService addresses = new SuiAddressService(keys, repository);
+        SuiAddressService addresses = new SuiAddressService(keys, repository.chainAddressRepository);
         SuiTransactionSigner signer = new SuiTransactionSigner(keys);
-        SuiTransactionService transactions = new SuiTransactionService(rpc,
+        SuiTransactionService transactions = new SuiTransactionService(
+                rpc,
                 signer,
                 new com.surprising.wallet.chain.sui.SuiPtbTransactionBuilder(),
-                repository,
-                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc), RuntimeTestSupport.database(jdbc));
-        SuiDepositScanner scanner = new SuiDepositScanner(rpc, repository, RuntimeTestSupport.database(jdbc));
+                repository.withdrawalOrderRepository,
+                repository.ledgerBalanceRepository,
+                repository.withdrawalClaimService,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.collectionRecordRepository,
+                repository.suiTransactionRepository,
+                repository.chainAssetRepository,
+                com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc),
+                RuntimeTestSupport.database(jdbc));
+        SuiDepositScanner scanner = new SuiDepositScanner(
+                rpc,
+                repository.chainProfileRepository,
+                repository.tokenConfigRepository,
+                repository.chainScanHeightRepository,
+                repository.chainAddressRepository,
+                repository.suiTransactionRepository,
+                repository.depositService,
+                repository.chainAssetRepository,
+                RuntimeTestSupport.database(jdbc));
 
         ChainAddressRecord owner = addresses.createNativeAddress(
                 tenantId, 7001, 0, OWNER_INDEX, "DEPOSIT");
@@ -116,10 +132,19 @@ class SuiLiveNativeFlowIntegrationTest {
                 withdrawAmount.add(new BigDecimal("0.01"))));
 
         String collectionNo = "sui-live-collection-" + UUID.randomUUID();
-        assertEquals(1, repository.createCollectionRecord(
-                tenantId, custodyAddressId, collectionNo, "SUI", "SUI",
-                owner.getAddress(), hot.getAddress(), new BigDecimal("0.2"),
-                new BigDecimal("0.01"), null));
+        assertEquals(
+                1,
+                repository.collectionRecordRepository.create(
+                        tenantId,
+                        custodyAddressId,
+                        collectionNo,
+                        "SUI",
+                        "SUI",
+                        owner.getAddress(),
+                        hot.getAddress(),
+                        new BigDecimal("0.2"),
+                        new BigDecimal("0.01"),
+                        null));
         String collectionDigest = transactions.collectNative(
                 tenantId, collectionNo, owner, hot.getAddress(), BigDecimal.valueOf(COLLECTION_MIST));
         assertEquals(collectionDigest, transactions.collectNative(
@@ -219,8 +244,8 @@ class SuiLiveNativeFlowIntegrationTest {
     /**
      * 验证 {@code ledger} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static LedgerBalanceRecord ledger(ChainJdbcRepository repository, String accountId) {
-        return repository.findLedgerBalance("SUI", "SUI", accountId).orElseThrow();
+    private static LedgerBalanceRecord ledger(ChainRepositoryFixture repository, String accountId) {
+        return repository.ledgerBalanceRepository.find("SUI", "SUI", accountId).orElseThrow();
     }
 
     /**

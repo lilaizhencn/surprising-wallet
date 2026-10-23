@@ -112,7 +112,7 @@ RPC 客户端直接读取 `ChainProfileRepository` 的网络配置，再调用 `
 chain RPC/indexer
   -> chain scanner
   -> chain_address match
-  -> DepositService transaction (EVM direct; other existing entry via ChainJdbcRepository)
+  -> DepositService transaction (all chain scanners call directly)
   -> deposit_record insert or idempotent skip
   -> ledger_balance credit
   -> notification/API layer
@@ -270,3 +270,5 @@ SELECT pgmq.send('wallet_rbf',
 UTXO 签名阶段明确传递 UtxoSigningTask → UtxoPartialSigningTask → UtxoSigningResult。API 以数据库请求校验租户和 UUID，签名结果不携带业务意图或历史。UtxoBroadcastService 保存每一次签名事实再调用 RPC，UNKNOWN 保留锁及已知哈希。RBF/广播/结算共享签名行锁；原尝试在新签名/广播/失败期间确认时，恢复其完整请求和实际费用，并在同事务中确认订单、冻结扣款和输入花费。
 
 本机 PostgreSQL 18 贯通回归：`CUSTODY_DB_TESTS=UtxoSigningPipelineIntegrationTest bash resources/scripts/regtest/run-custody-db-tests.sh`。使用独立测试密钥执行四条链的真实双签与 PGMQ 阶段，只模拟链 RPC；覆盖重复消费、初次 UNKNOWN、签名失败释放、提现旧尝试确认及生成列身份约束。另由 `UtxoSigningCryptoTest` 覆盖每条链的 mainnet/testnet/regtest 签名和金额守恒。
+
+归集与提现领取：归集规划用例组合充值、归集、地址和资产单表结果 → 批处理在同一事务中校验租户 UTXO 归属并选择/锁定 → 订单、签名请求和队列共同提交。提现进入签名前由领取用例检查租户重组赤字并条件领取；批次接管状态通过租户与 UUID 批次查询，单笔确认不重复推进。账户序号预留直接执行原子单表 UPSERT，并保留外层事务回滚语义。

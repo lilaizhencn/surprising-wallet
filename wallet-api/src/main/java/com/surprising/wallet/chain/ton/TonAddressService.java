@@ -1,15 +1,15 @@
 package com.surprising.wallet.chain.ton;
 
-import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.chain.model.HotWalletRules;
-import com.surprising.wallet.repository.ChainJdbcRepository;
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.repository.ChainAddressRepository;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.ton.ton4j.address.Address;
 import org.ton.ton4j.smartcontract.wallet.v4.WalletV4R2;
-
-import java.util.Objects;
-import java.util.UUID;
 
 /**
  * TON 链地址管理服务，负责创建和管理 TON 地址（原生 TON 地址和 Jetton Wallet 地址）。
@@ -29,17 +29,16 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
-public
-class TonAddressService {
+public class TonAddressService {
 
     /** 链标识常量 */
     private static final String CHAIN = "TON";
 
     /** TON 密钥服务 */
     private final TonKeyService keyService;
+    private final ChainAddressRepository chainAddressRepository;
+    private final ChainProfileRepository chainProfileRepository;
 
-    /** 数据库仓库 */
-    private final ChainJdbcRepository repository;
 
     /**
      * 创建原生 TON 地址并持久化。
@@ -55,7 +54,7 @@ class TonAddressService {
                                                   long derivationIndex, String walletRole) {
         Objects.requireNonNull(tenantId, "tenantId is required");
         HotWalletRules.requireAllowedReservedAddress(CHAIN, "TON", "TON", userId, biz, derivationIndex, walletRole);
-        return repository.findChainAddress(CHAIN, "TON", userId, biz, derivationIndex, walletRole)
+        return chainAddressRepository.find(CHAIN, "TON", userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     WalletV4R2 wallet = keyService.wallet(userId, biz, derivationIndex);
                     String address = friendly(wallet.getAddress(), false);
@@ -73,8 +72,8 @@ class TonAddressService {
                             .walletRole(walletRole)
                             .enabled(true)
                             .build();
-                    repository.upsertChainAddress(record);
-                    return repository.findChainAddress(CHAIN, "TON", userId, biz, derivationIndex, walletRole)
+                    chainAddressRepository.upsert(record);
+                    return chainAddressRepository.find(CHAIN, "TON", userId, biz, derivationIndex, walletRole)
                             .orElseThrow();
                 });
     }
@@ -100,7 +99,7 @@ class TonAddressService {
         Objects.requireNonNull(tenantId, "tenantId is required");
         HotWalletRules.requireAllowedReservedAddress(CHAIN, symbol, "TON", userId, biz, derivationIndex, walletRole);
         ChainAddressRecord owner = createNativeAddress(tenantId, userId, biz, derivationIndex, walletRole);
-        return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
+        return chainAddressRepository.find(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                 .orElseGet(() -> {
                     String address = friendly(Address.of(jettonWalletAddress), true);
                     ChainAddressRecord record = ChainAddressRecord.builder()
@@ -117,8 +116,8 @@ class TonAddressService {
                             .walletRole(walletRole)
                             .enabled(true)
                             .build();
-                    repository.upsertChainAddress(record);
-                    return repository.findChainAddress(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
+                    chainAddressRepository.upsert(record);
+                    return chainAddressRepository.find(CHAIN, symbol, userId, biz, derivationIndex, walletRole)
                             .orElseThrow();
                 });
     }
@@ -141,7 +140,7 @@ class TonAddressService {
      * @return friendly 格式地址
      */
     private String friendly(Address address, boolean bounceable) {
-        boolean testnet = repository.findProfileByChain(CHAIN)
+        boolean testnet = chainProfileRepository.findAccountByChain(CHAIN)
                 .map(profile -> profile.getNetwork().toLowerCase(java.util.Locale.ROOT).contains("test"))
                 .orElseThrow(() -> new IllegalStateException("missing enabled chain_profile for " + CHAIN));
         return address.toString(true, true, bounceable, testnet);

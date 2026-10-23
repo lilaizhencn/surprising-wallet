@@ -1,16 +1,21 @@
 package com.surprising.wallet.custody;
 
-import tools.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
-import com.surprising.wallet.repository.ChainJdbcRepository;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-
+import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
+import com.surprising.wallet.job.custody.CustodyWebhookDispatcher;
+import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
+import com.surprising.wallet.model.CustodySecurityProperties;
+import com.surprising.wallet.model.CustodyWebhookRetryPolicy;
+import com.surprising.wallet.repository.CustodyRepository;
+import com.surprising.wallet.repository.CustodyTenantChainRepository;
+import com.surprising.wallet.service.CustodyCryptoService;
+import com.surprising.wallet.service.CustodyWebhookDispatchService;
+import com.surprising.wallet.service.CustodyWebhookService;
+import com.surprising.wallet.service.CustodyWithdrawalReconciliationService;
+import com.surprising.wallet.testutil.ChainRepositoryFixture;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.InetSocketAddress;
@@ -33,20 +38,14 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntConsumer;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.service.CustodyCryptoService;
-import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
-import com.surprising.wallet.repository.CustodyRepository;
-import com.surprising.wallet.model.CustodySecurityProperties;
-import com.surprising.wallet.repository.CustodyTenantChainRepository;
-import com.surprising.wallet.job.custody.CustodyWebhookDispatcher;
-import com.surprising.wallet.model.CustodyWebhookRetryPolicy;
-import com.surprising.wallet.service.CustodyWebhookDispatchService;
-import com.surprising.wallet.service.CustodyWebhookService;
-import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
-import com.surprising.wallet.service.CustodyWithdrawalReconciliationService;
 
 /**
  * 验证 {@code CustodyMultiChainLoadIntegrationTest} 覆盖的业务流程、边界条件和异常行为。
@@ -87,8 +86,12 @@ class CustodyMultiChainLoadIntegrationTest {
         CustodyRepository custody = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
         CustodyTenantChainRepository tenantChains = new CustodyTenantChainRepository(jdbc);
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
-        ChainJdbcRepository chains = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
-                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc), objectMapper));
+        ChainRepositoryFixture chains = com.surprising.wallet.testutil.DepositTestSupport.repository(
+                jdbc,
+                com.surprising.wallet.testutil.DepositTestSupport.projection(
+                        jdbc,
+                        com.surprising.wallet.testutil.CustodyTestSupport.events(jdbc),
+                        objectMapper));
 
         Tenant tenant = createTenant(jdbc, tenantChains);
         List<UserAccount> accounts = createAccounts(jdbc, tenant, users);
@@ -106,8 +109,7 @@ class CustodyMultiChainLoadIntegrationTest {
             Instant depositStarted = Instant.now();
             runConcurrently(deposits.size(), concurrency, index -> {
                 DepositAttempt attempt = deposits.get(index);
-                if (chains.recordAndCreditDeposit(
-                        attempt.event(), 0L, 1, attempt.account().accountId())) {
+                if (chains.depositService.recordAndCredit(attempt.event(), 0L, 1, attempt.account().accountId())) {
                     credited.incrementAndGet();
                 }
             });
@@ -285,30 +287,38 @@ class CustodyMultiChainLoadIntegrationTest {
     /**
      * 验证 {@code createAndConfirmWithdrawal} 对应的测试场景，明确输入、预期结果和异常边界。
      */
-    private static void createAndConfirmWithdrawal(JdbcTemplate jdbc, ChainJdbcRepository chains,
+    private static void createAndConfirmWithdrawal(JdbcTemplate jdbc, ChainRepositoryFixture chains,
                                                    CustodyRepository custody, UUID tenantId,
                                                    UserAccount account) {
         String orderNo = "LOAD-" + account.chain().name() + "-" + account.index();
-        int created = chains.createTenantWithdrawalOrder(
-                tenantId, orderNo, Integer.toUnsignedLong(account.derivationSubject()),
-                account.chain().name(), account.symbol(), account.address(), account.accountId(),
-                address(account.chain(), account.index() + 20_000), WITHDRAW_AMOUNT, BigDecimal.ZERO);
+        int created = chains.withdrawalOrderRepository.createForTenant(
+                tenantId,
+                orderNo,
+                Integer.toUnsignedLong(account.derivationSubject()),
+                account.chain().name(),
+                account.symbol(),
+                account.address(),
+                account.accountId(),
+                address(account.chain(), account.index() + 20_000),
+                WITHDRAW_AMOUNT,
+                BigDecimal.ZERO);
         assertEquals(1, created);
-        assertTrue(chains.freezeLedgerBalance(
-                account.chain().name(), account.symbol(), account.accountId(), WITHDRAW_AMOUNT));
-        chains.updateWithdrawalStatus(
-                account.chain().name(), orderNo, "FROZEN", account.address(), null, null);
+        assertTrue(chains.ledgerBalanceRepository.freeze(account.chain().name(), account.symbol(), account.accountId(), WITHDRAW_AMOUNT, null));
+        chains.withdrawalOrderRepository.updateStatus(account.chain().name(), orderNo, "FROZEN", account.address(), null, null);
         custody.insertCustodyWithdrawal(
                 UUID.randomUUID(), tenantId, account.custodyAddressId(), orderNo,
                 "external-" + account.index(), "load-idempotency-" + account.index(),
                 account.chain().name(), account.symbol(),
                 address(account.chain(), account.index() + 20_000), WITHDRAW_AMOUNT, BigDecimal.ZERO,
                 "FROZEN", "API_KEY", "load-test");
-        assertTrue(chains.settleLockedDebit(
-                account.chain().name(), account.symbol(), account.accountId(), WITHDRAW_AMOUNT));
-        chains.updateWithdrawalStatus(
-                account.chain().name(), orderNo, "CONFIRMED", account.address(),
-                "load-withdraw-" + account.index(), null);
+        assertTrue(chains.ledgerBalanceRepository.settle(account.chain().name(), account.symbol(), account.accountId(), WITHDRAW_AMOUNT, null));
+        chains.withdrawalOrderRepository.updateStatus(
+                account.chain().name(),
+                orderNo,
+                "CONFIRMED",
+                account.address(),
+                "load-withdraw-" + account.index(),
+                null);
     }
 
     /**
