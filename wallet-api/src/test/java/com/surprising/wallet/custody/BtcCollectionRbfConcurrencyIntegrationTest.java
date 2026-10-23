@@ -80,7 +80,6 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         context.registerBean(QueueWorker.class, () -> new QueueWorker(queue, manager));
         context.registerBean(ObjectMapper.class, () -> json);
         context.registerBean(PgmqClient.class, () -> queue);
-        context.registerBean(AddressService.class, () -> mock(AddressService.class));
         context.registerBean(WalletTaskLeaseService.class, () -> {
             var lease = mock(WalletTaskLeaseService.class); when(lease.ownerId()).thenReturn("test-rbf"); return lease;
         });
