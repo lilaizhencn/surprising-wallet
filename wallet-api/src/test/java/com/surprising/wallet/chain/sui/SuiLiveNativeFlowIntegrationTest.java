@@ -68,7 +68,7 @@ class SuiLiveNativeFlowIntegrationTest {
                 env("SUI_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         UUID tenantId = SuiTenantIntegrationFixture.ensureTenant(jdbc);
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         SuiRpcClient rpc = new SuiRpcClient(new ObjectMapper(),
                 env("SUI_GRPC_ENDPOINT", "fullnode.testnet.sui.io:443"));
         SuiKeyService keys = new SuiKeyService(masterSeed);

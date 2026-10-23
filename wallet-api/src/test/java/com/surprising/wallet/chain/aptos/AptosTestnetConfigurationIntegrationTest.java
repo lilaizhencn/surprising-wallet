@@ -35,7 +35,7 @@ class AptosTestnetConfigurationIntegrationTest {
                 env("APTOS_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
                 env("APTOS_DB_USER", "wallet"),
                 env("APTOS_DB_PASSWORD", ""));
-        ChainJdbcRepository repository = new ChainJdbcRepository(new JdbcTemplate(dataSource));
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(new JdbcTemplate(dataSource));
         AptosRpcClient rpc = new AptosRpcClient(new ObjectMapper(),
                 env("APTOS_RPC_URL", "https://fullnode.testnet.aptoslabs.com/v1"), "");
 

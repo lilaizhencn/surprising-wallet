@@ -283,4 +283,26 @@ public class ChainAddressRepository {
                 tenantId, chainAddressId);
     }
 
+
+    /** Enabled account aliases that can identify a deposit within one tenant. */
+    public List<ChainAddressRecord> findDepositMatches(UUID tenantId, String chain, String accountId, String address) {
+        return jdbc.query("""
+                select id, tenant_id, chain, asset_symbol, account_id, user_id, biz, address_index,
+                       address, owner_address, derivation_path, wallet_role, enabled
+                  from chain_address
+                 where tenant_id = ? and chain = ? and enabled = true
+                   and (lower(account_id) = lower(?) or lower(address) = lower(?))
+                """, (rs, rowNum) -> map(rs), tenantId, chain, accountId, address);
+    }
+
+    /** Related base addresses include older/disabled aliases bound to the same derivation coordinates. */
+    public List<Long> listRelatedAddressIds(ChainAddressRecord address) {
+        return jdbc.queryForList("""
+                select id from chain_address
+                 where tenant_id = ? and chain = ? and user_id = ? and biz = ?
+                   and address_index = ? and wallet_role = ?
+                """, Long.class, address.getTenantId(), address.getChain(), address.getUserId(),
+                address.getBiz(), address.getAddressIndex(), address.getWalletRole());
+    }
+
 }

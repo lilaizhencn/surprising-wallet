@@ -9,7 +9,6 @@ import com.surprising.wallet.service.CustodyCryptoService;
 import com.surprising.wallet.service.CustodyWithdrawalService;
 import com.surprising.wallet.model.CustodyPrincipal;
 import com.surprising.wallet.model.CustodySecurityProperties;
-import com.surprising.wallet.observer.CustodyDepositCreditObserver;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
 import com.surprising.wallet.service.CustodyGasService;
 import com.surprising.wallet.service.CustodyTenantChainService;
@@ -43,12 +42,10 @@ import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.CustodyAddressRepository;
 import com.surprising.wallet.repository.LedgerBalanceRepository;
 import com.surprising.wallet.repository.TokenConfigRepository;
-import com.surprising.wallet.observer.DepositCreditObserver;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.web3j.abi.FunctionEncoder;
@@ -188,12 +185,8 @@ class Evm7702ProductionFlowIntegrationTest {
         custodyRepository = new CustodyRepository(jdbc);
         CustodyTenantChainRepository tenantChainRepository =
                 new CustodyTenantChainRepository(jdbc);
-        CustodyDepositCreditObserver depositObserver = new CustodyDepositCreditObserver(
-                jdbc, objectMapper, custodyRepository, tenantChainRepository);
-        StaticListableBeanFactory observers = new StaticListableBeanFactory();
-        observers.addBean("custodyDepositCreditObserver", depositObserver);
-        chainRepository = new ChainJdbcRepository(
-                jdbc, observers.getBeanProvider(DepositCreditObserver.class));
+        chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
+                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, custodyRepository, objectMapper));
         jdbc.update("""
                 update chain_profile
                    set network = 'local', chain_id = ?, withdraw_confirmations = 1,

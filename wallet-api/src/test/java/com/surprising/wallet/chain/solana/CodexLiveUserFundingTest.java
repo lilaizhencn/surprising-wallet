@@ -74,7 +74,7 @@ class CodexLiveUserFundingTest {
                 "set -Dcodex.live.user-funding=true to broadcast funded testnet transactions");
 
         JdbcTemplate jdbc = jdbc();
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         long userId = userId(jdbc, USER_EMAIL);
         StringBuilder report = new StringBuilder();
         report.append("Codex live funding report\n");
@@ -100,7 +100,7 @@ class CodexLiveUserFundingTest {
                 "set -Dcodex.live.user-scan=true to scan the known live deposit blocks");
 
         JdbcTemplate jdbc = jdbc();
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         StringBuilder report = new StringBuilder();
         report.append("Codex live scan report\n");
         scanEvmBlock(jdbc, repository, ChainType.ETH,

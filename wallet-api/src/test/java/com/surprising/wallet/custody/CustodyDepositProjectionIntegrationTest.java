@@ -4,10 +4,8 @@ import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.repository.ChainJdbcRepository;
-import com.surprising.wallet.observer.DepositCreditObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -21,7 +19,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.surprising.wallet.observer.CustodyDepositCreditObserver;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
@@ -61,14 +58,8 @@ class CustodyDepositProjectionIntegrationTest {
     void confirmedDepositProjectsDisabledAddressAndSubjectAtomically() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         CustodyRepository custodyRepository = new CustodyRepository(jdbc);
-        CustodyDepositCreditObserver observer =
-                new CustodyDepositCreditObserver(
-                        jdbc, objectMapper, custodyRepository,
-                        new CustodyTenantChainRepository(jdbc));
-        StaticListableBeanFactory beans = new StaticListableBeanFactory(
-                Map.of("custodyDepositCreditObserver", observer));
-        ChainJdbcRepository chainRepository = new ChainJdbcRepository(
-                jdbc, beans.getBeanProvider(DepositCreditObserver.class));
+        ChainJdbcRepository chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
+                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, custodyRepository, objectMapper));
 
         transactions.executeWithoutResult(status -> {
             DepositFixture fixture = createFixture("user_10086", "DISABLED");
@@ -113,14 +104,8 @@ class CustodyDepositProjectionIntegrationTest {
     void sharedAccountIdAcrossAddressVersionsProjectsToExactAddress() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         CustodyRepository custodyRepository = new CustodyRepository(jdbc);
-        CustodyDepositCreditObserver observer =
-                new CustodyDepositCreditObserver(
-                        jdbc, objectMapper, custodyRepository,
-                        new CustodyTenantChainRepository(jdbc));
-        StaticListableBeanFactory beans = new StaticListableBeanFactory(
-                Map.of("custodyDepositCreditObserver", observer));
-        ChainJdbcRepository chainRepository = new ChainJdbcRepository(
-                jdbc, beans.getBeanProvider(DepositCreditObserver.class));
+        ChainJdbcRepository chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
+                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, custodyRepository, objectMapper));
 
         transactions.executeWithoutResult(status -> {
             DepositFixture first = createFixture("versioned-user", "ACTIVE");
@@ -166,36 +151,38 @@ class CustodyDepositProjectionIntegrationTest {
     }
 
     /**
-     * 验证 {@code observerFailureRollsBackDepositAndBalance} 对应的测试场景，明确输入、预期结果和异常边界。
+     * 验证 {@code projectionFailureRollsBackTheEntirePostingWithoutAnOuterTransaction} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     @Test
-    void observerFailureRollsBackDepositAndBalance() {
-        DepositCreditObserver failingObserver = (ignoredEvent, ignoredIndex, ignoredAccount) -> {
-            throw new IllegalStateException("projection failure");
+    void projectionFailureRollsBackTheEntirePostingWithoutAnOuterTransaction() {
+        ObjectMapper mapper = new CustodyJacksonConfiguration().custodyObjectMapper();
+        CustodyRepository failingEvents = new CustodyRepository(jdbc) {
+            @Override
+            public UUID insertEventWithDeliveries(UUID id, UUID tenantId, String eventType,
+                                                   String aggregateType, String aggregateId,
+                                                   String payload, boolean apiSource) {
+                throw new IllegalStateException("projection failure");
+            }
         };
-        StaticListableBeanFactory beans = new StaticListableBeanFactory(
-                Map.of("failingObserver", failingObserver));
-        ChainJdbcRepository chainRepository = new ChainJdbcRepository(
-                jdbc, beans.getBeanProvider(DepositCreditObserver.class));
-        String[] transactionId = new String[1];
-        String[] accountId = new String[1];
-
-        assertThrows(IllegalStateException.class, () -> transactions.executeWithoutResult(
-                status -> {
-                    DepositFixture fixture = createFixture("rollback-user", "ACTIVE");
-                    DepositEvent event = event(fixture.address(), new BigDecimal("2.75"));
-                    transactionId[0] = event.txId();
-                    accountId[0] = fixture.accountId();
-                    chainRepository.recordAndCreditDeposit(event, 0L, 12, fixture.accountId());
-                }));
-
-        assertEquals(0, jdbc.queryForObject(
-                "select count(*) from deposit_record where chain = 'ETH' and tx_hash = ?",
-                Integer.class, transactionId[0]));
-        assertEquals(0, jdbc.queryForObject("""
-                select count(*) from ledger_balance
-                 where chain = 'ETH' and asset_symbol = 'ETH' and account_id = ?
-                """, Integer.class, accountId[0]));
+        try (var context = com.surprising.wallet.testutil.DepositTestSupport.context(jdbc, failingEvents, mapper)) {
+            DepositFixture fixture = transactions.execute(status -> createFixture("rollback-user", "ACTIVE"));
+            DepositEvent event = event(fixture.address(), new BigDecimal("2.75"));
+            assertThrows(org.springframework.transaction.IllegalTransactionStateException.class,
+                    () -> context.getBean(com.surprising.wallet.service.CustodyDepositProjectionService.class)
+                            .credit(fixture.tenantId(), event, 0L, fixture.accountId(),
+                                    new com.surprising.wallet.repository.DepositRecordRepository.Credit(1L, 1)));
+            var service = context.getBean(com.surprising.wallet.service.DepositService.class);
+            assertThrows(IllegalStateException.class,
+                    () -> service.recordAndCredit(event, 0L, 12, fixture.accountId()));
+            assertEquals(0, jdbc.queryForObject(
+                    "select count(*) from deposit_record where chain = 'ETH' and tx_hash = ?", Integer.class, event.txId()));
+            assertEquals(0, jdbc.queryForObject(
+                    "select count(*) from ledger_balance where tenant_id = ?", Integer.class, fixture.tenantId()));
+            assertEquals(0, jdbc.queryForObject(
+                    "select count(*) from custody_deposit where tenant_id = ?", Integer.class, fixture.tenantId()));
+            assertEquals(0, jdbc.queryForObject(
+                    "select count(*) from custody_ledger_entry where tenant_id = ?", Integer.class, fixture.tenantId()));
+        }
     }
 
     /**
@@ -205,7 +192,7 @@ class CustodyDepositProjectionIntegrationTest {
     void pendingDepositIsAttributedToTenantBeforeCredit() {
         transactions.executeWithoutResult(status -> {
             DepositFixture fixture = createFixture("pending-user", "ACTIVE");
-            ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             DepositEvent event = new DepositEvent(
                     ChainType.ETH, "ETH",
                     "0x" + UUID.randomUUID().toString().replace("-", ""),
@@ -234,7 +221,7 @@ class CustodyDepositProjectionIntegrationTest {
     void collectionTransferToTenantHotAddressIsNotCreditedAsANewDeposit() {
         transactions.executeWithoutResult(status -> {
             DepositFixture fixture = createFixture("internal-hot", "ACTIVE");
-            ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             DepositEvent event = event(fixture.address(), new BigDecimal("3.50"));
             jdbc.update("""
                     insert into collection_record(
@@ -269,7 +256,7 @@ class CustodyDepositProjectionIntegrationTest {
         transactions.executeWithoutResult(status -> {
             DepositFixture sender = createFixture("internal-sender", "ACTIVE");
             DepositFixture recipient = createFixture("internal-recipient", "ACTIVE");
-            ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             DepositEvent event = new DepositEvent(
                     ChainType.ETH, "ETH",
                     "0x" + UUID.randomUUID().toString().replace("-", ""),
@@ -321,14 +308,8 @@ class CustodyDepositProjectionIntegrationTest {
     void webhookDeliveryIsAutomaticOnlyForApiCreatedAddresses() {
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
         CustodyRepository custodyRepository = new CustodyRepository(jdbc);
-        CustodyDepositCreditObserver observer =
-                new CustodyDepositCreditObserver(
-                        jdbc, objectMapper, custodyRepository,
-                        new CustodyTenantChainRepository(jdbc));
-        StaticListableBeanFactory beans = new StaticListableBeanFactory(
-                Map.of("custodyDepositCreditObserver", observer));
-        ChainJdbcRepository chainRepository = new ChainJdbcRepository(
-                jdbc, beans.getBeanProvider(DepositCreditObserver.class));
+        ChainJdbcRepository chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
+                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, custodyRepository, objectMapper));
 
         transactions.executeWithoutResult(status -> {
             DepositFixture apiAddress = createFixture("api-user", "ACTIVE", "API");

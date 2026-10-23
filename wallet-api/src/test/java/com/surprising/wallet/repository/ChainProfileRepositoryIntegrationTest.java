@@ -47,7 +47,7 @@ class ChainProfileRepositoryIntegrationTest {
             assertEquals(100L, profile.getScanStartHeight());
             assertEquals(200L, profile.getScanMaxBlocksPerRun());
             assertEquals(false, profile.getScanEnabled());
-            assertEquals(456L, new ChainJdbcRepository(jdbc)
+            assertEquals(456L, com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc)
                     .findProfileByChain("REPO_TEST").orElseThrow().getChainId());
         });
     }

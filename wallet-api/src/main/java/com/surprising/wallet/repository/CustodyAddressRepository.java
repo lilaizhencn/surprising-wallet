@@ -170,4 +170,37 @@ public class CustodyAddressRepository {
         return value instanceof Timestamp timestamp ? timestamp.toInstant()
                 : value instanceof java.time.OffsetDateTime offset ? offset.toInstant() : null;
     }
+
+    public java.util.Optional<DepositOwner> findDepositOwner(
+            UUID tenantId, String chain, List<Long> chainAddressIds, String preferredAddress) {
+        if (chainAddressIds.isEmpty()) return java.util.Optional.empty();
+        List<Object> args = new java.util.ArrayList<>();
+        args.add(tenantId);
+        args.add(chain);
+        args.addAll(chainAddressIds);
+        args.add(preferredAddress);
+        String ids = String.join(",", java.util.Collections.nCopies(chainAddressIds.size(), "?"));
+        return jdbc.query("""
+                select id, subject, address, memo, source from custody_address
+                 where tenant_id = ? and chain = ? and chain_address_id in (
+                """ + ids + """
+                ) order by case when lower(address) = lower(?) then 0 else 1 end,
+                           address_version desc, created_at desc limit 1
+                """, (rs, rowNum) -> mapDepositOwner(rs), args.toArray()).stream().findFirst();
+    }
+
+    public java.util.Optional<DepositOwner> lockDepositOwnerById(UUID tenantId, UUID id) {
+        return jdbc.query("""
+                select id, subject, address, memo, source from custody_address
+                 where tenant_id = ? and id = ? for update
+                """, (rs, rowNum) -> mapDepositOwner(rs), tenantId, id).stream().findFirst();
+    }
+
+    private static DepositOwner mapDepositOwner(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return new DepositOwner(rs.getObject("id", UUID.class), rs.getString("subject"),
+                rs.getString("address"), rs.getString("memo"), rs.getString("source"));
+    }
+
+    public record DepositOwner(UUID id, String subject, String address, String memo, String source) { }
+
 }

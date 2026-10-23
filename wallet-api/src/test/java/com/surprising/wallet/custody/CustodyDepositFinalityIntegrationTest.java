@@ -4,11 +4,8 @@ import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.repository.ChainJdbcRepository;
-import com.surprising.wallet.observer.DepositCreditObserver;
-import com.surprising.wallet.observer.DepositReorgObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -21,8 +18,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.repository.CustodyAssetDashboardRepository;
-import com.surprising.wallet.observer.CustodyDepositCreditObserver;
-import com.surprising.wallet.observer.CustodyDepositReorgObserver;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.repository.CustodyTenantChainRepository;
@@ -154,6 +149,48 @@ class CustodyDepositFinalityIntegrationTest {
         });
     }
 
+    @Test
+    void reorgProjectionFailureRollsBackLedgerDeficitAndCanonicalState() {
+        Fixture fixture = transactions.execute(status -> {
+            Fixture created = fixture();
+            ChainJdbcRepository chains = repository();
+            credit(chains, created, "0xrollback-reorg", new BigDecimal("10"), 910_001L, "0xoriginal");
+            assertTrue(chains.debitLedgerBalance(created.tenantId(), "ETH", "ETH",
+                    created.accountId(), new BigDecimal("7")));
+            return created;
+        });
+        CustodyRepository failingEvents = new CustodyRepository(jdbc) {
+            @Override
+            public UUID insertEventWithDeliveries(UUID id, UUID tenantId, String eventType,
+                                                   String aggregateType, String aggregateId,
+                                                   String payload, boolean apiSource) {
+                throw new IllegalStateException("reorg event failure");
+            }
+        };
+        var mapper = new CustodyJacksonConfiguration().custodyObjectMapper();
+        try (var context = com.surprising.wallet.testutil.DepositTestSupport.context(jdbc, failingEvents, mapper)) {
+            var deposits = context.getBean(com.surprising.wallet.service.DepositService.class);
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () ->
+                    deposits.observeCanonicalBlock("ETH", "evm-canonical", 910_001L, "0xreplacement", "0xparent"));
+        }
+        assertAmount("3", balance(fixture));
+        assertEquals("CREDITED", value("select status from deposit_record where tx_hash = '0xrollback-reorg'", String.class));
+        assertEquals("CONFIRMED", value("select status from custody_deposit where tenant_id = ?", String.class, fixture.tenantId()));
+        assertEquals(0, value("select count(*) from custody_reorg_deficit where tenant_id = ?", Integer.class, fixture.tenantId()));
+        assertEquals(0, value("""
+                select count(*) from custody_ledger_entry
+                 where tenant_id = ? and entry_type = 'DEPOSIT_REORG_REVERSAL'
+                """, Integer.class, fixture.tenantId()));
+        try (var context = com.surprising.wallet.testutil.DepositTestSupport.context(jdbc, new CustodyRepository(jdbc), mapper)) {
+            var deposits = context.getBean(com.surprising.wallet.service.DepositService.class);
+            assertEquals(1, deposits.observeCanonicalBlock("ETH", "evm-canonical", 910_001L, "0xreplacement", "0xparent")
+                    .reversedDepositCount());
+            assertFalse(deposits.observeCanonicalBlock("ETH", "evm-canonical", 910_001L, "0xreplacement", "0xparent").reorg());
+        }
+        assertAmount("0", balance(fixture));
+        assertAmount("7", openDeficit(fixture));
+    }
+
     /**
      * 验证 {@code credit} 对应的测试场景，明确输入、预期结果和异常边界。
      */
@@ -169,18 +206,7 @@ class CustodyDepositFinalityIntegrationTest {
      * 验证 {@code repository} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     private ChainJdbcRepository repository() {
-        ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
-        CustodyRepository custody = new CustodyRepository(jdbc);
-        CustodyDepositCreditObserver credit = new CustodyDepositCreditObserver(
-                jdbc, objectMapper, custody, new CustodyTenantChainRepository(jdbc));
-        CustodyDepositReorgObserver reorg = new CustodyDepositReorgObserver(
-                jdbc, custody, objectMapper);
-        StaticListableBeanFactory beans = new StaticListableBeanFactory();
-        beans.addBean("credit", credit);
-        beans.addBean("reorg", reorg);
-        return new ChainJdbcRepository(
-                jdbc, beans.getBeanProvider(DepositCreditObserver.class),
-                beans.getBeanProvider(DepositReorgObserver.class));
+        return com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
     }
 
     /**

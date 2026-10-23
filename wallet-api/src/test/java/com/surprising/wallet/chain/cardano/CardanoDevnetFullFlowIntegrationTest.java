@@ -71,7 +71,7 @@ class CardanoDevnetFullFlowIntegrationTest {
                 "set -Dcardano.devnet.flow.enabled=true to run the local Cardano devnet flow");
 
         JdbcTemplate jdbc = new JdbcTemplate(dataSource());
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         UUID tenantId = CardanoTenantIntegrationFixture.ensureTenant(jdbc);
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         CardanoKeyService keys = new CardanoKeyService(keyMaterial);

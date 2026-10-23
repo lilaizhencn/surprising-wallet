@@ -80,7 +80,7 @@ class TronLiveFullFlowIntegrationTest {
 
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource());
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbcTemplate);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbcTemplate);
         TronDepositScanner depositScanner = new TronDepositScanner(repository, new TronScanner());
         TronTransactionService trxService = new TronTransactionService();
         TronTrc20Service trc20Service = new TronTrc20Service();

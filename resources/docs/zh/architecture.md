@@ -65,6 +65,9 @@ bootstrap 包按模式显式扫描组件；签名实现由 FirstSignerRegistry /
 
 提现创建复用同一运行时地址校验，先验证格式、校验和及 UTXO 网络，再创建订单和冻结余额。Console 根据 Token 配置显示资产明细；链列表契约不再返回闲置报价能力字段。
 
+
+充值和重组的事务由 `DepositService` 编排，现有 ChainJdbcRepository 充值入口显式委托该用例。确认入账时，DepositRecordRepository 的受租户约束状态更新直接返回记录 ID 与入账代次；随后更新账本并调用必需的 CustodyDepositProjectionService，投影、流水、赤字抵扣、事件和 API 来源 Webhook 与余额一起提交或回滚。投影服务要求已有事务，不再使用 Observer 接口、ObjectProvider 或空列表构造路径。SQL 只位于对应单表仓储；地址归属通过同租户派生坐标与地址版本在应用层组合，优先匹配精确地址。
+
 ## 模块
 
 | 模块 | 职责 |

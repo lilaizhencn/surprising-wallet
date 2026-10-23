@@ -392,7 +392,7 @@ public class EvmDepositScanner {
     /**
      * 设置或更新 {@code observeBlock} 对应的状态，并保持相关业务字段一致。
      */
-    private ChainJdbcRepository.BlockObservation observeBlock(
+    private com.surprising.wallet.service.DepositService.BlockObservation observeBlock(
             Web3j web3j, ChainType chainType, long blockHeight) throws IOException {
         EthBlock.Block block = web3j.ethGetBlockByNumber(
                 DefaultBlockParameter.valueOf(BigInteger.valueOf(blockHeight)), false).send().getBlock();

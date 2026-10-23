@@ -45,7 +45,7 @@ class CustodyTenantIsolationIntegrationTest {
         String accountId = "tenant-collection-" + UUID.randomUUID();
         UUID custodyAddressId = createAddress(ownerTenant, accountId);
         String collectionNo = "tenant-scoped-" + UUID.randomUUID();
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
 
         assertEquals(1, repository.createCollectionRecord(
                 ownerTenant, custodyAddressId, collectionNo, "ETH", "USDT",
@@ -80,7 +80,7 @@ class CustodyTenantIsolationIntegrationTest {
      */
     @Test
     void collectionApiRejectsMissingTenantContext() {
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
 
         assertThrows(NullPointerException.class, () -> repository.createCollectionRecord(
                 null, null, "missing-tenant", "ETH", "ETH",
@@ -153,7 +153,7 @@ class CustodyTenantIsolationIntegrationTest {
         UUID otherTenant = createTenant();
         String accountId = "tenant-withdrawal-" + UUID.randomUUID();
         createAddress(ownerTenant, accountId);
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         String orderNo = "tenant-withdrawal-" + UUID.randomUUID();
         String txHash = "0x" + UUID.randomUUID().toString().replace("-", "");
         BigDecimal debit = new BigDecimal("1.25");
@@ -210,7 +210,7 @@ class CustodyTenantIsolationIntegrationTest {
         String secondAddress = "btc-second-" + UUID.randomUUID();
         createChainAddress(firstTenant, "BTC", firstAddress);
         createChainAddress(secondTenant, "BTC", secondAddress);
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
 
         assertEquals(1, repository.createTenantWithdrawalOrder(
                 firstTenant, "btc-first-order", 11L, "BTC", "BTC",

@@ -31,12 +31,12 @@ class DogecoinDatabaseFlowIntegrationTest {
                 env("DOGE_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
                 env("DOGE_DB_USER", "wallet"),
                 env("DOGE_DB_PASSWORD", ""));
-        ChainJdbcRepository repository = new ChainJdbcRepository(new JdbcTemplate(dataSource));
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(new JdbcTemplate(dataSource));
 
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-            repository = new ChainJdbcRepository(jdbc);
+            repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             for (ChainType chainType : List.of(ChainType.DOGE, ChainType.BCH)) {
                 String chain = chainType.name();
                 String txid = UUID.randomUUID().toString().replace("-", "") + "00";

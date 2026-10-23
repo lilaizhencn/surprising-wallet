@@ -50,7 +50,7 @@ class CardanoDepositScannerTest {
          * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         FakeRepository() {
-            super(null);
+            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
         }
 
         /**

@@ -204,7 +204,7 @@ class AptosTransactionServiceTest {
          * 验证 {@code FakeRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private FakeRepository(TokenDefinition token) {
-            super(null);
+            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
             this.token = token;
         }
 

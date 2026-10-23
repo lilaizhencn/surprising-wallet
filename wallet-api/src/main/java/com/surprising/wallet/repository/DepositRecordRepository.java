@@ -75,15 +75,19 @@ public class DepositRecordRepository {
     }
 
     /** 标记充值已经入账。 */
-    public int markCredited(String chain, String txHash, long logIndex) {
+    public java.util.Optional<Credit> markCredited(UUID tenantId, String chain, String txHash, long logIndex) {
         Timestamp now = Timestamp.from(Instant.now());
-        return jdbc.update("""
+        return jdbc.query("""
                 update deposit_record set credited = true, credited_at = ?, status = 'CREDITED',
                     credit_generation = credit_generation + 1, updated_at = ?
-                 where chain = ? and tx_hash = ? and log_index = ?
+                 where tenant_id = ? and chain = ? and tx_hash = ? and log_index = ?
                    and credited = false and canonical_status = 'CANONICAL'
-                """, now, now, chain, txHash, logIndex);
+                returning id, credit_generation
+                """, (rs, rowNum) -> new Credit(rs.getLong("id"), rs.getInt("credit_generation")),
+                now, now, tenantId, chain, txHash, logIndex).stream().findFirst();
     }
+
+    public record Credit(long id, int generation) { }
 
     /** 查询待确认充值。 */
     public List<PendingRecord> listPending(String chain, int requiredConfirmations, int limit) {

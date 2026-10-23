@@ -48,7 +48,7 @@ class SolanaDevnetLiveFlowIntegrationTest {
                 env("SOLANA_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         UUID tenantId = SolanaTenantIntegrationFixture.ensureTenant(jdbc);
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         SolanaRpcClient rpc = new SolanaRpcClient(new ObjectMapper(),
                 env("SOLANA_RPC_URL", "https://api.devnet.solana.com"));
         SolanaKeyService keys = new SolanaKeyService(masterSeed);

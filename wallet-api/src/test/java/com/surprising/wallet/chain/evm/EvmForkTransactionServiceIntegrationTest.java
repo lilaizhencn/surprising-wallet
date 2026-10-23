@@ -58,7 +58,7 @@ class EvmForkTransactionServiceIntegrationTest {
 
         ChainType chain = ChainType.valueOf(System.getProperty("evm.fork.chain", "ETH"));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource());
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         AccountChainProfile originalProfile = repository.findProfileByChain(chain.name()).orElseThrow();
         String originalNetwork = originalProfile.getNetwork();
         Web3j web3j = Web3j.build(new HttpService(LOCAL_RPC));

@@ -19,7 +19,7 @@ class ChainJdbcRepositoryCollectionCandidateTest {
 
     @Test
     void collectionCandidatesUseGroupedRowsAndPreserveEligibilityAmountAndOrdering() {
-        ChainJdbcRepository repository = new ChainJdbcRepository(new CollectionJdbcTemplate());
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(new CollectionJdbcTemplate());
 
         List<CollectionCandidateRecord> candidates = repository.listCollectableLedgerBalances(
                 "ETH", BigDecimal.ZERO, 20);

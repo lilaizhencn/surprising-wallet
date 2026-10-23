@@ -85,7 +85,7 @@ class XrpTestnetFullFlowIntegrationTest {
                 "set -Dxrp.live.flow.enabled=true to broadcast XRPL Testnet transactions");
 
         JdbcTemplate jdbc = new JdbcTemplate(dataSource());
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         UUID tenantId = XrpTenantIntegrationFixture.ensureTenant(jdbc);
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         XrpKeyService keys = new XrpKeyService(new PubKeyConfig(keyMaterial),

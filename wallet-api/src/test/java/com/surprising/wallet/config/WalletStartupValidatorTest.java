@@ -577,7 +577,7 @@ class WalletStartupValidatorTest {
          */
         private FakeRepository(List<AccountChainProfile> profiles, List<ChainRpcNode> nodes,
                                List<TokenDefinition> tokens) {
-            super(null);
+            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
             this.profiles = profiles;
             this.nodes = nodes;
             this.tokens = tokens;

@@ -19,7 +19,7 @@ Surprising Wallet 涉及链上资产和钱包账户，所有改动必须保守�
 |---|---|---|
 | Web 层 | REST 参数校验、委托、HTTP 异常映射、认证过滤和 Web DTO；保持原有 Controller/Job 行为 | `custody/controller/**`、`job/**`、`custody/exception/**`、`custody/filter/**`、Web `model/**` |
 | 应用层 | 业务用例、工作流编排、运行时开关和定时任务实际调用的 Service | `service/**` |
-| 领域与链集成层 | 领域模型、链适配器、RPC 客户端、链上协调器和观察者 | `chain/**`、`account/coordinator/**`、`custody/gateway/**`、`custody/observer/**`、业务 `model/**` |
+| 领域与链集成层 | 领域模型、链适配器、RPC 客户端、链上协调器 | `chain/**`、`account/coordinator/**`、`custody/gateway/**`、业务 `model/**` |
 | 持久化层 | PostgreSQL/JDBC 仓储、账本和链配置数据访问 | `repository/**` |
 | 应用配置层 | Web、安全、Jackson、数据源、链 RPC 和钱包运行时配置 | `config/**` |
 
@@ -92,6 +92,8 @@ wallet-api/job/
 - SaaS 重构不得降低资金与链上安全要求，涉及敏感数据和余额变化时仍需保守、可审计、可回滚。
 
 ## 资金和链上安全
+
+- 充值入账与区块重组由 `DepositService` 显式编排；`CustodyDepositProjectionService` 是同事务中的必需步骤，不得恢复可选观察者或空回调列表。充值记录、余额、租户投影、赤字恢复及事件持久化必须一起提交或回滚。
 
 - 充值、提现、归集、手续费、链上确认、重放、幂等、回调都要有明确审计路径。
 - 任何余额变化都要能通过流水对账。

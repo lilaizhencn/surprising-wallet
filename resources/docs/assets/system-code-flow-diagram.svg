@@ -118,13 +118,13 @@
   <line x1="210" y1="438" x2="245" y2="438" class="arrow"/>
 
   <rect x="245" y="410" width="190" height="56" class="dep"/>
-  <text x="340" y="434" text-anchor="middle" class="bold">确认 &amp; 幂等入账</text>
+  <text x="340" y="434" text-anchor="middle" class="bold">DepositService 原子入账</text>
   <text x="340" y="452" text-anchor="middle" class="small">deposit_record + ledger_balance</text>
 
   <line x1="435" y1="438" x2="470" y2="438" class="arrow"/>
 
   <rect x="470" y="410" width="200" height="56" class="dep"/>
-  <text x="570" y="434" text-anchor="middle" class="bold">Custody 投影（同事务）</text>
+  <text x="570" y="434" text-anchor="middle" class="bold">必需投影（同事务）</text>
   <text x="570" y="452" text-anchor="middle" class="small">精确地址优先 · 同租户历史版本去重</text>
 
   <line x1="670" y1="438" x2="705" y2="438" class="arrow"/>

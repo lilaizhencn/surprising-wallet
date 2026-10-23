@@ -138,7 +138,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-            ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             try {
                 ensureTestTenant(jdbc);
                 ensureBitcoinLikeProfiles(jdbc);
@@ -164,7 +164,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 env("BITCOINLIKE_REGTEST_DB_USER", "wallet"),
                 env("BITCOINLIKE_REGTEST_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         String runId = "c" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
 
         try {
@@ -196,7 +196,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
                 env("BITCOINLIKE_REGTEST_DB_USER", "wallet"),
                 env("BITCOINLIKE_REGTEST_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         String runId = "b" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         List<String> cleanupTxids = Collections.synchronizedList(new ArrayList<>());
 
@@ -805,7 +805,7 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
      */
     private static void assertLedger(JdbcTemplate jdbc, String chain, String accountId,
                                      BigDecimal available, BigDecimal locked, BigDecimal total) {
-        LedgerBalanceRecord record = new ChainJdbcRepository(jdbc)
+        LedgerBalanceRecord record = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc)
                 .findLedgerBalance(chain, chain, accountId)
                 .orElseThrow();
         assertDecimalEquals(available, record.getAvailableBalance(), chain + " available");

@@ -75,7 +75,7 @@ class HyperCoreLocalFullFlowIntegrationTest {
                 required("HYPERCORE_DB_USER"),
                 System.getenv().getOrDefault("HYPERCORE_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        ChainJdbcRepository chainRepository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository chainRepository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         HyperCoreRepository hyperCoreRepository = new HyperCoreRepository(jdbc, chainRepository);
         UUID tenantId = ensureTenant(jdbc);
         AccountChainProfile profile = chainRepository.findProfileByChain(CHAIN).orElseThrow();

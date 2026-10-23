@@ -26,12 +26,9 @@ import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.utils.Constants;
-import com.surprising.wallet.observer.DepositCreditObserver;
-import com.surprising.wallet.observer.DepositReorgObserver;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import com.surprising.wallet.service.DepositService;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -63,8 +60,6 @@ import java.util.stream.Collectors;
  *   <li>扫描高度追踪（chain_scan_height）与区块重组检测（chain_scan_block）</li>
  * </ul>
  *
- * @see DepositCreditObserver
- * @see DepositReorgObserver
  */
 @Component
 public class ChainJdbcRepository {
@@ -143,75 +138,13 @@ public class ChainJdbcRepository {
     private EvmCollectionBatchItemRepository evmCollectionBatchItemRepository;
     private EvmCollectionBatchRepository evmCollectionBatchRepository;
 
-    /** 充值入账观察者列表（通过 Spring ObjectProvider 注入） */
-    private final List<DepositCreditObserver> depositCreditObservers;
-    /** 充值重组观察者列表（通过 Spring ObjectProvider 注入） */
-    private final List<DepositReorgObserver> depositReorgObservers;
+    private final DepositService depositService;
 
-    /**
-     * 最小构造器（无观察者）。
-     *
-     * @param jdbcTemplate JDBC 模板
-     */
-    public ChainJdbcRepository(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.utxoRepository = new UtxoRepository(jdbcTemplate);
-        this.chainAddressRepository = new ChainAddressRepository(jdbcTemplate);
-        this.chainProfileRepository = new ChainProfileRepository(jdbcTemplate);
-        this.chainAssetRepository = new ChainAssetRepository(jdbcTemplate);
-        this.tokenConfigRepository = new TokenConfigRepository(jdbcTemplate);
-        this.walletSystemConfigRepository = new WalletSystemConfigRepository(jdbcTemplate);
-        this.chainRpcNodeRepository = new ChainRpcNodeRepository(jdbcTemplate);
-        initializeTableRepositories(jdbcTemplate);
-        this.depositCreditObservers = List.of();
-        this.depositReorgObservers = List.of();
-    }
-
-    /**
-     * 仅注入充值入账观察者的构造器。
-     *
-     * @param jdbcTemplate           JDBC 模板
-     * @param depositCreditObservers 充值入账观察者
-     */
-    public ChainJdbcRepository(JdbcTemplate jdbcTemplate,
-                               ObjectProvider<DepositCreditObserver> depositCreditObservers) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.utxoRepository = new UtxoRepository(jdbcTemplate);
-        this.chainAddressRepository = new ChainAddressRepository(jdbcTemplate);
-        this.chainProfileRepository = new ChainProfileRepository(jdbcTemplate);
-        this.chainAssetRepository = new ChainAssetRepository(jdbcTemplate);
-        this.tokenConfigRepository = new TokenConfigRepository(jdbcTemplate);
-        this.walletSystemConfigRepository = new WalletSystemConfigRepository(jdbcTemplate);
-        this.chainRpcNodeRepository = new ChainRpcNodeRepository(jdbcTemplate);
-        initializeTableRepositories(jdbcTemplate);
-        this.depositCreditObservers = depositCreditObservers.orderedStream().toList();
-        this.depositReorgObservers = List.of();
-    }
-
-    /**
-     * 完整构造器，注入充值入账和重组两种观察者。
-     *
-     * @param jdbcTemplate           JDBC 模板
-     * @param depositCreditObservers 充值入账观察者
-     * @param depositReorgObservers  重组观察者
-     */
-    public ChainJdbcRepository(JdbcTemplate jdbcTemplate,
-                               ObjectProvider<DepositCreditObserver> depositCreditObservers,
-                               ObjectProvider<DepositReorgObserver> depositReorgObservers) {
-        this(jdbcTemplate, depositCreditObservers, depositReorgObservers,
-                new UtxoRepository(jdbcTemplate));
-    }
-
-    /**
-     * Spring 完整构造器，注入观察者和独立 UTXO 仓储。
-     */
-    @Autowired
-    public ChainJdbcRepository(JdbcTemplate jdbcTemplate,
-                               ObjectProvider<DepositCreditObserver> depositCreditObservers,
-                               ObjectProvider<DepositReorgObserver> depositReorgObservers,
-                               UtxoRepository utxoRepository) {
+    public ChainJdbcRepository(JdbcTemplate jdbcTemplate, UtxoRepository utxoRepository,
+                               DepositService depositService) {
         this.jdbcTemplate = jdbcTemplate;
         this.utxoRepository = utxoRepository;
+        this.depositService = depositService;
         this.chainAddressRepository = new ChainAddressRepository(jdbcTemplate);
         this.chainProfileRepository = new ChainProfileRepository(jdbcTemplate);
         this.chainAssetRepository = new ChainAssetRepository(jdbcTemplate);
@@ -219,8 +152,6 @@ public class ChainJdbcRepository {
         this.walletSystemConfigRepository = new WalletSystemConfigRepository(jdbcTemplate);
         this.chainRpcNodeRepository = new ChainRpcNodeRepository(jdbcTemplate);
         initializeTableRepositories(jdbcTemplate);
-        this.depositCreditObservers = depositCreditObservers.orderedStream().toList();
-        this.depositReorgObservers = depositReorgObservers.orderedStream().toList();
     }
 
     /** 初始化链领域各单表仓储。 */
@@ -546,173 +477,34 @@ public class ChainJdbcRepository {
      */
     @Transactional(rollbackFor = Throwable.class)
     public boolean recordAndCreditDeposit(DepositEvent event, int requiredConfirmations) {
-        return recordAndCreditDeposit(event, 0L, requiredConfirmations);
+        return depositService.recordAndCredit(event, requiredConfirmations);
     }
 
-    /**
-     * 记录或保存 {@code recordAndCreditDeposit} 对应的数据，并遵守幂等和事务约束。
-     */
     @Transactional(rollbackFor = Throwable.class)
     public boolean recordAndCreditDeposit(DepositEvent event, long logIndex, int requiredConfirmations) {
-        return recordAndCreditDeposit(event, logIndex, requiredConfirmations, event.toAddress().toLowerCase());
+        return depositService.recordAndCredit(event, logIndex, requiredConfirmations);
     }
 
-    /**
-     * 记录或保存 {@code recordAndCreditDeposit} 对应的数据，并遵守幂等和事务约束。
-     */
     @Transactional(rollbackFor = Throwable.class)
-    public boolean recordAndCreditDeposit(DepositEvent event, long logIndex, int requiredConfirmations,
-                                          String accountId) {
-        String chain = event.chainType().name();
-        UUID tenantId = requireDepositTenant(chain, accountId, event.toAddress());
-        if (isInternalCollectionTransfer(tenantId, chain, event.txId(), event.toAddress())) {
-            return false;
-        }
-        String status = event.confirmations() <= 0 ? "DETECTED"
-                : event.confirmations() < requiredConfirmations ? "CONFIRMING" : "CONFIRMED";
-        int recorded = depositRecordRepository.upsert(tenantId, chain, event.assetSymbol(), event.txId(), logIndex,
-                event.fromAddress(), event.toAddress(), event.tokenAddress(), event.amount(), event.blockHeight(),
-                event.blockHash(), event.confirmations(), status, accountId, event.rawPayload());
-        if (recorded != 1) {
-            throw new IllegalStateException("deposit record belongs to another tenant");
-        }
-
-        if (event.confirmations() < requiredConfirmations) {
-            return false;
-        }
-
-        int credited = depositRecordRepository.markCredited(chain, event.txId(), logIndex);
-        if (credited == 1) {
-            incrementLedgerBalance(tenantId, chain, event.assetSymbol(), accountId, event.amount());
-            for (DepositCreditObserver observer : depositCreditObservers) {
-                observer.onDepositCredited(event, logIndex, accountId);
-            }
-            return true;
-        }
-        return false;
+    public boolean recordAndCreditDeposit(DepositEvent event, long logIndex, int requiredConfirmations, String accountId) {
+        return depositService.recordAndCredit(event, logIndex, requiredConfirmations, accountId);
     }
 
-    /**
-     * 获取或查询 {@code listPendingDeposits} 对应的数据，供调用方读取当前状态。
-     */
-    public List<PendingDepositRecord> listPendingDeposits(String chain, int requiredConfirmations, int limit) {
-        return depositRecordRepository.listPending(chain, requiredConfirmations, limit).stream()
-                .map(row -> new PendingDepositRecord(row.assetSymbol(), row.txHash(), row.logIndex(),
-                        row.fromAddress(), row.toAddress(), row.contractAddress(), row.amount(), row.blockHeight(),
-                        row.blockHash(), row.confirmations(), row.accountId(), row.rawPayload()))
-                .toList();
+    public List<DepositRecordRepository.PendingRecord> listPendingDeposits(
+            String chain, int requiredConfirmations, int limit) {
+        return depositRecordRepository.listPending(chain, requiredConfirmations, limit);
     }
 
-    public record PendingDepositRecord(
-            String assetSymbol,
-            String txHash,
-            long logIndex,
-            String fromAddress,
-            String toAddress,
-            String contractAddress,
-            BigDecimal amount,
-            long blockHeight,
-            String blockHash,
-            int confirmations,
-            String accountId,
-            String rawPayload) {
-    }
-
-        /**
-     * 设置或更新 {@code observeCanonicalBlock} 对应的状态，并保持相关业务字段一致。
-     */
     @Transactional(rollbackFor = Throwable.class)
-    public BlockObservation observeCanonicalBlock(String chain, String scannerName,
-                                                   long blockHeight, String blockHash,
-                                                   String parentHash) {
-        String normalizedChain = requireText(chain, "chain").toUpperCase(java.util.Locale.ROOT);
-        String normalizedScanner = requireText(scannerName, "scannerName");
-        String normalizedHash = requireText(blockHash, "blockHash");
-        List<String> existing = chainScanBlockRepository.findHashForUpdate(
-                normalizedChain, normalizedScanner, blockHeight);
-        if (existing.isEmpty()) {
-            chainScanBlockRepository.insert(normalizedChain, normalizedScanner, blockHeight,
-                    normalizedHash, parentHash);
-            return new BlockObservation(false, null, normalizedHash, 0);
-        }
-        String previousHash = existing.getFirst();
-        if (previousHash.equalsIgnoreCase(normalizedHash)) {
-            chainScanBlockRepository.updateObservation(normalizedChain, normalizedScanner, blockHeight,
-                    previousHash, parentHash);
-            return new BlockObservation(false, previousHash, normalizedHash, 0);
-        }
-
-        List<DepositRecordRepository.ReorgRecord> deposits = depositRecordRepository.listForReorg(
-                normalizedChain, blockHeight, normalizedHash);
-        utxoRepository.markOrphaned(normalizedChain, blockHeight, normalizedHash);
-        int reversed = 0;
-        for (DepositRecordRepository.ReorgRecord deposit : deposits) {
-            reverseDeposit(deposit, normalizedHash,
-                    "canonical block changed from " + previousHash + " to " + normalizedHash);
-            reversed++;
-        }
-        chainScanBlockRepository.updateObservation(normalizedChain, normalizedScanner, blockHeight,
-                normalizedHash, parentHash);
-        return new BlockObservation(true, previousHash, normalizedHash, reversed);
-    }
-    /**
-     * 执行 {@code reverseDeposit} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private void reverseDeposit(DepositRecordRepository.ReorgRecord deposit, String replacementBlockHash, String reason) {
-        BigDecimal reversedAmount = BigDecimal.ZERO;
-        BigDecimal deficitAmount = BigDecimal.ZERO;
-        if (deposit.credited()) {
-            BigDecimal available = ledgerBalanceRepository.findAvailableForUpdate(
-                    deposit.tenantId(), deposit.chain(), deposit.assetSymbol(), deposit.accountId());
-            reversedAmount = available.min(deposit.amount()).max(BigDecimal.ZERO);
-            deficitAmount = deposit.amount().subtract(reversedAmount);
-            if (reversedAmount.signum() > 0) {
-                if (!ledgerBalanceRepository.debit(deposit.chain(), deposit.assetSymbol(), deposit.accountId(),
-                        reversedAmount, deposit.tenantId())) {
-                    throw new IllegalStateException("unable to reverse orphaned deposit balance");
-                }
-            }
-        }
-        int updated = depositRecordRepository.markReorged(deposit.id(), reason);
-        if (updated != 1) {
-            throw new IllegalStateException("unable to mark deposit reorged: " + deposit.id());
-        }
-        if (deposit.credited()) {
-            DepositReorgObserver.ReorgedDeposit event = new DepositReorgObserver.ReorgedDeposit(
-                    deposit.id(), deposit.tenantId(), deposit.chain(), deposit.assetSymbol(),
-                    deposit.txHash(), deposit.logIndex(), deposit.accountId(), deposit.toAddress(),
-                    deposit.amount(), reversedAmount, deficitAmount, deposit.creditGeneration(),
-                    deposit.blockHeight(), deposit.blockHash(), replacementBlockHash, reason);
-            for (DepositReorgObserver observer : depositReorgObservers) {
-                observer.onDepositReorged(event);
-            }
-        }
-    }
-    /**
-     * 校验 {@code requireText} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private static String requireText(String value, String field) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(field + " is required");
-        }
-        return value.trim();
+    public DepositService.BlockObservation observeCanonicalBlock(String chain, String scannerName, long blockHeight,
+                                                                  String blockHash, String parentHash) {
+        return depositService.observeCanonicalBlock(chain, scannerName, blockHeight, blockHash, parentHash);
     }
 
-    public record BlockObservation(boolean reorg, String previousBlockHash,
-                                   String blockHash, int reversedDepositCount) {
+    public boolean isInternalCollectionTransfer(UUID tenantId, String chain, String txHash, String toAddress) {
+        return depositService.isInternalCollectionTransfer(tenantId, chain, txHash, toAddress);
     }
 
-    /**
-     * 判断 {@code isInternalCollectionTransfer} 对应的条件是否成立，并返回明确的布尔结果。
-     */
-    public boolean isInternalCollectionTransfer(UUID tenantId, String chain,
-                                                String txHash, String toAddress) {
-        if (collectionRecordRepository.existsInternalTransfer(tenantId, chain, txHash, toAddress)) return true;
-        // A replaced hash remains internal even when the active collector has since rotated.
-        return chainSigningTransactionRepository.findCollectionBusinessNo(chain, tenantId, txHash)
-                .filter(no -> collectionRecordRepository.matchesInternalDestination(tenantId, chain, no, toAddress))
-                .isPresent();
-    }
     /**
      * 校验 {@code requireDepositTenant} 对应的前置条件，不满足时抛出明确异常。
      */

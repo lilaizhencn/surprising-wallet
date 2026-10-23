@@ -58,7 +58,7 @@ class PolkadotDevnetFullFlowIntegrationTest {
                 "set -Dpolkadot.devnet.flow.enabled=true to run the local Polkadot flow");
 
         JdbcTemplate jdbc = new JdbcTemplate(dataSource());
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         UUID tenantId = PolkadotTenantIntegrationFixture.ensureTenant(jdbc);
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         PolkadotKeyService keys = new PolkadotKeyService(keyMaterial);

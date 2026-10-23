@@ -41,4 +41,39 @@ public class CustodyReorgDeficitRepository {
                    and account_id = ? and status = 'OPEN' limit 1
                 """, tenantId, chain, assetSymbol, accountId).isEmpty();
     }
+
+    public List<Deficit> lockOpenForAccount(UUID tenantId, String chain, String symbol, String accountId) {
+        return jdbc.query("""
+                select id, deficit_amount, recovered_amount from custody_reorg_deficit
+                 where tenant_id = ? and chain = ? and asset_symbol = ? and account_id = ? and status = 'OPEN'
+                 order by created_at, id for update
+                """, (rs, rowNum) -> new Deficit(rs.getObject("id", UUID.class),
+                rs.getBigDecimal("deficit_amount"), rs.getBigDecimal("recovered_amount")),
+                tenantId, chain, symbol, accountId);
+    }
+
+    public int recover(UUID tenantId, UUID id, java.math.BigDecimal amount) {
+        return jdbc.update("""
+                update custody_reorg_deficit set recovered_amount = recovered_amount + ?,
+                    status = case when recovered_amount + ? >= deficit_amount then 'RECOVERED' else 'OPEN' end,
+                    updated_at = now() where id = ? and tenant_id = ?
+                """, amount, amount, id, tenantId);
+    }
+
+    public UUID open(UUID tenantId, UUID addressId, long depositRecordId, String chain, String symbol,
+                     String accountId, java.math.BigDecimal originalAmount, java.math.BigDecimal deficitAmount) {
+        return jdbc.queryForObject("""
+                insert into custody_reorg_deficit(id, tenant_id, custody_address_id, deposit_record_id,
+                    chain, asset_symbol, account_id, original_amount, deficit_amount)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                on conflict (tenant_id, deposit_record_id) do update set
+                    original_amount = excluded.original_amount, deficit_amount = excluded.deficit_amount,
+                    recovered_amount = 0, status = 'OPEN', updated_at = now()
+                returning id
+                """, UUID.class, UUID.randomUUID(), tenantId, addressId, depositRecordId,
+                chain, symbol, accountId, originalAmount, deficitAmount);
+    }
+
+    public record Deficit(UUID id, java.math.BigDecimal amount, java.math.BigDecimal recovered) { }
+
 }

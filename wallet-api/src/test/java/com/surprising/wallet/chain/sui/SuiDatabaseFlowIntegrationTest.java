@@ -35,7 +35,7 @@ class SuiDatabaseFlowIntegrationTest {
                 env("SUI_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
         UUID tenantId = SuiTenantIntegrationFixture.ensureTenant(jdbc);
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         SuiKeyService keys = new SuiKeyService("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
         SuiAddressService addresses = new SuiAddressService(keys, repository);
 

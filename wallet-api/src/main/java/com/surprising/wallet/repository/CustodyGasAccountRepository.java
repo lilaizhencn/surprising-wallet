@@ -95,4 +95,11 @@ public class CustodyGasAccountRepository {
                  where tenant_id = ? and id = ?
                 """, threshold, status, tenantId, id);
     }
+
+    public boolean existsForAddress(UUID tenantId, UUID custodyAddressId) {
+        return !jdbc.queryForList("""
+                select id from custody_gas_account where tenant_id = ? and custody_address_id = ? limit 1
+                """, UUID.class, tenantId, custodyAddressId).isEmpty();
+    }
+
 }

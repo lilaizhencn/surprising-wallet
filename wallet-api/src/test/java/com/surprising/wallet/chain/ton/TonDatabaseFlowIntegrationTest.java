@@ -58,7 +58,7 @@ class TonDatabaseFlowIntegrationTest {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-            ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             TonKeyService keys = new TonKeyService(MASTER_SEED);
             TonAddressService addresses = new TonAddressService(keys, repository);
             UUID tenantId = TonTenantIntegrationFixture.ensureTenant(jdbc);

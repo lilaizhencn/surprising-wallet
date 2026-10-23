@@ -64,7 +64,7 @@ class TonLiveMockJettonFlowIntegrationTest {
                 env("TON_DB_USER", "wallet"),
                 env("TON_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         UUID tenantId = TonTenantIntegrationFixture.ensureTenant(jdbc);
         TonCenterClient rpc = new TonCenterClient(new ObjectMapper(),
                 env("TON_RPC_URL", "https://testnet.toncenter.com/api/v2"),

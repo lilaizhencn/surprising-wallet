@@ -52,7 +52,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         var ds = CustodyIntegrationDatabase.dataSource();
         CustodyIntegrationDatabase.reset(ds);
         jdbc = new JdbcTemplate(ds);
-        repository = new ChainJdbcRepository(jdbc);
+        repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         runtime = mock(BlockchainRuntimeService.class);
         rates = mock(ChainFeeRateRepository.class);
         var switches = mock(WalletRuntimeConfigService.class);

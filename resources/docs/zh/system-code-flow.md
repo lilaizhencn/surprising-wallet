@@ -87,10 +87,13 @@ request chain/symbol/contract
 
 ## 充值流程
 
+充值与重组使用显式业务调用：DepositService → CustodyDepositProjectionService。入账代次来自受租户约束的状态更新返回值，投影不再重复查询和重新分配租户。投影以 MANDATORY 传播加入当前事务；投影、流水、赤字恢复或事件持久化失败时，充值记录与余额同步回滚。单表仓储提供地址、投影、赤字和流水数据，跨表组合在应用层完成。
+
 ```text
 chain RPC/indexer
   -> chain scanner
   -> chain_address match
+  -> ChainJdbcRepository deposit entry -> DepositService transaction
   -> deposit_record insert or idempotent skip
   -> ledger_balance credit
   -> notification/API layer

@@ -65,7 +65,7 @@ class AptosLiveNativeFlowIntegrationTest {
                 env("APTOS_DB_USER", "wallet"),
                 env("APTOS_DB_PASSWORD", ""));
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         AptosRpcClient rpc = new AptosRpcClient(new ObjectMapper(),
                 env("APTOS_RPC_URL", "https://fullnode.devnet.aptoslabs.com/v1"),
                 env("APTOS_FAUCET_URL", "https://faucet.devnet.aptoslabs.com"));

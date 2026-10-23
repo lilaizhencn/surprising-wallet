@@ -536,7 +536,7 @@ class AccountChainWorkflowServiceTest {
          */
         private FakeRepository(ChainAddressRecord address, TokenDefinition token,
                                ChainAddressRecord tokenAddress) {
-            super(null);
+            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
             this.address = address;
             this.token = token;
             this.tokenAddress = tokenAddress;
@@ -721,7 +721,7 @@ class AccountChainWorkflowServiceTest {
         }
 
         private TenantCollectionRepository(int candidateCount) {
-            super(null);
+            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
             this.candidateCount = candidateCount;
         }
 
@@ -784,7 +784,7 @@ class AccountChainWorkflowServiceTest {
 
     private static final class EmptyCollectionRepository extends ChainJdbcRepository {
         private EmptyCollectionRepository() {
-            super(null);
+            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
         }
 
         @Override
@@ -879,7 +879,7 @@ class AccountChainWorkflowServiceTest {
          * 验证 {@code EvmCollectionRepository} 对应的测试场景，明确输入、预期结果和异常边界。
          */
         private EvmCollectionRepository(boolean eip7702Managed) {
-            super(null);
+            super(null, new com.surprising.wallet.repository.UtxoRepository(null), com.surprising.wallet.testutil.DepositTestSupport.service(null));
             this.eip7702Managed = eip7702Managed;
         }
 

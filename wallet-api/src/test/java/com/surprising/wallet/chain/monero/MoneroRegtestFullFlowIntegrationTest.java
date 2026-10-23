@@ -77,7 +77,7 @@ class MoneroRegtestFullFlowIntegrationTest {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-            ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             try {
                 String environment = env("MONERO_REGTEST_ENVIRONMENT", "dev");
                 String network = env("MONERO_REGTEST_PROFILE_NETWORK", "regtest");

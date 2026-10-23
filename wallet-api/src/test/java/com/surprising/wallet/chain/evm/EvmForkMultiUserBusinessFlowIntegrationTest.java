@@ -77,7 +77,7 @@ class EvmForkMultiUserBusinessFlowIntegrationTest {
         String nativeSymbol = System.getProperty("evm.native.symbol", "ETH");
         int confirmations = Integer.getInteger("evm.confirmations", 1);
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource());
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbcTemplate);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbcTemplate);
         EvmDepositScanner scanner = new EvmDepositScanner(repository, new EvmLogScanner(), LOCAL_RPC, confirmations);
         Web3j web3j = Web3j.build(new HttpService(LOCAL_RPC));
 

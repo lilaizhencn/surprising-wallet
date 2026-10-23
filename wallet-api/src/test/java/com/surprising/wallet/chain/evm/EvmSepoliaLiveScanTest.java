@@ -41,7 +41,7 @@ class EvmSepoliaLiveScanTest {
                 "set -Devm.live.enabled=true to run live Sepolia scan");
 
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource());
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbcTemplate);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbcTemplate);
         EvmDepositScanner scanner = new EvmDepositScanner(repository,
                 System.getProperty("evm.rpc", "https://ethereum-sepolia-rpc.publicnode.com"),
                 Integer.getInteger("evm.confirmations", 12));

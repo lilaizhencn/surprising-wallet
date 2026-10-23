@@ -44,7 +44,7 @@ class AptosDatabaseFlowIntegrationTest {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-            ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             AptosKeyService keys = new AptosKeyService(MASTER_SEED);
             AptosAddressService addresses = new AptosAddressService(keys, repository);
             long baseIndex = 1_200_000L + Math.abs(UUID.randomUUID().getLeastSignificantBits() % 100_000L);

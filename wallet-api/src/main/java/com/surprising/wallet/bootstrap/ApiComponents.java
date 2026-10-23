@@ -16,7 +16,6 @@ import org.springframework.context.annotation.Configuration;
         "com.surprising.wallet.gateway",
         "com.surprising.wallet.job",
         "com.surprising.wallet.model",
-        "com.surprising.wallet.observer",
         "com.surprising.wallet.repository",
         "com.surprising.wallet.service"
 })

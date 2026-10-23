@@ -6,10 +6,8 @@ import com.sun.net.httpserver.HttpServer;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.repository.ChainJdbcRepository;
-import com.surprising.wallet.observer.DepositCreditObserver;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
@@ -39,7 +37,6 @@ import java.util.function.IntConsumer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.surprising.wallet.service.CustodyCryptoService;
-import com.surprising.wallet.observer.CustodyDepositCreditObserver;
 import com.surprising.wallet.config.custody.CustodyJacksonConfiguration;
 import com.surprising.wallet.repository.CustodyRepository;
 import com.surprising.wallet.model.CustodySecurityProperties;
@@ -90,12 +87,8 @@ class CustodyMultiChainLoadIntegrationTest {
         CustodyRepository custody = new CustodyRepository(jdbc);
         CustodyTenantChainRepository tenantChains = new CustodyTenantChainRepository(jdbc);
         ObjectMapper objectMapper = new CustodyJacksonConfiguration().custodyObjectMapper();
-        CustodyDepositCreditObserver observer = new CustodyDepositCreditObserver(
-                jdbc, objectMapper, custody, tenantChains);
-        StaticListableBeanFactory beans = new StaticListableBeanFactory(
-                Map.of("custodyDepositCreditObserver", observer));
-        ChainJdbcRepository chains = new ChainJdbcRepository(
-                jdbc, beans.getBeanProvider(DepositCreditObserver.class));
+        ChainJdbcRepository chains = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc,
+                com.surprising.wallet.testutil.DepositTestSupport.projection(jdbc, custody, objectMapper));
 
         Tenant tenant = createTenant(jdbc, tenantChains);
         List<UserAccount> accounts = createAccounts(jdbc, tenant, users);

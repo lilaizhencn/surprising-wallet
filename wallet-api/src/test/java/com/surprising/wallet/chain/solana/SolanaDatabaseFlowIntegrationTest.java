@@ -43,7 +43,7 @@ class SolanaDatabaseFlowIntegrationTest {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             JdbcTemplate jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
-            ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+            ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
             SolanaKeyService keys = new SolanaKeyService(MASTER_SEED);
             SolanaAddressService addresses = new SolanaAddressService(keys, repository);
             UUID tenantId = SolanaTenantIntegrationFixture.ensureTenant(jdbc);

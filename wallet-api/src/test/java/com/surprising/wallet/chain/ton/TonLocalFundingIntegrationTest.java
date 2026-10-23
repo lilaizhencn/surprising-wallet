@@ -44,7 +44,7 @@ class TonLocalFundingIntegrationTest {
                 env("TON_DB_URL", "jdbc:postgresql://127.0.0.1:5432/wallet"),
                 env("TON_DB_USER", "wallet"),
                 env("TON_DB_PASSWORD", ""));
-        ChainJdbcRepository repository = new ChainJdbcRepository(new JdbcTemplate(dataSource));
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(new JdbcTemplate(dataSource));
         TonCenterClient rpc = new TonCenterClient(new ObjectMapper(),
                 env("TON_RPC_URL", "http://127.0.0.1:8081"), "");
         TonKeyService keys = new TonKeyService(masterSeed);

@@ -821,7 +821,7 @@ class CustodyOperationsIntegrationTest {
 
             CustodyAddressService service = new CustodyAddressService(
                     custody,
-                    new ChainJdbcRepository(jdbc),
+                    com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc),
                     new StableEvmRuntime(jdbc),
                     new CustodyTenantChainService(
                             tenantChainRepository, custody,
@@ -902,7 +902,7 @@ class CustodyOperationsIntegrationTest {
                     """, administratorId, tenantId, slug + "@example.test");
             tenantChains.setStatus(tenantId, "ETH", "ACTIVE", administratorId);
             CustodyAddressService service = new CustodyAddressService(
-                    custody, new ChainJdbcRepository(jdbc), new StableEvmRuntime(jdbc),
+                    custody, com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc), new StableEvmRuntime(jdbc),
                     new CustodyTenantChainService(tenantChains, custody,
                             new BlockchainRuntimeService(new com.surprising.wallet.repository.ChainProfileRepository(jdbc),
                             new com.surprising.wallet.repository.ChainAssetRepository(jdbc), null, null)),

@@ -73,7 +73,7 @@ class NearSandboxFullFlowIntegrationTest {
                 "set -Dnear.sandbox.flow.enabled=true to run the local NEAR sandbox flow");
 
         JdbcTemplate jdbc = new JdbcTemplate(dataSource());
-        ChainJdbcRepository repository = new ChainJdbcRepository(jdbc);
+        ChainJdbcRepository repository = com.surprising.wallet.testutil.DepositTestSupport.repository(jdbc);
         UUID tenantId = NearTenantIntegrationFixture.ensureTenant(jdbc);
         WalletKeyMaterialProvider keyMaterial = WalletKeyTestFixture.provider();
         NearKeyService keys = new NearKeyService(keyMaterial);
