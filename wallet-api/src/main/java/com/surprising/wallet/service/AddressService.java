@@ -1,24 +1,102 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.common.chain.ChainAddressRecord;
+import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.Address;
+import com.surprising.wallet.common.utils.Constants;
+import com.surprising.wallet.repository.ChainJdbcRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import java.math.BigDecimal;
+import java.util.Locale;
+import java.util.Optional;
 
 /**
- * 地址服务接口。
+ * 地址服务实现。
  *
- * 负责根据链和资产上下文读取托管系统中的地址元数据，用于充值/提现的归属判断与风控分流。
+ * 从链上地址仓库读取地址记录并转成通用地址模型，处理地址大小写归一化分支（如以太坊的 case-insensitive 匹配）。
  *
  * @author lilaizhen
  * @date 2018-03-27
  */
-public interface AddressService {
+@Service
+public class AddressService {
 
     /**
-     * 根据字符串地址查找对应地址元数据。
-     *
-     * @param addressStr 链上地址
-     * @param currency   资产元数据上下文
-     * @return 地址模型；未命中返回 null
+     * 链地址仓库，负责按链名/资产标识查询钱包地址及用户绑定关系。
      */
-    Address getAddress(String addressStr, AssetRuntimeMetadata currency);
+    private final ChainJdbcRepository chainJdbcRepository;
+
+    /** 构造地址服务。 */
+    public AddressService(ChainJdbcRepository chainJdbcRepository) {
+        this.chainJdbcRepository = chainJdbcRepository;
+    }
+
+    /**
+     * 将数据库地址记录映射为业务可消费的 Address 模型。
+     *
+     * @param record   数据库地址记录
+     * @param currency 资产运行时元数据
+     * @return 通用地址模型
+     */
+    private Address toAddress(ChainAddressRecord record, AssetRuntimeMetadata currency) {
+        return Address.builder()
+                .userId(record.getUserId())
+                .address(record.getAddress())
+                .network("")
+                .scriptType("")
+                .redeemScript("")
+                .witnessScript("")
+                .derivationPath(record.getDerivationPath())
+                .publicKeys("")
+                .balance(BigDecimal.ZERO)
+                .biz(record.getBiz())
+                .nonce(0)
+                .index(Math.toIntExact(record.getAddressIndex()))
+                .status((byte) Constants.WAITING)
+                .currency(currency.getName())
+                .build();
+    }
+
+    /**
+     * 按 EVM 和 HyperCore 十六进制地址规则匹配。
+     *
+     * 仅在主网查询未命中时触发，尝试将输入地址归一化为小写后再次查库，兼容链上校验不区分大小写场景。
+     */
+    private Optional<Address> findCaseFoldedChainAddress(AssetRuntimeMetadata currency, String addressStr) {
+        if (!ChainType.valueOf(currency.chain()).isEvm() && !"HYPERCORE".equals(currency.chain())) {
+            return Optional.empty();
+        }
+        String normalized = addressStr.toLowerCase(Locale.ROOT);
+        if (normalized.equals(addressStr)) {
+            return Optional.empty();
+        }
+        return chainJdbcRepository.findChainAddressByAddress(currency.chain(), currency.assetSymbol(), normalized)
+                .map(record -> toAddress(record, currency));
+    }
+
+    /**
+     * 获取指定链/资产下的地址信息。
+     *
+     * @param addressStr 以字符串形式输入的地址
+     * @param currency   资产运行时元数据
+     * @return 命中的地址模型；未命中返回 null
+     */
+    public Address getAddress(String addressStr, AssetRuntimeMetadata currency) {
+        if (!StringUtils.hasText(addressStr) || currency == null) {
+            return null;
+        }
+        return findChainAddress(currency, addressStr).orElse(null);
+    }
+
+    /**
+     * 按链和资产从链地址库精确匹配地址，必要时回退到大小写归一化匹配。
+     */
+    private Optional<Address> findChainAddress(AssetRuntimeMetadata currency, String addressStr) {
+        return chainJdbcRepository.findChainAddressByAddress(currency.chain(), currency.assetSymbol(), addressStr)
+                .map(record -> toAddress(record, currency))
+                .or(() -> findCaseFoldedChainAddress(currency, addressStr));
+    }
 }

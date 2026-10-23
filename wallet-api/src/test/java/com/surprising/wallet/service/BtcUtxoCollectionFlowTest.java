@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.repository.ChainFeeRateRepository;
 import com.surprising.wallet.chain.BitcoinLikeSettlementService;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
@@ -38,14 +39,14 @@ class BtcUtxoCollectionFlowTest {
         var runtime = mock(BlockchainRuntimeService.class);
         var repository = mock(ChainJdbcRepository.class);
         var switches = mock(WalletRuntimeConfigService.class);
-        var feeRates = mock(ChainFeeRateService.class);
+        var feeRates = mock(ChainFeeRateRepository.class);
         var outbox = mock(WalletOutboxRepository.class);
         when(switches.isTaskEnabled("BTC", WalletRuntimeConfigService.TASK_WITHDRAW)).thenReturn(false);
         when(switches.isTaskEnabled("BTC", WalletRuntimeConfigService.TASK_COLLECTION)).thenReturn(true);
         when(runtime.assetMetadata("BTC")).thenReturn(BTC);
         when(runtime.depositConfirmationThreshold(BTC)).thenReturn(1L);
         when(runtime.dustThresholdAtomic(BTC)).thenReturn(546L);
-        when(feeRates.get("BTC")).thenReturn("1");
+        when(feeRates.find("BTC")).thenReturn("1");
         when(repository.listCollectableLedgerBalances(eq("BTC"), eq(BigDecimal.ZERO), anyInt()))
                 .thenReturn(List.of(CollectionCandidateRecord.builder().tenantId(TENANT)
                         .custodyAddressId(CUSTODY_ADDRESS).chain("BTC").assetSymbol("BTC")

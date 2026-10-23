@@ -41,18 +41,6 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>org.web3j</groupId>
-            <artifactId>core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.web3j</groupId>
-            <artifactId>abi</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.web3j</groupId>
-            <artifactId>crypto</artifactId>
-        </dependency>
-        <dependency>
             <groupId>com.surprising</groupId>
             <artifactId>chain-sdks</artifactId>
         </dependency>

@@ -82,13 +82,7 @@ import static com.surprising.wallet.common.utils.Constants.UNSPENT_TX_ID;
  *  {@link com.surprising.wallet.chain.ltc.LitecoinEsploraCommand}），
  * 通过 {@link #networkParameters(ChainType)} 获取对应的网络参数。
  *
- * <p>该类被各链的 {@link com.surprising.wallet.chain.BlockchainAdapter} 适配器
- * 委托调用，不直接面向外部。
- *
- * @see com.surprising.wallet.chain.btc.BtcChainAdapter
- * @see com.surprising.wallet.chain.ltc.LitecoinChainAdapter
- * @see com.surprising.wallet.chain.doge.DogeChainAdapter
- * @see com.surprising.wallet.chain.bch.BchChainAdapter
+ * <p>由 BlockchainRuntimeService 直接分发 BTC、BCH、LTC、DOGE 操作。
  */
 @Service
 public

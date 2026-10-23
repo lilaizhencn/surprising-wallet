@@ -52,8 +52,16 @@ class WalletModeTest {
                 assertEquals(first, context.containsBean("sig1KeyMaterial"), mode);
                 assertEquals(second, context.containsBean("sig2KeyMaterial"), mode);
                 assertEquals(api, context.containsBean("apiKeyMaterial"), mode);
-                assertEquals(first ? 1 : 0, context.getBeansOfType(com.surprising.wallet.sig.first.SignContent.class).size());
-                assertEquals(second ? 1 : 0, context.getBeansOfType(com.surprising.wallet.sig.second.SignContent.class).size());
+                assertEquals(first ? 1 : 0, context.getBeansOfType(com.surprising.wallet.sig.first.FirstSignerRegistry.class).size());
+                assertEquals(second ? 1 : 0, context.getBeansOfType(com.surprising.wallet.sig.second.SecondSignerRegistry.class).size());
+                assertEquals(first ? 4 : 0, context.getBeansOfType(com.surprising.wallet.sig.first.service.ISignService.class).size());
+                assertEquals(second ? 4 : 0, context.getBeansOfType(com.surprising.wallet.sig.second.ISignService.class).size());
+                for (String chain : new String[]{"BTC", "BCH", "LTC", "DOGE"}) {
+                    var asset = com.surprising.wallet.common.chain.AssetRuntimeMetadata.fromProfile(
+                            1, chain, chain, 1, 0, 8, null);
+                    if (first) assertNotNull(context.getBean(com.surprising.wallet.sig.first.FirstSignerRegistry.class).find(asset));
+                    if (second) assertNotNull(context.getBean(com.surprising.wallet.sig.second.SecondSignerRegistry.class).find(asset));
+                }
                 if (first) {
                     var keys = context.getBean("sig1KeyMaterial", WalletKeyMaterialProvider.class);
                     assertThrows(IllegalStateException.class, keys::sig2Root);
@@ -75,6 +83,14 @@ class WalletModeTest {
                 }
             }
         }
+    }
+    @Test void duplicateSignerRegistrationFailsAtConstruction() {
+        assertThrows(IllegalArgumentException.class, () -> new com.surprising.wallet.sig.first.FirstSignerRegistry(
+                java.util.List.of(new com.surprising.wallet.sig.first.service.BtcFirstSignService(),
+                        new com.surprising.wallet.sig.first.service.BtcFirstSignService())));
+        assertThrows(IllegalArgumentException.class, () -> new com.surprising.wallet.sig.second.SecondSignerRegistry(
+                java.util.List.of(new com.surprising.wallet.sig.second.impl.BtcSecondSignService(null),
+                        new com.surprising.wallet.sig.second.impl.BtcSecondSignService(null))));
     }
     @Test void signerEnvironmentEnforcesHeadlessModeAndOwnDatabaseRole() {
         for (String mode : new String[]{"sig1", "sig2"}) {

@@ -46,13 +46,13 @@
 
   <rect x="400" y="90" width="220" height="58" class="key"/>
   <text x="510" y="112" text-anchor="middle" class="bold">BIP32 Root #1 (sig1)</text>
-  <text x="510" y="132" text-anchor="middle" class="small">在线 · 第一签私钥 · wallet-sig1</text>
+  <text x="510" y="132" text-anchor="middle" class="small">BTC/BCH/LTC/DOGE · wallet-sig1</text>
 
   <path d="M190,110 V84 H755 V90" class="arrow"/>
 
   <rect x="645" y="90" width="220" height="58" class="key"/>
   <text x="755" y="112" text-anchor="middle" class="bold">BIP32 Root #2 (sig2)</text>
-  <text x="755" y="132" text-anchor="middle" class="small">在线 · sig2 / API 账户链</text>
+  <text x="755" y="132" text-anchor="middle" class="small">sig2 UTXO · API 账户链独立签名</text>
 
   <path d="M190,110 V84 H1000 V90" class="arrow"/>
 
@@ -77,7 +77,7 @@
 
   <!-- ====== PHASE 2: 创建地址 ====== -->
   <rect x="20" y="236" width="1140" height="120" class="phase-bg"/>
-  <text x="40" y="258" class="phase-label">② 创建充值地址</text>
+  <text x="40" y="258" class="phase-label">② 创建充值地址：DB 配置 → BlockchainRuntimeService → Bitcoin-like / Account 地址运行时</text>
 
   <rect x="40" y="274" width="200" height="52" class="addr"/>
   <text x="140" y="298" text-anchor="middle" class="bold">租户请求分配地址</text>
@@ -87,7 +87,7 @@
 
   <rect x="275" y="274" width="220" height="52" class="addr"/>
   <text x="385" y="298" text-anchor="middle" class="bold">确定性派生 &amp; 幂等</text>
-  <text x="385" y="315" text-anchor="middle" class="small">同链同 subject 返回同一地址</text>
+  <text x="385" y="315" text-anchor="middle" class="small">固定派生索引 · 同 subject 幂等</text>
 
   <line x1="495" y1="300" x2="530" y2="300" class="arrow"/>
 
@@ -192,7 +192,7 @@
 
   <rect x="255" y="702" width="190" height="56" class="withdraw"/>
   <text x="350" y="726" text-anchor="middle" class="bold">Gas &amp; 费用预留</text>
-  <text x="350" y="744" text-anchor="middle" class="small">native_symbol · gas_policy · fee_model</text>
+  <text x="350" y="744" text-anchor="middle" class="small">共享地址校验通过后创建订单</text>
 
   <line x1="445" y1="730" x2="480" y2="730" class="arrow"/>
 

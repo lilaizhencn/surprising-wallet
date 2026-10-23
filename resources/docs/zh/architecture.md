@@ -42,7 +42,7 @@ GitHub Actions 使用 JDK 27 / Lombok 1.18.48 构建并执行单元测试，随�
 | `sig1` | 第一签 | 关闭 | 第一签账号 |
 | `sig2` | 第二签 | 关闭 | 第二签账号 |
 
-bootstrap 包按模式显式扫描组件；签名 Bean 使用全限定名称避免冲突。第一签和第二签分别绑定单线程 `sig1TaskScheduler`、`sig2TaskScheduler`，API 保持按 Job 类别分池。签名密钥通过限定名称注入，第二签不保留静态私钥或 HTTP 签名入口。所有模式仍通过 PGMQ 推进阶段；合并进程不改变消息重试、幂等和审计路径。
+bootstrap 包按模式显式扫描组件；签名实现由 FirstSignerRegistry / SecondSignerRegistry 通过构造器列表注入，按原生链建立不可变索引并拒绝重复注册。两个模块仅处理 BTC/BCH/LTC/DOGE；EVM/TRON 等账户链继续由 API 内已有链服务签名。第一签和第二签分别绑定单线程 `sig1TaskScheduler`、`sig2TaskScheduler`，API 保持按 Job 类别分池。签名密钥通过限定名称注入，第二签不保留静态私钥或 HTTP 签名入口。所有模式仍通过 PGMQ 推进阶段；合并进程不改变消息重试、幂等和审计路径。
 
 
 运行时资产来源：
@@ -57,13 +57,17 @@ bootstrap 包按模式显式扫描组件；签名 Bean 使用全限定名称避�
 | `ledger_balance` | 按链隔离的用户/系统余额状态 |
 | `custody_*` | 租户、凭证、地址分配、充提投影、Webhook、幂等和审计控制面状态 |
 
-应用应通过 `chain + symbol` 或 `chain + contract` 解析资产，然后把 runtime asset 传入 scanner、withdraw、collection 和 signing 流程。
+应用通过 `chain + symbol` 或 `chain + contract` 解析资产，然后把 runtime asset 传入 scanner、withdraw、collection 和 signing 流程。
+
+`BlockchainRuntimeService` 从启用的 `chain_profile` 解析链元数据，直接调用 `BitcoinLikeChainRuntime`（BTC/BCH/LTC/DOGE）或 `ChainAddressRuntime`（其余链）的地址生成与校验。ADA 的 UTXO 模型由 Cardano 引擎处理，不进入 Bitcoin-like 引擎。账户链扫描、提现和归集由现有业务工作流调用各链实现。项目不再保留通用 BlockchainAdapter、能力注册表或无人调用的转账报价框架；28 条链使用同一套数据库元数据进入租户链列表和开关管理。
+
+提现创建复用同一运行时地址校验，先验证格式、校验和及 UTXO 网络，再创建订单和冻结余额。Console 根据 Token 配置显示资产明细；链列表契约不再返回闲置报价能力字段。
 
 ## 模块
 
 | 模块 | 职责 |
 |---|---|
-| `wallet-api` | Spring MVC 单体应用：Custody/Console REST API、Servlet/Cookie 与 HTTP 异常映射、Job 调度、业务 Service、链领域与持久化模型、链适配器（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、充值、账本、提现、归集、Gas、Webhook 和启动校验 |
+| `wallet-api` | Spring MVC 单体应用：Custody/Console REST API、Servlet/Cookie 与 HTTP 异常映射、Job 调度、业务 Service、链领域与持久化模型、链引擎（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、充值、账本、提现、归集、Gas、Webhook 和启动校验 |
 | `wallet-sig1` | BTC-like 2-of-3 第一签服务：对 BTC、BCH、LTC、DOGE 提现交易生成部分签名，轮询 PostgreSQL / PGMQ 队列；处理中任务可恢复 |
 | `wallet-sig2` | 第二签服务：完成最终签名并入 PGMQ 广播队列，由 wallet-api 广播；处理中任务可恢复 |
 | `common` | 无 Web 耦合、至少被两个上层模块使用的共享契约和 PGMQ 基础设施：运行时链/资产契约、签名交易 DTO、钱包密钥配置与加载、通用常量 |
@@ -186,7 +190,7 @@ wallet-api 启动时会先校验当前模式所需的 `sw.wallet.keys`，再检�
 ### PostgreSQL 队列与费用报价
 
 PGMQ 扩展管理 `pgmq.q_wallet_*`、对应归档表和死信队列。`common.queue.PgmqClient` 只访问扩展对象，不访问业务表。
-`ChainFeeRateRepository` 对应 `chain_fee_rate`（链、整数费率、更新时间），经 `ChainFeeRateService` 为提现和 RBF 提供网络报价。
+`ChainFeeRateRepository` 对应 `chain_fee_rate`（链、整数费率、更新时间），由费率更新、提现和 RBF 服务直接访问，提供网络报价。
 队列消费由 `WithdrawalQueueService`、`FirstSigningService`、`SecondSigningService` 和 `RbfBumpService` 编排；Job 仅调度。
 已移除独立失败重试和超时重投签名 Job，PGMQ 未确认消息在可见性超时后恢复。
 队列归档用于审计；运维使用 `wallet_replay_dead(queue, id, reason)` 重放死信，并记录数据库操作者和原因。

@@ -15,7 +15,7 @@
   -> wallet-sig2：仅 sig2 私钥与自身 public root
 ```
 
-唯一 JAR 的 all 模式在一个进程内运行全部阶段，共享数据源但隔离签名调度池；分进程模式使用同一个 JAR。第二签没有 HTTP 入口，签名消息始终经过 PGMQ。恢复私钥不加载，只输入扩展公钥。api 模式仍承担账户链签名，需要 sig2 和 Ed25519 私钥。
+唯一 JAR 的 all 模式在一个进程内运行全部阶段，共享数据源但隔离签名调度池；分进程模式使用同一个 JAR。第二签没有 HTTP 入口，签名消息始终经过 PGMQ。FirstSignerRegistry / SecondSignerRegistry 由构造器接收原生 UTXO 签名实现，不再访问 Spring ApplicationContext；账户链不进入此队列。恢复私钥不加载，只输入扩展公钥。api 模式仍承担账户链签名，需要 sig2 和 Ed25519 私钥。
 
 密钥不再写入 PostgreSQL，也没有运行时查询、明文展示或热更新接口。配置变更必须重启对应进程；已有派生地址后更换 Seed 会导致签名材料与地址不一致，因此必须作为受审计的整体密钥迁移处理。
 
@@ -79,10 +79,11 @@ request chain/symbol/contract
   -> chain_profile
   -> chain_asset
   -> token_config when token asset
-  -> BlockchainRuntimeService/BlockchainAdapter input
+  -> BlockchainRuntimeService
+  -> BitcoinLikeChainRuntime (BTC/BCH/LTC/DOGE) or ChainAddressRuntime (other address operations)
 ```
 
-业务路由应使用 `chain + asset` lookup。legacy enum 和数字 currency id 只应在不可避免时作为兼容映射存在。
+业务路由使用 `chain + asset` lookup。租户链列表和开链直接使用已启用的数据库配置，不再要求额外的 Adapter 注册。提现创建使用与地址运行时相同的校验入口，验证完成后才创建订单和冻结余额；UTXO 地址校验使用当前链的已配置网络。
 
 ## 充值流程
 
@@ -194,7 +195,7 @@ SOL/TON/APTOS/SUI：
 - DB 测试覆盖确定性的 scanner/ledger/transaction 行为。
 - live 测试依赖外部 devnet/testnet RPC、faucet 限流和已充值地址。
 
-费用报价：FeeRateUpdater → FeeRateUpdateService → ChainFeeRateService → ChainFeeRateRepository → chain_fee_rate；队列和业务事务共用同一 PostgreSQL 数据源。
+费用报价：FeeRateUpdater → FeeRateUpdateService → ChainFeeRateRepository → chain_fee_rate；队列和业务事务共用同一 PostgreSQL 数据源。
 
 每轮新签名请求（含 RBF）带唯一 signingRequestId，广播前与数据库当前请求校验；旧请求的死信回放不得覆盖新交易。
 

@@ -1,11 +1,8 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.repository.CustodyRepository.AddressRecord;
-import com.surprising.wallet.chain.cardano.CardanoKeyService;
-import com.surprising.wallet.chain.monero.MoneroAddressValidator;
-import com.surprising.wallet.chain.near.NearKeyService;
-import com.surprising.wallet.chain.polkadot.PolkadotKeyService;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import com.surprising.wallet.repository.ChainAddressRepository;
 import com.surprising.wallet.repository.ChainAssetRepository;
@@ -41,6 +38,7 @@ public class CustodyWithdrawalExecutionService {
      * 保存 {@code runtimeConfig}，用于保存运行配置和策略参数。
      */
     private final WalletRuntimeConfigService runtimeConfig;
+    private final BlockchainRuntimeService runtime;
     /** chain_asset 单表仓储。 */
     private final ChainAssetRepository chainAssetRepository;
     /** chain_profile 单表仓储。 */
@@ -59,6 +57,7 @@ public class CustodyWithdrawalExecutionService {
      */
     public CustodyWithdrawalExecutionService(ChainJdbcRepository chains,
                                              WalletRuntimeConfigService runtimeConfig,
+                                             BlockchainRuntimeService runtime,
                                              ChainAssetRepository chainAssetRepository,
                                              ChainProfileRepository chainProfileRepository,
                                              TokenConfigRepository tokenConfigRepository,
@@ -67,6 +66,7 @@ public class CustodyWithdrawalExecutionService {
                                              LedgerBalanceRepository ledgerBalanceRepository) {
         this.chains = chains;
         this.runtimeConfig = runtimeConfig;
+        this.runtime = runtime;
         this.chainAssetRepository = chainAssetRepository;
         this.chainProfileRepository = chainProfileRepository;
         this.tokenConfigRepository = tokenConfigRepository;
@@ -84,7 +84,7 @@ public class CustodyWithdrawalExecutionService {
         runtimeConfig.requireTaskEnabled(
                 chain, WalletRuntimeConfigService.TASK_WITHDRAW, "custody withdrawal create");
         AssetMeta asset = requireAsset(chain, symbol);
-        validateExternalAddress(chain, toAddress);
+        toAddress = validateExternalAddress(chain, toAddress);
         BigDecimal frozenAmount = amount.add(asset.networkFeeReserve());
         SpendAccount spend = requireTenantSpendAccount(
                 tenantId, custodyAddress.id(), chain, symbol, frozenAmount);
@@ -187,33 +187,15 @@ public class CustodyWithdrawalExecutionService {
     /**
      * 校验 {@code validateExternalAddress} 对应的前置条件，不满足时抛出明确异常。
      */
-    private static void validateExternalAddress(String chain, String address) {
+    private String validateExternalAddress(String chain, String address) {
         String value = address == null ? "" : address.trim();
         if (value.isBlank() || value.length() > 160) {
             throw new IllegalArgumentException("valid withdrawal address is required");
         }
-        if ((ChainType.valueOf(chain).isEvm() || "HYPERCORE".equals(chain))
-                && !value.matches("^0x[0-9a-fA-F]{40}$")) {
-            throw new IllegalArgumentException("invalid EVM address");
+        if (!runtime.checkAddress(chain, value)) {
+            throw new IllegalArgumentException("invalid " + chain + " address");
         }
-        if ("TRON".equals(chain) && !value.matches("^T[1-9A-HJ-NP-Za-km-z]{33}$")) {
-            throw new IllegalArgumentException("invalid TRON address");
-        }
-        if ("XRP".equals(chain) && !value.matches("^r[1-9A-HJ-NP-Za-km-z]{25,34}$")) {
-            throw new IllegalArgumentException("invalid XRP address");
-        }
-        if ("XMR".equals(chain) && !MoneroAddressValidator.isValid(value)) {
-            throw new IllegalArgumentException("invalid XMR address");
-        }
-        if ("ADA".equals(chain) && !CardanoKeyService.isValidAddress(value)) {
-            throw new IllegalArgumentException("invalid ADA address");
-        }
-        if ("DOT".equals(chain) && !PolkadotKeyService.isValidSs58Address(value)) {
-            throw new IllegalArgumentException("invalid DOT address");
-        }
-        if ("NEAR".equals(chain) && !NearKeyService.isValidAccountId(value)) {
-            throw new IllegalArgumentException("invalid NEAR address");
-        }
+        return value;
     }
     /**
      * 执行 {@code atomicToDecimal} 对应的辅助逻辑，完成数据处理并维护状态边界。

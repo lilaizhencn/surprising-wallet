@@ -45,7 +45,7 @@
   <text x="890" y="222" text-anchor="middle" class="label">wallet-sig1 · wallet-sig2 普通库</text>
   <text x="890" y="244" text-anchor="middle" class="desc">all 共享池；独立模式各自数据库账号</text>
   <text x="890" y="262" text-anchor="middle" class="desc">BTC/BCH/LTC/DOGE → 第一签 → 第二签</text>
-  <text x="890" y="280" text-anchor="middle" class="desc">独立调度池 · 事务推进与消息归档</text>
+  <text x="890" y="280" text-anchor="middle" class="desc">不可变签名索引 · 独立调度池 · 事务归档</text>
 
   <line x1="695" y1="210" x2="720" y2="210" class="arrow"/>
   <!-- consumers → providers -->
@@ -55,7 +55,7 @@
   <line x1="890" y1="194" x2="350" y2="148" class="arrow"/>
 
   <!-- ====== 第三层：支持链 ====== -->
-  <text x="30" y="328" class="sep"> 区块链适配（28 条链：EVM 13 条，非 EVM 15 条）</text>
+  <text x="30" y="328" class="sep"> 链引擎（28 条链） · DB 配置 → Bitcoin-like / Account 地址运行时 · 无 Adapter 注册层</text>
 
   <rect x="30" y="342" width="90" height="48" class="chain"/>
   <text x="75" y="364" text-anchor="middle" class="label">BTC</text>

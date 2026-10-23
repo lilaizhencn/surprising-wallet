@@ -1,8 +1,6 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.common.chain.ChainType;
-import com.surprising.wallet.chain.BlockchainAdapter;
-import com.surprising.wallet.chain.BlockchainAdapterRegistry;
+import com.surprising.wallet.chain.BlockchainRuntimeService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,7 +8,6 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 import com.surprising.wallet.exception.CustodyForbiddenException;
@@ -35,16 +32,16 @@ public class CustodyTenantChainService {
     /**
      * 保存 {@code adapters}，用于访问当前业务所依赖的仓储、客户端或服务。
      */
-    private final BlockchainAdapterRegistry adapters;
+    private final BlockchainRuntimeService runtime;
     /**
      * 构造 {@code CustodyTenantChainService}，初始化该组件运行所需的状态和依赖。
      */
     public CustodyTenantChainService(CustodyTenantChainRepository chains,
                                      CustodyRepository custody,
-                                     BlockchainAdapterRegistry adapters) {
+                                     BlockchainRuntimeService runtime) {
         this.chains = chains;
         this.custody = custody;
-        this.adapters = adapters;
+        this.runtime = runtime;
     }
     /**
      * 获取或查询 {@code list} 对应的数据，供调用方读取当前状态。
@@ -56,8 +53,7 @@ public class CustodyTenantChainService {
                 .collect(java.util.stream.Collectors.toMap(
                         CustodyRepository.GasAccountRecord::chain, row -> row));
         return chains.list(principal.tenantId()).stream()
-                .map(row -> toSupportedView(row, addresses.get(row.chain())))
-                .filter(java.util.Objects::nonNull)
+                .map(row -> toView(row, addresses.get(row.chain())))
                 .toList();
     }
 
@@ -72,7 +68,7 @@ public class CustodyTenantChainService {
         if (!chains.platformChainEnabled(chain)) {
             throw new IllegalArgumentException("chain is not enabled by the platform");
         }
-        requireAdapter(chain);
+        runtime.requireRuntime(chain);
         String status = enabled ? "ACTIVE" : "CLOSED";
         chains.setStatus(principal.tenantId(), chain, status, principal.actorId());
         custody.audit(principal.tenantId(), principal.actorType().name(),
@@ -86,7 +82,7 @@ public class CustodyTenantChainService {
                         CustodyRepository.GasAccountRecord::chain, row -> row));
         return chains.list(principal.tenantId()).stream()
                 .filter(row -> row.chain().equals(chain))
-                .map(row -> toSupportedView(row, addresses.get(row.chain())))
+                .map(row -> toView(row, addresses.get(row.chain())))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("tenant chain status was not persisted"));
     }
@@ -113,16 +109,10 @@ public class CustodyTenantChainService {
     }
 
     /**
-     * 编码 {@code toSupportedView} 对应的数据，生成链上或接口所需的表示。
+     * 将数据库开关和资产配置投影为租户可见的链信息。
      */
-    private ChainView toSupportedView(CustodyTenantChainRepository.ChainRecord row,
+    private ChainView toView(CustodyTenantChainRepository.ChainRecord row,
                                       CustodyRepository.GasAccountRecord address) {
-        BlockchainAdapter adapter;
-        try {
-            adapter = requireAdapter(row.chain());
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
         List<TokenView> tokens = row.tokens().stream()
                 .map(CustodyTenantChainService::tokenView)
                 .toList();
@@ -135,7 +125,6 @@ public class CustodyTenantChainService {
                 row.eip7702Enabled(),
                 enabledAssets, tokens, row.status(), "ACTIVE".equals(row.status()),
                 row.scanEnabled(), row.withdrawalEnabled(), row.transferEnabled(),
-                adapter.capabilities(),
                 address == null ? null : address.custodyAddressId(),
                 address == null ? null : address.address(),
                 address == null ? null : address.memo(),
@@ -148,16 +137,6 @@ public class CustodyTenantChainService {
         return new TokenView(
                 row.symbol(), row.standard(), row.contractAddress(), row.decimals(),
                 row.platformEnabled(), row.minDeposit());
-    }
-    /**
-     * 校验 {@code requireAdapter} 对应的前置条件，不满足时抛出明确异常。
-     */
-    private BlockchainAdapter requireAdapter(String chain) {
-        try {
-            return adapters.require(ChainType.valueOf(chain));
-        } catch (RuntimeException e) {
-            throw new IllegalArgumentException("chain has no executable wallet adapter: " + chain, e);
-        }
     }
     /**
      * 转换或计算 {@code normalizeChain} 对应的值，统一金额、格式和边界规则。
@@ -210,7 +189,6 @@ public class CustodyTenantChainService {
             boolean scanEnabled,
             boolean withdrawalEnabled,
             boolean transferEnabled,
-            Set<BlockchainAdapter.Capability> capabilities,
             UUID collectionAddressId,
             String collectionAddress,
             String memo,

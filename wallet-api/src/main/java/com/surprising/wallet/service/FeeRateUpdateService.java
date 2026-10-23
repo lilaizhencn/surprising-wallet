@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.repository.ChainFeeRateRepository;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
@@ -46,12 +47,12 @@ public class FeeRateUpdateService {
     /**
      * 保存 {@code feeRates}，用于承载当前对象的运行配置或业务数据。
      */
-    private final ChainFeeRateService feeRates;
+    private final ChainFeeRateRepository feeRates;
 
     /** 构造费率更新任务。 */
     public FeeRateUpdateService(BlockchainRuntimeService blockchainRuntimeService,
                           WalletRuntimeConfigService runtimeConfigService,
-                          ChainFeeRateService feeRates) {
+                          ChainFeeRateRepository feeRates) {
         this.blockchainRuntimeService = blockchainRuntimeService;
         this.runtimeConfigService = runtimeConfigService;
         this.feeRates = feeRates;
@@ -70,14 +71,14 @@ public class FeeRateUpdateService {
             try {
                 int feeRate = fetchFeeRate();
                 String key = currency.getName();
-                feeRates.set(key, String.valueOf(feeRate));
+                feeRates.save(key, String.valueOf(feeRate));
                 log.info("费率更新: {} = {} sat/vB", key, feeRate);
             } catch (Exception e) {
                 String key = currency.getName();
-                String currentValue = feeRates.get(key);
+                String currentValue = feeRates.find(key);
                 Integer current = currentValue == null ? null : Integer.valueOf(currentValue);
                 if (current == null || current <= 0) {
-                    feeRates.set(key, String.valueOf(DEFAULT_FEE_RATE));
+                    feeRates.save(key, String.valueOf(DEFAULT_FEE_RATE));
                     log.warn("费率 API 不可用，使用默认值: {} = {} sat/vB", key, DEFAULT_FEE_RATE);
                 } else {
                     log.info("费率 API 不可用，保留当前值: {} = {} sat/vB", key, current);
@@ -124,7 +125,7 @@ public class FeeRateUpdateService {
      */
     public void forceUpdate(int feeRate) {
         String key = btc().getName();
-        feeRates.set(key, String.valueOf(Math.max(feeRate, MIN_FEE_RATE)));
+        feeRates.save(key, String.valueOf(Math.max(feeRate, MIN_FEE_RATE)));
         log.warn("手动强制费率: {} = {} sat/vB", key, feeRate);
     }
 

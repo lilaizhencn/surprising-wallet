@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.repository.ChainFeeRateRepository;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
@@ -41,7 +42,7 @@ public class RbfBumpService {
     private final WalletRuntimeConfigService runtimeConfigService;
     /** PostgreSQL / PGMQ 队列。 */
     private final QueueWorker worker;
-    private final ChainFeeRateService feeRates;
+    private final ChainFeeRateRepository feeRates;
     /** JSON 序列化器。 */
     private final ObjectMapper objectMapper;
 
@@ -51,7 +52,7 @@ public class RbfBumpService {
             BlockchainRuntimeService blockchainRuntimeService,
             WalletRuntimeConfigService runtimeConfigService,
             QueueWorker worker,
-            ChainFeeRateService feeRates,
+            ChainFeeRateRepository feeRates,
             ObjectMapper objectMapper) {
         this.repository = repository;
         this.blockchainRuntimeService = blockchainRuntimeService;
@@ -97,7 +98,7 @@ public class RbfBumpService {
         if (signature.path("rbfHistory").size() >= 5)
             throw new IllegalArgumentException("RBF attempt limit exceeded");
         long oldFeeRate = signature.path("feeRate").asLong();
-        String configured = feeRates.get(currency.getName());
+        String configured = feeRates.find(currency.getName());
         long newFeeRate = Math.max(configured == null ? 0 : Long.parseLong(configured),
                 Math.max(Math.multiplyExact(oldFeeRate, DEFAULT_FEE_BUMP_FACTOR), Math.addExact(oldFeeRate, 5)));
         if (oldFeeRate <= 0 || newFeeRate > 1000)

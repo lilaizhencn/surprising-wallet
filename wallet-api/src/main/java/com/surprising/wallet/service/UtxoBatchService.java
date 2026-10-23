@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.repository.ChainFeeRateRepository;
 import com.surprising.wallet.common.chain.ChainAddressRecord;
 import com.surprising.wallet.common.chain.CollectionCandidateRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
@@ -50,7 +51,7 @@ public class UtxoBatchService {
     /** 提现任务开关服务。 */
     private final WalletRuntimeConfigService runtimeConfigService;
     /** PostgreSQL 网络费率报价。 */
-    private final ChainFeeRateService feeRates;
+    private final ChainFeeRateRepository feeRates;
     /** 签名 Outbox 仓储，保证数据库提交后任务不会丢失。 */
     private final WalletOutboxRepository outbox;
     /** Jackson 3 对象映射器，用于构建和序列化签名队列 JSON。 */
@@ -63,7 +64,7 @@ public class UtxoBatchService {
             BlockchainRuntimeService blockchainRuntimeService,
             ChainJdbcRepository chainJdbcRepository,
             WalletRuntimeConfigService runtimeConfigService,
-            ChainFeeRateService feeRates,
+            ChainFeeRateRepository feeRates,
             ObjectMapper objectMapper,
             WalletOutboxRepository outbox) {
         this.blockchainRuntimeService = blockchainRuntimeService;
@@ -130,7 +131,7 @@ public class UtxoBatchService {
     /** Sweep confirmed deposit outputs to the tenant's internal collection address. */
     private void collectBtc(AssetRuntimeMetadata currency) {
         String chain = currency.chain().toUpperCase(Locale.ROOT);
-        String configured = feeRates.get(chain);
+        String configured = feeRates.find(chain);
         int feeRate = configured == null || Integer.parseInt(configured) <= 0
                 ? defaultFeeRate(chain) : Integer.parseInt(configured);
         long confirmations = blockchainRuntimeService.depositConfirmationThreshold(currency);
@@ -232,7 +233,7 @@ public class UtxoBatchService {
             totalAmount = totalAmount.add(record.getBalance()).add(record.getFee());
             withdrawAmount = withdrawAmount.add(record.getBalance());
         }
-        String configuredFeeRateValue = feeRates.get(currency.getName());
+        String configuredFeeRateValue = feeRates.find(currency.getName());
         Integer configuredFeeRate = configuredFeeRateValue == null ? null : Integer.valueOf(configuredFeeRateValue);
         String chain = currency.getName().toUpperCase(Locale.ROOT);
         int feeRate = configuredFeeRate == null || configuredFeeRate <= 0

@@ -185,8 +185,8 @@ class ChainAddressRuntime {
      */
     private boolean isValidXrpAddress(String address) {
         try {
-            org.xrpl.xrpl4j.model.transactions.Address.of(address).validateAddress();
-            return true;
+            return org.xrpl.xrpl4j.codec.addresses.AddressCodec.getInstance()
+                    .isValidClassicAddress(org.xrpl.xrpl4j.model.transactions.Address.of(address));
         } catch (RuntimeException e) {
             return false;
         }
@@ -205,11 +205,6 @@ class ChainAddressRuntime {
      * 判断 {@code isValidTonAddress} 对应的条件是否成立，并返回明确的布尔结果。
      */
     private boolean isValidTonAddress(String address) {
-        try {
-            org.ton.ton4j.address.Address.of(address);
-            return true;
-        } catch (RuntimeException e) {
-            return false;
-        }
+        return org.ton.ton4j.address.Address.isValid(address);
     }
 }

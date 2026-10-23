@@ -1,5 +1,6 @@
 package com.surprising.wallet.service;
 
+import com.surprising.wallet.repository.ChainFeeRateRepository;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.json.JacksonJson;
@@ -19,7 +20,7 @@ class RbfBumpServiceTest {
     @Test void withdrawalRbfUsesFinalRawSignatureAndPreservesUserAmountAndInputLocks() {
         var json = new ObjectMapper(); var repository = mock(ChainJdbcRepository.class);
         var runtime = mock(BlockchainRuntimeService.class); var switches = mock(WalletRuntimeConfigService.class);
-        var rates = mock(ChainFeeRateService.class);
+        var rates = mock(ChainFeeRateRepository.class);
         var btc = AssetRuntimeMetadata.fromProfile(1, "BTC", "BTC", 1, 0, 8, null);
         UUID tenant = UUID.randomUUID(); String hash = "a".repeat(64), input = "c".repeat(64);
         var signature = json.createObjectNode().put("tenantId", tenant.toString())
@@ -36,7 +37,7 @@ class RbfBumpServiceTest {
         when(repository.isUtxoLockedBy("BTC", input, 0, "42")).thenReturn(true);
         when(repository.updateBitcoinLikeSigningTransaction(btc, tx)).thenReturn(1);
         when(switches.isTaskEnabled("BTC", WalletRuntimeConfigService.TASK_WITHDRAW)).thenReturn(true);
-        when(rates.get("btc")).thenReturn("35");
+        when(rates.find("btc")).thenReturn("35");
         var service = new RbfBumpService(repository, runtime, switches, mock(QueueWorker.class), rates, json);
         var result = JacksonJson.readValue(json, service.bumpFee(42, tenant, hash), WithdrawTransaction.class);
         var updated = JacksonJson.readObject(json, result.getSignature());

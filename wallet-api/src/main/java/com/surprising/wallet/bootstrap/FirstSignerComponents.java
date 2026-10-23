@@ -2,13 +2,12 @@ package com.surprising.wallet.bootstrap;
 
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.FullyQualifiedAnnotationBeanNameGenerator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 @Configuration(proxyBeanMethods = false)
 @WalletModeEnabled({WalletMode.sig1, WalletMode.all})
-@ComponentScan(basePackages = "com.surprising.wallet.sig.first", nameGenerator = FullyQualifiedAnnotationBeanNameGenerator.class)
+@ComponentScan(basePackages = "com.surprising.wallet.sig.first")
 public class FirstSignerComponents {
     @Bean(name = "sig1TaskScheduler")
     ThreadPoolTaskScheduler scheduler() {

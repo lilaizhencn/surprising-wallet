@@ -1,5 +1,6 @@
 package com.surprising.wallet.custody;
 
+import com.surprising.wallet.repository.ChainFeeRateRepository;
 import com.surprising.wallet.chain.BitcoinLikeSettlementService;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
@@ -43,7 +44,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
     TransactionService broadcaster;
     BlockchainRuntimeService runtime;
     PgmqClient queue;
-    ChainFeeRateService rates;
+    ChainFeeRateRepository rates;
     int id;
     @Configuration(proxyBeanMethods = false) @EnableTransactionManagement static class Transactions { }
 
@@ -53,14 +54,14 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         jdbc = new JdbcTemplate(ds);
         repository = new ChainJdbcRepository(jdbc);
         runtime = mock(BlockchainRuntimeService.class);
-        rates = mock(ChainFeeRateService.class);
+        rates = mock(ChainFeeRateRepository.class);
         var switches = mock(WalletRuntimeConfigService.class);
         when(runtime.assetMetadata("BTC")).thenReturn(BTC);
         when(runtime.isBitcoinLikeRuntime(any(AssetRuntimeMetadata.class))).thenReturn(true);
         when(runtime.chainName(any(AssetRuntimeMetadata.class))).thenReturn("BTC");
         when(runtime.broadcastSignedTransaction(any(), any())).thenReturn(REPLACEMENT);
         when(switches.isTaskEnabled(eq("BTC"), anyString())).thenReturn(true);
-        when(rates.get("btc")).thenReturn("10");
+        when(rates.find("btc")).thenReturn("10");
         queue = new PgmqClient(jdbc);
         var manager = new DataSourceTransactionManager(ds);
         context = new AnnotationConfigApplicationContext();
@@ -69,7 +70,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         context.registerBean(ChainJdbcRepository.class, () -> repository);
         context.registerBean(BlockchainRuntimeService.class, () -> runtime);
         context.registerBean(WalletRuntimeConfigService.class, () -> switches);
-        context.registerBean(ChainFeeRateService.class, () -> rates);
+        context.registerBean(ChainFeeRateRepository.class, () -> rates);
         context.registerBean(QueueWorker.class, () -> new QueueWorker(queue, manager));
         context.registerBean(ObjectMapper.class, () -> json);
         context.registerBean(PgmqClient.class, () -> queue);
@@ -210,7 +211,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         ((ObjectNode) signature.path("utxos").get(0)).put("balance", new BigDecimal("0.001"));
         tx.setBalance(new BigDecimal("0.001")); tx.setSignature(JacksonJson.writeValue(json, signature));
         repository.updateBitcoinLikeSigningTransaction(BTC, tx);
-        when(rates.get("btc")).thenReturn("70"); // 11130 sat > 10% of this input, below absolute limit
+        when(rates.find("btc")).thenReturn("70"); // 11130 sat > 10% of this input, below absolute limit
         assertThrows(IllegalArgumentException.class, () -> rbf.bumpFee(id, TENANT, ORIGINAL));
         assertEquals(ORIGINAL, current().getTxId()); assertAmounts("0.00998410", "0.00001590"); assertLedger();
     }
@@ -232,11 +233,11 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
     @Test void tenantInputLockAndFeeLimitsRollbackWithoutMutation() {
         assertThrows(IllegalArgumentException.class, () -> rbf.bumpFee(id, UUID.randomUUID(), ORIGINAL));
         assertThrows(IllegalArgumentException.class, () -> rbf.bumpFee(id, TENANT, ""));
-        when(rates.get("btc")).thenReturn("1001");
+        when(rates.find("btc")).thenReturn("1001");
         assertThrows(IllegalArgumentException.class, () -> rbf.bumpFee(id, TENANT, ORIGINAL));
-        when(rates.get("btc")).thenReturn("1000");
+        when(rates.find("btc")).thenReturn("1000");
         assertThrows(IllegalArgumentException.class, () -> rbf.bumpFee(id, TENANT, ORIGINAL));
-        when(rates.get("btc")).thenReturn("10");
+        when(rates.find("btc")).thenReturn("10");
         jdbc.update("update utxo_record set lock_ref = 'other' where tx_hash = ?", INPUT);
         assertThrows(IllegalStateException.class, () -> rbf.bumpFee(id, TENANT, ORIGINAL));
         assertEquals(ORIGINAL, current().getTxId()); assertFalse(sig().has("rbfHistory")); assertLedger();

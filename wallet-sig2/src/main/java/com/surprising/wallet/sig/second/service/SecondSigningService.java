@@ -5,7 +5,7 @@ import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.sig.second.ISignService;
-import com.surprising.wallet.sig.second.SignContent;
+import com.surprising.wallet.sig.second.SecondSignerRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.Transaction;
@@ -27,7 +27,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class SecondSigningService {
     private final QueueWorker worker;
-    private final SignContent signContent;
+    private final SecondSignerRegistry signers;
     private final ObjectMapper objectMapper;
     private static final HexFormat HEX = HexFormat.of();
     public void process() {
@@ -35,7 +35,7 @@ public class SecondSigningService {
             WithdrawTransaction transaction = JacksonJson.readValue(objectMapper, message.body(), WithdrawTransaction.class);
             QueueTenant.verifySignature(objectMapper, message, transaction.getSignature());
             AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
-            ISignService signService = signContent.getSignService(currency);
+            ISignService signService = signers.find(currency);
             ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
             if (signService == null) {
                 signature.put("valid", false);

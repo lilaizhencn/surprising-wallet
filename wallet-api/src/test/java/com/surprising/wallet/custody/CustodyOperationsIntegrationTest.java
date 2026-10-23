@@ -2,9 +2,7 @@ package com.surprising.wallet.custody;
 
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.pojo.Address;
-import com.surprising.wallet.chain.BlockchainAdapterRegistry;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
-import com.surprising.wallet.chain.tron.TronChainAdapter;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -686,6 +684,42 @@ class CustodyOperationsIntegrationTest {
      * 验证 {@code tenantChainMustBeOpenedBeforeOperationsAndCanBeClosedAgain} 对应的测试场景，明确输入、预期结果和异常边界。
      */
     @Test
+    void everyConfiguredChainIsVisibleAndFormerlyMissingAdaptersCanBeOpened() {
+        transactions.executeWithoutResult(status -> {
+            // Exercise all implemented chains without changing the platform's default network policy.
+            List<Long> networks = jdbc.queryForList("""
+                    select distinct on (chain) id from chain_profile
+                    order by chain, enabled desc, id
+                    """, Long.class);
+            jdbc.update("update chain_profile set enabled = false");
+            networks.forEach(id -> jdbc.update("update chain_profile set enabled = true where id = ?", id));
+            UUID tenantId = createTenant();
+            UUID administratorId = UUID.randomUUID();
+            String slug = jdbc.queryForObject("select slug from custody_tenant where id = ?", String.class, tenantId);
+            jdbc.update("""
+                    insert into custody_tenant_user(id, tenant_id, email, display_name, password_hash, role, status)
+                    values (?, ?, ?, 'Chain administrator', 'test-only-hash', 'TENANT_ADMIN', 'ACTIVE')
+                    """, administratorId, tenantId, slug + "@example.test");
+            var principal = new CustodyPrincipal(CustodyPrincipal.ActorType.TENANT_USER,
+                    administratorId, tenantId, slug, "TENANT_ADMIN", Set.of("*"));
+            var chains = new CustodyTenantChainRepository(jdbc);
+            var runtime = new BlockchainRuntimeService(new ChainJdbcRepository(jdbc), null, null);
+            var service = new CustodyTenantChainService(chains, new CustodyRepository(jdbc), runtime);
+            Set<String> expected = java.util.Arrays.stream(ChainType.values())
+                    .map(Enum::name).collect(java.util.stream.Collectors.toSet());
+            assertEquals(expected, service.list(principal).stream()
+                    .map(CustodyTenantChainService.ChainView::chain).collect(java.util.stream.Collectors.toSet()));
+            for (String chain : List.of("ADA", "DOT", "HYPERCORE", "NEAR", "XMR")) {
+                assertTrue(service.setEnabled(principal, chain, true, "127.0.0.1").enabled(), chain);
+                service.requireActive(tenantId, chain);
+                assertFalse(service.setEnabled(principal, chain, false, "127.0.0.1").enabled(), chain);
+                assertThrows(CustodyForbiddenException.class, () -> service.requireActive(tenantId, chain));
+            }
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
     void tenantChainMustBeOpenedBeforeOperationsAndCanBeClosedAgain() {
         transactions.executeWithoutResult(status -> {
             CustodyRepository custody = new CustodyRepository(jdbc);
@@ -693,7 +727,7 @@ class CustodyOperationsIntegrationTest {
                     new CustodyTenantChainRepository(jdbc);
             CustodyTenantChainService service = new CustodyTenantChainService(
                     chainRepository, custody,
-                    new BlockchainAdapterRegistry(List.of(new TronChainAdapter())));
+                    new BlockchainRuntimeService(new ChainJdbcRepository(jdbc), null, null));
             jdbc.update("""
                     update chain_profile
                        set scan_enabled = true,
@@ -789,7 +823,7 @@ class CustodyOperationsIntegrationTest {
                     new StableEvmRuntime(jdbc),
                     new CustodyTenantChainService(
                             tenantChainRepository, custody,
-                            new BlockchainAdapterRegistry(List.of())),
+                            new BlockchainRuntimeService(new ChainJdbcRepository(jdbc), null, null)),
                     new CustodyJacksonConfiguration().custodyObjectMapper());
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER,
@@ -867,7 +901,7 @@ class CustodyOperationsIntegrationTest {
             CustodyAddressService service = new CustodyAddressService(
                     custody, new ChainJdbcRepository(jdbc), new StableEvmRuntime(jdbc),
                     new CustodyTenantChainService(tenantChains, custody,
-                            new BlockchainAdapterRegistry(List.of())),
+                            new BlockchainRuntimeService(new ChainJdbcRepository(jdbc), null, null)),
                     new CustodyJacksonConfiguration().custodyObjectMapper());
             CustodyPrincipal principal = new CustodyPrincipal(
                     CustodyPrincipal.ActorType.TENANT_USER, administratorId, tenantId, slug,
@@ -1190,8 +1224,7 @@ class CustodyOperationsIntegrationTest {
             ChainType chainType = ChainType.valueOf(chain);
             String nativeSymbol = chainType == ChainType.BNB ? "BNB" : "ETH";
             return new RuntimeChain(
-                    chainType, chain, "qa", "evm", nativeSymbol, 1,
-                    "evm", "integration-test", Set.of());
+                    chainType, chain, "qa", "evm", nativeSymbol, 1);
         }
 
         /**

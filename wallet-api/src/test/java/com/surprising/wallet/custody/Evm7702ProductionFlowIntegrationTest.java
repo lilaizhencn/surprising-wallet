@@ -1,4 +1,7 @@
 package com.surprising.wallet.custody;
+
+import com.surprising.wallet.chain.BlockchainRuntimeService;
+import com.surprising.wallet.chain.ChainAddressRuntime;
 import com.surprising.wallet.job.custody.CustodyWithdrawalReconciliationJob;
 import com.surprising.wallet.service.CustodyWithdrawalReconciliationService;
 import com.surprising.wallet.repository.CustodyRepository;
@@ -226,6 +229,8 @@ class Evm7702ProductionFlowIntegrationTest {
                 tenantChainRepository, custodyRepository, null);
         CustodyWithdrawalExecutionService withdrawalExecution =
                 new CustodyWithdrawalExecutionService(chainRepository, runtimeConfig,
+                        new BlockchainRuntimeService(chainRepository,
+                                new ChainAddressRuntime(chainRepository, null), null),
                         new ChainAssetRepository(jdbc), new ChainProfileRepository(jdbc),
                         new TokenConfigRepository(jdbc), new CustodyAddressRepository(jdbc),
                         new ChainAddressRepository(jdbc), new LedgerBalanceRepository(jdbc));

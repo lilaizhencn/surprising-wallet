@@ -1497,7 +1497,7 @@ components:
         minDeposit: { type: [number, string, 'null'] }
     TenantChain:
       type: object
-      required: [chain, network, family, nativeSymbol, eip7702Enabled, assetSymbols, tokens, status, enabled, scanEnabled, withdrawalEnabled, transferEnabled, capabilities]
+      required: [chain, network, family, nativeSymbol, eip7702Enabled, assetSymbols, tokens, status, enabled, scanEnabled, withdrawalEnabled, transferEnabled]
       properties:
         chain: { type: string }
         network: { type: string }
@@ -1517,9 +1517,6 @@ components:
         scanEnabled: { type: boolean }
         withdrawalEnabled: { type: boolean }
         transferEnabled: { type: boolean }
-        capabilities:
-          type: array
-          items: { type: string }
         collectionAddressId: { type: [string, 'null'], format: uuid }
         collectionAddress: { type: [string, 'null'] }
         memo: { type: [string, 'null'] }

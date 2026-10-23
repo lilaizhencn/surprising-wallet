@@ -1,7 +1,7 @@
 package com.surprising.wallet.sig.first.service;
 
 import com.surprising.wallet.common.json.JacksonJson;
-import com.surprising.wallet.sig.first.SignContent;
+import com.surprising.wallet.sig.first.FirstSignerRegistry;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
@@ -24,14 +24,14 @@ import org.springframework.stereotype.Service;
 public class FirstSigningService {
     private final QueueWorker worker;
     private final ObjectMapper objectMapper;
-    private final SignContent signContent;
+    private final FirstSignerRegistry signers;
     public void process() {
         worker.drain(WalletQueue.SIGN_FIRST, 20, message -> {
             ObjectNode txJson = JacksonJson.readObject(objectMapper, message.body());
             WithdrawTransaction transaction = JacksonJson.toValue(objectMapper, txJson, WithdrawTransaction.class);
             QueueTenant.verifySignature(objectMapper, message, transaction.getSignature());
             AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
-            ISignService signService = signContent.getSignService(currency);
+            ISignService signService = signers.find(currency);
             if (signService == null) {
                 ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
                 signature.put("valid", false);
