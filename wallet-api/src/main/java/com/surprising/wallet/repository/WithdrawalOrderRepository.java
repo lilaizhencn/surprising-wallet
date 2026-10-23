@@ -224,6 +224,16 @@ public class WithdrawalOrderRepository {
                 """, status, fromAddress, txHash, errorMessage, chain, orderNo);
     }
 
+    /** The UTXO settlement use case has already validated this hash against the locked signing history. */
+    public int markUtxoAttemptConfirming(UUID tenantId, String chain, String orderNo, String txHash) {
+        return jdbc.update("""
+                update withdrawal_order set status = 'CONFIRMING', tx_hash = ?, error_message = null,
+                    updated_at = now() where tenant_id = ? and chain = ? and order_no = ?
+                    and chain in ('BTC', 'BCH', 'LTC', 'DOGE')
+                    and status in ('SIGNING', 'SENT', 'CONFIRMING', 'BROADCAST_UNKNOWN')
+                """, txHash, tenantId, chain, orderNo);
+    }
+
     /** 标记租户提现已确认。 */
     public int markConfirmed(UUID tenantId, String chain, String orderNo, String txHash) {
         return jdbc.update("""

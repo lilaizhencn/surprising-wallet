@@ -12,7 +12,9 @@ import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
-import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.common.signing.UtxoSignedTransaction;
+import com.surprising.wallet.repository.ChainSigningTransactionRepository;
+import com.surprising.wallet.sdk.bitcoinj.core.BitcoinLikeNetwork;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeBlock;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.BtcLikeRawTransaction;
 import com.surprising.wallet.sdk.bitcoinj.rpc.model.ScriptPubKey;
@@ -24,7 +26,6 @@ import com.surprising.wallet.sdk.bitcoinj.bitcoincash.BitcoinCashNetworkParamete
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinNetworkParameters;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinNetworkParameters;
 import com.surprising.wallet.chain.BitcoinLikeSettlementService;
-import com.surprising.wallet.chain.BitcoinLikeRbfHistory;
 import com.surprising.wallet.chain.ltc.LitecoinEsploraCommand;
 import com.surprising.wallet.chain.rpc.BchCommand;
 import com.surprising.wallet.chain.rpc.BtcCommand;
@@ -92,6 +93,7 @@ class BitcoinLikeChainRuntime {
 
     /** 链配置数据库访问 */
     private final ChainJdbcRepository chainRepository;
+    private final ChainSigningTransactionRepository signingTransactions;
 
     /** 多签公钥配置 */
     private final PubKeyConfig pubKeyConfig;
@@ -141,7 +143,8 @@ class BitcoinLikeChainRuntime {
             LitecoinEsploraCommand ltcCommand,
             DogeCommand dogeCommand,
             BchCommand bchCommand,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ChainSigningTransactionRepository signingTransactions) {
         this.chainRepository = chainRepository;
         this.pubKeyConfig = pubKeyConfig;
         this.addressService = addressService;
@@ -152,6 +155,7 @@ class BitcoinLikeChainRuntime {
         this.dogeCommand = dogeCommand;
         this.bchCommand = bchCommand;
         this.objectMapper = objectMapper;
+        this.signingTransactions = signingTransactions;
     }
 
     /**
@@ -364,19 +368,22 @@ class BitcoinLikeChainRuntime {
      * 广播失败后也会做一次幂等检查，避免因网络问题导致重复广播。
      *
      * @param chainType   链类型
-     * @param transaction 包含签名数据的提现交易（rawTransaction 在 signature JSON 中）
+     * @param transaction 已签名交易、哈希和最小单位手续费
      * @return 交易哈希（txid），广播失败返回空字符串
      */
-    public String broadcastSignedTransaction(ChainType chainType, WithdrawTransaction transaction) {
-        String expectedTxId = txId(transaction);
+    public String broadcastSignedTransaction(ChainType chainType, UtxoSignedTransaction transaction) {
+        String expectedTxId = Transaction.read(java.nio.ByteBuffer.wrap(
+                java.util.HexFormat.of().parseHex(transaction.transactionHex()))).getTxId().toString();
+        if (!expectedTxId.equals(transaction.txId())) throw new IllegalArgumentException("signed transaction hash mismatch");
         try {
-            ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
-            String raw = JacksonJson.text(signature, "rawTransaction");
+            String raw = transaction.transactionHex();
             if (transactionExists(chainType, expectedTxId)) {
                 return expectedTxId;
             }
             try {
-                return command(chainType).sendRawTransaction(raw);
+                String hash = command(chainType).sendRawTransaction(raw);
+                if (!expectedTxId.equals(hash)) throw new IllegalStateException("RPC transaction hash mismatch");
+                return expectedTxId;
             } catch (Throwable broadcastError) {
                 if (transactionExists(chainType, expectedTxId)) {
                     return expectedTxId;
@@ -598,22 +605,15 @@ class BitcoinLikeChainRuntime {
      * 设置或更新 {@code updateWithdrawTransaction} 对应的状态，并保持相关业务字段一致。
      */
     private void updateWithdrawTransaction(ChainType chainType, String txId, AssetRuntimeMetadata asset) {
-        Optional<WithdrawTransaction> existing =
-                chainRepository.findBitcoinLikeSigningTransactionByTxId(asset, txId);
-        if (existing.isEmpty()) {
-            return;
-        }
-        WithdrawTransaction transaction = existing.get();
-        if (transaction.getStatus() != null && transaction.getStatus() >= Constants.CONFIRM) {
-            return;
-        }
-        ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
+        var existing = signingTransactions.findByTxId(chainType.name(), txId);
+        if (existing.isEmpty() || existing.get().terminal()) return;
+        var transaction = existing.get();
         int confirmations = confirmations(chainType, txId);
         if (confirmations < withdrawConfirmationThreshold(chainType)) {
-            if (confirmations > 0) settlementService.markConfirming(transaction.getId(), txId, asset);
+            if (confirmations > 0) settlementService.markConfirming(chainType.name(), transaction.id(), txId);
             return;
         }
-        settlementService.settleConfirmed(transaction, txId, asset);
+        settlementService.settleConfirmed(chainType.name(), transaction.id(), txId);
     }
     /**
      * 设置或更新 {@code updateUnifiedUtxoConfirmations} 对应的状态，并保持相关业务字段一致。
@@ -643,17 +643,16 @@ class BitcoinLikeChainRuntime {
      * 设置或更新 {@code updatePendingWithdrawConfirmations} 对应的状态，并保持相关业务字段一致。
      */
     private void updatePendingWithdrawConfirmations(ChainType chainType, AssetRuntimeMetadata asset) {
-        List<WithdrawTransaction> pending = chainRepository.findSentBitcoinLikeSigningTransactions(asset);
-        for (WithdrawTransaction transaction : pending) {
-            ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
-            List<String> ids = BitcoinLikeRbfHistory.transactionIds(signature, transaction.getTxId());
+        var pending = signingTransactions.listPendingConfirmation(chainType.name());
+        for (var transaction : pending) {
+            var ids = transaction.transactionIds();
             for (String txId : ids) {
                 int confirmations = confirmations(chainType, txId);
                 if (confirmations >= withdrawConfirmationThreshold(chainType)) {
-                    settlementService.settleConfirmed(transaction, txId, asset);
+                    settlementService.settleConfirmed(chainType.name(), transaction.id(), txId);
                     break;
                 } else if (confirmations > 0) {
-                    settlementService.markConfirming(transaction.getId(), txId, asset);
+                    settlementService.markConfirming(chainType.name(), transaction.id(), txId);
                     break;
                 }
             }
@@ -716,15 +715,6 @@ class BitcoinLikeChainRuntime {
         }
     }
     /**
-     * 执行 {@code txId} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    private String txId(WithdrawTransaction transaction) {
-        ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
-        String raw = JacksonJson.text(signature, "rawTransaction");
-        Transaction signCompleteTx = Transaction.read(java.nio.ByteBuffer.wrap(java.util.HexFormat.of().parseHex(raw)));
-        return signCompleteTx.getTxId().toString();
-    }
-    /**
      * 执行 {@code rejectReservedHotAddress} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private void rejectReservedHotAddress(long userId, int biz) {
@@ -743,23 +733,7 @@ class BitcoinLikeChainRuntime {
      * 获取或查询 {@code networkParameters} 对应的数据，并向调用方返回当前业务状态。
      */
     private NetworkParameters networkParameters(ChainType chainType) {
-        String network = bitcoinLikeProfile(chainType).getNetwork();
-        boolean mainnet = "main".equalsIgnoreCase(network) || "mainnet".equalsIgnoreCase(network);
-        boolean regtest = "regtest".equalsIgnoreCase(network);
-        return switch (chainType) {
-            case BTC -> mainnet ? MainNetParams.get() : (regtest ? RegTestParams.get() : TestNet3Params.get());
-            case LTC -> {
-                if (regtest) {
-                    throw new IllegalStateException("LTC regtest network parameters are not implemented");
-                }
-                yield mainnet ? LitecoinNetworkParameters.mainnet() : LitecoinNetworkParameters.testnet();
-            }
-            case DOGE -> mainnet ? DogecoinNetworkParameters.mainnet()
-                    : (regtest ? DogecoinNetworkParameters.regtest() : DogecoinNetworkParameters.testnet());
-            case BCH -> mainnet ? BitcoinCashNetworkParameters.mainnet()
-                    : (regtest ? BitcoinCashNetworkParameters.regtest() : BitcoinCashNetworkParameters.testnet());
-            default -> throw new IllegalStateException("unsupported bitcoin-like chain " + chainType);
-        };
+        return BitcoinLikeNetwork.parse(bitcoinLikeProfile(chainType).getNetwork()).parameters(chainType.name());
     }
     /**
      * 执行 {@code command} 对应的辅助逻辑，完成数据处理并维护状态边界。

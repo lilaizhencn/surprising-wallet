@@ -37,7 +37,7 @@ class CustodyWithdrawalAddressValidationTest {
         when(metadata.findProfileByChain(chain)).thenReturn(Optional.of(AccountChainProfile.builder()
                 .chain(chain).network("testnet").nativeSymbol(chain).build()));
         var bitcoin = new com.surprising.wallet.chain.utxo.BitcoinLikeChainRuntime(
-                metadata, null, null, null, null, null, null, null, null, null);
+                metadata, null, null, null, null, null, null, null, null, null, null);
         var runtimeProfiles = mock(ChainProfileRepository.class);
         var enabledProfile = metadata.findProfileByChain(chain);
         when(runtimeProfiles.findAccountByChain(chain)).thenReturn(enabledProfile);

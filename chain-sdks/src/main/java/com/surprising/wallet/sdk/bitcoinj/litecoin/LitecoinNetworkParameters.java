@@ -42,6 +42,7 @@ public final class LitecoinNetworkParameters extends NetworkParameters {
      * 定义 {@code TESTNET} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
     private static final LitecoinNetworkParameters TESTNET = new LitecoinNetworkParameters(LitecoinNetwork.TESTNET);
+    private static final LitecoinNetworkParameters REGTEST = new LitecoinNetworkParameters(LitecoinNetwork.REGTEST);
     /**
      * 定义 {@code MAX_MONEY} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
@@ -76,6 +77,12 @@ public final class LitecoinNetworkParameters extends NetworkParameters {
         this.bip32HeaderP2WPKHpub = 0x0436f6e1;
         this.bip32HeaderP2WPKHpriv = 0x0436ef7d;
         this.genesisBlock = Block.createGenesis(Instant.ofEpochSecond(1317972665L), 0x1e0ffff0L, 2084524493L);
+        if (network == LitecoinNetwork.REGTEST) {
+            // Litecoin Core v0.21.4 src/chainparams.cpp, CRegTestParams (wallet-side parameters).
+            this.port = 19444;
+            this.packetMagic = 0xfabfb5da;
+            this.maxTarget = new BigInteger("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16);
+        }
     }
 
     /**
@@ -90,6 +97,10 @@ public final class LitecoinNetworkParameters extends NetworkParameters {
      */
     public static LitecoinNetworkParameters testnet() {
         return TESTNET;
+    }
+
+    public static LitecoinNetworkParameters regtest() {
+        return REGTEST;
     }
 
     /**

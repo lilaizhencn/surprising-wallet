@@ -5,7 +5,7 @@ import com.surprising.wallet.common.queue.QueueTenant;
 import com.surprising.wallet.common.queue.WalletQueue;
 import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
-import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.common.signing.UtxoSigningResult;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 public class WithdrawalQueueService {
     private final QueueWorker worker;
     private final TransactionService transactions;
+    private final UtxoBroadcastService broadcasts;
     private final ObjectMapper objectMapper;
     private final WalletRuntimeConfigService runtimeConfig;
     public void withdraw() {
@@ -27,10 +28,9 @@ public class WithdrawalQueueService {
     }
     public void broadcast() {
         worker.drain(WalletQueue.SIGN_DONE, 100, message -> {
-            var tx = JacksonJson.readValue(objectMapper, message.body(), WithdrawTransaction.class);
-            QueueTenant.verifySignature(objectMapper, message, tx.getSignature());
-            if (!transactions.sendWithdrawTransaction(tx))
-                throw new IllegalStateException("broadcast not completed");
+            var result = JacksonJson.readValue(objectMapper, message.body(), UtxoSigningResult.class);
+            QueueTenant.verify(objectMapper, message, result.tenantId());
+            broadcasts.apply(result);
             return null;
         });
     }

@@ -7,7 +7,7 @@ import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.pojo.Address;
-import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.common.signing.UtxoSignedTransaction;
 import com.surprising.wallet.repository.ChainProfileRepository;
 import com.surprising.wallet.repository.ChainAssetRepository;
 import lombok.RequiredArgsConstructor;
@@ -80,7 +80,7 @@ public class BlockchainRuntimeService {
         bitcoinLikeRuntime.updateTotalBalance(requireBitcoinLike(asset));
     }
 
-    public String broadcastSignedTransaction(AssetRuntimeMetadata asset, WithdrawTransaction transaction) {
+    public String broadcastSignedTransaction(AssetRuntimeMetadata asset, UtxoSignedTransaction transaction) {
         return bitcoinLikeRuntime.broadcastSignedTransaction(requireBitcoinLike(asset), transaction);
     }
 

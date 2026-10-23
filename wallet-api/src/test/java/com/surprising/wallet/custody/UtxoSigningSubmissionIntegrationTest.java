@@ -3,7 +3,10 @@ package com.surprising.wallet.custody;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.json.JacksonJson;
-import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.chain.model.UtxoSigningTransaction;
+import com.surprising.wallet.common.signing.*;
+import com.surprising.wallet.repository.ChainProfileRepository;
+import static com.surprising.wallet.testutil.UtxoSigningTestSupport.*;
 import com.surprising.wallet.common.queue.PgmqClient;
 import com.surprising.wallet.common.queue.WalletQueue;
 import com.surprising.wallet.common.utils.Constants;
@@ -56,7 +59,7 @@ class UtxoSigningSubmissionIntegrationTest {
         jdbc = new JdbcTemplate(ds);
         jdbc.execute("truncate pgmq.q_wallet_sign_first, pgmq.a_wallet_sign_first");
         repository = DepositTestSupport.repository(jdbc);
-        transactions = new ChainSigningTransactionRepository(jdbc);
+        transactions = new ChainSigningTransactionRepository(jdbc, json);
         queue = new PgmqClient(jdbc);
         var runtime = mock(BlockchainRuntimeService.class);
         when(runtime.assetMetadata("BTC")).thenReturn(BTC);
@@ -71,6 +74,7 @@ class UtxoSigningSubmissionIntegrationTest {
         context.registerBean(PlatformTransactionManager.class, () -> new DataSourceTransactionManager(ds));
         context.registerBean(ChainJdbcRepository.class, () -> repository);
         context.registerBean(ChainSigningTransactionRepository.class, () -> transactions);
+        context.registerBean(ChainProfileRepository.class, () -> new ChainProfileRepository(jdbc));
         context.registerBean(BlockchainRuntimeService.class, () -> runtime);
         context.registerBean(WalletRuntimeConfigService.class, () -> switches);
         context.registerBean(ChainFeeRateRepository.class, () -> rates);
@@ -89,62 +93,61 @@ class UtxoSigningSubmissionIntegrationTest {
         var tx = createSigning(request);
         try (var executor = Executors.newFixedThreadPool(8)) {
             var futures = IntStream.range(0, 24).mapToObj(i -> executor.submit(() ->
-                    submissions.enqueue(TENANT, BTC, tx.getId(), request))).toList();
+                    submissions.enqueue(TENANT, "BTC", tx.id(), request))).toList();
             for (var future : futures) future.get(20, TimeUnit.SECONDS);
         }
         assertEquals(1, queued());
         var payload = JacksonJson.readObject(json, jdbc.queryForObject(
                 "select message::text from pgmq.q_wallet_sign_first", String.class));
-        assertEquals("BTC", payload.path("chain").asText());
-        assertEquals(0, new BigDecimal("0.01000001").compareTo(payload.path("balance").decimalValue()));
-        assertEquals(request.toString(), jdbc.queryForObject(
-                "select headers->>'signing_request_id' from pgmq.q_wallet_sign_first", String.class));
+        assertEquals("BTC", payload.path("request").path("asset").path("chain").asText());
+        assertEquals(0, new BigDecimal("0.01000001").compareTo(payload.path("request").path("inputs").get(0).path("amount").decimalValue()));
+        assertEquals(request.toString(), payload.path("request").path("requestId").asText());
         assertEquals(TENANT.toString(), jdbc.queryForObject(
                 "select headers->>'tenant_id' from pgmq.q_wallet_sign_first", String.class));
         queue.archive(WalletQueue.SIGN_FIRST, queue.read(WalletQueue.SIGN_FIRST, 30, 1).getFirst());
         jdbc.execute("truncate pgmq.a_wallet_sign_first");
-        submissions.enqueue(TENANT, BTC, tx.getId(), request);
+        submissions.enqueue(TENANT, "BTC", tx.id(), request);
         assertEquals(0, queued());
-        assertEquals(request, receipt(tx.getId()));
+        assertEquals(request, receipt(tx.id()));
     }
 
     @Test void newRequestCanBeQueuedButOldAndForeignRequestsAreRejected() {
         UUID first = UUID.randomUUID();
         var tx = createSigning(first);
-        assertThrows(IllegalArgumentException.class, () -> submissions.enqueue(UUID.randomUUID(), BTC, tx.getId(), first));
-        assertNull(receipt(tx.getId()));
-        submissions.enqueue(TENANT, BTC, tx.getId(), first);
+        assertThrows(IllegalArgumentException.class, () -> submissions.enqueue(UUID.randomUUID(), "BTC", tx.id(), first));
+        assertNull(receipt(tx.id()));
+        submissions.enqueue(TENANT, "BTC", tx.id(), first);
         UUID next = UUID.randomUUID();
-        tx.setSignature(signature(next));
-        assertEquals(1, transactions.updateStatus("BTC", tx.getId(), tx));
-        assertThrows(IllegalArgumentException.class, () -> submissions.enqueue(TENANT, BTC, tx.getId(), first));
-        submissions.enqueue(TENANT, BTC, tx.getId(), next);
-        submissions.enqueue(TENANT, BTC, tx.getId(), next);
+        var replacement = tx.request().replacement(next, 10, tx.request().payments());
+        assertEquals(1, transactions.update(new UtxoSigningTransaction(tx.id(), replacement, null,
+                tx.attempts(), tx.status(), tx.enqueuedRequestId(), null, tx.createdAt(), tx.updatedAt())));
+        assertThrows(IllegalArgumentException.class, () -> submissions.enqueue(TENANT, "BTC", tx.id(), first));
+        submissions.enqueue(TENANT, "BTC", tx.id(), next);
+        submissions.enqueue(TENANT, "BTC", tx.id(), next);
         assertEquals(2, queued());
-        assertEquals(next, receipt(tx.getId()));
+        assertEquals(next, receipt(tx.id()));
     }
 
     @Test void terminalTransactionCannotCreateAnInitialSigningTask() {
         UUID request = UUID.randomUUID();
         var tx = createSigning(request);
-        tx.setStatus(Constants.CONFIRM);
-        transactions.updateStatus("BTC", tx.getId(), tx);
-        assertThrows(IllegalStateException.class, () -> submissions.enqueue(TENANT, BTC, tx.getId(), request));
+        transactions.update(tx.withSigned(signed("a".repeat(64), 1590), Constants.CONFIRM));
+        assertThrows(IllegalStateException.class, () -> submissions.enqueue(TENANT, "BTC", tx.id(), request));
         assertEquals(0, queued());
-        assertNull(receipt(tx.getId()));
+        assertNull(receipt(tx.id()));
     }
 
     @Test void outerRollbackRemovesQueueMessageAndReceiptTogether() {
         UUID request = UUID.randomUUID();
         var tx = createSigning(request);
         new TransactionTemplate(context.getBean(PlatformTransactionManager.class)).executeWithoutResult(status -> {
-            submissions.enqueue(TENANT, BTC, tx.getId(), request);
+            submissions.enqueue(TENANT, "BTC", tx.id(), request);
             assertEquals(1, queued());
             status.setRollbackOnly();
         });
         assertEquals(0, queued());
-        assertNull(receipt(tx.getId()));
-        submissions.enqueue(TENANT, BTC, tx.getId(), request);
+        assertNull(receipt(tx.id()));
+        submissions.enqueue(TENANT, "BTC", tx.id(), request);
         assertEquals(1, queued());
     }
 
@@ -169,15 +172,9 @@ class UtxoSigningSubmissionIntegrationTest {
         assertNotNull(jdbc.queryForObject("select enqueued_signing_request_id from chain_signing_transaction", UUID.class));
     }
 
-    private WithdrawTransaction createSigning(UUID request) {
-        return repository.createBitcoinLikeSigningTransaction(BTC, "WITHDRAW", "TEST-REQUEST",
-                WithdrawTransaction.builder().currency(1).balance(new BigDecimal("0.01000001"))
-                        .status(Constants.SIGNING).txId("signing").signature(signature(request)).build());
-    }
-
-    private String signature(UUID request) {
-        return JacksonJson.writeValue(json, json.createObjectNode().put("tenantId", TENANT.toString())
-                .put("signingRequestId", request.toString()));
+    private UtxoSigningTransaction createSigning(UUID requestId) {
+        var request = request(TENANT, UtxoSigningRequest.Operation.WITHDRAWAL, "0.01000001", "0.005");
+        return transactions.create(request.replacement(requestId, 10, request.payments()), "TEST-REQUEST");
     }
 
     private int queued() { return jdbc.queryForObject("select count(*) from pgmq.q_wallet_sign_first", Integer.class); }

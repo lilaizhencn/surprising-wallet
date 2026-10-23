@@ -47,7 +47,7 @@ public final class DepositTestSupport {
     public static DepositService service(JdbcTemplate jdbc, CustodyDepositProjectionService projection) {
         return new DepositService(new ChainAddressRepository(jdbc), new DepositRecordRepository(jdbc),
                 new LedgerBalanceRepository(jdbc), new ChainScanBlockRepository(jdbc), new UtxoRepository(jdbc),
-                new CollectionRecordRepository(jdbc), new ChainSigningTransactionRepository(jdbc), projection);
+                new CollectionRecordRepository(jdbc), new ChainSigningTransactionRepository(jdbc, new tools.jackson.databind.ObjectMapper()), projection);
     }
 
     public static CustodyDepositProjectionService projection(

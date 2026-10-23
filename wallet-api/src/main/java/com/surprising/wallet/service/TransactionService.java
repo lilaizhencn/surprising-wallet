@@ -7,10 +7,8 @@ import com.surprising.wallet.common.dto.TransactionDTO;
 import com.surprising.wallet.common.json.JacksonJson;
 import com.surprising.wallet.common.pojo.Address;
 import com.surprising.wallet.common.pojo.WithdrawRecord;
-import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
-import com.surprising.wallet.chain.BitcoinLikeRbfHistory;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import lombok.extern.slf4j.Slf4j;
 import com.surprising.wallet.common.queue.PgmqClient;
@@ -21,7 +19,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-import tools.jackson.databind.node.ObjectNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
@@ -71,8 +68,6 @@ public class TransactionService {
     private final PgmqClient queue;
     /** Jackson 3 对象映射器，用于处理队列和签名元数据 JSON。 */
     private final ObjectMapper objectMapper;
-    /** 广播租约工作者标识。 */
-    private final String broadcastOwner;
 
     /** 构造充值提现事务服务。 */
     public TransactionService(
@@ -81,15 +76,13 @@ public class TransactionService {
             ChainJdbcRepository chainJdbcRepository,
             WalletRuntimeConfigService runtimeConfigService,
             PgmqClient queue,
-            ObjectMapper objectMapper,
-            WalletTaskLeaseService leaseService) {
+            ObjectMapper objectMapper) {
         this.addressService = addressService;
         this.blockchainRuntimeService = blockchainRuntimeService;
         this.chainJdbcRepository = chainJdbcRepository;
         this.runtimeConfigService = runtimeConfigService;
         this.queue = queue;
         this.objectMapper = objectMapper;
-        this.broadcastOwner = leaseService.ownerId() + "-broadcast";
     }
 
     /**
@@ -193,189 +186,6 @@ public class TransactionService {
     }
 
     /**
-     * 把已经签好的交易发送出去
-     * 更新withdrawrecord表和utxo表中的txid
-     * 把数据推送到 提现事件各个业务线的队列，回写txid
-     *
-     * @param transaction 已经签好的交易
-     */
-    @Transactional(rollbackFor = Throwable.class, isolation = Isolation.READ_COMMITTED)
-    public boolean sendWithdrawTransaction(WithdrawTransaction transaction) {
-        log.info("广播签名后的交易 开始 币种id:{} 交易id:{}", transaction.getCurrency(), transaction.getId());
-        ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
-        AssetRuntimeMetadata currency = transactionAsset(transaction);
-
-        var persisted = isUnifiedBitcoinLike(currency)
-                ? chainJdbcRepository.lockBitcoinLikeSigningTransaction(currency, transaction.getId())
-                : java.util.Optional.<WithdrawTransaction>empty();
-        if (persisted.isEmpty()) throw new IllegalStateException("signing transaction missing");
-        ObjectNode original = JacksonJson.readObject(objectMapper, persisted.get().getSignature());
-        if (!original.path("tenantId").asText().equals(signature.path("tenantId").asText()))
-            throw new IllegalArgumentException("signing transaction tenant mismatch");
-        if (persisted.get().getStatus() == Constants.CONFIRM || persisted.get().getStatus() == Constants.DELETE)
-            return true; // obsolete queued signatures cannot reopen a terminal operation
-        for (String field : List.of("utxos", "withdraw", "feeRate", "changeAddress")) {
-            if (!original.path(field).equals(signature.path(field)))
-                throw new IllegalArgumentException("signed transaction intent mismatch: " + field);
-        }
-        UUID requestId = UUID.fromString(signature.path("signingRequestId").asText());
-        if (!requestId.toString().equals(original.path("signingRequestId").asText()))
-            throw new IllegalArgumentException("stale signing request");
-        if (!original.path("operationType").asText("WITHDRAW")
-                .equals(signature.path("operationType").asText("WITHDRAW")))
-            throw new IllegalArgumentException("signing operation type mismatch");
-        if (isBitcoinLikeCollection(original) && !original.path("collectionNo").asText()
-                .equals(signature.path("collectionNo").asText()))
-            throw new IllegalArgumentException("signing collection number mismatch");
-        if (persisted.get().getStatus() != null && persisted.get().getStatus() == Constants.DELETE) return true;
-        if (persisted.isPresent()
-                && persisted.get().getStatus() != null
-                && persisted.get().getStatus() >= Constants.SENT
-                && StringUtils.hasText(persisted.get().getTxId())
-                && !"singing".equalsIgnoreCase(persisted.get().getTxId())
-                && !"signing".equalsIgnoreCase(persisted.get().getTxId())) {
-            log.info("广播签名后的交易 已完成幂等跳过 币种:{} 交易id:{} txid:{}",
-                    currency.getName(), transaction.getId(), persisted.get().getTxId());
-            return true;
-        }
-        // Audit history is database-owned; a signer result cannot erase a live previous attempt.
-        if (BitcoinLikeRbfHistory.hasHistory(original))
-            signature.set("rbfHistory", original.get("rbfHistory").deepCopy());
-        else signature.remove("rbfHistory");
-        transaction.setSignature(JacksonJson.writeValue(objectMapper, signature));
-        //签名是否成功
-        if (!signature.has("valid") || !JacksonJson.booleanValue(signature, "valid")) {
-            log.error("广播签名后的交易 签名失败 币种id:{} 交易id:{}", transaction.getCurrency(), transaction.getId());
-            if (isUnifiedBitcoinLike(currency)) {
-                failBitcoinLikeTransaction(transaction, currency, JacksonJson.text(signature, "error"));
-            }
-            return true;
-        }
-
-        if (isUnifiedBitcoinLike(currency)
-                && !chainJdbcRepository.claimBitcoinLikeBroadcast(
-                currency, transaction.getId(), broadcastOwner)) {
-            log.info("广播任务已被其他工作者领取，跳过交易 id={}", transaction.getId());
-            return true;
-        }
-        // Persist the signed attempt even when RPC reports an unknown broadcast result.
-        // The shared row lock remains held across RPC and state changes.
-        if (BitcoinLikeRbfHistory.hasHistory(original)) {
-            signature.set("rbfHistory", original.get("rbfHistory").deepCopy());
-            transaction.setSignature(JacksonJson.writeValue(objectMapper, signature));
-            transaction.setTxId(signature.path("txId").asText());
-            transaction.setStatus(Constants.SIGNING);
-            chainJdbcRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
-        }
-        String txId = blockchainRuntimeService.broadcastSignedTransaction(currency, transaction);
-
-        if (!StringUtils.hasText(txId)) {
-            log.error("广播签名后的交易 广播失败 币种id:{} 提现信息:{}", currency.getName(), transaction);
-            if (isUnifiedBitcoinLike(currency)) {
-                markBitcoinLikeBroadcastUnknown(transaction, currency, signature, "broadcast failed");
-            }
-            return true;
-        }
-
-        // String txId = wallet.getTxId(transaction);
-        transaction.setTxId(txId);
-        //2 代表交易已发送
-        short status = Constants.SENT;
-        transaction.setStatus(status);
-        transaction.setUpdateDate(Date.from(Instant.now()));
-        if (isUnifiedBitcoinLike(currency)) {
-            chainJdbcRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
-        } else {
-            throw new IllegalArgumentException(
-                    "legacy withdraw transaction runtime is disabled for currency " + transaction.getCurrency());
-        }
-
-        List<WithdrawRecord> records = signature.get("withdraw") == null
-                ? List.of()
-                : JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
-        if (isBitcoinLikeCollection(signature)) {
-            UUID tenant = UUID.fromString(signature.path("tenantId").asText());
-            String collectionNo = signature.path("collectionNo").asText();
-            if (chainJdbcRepository.updateCollectionStatus(tenant, chainName(currency),
-                    collectionNo, "SENT", txId, null, null) != 1) {
-                throw new IllegalStateException("BTC collection record missing after broadcast");
-            }
-            return true;
-        }
-        records.forEach((record) -> {
-            record.setTxId(txId);
-            record.setStatus((byte) status);
-            record.setUpdateDate(Date.from(Instant.now()));
-            chainJdbcRepository.updateWithdrawalStatus(
-                    UUID.fromString(signature.path("tenantId").asText()),
-                    chainName(currency), record.getWithdrawId(), "SENT", null, txId, null);
-            String val = JacksonJson.writeValue(objectMapper, record);
-            queue.send(WalletQueue.WITHDRAW_EVENT, val, QueueTenant.headers(
-                    UUID.fromString(signature.path("tenantId").asText())));
-        });
-        log.info("广播签名后的交易 成功 更新数据库完成 币种id:{} 交易id:{}", currency.getName(), transaction.getTxId());
-        return true;
-    }
-
-    /**
-     * 标记统一 UTXO 广播为 UNKNOWN，记录错误原因并刷新待发提现状态，防止交易丢失。
-     */
-    private void markBitcoinLikeBroadcastUnknown(WithdrawTransaction transaction, AssetRuntimeMetadata currency,
-                                                 ObjectNode signature, String error) {
-        String chain = chainName(currency);
-        chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
-        if (isBitcoinLikeCollection(signature)) {
-            chainJdbcRepository.updateCollectionStatus(UUID.fromString(signature.path("tenantId").asText()),
-                    chain, signature.path("collectionNo").asText(), "BROADCAST_UNKNOWN", null, error, null);
-            return;
-        }
-        List<WithdrawRecord> records = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
-        records.forEach(record -> chainJdbcRepository.updateWithdrawalStatus(
-                UUID.fromString(signature.path("tenantId").asText()), chain, record.getWithdrawId(), "BROADCAST_UNKNOWN", null, null, error));
-    }
-
-    /**
-     * UTXO 签名失败处理：释放锁定 UTXO 与冻结余额，更新提现记录为失败状态。
-     */
-    private void failBitcoinLikeTransaction(WithdrawTransaction transaction, AssetRuntimeMetadata currency, String error) {
-        ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
-        String lockRef = transaction.getId().toString();
-        String chain = chainName(currency);
-        if (BitcoinLikeRbfHistory.hasHistory(signature)) {
-            // A previous attempt can still spend these inputs. A signing failure is not a chain failure.
-            chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
-            if (isBitcoinLikeCollection(signature))
-                chainJdbcRepository.updateCollectionStatus(UUID.fromString(signature.path("tenantId").asText()),
-                        chain, signature.path("collectionNo").asText(), "BROADCAST_UNKNOWN", null, error, null);
-            return;
-        }
-        chainJdbcRepository.releaseUtxos(chain, lockRef);
-        transaction.setStatus(Constants.DELETE);
-        transaction.setUpdateDate(Date.from(Instant.now()));
-        chainJdbcRepository.updateBitcoinLikeSigningTransaction(currency, transaction);
-        chainJdbcRepository.markBitcoinLikeSigningError(currency, transaction.getId(), error);
-
-        if (isBitcoinLikeCollection(signature)) {
-            chainJdbcRepository.updateCollectionStatus(UUID.fromString(signature.path("tenantId").asText()),
-                    chain, signature.path("collectionNo").asText(), "FAILED", null, error, null);
-            return;
-        }
-
-        List<WithdrawRecord> records = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
-        records.forEach(record -> {
-            BigDecimal amount = withdrawFrozenAmount(record);
-            UUID tenant = UUID.fromString(signature.path("tenantId").asText());
-            String debitAccountId = withdrawalDebitAccount(tenant, chain, record);
-            chainJdbcRepository.releaseLockedBalance(
-                    tenant, chain, chain, debitAccountId, amount);
-            chainJdbcRepository.updateWithdrawalStatus(
-                    tenant, chain, record.getWithdrawId(), "FAILED", null, null, error);
-            record.setStatus((byte) Constants.DELETE);
-            record.setUpdateDate(Date.from(Instant.now()));
-        });
-    }
-
-    /**
      * 对 UTXO 入账链路进行幂等记账：
      * 命中 utxo key 后写入/更新入账流水，并在确认数达标时补充标记。
      */
@@ -438,16 +248,6 @@ public class TransactionService {
     }
 
     /**
-     * 查询提现订单对应的 debited 账户标识，默认回退到用户 ID。
-     */
-    private String withdrawalDebitAccount(UUID tenant, String chain, WithdrawRecord record) {
-        return chainJdbcRepository.findWithdrawalOrder(tenant, chain, record.getWithdrawId())
-                .map(order -> order.getDebitAccountId())
-                .filter(StringUtils::hasText)
-                .orElse(record.getUserId().toString());
-    }
-
-    /**
      * 判断是否为统一 Bitcoin-like 链类型。
      */
     private boolean isUnifiedBitcoinLike(AssetRuntimeMetadata currency) {
@@ -459,24 +259,6 @@ public class TransactionService {
      */
     private String chainName(AssetRuntimeMetadata currency) {
         return blockchainRuntimeService.chainName(currency);
-    }
-
-    private boolean isBitcoinLikeCollection(ObjectNode signature) {
-        return "COLLECTION".equals(signature.path("operationType").asText());
-    }
-
-    /**
-     * 从提现交易读取运行时元数据：
-     * 优先走交易内联 chain/asset 字段，兜底按 currency 编码查询。
-     */
-    private AssetRuntimeMetadata transactionAsset(WithdrawTransaction transaction) {
-        if (StringUtils.hasText(transaction.getChain())
-                && StringUtils.hasText(transaction.getAssetSymbol())
-                && transaction.getAssetDecimals() != null
-                && transaction.getBip44CoinType() != null) {
-            return AssetRuntimeMetadata.fromTransaction(transaction);
-        }
-        return blockchainRuntimeService.assetMetadata(transaction.getCurrency());
     }
 
     /**

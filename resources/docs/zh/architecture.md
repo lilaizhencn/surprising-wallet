@@ -47,7 +47,7 @@ GitHub Actions 使用 JDK 27 / Lombok 1.18.48 构建并执行单元测试，随�
 bootstrap 包按模式显式扫描组件；签名实现由 FirstSignerRegistry / SecondSignerRegistry 通过构造器列表注入，按原生链建立不可变索引并拒绝重复注册。两个模块仅处理 BTC/BCH/LTC/DOGE；EVM/TRON 等账户链继续由 API 内已有链服务签名。第一签和第二签分别绑定单线程 `sig1TaskScheduler`、`sig2TaskScheduler`，API 保持按 Job 类别分池。签名密钥通过限定名称注入，第二签不保留静态私钥或 HTTP 签名入口。所有模式仍通过 PGMQ 推进阶段；合并进程不改变消息重试、幂等和审计路径。
 
 
-BTC/LTC 首签只有构造器依赖，签名公钥配置只接收角色密钥提供者，不再保留 NODE、testNodes 或空依赖测试分支。签名金额使用精确最小单位转换，输入合计必须等于请求总额；手续费和汇总使用溢出检查，产生找零时必须提供目标地址。测试通过相同构造器提供确定性的测试密钥。
+四条 Bitcoin-like 链的签名只依赖必需的密钥与公钥派生组件，无字段注入、ObjectMapper、固定测试网络或测试专用密钥分支。请求中的 Asset 保存数据库链网络，API 地址运行时和签名模块共用 SDK 的 BitcoinLikeNetwork；LTC regtest 使用 rltc 地址。输入金额是唯一合计来源，精确转换最小单位，手续费和汇总检查溢出，产生找零时必须提供目标地址。
 
 运行时资产来源：
 
@@ -81,7 +81,7 @@ EvmDepositScanner 直接读取链配置、地址、Token 和扫描记录单表�
 | `wallet-api` | Spring MVC 单体应用：Custody/Console REST API、Servlet/Cookie 与 HTTP 异常映射、Job 调度、业务 Service、链领域与持久化模型、链引擎（Bitcoin-like/EVM/TRON/Solana/TON/Aptos/Sui/XRP/Cardano/Polkadot/NEAR/Monero/HyperEVM/HyperCore）、充值、账本、提现、归集、Gas、Webhook 和启动校验 |
 | `wallet-sig1` | BTC-like 2-of-3 第一签服务：对 BTC、BCH、LTC、DOGE 提现交易生成部分签名，轮询 PostgreSQL / PGMQ 队列；处理中任务可恢复 |
 | `wallet-sig2` | 第二签服务：完成最终签名并入 PGMQ 广播队列，由 wallet-api 广播；处理中任务可恢复 |
-| `common` | 无 Web 耦合、至少被两个上层模块使用的共享契约和 PGMQ 基础设施：运行时链/资产契约、签名交易 DTO、钱包密钥配置与加载、通用常量 |
+| `common` | 无 Web 耦合、至少被两个上层模块使用的共享契约和 PGMQ 基础设施：运行时链/资产契约、不可变 UTXO 签名请求/部分签名/结果契约、钱包密钥配置与加载、通用常量 |
 | `chain-sdks` | 与业务和数据库无关的链 SDK：BitcoinJ 网络参数、Bitcoin-like RPC DTO、多签地址、SegWit 交易、UTXO 选择、BIP32、SLIP-0010 Ed25519 派生与签名、TRON gRPC/Protobuf/ECKey |
 
 所有模块的 parent POM 为根目录 `pom.xml`，继承 Spring Boot starter parent，以 Java 27 作为统一编译和运行基线，并提供统一的版本和依赖管理。
@@ -117,6 +117,12 @@ Repository 采用“单表一仓储”约束：每个 `@Repository` 只访问一
 Bitcoin-like RPC DTO 与 Ed25519 链枚举、派生结果和 SLIP-0010 密钥提供者位于 `chain-sdks`；`common`
 不直接声明 BitcoinJ 或 EdDSA，也不再通过全局 `Constants.NET_PARAMS` 暴露链 SDK 类型。数据库/JDBC
 模型不得进入 `chain-sdks`。
+
+签名协议为 `UtxoSigningTask(request) → UtxoPartialSigningTask(partial) → UtxoSigningResult`。输入自身包含 outpoint、金额、地址及派生坐标，不传平行 UTXO/地址数组。签名实现返回值或抛出异常，不修改业务实体或 JSON；只有队列与数据库边界使用 Jackson。第二签从原始交易计算真实费用并核对输入身份。
+
+`chain_signing_transaction` 分别保存有类型的 request、signed_transaction 和完整 attempts 快照；链、租户、请求 UUID、业务类型及当前哈希由 JSON 生成数据库列，唯一键、索引及租户外键直接使用生成列，避免手工同步两份身份。API 内的 UtxoSigningTransaction 管理生命周期，签名服务不接收数据库状态或历史。UtxoBroadcastService 在同一签名行锁下校验结果身份，持久化签名事实后广播；初次广播 UNKNOWN 也保留哈希并继续确认。SIGN_DONE 队列的持久化结果在失败重试期间保留原始签名，禁止释放任何已有已签尝试的输入。
+
+批处理、请求提交、RBF、广播、确认和内部归集识别直接调用 ChainSigningTransactionRepository，总仓储不再转发签名表方法。RBF 保存完整请求与签名快照，原尝试确认时恢复对应金额与实际费用；提现先将已验证的历史尝试标为 CONFIRMING，再由 WithdrawalSettlementService 扣款确认。签名行、订单、UTXO 与余额更新在同一事务中提交或回滚，终态不可重开。
 
 ## 调度与运行时开关
 
@@ -215,3 +221,5 @@ PGMQ 的消息行锁与 read_ct 校验保证领取和确认安全，链上 RPC �
 ## Cloudflare 租户 Demo
 
 `resources/tenant-demo` 是独立租户应用，部署为 Cloudflare Worker + Static Assets + SQLite-backed Durable Object。每个部署固定对应一个钱包租户，浏览器不能选择租户对象。用户、会话、余额和流水保存在该对象内；仅通过 HTTPS Custody API / HMAC Webhook 与阿里云钱包协作，不访问钱包数据库。API 密钥、Webhook 密钥及管理令牌使用 Worker Secrets。master 分支的 Demo 目录变更触发 GitHub Actions，先验证独立测试 Worker，再部署正式 Worker；不会触发钱包后端发布。
+
+LTC regtest 地址与网络标识依据 [Litecoin Core v0.21.4 CRegTestParams](https://github.com/litecoin-project/litecoin/blob/v0.21.4/src/chainparams.cpp#L251)。SDK 只用于钱包地址与交易，不执行 Litecoin SPV 验证。

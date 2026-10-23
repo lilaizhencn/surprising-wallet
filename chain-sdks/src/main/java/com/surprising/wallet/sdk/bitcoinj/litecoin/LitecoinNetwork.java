@@ -15,7 +15,8 @@ public enum LitecoinNetwork implements Network {
     /**
      * 定义 {@code TESTNET} 常量，作为当前组件统一使用的固定协议、网络或配置值。
      */
-    TESTNET("org.litecoin.test", 111, 58, "tltc", "litecoin");
+    TESTNET("org.litecoin.test", 111, 58, "tltc", "litecoin"),
+    REGTEST("org.litecoin.regtest", 111, 58, "rltc", "litecoin");
 
     /**
      * 定义 {@code MAX_MONEY} 常量，作为当前组件统一使用的固定协议、网络或配置值。

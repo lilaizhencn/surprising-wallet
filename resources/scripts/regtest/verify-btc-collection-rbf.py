@@ -193,15 +193,16 @@ def main():
     def replacements():
         result = []
         for record in originals:
-            current = wallet(f"select id,tx_id,status,signature::jsonb as signature from chain_signing_transaction where id={record['signingId']}")[0]
+            current = wallet(f"select id,tx_id,status,request,signed_transaction,attempts from chain_signing_transaction where id={record['signingId']}")[0]
             if current["status"] != 2 or current["tx_id"] == record["tx_hash"]:
                 return False
-            require(len(current["signature"].get("rbfHistory", [])) == 1, "duplicate request caused repeated fee bump")
+            require(len(current["attempts"]) == 1, "duplicate request caused repeated fee bump")
+            require(current["attempts"][0]["transaction"]["txId"] == record["tx_hash"], "original signed attempt was not retained")
             result.append(current)
         return result
     replacements = wait_for("three RBF replacements broadcast", replacements)
-    state["replacements"] = [{"id": r["id"], "txId": r["tx_id"], "feeRate": r["signature"]["feeRate"],
-                              "feeSat": r["signature"]["fee"], "historyCount": len(r["signature"]["rbfHistory"])} for r in replacements]
+    state["replacements"] = [{"id": r["id"], "txId": r["tx_id"], "feeRate": r["request"]["feeRate"],
+                              "feeSat": r["signed_transaction"]["feeAtomic"], "historyCount": len(r["attempts"])} for r in replacements]
     mempool = rpc("getrawmempool")
     require(len(mempool) == 3, "mempool has unexpected transactions")
     raw_transactions = []
@@ -216,7 +217,7 @@ def main():
         entry = rpc("getmempoolentry", replacement["tx_id"])
         fee = amount(entry["fees"]["base"])
         require(amount(raw["vout"][0]["value"]) + fee == Decimal("0.001"), "on-chain sweep conservation failed")
-        require(fee * 100000000 == replacement["signature"]["fee"], "signed fee differs from node")
+        require(fee * 100000000 == replacement["signed_transaction"]["feeAtomic"], "signed fee differs from node")
         raw_transactions.append({"txId": replacement["tx_id"], "inputCount": len(raw["vin"]),
                                  "output": raw["vout"][0]["value"], "fee": fee, "vsize": raw["vsize"]})
     state["nodeTransactions"] = raw_transactions

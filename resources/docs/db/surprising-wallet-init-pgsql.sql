@@ -39,6 +39,7 @@ ALTER TABLE IF EXISTS ONLY public.collection_record DROP CONSTRAINT IF EXISTS co
 
 ALTER TABLE IF EXISTS ONLY public.withdrawal_order DROP CONSTRAINT IF EXISTS withdrawal_order_tenant_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.ledger_balance DROP CONSTRAINT IF EXISTS ledger_balance_tenant_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.chain_signing_transaction DROP CONSTRAINT IF EXISTS chain_signing_transaction_tenant_fkey;
 ALTER TABLE IF EXISTS ONLY public.deposit_record DROP CONSTRAINT IF EXISTS deposit_record_tenant_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.custody_asset_recovery DROP CONSTRAINT IF EXISTS custody_asset_recovery_tenant_id_fkey;
 ALTER TABLE IF EXISTS ONLY public.custody_asset_recovery DROP CONSTRAINT IF EXISTS custody_asset_recovery_address_fk;
@@ -766,19 +767,23 @@ ALTER SEQUENCE public.chain_scan_height_id_seq OWNED BY public.chain_scan_height
 
 CREATE TABLE public.chain_signing_transaction (
     id integer NOT NULL,
-    chain character varying(32) NOT NULL,
-    asset_symbol character varying(32) NOT NULL,
-    business_type character varying(32) NOT NULL,
+    request jsonb NOT NULL,
+    chain character varying(32) GENERATED ALWAYS AS (request #>> '{asset,chain}') STORED NOT NULL,
+    tenant_id uuid GENERATED ALWAYS AS ((request ->> 'tenantId')::uuid) STORED NOT NULL,
+    signing_request_id uuid GENERATED ALWAYS AS ((request ->> 'requestId')::uuid) STORED NOT NULL,
+    business_type character varying(32) GENERATED ALWAYS AS (request ->> 'operation') STORED NOT NULL,
     business_no character varying(512) NOT NULL,
-    tx_id character varying(128) DEFAULT ''::character varying NOT NULL,
-    balance numeric(78,18) DEFAULT 0 NOT NULL,
-    signature text,
+    signed_transaction jsonb,
+    tx_id character varying(128) GENERATED ALWAYS AS (signed_transaction ->> 'txId') STORED,
+    attempts jsonb DEFAULT '[]'::jsonb NOT NULL,
     enqueued_signing_request_id uuid,
-    currency integer NOT NULL,
-    status smallint NOT NULL,
+    status smallint NOT NULL CHECK (status IN (-1, 0, 1, 2, 3)),
     error_message text,
     create_date timestamp with time zone DEFAULT now() NOT NULL,
-    update_date timestamp with time zone DEFAULT now() NOT NULL
+    update_date timestamp with time zone DEFAULT now() NOT NULL,
+    CHECK (chain IN ('BTC', 'BCH', 'LTC', 'DOGE')),
+    CHECK (business_type IN ('WITHDRAWAL', 'COLLECTION')),
+    CHECK (jsonb_typeof(attempts) = 'array')
 );
 
 
@@ -7016,3 +7021,7 @@ BEGIN
     RETURN new_id;
 END $$;
 REVOKE ALL ON FUNCTION public.wallet_replay_dead(text, bigint, text) FROM PUBLIC;
+
+-- Signing identity comes from the typed immutable request; generated columns cannot drift.
+ALTER TABLE public.chain_signing_transaction
+    ADD CONSTRAINT chain_signing_transaction_tenant_fkey FOREIGN KEY (tenant_id) REFERENCES public.custody_tenant(id);

@@ -1,176 +1,84 @@
 package com.surprising.wallet.sig.first.service;
 
-import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
-import com.surprising.wallet.common.json.JacksonJson;
-import com.surprising.wallet.common.pojo.Address;
-import com.surprising.wallet.common.pojo.UtxoTransaction;
-import com.surprising.wallet.common.pojo.WithdrawRecord;
-import com.surprising.wallet.common.pojo.WithdrawTransaction;
-import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
+import com.surprising.wallet.common.signing.UtxoPartialSignature;
+import com.surprising.wallet.common.signing.UtxoSigningRequest;
 import com.surprising.wallet.sdk.bitcoinj.core.LegacyMultisigTransactionBuilder;
 import com.surprising.wallet.sdk.bitcoinj.core.P2shMultisigFeeCalculator;
 import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinFeePolicy;
-import com.surprising.wallet.sdk.bitcoinj.dogecoin.DogecoinNetworkParameters;
 import com.surprising.wallet.sig.first.config.PubKeyConfig;
 import org.bitcoinj.base.Coin;
 import org.bitcoinj.crypto.ECKey;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.List;
 
-/**
- * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
- */
 @Component
 public class DogeFirstSignService implements ISignService {
-    /**
-     * 保存 {@code pubKeyConfig}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
-     */
-    @Autowired
-    private PubKeyConfig pubKeyConfig;
+    private final PubKeyConfig publicKeys;
+    private final WalletKeyMaterialProvider keys;
 
-    /**
-     * 保存 {@code keyMaterial}，用于保存密钥或签名材料，必须遵守敏感数据保护要求。
-     */
-    @Autowired
-    @org.springframework.beans.factory.annotation.Qualifier("sig1KeyMaterial")
-    private WalletKeyMaterialProvider keyMaterial;
+    public DogeFirstSignService(PubKeyConfig publicKeys,
+                                @Qualifier("sig1KeyMaterial") WalletKeyMaterialProvider keys) {
+        this.publicKeys = publicKeys;
+        this.keys = keys;
+    }
 
-    /** Jackson 3 对象映射器，用于解析和序列化签名元数据。 */
-    @Autowired
-    private ObjectMapper objectMapper;
+    @Override public String chain() { return "DOGE"; }
 
-    /**
-     * 保存 {@code network}，表示链、网络、资产或代币配置。
-     */
-    @Value("${sw.doge.network:testnet}")
-    private String network;
-
-    /**
-     * 为 {@code signTransaction} 对应的交易或消息生成签名，并保持原始数据不被改变。
-     */
     @Override
-    public void signTransaction(WithdrawTransaction transaction) {
-        AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
-        ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
-        try {
-            List<UtxoTransaction> utxos = JacksonJson.toList(objectMapper, signature.get("utxos"), UtxoTransaction.class);
-            List<Address> addresses = JacksonJson.toList(objectMapper, signature.get("addresses"), Address.class);
-            List<WithdrawRecord> records = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
-            BigDecimal decimal = currency.getDecimal();
-            LegacyMultisigTransactionBuilder builder =
-                    new LegacyMultisigTransactionBuilder(networkParameters());
-            List<ECKey> signingKeys = new ArrayList<>(utxos.size());
-            List<String> redeemScripts = new ArrayList<>(utxos.size());
-            for (int i = 0; i < utxos.size(); i++) {
-                Address address = addresses.get(i);
-                UtxoTransaction utxo = utxos.get(i);
-                String redeemScript = pubKeyConfig.genRedeemScript(address, currency);
-                redeemScripts.add(redeemScript);
-                signingKeys.add(derive(address, currency).getEcKey());
-                builder.addInput(
-                        utxo.getTxId(), utxo.getSeq(), redeemScript,
-                        Coin.valueOf(utxo.getBalance().multiply(decimal).longValueExact()));
-            }
-
-            long inputKoinu = transaction.getBalance().multiply(decimal).longValueExact();
-            long sentKoinu = records.stream()
-                    .map(WithdrawRecord::getBalance)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    .multiply(decimal).longValueExact();
-            long feeRate = JacksonJson.longValue(signature, "feeRate");
-            if (feeRate <= 0) {
-                feeRate = DogecoinFeePolicy.DEFAULT_FEE_RATE_KOINU_PER_BYTE;
-            }
-            long estimatedBytes = P2shMultisigFeeCalculator.estimateBytes(
-                    utxos.size(), records.size(), 2, 3);
-            long fee = DogecoinFeePolicy.feeForBytes(estimatedBytes, feeRate);
-            long change = inputKoinu - sentKoinu - fee;
-            long dust = DogecoinFeePolicy.RECOMMENDED_DUST_THRESHOLD_KOINU;
-            if (change >= dust) {
-                long withChangeBytes = P2shMultisigFeeCalculator.estimateBytes(
-                        utxos.size(), records.size() + 1, 2, 3);
-                long withChangeFee = DogecoinFeePolicy.feeForBytes(withChangeBytes, feeRate);
-                long withChange = inputKoinu - sentKoinu - withChangeFee;
-                if (withChange >= dust) {
-                    estimatedBytes = withChangeBytes;
-                    fee = withChangeFee;
-                    change = withChange;
-                } else {
-                    fee = inputKoinu - sentKoinu;
-                    change = 0;
-                }
-            } else if (change >= 0) {
-                fee = inputKoinu - sentKoinu;
+    public UtxoPartialSignature sign(UtxoSigningRequest request) {
+        if (!chain().equals(request.asset().chain())) throw new IllegalArgumentException("signing chain mismatch");
+        request.validateForSigning();
+        var asset = request.asset();
+        var builder = new LegacyMultisigTransactionBuilder(asset.network().parameters(chain()));
+        var signingKeys = new ArrayList<ECKey>();
+        var scripts = new ArrayList<String>();
+        for (var input : request.inputs()) {
+            var key = input.key();
+            String script = publicKeys.genRedeemScript(key, asset);
+            scripts.add(script);
+            signingKeys.add(keys.sig1Root().getChild(44).getChild(asset.coinType()).getChild(key.biz())
+                    .getChild(Math.toIntExact(key.userId())).getChild(key.index()).getEcKey());
+            builder.addInput(input.txId(), input.vout(), script, Coin.valueOf(asset.atomic(input.amount())));
+        }
+        long feeRate = request.feeRate() > 0 ? request.feeRate() : DogecoinFeePolicy.DEFAULT_FEE_RATE_KOINU_PER_BYTE;
+        long remaining = Math.subtractExact(request.inputAtomic(), request.paymentAtomic());
+        long bytes = P2shMultisigFeeCalculator.estimateBytes(request.inputs().size(), request.payments().size(), 2, 3);
+        long fee = DogecoinFeePolicy.feeForBytes(bytes, feeRate);
+        long change = Math.subtractExact(remaining, fee);
+        long dust = DogecoinFeePolicy.RECOMMENDED_DUST_THRESHOLD_KOINU;
+        if (change >= dust) {
+            long withChangeBytes = P2shMultisigFeeCalculator.estimateBytes(
+                    request.inputs().size(), request.payments().size() + 1, 2, 3);
+            long withChangeFee = DogecoinFeePolicy.feeForBytes(withChangeBytes, feeRate);
+            long withChangeAmount = Math.subtractExact(remaining, withChangeFee);
+            if (withChangeAmount >= dust) {
+                bytes = withChangeBytes;
+                fee = withChangeFee;
+                change = withChangeAmount;
+            } else {
+                fee = remaining;
                 change = 0;
             }
-            if (change < 0) {
-                throw new IllegalArgumentException("insufficient DOGE input for network fee");
-            }
-
-            for (WithdrawRecord record : records) {
-                long value = record.getBalance().multiply(decimal).longValueExact();
-                if (value < dust) {
-                    throw new IllegalArgumentException("DOGE output below recommended dust: " + value);
-                }
-                builder.addOutput(record.getAddress(), Coin.valueOf(value));
-            }
-            if (change > 0) {
-                builder.addOutput(JacksonJson.text(signature, "changeAddress"), Coin.valueOf(change));
-            }
-
-            String firstSigned = builder.buildFirstSign(signingKeys);
-            signature.put("firstSignTx", firstSigned);
-            signature.put("scriptType", "p2sh");
-            signature.put("fee", fee);
-            signature.put("estimatedBytes", estimatedBytes);
-            signature.put("valid", true);
-            ArrayNode scripts = objectMapper.createArrayNode();
-            redeemScripts.forEach(scripts::add);
-            signature.set("redeemScripts", scripts);
-        } catch (Throwable error) {
-            signature.put("valid", false);
-            signature.put("error", error.getMessage());
+        } else if (change >= 0) {
+            fee = remaining;
+            change = 0;
         }
-        transaction.setSignature(JacksonJson.writeValue(objectMapper, signature));
-    }
-
-    /**
-     * 获取或查询 {@code chain} 对应的数据，并向调用方返回当前业务状态。
-     */
-    @Override
-    public String chain() {
-        return "DOGE";
-    }
-
-    /**
-     * 构建或生成 {@code derive} 对应的结果，并执行输入和状态校验。
-     */
-    private Bip32Node derive(Address address, AssetRuntimeMetadata currency) {
-        return keyMaterial.sig1Root().getChild(44)
-                .getChild(currency.getBip44CoinType())
-                .getChild(address.getBiz())
-                .getChild(address.getUserId().intValue())
-                .getChild(address.getIndex());
-    }
-
-    /**
-     * 获取或查询 {@code networkParameters} 对应的数据，并向调用方返回当前业务状态。
-     */
-    private DogecoinNetworkParameters networkParameters() {
-        if ("main".equalsIgnoreCase(network) || "mainnet".equalsIgnoreCase(network)) {
-            return DogecoinNetworkParameters.mainnet();
+        if (change < 0) throw new IllegalArgumentException("insufficient DOGE input for network fee");
+        for (var payment : request.payments()) {
+            long amount = asset.atomic(payment.amount());
+            if (amount < dust) throw new IllegalArgumentException("DOGE output below recommended dust");
+            builder.addOutput(payment.address(), Coin.valueOf(amount));
         }
-        return "regtest".equalsIgnoreCase(network)
-                ? DogecoinNetworkParameters.regtest()
-                : DogecoinNetworkParameters.testnet();
+        if (change > 0) {
+            if (request.changeAddress() == null || request.changeAddress().isBlank()) {
+                throw new IllegalArgumentException("DOGE change address is required");
+            }
+            builder.addOutput(request.changeAddress(), Coin.valueOf(change));
+        }
+        return new UtxoPartialSignature(builder.buildFirstSign(signingKeys), UtxoPartialSignature.ScriptType.P2SH,
+                scripts, fee, new UtxoPartialSignature.Estimates(bytes, 0, 0));
     }
 }

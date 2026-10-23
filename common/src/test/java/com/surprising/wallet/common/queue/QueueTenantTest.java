@@ -10,9 +10,8 @@ class QueueTenantTest {
         var mapper = new ObjectMapper();
         var tenant = UUID.randomUUID();
         var message = new PgmqClient.Message(1, 1, "{}", QueueTenant.headers(tenant));
-        assertDoesNotThrow(() -> QueueTenant.verifySignature(mapper, message, "{\"tenantId\":\"" + tenant + "\"}"));
-        assertThrows(IllegalArgumentException.class, () -> QueueTenant.verifySignature(mapper, message, "{}"));
-        assertThrows(IllegalArgumentException.class, () -> QueueTenant.verifySignature(mapper, message,
-                "{\"tenantId\":\"" + UUID.randomUUID() + "\"}"));
+        assertDoesNotThrow(() -> QueueTenant.verify(mapper, message, tenant));
+        assertThrows(IllegalArgumentException.class, () -> QueueTenant.verify(mapper, message, null));
+        assertThrows(IllegalArgumentException.class, () -> QueueTenant.verify(mapper, message, UUID.randomUUID()));
     }
 }

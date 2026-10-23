@@ -207,7 +207,7 @@ SOL/TON/APTOS/SUI：
 
 费用报价：FeeRateUpdater → FeeRateUpdateService → ChainFeeRateRepository → chain_fee_rate；队列和业务事务共用同一 PostgreSQL 数据源。
 
-每轮新签名请求（含 RBF）带唯一 signingRequestId，广播前与数据库当前请求校验；旧请求的死信回放不得覆盖新交易。
+每轮新签名请求（含 RBF）带唯一 requestId，广播前与数据库当前请求校验；旧请求的死信回放不得覆盖新交易。
 
 UTXO 充值扫描的批量 saveTransaction 入口也开启事务，确保批内入账与 PGMQ 充值事件一起提交或回滚。
 
@@ -218,12 +218,12 @@ UTXO 充值扫描的批量 saveTransaction 入口也开启事务，确保批内�
 
 ### BTC 归集 / 提现 RBF
 
-`RbfBumpJob → RbfBumpService → wallet_sign_first → sig1 → sig2 → TransactionService`。
+`RbfBumpJob → RbfBumpService → wallet_sign_first → sig1 → sig2 → UtxoBroadcastService`。
 人工提交的租户队列请求必须同时包含 `transactionId` 和当前已广播的 `expectedTxId`；同一哈希的重复请求幂等跳过。
 加速、广播和确认均在事务内锁定同一 `chain_signing_transaction` 行；队列处理、下一阶段消息与确认归档原子提交。
-RBF 不释放或重新获取 UTXO，必须确认原输入仍由该交易锁定，重新生成 signingRequestId，旧签名结果不能覆盖新请求。
+RBF 不释放或重新获取 UTXO，必须确认原输入仍由该交易锁定，重新生成 requestId，旧签名结果不能覆盖新请求。
 归集复用全部输入及唯一目标地址，以输入总额减去新手续费重算输出；用户账本、提现订单和 Webhook 不产生归集事件。
-公开交易尝试（哈希、原始交易、输出、费率、费用）保存在 signature.rbfHistory，不引入新表或字段。
+交易尝试以完整的不可变 request + signed transaction + replacedAt 快照保存在 chain_signing_transaction.attempts，当前请求和签名分别位于 request / signed_transaction，不再按字段白名单复制或恢复 JSON。
 扫描包括已发送交易及替换签名/广播未知期间的历史哈希；原交易先确认或替换交易先确认均按实际获确认的金额结算。
 内部转账识别同时查询当前及历史归集哈希，即使归集目标地址已经轮换也不重复充值入账。
 确认事务重新锁定并读取最新行，终态幂等返回；部分确认不得覆盖终态。替换签名失败保留输入锁和历史扫描。
@@ -238,12 +238,16 @@ SELECT pgmq.send('wallet_rbf',
   '{"tenant_id":"替换此处为租户UUID"}'::jsonb);
 ```
 
-数据库基线判断：仅使用现有 signature JSON、状态、金额与费用列，不新增数据库结构或配置种子。
+数据库基线：删除 signature、balance、currency 与重复资产字段，新增有类型的 request / signed_transaction / attempts JSON；链、租户、请求、业务类型及当前哈希为生成列，租户外键和入队凭据保留在同一表。仅修改 init-sql，不保留旧协议或兼容迁移。
 
-签名 JSON 及 RBF 历史中的小数金额直接解析为 BigDecimal，避免树解析往返时丢失最小单位。
+签名请求与 RBF 快照中的小数金额直接映射为 BigDecimal，手续费使用整数最小单位，避免 JSON 树往返和有损截断。
 验收入口：`resources/scripts/regtest/verify-btc-collection-rbf.py --run --checkpoint /tmp/btc-rbf-evidence.json`。
 该脚本仅连接现有 regtest 节点和现有 Wallet/Exchange 服务，向三个明确指定的测试账户各充值两笔，
 提交 24 次重复加速请求，核对节点替换、六次确认、用户/平台账本、归集输出、矿工费及 Webhook，最后回放已确认请求。
 真实 PostgreSQL 并发/故障测试：`CUSTODY_DB_TESTS=BtcCollectionRbfConcurrencyIntegrationTest bash resources/scripts/regtest/run-custody-db-tests.sh`。
 
-BTC/LTC 首签在生成部分签名前校验每个输入、请求合计及输出的最小单位精度，检查输入合计一致、金额汇总和费率乘积不溢出；达到粉尘阈值的找零必须有目标地址。非法请求返回签名失败，不以截断、溢出或省略找零继续签名。
+首签在生成部分签名前校验每个输入和输出的最小单位精度；输入总额只从输入列表计算，不再传独立余额。金额汇总、手续费及找零计算检查溢出，达到粉尘阈值的找零必须有目标地址。非法请求返回签名失败，不以截断、溢出或省略找零继续签名。
+
+UTXO 签名阶段明确传递 UtxoSigningTask → UtxoPartialSigningTask → UtxoSigningResult。API 以数据库请求校验租户和 UUID，签名结果不携带业务意图或历史。UtxoBroadcastService 保存每一次签名事实再调用 RPC，UNKNOWN 保留锁及已知哈希。RBF/广播/结算共享签名行锁；原尝试在新签名/广播/失败期间确认时，恢复其完整请求和实际费用，并在同事务中确认订单、冻结扣款和输入花费。
+
+本机 PostgreSQL 18 贯通回归：`CUSTODY_DB_TESTS=UtxoSigningPipelineIntegrationTest bash resources/scripts/regtest/run-custody-db-tests.sh`。使用独立测试密钥执行四条链的真实双签与 PGMQ 阶段，只模拟链 RPC；覆盖重复消费、初次 UNKNOWN、签名失败释放、提现旧尝试确认及生成列身份约束。另由 `UtxoSigningCryptoTest` 覆盖每条链的 mainnet/testnet/regtest 签名和金额守恒。

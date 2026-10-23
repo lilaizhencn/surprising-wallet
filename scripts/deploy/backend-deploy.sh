@@ -27,6 +27,11 @@ DO $$ BEGIN
      OR NOT EXISTS (SELECT 1 FROM information_schema.columns
                     WHERE table_schema='public' AND table_name='chain_signing_transaction'
                       AND column_name='enqueued_signing_request_id' AND data_type='uuid')
+     OR (SELECT count(*) FROM information_schema.columns
+          WHERE table_schema='public' AND table_name='chain_signing_transaction'
+            AND ((column_name IN ('request', 'signed_transaction', 'attempts') AND data_type='jsonb')
+                 OR (column_name IN ('tenant_id', 'signing_request_id')
+                     AND data_type='uuid' AND is_generated='ALWAYS'))) <> 5
      OR NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname='pgmq' AND extversion='1.11.1') THEN
     RAISE EXCEPTION 'wallet database prerequisites are missing';
   END IF;

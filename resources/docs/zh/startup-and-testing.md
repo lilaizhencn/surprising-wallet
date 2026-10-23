@@ -376,7 +376,7 @@ GRANT USAGE, SELECT ON SEQUENCE pgmq.q_wallet_sign_done_msg_id_seq,
 使用普通持久化队列。队列包含 `wallet_sign_first`、`wallet_sign_second`、`wallet_sign_done`、
 `wallet_withdraw`、`wallet_rbf`、`wallet_deposit_event`、`wallet_withdraw_event`，每个队列都有对应 `_dead` 死信队列。
 队列 JSON headers 必须携带 `tenant_id`。外部业务消费充值/提现事件时，也必须按租户限定查询条件和数据库权限；
-不要向租户应用开放平台队列账号。签名 payload 的 signature JSON 同时包含 tenantId，消费者校验两者一致。
+不要向租户应用开放平台队列账号。签名请求和结果使用有类型的协议携带 tenantId 与 requestId；消费者校验租户 header，API 广播端同时校验数据库请求 UUID。签名服务不接收或修改数据库状态及 RBF 历史。
 
 消费先以 300 秒可见性超时领取，再开启处理事务并锁定该消息，事务提交时同时归档消息与投递下一阶段。
 处理中的行锁会阻止其他消费者重复领取；崩溃会释放锁并回滚，消息超时后恢复。领取后尚未开始处理就已超时的旧消费者不能确认消息。
@@ -402,7 +402,7 @@ SW_TEST_PGMQ=true mvn -pl common -am test -Dtest=PgmqIntegrationTest -Dsurefire.
 如需回滚，先停止生产者和消费者，保留新数据库快照、未完成队列和归档，再恢复已备份的代码与数据库；不能只回滚 JAR。
 队列增加数据库写入、WAL 和归档存储负载，应监控连接池、vacuum 和磁盘占用。
 
-每轮新签名请求（含 RBF）带唯一 signingRequestId，广播前与数据库当前请求校验；旧请求的死信回放不得覆盖新交易。
+每轮新签名请求（含 RBF）带唯一 requestId，广播前与数据库当前请求校验；旧请求的死信回放不得覆盖新交易。
 
 ## 阿里云单 JAR 发布
 

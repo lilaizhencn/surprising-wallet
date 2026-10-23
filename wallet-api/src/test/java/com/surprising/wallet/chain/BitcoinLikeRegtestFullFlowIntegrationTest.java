@@ -8,7 +8,8 @@ import com.surprising.wallet.common.chain.ChainType;
 import com.surprising.wallet.common.chain.DepositEvent;
 import com.surprising.wallet.chain.model.LedgerBalanceRecord;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
-import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.common.signing.*;
+import com.surprising.wallet.repository.ChainSigningTransactionRepository;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.repository.ChainJdbcRepository;
 import org.junit.jupiter.api.Assumptions;
@@ -284,19 +285,16 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
         assertEquals(1, repository.updateWithdrawalStatus(
                 chainName, withdrawalOrder, "FROZEN", depositAddress, null, null));
         AssetRuntimeMetadata currency = assetMetadata(repository, chainName);
-        WithdrawTransaction signing = repository.createBitcoinLikeSigningTransaction(
-                currency,
-                "WITHDRAW",
-                withdrawalOrder,
-                WithdrawTransaction.builder()
-                        .txId("signing")
-                        .balance(chain.depositAmount())
-                        .signature("{}")
-                        .currency(currency.getIndex())
-                        .status(Constants.SIGNING)
-                        .build());
-        assertTrue(repository.findBitcoinLikeSigningTransactionById(currency, signing.getId()).isPresent());
-        String signingLockRef = signing.getId().toString();
+        var signingRepository = new ChainSigningTransactionRepository(jdbc, JSON);
+        var request = new UtxoSigningRequest(TEST_TENANT_ID, UUID.randomUUID(),
+                UtxoSigningRequest.Asset.from(currency, "regtest"), UtxoSigningRequest.Operation.WITHDRAWAL, null,
+                List.of(new UtxoSigningRequest.Input(depositTx.txid(), depositOutput.vout(), depositAddress,
+                        chain.depositAmount(), new UtxoSigningRequest.Key(9901, 0, 0, null))),
+                List.of(new UtxoSigningRequest.Payment(withdrawalOrder, 9901, withdrawAddress,
+                        chain.withdrawAmount(), chain.withdrawFee())), depositAddress, 10, 546);
+        var signing = signingRepository.create(request, withdrawalOrder);
+        assertTrue(signingRepository.findById(chainName, signing.id()).isPresent());
+        String signingLockRef = Integer.toString(signing.id());
         assertEquals(1, repository.lockUtxo(chainName, depositTx.txid(), depositOutput.vout(), signingLockRef));
         assertEquals(0, repository.lockUtxo(chainName, depositTx.txid(), depositOutput.vout(), signingLockRef + "-again"));
         assertEquals(1, repository.updateWithdrawalStatus(
@@ -306,12 +304,11 @@ class BitcoinLikeRegtestFullFlowIntegrationTest {
 
         RealTx withdrawTx = sendAndMine(root, chain, withdrawAddress, chain.withdrawAmount());
         findOutput(withdrawTx.raw(), withdrawAddress, chain.withdrawAmount());
-        signing.setTxId(withdrawTx.txid());
-        signing.setStatus(Constants.SENT);
-        signing.setSignature(withdrawTx.raw().toString());
-        assertEquals(1, repository.updateBitcoinLikeSigningTransaction(currency, signing));
-        assertTrue(repository.bitcoinLikeSigningTransactionExists(currency, withdrawTx.txid()));
-        assertTrue(repository.findBitcoinLikeSigningTransactionByTxId(currency, withdrawTx.txid()).isPresent());
+        var signed = new UtxoSignedTransaction(withdrawTx.raw().path("hex").asText(), withdrawTx.txid(),
+                chain.withdrawFee().movePointRight(8).longValueExact(), 0, 0, new UtxoPartialSignature.Estimates(0, 0, 0));
+        assertEquals(1, signingRepository.update(signing.withSigned(signed, Constants.SENT)));
+        assertTrue(signingRepository.exists(chainName, withdrawTx.txid()));
+        assertTrue(signingRepository.findByTxId(chainName, withdrawTx.txid()).isPresent());
         assertEquals(1, repository.updateWithdrawalStatus(
                 chainName, withdrawalOrder, "SENT", depositAddress, withdrawTx.txid(), null));
         assertEquals(1, repository.markWithdrawalConfirmed(chainName, withdrawalOrder, withdrawTx.txid()));

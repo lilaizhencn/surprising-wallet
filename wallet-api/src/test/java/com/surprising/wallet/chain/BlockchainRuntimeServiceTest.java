@@ -64,7 +64,7 @@ class BlockchainRuntimeServiceTest {
         when(profiles.findAccountByChain("BTC")).thenReturn(Optional.of(profile));
         when(repository.findProfileByChain("BTC")).thenReturn(Optional.of(profile));
         BitcoinLikeChainRuntime runtime = new BitcoinLikeChainRuntime(
-                repository, null, null, null, null, null, null, null, null, null);
+                repository, null, null, null, null, null, null, null, null, null, null);
         BlockchainRuntimeService configured = new BlockchainRuntimeService(profiles, assets, addresses, runtime);
 
         assertTrue(configured.checkAddress("BTC", " mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn "));

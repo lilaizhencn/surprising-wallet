@@ -87,13 +87,14 @@ class WalletModeTest {
     @Test void duplicateSignerRegistrationFailsAtConstruction() {
         var keys = WalletKeyMaterialProvider.forSig1(seed(1), publicRoot(2), publicRoot(3));
         var first = new com.surprising.wallet.sig.first.service.BtcFirstSignService(
-                new com.surprising.wallet.sig.first.config.PubKeyConfig(keys), keys,
-                new tools.jackson.databind.ObjectMapper(), "test");
+                new com.surprising.wallet.sig.first.config.PubKeyConfig(keys), keys);
         assertThrows(IllegalArgumentException.class, () -> new com.surprising.wallet.sig.first.FirstSignerRegistry(
                 java.util.List.of(first, first)));
+        var second = new com.surprising.wallet.sig.second.impl.BtcSecondSignService(
+                new com.surprising.wallet.sig.second.Sig2KeyDerivation(
+                        WalletKeyMaterialProvider.forSig2(seed(2))));
         assertThrows(IllegalArgumentException.class, () -> new com.surprising.wallet.sig.second.SecondSignerRegistry(
-                java.util.List.of(new com.surprising.wallet.sig.second.impl.BtcSecondSignService(null),
-                        new com.surprising.wallet.sig.second.impl.BtcSecondSignService(null))));
+                java.util.List.of(second, second)));
     }
     @Test void signerEnvironmentEnforcesHeadlessModeAndOwnDatabaseRole() {
         for (String mode : new String[]{"sig1", "sig2"}) {

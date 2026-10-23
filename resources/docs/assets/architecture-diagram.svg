@@ -23,7 +23,7 @@
 
   <rect x="30"  y="70" width="200" height="78" class="lib"/>
   <text x="130" y="98" text-anchor="middle" class="label">common</text>
-  <text x="130" y="118" text-anchor="middle" class="desc">跨模块契约 · 签名 DTO · 密钥校验</text>
+  <text x="130" y="118" text-anchor="middle" class="desc">UTXO 请求 · 部分签名 · 结果</text>
   <text x="130" y="135" text-anchor="middle" class="desc">PGMQ JDBC 适配器 · 无 Web 依赖</text>
 
   <rect x="250" y="70" width="200" height="78" class="lib"/>
@@ -45,7 +45,7 @@
   <text x="890" y="222" text-anchor="middle" class="label">wallet-sig1 · wallet-sig2 普通库</text>
   <text x="890" y="244" text-anchor="middle" class="desc">all 共享池；独立模式各自数据库账号</text>
   <text x="890" y="262" text-anchor="middle" class="desc">BTC/BCH/LTC/DOGE → 第一签 → 第二签</text>
-  <text x="890" y="280" text-anchor="middle" class="desc">不可变签名索引 · BTC/LTC 构造器依赖 · 角色密钥</text>
+  <text x="890" y="280" text-anchor="middle" class="desc">构造器依赖 · 请求网络 · 角色密钥 · 无业务状态</text>
 
   <line x1="695" y1="210" x2="720" y2="210" class="arrow"/>
   <!-- consumers → providers -->

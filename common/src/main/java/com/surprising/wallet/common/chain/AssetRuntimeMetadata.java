@@ -1,6 +1,5 @@
 package com.surprising.wallet.common.chain;
 
-import com.surprising.wallet.common.pojo.WithdrawTransaction;
 
 import java.math.BigDecimal;
 import java.util.Locale;
@@ -88,27 +87,6 @@ public final class AssetRuntimeMetadata {
     }
 
     /**
-     * 解析 {@code fromTransaction} 对应的输入，并转换为当前业务模型。
-     */
-    public static AssetRuntimeMetadata fromTransaction(WithdrawTransaction transaction) {
-        if (!hasText(transaction.getChain())
-                || !hasText(transaction.getAssetSymbol())
-                || transaction.getAssetDecimals() == null
-                || transaction.getBip44CoinType() == null) {
-            throw new IllegalArgumentException(
-                    "Currency " + transaction.getCurrency() + " is not supported");
-        }
-        return new AssetRuntimeMetadata(
-                transaction.getCurrency(),
-                transaction.getChain(),
-                transaction.getAssetSymbol(),
-                0,
-                transaction.getAssetDecimals(),
-                transaction.getContractAddress(),
-                transaction.getBip44CoinType());
-    }
-
-    /**
      * 校验 {@code requireDecimals} 对应的前置条件，不满足时抛出明确异常。
      */
     private static int requireDecimals(String chain, String symbol, Integer decimals) {
@@ -135,18 +113,6 @@ public final class AssetRuntimeMetadata {
      */
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
-    }
-
-    /**
-     * 设置或更新 {@code applyTo} 对应的状态，并保持相关业务字段一致。
-     */
-    public void applyTo(WithdrawTransaction transaction) {
-        transaction.setCurrency(getIndex());
-        transaction.setChain(chain);
-        transaction.setAssetSymbol(assetSymbol);
-        transaction.setAssetDecimals(getDecimals());
-        transaction.setBip44CoinType(bip44CoinType);
-        transaction.setContractAddress(contractAddress);
     }
 
     /**

@@ -11,10 +11,8 @@ public final class QueueTenant {
         var headers = JacksonJson.readObject(mapper, message.headers());
         return UUID.fromString(headers.path("tenant_id").asText());
     }
-    public static void verifySignature(ObjectMapper mapper, PgmqClient.Message message, String signature) {
-        UUID expected = require(mapper, message);
-        UUID actual = UUID.fromString(JacksonJson.readObject(mapper, signature).path("tenantId").asText());
-        if (!expected.equals(actual)) throw new IllegalArgumentException("queue tenant mismatch");
+    public static void verify(ObjectMapper mapper, PgmqClient.Message message, UUID actual) {
+        if (!require(mapper, message).equals(actual)) throw new IllegalArgumentException("queue tenant mismatch");
     }
     public static String headers(UUID tenant) {
         return "{\"tenant_id\":\"" + java.util.Objects.requireNonNull(tenant) + "\"}";

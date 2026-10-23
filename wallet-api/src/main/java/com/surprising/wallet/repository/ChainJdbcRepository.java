@@ -21,7 +21,6 @@ import com.surprising.wallet.chain.model.SuiTransactionRecord;
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import com.surprising.wallet.chain.model.XrpTransactionRecord;
 import com.surprising.wallet.common.pojo.UtxoTransaction;
-import com.surprising.wallet.common.pojo.WithdrawTransaction;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.utils.Constants;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -105,8 +104,6 @@ public class ChainJdbcRepository {
     private ChainScanHeightRepository chainScanHeightRepository;
     /** TRON 代币转账单表仓储。 */
     private TronTokenTransferRepository tronTokenTransferRepository;
-    /** 签名交易单表仓储。 */
-    private ChainSigningTransactionRepository chainSigningTransactionRepository;
     /** 归集记录单表仓储。 */
     private CollectionRecordRepository collectionRecordRepository;
     /** 提现订单单表仓储。 */
@@ -158,7 +155,6 @@ public class ChainJdbcRepository {
         this.chainScanBlockRepository = new ChainScanBlockRepository(jdbcTemplate);
         this.chainScanHeightRepository = new ChainScanHeightRepository(jdbcTemplate);
         this.tronTokenTransferRepository = new TronTokenTransferRepository(jdbcTemplate);
-        this.chainSigningTransactionRepository = new ChainSigningTransactionRepository(jdbcTemplate);
         this.collectionRecordRepository = new CollectionRecordRepository(jdbcTemplate);
         this.withdrawalOrderRepository = new WithdrawalOrderRepository(jdbcTemplate);
         this.custodyReorgDeficitRepository = new CustodyReorgDeficitRepository(jdbcTemplate);
@@ -474,13 +470,6 @@ public class ChainJdbcRepository {
         return utxoRepository.markSpent(chain, lockRef, spentTxHash);
     }
 
-    /** 领取 Bitcoin-like 签名交易的广播租约。 */
-    public boolean claimBitcoinLikeBroadcast(AssetRuntimeMetadata currency, long transactionId,
-                                             String ownerId) {
-        return chainSigningTransactionRepository.claimBroadcast(
-                currency.getName().toUpperCase(Locale.ROOT), transactionId, ownerId, 300,
-                Constants.SENT);
-    }
     /**
      * 设置或更新 {@code updateUtxoConfirmations} 对应的状态，并保持相关业务字段一致。
      */
@@ -822,54 +811,6 @@ public class ChainJdbcRepository {
         Objects.requireNonNull(tenantId, "tenantId is required");
         return collectionRecordRepository.findTxHash(tenantId, chain, collectionNo);
     }
-    /**
-     * 构建或生成 {@code createBitcoinLikeSigningTransaction} 对应的结果，并执行输入和状态校验。
-     */
-    public WithdrawTransaction createBitcoinLikeSigningTransaction(
-            AssetRuntimeMetadata currency,
-            String businessType,
-            String businessNo,
-            WithdrawTransaction transaction) {
-        WithdrawTransaction persisted = createBitcoinLikeSigningTransaction(
-                currency.getName().toUpperCase(java.util.Locale.ROOT),
-                currency.getName().toUpperCase(java.util.Locale.ROOT),
-                businessType,
-                businessNo,
-                transaction);
-        currency.applyTo(persisted);
-        return persisted;
-    }
-
-    /**
-     * 构建或生成 {@code createBitcoinLikeSigningTransaction} 对应的结果，并执行输入和状态校验。
-     */
-    public WithdrawTransaction createBitcoinLikeSigningTransaction(
-            String chain,
-            String assetSymbol,
-            String businessType,
-            String businessNo,
-            WithdrawTransaction transaction) {
-        return chainSigningTransactionRepository.create(chain, assetSymbol, businessType, businessNo, transaction,
-                        Constants.WAITING, Constants.SIGNING)
-                .orElseThrow(() -> new IllegalStateException(
-                        "failed to create " + chain + " signing transaction " + businessType + "/" + businessNo));
-    }
-
-    /**
-     * 获取或查询 {@code findBitcoinLikeSigningTransactionById} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<WithdrawTransaction> findBitcoinLikeSigningTransactionById(
-            AssetRuntimeMetadata currency, int transactionId) {
-        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        return chainSigningTransactionRepository.findById(chain, transactionId);
-    }
-
-    /** Row lock shared by fee replacement, broadcast and confirmation settlement. */
-    public Optional<WithdrawTransaction> lockBitcoinLikeSigningTransaction(
-            AssetRuntimeMetadata currency, int transactionId) {
-        return chainSigningTransactionRepository.lockById(currency.chain(), transactionId);
-    }
-
     public boolean isUtxoLockedBy(String chain, String txHash, int vout, String lockRef) {
         return utxoRepository.isLockedBy(chain, txHash, vout, lockRef);
     }
@@ -879,42 +820,6 @@ public class ChainJdbcRepository {
         return collectionRecordRepository.updateAmounts(tenantId, chain, collectionNo, amount, fee);
     }
 
-    /**
-     * 获取或查询 {@code findBitcoinLikeSigningTransactionByTxId} 对应的数据，供调用方读取当前状态。
-     */
-    public Optional<WithdrawTransaction> findBitcoinLikeSigningTransactionByTxId(
-            AssetRuntimeMetadata currency, String txId) {
-        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        return chainSigningTransactionRepository.findByTxId(chain, txId);
-    }
-    /**
-     * 执行 {@code bitcoinLikeSigningTransactionExists} 对应的辅助逻辑，完成数据处理并维护状态边界。
-     */
-    public boolean bitcoinLikeSigningTransactionExists(AssetRuntimeMetadata currency, String txId) {
-        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        return chainSigningTransactionRepository.exists(chain, txId);
-    }
-    /**
-     * 设置或更新 {@code updateBitcoinLikeSigningTransaction} 对应的状态，并保持相关业务字段一致。
-     */
-    public int updateBitcoinLikeSigningTransaction(AssetRuntimeMetadata currency, WithdrawTransaction transaction) {
-        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        return chainSigningTransactionRepository.updateStatus(chain, transaction.getId(), transaction);
-    }
-    /**
-     * 写入或更新 {@code markBitcoinLikeSigningError} 对应的业务状态，并保持关联字段与审计状态一致。
-     */
-    public int markBitcoinLikeSigningError(AssetRuntimeMetadata currency, int transactionId, String errorMessage) {
-        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        return chainSigningTransactionRepository.markError(chain, transactionId, errorMessage);
-    }
-    /**
-     * 获取或查询 {@code findSentBitcoinLikeSigningTransactions} 对应的数据，供调用方读取当前状态。
-     */
-    public List<WithdrawTransaction> findSentBitcoinLikeSigningTransactions(AssetRuntimeMetadata currency) {
-        String chain = currency.getName().toUpperCase(java.util.Locale.ROOT);
-        return chainSigningTransactionRepository.listSent(chain, Constants.SENT);
-    }
     /**
      * 获取或查询 {@code findLedgerBalance} 对应的数据，供调用方读取当前状态。
      */

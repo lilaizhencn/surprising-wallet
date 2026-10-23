@@ -160,8 +160,8 @@
   <line x1="495" y1="584" x2="530" y2="584" class="arrow"/>
 
   <rect x="530" y="556" width="200" height="56" class="sig"/>
-  <text x="630" y="580" text-anchor="middle" class="bold">签名管道</text>
-  <text x="630" y="598" text-anchor="middle" class="small">金额 / 找零校验 → sig1 → sig2</text>
+  <text x="630" y="580" text-anchor="middle" class="bold">类型明确的签名管道</text>
+  <text x="630" y="598" text-anchor="middle" class="small">request → partial → signed result</text>
 
   <line x1="730" y1="584" x2="765" y2="584" class="arrow"/>
 
@@ -253,8 +253,8 @@
   <text x="52" y="1192" class="small">保留 UTXO 锁；归集输出 = 输入 − 新手续费</text>
   <line x1="325" y1="1182" x2="365" y2="1182" class="arrow"/>
   <rect x="365" y="1150" width="355" height="65" class="db"/>
-  <text x="377" y="1172" class="bold">chain_signing_transaction.signature.rbfHistory</text>
-  <text x="377" y="1192" class="small">保留所有已广播尝试；失败 / UNKNOWN 不释放锁</text>
+  <text x="377" y="1172" class="bold">chain_signing_transaction.attempts</text>
+  <text x="377" y="1192" class="small">完整请求 / 签名快照；失败 / UNKNOWN 保留锁</text>
   <line x1="720" y1="1182" x2="760" y2="1182" class="arrow"/>
   <rect x="760" y="1150" width="350" height="65" class="dep"/>
   <text x="772" y="1172" class="bold">原交易 / 替换交易确认 → 仅结算一次</text>

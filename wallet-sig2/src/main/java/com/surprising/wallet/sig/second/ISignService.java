@@ -1,11 +1,12 @@
 package com.surprising.wallet.sig.second;
 
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
-import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.common.signing.UtxoSigningRequest;
+import com.surprising.wallet.common.signing.UtxoPartialSignature;
 
 /** Native BTC, BCH, LTC and DOGE second-stage signing. */
 public interface ISignService {
-    String signTransaction(WithdrawTransaction transaction);
+    String sign(UtxoSigningRequest request, UtxoPartialSignature partial);
 
     String chain();
 

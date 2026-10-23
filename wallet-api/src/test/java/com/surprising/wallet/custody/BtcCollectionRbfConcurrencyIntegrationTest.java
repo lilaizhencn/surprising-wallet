@@ -5,9 +5,9 @@ import com.surprising.wallet.chain.BitcoinLikeSettlementService;
 import com.surprising.wallet.chain.BlockchainRuntimeService;
 import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.json.JacksonJson;
-import com.surprising.wallet.common.pojo.UtxoTransaction;
-import com.surprising.wallet.common.pojo.WithdrawRecord;
-import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.chain.model.UtxoSigningTransaction;
+import com.surprising.wallet.common.signing.*;
+import static com.surprising.wallet.testutil.UtxoSigningTestSupport.*;
 import com.surprising.wallet.common.queue.*;
 import com.surprising.wallet.common.utils.Constants;
 import com.surprising.wallet.repository.*;
@@ -21,7 +21,6 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.*;
@@ -41,7 +40,8 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
     ChainJdbcRepository repository;
     RbfBumpService rbf;
     BitcoinLikeSettlementService settlement;
-    TransactionService broadcaster;
+    UtxoBroadcastService broadcaster;
+    ChainSigningTransactionRepository signing;
     BlockchainRuntimeService runtime;
     PgmqClient queue;
     ChainFeeRateRepository rates;
@@ -68,6 +68,12 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         context.register(Transactions.class);
         context.registerBean(PlatformTransactionManager.class, () -> manager);
         context.registerBean(ChainJdbcRepository.class, () -> repository);
+        signing = new ChainSigningTransactionRepository(jdbc, json);
+        context.registerBean(ChainSigningTransactionRepository.class, () -> signing);
+        context.registerBean(WithdrawalOrderRepository.class, () -> new WithdrawalOrderRepository(jdbc));
+        context.registerBean(CollectionRecordRepository.class, () -> new CollectionRecordRepository(jdbc));
+        context.registerBean(UtxoRepository.class, () -> new UtxoRepository(jdbc));
+        context.registerBean(LedgerBalanceRepository.class, () -> new LedgerBalanceRepository(jdbc));
         context.registerBean(BlockchainRuntimeService.class, () -> runtime);
         context.registerBean(WalletRuntimeConfigService.class, () -> switches);
         context.registerBean(ChainFeeRateRepository.class, () -> rates);
@@ -82,11 +88,11 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         context.registerBean(WithdrawalSettlementService.class,
                 () -> com.surprising.wallet.testutil.CustodyTestSupport.settlements(jdbc));
         context.registerBean(BitcoinLikeSettlementService.class);
-        context.registerBean(TransactionService.class);
+        context.registerBean(UtxoBroadcastService.class);
         context.refresh();
         rbf = context.getBean(RbfBumpService.class);
         settlement = context.getBean(BitcoinLikeSettlementService.class);
-        broadcaster = context.getBean(TransactionService.class);
+        broadcaster = context.getBean(UtxoBroadcastService.class);
         Long addressId = jdbc.queryForObject("""
                 insert into chain_address(tenant_id, chain, asset_symbol, account_id, user_id, biz,
                     address_index, address, owner_address, derivation_path, wallet_role, enabled)
@@ -103,21 +109,10 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
                 new BigDecimal("0.00998410"), new BigDecimal("0.00001590"), null);
         repository.claimCollectionSigning(TENANT, "BTC", "COLL-RBF", null);
         repository.updateCollectionStatus(TENANT, "BTC", "COLL-RBF", "SENT", ORIGINAL, null, null);
-        ObjectNode signature = json.createObjectNode();
-        signature.put("tenantId", TENANT.toString());
-        signature.put("operationType", "COLLECTION"); signature.put("collectionNo", "COLL-RBF");
-        signature.put("signingRequestId", UUID.randomUUID().toString()); signature.put("changeAddress", "collector");
-        signature.put("feeRate", 10); signature.put("fee", 1590); signature.put("txId", ORIGINAL);
-        signature.put("rawTransaction", "00"); signature.put("valid", true);
-        signature.set("utxos", json.valueToTree(List.of(UtxoTransaction.builder().txId(INPUT).seq((short) 0)
-                .address("source").balance(new BigDecimal("0.01")).build())));
-        signature.set("withdraw", json.valueToTree(List.of(WithdrawRecord.builder().withdrawId("COLL-RBF")
-                .address("collector").balance(new BigDecimal("0.00998410")).fee(BigDecimal.ZERO).build())));
-        var tx = WithdrawTransaction.builder().currency(1).balance(new BigDecimal("0.01"))
-                .status(Constants.SIGNING).txId(ORIGINAL).signature(JacksonJson.writeValue(json, signature)).build();
-        BTC.applyTo(tx);
-        tx = repository.createBitcoinLikeSigningTransaction(BTC, "COLLECTION", "COLL-RBF", tx);
-        id = tx.getId(); tx.setStatus(Constants.SENT); repository.updateBitcoinLikeSigningTransaction(BTC, tx);
+        var request = request(TENANT, UtxoSigningRequest.Operation.COLLECTION, "0.01", "0.00998410");
+        var transaction = signing.create(request, "COLL-RBF");
+        id = transaction.id();
+        signing.update(transaction.withSigned(com.surprising.wallet.testutil.UtxoSigningTestSupport.signed(ORIGINAL, 1590), Constants.SENT));
         repository.upsertUtxo("BTC", "BTC", INPUT, 0, "source", new BigDecimal("0.01"), 1, "block", 6, true);
         assertEquals(1, repository.lockUtxo("BTC", INPUT, 0, String.valueOf(id)));
         jdbc.update("insert into ledger_balance(tenant_id, chain, asset_symbol, account_id, available_balance, total_balance) "
@@ -130,98 +125,96 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         parallel(12, () -> rbf.process());
         assertEquals(1, jdbc.queryForObject("select count(*) from pgmq.q_wallet_sign_first", Integer.class));
         assertEquals(0, jdbc.queryForObject("select count(*) from pgmq.q_wallet_rbf", Integer.class));
-        assertEquals(1, sig().path("rbfHistory").size());
-        assertEquals(20, sig().path("feeRate").asLong());
+        assertEquals(1, current().attempts().size());
+        assertEquals(20, current().request().feeRate());
         assertEquals("LOCKED", inputState());
         assertAmounts("0.00996820", "0.00003180"); assertLedger();
     }
     @Test void concurrentBroadcastAndFinalizationSettleOnlyOnce() throws Exception {
-        String body = rbf.bumpFee(id, TENANT, ORIGINAL);
+        var body = rbf.bumpFee(id, TENANT, ORIGINAL);
         var signed = signed(body, true);
-        parallel(12, () -> broadcaster.sendWithdrawTransaction(signed));
+        parallel(12, () -> broadcaster.apply(signed));
         verify(runtime, times(1)).broadcastSignedTransaction(any(), any());
         assertNull(rbf.bumpFee(id, TENANT, ORIGINAL)); // replay after replacement was broadcast
-        parallel(16, () -> settlement.settleConfirmed(signed, REPLACEMENT, BTC));
+        parallel(16, () -> settlement.settleConfirmed("BTC", id, REPLACEMENT));
         assertEquals("CONFIRMED", collectionStatus()); assertEquals("SPENT", inputState());
-        assertEquals(REPLACEMENT, current().getTxId());
-        settlement.markConfirming(id, ORIGINAL, BTC);
+        assertEquals(REPLACEMENT, current().txId());
+        settlement.markConfirming("BTC", id, ORIGINAL);
         assertEquals("CONFIRMED", collectionStatus());
         assertAmounts("0.00996820", "0.00003180"); assertLedger();
     }
     @Test void originalConfirmationWinsWhileReplacementIsSigning() throws Exception {
         rbf.bumpFee(id, TENANT, ORIGINAL);
-        assertEquals(1, repository.findSentBitcoinLikeSigningTransactions(BTC).size());
-        assertTrue(repository.findBitcoinLikeSigningTransactionByTxId(BTC, ORIGINAL).isPresent());
-        parallel(16, () -> settlement.settleConfirmed(current(), ORIGINAL, BTC));
-        assertEquals(ORIGINAL, current().getTxId()); assertEquals("SPENT", inputState());
+        assertEquals(1, signing.listPendingConfirmation("BTC").size());
+        assertTrue(signing.findByTxId("BTC", ORIGINAL).isPresent());
+        parallel(16, () -> settlement.settleConfirmed("BTC", id, ORIGINAL));
+        assertEquals(ORIGINAL, current().txId()); assertEquals("SPENT", inputState());
         assertAmounts("0.00998410", "0.00001590"); assertLedger();
     }
     @Test void originalConfirmationRestoresAmountsAfterReplacementBroadcast() {
-        broadcaster.sendWithdrawTransaction(signed(rbf.bumpFee(id, TENANT, ORIGINAL), true));
+        broadcaster.apply(signed(rbf.bumpFee(id, TENANT, ORIGINAL), true));
         assertTrue(repository.isInternalCollectionTransfer(TENANT, "BTC", ORIGINAL, "collector"));
         assertFalse(repository.isInternalCollectionTransfer(UUID.randomUUID(), "BTC", ORIGINAL, "collector"));
         assertFalse(repository.isInternalCollectionTransfer(TENANT, "BTC", ORIGINAL, "external"));
-        settlement.settleConfirmed(current(), ORIGINAL, BTC);
+        settlement.settleConfirmed("BTC", id, ORIGINAL);
         assertAmounts("0.00998410", "0.00001590");
-        assertEquals(3180, sig().path("rbfHistory").get(1).path("fee").asLong());
-        assertEquals(REPLACEMENT, sig().path("rbfHistory").get(1).path("txId").asText()); assertLedger();
+        assertEquals(3180, current().attempts().get(1).transaction().feeAtomic());
+        assertEquals(REPLACEMENT, current().attempts().get(1).transaction().txId()); assertLedger();
     }
     @Test void concurrentFeeBumpAndOriginalSettlementCannotReopenConfirmedState() throws Exception {
         parallel(16, () -> {
             if (ThreadLocalRandom.current().nextBoolean()) rbf.bumpFee(id, TENANT, ORIGINAL);
-            else settlement.settleConfirmed(current(), ORIGINAL, BTC);
+            else settlement.settleConfirmed("BTC", id, ORIGINAL);
         });
-        settlement.settleConfirmed(current(), ORIGINAL, BTC);
+        settlement.settleConfirmed("BTC", id, ORIGINAL);
         assertNull(rbf.bumpFee(id, TENANT, ORIGINAL));
-        assertEquals(Constants.CONFIRM, current().getStatus()); assertEquals("CONFIRMED", collectionStatus());
+        assertEquals(Constants.CONFIRM, current().status()); assertEquals("CONFIRMED", collectionStatus());
         assertEquals("SPENT", inputState()); assertAmounts("0.00998410", "0.00001590"); assertLedger();
     }
     @Test void replacementSigningFailureRetainsInputsUntilOriginalConfirms() {
         var failed = signed(rbf.bumpFee(id, TENANT, ORIGINAL), false);
-        var corrupted = JacksonJson.readObject(json, failed.getSignature());
-        corrupted.remove("rbfHistory"); // signer result must not erase database-owned attempts
-        failed.setSignature(JacksonJson.writeValue(json, corrupted));
-        broadcaster.sendWithdrawTransaction(failed);
+        assertFalse(json.valueToTree(failed).has("attempts")); // history has no slot in a signer result
+        broadcaster.apply(failed);
         assertEquals("LOCKED", inputState()); assertEquals("BROADCAST_UNKNOWN", collectionStatus());
-        assertEquals(1, repository.findSentBitcoinLikeSigningTransactions(BTC).size());
-        settlement.settleConfirmed(current(), ORIGINAL, BTC);
+        assertEquals(1, signing.listPendingConfirmation("BTC").size());
+        settlement.settleConfirmed("BTC", id, ORIGINAL);
         assertEquals("SPENT", inputState()); assertLedger();
     }
     @Test void unknownReplacementBroadcastIsTrackedAndCanConfirm() {
         when(runtime.broadcastSignedTransaction(any(), any())).thenReturn("");
-        broadcaster.sendWithdrawTransaction(signed(rbf.bumpFee(id, TENANT, ORIGINAL), true));
-        assertEquals(REPLACEMENT, current().getTxId()); assertEquals("LOCKED", inputState());
+        broadcaster.apply(signed(rbf.bumpFee(id, TENANT, ORIGINAL), true));
+        assertEquals(REPLACEMENT, current().txId()); assertEquals("LOCKED", inputState());
         assertEquals("BROADCAST_UNKNOWN", collectionStatus());
-        assertEquals(1, repository.findSentBitcoinLikeSigningTransactions(BTC).size());
-        settlement.settleConfirmed(current(), REPLACEMENT, BTC);
+        assertEquals(1, signing.listPendingConfirmation("BTC").size());
+        settlement.settleConfirmed("BTC", id, REPLACEMENT);
         assertEquals("CONFIRMED", collectionStatus()); assertAmounts("0.00996820", "0.00003180"); assertLedger();
     }
     @Test void obsoleteSignatureAfterOriginalConfirmationIsAcknowledgedWithoutBroadcast() {
         var signed = signed(rbf.bumpFee(id, TENANT, ORIGINAL), true);
-        settlement.settleConfirmed(current(), ORIGINAL, BTC);
-        assertTrue(broadcaster.sendWithdrawTransaction(signed));
+        settlement.settleConfirmed("BTC", id, ORIGINAL);
+        broadcaster.apply(signed);
         verify(runtime, never()).broadcastSignedTransaction(any(), any());
         assertEquals("CONFIRMED", collectionStatus()); assertAmounts("0.00998410", "0.00001590"); assertLedger();
     }
     @Test void attemptLimitAndRelativeFeeCapDoNotChangeAmounts() {
-        var tx = current(); var signature = sig();
-        var history = signature.putArray("rbfHistory");
-        for (int i = 0; i < 5; i++) history.add(json.createObjectNode().put("txId", ORIGINAL));
-        tx.setSignature(JacksonJson.writeValue(json, signature)); repository.updateBitcoinLikeSigningTransaction(BTC, tx);
+        var tx = current();
+        var history = new ArrayList<UtxoSigningTransaction.Attempt>();
+        for (int index = 0; index < 5; index++) history.add(new UtxoSigningTransaction.Attempt(tx.request(), tx.signed(), java.time.Instant.now()));
+        signing.update(new UtxoSigningTransaction(id, tx.request(), tx.signed(), history, tx.status(),
+                tx.enqueuedRequestId(), null, tx.createdAt(), tx.updatedAt()));
         assertThrows(IllegalArgumentException.class, () -> rbf.bumpFee(id, TENANT, ORIGINAL));
-        signature.remove("rbfHistory");
-        ((ObjectNode) signature.path("utxos").get(0)).put("balance", new BigDecimal("0.001"));
-        tx.setBalance(new BigDecimal("0.001")); tx.setSignature(JacksonJson.writeValue(json, signature));
-        repository.updateBitcoinLikeSigningTransaction(BTC, tx);
+        var smaller = request(TENANT, UtxoSigningRequest.Operation.COLLECTION, "0.001", "0.00998410");
+        signing.update(new UtxoSigningTransaction(id, smaller, tx.signed(), List.of(), tx.status(),
+                tx.enqueuedRequestId(), null, tx.createdAt(), tx.updatedAt()));
         when(rates.find("btc")).thenReturn("70"); // 11130 sat > 10% of this input, below absolute limit
         assertThrows(IllegalArgumentException.class, () -> rbf.bumpFee(id, TENANT, ORIGINAL));
-        assertEquals(ORIGINAL, current().getTxId()); assertAmounts("0.00998410", "0.00001590"); assertLedger();
+        assertEquals(ORIGINAL, current().txId()); assertAmounts("0.00998410", "0.00001590"); assertLedger();
     }
     @Test void settlementInputMismatchRollsBackTerminalStatusAndAmounts() {
         rbf.bumpFee(id, TENANT, ORIGINAL);
         jdbc.update("update utxo_record set lock_ref = 'other' where tx_hash = ?", INPUT);
-        assertThrows(IllegalStateException.class, () -> settlement.settleConfirmed(current(), ORIGINAL, BTC));
-        assertEquals(Constants.SIGNING, current().getStatus()); assertEquals("SIGNING", collectionStatus());
+        assertThrows(IllegalStateException.class, () -> settlement.settleConfirmed("BTC", id, ORIGINAL));
+        assertEquals(Constants.SIGNING, current().status()); assertEquals("SIGNING", collectionStatus());
         assertAmounts("0.00996820", "0.00003180"); assertLedger();
     }
     @Test void unavailableNextQueueRollsBackReplacementAndAmounts() {
@@ -229,7 +222,7 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         jdbc.execute("alter table pgmq.q_wallet_sign_first rename to q_wallet_sign_first_unavailable");
         try { rbf.process(); }
         finally { jdbc.execute("alter table pgmq.q_wallet_sign_first_unavailable rename to q_wallet_sign_first"); }
-        assertEquals(ORIGINAL, current().getTxId()); assertFalse(sig().has("rbfHistory"));
+        assertEquals(ORIGINAL, current().txId()); assertTrue(current().attempts().isEmpty());
         assertEquals("LOCKED", inputState()); assertAmounts("0.00998410", "0.00001590"); assertLedger();
     }
     @Test void tenantInputLockAndFeeLimitsRollbackWithoutMutation() {
@@ -242,17 +235,14 @@ class BtcCollectionRbfConcurrencyIntegrationTest {
         when(rates.find("btc")).thenReturn("10");
         jdbc.update("update utxo_record set lock_ref = 'other' where tx_hash = ?", INPUT);
         assertThrows(IllegalStateException.class, () -> rbf.bumpFee(id, TENANT, ORIGINAL));
-        assertEquals(ORIGINAL, current().getTxId()); assertFalse(sig().has("rbfHistory")); assertLedger();
+        assertEquals(ORIGINAL, current().txId()); assertTrue(current().attempts().isEmpty()); assertLedger();
     }
-    private WithdrawTransaction signed(String body, boolean valid) {
-        var tx = JacksonJson.readValue(json, body, WithdrawTransaction.class);
-        var signature = JacksonJson.readObject(json, tx.getSignature());
-        signature.put("valid", valid); signature.put("rawTransaction", "11"); signature.put("txId", REPLACEMENT);
-        if (!valid) signature.put("error", "test failure");
-        tx.setSignature(JacksonJson.writeValue(json, signature)); return tx;
+    private UtxoSigningResult signed(UtxoSigningTask task, boolean valid) {
+        return valid ? UtxoSigningResult.success(task, com.surprising.wallet.testutil.UtxoSigningTestSupport.signed(REPLACEMENT,
+                task.request().inputAtomic() - task.request().paymentAtomic()))
+                : UtxoSigningResult.failure(task, "test failure");
     }
-    private WithdrawTransaction current() { return repository.findBitcoinLikeSigningTransactionById(BTC, id).orElseThrow(); }
-    private ObjectNode sig() { return JacksonJson.readObject(json, current().getSignature()); }
+    private UtxoSigningTransaction current() { return signing.findById("BTC", id).orElseThrow(); }
     private String inputState() { return jdbc.queryForObject("select state from utxo_record where tx_hash = ?", String.class, INPUT); }
     private String collectionStatus() { return repository.findCollectionStatus(TENANT, "BTC", "COLL-RBF").orElseThrow(); }
     private void assertAmounts(String amount, String fee) {
