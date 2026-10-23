@@ -245,3 +245,5 @@ SELECT pgmq.send('wallet_rbf',
 该脚本仅连接现有 regtest 节点和现有 Wallet/Exchange 服务，向三个明确指定的测试账户各充值两笔，
 提交 24 次重复加速请求，核对节点替换、六次确认、用户/平台账本、归集输出、矿工费及 Webhook，最后回放已确认请求。
 真实 PostgreSQL 并发/故障测试：`CUSTODY_DB_TESTS=BtcCollectionRbfConcurrencyIntegrationTest bash resources/scripts/regtest/run-custody-db-tests.sh`。
+
+BTC/LTC 首签在生成部分签名前校验每个输入、请求合计及输出的最小单位精度，检查输入合计一致、金额汇总和费率乘积不溢出；达到粉尘阈值的找零必须有目标地址。非法请求返回签名失败，不以截断、溢出或省略找零继续签名。

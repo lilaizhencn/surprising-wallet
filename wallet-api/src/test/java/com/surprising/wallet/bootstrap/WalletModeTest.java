@@ -85,9 +85,12 @@ class WalletModeTest {
         }
     }
     @Test void duplicateSignerRegistrationFailsAtConstruction() {
+        var keys = WalletKeyMaterialProvider.forSig1(seed(1), publicRoot(2), publicRoot(3));
+        var first = new com.surprising.wallet.sig.first.service.BtcFirstSignService(
+                new com.surprising.wallet.sig.first.config.PubKeyConfig(keys), keys,
+                new tools.jackson.databind.ObjectMapper(), "test");
         assertThrows(IllegalArgumentException.class, () -> new com.surprising.wallet.sig.first.FirstSignerRegistry(
-                java.util.List.of(new com.surprising.wallet.sig.first.service.BtcFirstSignService(),
-                        new com.surprising.wallet.sig.first.service.BtcFirstSignService())));
+                java.util.List.of(first, first)));
         assertThrows(IllegalArgumentException.class, () -> new com.surprising.wallet.sig.second.SecondSignerRegistry(
                 java.util.List.of(new com.surprising.wallet.sig.second.impl.BtcSecondSignService(null),
                         new com.surprising.wallet.sig.second.impl.BtcSecondSignService(null))));

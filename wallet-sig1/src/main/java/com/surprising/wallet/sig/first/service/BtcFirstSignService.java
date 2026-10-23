@@ -1,7 +1,11 @@
 package com.surprising.wallet.sig.first.service;
 
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import com.surprising.wallet.sig.first.config.PubKeyConfig;
+import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import tools.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * BTC 第一次签名服务。
@@ -12,8 +16,12 @@ import org.springframework.stereotype.Component;
  * @author lilaizhen
  */
 @Component
-@Slf4j
-public class BtcFirstSignService extends AbstractBtcLikeFirstSign implements ISignService {
+public class BtcFirstSignService extends AbstractBtcLikeFirstSign {
+    public BtcFirstSignService(PubKeyConfig publicKeys,
+                               @Qualifier("sig1KeyMaterial") WalletKeyMaterialProvider keys,
+                               ObjectMapper mapper, @Value("${sw.wallet.network:test}") String network) {
+        super(publicKeys, keys, mapper, network);
+    }
     /** @return 链名称 BTC */
     @Override
     public String chain() {

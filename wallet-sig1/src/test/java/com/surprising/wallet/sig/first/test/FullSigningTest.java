@@ -78,12 +78,10 @@ public class FullSigningTest {
             .chain("BTC").assetSymbol("BTC").assetDecimals(8).bip44CoinType(0).build();
 
         // Phase 1: First Sign with SIG1_MK
-        BtcFirstSignService firstSign = new BtcFirstSignService();
-        firstSign.NODE = ROOT1;
-        PubKeyConfig pk = new PubKeyConfig(
-                Bip32Node.decode(PK1), Bip32Node.decode(PK2), Bip32Node.decode(PK3));
-        set(firstSign, "pubKeyConfig", pk);
-        set(firstSign, "objectMapper", OBJECT_MAPPER);
+        var keys1 = com.surprising.wallet.common.key.WalletKeyMaterialProvider.forSig1(
+                java.util.Base64.getEncoder().encodeToString(java.util.HexFormat.of().parseHex("11".repeat(32))), PK2, PK3);
+        BtcFirstSignService firstSign = new BtcFirstSignService(
+                new PubKeyConfig(keys1), keys1, OBJECT_MAPPER, "test");
 
         System.out.println("=============================================");
         System.out.println("  Phase 1: FirstSign (KEY 1 — hot wallet)");

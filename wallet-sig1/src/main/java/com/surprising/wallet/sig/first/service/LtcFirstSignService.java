@@ -2,16 +2,23 @@ package com.surprising.wallet.sig.first.service;
 
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinFeePolicy;
 import com.surprising.wallet.sdk.bitcoinj.litecoin.LitecoinNetworkParameters;
-import lombok.extern.slf4j.Slf4j;
 import org.bitcoinj.core.NetworkParameters;
 import org.springframework.stereotype.Component;
+import com.surprising.wallet.sig.first.config.PubKeyConfig;
+import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
+import tools.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 /**
- * 负责钱包业务流程编排，并集中处理状态、校验和异常边界。
+ * Litecoin P2WSH 首签，复用 Bitcoin-like 签名逻辑并提供 Litecoin 费用策略。
  */
 @Component
-@Slf4j
-public class LtcFirstSignService extends AbstractBtcLikeFirstSign implements ISignService {
+public class LtcFirstSignService extends AbstractBtcLikeFirstSign {
+    public LtcFirstSignService(PubKeyConfig publicKeys,
+                               @Qualifier("sig1KeyMaterial") WalletKeyMaterialProvider keys,
+                               ObjectMapper mapper) {
+        super(publicKeys, keys, mapper, "test");
+    }
     /**
      * 获取或查询 {@code chain} 对应的数据，并向调用方返回当前业务状态。
      */

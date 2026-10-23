@@ -1,16 +1,31 @@
 package com.surprising.wallet.sig.first.service;
+
+import com.surprising.wallet.common.chain.AssetRuntimeMetadata;
 import com.surprising.wallet.common.json.JacksonJson;
-import com.surprising.wallet.common.chain.AssetRuntimeMetadata;import com.surprising.wallet.common.pojo.*;
 import com.surprising.wallet.common.key.WalletKeyMaterialProvider;
-import com.surprising.wallet.sdk.bitcoinj.bip.Bip32Node;
-import com.surprising.wallet.sdk.bitcoinj.core.WitnessTransactionBuilder;import com.surprising.wallet.sig.first.config.PubKeyConfig;
-import lombok.extern.slf4j.Slf4j;import org.bitcoinj.base.Coin;import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.crypto.ECKey;import org.bitcoinj.params.MainNetParams;import org.bitcoinj.params.RegTestParams;
-import org.bitcoinj.params.TestNet3Params;import org.springframework.beans.factory.annotation.Autowired;import org.springframework.beans.factory.annotation.Value;
+import com.surprising.wallet.common.pojo.Address;
+import com.surprising.wallet.common.pojo.UtxoTransaction;
+import com.surprising.wallet.common.pojo.WithdrawRecord;
+import com.surprising.wallet.common.pojo.WithdrawTransaction;
+import com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator;
+import com.surprising.wallet.sdk.bitcoinj.core.WitnessTransactionBuilder;
+import com.surprising.wallet.sig.first.config.PubKeyConfig;
+import lombok.extern.slf4j.Slf4j;
+import org.bitcoinj.base.Coin;
+import org.bitcoinj.core.NetworkParameters;
+import org.bitcoinj.crypto.ECKey;
+import org.bitcoinj.params.MainNetParams;
+import org.bitcoinj.params.RegTestParams;
+import org.bitcoinj.params.TestNet3Params;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
-import java.math.BigDecimal;import java.util.ArrayList;import java.util.List;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
 /**
  * BTC-like 链（BTC、LTC）P2WSH（SegWit 多签）一签抽象基类。
  *
@@ -24,23 +39,20 @@ import java.math.BigDecimal;import java.util.ArrayList;import java.util.List;
  * {@link #dustThresholdSat()} 来适配不同链的网络参数。
  */
 @Slf4j
-abstract public class AbstractBtcLikeFirstSign implements ISignService {
+public abstract class AbstractBtcLikeFirstSign implements ISignService {
 
-    /** 测试用 BIP32 根节点（为 null 时从 keyMaterial 获取） */
-    public Bip32Node NODE;
-    /** 多签公钥配置 */
-    @Autowired
-    protected PubKeyConfig pubKeyConfig;
-    /** 密钥材料提供者 */
-    @Autowired
-    @org.springframework.beans.factory.annotation.Qualifier("sig1KeyMaterial")
-    protected WalletKeyMaterialProvider keyMaterial;
-    /** 当前签名服务使用的 Bitcoin 网络。 */
-    @Value("${sw.wallet.network:test}")
-    protected String network;
-    /** Jackson 3 对象映射器，用于解析和序列化签名元数据。 */
-    @Autowired
-    protected ObjectMapper objectMapper;
+    protected final PubKeyConfig pubKeyConfig;
+    protected final WalletKeyMaterialProvider keyMaterial;
+    protected final String network;
+    protected final ObjectMapper objectMapper;
+
+    protected AbstractBtcLikeFirstSign(PubKeyConfig pubKeyConfig, WalletKeyMaterialProvider keyMaterial,
+                                       ObjectMapper objectMapper, String network) {
+        this.pubKeyConfig = Objects.requireNonNull(pubKeyConfig, "publicKeys");
+        this.keyMaterial = Objects.requireNonNull(keyMaterial, "keys");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "mapper");
+        this.network = Objects.requireNonNull(network, "network");
+    }
 
     /** 默认费率（sat/vByte），子类可覆盖 */
     private static final long DEFAULT_FEE_RATE = 10L;
@@ -78,59 +90,106 @@ abstract public class AbstractBtcLikeFirstSign implements ISignService {
     @Override
     public void signTransaction(WithdrawTransaction transaction) {
         AssetRuntimeMetadata currency = AssetRuntimeMetadata.fromTransaction(transaction);
-        WitnessTransactionBuilder wtxBuilder=new WitnessTransactionBuilder(getNetworkParameters());
+        var builder = new WitnessTransactionBuilder(getNetworkParameters());
         ObjectNode signature = JacksonJson.readObject(objectMapper, transaction.getSignature());
-        try{
+        try {
             List<UtxoTransaction> utxos = JacksonJson.toList(objectMapper, signature.get("utxos"), UtxoTransaction.class);
             List<Address> addresses = JacksonJson.toList(objectMapper, signature.get("addresses"), Address.class);
-            List<WithdrawRecord> records = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
-            int inputCount=utxos.size();
-            List<String> witnessScriptHexes=new ArrayList<>(inputCount);
-            List<Coin> utxoValues=new ArrayList<>(inputCount);
-            List<ECKey> ecKeys=new ArrayList<>(inputCount);
-            BigDecimal cd=currency.getDecimal();
-            for(int i=0;i<inputCount;i++){Address a=addresses.get(i); UtxoTransaction u=utxos.get(i);
-                Bip32Node n=getBipNODE(a,currency); ECKey ek=n.getEcKey(); ecKeys.add(ek);
-                String wsh=pubKeyConfig.genWitnessScript(a,currency); witnessScriptHexes.add(wsh);
-                Coin uv=Coin.valueOf(u.getBalance().multiply(cd).longValue()); utxoValues.add(uv);
-                wtxBuilder.addInput(u.getTxId(),u.getSeq(),wsh,uv);}
-            long total=transaction.getBalance().multiply(cd).longValue(), sent=0;
-            for(WithdrawRecord r:records) sent+=r.getBalance().multiply(cd).longValue();
-            long feeRate = JacksonJson.longValue(signature, "feeRate"); if(feeRate<=0){feeRate=defaultFeeRate();}
-            long vBytes=WitnessTransactionBuilder.estimateVBytes(inputCount,records.size()), fee=vBytes*feeRate;
-            long change=total-sent-fee;
-            long dust=dustThresholdSat();
-            if(change>=dust){long cv=WitnessTransactionBuilder.estimateVBytes(inputCount,records.size()+1), cf=cv*feeRate, cc=total-sent-cf; if(cc>=dust){vBytes=cv; fee=cf; change=cc;} else {fee=total-sent; change=0;}}
-            else if(change>0){fee=total-sent; change=0;}
-            if(change<0){throw new IllegalArgumentException("insufficient input for SegWit fee: need "+(sent+fee)+", have "+total);}
-            log.info("P2WSH fee: {} vB * {} sat/vB = {} sat",vBytes,feeRate,fee);
-            for(WithdrawRecord r:records) { long out=r.getBalance().multiply(cd).longValue(); if(out>0&&out<dust){throw new IllegalArgumentException("withdraw output dust: "+out+" sat");} wtxBuilder.addOutput(r.getAddress(),Coin.valueOf(out)); }
-            if(change>0){String ca=JacksonJson.text(signature, "changeAddress"); if(ca!=null&&!ca.isEmpty()) wtxBuilder.addOutput(ca,Coin.valueOf(change));}
-            long estimatedWeight=com.surprising.wallet.sdk.bitcoinj.core.P2wshFeeCalculator.estimateWeight(inputCount,records.size()+(change>0?1:0),2,3);
-            String firstSignTx=wtxBuilder.buildFirstSign(ecKeys);
-            signature.put("firstSignTx",firstSignTx); signature.put("valid",true);
-            ArrayNode wsa = objectMapper.createArrayNode();
-            witnessScriptHexes.forEach(wsa::add);
-            signature.set("witnessScripts", wsa);
-            ArrayNode uva = objectMapper.createArrayNode(); utxoValues.forEach(v -> uva.add(v.getValue())); signature.set("utxoValues", uva);
-            signature.put("scriptType","p2wsh"); signature.put("fee",fee); signature.put("estimatedVBytes",vBytes); signature.put("estimatedWeight",estimatedWeight); signature.put("vBytes",vBytes);
-            log.info("P2WSH first sign done: txid={}", wtxBuilder.getHash());
-        }catch(Throwable e){log.error("sign error",e); signature.put("valid",false); signature.put("error",e.getMessage());}
+            List<WithdrawRecord> payments = JacksonJson.toList(objectMapper, signature.get("withdraw"), WithdrawRecord.class);
+            if (utxos.size() != addresses.size()) {
+                throw new IllegalArgumentException("each input requires an address key path");
+            }
+            int inputCount = utxos.size();
+            var scripts = new ArrayList<String>(inputCount);
+            var inputValues = new ArrayList<Coin>(inputCount);
+            var keys = new ArrayList<ECKey>(inputCount);
+            BigDecimal unit = currency.getDecimal();
+            long inputTotal = 0;
+            for (int index = 0; index < inputCount; index++) {
+                Address address = addresses.get(index);
+                UtxoTransaction utxo = utxos.get(index);
+                long atomic = utxo.getBalance().multiply(unit).longValueExact();
+                inputTotal = Math.addExact(inputTotal, atomic);
+                Coin value = Coin.valueOf(atomic);
+                String script = pubKeyConfig.genWitnessScript(address, currency);
+                keys.add(deriveKey(address, currency));
+                scripts.add(script);
+                inputValues.add(value);
+                builder.addInput(utxo.getTxId(), utxo.getSeq(), script, value);
+            }
+            long total = transaction.getBalance().multiply(unit).longValueExact();
+            if (total != inputTotal) {
+                throw new IllegalArgumentException("signing total does not equal input amounts");
+            }
+            long sent = 0;
+            for (WithdrawRecord payment : payments) {
+                sent = Math.addExact(sent, payment.getBalance().multiply(unit).longValueExact());
+            }
+            long feeRate = JacksonJson.longValue(signature, "feeRate");
+            if (feeRate <= 0) feeRate = defaultFeeRate();
+            long remaining = Math.subtractExact(total, sent);
+            long vBytes = WitnessTransactionBuilder.estimateVBytes(inputCount, payments.size());
+            long fee = Math.multiplyExact(vBytes, feeRate);
+            long change = Math.subtractExact(remaining, fee);
+            long dust = dustThresholdSat();
+            if (change >= dust) {
+                long withChangeVBytes = WitnessTransactionBuilder.estimateVBytes(inputCount, payments.size() + 1);
+                long withChangeFee = Math.multiplyExact(withChangeVBytes, feeRate);
+                long withChangeAmount = Math.subtractExact(remaining, withChangeFee);
+                if (withChangeAmount >= dust) {
+                    vBytes = withChangeVBytes;
+                    fee = withChangeFee;
+                    change = withChangeAmount;
+                } else {
+                    fee = remaining;
+                    change = 0;
+                }
+            } else if (change > 0) {
+                fee = remaining;
+                change = 0;
+            }
+            if (change < 0) throw new IllegalArgumentException("insufficient input for SegWit fee");
+            for (WithdrawRecord payment : payments) {
+                long amount = payment.getBalance().multiply(unit).longValueExact();
+                if (amount > 0 && amount < dust) {
+                    throw new IllegalArgumentException("withdraw output dust: " + amount + " sat");
+                }
+                builder.addOutput(payment.getAddress(), Coin.valueOf(amount));
+            }
+            if (change > 0) {
+                String changeAddress = JacksonJson.text(signature, "changeAddress");
+                if (changeAddress == null || changeAddress.isBlank()) {
+                    throw new IllegalArgumentException("change address is required");
+                }
+                builder.addOutput(changeAddress, Coin.valueOf(change));
+            }
+            long estimatedWeight = P2wshFeeCalculator.estimateWeight(
+                    inputCount, payments.size() + (change > 0 ? 1 : 0), 2, 3);
+            signature.put("firstSignTx", builder.buildFirstSign(keys));
+            signature.put("valid", true);
+            ArrayNode scriptArray = objectMapper.createArrayNode();
+            scripts.forEach(scriptArray::add);
+            signature.set("witnessScripts", scriptArray);
+            ArrayNode valueArray = objectMapper.createArrayNode();
+            inputValues.forEach(value -> valueArray.add(value.getValue()));
+            signature.set("utxoValues", valueArray);
+            signature.put("scriptType", "p2wsh");
+            signature.put("fee", fee);
+            signature.put("estimatedVBytes", vBytes);
+            signature.put("estimatedWeight", estimatedWeight);
+            signature.put("vBytes", vBytes);
+            log.info("P2WSH first sign: txid={} fee={} vBytes={}", builder.getHash(), fee, vBytes);
+        } catch (Throwable error) {
+            log.error("sign error", error);
+            signature.put("valid", false);
+            signature.put("error", error.getMessage());
+        }
         transaction.setSignature(JacksonJson.writeValue(objectMapper, signature));
     }
-    /**
-     * 按 BIP44 路径派生地址对应的 BIP32 节点及私钥。
-     *
-     * <p>派生路径：m/44'/{coinType}'/{biz}'/{userId}'/{index}
-     * 优先使用测试节点 {@link #NODE}，为 null 时从 {@code keyMaterial.sig1Root()} 获取。
-     *
-     * @param a        地址信息
-     * @param currency 资产元数据
-     * @return 派生后的 BIP32 节点
-     */
-    public Bip32Node getBipNODE(Address a, AssetRuntimeMetadata currency) {
-        Bip32Node root = NODE != null ? NODE : keyMaterial.sig1Root();
-        return root.getChild(44).getChild(currency.getBip44CoinType()).getChild(a.getBiz()).getChild(a.getUserId().intValue()).getChild(a.getIndex());
+    private ECKey deriveKey(Address address, AssetRuntimeMetadata currency) {
+        return keyMaterial.sig1Root().getChild(44).getChild(currency.getBip44CoinType())
+                .getChild(address.getBiz()).getChild(address.getUserId().intValue())
+                .getChild(address.getIndex()).getEcKey();
     }
 
     /** @return 默认费率（sat/vByte） */

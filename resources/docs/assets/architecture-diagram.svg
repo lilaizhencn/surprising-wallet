@@ -45,7 +45,7 @@
   <text x="890" y="222" text-anchor="middle" class="label">wallet-sig1 · wallet-sig2 普通库</text>
   <text x="890" y="244" text-anchor="middle" class="desc">all 共享池；独立模式各自数据库账号</text>
   <text x="890" y="262" text-anchor="middle" class="desc">BTC/BCH/LTC/DOGE → 第一签 → 第二签</text>
-  <text x="890" y="280" text-anchor="middle" class="desc">不可变签名索引 · 独立调度池 · 事务归档</text>
+  <text x="890" y="280" text-anchor="middle" class="desc">不可变签名索引 · BTC/LTC 构造器依赖 · 角色密钥</text>
 
   <line x1="695" y1="210" x2="720" y2="210" class="arrow"/>
   <!-- consumers → providers -->

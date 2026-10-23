@@ -161,7 +161,7 @@
 
   <rect x="530" y="556" width="200" height="56" class="sig"/>
   <text x="630" y="580" text-anchor="middle" class="bold">签名管道</text>
-  <text x="630" y="598" text-anchor="middle" class="small">sig1 → PGMQ → sig2</text>
+  <text x="630" y="598" text-anchor="middle" class="small">金额 / 找零校验 → sig1 → sig2</text>
 
   <line x1="730" y1="584" x2="765" y2="584" class="arrow"/>
 

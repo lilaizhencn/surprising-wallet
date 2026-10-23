@@ -47,6 +47,8 @@ GitHub Actions 使用 JDK 27 / Lombok 1.18.48 构建并执行单元测试，随�
 bootstrap 包按模式显式扫描组件；签名实现由 FirstSignerRegistry / SecondSignerRegistry 通过构造器列表注入，按原生链建立不可变索引并拒绝重复注册。两个模块仅处理 BTC/BCH/LTC/DOGE；EVM/TRON 等账户链继续由 API 内已有链服务签名。第一签和第二签分别绑定单线程 `sig1TaskScheduler`、`sig2TaskScheduler`，API 保持按 Job 类别分池。签名密钥通过限定名称注入，第二签不保留静态私钥或 HTTP 签名入口。所有模式仍通过 PGMQ 推进阶段；合并进程不改变消息重试、幂等和审计路径。
 
 
+BTC/LTC 首签只有构造器依赖，签名公钥配置只接收角色密钥提供者，不再保留 NODE、testNodes 或空依赖测试分支。签名金额使用精确最小单位转换，输入合计必须等于请求总额；手续费和汇总使用溢出检查，产生找零时必须提供目标地址。测试通过相同构造器提供确定性的测试密钥。
+
 运行时资产来源：
 
 | 表 | 作用 |
