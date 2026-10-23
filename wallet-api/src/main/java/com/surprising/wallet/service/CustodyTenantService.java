@@ -38,14 +38,16 @@ public class CustodyTenantService {
      * 保存 {@code objectMapper}，用于保存业务集合或索引状态。
      */
     private final ObjectMapper objectMapper;
+    private final CustodyTransactionQueryService history;
     /**
      * 构造 {@code CustodyTenantService}，初始化该组件运行所需的状态和依赖。
      */
     public CustodyTenantService(CustodyRepository repository, CustodyPasswordService passwords,
-                                ObjectMapper objectMapper) {
+                                ObjectMapper objectMapper, CustodyTransactionQueryService history) {
         this.repository = repository;
         this.passwords = passwords;
         this.objectMapper = objectMapper;
+        this.history = history;
     }
 
     /**
@@ -105,8 +107,8 @@ public class CustodyTenantService {
                 repository.listIpRules(tenantId),
                 repository.listWebhookEndpoints(tenantId),
                 repository.listWebhookDeliveries(tenantId, null, null, 20, 0),
-                repository.listCustodyDeposits(tenantId, "", "", "", "", 20, 0),
-                repository.listCustodyWithdrawals(tenantId, "", "", "", "", 20, 0),
+                history.deposits(tenantId, "", "", "", "", 20, 0),
+                history.withdrawals(tenantId, "", "", "", "", 20, 0),
                 repository.listAudit(tenantId, 50, 0));
     }
 
@@ -318,8 +320,8 @@ public class CustodyTenantService {
             List<Map<String, Object>> ipRules,
             List<Map<String, Object>> webhooks,
             List<Map<String, Object>> webhookDeliveries,
-            List<Map<String, Object>> recentDeposits,
-            List<Map<String, Object>> recentWithdrawals,
+            List<CustodyTransactionQueryService.DepositView> recentDeposits,
+            List<CustodyTransactionQueryService.WithdrawalView> recentWithdrawals,
             List<Map<String, Object>> recentAudit
     ) {
     }

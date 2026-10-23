@@ -2,6 +2,7 @@ package com.surprising.wallet.repository;
 
 import com.surprising.wallet.common.chain.WithdrawalOrderRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
@@ -24,6 +25,25 @@ public class WithdrawalOrderRepository {
     public WithdrawalOrderRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
+
+    public List<Long> findHistorySearchIds(UUID tenantId, String chain, String search) {
+        return jdbc.queryForList("""
+                select id from withdrawal_order where tenant_id = ? and (? = '' or chain = ?)
+                   and position(? in lower(coalesce(tx_hash, ''))) > 0
+                """, Long.class, tenantId, chain, chain, search);
+    }
+
+    public List<HistoryOrder> findHistoryOrders(UUID tenantId, List<Long> ids) {
+        if (ids.isEmpty()) return List.of();
+        return jdbc.query("""
+                select id, tx_hash, status, error_message from withdrawal_order
+                 where tenant_id = ? and id = any (?)
+                """, (rs, rowNum) -> new HistoryOrder(rs.getLong("id"), rs.getString("tx_hash"),
+                        rs.getString("status"), rs.getString("error_message")),
+                tenantId, new SqlArrayValue("bigint", ids.toArray()));
+    }
+
+    public record HistoryOrder(long id, String txHash, String status, String errorMessage) { }
 
     /** 判断指定链是否存在提现订单。 */
     public boolean existsByChain(String chain) {

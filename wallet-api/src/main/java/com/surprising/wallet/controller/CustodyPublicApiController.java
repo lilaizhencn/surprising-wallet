@@ -20,6 +20,7 @@ import com.surprising.wallet.service.CustodyAddressService;
 import com.surprising.wallet.model.CustodyRequestSupport;
 import com.surprising.wallet.service.CustodyTenantChainService;
 import com.surprising.wallet.service.CustodyWithdrawalService;
+import com.surprising.wallet.service.CustodyTransactionQueryService;
 
 /**
  * 公共 API 控制器，暴露给租户的 REST API。
@@ -32,8 +33,9 @@ import com.surprising.wallet.service.CustodyWithdrawalService;
 public class CustodyPublicApiController {
     /** 地址服务：负责创建与查询托管地址。 */
     private final CustodyAddressService addresses;
-    /** 提现/充值服务：负责创建提现与查询明细。 */
+    /** 提现创建用例。 */
     private final CustodyWithdrawalService transfers;
+    private final CustodyTransactionQueryService history;
     /** 可用链服务：返回当前租户启用链。 */
     private final CustodyTenantChainService chains;
 
@@ -42,9 +44,11 @@ public class CustodyPublicApiController {
      */
     public CustodyPublicApiController(CustodyAddressService addresses,
                                       CustodyWithdrawalService transfers,
-                                      CustodyTenantChainService chains) {
+                                      CustodyTenantChainService chains,
+                                      CustodyTransactionQueryService history) {
         this.addresses = addresses;
         this.transfers = transfers;
+        this.history = history;
         this.chains = chains;
     }
 
@@ -112,7 +116,7 @@ public class CustodyPublicApiController {
      * 分页查询充值记录，支持链/币种/状态/关键词过滤。
      */
     @GetMapping("/deposits")
-    public List<Map<String, Object>> deposits(
+    public List<CustodyTransactionQueryService.DepositView> deposits(
             @RequestParam(defaultValue = "") String chain,
             @RequestParam(defaultValue = "") String assetSymbol,
             @RequestParam(defaultValue = "") String status,
@@ -120,7 +124,7 @@ public class CustodyPublicApiController {
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
-        return transfers.deposits(
+        return history.deposits(
                 CustodyRequestSupport.requirePrincipal(request),
                 chain, assetSymbol, status, search, limit, offset);
     }
@@ -129,7 +133,7 @@ public class CustodyPublicApiController {
      * 分页查询提现记录，支持链/币种/状态/关键词过滤。
      */
     @GetMapping("/withdrawals")
-    public List<Map<String, Object>> withdrawals(
+    public List<CustodyTransactionQueryService.WithdrawalView> withdrawals(
             @RequestParam(defaultValue = "") String chain,
             @RequestParam(defaultValue = "") String assetSymbol,
             @RequestParam(defaultValue = "") String status,
@@ -137,7 +141,7 @@ public class CustodyPublicApiController {
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
-        return transfers.withdrawals(
+        return history.withdrawals(
                 CustodyRequestSupport.requirePrincipal(request),
                 chain, assetSymbol, status, search, limit, offset);
     }

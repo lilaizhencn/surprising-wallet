@@ -1,6 +1,5 @@
 package com.surprising.wallet.service;
 
-import com.surprising.wallet.model.PageView;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import com.surprising.wallet.repository.CustodyRepository.AddressRecord;
@@ -13,7 +12,6 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -189,72 +187,6 @@ public class CustodyWithdrawalService {
     }
 
     /**
-     * 处理 {@code withdrawals} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public List<Map<String, Object>> withdrawals(CustodyPrincipal principal, String chain,
-                                                  String assetSymbol, String status,
-                                                  String search, int limit, int offset) {
-        requireScope(principal, "withdrawals:read");
-        return repository.listCustodyWithdrawals(
-                principal.tenantId(), upperOrEmpty(chain), upperOrEmpty(assetSymbol),
-                upperOrEmpty(status), search, limit, offset);
-    }
-
-    /**
-     * 处理 {@code withdrawalPage} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public PageView<Map<String, Object>> withdrawalPage(
-            CustodyPrincipal principal, String chain, String assetSymbol, String status,
-            String search, int limit, int offset) {
-        requireScope(principal, "withdrawals:read");
-        int pageSize = Math.min(Math.max(limit, 1), 200);
-        int pageOffset = Math.max(offset, 0);
-        String normalizedChain = upperOrEmpty(chain);
-        String normalizedAsset = upperOrEmpty(assetSymbol);
-        String normalizedStatus = upperOrEmpty(status);
-        return new PageView<>(
-                repository.listCustodyWithdrawals(
-                        principal.tenantId(), normalizedChain, normalizedAsset,
-                        normalizedStatus, search, pageSize, pageOffset),
-                repository.countCustodyWithdrawals(
-                        principal.tenantId(), normalizedChain, normalizedAsset,
-                        normalizedStatus, search),
-                pageSize, pageOffset);
-    }
-
-    /**
-     * 处理 {@code deposits} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public List<Map<String, Object>> deposits(CustodyPrincipal principal, String chain,
-                                               String assetSymbol, String status,
-                                               String search, int limit, int offset) {
-        requireScope(principal, "deposits:read");
-        return repository.listCustodyDeposits(
-                principal.tenantId(), upperOrEmpty(chain), upperOrEmpty(assetSymbol),
-                upperOrEmpty(status), search, limit, offset);
-    }
-    /**
-     * 处理 {@code depositPage} 对应的链上或钱包业务流程，并维护状态、幂等和错误边界。
-     */
-    public PageView<Map<String, Object>> depositPage(
-            CustodyPrincipal principal, String chain, String assetSymbol, String status,
-            String search, int limit, int offset) {
-        requireScope(principal, "deposits:read");
-        int pageSize = Math.min(Math.max(limit, 1), 200);
-        int pageOffset = Math.max(offset, 0);
-        String normalizedChain = upperOrEmpty(chain);
-        String normalizedAsset = upperOrEmpty(assetSymbol);
-        String normalizedStatus = upperOrEmpty(status);
-        return new PageView<>(
-                repository.listCustodyDeposits(
-                        principal.tenantId(), normalizedChain, normalizedAsset,
-                        normalizedStatus, search, pageSize, pageOffset),
-                repository.countCustodyDeposits(
-                        principal.tenantId(), normalizedChain, normalizedAsset,
-                        normalizedStatus, search),
-                pageSize, pageOffset);
-    }
-    /**
      * 执行 {@code replay} 对应的辅助逻辑，完成数据处理并维护状态边界。
      */
     private WithdrawalView replay(UUID tenantId, String key, String requestHash) {
@@ -358,12 +290,6 @@ public class CustodyWithdrawalService {
                     "Idempotency-Key must contain 8-160 letters, digits, dots, underscores, colons or hyphens");
         }
         return key;
-    }
-    /**
-     * 转换或计算 {@code upperOrEmpty} 对应的值，统一金额、格式和边界规则。
-     */
-    private static String upperOrEmpty(String value) {
-        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
     /**
      * 校验 {@code requireScope} 对应的前置条件，不满足时抛出明确异常。

@@ -43,6 +43,8 @@
 
 Console 可附带标签和元数据手动创建地址；公开 API 不接收这些管理字段。地址仍计入租户资产总额，但其后续充值不自动投递 Webhook。创建地址本身也不产生 Webhook。所有 Console/API 查询和变更都强制应用租户隔离。
 
+充提历史查询：Console / API Controller → `CustodyTransactionQueryService` → 同租户关联主键搜索 → 充提单表筛选、计数、分页 → 当前页地址/订单批量补充。平台租户详情在校验管理员权限与目标租户后复用该服务。分页和计数使用同一只读快照，有类型记录直接映射为 camelCase 接口字段；不再经提现服务和总仓储转发，不返回原始数据库字段别名。
+
 提现请求要求幂等键，服务保留七天并复用现有的资金锁定、广播和确认流程；API 与 Console 使用同一幂等语义，从持久化投递记录发送签名生命周期 Webhook。
 
 Webhook 接收方必须使用原始请求体验签，并校验以下规范请求串：
@@ -165,7 +167,7 @@ token 归集使用 token 专属策略，同时使用链服务中的原生 gas �
 
 EIP-7702 的外层交易由 relayer 支付当前链的原生 Gas，授权账户本身可以归集全部原生余额。签名交易写入加密 outbox 之前，系统同时完成租户 Gas 账户预留和 relayer 链上余额校验；任一不足都回滚未广播批次。type-4 只用于包含新 authorization 的批次，已委托账户继续使用 type-2 外层交易。确认阶段和普通 EVM 交易复用同一 `fee_model`，分别记录执行费、L1/DA 费、Operator Fee 与总费用。
 
-BTC 归集由 `BtcUtxoBatchJob` 调用 `UtxoBatchService`：仅选择同一租户、同一充值地址下已入账且达到确认数的 `AVAILABLE` UTXO，按网络费率计算扣费后的输出，写入 `collection_record`、`chain_signing_transaction` 和签名 outbox，并在同一事务内锁定输入。签名仍走 sig1/sig2。广播和链上确认只推进归集记录及 UTXO 状态，不创建提现订单、不扣减用户账本，也不发送提现 Webhook；热钱包输出由充值扫描识别为内部地址，不重复入账。BTC 提现和归集分别由独立开关控制，归集的广播结果未知时保留 UTXO 锁并继续扫描所有已知交易尝试。
+BTC 归集由 `BtcUtxoBatchJob` 调用 `UtxoBatchService`：仅选择同一租户、同一充值地址下已入账且达到确认数的 `AVAILABLE` UTXO，按网络费率计算扣费后的输出，写入 `collection_record`、`chain_signing_transaction` 和签名入队凭据及 PGMQ 消息，并在同一事务内锁定输入。签名仍走 sig1/sig2。广播和链上确认只推进归集记录及 UTXO 状态，不创建提现订单、不扣减用户账本，也不发送提现 Webhook；热钱包输出由充值扫描识别为内部地址，不重复入账。BTC 提现和归集分别由独立开关控制，归集的广播结果未知时保留 UTXO 锁并继续扫描所有已知交易尝试。
 
 ## 扫描调度与开关判定
 

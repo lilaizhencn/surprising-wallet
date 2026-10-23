@@ -198,9 +198,8 @@ public class CustodyRepository {
         result.put("gasAccountCount", gasAccounts.listByTenant(tenantId).stream()
                 .filter(row -> "ACTIVE".equals(row.get("status"))).count());
         result.put("userCount", (long) tenantUsers.listByTenant(tenantId).size());
-        result.put("withdrawalCount", (long) custodyWithdrawals.listByTenant(tenantId, "", "", "", 500, 0).size());
-        result.put("depositCount", custodyDeposits.listByTenant(tenantId, "", "", "", 500, 0).stream()
-                .filter(row -> !gasAddressIds.contains(uuid(row.get("custody_address_id")))).count());
+        result.put("withdrawalCount", custodyWithdrawals.countByTenant(tenantId, "", "", ""));
+        result.put("depositCount", custodyDeposits.countCustomerDeposits(tenantId, gasAddressIds));
         result.put("activeApiKeyCount", securityRepository.countActiveApiKeys(tenantId));
         result.put("activeWebhookCount", webhookEndpoints.countActive(tenantId));
         result.put("webhookEndpointCount", webhookEndpoints.list(tenantId).size());
@@ -953,62 +952,6 @@ public class CustodyRepository {
                 .orElseThrow(() -> new IllegalArgumentException("withdrawal order not found"));
         custodyWithdrawals.insert(id, tenantId, custodyAddressId, orderId, orderNo, externalReference,
                 idempotencyKey, chain, assetSymbol, toAddress, amount, fee, status, createdByType, createdById);
-    }
-
-    /** 查询托管提现记录并组合订单与地址字段。 */
-    public List<Map<String, Object>> listCustodyWithdrawals(UUID tenantId, String chain, String assetSymbol,
-                                                             String status, String search, int limit, int offset) {
-        String value = search == null ? "" : search.toLowerCase();
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Map<String, Object> row : custodyWithdrawals.listByTenant(tenantId, blank(chain), blank(assetSymbol), blank(status), 500, 0)) {
-            Map<String, Object> order = withdrawalOrders.findById(tenantId, ((Number) row.get("withdrawal_order_id")).longValue()).orElse(Map.of());
-            Map<String, Object> address = custodyAddresses.findFullByTenantAndId(
-                    tenantId, uuid(row.get("custody_address_id"))).orElse(Map.of());
-            String haystack = (text(row.get("order_no")) + " " + text(row.get("external_reference")) + " "
-                    + text(row.get("to_address")) + " " + text(order.get("tx_hash"))).toLowerCase();
-            if (!value.isEmpty() && !haystack.contains(value)) continue;
-            Map<String, Object> view = new LinkedHashMap<>();
-            view.put("id", row.get("id")); view.put("custodyAddressId", row.get("custody_address_id"));
-            view.put("orderNo", row.get("order_no")); view.put("externalReference", row.get("external_reference"));
-            view.put("chain", row.get("chain")); view.put("assetSymbol", row.get("asset_symbol"));
-            view.put("toAddress", row.get("to_address")); view.put("amount", row.get("amount")); view.put("fee", row.get("fee"));
-            view.put("txHash", order.get("tx_hash")); view.put("status", order.getOrDefault("status", row.get("status")));
-            view.put("errorMessage", order.get("error_message")); view.put("createdByType", row.get("created_by_type"));
-            view.put("subject", address.get("subject"));
-            view.put("createdAt", instant(row.get("created_at"))); view.put("updatedAt", instant(row.get("updated_at")));
-            result.add(view);
-        }
-        return result.stream().skip(Math.max(offset, 0)).limit(Math.min(Math.max(limit, 1), 200)).toList();
-    }
-
-    /** 统计托管提现记录。 */
-    public long countCustodyWithdrawals(UUID tenantId, String chain, String assetSymbol, String status, String search) {
-        return listCustodyWithdrawals(tenantId, chain, assetSymbol, status, search, Integer.MAX_VALUE, 0).size();
-    }
-
-    /** 查询托管充值记录并组合地址字段。 */
-    public List<Map<String, Object>> listCustodyDeposits(UUID tenantId, String chain, String assetSymbol,
-                                                         String status, String search, int limit, int offset) {
-        String value = search == null ? "" : search.toLowerCase();
-        return custodyDeposits.listByTenant(tenantId, blank(chain), blank(assetSymbol), blank(status), 500, 0).stream()
-                .map(row -> {
-            Map<String, Object> address = custodyAddresses.findFullByTenantAndId(
-                    tenantId, uuid(row.get("custody_address_id"))).orElse(Map.of());
-            Map<String, Object> view = new LinkedHashMap<>(row);
-            view.put("address", address.get("address")); view.put("subject", address.get("subject"));
-            view.put("id", row.get("id")); view.put("custodyAddressId", row.get("custody_address_id"));
-            view.put("txHash", row.get("tx_hash")); view.put("assetSymbol", row.get("asset_symbol"));
-            view.put("logIndex", row.get("log_index"));
-                    view.put("creditedAt", instant(row.get("credited_at"))); view.put("createdAt", instant(row.get("created_at")));
-                    view.put("updatedAt", instant(row.get("updated_at")));
-                    return view;
-                }).filter(row -> value.isEmpty() || (text(row.get("tx_hash")) + " " + text(row.get("address")) + " " + text(row.get("subject"))).toLowerCase().contains(value))
-                .skip(Math.max(offset, 0)).limit(Math.min(Math.max(limit, 1), 200)).toList();
-    }
-
-    /** 统计托管充值记录。 */
-    public long countCustodyDeposits(UUID tenantId, String chain, String assetSymbol, String status, String search) {
-        return listCustodyDeposits(tenantId, chain, assetSymbol, status, search, Integer.MAX_VALUE, 0).size();
     }
 
     /** 查询状态不同步的提现记录。 */

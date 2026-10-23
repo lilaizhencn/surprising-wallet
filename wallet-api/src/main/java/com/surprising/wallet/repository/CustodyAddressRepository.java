@@ -1,6 +1,7 @@
 package com.surprising.wallet.repository;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -20,6 +21,24 @@ public class CustodyAddressRepository {
     public CustodyAddressRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
+
+    public List<UUID> findHistorySearchIds(UUID tenantId, String chain, String search) {
+        return jdbc.queryForList("""
+                select id from custody_address where tenant_id = ? and (? = '' or chain = ?)
+                   and position(? in lower(concat_ws(' ', address, subject))) > 0
+                """, UUID.class, tenantId, chain, chain, search);
+    }
+
+    public List<HistoryAddress> findHistoryAddresses(UUID tenantId, List<UUID> ids) {
+        if (ids.isEmpty()) return List.of();
+        return jdbc.query("""
+                select id, address, subject from custody_address where tenant_id = ? and id = any (?)
+                """, (rs, rowNum) -> new HistoryAddress(rs.getObject("id", UUID.class),
+                        rs.getString("address"), rs.getString("subject")),
+                tenantId, new SqlArrayValue("uuid", ids.toArray()));
+    }
+
+    public record HistoryAddress(UUID id, String address, String subject) { }
 
     /** 判断指定租户的托管地址是否来自 API。 */
     public boolean hasApiSource(UUID tenantId, UUID custodyAddressId) {

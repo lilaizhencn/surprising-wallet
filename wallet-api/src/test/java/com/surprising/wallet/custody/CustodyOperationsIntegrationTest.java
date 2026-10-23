@@ -45,6 +45,7 @@ class CustodyOperationsIntegrationTest {
      * 保存 {@code jdbc}，用于访问当前测试所依赖的仓储、客户端或服务。
      */
     private JdbcTemplate jdbc;
+    private com.surprising.wallet.service.CustodyTransactionQueryService history;
     /**
      * 保存 {@code transactions}，用于标识测试中的交易、区块或业务记录。
      */
@@ -59,6 +60,11 @@ class CustodyOperationsIntegrationTest {
         jdbc = new JdbcTemplate(dataSource);
         transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         CustodyIntegrationDatabase.reset(dataSource);
+        history = new com.surprising.wallet.service.CustodyTransactionQueryService(
+                new com.surprising.wallet.repository.CustodyDepositRepository(jdbc),
+                new com.surprising.wallet.repository.CustodyWithdrawalRepository(jdbc),
+                new com.surprising.wallet.repository.CustodyAddressRepository(jdbc),
+                new com.surprising.wallet.repository.WithdrawalOrderRepository(jdbc));
     }
 
     /**
@@ -321,13 +327,13 @@ class CustodyOperationsIntegrationTest {
             insertTestDeposit(
                     otherTenantId, otherAddress, "USDT", depositHash + "-other", "CONFIRMED");
 
-            List<Map<String, Object>> deposits = repository.listCustodyDeposits(
-                    tenantId, "ETH", "USDT", "CONFIRMED", "customer-alpha", 20, 0);
+            var deposits = history.deposits(
+                    historyPrincipal(tenantId), "ETH", "USDT", "CONFIRMED", "customer-alpha", 20, 0);
             assertEquals(1, deposits.size());
-            assertEquals(address.address(), deposits.getFirst().get("address"));
-            assertEquals(depositHash, deposits.getFirst().get("txHash"));
-            assertTrue(repository.listCustodyDeposits(
-                    tenantId, "BTC", "USDT", "CONFIRMED", "customer-alpha", 20, 0).isEmpty());
+            assertEquals(address.address(), deposits.getFirst().address());
+            assertEquals(depositHash, deposits.getFirst().txHash());
+            assertTrue(history.deposits(
+                    historyPrincipal(tenantId), "BTC", "USDT", "CONFIRMED", "customer-alpha", 20, 0).isEmpty());
 
             String orderNo = "CW-FILTER-ALPHA";
             String destination = "0x2222222222222222222222222222222222222222";
@@ -339,21 +345,107 @@ class CustodyOperationsIntegrationTest {
                     repository, otherTenantId, otherAddress, orderNo + "-OTHER",
                     "payout-alpha-other", destination, withdrawalHash + "-other", "CONFIRMED");
 
-            List<Map<String, Object>> withdrawals = repository.listCustodyWithdrawals(
-                    tenantId, "ETH", "USDT", "CONFIRMED", "payout-alpha", 20, 0);
+            var withdrawals = history.withdrawals(
+                    historyPrincipal(tenantId), "ETH", "USDT", "CONFIRMED", "payout-alpha", 20, 0);
             assertEquals(1, withdrawals.size());
-            assertFalse(withdrawals.getFirst().containsKey("sourceAddress"));
-            assertEquals(destination, withdrawals.getFirst().get("toAddress"));
-            assertEquals("customer-alpha", withdrawals.getFirst().get("subject"));
-            assertTrue(repository.listCustodyWithdrawals(
-                    tenantId, "ETH", "BTC", "CONFIRMED", destination, 20, 0).isEmpty());
+            assertEquals(destination, withdrawals.getFirst().toAddress());
+            assertEquals("customer-alpha", withdrawals.getFirst().subject());
+            assertTrue(history.withdrawals(
+                    historyPrincipal(tenantId), "ETH", "BTC", "CONFIRMED", destination, 20, 0).isEmpty());
             status.setRollbackOnly();
         });
     }
 
-    /**
-     * 验证 {@code gasReservationUsesTenantGasAccountAndPreservesAuditTrail} 对应的测试场景，明确输入、预期结果和异常边界。
-     */
+    @Test
+    void transferHistoryCountsAndSearchesBeyondFiveHundredRecords() {
+        transactions.executeWithoutResult(transaction -> {
+            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
+            UUID tenantId = createTenant();
+            TestAddress address = insertTestAddress(tenantId, "ETH", "USDT", "history-customer",
+                    "0x7777777777777777777777777777777777777777");
+            String prefix = UUID.randomUUID().toString();
+            for (int index = 0; index < 620; index++) {
+                insertTestDeposit(tenantId, address, "USDT", "history-deposit-" + index, "CONFIRMED");
+                insertTestWithdrawal(repository, tenantId, address, prefix + "-" + index,
+                        "history-payout-" + index, "0xrecipient", "history-transaction-" + index, "CONFIRMED");
+            }
+            jdbc.update("""
+                    update custody_deposit set created_at = now() -
+                        split_part(tx_hash, '-', 3)::int * interval '1 second' where tenant_id = ?
+                    """, tenantId);
+            jdbc.update("""
+                    update custody_withdrawal set created_at = now() -
+                        split_part(external_reference, '-', 3)::int * interval '1 second' where tenant_id = ?
+                    """, tenantId);
+
+            var summary = repository.tenantOperationsSummary(tenantId);
+            org.junit.jupiter.api.Assertions.assertAll(
+                    () -> assertEquals(620L, summary.get("depositCount")),
+                    () -> assertEquals(620L, summary.get("withdrawalCount")),
+                    () -> assertEquals(620, history.depositPage(historyPrincipal(tenantId), "", "", "", "", 20, 0).total()),
+                    () -> assertEquals(620, history.withdrawalPage(historyPrincipal(tenantId), "", "", "", "", 20, 0).total()),
+                    () -> assertEquals(20, history.deposits(historyPrincipal(tenantId), "", "", "", "", 20, 600).size()),
+                    () -> assertEquals(20, history.withdrawals(historyPrincipal(tenantId), "", "", "", "", 20, 600).size()),
+                    () -> assertEquals(1, history.deposits(historyPrincipal(tenantId), "", "", "", "history-deposit-619", 20, 0).size()),
+                    () -> assertEquals(1, history.withdrawals(historyPrincipal(tenantId), "", "", "", "history-transaction-619", 20, 0).size()));
+            transaction.setRollbackOnly();
+        });
+    }
+
+    @Test
+    void transferHistorySearchIsLiteralAndTenantScoped() {
+        transactions.executeWithoutResult(transaction -> {
+            CustodyRepository repository = com.surprising.wallet.testutil.CustodyTestSupport.repository(jdbc);
+            UUID tenantId = createTenant();
+            UUID otherTenantId = createTenant();
+            var address = insertTestAddress(tenantId, "ETH", "USDT", "customer%_one", "0xown-address");
+            var other = insertTestAddress(otherTenantId, "ETH", "USDT", "foreign-only", "0xforeign-address");
+            insertTestDeposit(tenantId, address, "USDT", "deposit%_own", "CONFIRMED");
+            insertTestDeposit(otherTenantId, other, "USDT", "deposit%_foreign", "CONFIRMED");
+            insertTestWithdrawal(repository, tenantId, address, "QUERY-OWN", "payout%_one",
+                    "recipient%_one", "transaction%_own", "SENT");
+            insertTestWithdrawal(repository, otherTenantId, other, "QUERY-FOREIGN", "foreign-only",
+                    "foreign-only", "transaction%_foreign", "SENT");
+            var principal = historyPrincipal(tenantId);
+            for (String search : List.of("CUSTOMER%_ONE", "0xown-address", "%_")) {
+                assertEquals(1, history.depositPage(principal, "eth", "usdt", "confirmed", search, 20, 0).total());
+            }
+            assertEquals(0, history.depositPage(principal, "", "", "", "foreign-only", 20, 0).total());
+            assertEquals(0, history.depositPage(principal, "", "", "REORGED", "", 20, 0).total());
+            for (String search : List.of("QUERY-OWN", "payout%_one", "recipient%_one", "TRANSACTION%_OWN", "%_")) {
+                var page = history.withdrawalPage(principal, "eth", "usdt", "sent", search, 20, 0);
+                assertEquals(1, page.total(), search);
+                assertEquals("transaction%_own", page.items().getFirst().txHash());
+                assertEquals("customer%_one", page.items().getFirst().subject());
+            }
+            assertEquals(0, history.withdrawalPage(principal, "", "", "", "transaction%_foreign", 20, 0).total());
+            var empty = history.withdrawalPage(principal, "", "", "", "", 1000, 1000);
+            assertEquals(1, empty.total());
+            assertEquals(200, empty.limit());
+            assertTrue(empty.items().isEmpty());
+            var mapper = new CustodyJacksonConfiguration().custodyObjectMapper();
+            var json = mapper.valueToTree(history.deposits(principal, "", "", "", "", 20, 0).getFirst());
+            assertEquals("deposit%_own", json.path("txHash").asText());
+            assertEquals("0xown-address", json.path("address").asText());
+            assertFalse(json.has("tx_hash"));
+            transaction.setRollbackOnly();
+        });
+    }
+
+    @Test
+    void transferHistoryRequiresTheMatchingTenantScope() {
+        var noScopes = new CustodyPrincipal(CustodyPrincipal.ActorType.TENANT_USER, UUID.randomUUID(),
+                UUID.randomUUID(), "history-test", "VIEWER", Set.of());
+        var depositOnly = new CustodyPrincipal(CustodyPrincipal.ActorType.API_KEY, UUID.randomUUID(),
+                noScopes.tenantId(), "history-test", "VIEWER", Set.of("deposits:read"));
+        assertThrows(CustodyForbiddenException.class,
+                () -> history.depositPage(noScopes, "", "", "", "", 20, 0));
+        assertThrows(CustodyForbiddenException.class,
+                () -> history.withdrawals(depositOnly, "", "", "", "", 20, 0));
+        assertThrows(CustodyForbiddenException.class,
+                () -> history.deposits((CustodyPrincipal) null, "", "", "", "", 20, 0));
+    }
+
     @Test
     void gasReservationUsesTenantGasAccountAndPreservesAuditTrail() {
         transactions.executeWithoutResult(status -> {
@@ -1148,6 +1240,11 @@ class CustodyOperationsIntegrationTest {
                 UUID.randomUUID(), tenantId, address.id(), orderNo, externalReference, null,
                 "ETH", "USDT", destination, new BigDecimal("3.5"),
                 new BigDecimal("0.1"), status, "CONSOLE", "qa");
+    }
+
+    private static CustodyPrincipal historyPrincipal(UUID tenantId) {
+        return new CustodyPrincipal(CustodyPrincipal.ActorType.TENANT_USER, UUID.randomUUID(), tenantId,
+                "history-test", "VIEWER", Set.of("deposits:read", "withdrawals:read"));
     }
 
     private record TestAddress(UUID id, String address, long userId) {

@@ -1,16 +1,26 @@
 package com.surprising.wallet.repository;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Objects;
 
 /** custody_deposit 单表仓储。 */
 @Repository
 public class CustodyDepositRepository {
+    private static final String HISTORY_WHERE = """
+             where tenant_id = ?
+               and (? = '' or chain = ?) and (? = '' or asset_symbol = ?) and (? = '' or status = ?)
+               and (? = '' or position(? in lower(tx_hash)) > 0 or custody_address_id = any (?))
+            """;
     /** JDBC 模板。 */
     private final JdbcTemplate jdbc;
 
@@ -54,6 +64,59 @@ public class CustodyDepositRepository {
                 """, Long.class, tenantId, chain, chain, assetSymbol, assetSymbol, status, status);
         return count == null ? 0 : count;
     }
+
+    public List<HistoryEntry> history(HistoryQuery query, int limit, int offset) {
+        var args = historyArgs(query);
+        args.add(Math.min(Math.max(limit, 1), 200));
+        args.add(Math.max(offset, 0));
+        return jdbc.query("""
+                select id, custody_address_id, chain, asset_symbol, tx_hash, log_index,
+                       amount, status, credited_at, created_at, updated_at
+                  from custody_deposit
+                """ + HISTORY_WHERE + " order by created_at desc, id limit ? offset ?",
+                (rs, rowNum) -> new HistoryEntry(rs.getObject("id", UUID.class),
+                        rs.getObject("custody_address_id", UUID.class), rs.getString("chain"),
+                        rs.getString("asset_symbol"), rs.getString("tx_hash"), rs.getLong("log_index"),
+                        rs.getBigDecimal("amount"), rs.getString("status"),
+                        rs.getTimestamp("credited_at") == null ? null : rs.getTimestamp("credited_at").toInstant(),
+                        rs.getTimestamp("created_at").toInstant(), rs.getTimestamp("updated_at").toInstant()),
+                args.toArray());
+    }
+
+    public long countHistory(HistoryQuery query) {
+        return jdbc.queryForObject("select count(*) from custody_deposit " + HISTORY_WHERE,
+                Long.class, historyArgs(query).toArray());
+    }
+
+    public long countCustomerDeposits(UUID tenantId, List<UUID> gasAddressIds) {
+        return jdbc.queryForObject("""
+                select count(*) from custody_deposit
+                 where tenant_id = ? and not (custody_address_id = any (?))
+                """, Long.class, tenantId, new SqlArrayValue("uuid", gasAddressIds.toArray()));
+    }
+
+    private static ArrayList<Object> historyArgs(HistoryQuery query) {
+        var args = new ArrayList<Object>();
+        args.add(query.tenantId());
+        args.add(query.chain()); args.add(query.chain());
+        args.add(query.assetSymbol()); args.add(query.assetSymbol());
+        args.add(query.status()); args.add(query.status());
+        args.add(query.search()); args.add(query.search());
+        args.add(new SqlArrayValue("uuid", query.matchingAddressIds().toArray()));
+        return args;
+    }
+
+    public record HistoryQuery(UUID tenantId, String chain, String assetSymbol, String status,
+                               String search, List<UUID> matchingAddressIds) {
+        public HistoryQuery {
+            Objects.requireNonNull(tenantId, "tenantId");
+            matchingAddressIds = List.copyOf(matchingAddressIds);
+        }
+    }
+
+    public record HistoryEntry(UUID id, UUID custodyAddressId, String chain, String assetSymbol,
+                               String txHash, long logIndex, BigDecimal amount, String status,
+                               Instant creditedAt, Instant createdAt, Instant updatedAt) { }
 
     public UUID credit(UUID tenantId, UUID addressId, long depositRecordId, String chain,
                        String symbol, String txHash, long logIndex, java.math.BigDecimal amount) {

@@ -1528,6 +1528,7 @@ components:
         id: { type: string, format: uuid }
         custodyAddressId: { type: string, format: uuid }
         subject: { type: string }
+        address: { type: string }
         chain: { type: string }
         assetSymbol: { type: string }
         txHash: { type: string }
@@ -1569,7 +1570,10 @@ components:
         status: { type: string }
         txHash: { type: [string, 'null'] }
         errorMessage: { type: [string, 'null'] }
+        createdByType: { type: string }
+        subject: { type: string }
         createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     GasAccount:
       type: object
       required:

@@ -11,12 +11,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
-
 import com.surprising.wallet.model.PageView;
 import com.surprising.wallet.model.CustodyRequestSupport;
 import com.surprising.wallet.service.CustodyWithdrawalService;
+import com.surprising.wallet.service.CustodyTransactionQueryService;
 
 /**
  * Console 提现/转账管理控制器。
@@ -27,21 +25,24 @@ import com.surprising.wallet.service.CustodyWithdrawalService;
 @RestController
 @RequestMapping("/custody/console/v1")
 public class CustodyConsoleTransferController {
-    /** 提现服务：查询与提交提现工单。 */
+    /** 提现创建用例。 */
     private final CustodyWithdrawalService transfers;
+    private final CustodyTransactionQueryService history;
 
     /**
      * 注入提现服务。
      */
-    public CustodyConsoleTransferController(CustodyWithdrawalService transfers) {
+    public CustodyConsoleTransferController(CustodyWithdrawalService transfers,
+                                            CustodyTransactionQueryService history) {
         this.transfers = transfers;
+        this.history = history;
     }
 
     /**
      * 控制台分页查询充值记录。
      */
     @GetMapping("/deposits")
-    public PageView<Map<String, Object>> deposits(
+    public PageView<CustodyTransactionQueryService.DepositView> deposits(
             @RequestParam(defaultValue = "") String chain,
             @RequestParam(defaultValue = "") String assetSymbol,
             @RequestParam(defaultValue = "") String status,
@@ -49,7 +50,7 @@ public class CustodyConsoleTransferController {
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
-        return transfers.depositPage(
+        return history.depositPage(
                 CustodyRequestSupport.requirePrincipal(request),
                 chain, assetSymbol, status, search, limit, offset);
     }
@@ -58,7 +59,7 @@ public class CustodyConsoleTransferController {
      * 控制台分页查询提现记录。
      */
     @GetMapping("/withdrawals")
-    public PageView<Map<String, Object>> withdrawals(
+    public PageView<CustodyTransactionQueryService.WithdrawalView> withdrawals(
             @RequestParam(defaultValue = "") String chain,
             @RequestParam(defaultValue = "") String assetSymbol,
             @RequestParam(defaultValue = "") String status,
@@ -66,7 +67,7 @@ public class CustodyConsoleTransferController {
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset,
             HttpServletRequest request) {
-        return transfers.withdrawalPage(
+        return history.withdrawalPage(
                 CustodyRequestSupport.requirePrincipal(request),
                 chain, assetSymbol, status, search, limit, offset);
     }
